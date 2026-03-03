@@ -1,0 +1,16 @@
+{
+  "dependencies": [
+    "spdlog",
+    "glfw3",
+    "glad",
+    "stb",
+    "glm",
+    "box2d",
+    "bgfx",
+    {
+      "name": "bgfx",
+      "features": [ "tools" ],
+      "host": true
+    }
+  ]
+}

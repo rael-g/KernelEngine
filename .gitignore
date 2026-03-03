@@ -1,0 +1,105 @@
+# Build artifacts for C++
+/build
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.so
+*.a
+*.ilk
+*.pdb
+*.exp
+*.idb
+*.iobj
+*.ipdb
+*.tlog
+*.psess
+*.manifest
+*.res
+
+# Build artifacts for C#
+[Bb]in/
+[Oo]bj/
+*.exe
+*.pdb
+*.dll
+*.suo
+*.user
+*.bak
+*.vspscc
+*.vssscc
+*.vccpscc
+*.builds
+*.log
+*.err
+*.wrn
+*.opensdf
+*.sdf
+*.suo
+*.user
+*.vsp
+*.log
+*.buildlog
+*.docstates
+*.tlb
+*.tlh
+*.tmp
+*.rc
+*.aps
+ipch/
+*.aps
+*.bsc
+*.sbr
+*.res
+*.pch
+*.pco
+
+# Dependencies and package folders
+packages/
+node_modules/
+
+# Miscellaneous
+*.~
+*.bak
+*.swp
+*.swo
+*.tmp
+*.log
+*.orig
+*.*~
+#.DS_Store
+#.~lock.*
+*.pid
+*.seed
+tags
+TAGS
+cscope.*
+*.sublime-project
+*.sublime-workspace
+*.idea
+*.komodoproject
+
+# Rider
+.idea/
+*.sln.DotSettings
+*.user
+*.csproj.user
+
+# Dependencies and package folders
+/vcpkg_installed/
+/tools/
+packages/
+node_modules/
+
+# Generated Shaders
+src/cpp/systems/render_system/shaders/*.bin
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# VS Code
+.vscode/
