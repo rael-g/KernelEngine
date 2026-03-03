@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <kernel_engine/core/context/types.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -17,6 +18,9 @@ extern "C"
         KE_LOG_LEVEL_ERROR = 4,
         KE_LOG_LEVEL_CRITICAL = 5
     } ke_log_level;
+
+    /// @brief Converts a log level enum to a human-readable string.
+    KE_API const char* ke_log_level_to_string(int level);
 
 #ifdef __cplusplus
 }

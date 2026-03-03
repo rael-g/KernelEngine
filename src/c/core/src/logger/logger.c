@@ -119,3 +119,13 @@ ke_result ke_logger_create(const ke_descriptor *desc, ke_logger **out_logger)
     *out_logger = api;
     return KE_OK;
 }
+
+const char *ke_log_level_to_string(int level)
+{
+    static const char *levels[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "CRIT"};
+    if (level < 0 || level > 5)
+    {
+        return "UNKNOWN";
+    }
+    return levels[level];
+}
