@@ -1,0 +1,9 @@
+<Project>
+  <ItemGroup>
+    <NativeLibs Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\*.dll" />
+    <None Include="@(NativeLibs)">
+      <Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>
