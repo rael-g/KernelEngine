@@ -21,6 +21,7 @@ static ke_result engine_register_system(ke_engine *self, ke_system *sys)
         return KE_ERROR_INVALID_ARGUMENT;
     }
     ke_engine_internal *eng = (ke_engine_internal *)self->handle;
+    KE_LOG_DEBUG(self->logger, "engine", "Registering system with ID: %llu", sys->numeric_id);
     return ke_array_push(&eng->systems, sys);
 }
 
@@ -31,6 +32,7 @@ static ke_result engine_initialize(ke_engine *self)
         return KE_ERROR_INVALID_ARGUMENT;
     }
     ke_engine_internal *eng = (ke_engine_internal *)self->handle;
+    KE_LOG_INFO(self->logger, "engine", "Initializing engine with %zu systems...", eng->systems.size);
     for (size_t i = 0; i < eng->systems.size; ++i)
     {
         ke_system *sys = (ke_system *)eng->systems.data[i];
@@ -39,11 +41,13 @@ static ke_result engine_initialize(ke_engine *self)
             ke_result res = sys->on_initialize(sys);
             if (res != KE_OK)
             {
+                KE_LOG_ERROR(self->logger, "engine", "Failed to initialize system %llu (Result: %d)", sys->numeric_id, res);
                 return res;
             }
         }
     }
     eng->is_running = true;
+    KE_LOG_INFO(self->logger, "engine", "Engine initialized successfully.");
     return KE_OK;
 }
 
@@ -59,6 +63,7 @@ static ke_result engine_shutdown(ke_engine *self)
         return KE_OK;
     }
 
+    KE_LOG_INFO(self->logger, "engine", "Shutting down engine...");
     ke_result final_res = KE_OK;
     for (int i = (int)eng->systems.size - 1; i >= 0; --i)
     {
@@ -68,11 +73,13 @@ static ke_result engine_shutdown(ke_engine *self)
             ke_result res = sys->on_shutdown(sys);
             if (res != KE_OK)
             {
+                KE_LOG_ERROR(self->logger, "engine", "Failed to shutdown system %llu (Result: %d)", sys->numeric_id, res);
                 final_res = res;
             }
         }
     }
     eng->is_running = false;
+    KE_LOG_INFO(self->logger, "engine", "Engine shutdown complete.");
     return final_res;
 }
 
@@ -85,14 +92,8 @@ static void engine_destroy(ke_engine *self)
     engine_shutdown(self);
     ke_engine_internal *eng = (ke_engine_internal *)self->handle;
 
-    for (size_t i = 0; i < eng->systems.size; ++i)
-    {
-        ke_system *sys = (ke_system *)eng->systems.data[i];
-        if (sys && sys->destroy)
-        {
-            sys->destroy(sys);
-        }
-    }
+    // We no longer destroy systems here. 
+    // The creator of the system is responsible for its lifecycle.
 
     ke_array_destroy(&eng->systems);
 

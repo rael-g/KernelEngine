@@ -10,98 +10,68 @@ typedef struct ke_logger_internal
     ke_array sinks;
 } ke_logger_internal;
 
-static void logger_log(ke_logger *self, int level, const char *tag, const char *message)
+static void logger_log(ke_logger *self, const ke_log_event *event)
 {
-    if (!self || level < self->runtime_limit)
-    {
-        return;
-    }
+    if (!self || !event) return;
     ke_logger_internal *impl = (ke_logger_internal *)self->handle;
 
     for (size_t i = 0; i < impl->sinks.size; ++i)
     {
         ke_logger_sink *sink = (ke_logger_sink *)impl->sinks.data[i];
-        if (sink && sink->log)
+        if (sink && sink->log && event)
         {
-            sink->log(sink, level, tag, message);
+            sink->log(sink, event);
         }
     }
 }
 
 static ke_result logger_add_sink(ke_logger *self, ke_logger_sink sink)
 {
-    if (!self)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
+    if (!self) return KE_ERROR_INVALID_ARGUMENT;
     ke_logger_internal *impl = (ke_logger_internal *)self->handle;
-    ke_allocator *alloc = self->allocator;
 
-    ke_logger_sink *sink_ptr = (ke_logger_sink *)alloc->alloc(alloc, sizeof(ke_logger_sink), 0);
-    if (!sink_ptr)
-    {
-        return KE_ERROR_OUT_OF_MEMORY;
-    }
+    ke_logger_sink *new_sink = (ke_logger_sink *)self->allocator->alloc(self->allocator, sizeof(ke_logger_sink), 0);
+    if (!new_sink) return KE_ERROR_OUT_OF_MEMORY;
 
-    *sink_ptr = sink;
-    ke_array_push(&impl->sinks, sink_ptr);
+    memcpy(new_sink, &sink, sizeof(ke_logger_sink));
+    ke_array_push(&impl->sinks, new_sink);
+
     return KE_OK;
 }
 
 static void logger_destroy(ke_logger *self)
 {
-    if (!self)
-    {
-        return;
-    }
+    if (!self) return;
     ke_logger_internal *impl = (ke_logger_internal *)self->handle;
-    ke_allocator *alloc = self->allocator;
 
     for (size_t i = 0; i < impl->sinks.size; ++i)
     {
         ke_logger_sink *sink = (ke_logger_sink *)impl->sinks.data[i];
         if (sink)
         {
-            if (sink->destroy)
-            {
-                sink->destroy(sink);
-            }
-            alloc->free(alloc, sink);
+            if (sink->destroy) sink->destroy(sink);
+            self->allocator->free(self->allocator, sink);
         }
     }
 
     ke_array_destroy(&impl->sinks);
-    alloc->free(alloc, impl);
-    alloc->free(alloc, self);
+    self->allocator->free(self->allocator, impl);
+    self->allocator->free(self->allocator, self);
 }
 
 ke_result ke_logger_create(const ke_descriptor *desc, ke_logger **out_logger)
 {
-    if (!out_logger)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
+    if (!out_logger || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
     *out_logger = NULL;
 
-    if (!desc || !desc->allocator)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
     ke_allocator *alloc = desc->allocator;
-
     ke_logger_internal *impl = (ke_logger_internal *)alloc->alloc(alloc, sizeof(ke_logger_internal), 0);
     ke_logger *api = (ke_logger *)alloc->alloc(alloc, sizeof(ke_logger), 0);
 
     if (!impl || !api)
     {
-        if (impl)
-        {
-            alloc->free(alloc, impl);
-        }
-        if (api)
-        {
-            alloc->free(alloc, api);
-        }
+        if (impl) alloc->free(alloc, impl);
+        if (api) alloc->free(alloc, api);
         return KE_ERROR_OUT_OF_MEMORY;
     }
 
@@ -123,9 +93,6 @@ ke_result ke_logger_create(const ke_descriptor *desc, ke_logger **out_logger)
 const char *ke_log_level_to_string(int level)
 {
     static const char *levels[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "CRIT"};
-    if (level < 0 || level > 5)
-    {
-        return "UNKNOWN";
-    }
+    if (level < 0 || level > 5) return "UNKNOWN";
     return levels[level];
 }
