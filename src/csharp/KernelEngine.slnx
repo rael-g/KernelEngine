@@ -1,6 +1,0 @@
-<Solution>
-  <Project Path="KernelEngine.Bgfx/KernelEngine.Bgfx.csproj" />
-  <Project Path="KernelEngine.Core/KernelEngine.Core.csproj" />
-  <Project Path="KernelEngine.Glfw/KernelEngine.Glfw.csproj" />
-  <Project Path="KernelEngine.ShaderCompiler/KernelEngine.ShaderCompiler.csproj" />
-</Solution>
