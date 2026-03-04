@@ -1,7 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Core\KernelEngine.Core.csproj" />
+    <ProjectReference Include="..\Native\KernelEngine.Bgfx.Native\KernelEngine.Bgfx.Native.csproj" />
+    <ProjectReference Include="..\Native\KernelEngine.Core.Native\KernelEngine.Core.Native.csproj" />
+    <ProjectReference Include="..\KernelEngine.Glfw\KernelEngine.Glfw.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
   </ItemGroup>
 
   <PropertyGroup>

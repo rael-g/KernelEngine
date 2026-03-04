@@ -1,7 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Core\KernelEngine.Core.csproj" />
+    <ProjectReference Include="..\Native\KernelEngine.ShaderCompiler.Native\KernelEngine.ShaderCompiler.Native.csproj" />
+    <ProjectReference Include="..\Native\KernelEngine.Core.Native\KernelEngine.Core.Native.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
