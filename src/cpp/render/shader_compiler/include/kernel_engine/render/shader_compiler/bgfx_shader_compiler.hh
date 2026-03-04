@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace kernel_engine::domain::render
+namespace kernel_engine::render::shader_compiler
 {
 
 class BgfxShaderCompiler
@@ -41,4 +41,9 @@ class BgfxShaderCompiler
     std::string shaderc_path_;
 };
 
-} // namespace kernel_engine::domain::render
+} // namespace kernel_engine::render::shader_compiler
+
+extern "C"
+{
+    KE_API ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_descriptor *desc, ke_system **out_system);
+}

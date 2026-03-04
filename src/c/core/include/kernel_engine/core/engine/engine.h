@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_ENGINE_ENGINE_H_
+#define KERNEL_ENGINE_CORE_ENGINE_ENGINE_H_
 
 #include <kernel_engine/core/common/descriptor.h>
 #include <kernel_engine/core/common/error.h>
@@ -37,3 +38,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_ENGINE_ENGINE_H_

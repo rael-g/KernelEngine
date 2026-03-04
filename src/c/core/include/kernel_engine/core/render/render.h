@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_RENDER_RENDER_H_
+#define KERNEL_ENGINE_CORE_RENDER_RENDER_H_
 
 #include <kernel_engine/core/common/error.h>
 #include <kernel_engine/core/context/types.h>
@@ -27,3 +28,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_RENDER_RENDER_H_

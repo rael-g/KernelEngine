@@ -1,7 +1,8 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_LOGGER_LOG_LEVEL_H_
+#define KERNEL_ENGINE_CORE_LOGGER_LOG_LEVEL_H_
 
-#include <stdint.h>
 #include <kernel_engine/core/context/types.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -20,8 +21,10 @@ extern "C"
     } ke_log_level;
 
     /// @brief Converts a log level enum to a human-readable string.
-    KE_API const char* ke_log_level_to_string(int level);
+    KE_API const char *ke_log_level_to_string(int level);
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_LOGGER_LOG_LEVEL_H_

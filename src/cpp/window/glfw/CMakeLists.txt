@@ -1,7 +1,7 @@
 find_package(glfw3 CONFIG REQUIRED)
 
 add_library(ke_window_glfw
-    src/GlfwWindowSystem.cc
+    src/glfw_window_system.cc
 )
 
 get_target_property(target_type ke_window_glfw TYPE)
@@ -20,3 +20,13 @@ target_link_libraries(ke_window_glfw PUBLIC
     ke_core
     glfw
 )
+
+install(TARGETS ke_window_glfw
+    EXPORT KernelEngineTargets
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+
+# Install the kernel_engine folder into include/
+install(DIRECTORY include/kernel_engine DESTINATION include)

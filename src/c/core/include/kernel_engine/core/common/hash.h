@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_COMMON_HASH_H_
+#define KERNEL_ENGINE_CORE_COMMON_HASH_H_
 
 #include <kernel_engine/core/context/types.h>
 #include <stddef.h>
@@ -15,3 +16,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_COMMON_HASH_H_

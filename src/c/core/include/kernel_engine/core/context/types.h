@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_CONTEXT_TYPES_H_
+#define KERNEL_ENGINE_CORE_CONTEXT_TYPES_H_
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -36,3 +37,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_CONTEXT_TYPES_H_

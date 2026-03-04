@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_COMMON_ARRAY_H_
+#define KERNEL_ENGINE_CORE_COMMON_ARRAY_H_
 
 #include <kernel_engine/core/common/error.h>
 #include <kernel_engine/core/context/allocator.h>
@@ -61,3 +62,5 @@ static inline void ke_array_destroy(ke_array *arr)
     arr->size = 0;
     arr->capacity = 0;
 }
+
+#endif // KERNEL_ENGINE_CORE_COMMON_ARRAY_H_

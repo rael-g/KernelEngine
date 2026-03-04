@@ -22,3 +22,12 @@ target_include_directories(ke_core PUBLIC
 )
 
 add_library(ke::core ALIAS ke_core)
+
+install(TARGETS ke_core
+    EXPORT KernelEngineTargets
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+
+install(DIRECTORY include/ DESTINATION include)

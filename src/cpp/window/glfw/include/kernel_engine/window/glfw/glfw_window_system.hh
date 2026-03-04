@@ -6,12 +6,12 @@
 #include <kernel_engine/core/logger/logger.h>
 #include <kernel_engine/core/messaging/message_pipe.h>
 #include <kernel_engine/core/window/window.h>
+#include <kernel_engine/window/glfw/window_plugin.hh>
 #include <string>
-#include <window_plugin.h>
 
 struct GLFWwindow;
 
-namespace kernel_engine::domain::window
+namespace kernel_engine::window::glfw
 {
 
 class GlfwWindowSystem
@@ -41,7 +41,7 @@ class GlfwWindowSystem
         return pipe_api_;
     }
 
-    [[nodiscard]] ke_window *GetWindowApi()
+    [[nodiscard]] ke_window* GetWindowApi()
     {
         return &window_api_;
     }
@@ -58,4 +58,4 @@ class GlfwWindowSystem
     ke_message_pipe *pipe_api_ = nullptr;
     ke_logger *logger_ = nullptr;
 };
-} // namespace kernel_engine::domain::window
+} // namespace kernel_engine::window::glfw

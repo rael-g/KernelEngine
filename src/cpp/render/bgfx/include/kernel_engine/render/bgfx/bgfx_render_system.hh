@@ -6,12 +6,12 @@
 #include <kernel_engine/core/engine/system.h>
 #include <kernel_engine/core/logger/logger.h>
 #include <kernel_engine/core/render/render.h>
-#include <render_plugin.h>
+#include <kernel_engine/render/bgfx/render_plugin.hh>
 #include <string>
 
 struct ke_window;
 
-namespace kernel_engine::domain::render
+namespace kernel_engine::render::bgfx
 {
 
 class BgfxRenderSystem
@@ -42,7 +42,7 @@ class BgfxRenderSystem
     ke_system engine_api_{};
     ke_render render_api_{};
 
-    struct ke_window *window_ = nullptr;
+    struct ke_window* window_ = nullptr;
     ke_allocator *allocator_ = nullptr;
     ke_logger *logger_ = nullptr;
     std::string shader_path_;
@@ -52,4 +52,4 @@ class BgfxRenderSystem
     uint16_t program_ = 0; // bgfx::ProgramHandle is a struct wrapping uint16_t
 };
 
-} // namespace kernel_engine::domain::render
+} // namespace kernel_engine::render::bgfx

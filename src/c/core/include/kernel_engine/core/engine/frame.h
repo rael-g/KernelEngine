@@ -1,4 +1,6 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_ENGINE_FRAME_H_
+#define KERNEL_ENGINE_CORE_ENGINE_FRAME_H_
+
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -17,3 +19,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_ENGINE_FRAME_H_

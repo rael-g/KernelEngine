@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_COMMON_DESCRIPTOR_H_
+#define KERNEL_ENGINE_CORE_COMMON_DESCRIPTOR_H_
 
 #ifdef __cplusplus
 extern "C"
@@ -20,3 +21,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_COMMON_DESCRIPTOR_H_

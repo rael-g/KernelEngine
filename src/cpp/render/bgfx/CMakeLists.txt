@@ -24,3 +24,13 @@ target_link_libraries(ke_render_bgfx PUBLIC
     bgfx::bimg
     glm::glm
 )
+
+install(TARGETS ke_render_bgfx
+    EXPORT KernelEngineTargets
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+
+# Install the kernel_engine folder into include/
+install(DIRECTORY include/kernel_engine DESTINATION include)

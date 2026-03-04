@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_COMMON_ERROR_H_
+#define KERNEL_ENGINE_CORE_COMMON_ERROR_H_
 
 #include <stdint.h>
 
@@ -31,3 +32,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_COMMON_ERROR_H_

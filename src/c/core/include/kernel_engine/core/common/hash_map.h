@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CORE_COMMON_HASH_MAP_H_
+#define KERNEL_ENGINE_CORE_COMMON_HASH_MAP_H_
 
 #include <kernel_engine/core/common/error.h>
 #include <kernel_engine/core/context/types.h>
@@ -41,3 +42,5 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
+
+#endif // KERNEL_ENGINE_CORE_COMMON_HASH_MAP_H_
