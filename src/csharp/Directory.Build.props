@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Authors>Kernel Engine Team</Authors>
+    <Company>Kernel Engine</Company>
+    <Product>Kernel Engine</Product>
+    <Description>Native performance kernel with C# expressiveness.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/your-repo/KernelEngine</RepositoryUrl>
+    <Version>0.1.0-alpha</Version>
+    <!-- Essential for NuGet package to include the native files in the right place -->
+    <IncludeContentInPack>true</IncludeContentInPack>
+
+    <!-- Set to true to use PackageReference instead of ProjectReference for dependencies -->
+    <UsePackageReferences Condition="'$(UsePackageReferences)' == ''">false</UsePackageReferences>
+  </PropertyGroup>
+</Project>
