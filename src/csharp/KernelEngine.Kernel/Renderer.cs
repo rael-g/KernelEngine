@@ -30,6 +30,10 @@ public sealed unsafe class Renderer : IDisposable
         KernelException.ThrowIfFailed(_native->on_initialize(_native));
     }
 
+    /// <summary>Advances to the next frame and presents the current one. Call once per loop iteration.</summary>
+    public void Frame() =>
+        KernelException.ThrowIfFailed(_native->frame(_native));
+
     /// <summary>Sets the background clear color for the next frame.</summary>
     public void ClearColor(float r, float g, float b, float a) =>
         KernelException.ThrowIfFailed(_native->clear_color(_native, r, g, b, a));

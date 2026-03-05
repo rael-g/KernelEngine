@@ -22,6 +22,7 @@ class BgfxRenderSystem
     ke_result OnShutdown();
 
     // Render operations
+    ke_result Frame();
     ke_result SetOrthographic(bool enabled);
     ke_result ClearColor(float r, float g, float b, float a);
     ke_result Submit(const ke_mat4 *transform);

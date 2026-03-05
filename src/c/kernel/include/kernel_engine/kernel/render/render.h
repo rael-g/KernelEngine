@@ -25,6 +25,9 @@ extern "C"
         ke_result (*set_orthographic)(struct ke_render *self, bool enabled);
         ke_result (*clear_color)(struct ke_render *self, float r, float g, float b, float a);
         
+        /// @brief Advances to the next frame and presents the current one. Call once per loop iteration.
+        ke_result (*frame)(struct ke_render *self);
+
         /// @brief Submits a draw command with a world transform.
         ke_result (*submit)(struct ke_render *self, const ke_mat4 *transform);
 

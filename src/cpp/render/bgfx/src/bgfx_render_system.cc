@@ -1,5 +1,6 @@
 #include <kernel_engine/render/bgfx/bgfx_render_system.hh>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/window/window.h>
 #include <new>
 #include <bgfx/bgfx.h>
@@ -26,6 +27,9 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_descriptor *desc)
         auto *alloc = sys->allocator_;
         sys->~BgfxRenderSystem();
         alloc->free(alloc, sys);
+    };
+    render_api_.frame = [](ke_render *self) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->Frame();
     };
     render_api_.clear_color = [](ke_render *self, float r, float g, float b, float a) {
         return static_cast<BgfxRenderSystem *>(self->handle)->ClearColor(r, g, b, a);
@@ -54,7 +58,17 @@ ke_result BgfxRenderSystem::OnInitialize()
     init.resolution.height = (uint32_t)h;
     init.resolution.reset = BGFX_RESET_VSYNC;
 
-    if (!::bgfx::init(init)) return KE_ERROR_RENDER;
+    if (!::bgfx::init(init))
+    {
+        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "bgfx", "bgfx::init() failed"};
+        if (logger_) logger_->log(logger_, &ev);
+        return KE_ERROR_RENDER;
+    }
+
+    {
+        ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "bgfx initialized"};
+        if (logger_) logger_->log(logger_, &ev);
+    }
 
     ::bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
     ::bgfx::setViewRect(0, 0, 0, (uint16_t)w, (uint16_t)h);
@@ -64,7 +78,19 @@ ke_result BgfxRenderSystem::OnInitialize()
 
 ke_result BgfxRenderSystem::SetupShader() { return KE_OK; }
 
-ke_result BgfxRenderSystem::OnShutdown() { ::bgfx::shutdown(); return KE_OK; }
+ke_result BgfxRenderSystem::OnShutdown()
+{
+    ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "bgfx shutdown"};
+    if (logger_) logger_->log(logger_, &ev);
+    ::bgfx::shutdown();
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::Frame() {
+    ::bgfx::touch(0); // Mark view 0 as used even when no draw calls are submitted
+    ::bgfx::frame();
+    return KE_OK;
+}
 
 ke_result BgfxRenderSystem::ClearColor(float r, float g, float b, float a) {
     uint32_t color = (uint32_t(r * 255.0F) << 24) | (uint32_t(g * 255.0F) << 16) |

@@ -19,6 +19,9 @@ public unsafe partial struct ke_render
     [NativeTypeName("ke_result (*)(struct ke_render *, float, float, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_render*, float, float, float, float, ke_result> clear_color;
 
+    [NativeTypeName("ke_result (*)(struct ke_render *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_result> frame;
+
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_mat4 *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_mat4*, ke_result> submit;
 
