@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\KernelEngine.Core.Native\KernelEngine.Core.Native.csproj" />
+    <ProjectReference Include="..\KernelEngine.Kernel.Native\KernelEngine.Kernel.Native.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

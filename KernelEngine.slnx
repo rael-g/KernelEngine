@@ -1,16 +1,20 @@
 <Solution>
-  <Folder Name="/Native/">
+  <Folder Name="/src/">
     <Project Path="src/csharp/Native/KernelEngine.Bgfx.Native/KernelEngine.Bgfx.Native.csproj" />
-    <Project Path="src/csharp/Native/KernelEngine.Core.Native/KernelEngine.Core.Native.csproj" />
+    <Project Path="src/csharp/Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.Glfw.Native/KernelEngine.Glfw.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.ShaderCompiler.Native/KernelEngine.ShaderCompiler.Native.csproj" />
+    <Project Path="src/csharp/KernelEngine.Bgfx/KernelEngine.Bgfx.csproj" />
+    <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
+    <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
+    <Project Path="src/csharp/KernelEngine.Glfw/KernelEngine.Glfw.csproj" />
+    <Project Path="src/csharp/KernelEngine.Logging.Serilog/KernelEngine.Logging.Serilog.csproj" />
+    <Project Path="src/csharp/KernelEngine.ShaderCompiler/KernelEngine.ShaderCompiler.csproj" />
   </Folder>
-  <Project Path="src/csharp/KernelEngine.Bgfx/KernelEngine.Bgfx.csproj" />
-  <Project Path="src/csharp/KernelEngine.Core/KernelEngine.Core.csproj" />
-  <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
-  <Project Path="src/csharp/KernelEngine.Glfw/KernelEngine.Glfw.csproj" />
-  <Project Path="src/csharp/KernelEngine.Logging.Serilog/KernelEngine.Logging.Serilog.csproj" />
-  <Project Path="src/csharp/KernelEngine.ShaderCompiler/KernelEngine.ShaderCompiler.csproj" />
-  <Project Path="examples/csharp/SimpleWindow/SimpleWindow.csproj" />
-  <Project Path="examples/csharp/SimpleFrameworkApp/SimpleFrameworkApp.csproj" />
+  <Folder Name="/examples/">
+    <Project Path="examples/csharp/SimpleFrameworkApp/SimpleFrameworkApp.csproj" />
+    <Project Path="examples/csharp/SimpleWindow/SimpleWindow.csproj" />
+    <Project Path="examples/csharp/SimpleWorldEcs/SimpleWorldEcs.csproj" />
+    <Project Path="examples/csharp/SimpleFrameworkWorldApp/SimpleFrameworkWorldApp.csproj" />
+  </Folder>
 </Solution>

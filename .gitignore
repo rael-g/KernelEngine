@@ -103,3 +103,4 @@ Thumbs.db
 
 # VS Code
 .vscode/
+.claude/

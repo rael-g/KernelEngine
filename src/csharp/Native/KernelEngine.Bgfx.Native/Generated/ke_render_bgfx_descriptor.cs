@@ -1,4 +1,4 @@
-using KernelEngine.Core.Native;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Bgfx.Native;
 
