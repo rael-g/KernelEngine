@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine;
@@ -19,6 +20,9 @@ public sealed unsafe class World : IDisposable
         }
     }
 
+    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+    private TimeSpan _lastTime;
+
     private World(ke_world* native) => _native = native;
 
     /// <summary>Creates a world bound to the given renderer and window.</summary>
@@ -39,8 +43,17 @@ public sealed unsafe class World : IDisposable
     public Scene Scene => _scene ??= new Scene(Native->get_scene(Native));
 
     /// <summary>Advances the simulation by one frame.</summary>
-    public void Update() =>
+    public void Update()
+    {
+        var now = _stopwatch.Elapsed;
+        var dt = (float)(now - _lastTime).TotalSeconds;
+        _lastTime = now;
+
+        foreach (var node in Node.AllScripted)
+            node.InvokeLifecycle(dt);
+
         KernelException.ThrowIfFailed(Native->update(Native, null));
+    }
 
     public void Dispose()
     {

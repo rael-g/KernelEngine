@@ -112,6 +112,20 @@ public unsafe class Node
 
     // ── Internal ─────────────────────────────────────────────────────────────
 
+    private bool _started;
+
+    internal void InvokeLifecycle(float dt)
+    {
+        if (!_started)
+        {
+            _started = true;
+            OnStart();
+        }
+        OnUpdate(dt);
+    }
+
+    internal static IEnumerable<Node> AllScripted => s_registry.Values;
+
     internal void Register() => s_registry[(nint)_native] = this;
 
     internal static void Unregister(ke_node* native) =>
