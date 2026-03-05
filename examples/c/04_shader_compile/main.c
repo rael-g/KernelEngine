@@ -1,7 +1,7 @@
-#include <kernel_engine/core/common/error.h>
-#include <kernel_engine/core/context/allocator.h>
-#include <kernel_engine/core/logger/logger.h>
-#include <kernel_engine/core/render/shader_compiler.h>
+#include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/kernel/render/shader_compiler.h>
 #include <stdio.h>
 
 static void app_console_sink(ke_logger_sink *self, const ke_log_event *ev)
@@ -24,15 +24,14 @@ int main(void)
 
     ke_shader_compiler_bgfx_descriptor compiler_desc = {
         .allocator = alloc, .logger = logger, .shaderc_path = "vcpkg_installed/x64-windows-static-md/tools/bgfx/shaderc.exe"};
-    ke_system *compiler_sys = NULL;
-    ke_shader_compiler_bgfx_create(&compiler_desc, &compiler_sys);
-
-    ke_shader_compiler *compiler = (ke_shader_compiler *)compiler_sys->handle;
+    ke_shader_compiler *compiler = NULL;
+    ke_shader_compiler_bgfx_create(&compiler_desc, &compiler);
+    compiler->on_initialize(compiler);
 
     KE_LOG_INFO(logger, "app", "Compiling test shader...");
-    
+
     const char* includes[] = { "src/cpp/render/bgfx/shaders" };
-    ke_result res = compiler->compile_shader(compiler, 
+    ke_result res = compiler->compile_shader(compiler,
         "src/cpp/render/bgfx/shaders/fs_basic.sc",
         "src/cpp/render/bgfx/shaders/varying.def.sc",
         "fragment", "windows", "p30",
@@ -44,7 +43,8 @@ int main(void)
         KE_LOG_ERROR(logger, "app", "Shader compilation failed with result: %d", res);
     }
 
-    compiler_sys->destroy(compiler_sys);
+    compiler->on_shutdown(compiler);
+    compiler->destroy(compiler);
     logger->destroy(logger);
     alloc->destroy(alloc);
 

@@ -1,6 +1,6 @@
-#include <kernel_engine/core/common/error.h>
-#include <kernel_engine/core/context/allocator.h>
-#include <kernel_engine/core/logger/logger.h>
+#include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/logger/logger.h>
 #include <stdio.h>
 
 static void app_console_sink(ke_logger_sink *self, const ke_log_event *ev)

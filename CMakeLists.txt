@@ -11,7 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-add_subdirectory(src/c/core)
+add_subdirectory(src/c/kernel)
 add_subdirectory(src/cpp/window/glfw)
 add_subdirectory(src/cpp/render/bgfx)
 add_subdirectory(src/cpp/render/shader_compiler)
