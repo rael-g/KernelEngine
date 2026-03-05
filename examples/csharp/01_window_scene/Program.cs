@@ -19,9 +19,31 @@ using var app = new Application();
 
 app.OnReady = () =>
 {
+    // Directional light coming from upper-right-front
+    app.ActiveWorld.Scene.AddNode(
+        new LightNode
+        {
+            Direction = System.Numerics.Vector3.Normalize(new(0.5f, 1f, 0.5f)),
+            Color     = System.Numerics.Vector3.One,
+            Intensity = 1f,
+        },
+        "Sun");
+
+    // Camera positioned 5 units back, looking forward along -Z
+    var cam = app.ActiveWorld.Scene.AddNode(
+        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        "Camera");
+    cam.LocalTransform = cam.LocalTransform with
+    {
+        Position = new System.Numerics.Vector3(0f, 0f, 5f),
+    };
+    app.ActiveWorld.ActiveCamera = cam.Entity;
+
+    var orangeMat = app.Renderer.CreateMaterial(1f, 0.5f, 0f, 1f);
+
     var spinner = app.ActiveWorld.Scene.AddNode(new SpinnerNode(), "Spinner");
     app.ActiveWorld.Scene.AddNode(
-        new MeshNode { Color = new Vector4(1f, 0.5f, 0f, 1f) },
+        new MeshNode { MaterialHandle = orangeMat },
         "Quad",
         parent: spinner);
 };
