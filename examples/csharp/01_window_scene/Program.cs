@@ -39,7 +39,7 @@ app.OnReady = () =>
     };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
-    var orangeMat = app.Renderer.CreateMaterial(1f, 0.5f, 0f, 1f);
+    var orangeMat = app.Renderer.CreateMaterial(1f, 0.5f, 0f, 1f).Value;
 
     var spinner = app.ActiveWorld.Scene.AddNode(new SpinnerNode(), "Spinner");
     app.ActiveWorld.Scene.AddNode(
@@ -56,7 +56,7 @@ app.OnUpdate = () =>
     float r = MathF.Abs(hue * 6f - 3f) - 1f;
     float g = 2f - MathF.Abs(hue * 6f - 2f);
     float b = 2f - MathF.Abs(hue * 6f - 4f);
-    app.Renderer.ClearColor(Math.Clamp(r, 0, 1), Math.Clamp(g, 0, 1), Math.Clamp(b, 0, 1), 1f);
+    _ = app.Renderer.ClearColor(Math.Clamp(r, 0, 1), Math.Clamp(g, 0, 1), Math.Clamp(b, 0, 1), 1f);
 };
 
 app.Run(services);

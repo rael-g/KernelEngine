@@ -19,7 +19,7 @@ public static class TextureLoader
         using var image = Image.Load<Rgba32>(path);
         var pixels = new byte[image.Width * image.Height * 4];
         image.CopyPixelDataTo(pixels);
-        return renderer.CreateTexture((uint)image.Width, (uint)image.Height, pixels);
+        return renderer.CreateTexture((uint)image.Width, (uint)image.Height, pixels).Value;
     }
 
     /// <summary>
@@ -30,7 +30,7 @@ public static class TextureLoader
         using var image = Image.Load<Rgba32>(stream);
         var pixels = new byte[image.Width * image.Height * 4];
         image.CopyPixelDataTo(pixels);
-        return renderer.CreateTexture((uint)image.Width, (uint)image.Height, pixels);
+        return renderer.CreateTexture((uint)image.Width, (uint)image.Height, pixels).Value;
     }
 
     /// <summary>
@@ -54,6 +54,6 @@ public static class TextureLoader
             face.CopyPixelDataTo(combined.AsSpan((int)(i * faceBytes), (int)faceBytes));
         }
 
-        return renderer.CreateCubemap(faceSize, combined);
+        return renderer.CreateCubemap(faceSize, combined).Value;
     }
 }

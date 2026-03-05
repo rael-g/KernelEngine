@@ -33,7 +33,7 @@ public sealed unsafe class CameraRenderSystem : ISystem
         // View matrix = inverse of the camera's world transform
         Matrix4x4.Invert(tc->WorldMatrix, out var view);
 
-        var (w, h) = _window.GetSize();
+        var (w, h) = _window.GetSize().Value;
         float aspect = h > 0 ? (float)w / h : 1f;
 
         Matrix4x4 proj = cc->Orthographic != 0
