@@ -1,8 +1,8 @@
 #pragma once
 
-#include <kernel_engine/core/engine/system.h>
-#include <kernel_engine/core/common/descriptor.h>
-#include <kernel_engine/core/context/types.h>
+#include <kernel_engine/kernel/common/descriptor.h>
+#include <kernel_engine/kernel/context/types.h>
+#include <kernel_engine/kernel/render/render.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,12 +34,8 @@ typedef struct ke_render_bgfx_descriptor {
 /**
  * @brief Creates the BGFX render system plugin.
  */
-KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_descriptor* desc, ke_system** out_system);
+KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_descriptor* desc, ke_render** out_render);
 
 #ifdef __cplusplus
-}
-
-namespace kernel_engine::render::bgfx {
-    ke_result CreateBgfxRenderSystem(const ke_render_bgfx_descriptor* desc, ke_system** out_system);
 }
 #endif

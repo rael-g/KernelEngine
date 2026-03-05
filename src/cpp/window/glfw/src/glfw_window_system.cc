@@ -1,7 +1,6 @@
 #include <kernel_engine/window/glfw/glfw_window_system.hh>
-#include <kernel_engine/core/common/hash.h>
-#include <kernel_engine/core/context/allocator.h>
-#include <kernel_engine/core/input/input_messages.h>
+#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/input/input_messages.h>
 #include <new>
 
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -28,10 +27,23 @@ GlfwWindowSystem::GlfwWindowSystem(const ke_window_glfw_descriptor *desc)
       pipe_api_(desc->message_pipe), logger_(desc->logger)
 {
     window_api_.handle = this;
+    window_api_.on_initialize = [](ke_window *self) {
+        return static_cast<GlfwWindowSystem *>(self->handle)->OnInitialize();
+    };
+    window_api_.on_shutdown = [](ke_window *self) {
+        return static_cast<GlfwWindowSystem *>(self->handle)->OnShutdown();
+    };
+    window_api_.destroy = [](ke_window *self) {
+        auto *sys = static_cast<GlfwWindowSystem *>(self->handle);
+        auto *alloc = sys->allocator_;
+        sys->~GlfwWindowSystem();
+        alloc->free(alloc, sys);
+    };
     window_api_.should_close = [](ke_window *self) {
         return static_cast<GlfwWindowSystem *>(self->handle)->ShouldClose();
     };
     window_api_.poll_events = [](ke_window *self) {
+        (void)self;
         glfwPollEvents();
         return KE_OK;
     };
@@ -41,34 +53,10 @@ GlfwWindowSystem::GlfwWindowSystem(const ke_window_glfw_descriptor *desc)
     window_api_.get_native_handle = [](ke_window *self) {
         return static_cast<GlfwWindowSystem *>(self->handle)->GetNativeHandle();
     };
-
-    engine_api_.handle = &window_api_; // Correct: Point to C struct
-    engine_api_.numeric_id = ke_hash_string("ke_window_glfw");
-    engine_api_.on_initialize = [](ke_system *self) {
-        auto* api = static_cast<ke_window*>(self->handle);
-        return static_cast<GlfwWindowSystem *>(api->handle)->OnInitialize();
-    };
-    engine_api_.on_shutdown = [](ke_system *self) {
-        auto* api = static_cast<ke_window*>(self->handle);
-        return static_cast<GlfwWindowSystem *>(api->handle)->OnShutdown();
-    };
-    engine_api_.on_update = [](ke_system *self, const ke_frame *frame) {
-        (void)frame;
-        glfwPollEvents();
-        return KE_OK;
-    };
-    engine_api_.destroy = [](ke_system *self) {
-        auto *api = static_cast<ke_window *>(self->handle);
-        auto *sys = static_cast<GlfwWindowSystem *>(api->handle);
-        auto *alloc = sys->allocator_;
-        sys->~GlfwWindowSystem();
-        alloc->free(alloc, sys);
-    };
 }
 
 GlfwWindowSystem::~GlfwWindowSystem() {}
-uint64_t GlfwWindowSystem::Id() const { return engine_api_.numeric_id; }
-ke_system *GlfwWindowSystem::ToApi() { return &engine_api_; }
+ke_window *GlfwWindowSystem::ToApi() { return &window_api_; }
 
 ke_result GlfwWindowSystem::OnInitialize()
 {
@@ -109,11 +97,11 @@ bool GlfwWindowSystem::ShouldClose() const {
 } // namespace kernel_engine::window::glfw
 
 extern "C" {
-    ke_result ke_window_glfw_create(const ke_window_glfw_descriptor *desc, ke_system **out_system) {
-        if (!out_system || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
+    ke_result ke_window_glfw_create(const ke_window_glfw_descriptor *desc, ke_window **out_window) {
+        if (!out_window || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
         void *mem = desc->allocator->alloc(desc->allocator, sizeof(kernel_engine::window::glfw::GlfwWindowSystem), 0);
         auto *sys = new (mem) kernel_engine::window::glfw::GlfwWindowSystem(desc);
-        *out_system = sys->ToApi();
+        *out_window = sys->ToApi();
         return KE_OK;
     }
 }

@@ -1,7 +1,6 @@
 #include <kernel_engine/render/shader_compiler/bgfx_shader_compiler.hh>
 #include <cstdio>
-#include <kernel_engine/core/common/hash.h>
-#include <kernel_engine/core/context/allocator.h>
+#include <kernel_engine/kernel/context/allocator.h>
 #include <new>
 #include <string>
 #include <vector>
@@ -14,17 +13,13 @@ BgfxShaderCompiler::BgfxShaderCompiler(const ke_shader_compiler_bgfx_descriptor 
       shaderc_path_((desc->shaderc_path != nullptr) ? desc->shaderc_path : "")
 {
     compiler_api_.handle = this;
-    compiler_api_.destroy = [](ke_shader_compiler *self) { (void)self; };
-    compiler_api_.compile_shader = [](ke_shader_compiler *self, const char *file_path, const char *varying_def_path,
-                                      const char *type, const char *platform, const char *profile,
-                                      const char **includes, size_t include_count) {
-        return static_cast<BgfxShaderCompiler *>(self->handle)
-            ->CompileShader(file_path, varying_def_path, type, platform, profile, includes, include_count);
+    compiler_api_.on_initialize = [](ke_shader_compiler *self) {
+        return static_cast<BgfxShaderCompiler *>(self->handle)->OnInitialize();
     };
-
-    engine_api_.handle = this;
-    engine_api_.numeric_id = ke_hash_string("ke_shader_compiler_bgfx");
-    engine_api_.destroy = [](ke_system *self) {
+    compiler_api_.on_shutdown = [](ke_shader_compiler *self) {
+        return static_cast<BgfxShaderCompiler *>(self->handle)->OnShutdown();
+    };
+    compiler_api_.destroy = [](ke_shader_compiler *self) {
         auto *sys = static_cast<BgfxShaderCompiler *>(self->handle);
         auto *alloc = sys->allocator_;
         if (alloc)
@@ -33,16 +28,11 @@ BgfxShaderCompiler::BgfxShaderCompiler(const ke_shader_compiler_bgfx_descriptor 
             alloc->free(alloc, sys);
         }
     };
-    engine_api_.on_initialize = [](ke_system *self) {
-        return static_cast<BgfxShaderCompiler *>(self->handle)->OnInitialize();
-    };
-    engine_api_.on_shutdown = [](ke_system *self) {
-        return static_cast<BgfxShaderCompiler *>(self->handle)->OnShutdown();
-    };
-    engine_api_.on_update = [](ke_system *self, const ke_frame *frame) {
-        (void)self;
-        (void)frame;
-        return KE_OK;
+    compiler_api_.compile_shader = [](ke_shader_compiler *self, const char *file_path, const char *varying_def_path,
+                                      const char *type, const char *platform, const char *profile,
+                                      const char **includes, size_t include_count) {
+        return static_cast<BgfxShaderCompiler *>(self->handle)
+            ->CompileShader(file_path, varying_def_path, type, platform, profile, includes, include_count);
     };
 }
 
@@ -50,13 +40,9 @@ BgfxShaderCompiler::~BgfxShaderCompiler()
 {
 }
 
-uint64_t BgfxShaderCompiler::Id() const
+ke_shader_compiler *BgfxShaderCompiler::ToApi()
 {
-    return engine_api_.numeric_id;
-}
-ke_system *BgfxShaderCompiler::ToApi()
-{
-    return &engine_api_;
+    return &compiler_api_;
 }
 
 ke_result BgfxShaderCompiler::OnInitialize()
@@ -118,13 +104,13 @@ ke_result BgfxShaderCompiler::CompileShader(const char *file_path, const char *v
 extern "C"
 {
 
-    ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_descriptor *desc, ke_system **out_system)
+    ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_descriptor *desc, ke_shader_compiler **out_compiler)
     {
-        if (out_system == nullptr)
+        if (out_compiler == nullptr)
         {
             return KE_ERROR_INVALID_ARGUMENT;
         }
-        *out_system = NULL;
+        *out_compiler = NULL;
 
         if ((desc == nullptr) || (desc->allocator == nullptr))
         {
@@ -140,7 +126,7 @@ extern "C"
         }
 
         BgfxShaderCompiler *sys = new (mem) BgfxShaderCompiler(desc);
-        *out_system = sys->ToApi();
+        *out_compiler = sys->ToApi();
         return KE_OK;
     }
 }

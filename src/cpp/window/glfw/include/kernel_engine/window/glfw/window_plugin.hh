@@ -1,8 +1,8 @@
 #pragma once
 
-#include <kernel_engine/core/engine/system.h>
-#include <kernel_engine/core/common/descriptor.h>
-#include <kernel_engine/core/context/types.h>
+#include <kernel_engine/kernel/common/descriptor.h>
+#include <kernel_engine/kernel/context/types.h>
+#include <kernel_engine/kernel/window/window.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +33,7 @@ typedef struct ke_window_glfw_descriptor {
 /**
  * @brief Creates the GLFW window system plugin.
  */
-KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_descriptor* desc, ke_system** out_system);
+KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_descriptor* desc, ke_window** out_window);
 
 #ifdef __cplusplus
 }

@@ -13,11 +13,11 @@ endif()
 
 target_include_directories(ke_window_glfw PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/core/include
+    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
 target_link_libraries(ke_window_glfw PUBLIC 
-    ke_core
+    ke_kernel
     glfw
 )
 

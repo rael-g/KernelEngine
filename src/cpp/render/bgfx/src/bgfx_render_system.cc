@@ -1,7 +1,6 @@
 #include <kernel_engine/render/bgfx/bgfx_render_system.hh>
-#include <kernel_engine/core/common/hash.h>
-#include <kernel_engine/core/context/allocator.h>
-#include <kernel_engine/core/window/window.h>
+#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/window/window.h>
 #include <new>
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
@@ -16,38 +15,28 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_descriptor *desc)
       shader_path_((desc->shader_path != nullptr) ? desc->shader_path : "")
 {
     render_api_.handle = this;
-    render_api_.clear_color = [](ke_render *self, float r, float g, float b, float a) {
-        return static_cast<BgfxRenderSystem *>(self->handle)->ClearColor(r, g, b, a);
+    render_api_.on_initialize = [](ke_render *self) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->OnInitialize();
     };
-
-    engine_api_.handle = &render_api_; // Correct: Point to C struct
-    engine_api_.numeric_id = ke_hash_string("ke_render_bgfx");
-    engine_api_.on_initialize = [](ke_system *self) {
-        auto* api = static_cast<ke_render*>(self->handle);
-        return static_cast<BgfxRenderSystem *>(api->handle)->OnInitialize();
+    render_api_.on_shutdown = [](ke_render *self) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->OnShutdown();
     };
-    engine_api_.on_shutdown = [](ke_system *self) {
-        auto* api = static_cast<ke_render*>(self->handle);
-        return static_cast<BgfxRenderSystem *>(api->handle)->OnShutdown();
-    };
-    engine_api_.on_update = [](ke_system *self, const ke_frame *frame) {
-        (void)frame;
-        ::bgfx::touch(0);
-        ::bgfx::frame();
-        return KE_OK;
-    };
-    engine_api_.destroy = [](ke_system *self) {
-        auto *api = static_cast<ke_render *>(self->handle);
-        auto *sys = static_cast<BgfxRenderSystem *>(api->handle);
+    render_api_.destroy = [](ke_render *self) {
+        auto *sys = static_cast<BgfxRenderSystem *>(self->handle);
         auto *alloc = sys->allocator_;
         sys->~BgfxRenderSystem();
         alloc->free(alloc, sys);
     };
+    render_api_.clear_color = [](ke_render *self, float r, float g, float b, float a) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->ClearColor(r, g, b, a);
+    };
+    render_api_.submit = [](ke_render *self, const ke_mat4 *transform) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->Submit(transform);
+    };
 }
 
 BgfxRenderSystem::~BgfxRenderSystem() {}
-uint64_t BgfxRenderSystem::Id() const { return engine_api_.numeric_id; }
-ke_system *BgfxRenderSystem::ToApi() { return &engine_api_; }
+ke_render *BgfxRenderSystem::ToApi() { return &render_api_; }
 
 ke_result BgfxRenderSystem::OnInitialize()
 {
@@ -84,14 +73,23 @@ ke_result BgfxRenderSystem::ClearColor(float r, float g, float b, float a) {
     return KE_OK;
 }
 
+ke_result BgfxRenderSystem::Submit(const ke_mat4 *transform) {
+    if (!transform) return KE_ERROR_INVALID_ARGUMENT;
+    ::bgfx::setTransform(transform->m);
+    // Note: In a real engine, we'd set vertex buffers, shaders, etc. here.
+    // For this example, we just touch the transform to verify the data flow.
+    ::bgfx::submit(0, ::bgfx::ProgramHandle{program_});
+    return KE_OK;
+}
+
 } // namespace kernel_engine::render::bgfx
 
 extern "C" {
-    ke_result ke_render_bgfx_create(const ke_render_bgfx_descriptor *desc, ke_system **out_system) {
-        if (!out_system || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
+    ke_result ke_render_bgfx_create(const ke_render_bgfx_descriptor *desc, ke_render **out_render) {
+        if (!out_render || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
         void *mem = desc->allocator->alloc(desc->allocator, sizeof(kernel_engine::render::bgfx::BgfxRenderSystem), 0);
         auto *sys = new (mem) kernel_engine::render::bgfx::BgfxRenderSystem(desc);
-        *out_system = sys->ToApi();
+        *out_render = sys->ToApi();
         return KE_OK;
     }
 }
