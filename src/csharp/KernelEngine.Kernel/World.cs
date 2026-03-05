@@ -84,17 +84,20 @@ public sealed unsafe class World : IDisposable
     /// Advances the simulation by one frame.
     /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s.
     /// </summary>
-    public void Update()
+    public Result Update()
     {
         var now = _stopwatch.Elapsed;
         var dt = (float)(now - _lastTime).TotalSeconds;
         _lastTime = now;
 
         var frame = new ke_frame { delta_time = dt };
-        KernelException.ThrowIfFailed(Native->update(Native, &frame));
+        var res = Native->update(Native, &frame);
+        if (res != ke_result.KE_OK) return res;
 
         foreach (var system in _systems)
             system.Update(this, dt);
+
+        return ke_result.KE_OK;
     }
 
     // ── Internal helpers used by Scene ────────────────────────────────────────
@@ -108,8 +111,7 @@ public sealed unsafe class World : IDisposable
         finally { Marshal.FreeHGlobal(namePtr); }
     }
 
-    internal void DestroyNode(ulong entity) =>
-        KernelException.ThrowIfFailed(Native->destroy_node(Native, entity));
+    internal Result DestroyNode(ulong entity) => Native->destroy_node(Native, entity);
 
     // ── Disposal ──────────────────────────────────────────────────────────────
 

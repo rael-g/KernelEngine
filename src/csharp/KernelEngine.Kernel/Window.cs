@@ -25,6 +25,7 @@ public sealed unsafe class Window : IDisposable
     public Window(ke_window* native)
     {
         _native = native;
+        // In constructor we still throw because if initialization fails, the object is unusable.
         KernelException.ThrowIfFailed(_native->on_initialize(_native));
     }
 
@@ -32,15 +33,14 @@ public sealed unsafe class Window : IDisposable
     public bool ShouldClose() => _native->should_close(_native);
 
     /// <summary>Processes pending OS events. Call once per frame.</summary>
-    public void PollEvents() =>
-        KernelException.ThrowIfFailed(_native->poll_events(_native));
+    public Result PollEvents() => _native->poll_events(_native);
 
     /// <summary>Returns the current client area size in pixels.</summary>
-    public (int Width, int Height) GetSize()
+    public Result<(int Width, int Height)> GetSize()
     {
         int w, h;
-        KernelException.ThrowIfFailed(_native->get_size(_native, &w, &h));
-        return (w, h);
+        var res = _native->get_size(_native, &w, &h);
+        return new Result<(int, int)>(res, (w, h));
     }
 
     /// <summary>Returns the platform-specific native window handle (HWND, X11 Window, etc.).</summary>

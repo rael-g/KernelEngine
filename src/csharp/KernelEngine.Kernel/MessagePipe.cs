@@ -29,6 +29,7 @@ public sealed unsafe class MessagePipe : IDisposable
             logger = logger != null ? logger.Native : null,
         };
         ke_message_pipe* pipe;
+        // In constructor we still throw because if creation fails, the object is unusable.
         KernelException.ThrowIfFailed(NativeMethods.message_pipe_create(&desc, &pipe));
         _native = pipe;
     }
@@ -37,12 +38,11 @@ public sealed unsafe class MessagePipe : IDisposable
     /// Moves all pending broadcast messages into reader queues.
     /// Call once per frame before any <see cref="TryReceive{T}"/> calls.
     /// </summary>
-    public void Pump() =>
-        KernelException.ThrowIfFailed(_native->pump(_native));
+    public Result Pump() => _native->pump(_native);
 
     /// <summary>Broadcasts an unmanaged value to all readers.</summary>
-    public void Broadcast<T>(ulong messageId, T value) where T : unmanaged =>
-        KernelException.ThrowIfFailed(_native->broadcast(_native, messageId, &value, (nuint)sizeof(T)));
+    public Result Broadcast<T>(ulong messageId, T value) where T : unmanaged =>
+        _native->broadcast(_native, messageId, &value, (nuint)sizeof(T));
 
     /// <summary>
     /// Attempts to dequeue one message of the given type.
@@ -57,11 +57,11 @@ public sealed unsafe class MessagePipe : IDisposable
     }
 
     /// <summary>Creates a reader pipe that receives a copy of every message broadcast on this pipe.</summary>
-    public MessagePipe CreateReader()
+    public Result<MessagePipe> CreateReader()
     {
         ke_message_pipe* reader;
-        KernelException.ThrowIfFailed(_native->create_reader(_native, &reader));
-        return new MessagePipe(reader);
+        var res = _native->create_reader(_native, &reader);
+        return new Result<MessagePipe>(res, new MessagePipe(reader));
     }
 
     public void Dispose()
