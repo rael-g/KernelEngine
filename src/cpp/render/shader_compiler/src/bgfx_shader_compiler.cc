@@ -61,7 +61,8 @@ ke_result BgfxShaderCompiler::CompileShader(const char *file_path, const char *v
 {
     if (shaderc_path_.empty())
     {
-        KE_LOG_ERROR(logger_, "shader_compiler", "Shaderc path not configured.");
+        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "shader_compiler", "Shaderc path not configured."};
+        if (logger_) logger_->log(logger_, &ev);
         return KE_ERROR_NOT_INITIALIZED;
     }
 
@@ -86,16 +87,23 @@ ke_result BgfxShaderCompiler::CompileShader(const char *file_path, const char *v
         cmd += " -i " + std::string(includes[i]);
     }
 
-    KE_LOG_INFO(logger_, "shader_compiler", "Compiling shader: %s", cmd.c_str());
+    {
+        ke_log_event ev = {KE_LOG_LEVEL_INFO, "shader_compiler", cmd.c_str()};
+        if (logger_) logger_->log(logger_, &ev);
+    }
 
     int res = system(cmd.c_str());
     if (res != 0)
     {
-        KE_LOG_ERROR(logger_, "shader_compiler", "Failed to compile shader.");
+        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "shader_compiler", "Failed to compile shader."};
+        if (logger_) logger_->log(logger_, &ev);
         return KE_ERROR_RENDER;
     }
 
-    KE_LOG_INFO(logger_, "shader_compiler", "Shader compiled successfully.");
+    {
+        ke_log_event ev = {KE_LOG_LEVEL_INFO, "shader_compiler", "Shader compiled successfully."};
+        if (logger_) logger_->log(logger_, &ev);
+    }
     return KE_OK;
 }
 

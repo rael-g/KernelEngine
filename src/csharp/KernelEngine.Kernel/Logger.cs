@@ -34,8 +34,27 @@ public sealed unsafe class Logger : IDisposable
         _native = logger;
     }
 
+    /// <summary>Dispatches a log event to all registered sinks.</summary>
+    public void Log(ke_log_level level, string tag, string message)
+    {
+        var tagBytes = System.Text.Encoding.ASCII.GetBytes(tag + '\0');
+        var msgBytes = System.Text.Encoding.ASCII.GetBytes(message + '\0');
+        fixed (byte* tagPtr = tagBytes, msgPtr = msgBytes)
+        {
+            var evt = new ke_log_event
+            {
+                level = (int)level,
+                tag = (sbyte*)tagPtr,
+                message = (sbyte*)msgPtr,
+            };
+            _native->log(_native, &evt);
+        }
+    }
+
     /// <summary>Registers a managed sink to receive all subsequent log events.</summary>
-    public void AddSink(ILoggerSink sink)
+    /// <param name="sink">The sink implementation.</param>
+    /// <param name="minLevel">Minimum level forwarded to this sink. Defaults to <see cref="ke_log_level.KE_LOG_LEVEL_TRACE"/>.</param>
+    public void AddSink(ILoggerSink sink, ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE)
     {
         var handle = GCHandle.Alloc(sink);
         _sinkHandles.Add(handle);
@@ -43,6 +62,7 @@ public sealed unsafe class Logger : IDisposable
         var nativeSink = new ke_logger_sink
         {
             handle = GCHandle.ToIntPtr(handle).ToPointer(),
+            min_level = (int)minLevel,
             log = &LogCallback,
             destroy = &SinkDestroy,
         };

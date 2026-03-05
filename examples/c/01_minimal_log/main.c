@@ -1,13 +1,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/kernel/logger/console_sink.h>
 #include <stdio.h>
-
-static void app_console_sink(ke_logger_sink *self, const ke_log_event *ev)
-{
-    (void)self;
-    printf("[%s] %s\n", ev->tag, ev->message);
-}
 
 int main(void)
 {
@@ -16,22 +10,20 @@ int main(void)
     ke_allocator *alloc = ke_allocator_malloc_create();
     if (!alloc) return 1;
 
-    ke_descriptor desc = {
-        .allocator = alloc,
-        .logger = NULL,
-        .message_pipe = NULL
-    };
+    ke_descriptor desc = {.allocator = alloc, .logger = NULL, .message_pipe = NULL};
 
     ke_logger *logger = NULL;
     ke_result res = ke_logger_create(&desc, &logger);
 
     if (res == KE_OK)
     {
-        ke_logger_sink sink = {.handle = NULL, .log = app_console_sink, .destroy = NULL};
-        logger->add_sink(logger, sink);
+        logger->add_sink(logger, ke_console_sink_create(KE_LOG_LEVEL_TRACE));
 
-        KE_LOG_INFO(logger, "app", "Hello from C Minimal Log!");
-        KE_LOG_DEBUG(logger, "app", "Testing macros with formatting: %d + %d = %d", 2, 2, 4);
+        ke_log_event ev = {KE_LOG_LEVEL_INFO, "app", "Hello from C Minimal Log!"};
+        logger->log(logger, &ev);
+
+        ke_log_event ev2 = {KE_LOG_LEVEL_DEBUG, "app", "Debug message"};
+        logger->log(logger, &ev2);
 
         logger->destroy(logger);
     }

@@ -18,7 +18,7 @@ static void logger_log(ke_logger *self, const ke_log_event *event)
     for (size_t i = 0; i < impl->sinks.size; ++i)
     {
         ke_logger_sink *sink = (ke_logger_sink *)impl->sinks.data[i];
-        if (sink && sink->log && event)
+        if (sink && sink->log && event->level >= sink->min_level)
         {
             sink->log(sink, event);
         }

@@ -1,14 +1,8 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/kernel/logger/console_sink.h>
 #include <kernel_engine/kernel/render/shader_compiler.h>
 #include <stdio.h>
-
-static void app_console_sink(ke_logger_sink *self, const ke_log_event *ev)
-{
-    (void)self;
-    printf("[%s] %s\n", ev->tag, ev->message);
-}
 
 int main(void)
 {
@@ -19,8 +13,7 @@ int main(void)
     ke_descriptor core_desc = {.allocator = alloc, .logger = NULL, .message_pipe = NULL};
     ke_logger_create(&core_desc, &logger);
 
-    ke_logger_sink sink = {.handle = NULL, .log = app_console_sink, .destroy = NULL};
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, ke_console_sink_create(KE_LOG_LEVEL_TRACE));
 
     ke_shader_compiler_bgfx_descriptor compiler_desc = {
         .allocator = alloc, .logger = logger, .shaderc_path = "vcpkg_installed/x64-windows-static-md/tools/bgfx/shaderc.exe"};
@@ -28,7 +21,8 @@ int main(void)
     ke_shader_compiler_bgfx_create(&compiler_desc, &compiler);
     compiler->on_initialize(compiler);
 
-    KE_LOG_INFO(logger, "app", "Compiling test shader...");
+    ke_log_event ev_start = {KE_LOG_LEVEL_INFO, "app", "Compiling test shader..."};
+    logger->log(logger, &ev_start);
 
     const char* includes[] = { "src/cpp/render/bgfx/shaders" };
     ke_result res = compiler->compile_shader(compiler,
@@ -38,9 +32,11 @@ int main(void)
         includes, 1);
 
     if (res == KE_OK) {
-        KE_LOG_INFO(logger, "app", "Shader compiled successfully!");
+        ke_log_event ev = {KE_LOG_LEVEL_INFO, "app", "Shader compiled successfully!"};
+        logger->log(logger, &ev);
     } else {
-        KE_LOG_ERROR(logger, "app", "Shader compilation failed with result: %d", res);
+        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "app", "Shader compilation failed."};
+        logger->log(logger, &ev);
     }
 
     compiler->on_shutdown(compiler);

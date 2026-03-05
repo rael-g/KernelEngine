@@ -1,6 +1,7 @@
 #include <kernel_engine/window/glfw/glfw_window_system.hh>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/input/input_messages.h>
+#include <kernel_engine/kernel/logger/logger.h>
 #include <new>
 
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -58,22 +59,39 @@ GlfwWindowSystem::GlfwWindowSystem(const ke_window_glfw_descriptor *desc)
 GlfwWindowSystem::~GlfwWindowSystem() {}
 ke_window *GlfwWindowSystem::ToApi() { return &window_api_; }
 
+static void glfw_log(ke_logger *logger, ke_log_level level, const char *msg)
+{
+    if (!logger || level < logger->runtime_limit) return;
+    ke_log_event ev = {(int)level, "glfw", msg};
+    logger->log(logger, &ev);
+}
+
 ke_result GlfwWindowSystem::OnInitialize()
 {
-    if (glfwInit() == 0) return KE_ERROR_WINDOW;
+    if (glfwInit() == 0)
+    {
+        glfw_log(logger_, KE_LOG_LEVEL_ERROR, "glfwInit() failed");
+        return KE_ERROR_WINDOW;
+    }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window_ = glfwCreateWindow(width_, height_, title_.c_str(), nullptr, nullptr);
     if (window_ != nullptr)
     {
         glfwSetWindowUserPointer(window_, this);
         glfwSetKeyCallback(window_, glfw_key_callback);
+        glfw_log(logger_, KE_LOG_LEVEL_INFO, "Window created");
     }
     return (window_ != nullptr) ? KE_OK : KE_ERROR_WINDOW;
 }
 
 ke_result GlfwWindowSystem::OnShutdown()
 {
-    if (window_ != nullptr) { glfwDestroyWindow(window_); glfwTerminate(); }
+    if (window_ != nullptr)
+    {
+        glfw_log(logger_, KE_LOG_LEVEL_INFO, "Window destroyed");
+        glfwDestroyWindow(window_);
+        glfwTerminate();
+    }
     return KE_OK;
 }
 
