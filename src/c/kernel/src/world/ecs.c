@@ -174,3 +174,23 @@ void *ke_ecs_component_get(ke_ecs_registry *registry, ke_entity entity, ke_compo
 
     return (uint8_t *)type->data + ((uintptr_t)existing - 1) * type->size;
 }
+
+void ke_ecs_registry_query(ke_ecs_registry *registry, ke_component_id component,
+                           ke_entity **out_entities, void **out_data, size_t *out_count)
+{
+    if (!registry || !out_entities || !out_data || !out_count) return;
+
+    ke_ecs_registry_internal *internal = (ke_ecs_registry_internal *)registry->internal_data;
+    if (component >= internal->component_types.size)
+    {
+        *out_entities = NULL;
+        *out_data = NULL;
+        *out_count = 0;
+        return;
+    }
+
+    ke_component_type *type = (ke_component_type *)internal->component_types.data[component];
+    *out_entities = (ke_entity *)type->entities.data;
+    *out_data = type->data;
+    *out_count = type->entities.size;
+}

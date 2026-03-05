@@ -69,11 +69,7 @@ static void node_update_recursive(ke_node *node, const ke_mat4 *parent_world)
         memcpy(&world, &local_mat, sizeof(ke_mat4));
     }
 
-    // Write back to the implementation's matrix field
-    // (This requires knowledge of the impl, which is fine within the same domain)
-    // For now we assume the caller handles this or we add set_world_matrix to API.
-    // Let's assume we update the internal state directly.
-    // ...
+    node->set_world_matrix(node, &world);
 
     ke_node *child = node->get_first_child(node);
     while (child)

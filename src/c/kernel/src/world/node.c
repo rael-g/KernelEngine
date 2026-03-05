@@ -1,4 +1,5 @@
 #include <kernel_engine/kernel/world/node.h>
+#include <kernel_engine/kernel/common/math.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <string.h>
 
@@ -47,6 +48,12 @@ static ke_result node_set_local_transform(ke_node *self, const ke_transform *tra
 static ke_result node_get_world_matrix(ke_node *self, ke_mat4 *out_matrix)
 {
     *out_matrix = ((ke_node_impl *)self->handle)->world_matrix;
+    return KE_OK;
+}
+
+static ke_result node_set_world_matrix(ke_node *self, const ke_mat4 *matrix)
+{
+    ((ke_node_impl *)self->handle)->world_matrix = *matrix;
     return KE_OK;
 }
 
@@ -138,12 +145,13 @@ ke_result ke_node_create(const ke_node_descriptor *desc, ke_node **out_node)
 
     memset(impl, 0, sizeof(ke_node_impl));
     if (desc->name) strncpy(impl->name, desc->name, 63);
-    
+
     impl->allocator = desc->allocator;
     impl->local_transform.scale.x = 1.0f;
     impl->local_transform.scale.y = 1.0f;
     impl->local_transform.scale.z = 1.0f;
     impl->local_transform.rotation.w = 1.0f;
+    ke_mat4_identity(&impl->world_matrix);
     impl->is_dirty = true;
     impl->on_start = desc->on_start;
     impl->on_update = desc->on_update;
@@ -155,6 +163,7 @@ ke_result ke_node_create(const ke_node_descriptor *desc, ke_node **out_node)
     impl->api.get_local_transform = node_get_local_transform;
     impl->api.set_local_transform = node_set_local_transform;
     impl->api.get_world_matrix = node_get_world_matrix;
+    impl->api.set_world_matrix = node_set_world_matrix;
     impl->api.add_child = node_add_child;
     impl->api.remove_child = node_remove_child;
     impl->api.get_parent = node_get_parent;

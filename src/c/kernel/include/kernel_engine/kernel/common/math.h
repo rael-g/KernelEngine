@@ -51,20 +51,27 @@ extern "C"
         }
     }
 
-    // Simplified transform to matrix (no full quat math for now to keep it core C)
+    /// @brief Builds a row-major TRS matrix from position, quaternion rotation, and scale.
     static inline void ke_mat4_from_transform(ke_mat4 *out, const ke_vec3 *pos, const ke_quat *rot, const ke_vec3 *scale)
     {
-        ke_mat4_identity(out);
-        // Translation
-        out->m[12] = pos->x;
-        out->m[13] = pos->y;
-        out->m[14] = pos->z;
+        float qx = rot->x, qy = rot->y, qz = rot->z, qw = rot->w;
 
-        // Rotation placeholder (identity for now)
-        // Scale
-        out->m[0] *= scale->x;
-        out->m[5] *= scale->y;
-        out->m[10] *= scale->z;
+        float r00 = 1.0f - 2.0f * (qy*qy + qz*qz);
+        float r01 = 2.0f * (qx*qy + qz*qw);
+        float r02 = 2.0f * (qx*qz - qy*qw);
+
+        float r10 = 2.0f * (qx*qy - qz*qw);
+        float r11 = 1.0f - 2.0f * (qx*qx + qz*qz);
+        float r12 = 2.0f * (qy*qz + qx*qw);
+
+        float r20 = 2.0f * (qx*qz + qy*qw);
+        float r21 = 2.0f * (qy*qz - qx*qw);
+        float r22 = 1.0f - 2.0f * (qx*qx + qy*qy);
+
+        out->m[0]  = r00 * scale->x; out->m[1]  = r01 * scale->x; out->m[2]  = r02 * scale->x; out->m[3]  = 0.0f;
+        out->m[4]  = r10 * scale->y; out->m[5]  = r11 * scale->y; out->m[6]  = r12 * scale->y; out->m[7]  = 0.0f;
+        out->m[8]  = r20 * scale->z; out->m[9]  = r21 * scale->z; out->m[10] = r22 * scale->z; out->m[11] = 0.0f;
+        out->m[12] = pos->x;         out->m[13] = pos->y;         out->m[14] = pos->z;         out->m[15] = 1.0f;
     }
 
 #ifdef __cplusplus
