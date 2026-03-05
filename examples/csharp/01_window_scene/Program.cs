@@ -1,52 +1,38 @@
-using System;
-
 using KernelEngine;
 using KernelEngine.Bgfx;
 using KernelEngine.Framework;
 using KernelEngine.Glfw;
-using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
-
-// ── Entry point ───────────────────────────────────────────────────────────────
 
 var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
+    .AddConsoleSink()
     .AddMessagePipe()
     .AddGlfwWindow(800, 600, "KernelEngine — C# Window/Scene")
-    .AddBgfxRenderer("src/cpp/render/bgfx/shaders")
-    .AddSingleton<ILoggerSink, ConsoleLoggerSink>();
+    .AddBgfxRenderer("src/cpp/render/bgfx/shaders");
 
-using var app = new WindowSceneApp();
-app.Run(services);
+float hue = 0f;
 
-// ── App ───────────────────────────────────────────────────────────────────────
+using var app = new Application();
 
-sealed class WindowSceneApp : Application
+app.OnReady = () =>
 {
-    private float _hue;
+    app.ActiveWorld.Scene.AddNode(new SpinnerNode(), "Spinner");
+};
 
-    protected override void OnReady()
-    {
-        // Populate the scene before the loop starts.
-        var node = ActiveWorld.Scene.CreateNode(new SpinnerNode(), "Spinner", Allocator);
-        ActiveWorld.Scene.Root.AddChild(node);
-    }
+app.OnUpdate = () =>
+{
+    hue += 0.003f;
+    if (hue > 1f) hue -= 1f;
 
-    // The base loop calls World.Update() and Window.PollEvents() each frame.
-    // Override to insert per-frame logic (clear color animation, etc.).
-    protected override void OnUpdate()
-    {
-        _hue += 0.003f;
-        if (_hue > 1.0f) _hue -= 1.0f;
+    float r = MathF.Abs(hue * 6f - 3f) - 1f;
+    float g = 2f - MathF.Abs(hue * 6f - 2f);
+    float b = 2f - MathF.Abs(hue * 6f - 4f);
+    app.Renderer.ClearColor(Math.Clamp(r, 0, 1), Math.Clamp(g, 0, 1), Math.Clamp(b, 0, 1), 1f);
+};
 
-        // Hue → RGB (simple approximation for the demo).
-        float r = MathF.Abs(_hue * 6f - 3f) - 1f;
-        float g = 2f - MathF.Abs(_hue * 6f - 2f);
-        float b = 2f - MathF.Abs(_hue * 6f - 4f);
-        Renderer.ClearColor(Math.Clamp(r, 0, 1), Math.Clamp(g, 0, 1), Math.Clamp(b, 0, 1), 1f);
-    }
-}
+app.Run(services);
 
 // ── Scripted node ─────────────────────────────────────────────────────────────
 
@@ -61,7 +47,7 @@ sealed class SpinnerNode : Node
 
     protected override void OnUpdate(float dt)
     {
-        _angle += 90f * dt; // 90°/s
+        _angle += 90f * dt;
         if (_angle >= 360f) _angle -= 360f;
 
         LocalTransform = LocalTransform with
@@ -70,12 +56,4 @@ sealed class SpinnerNode : Node
                 _angle * MathF.PI / 180f, 0f, 0f),
         };
     }
-}
-
-// ── Console logger sink ───────────────────────────────────────────────────────
-
-sealed class ConsoleLoggerSink : ILoggerSink
-{
-    public void Log(ke_log_level level, string tag, string message) =>
-        Console.WriteLine($"[{level}] {tag}: {message}");
 }
