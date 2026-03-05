@@ -1,3 +1,4 @@
+using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine;
@@ -26,4 +27,13 @@ public static class ServiceCollectionExtensions
             sp.GetService<Logger>()));
         return services;
     }
+
+    /// <summary>
+    /// Registers the built-in <see cref="ConsoleSink"/> that mirrors the native <c>ke_console_sink</c>.
+    /// </summary>
+    public static IServiceCollection AddConsoleSink(
+        this IServiceCollection services,
+        ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE) =>
+        services.AddSingleton<ILoggerSink>(_ => new ConsoleSink { MinLevel = minLevel });
+
 }
