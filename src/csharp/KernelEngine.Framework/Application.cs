@@ -44,7 +44,17 @@ public class Application : IDisposable
         if (ActiveWorld == null)
             ActiveWorld = new World(Allocator, Renderer, Window);
 
+        LightNode.Initialize(ActiveWorld.Registry);
+        CameraNode.Initialize(ActiveWorld.Registry);
         MeshNode.Initialize(ActiveWorld.Registry);
+        SkyboxNode.Initialize();
+        // Handles 0 are built-in defaults created by the renderer during initialization.
+        MeshNode.DefaultMeshHandle     = 0; // unit quad
+        MeshNode.DefaultMaterialHandle = 0; // white material
+        Renderer.SetAmbientLight(0.15f, 0.15f, 0.15f);
+        ActiveWorld.AddSystem(new LightRenderSystem(Renderer));
+        ActiveWorld.AddSystem(new CameraRenderSystem(Renderer, Window));
+        ActiveWorld.AddSystem(new SkyboxRenderSystem(Renderer)); // after camera, before meshes
         ActiveWorld.AddSystem(new MeshRenderSystem(Renderer));
 
         OnReady?.Invoke();
