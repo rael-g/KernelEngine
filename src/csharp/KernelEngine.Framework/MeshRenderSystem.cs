@@ -22,7 +22,7 @@ public sealed unsafe class MeshRenderSystem : ISystem
         {
             var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
             if (tc != null)
-                _renderer.SubmitColored(tc->WorldMatrix, data[i].R, data[i].G, data[i].B, data[i].A);
+                _renderer.SubmitMesh(data[i].MeshHandle, data[i].MaterialHandle, tc->WorldMatrix);
         }
     }
 }

@@ -3,11 +3,15 @@ using System.Runtime.InteropServices;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// ECS component holding the render color for a mesh node.
+/// ECS component linking a scene node to a GPU mesh and a material.
 /// Stored contiguously in native memory via <see cref="EcsRegistry"/>.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct MeshComponent
 {
-    public float R, G, B, A;
+    /// <summary>Handle returned by <see cref="Renderer.CreateMesh"/>.</summary>
+    public uint MeshHandle;
+
+    /// <summary>Handle returned by <see cref="Renderer.CreateMaterial"/>.</summary>
+    public uint MaterialHandle;
 }

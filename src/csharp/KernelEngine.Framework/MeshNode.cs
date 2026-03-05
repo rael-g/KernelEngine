@@ -1,17 +1,23 @@
-using System.Numerics;
 using KernelEngine;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that renders a colored quad via the ECS mesh render system.
-/// Add to a scene with <c>scene.AddNode(new MeshNode { Color = … }, "name")</c>.
+/// A scene node that renders a mesh via the ECS mesh render system.
+/// Set <see cref="MeshHandle"/> and <see cref="MaterialHandle"/> before adding to the scene,
+/// or leave as default to use the built-in unit quad with a white material.
 /// </summary>
 public class MeshNode : Node
 {
     // ── ECS registration (shared across all MeshNode instances) ──────────────
 
     internal static uint ComponentId { get; private set; } = uint.MaxValue;
+
+    /// <summary>Handle of the built-in unit quad mesh (handle 0, created by the renderer at init).</summary>
+    public static uint DefaultMeshHandle { get; internal set; } = 0;
+
+    /// <summary>Handle of the built-in white material (handle 0, created by the renderer at init).</summary>
+    public static uint DefaultMaterialHandle { get; internal set; } = 0;
 
     internal static void Initialize(EcsRegistry registry)
     {
@@ -21,13 +27,26 @@ public class MeshNode : Node
 
     // ── Per-instance ──────────────────────────────────────────────────────────
 
-    /// <summary>The RGBA color of this mesh. Set before adding to the scene.</summary>
-    public Vector4 Color { get; init; } = Vector4.One;
+    /// <summary>
+    /// GPU mesh handle to render. Defaults to <see cref="DefaultMeshHandle"/> (built-in unit quad).
+    /// Set this to a handle returned by <see cref="Renderer.CreateMesh"/> for custom geometry.
+    /// </summary>
+    public uint MeshHandle { get; init; } = uint.MaxValue;
+
+    /// <summary>
+    /// Material handle to use for rendering. Defaults to <see cref="DefaultMaterialHandle"/> (built-in white).
+    /// Set this to a handle returned by <see cref="Renderer.CreateMaterial"/> for custom materials.
+    /// </summary>
+    public uint MaterialHandle { get; init; } = uint.MaxValue;
 
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue) return;
         ref var comp = ref AddComponent<MeshComponent>(ComponentId);
-        comp = new MeshComponent { R = Color.X, G = Color.Y, B = Color.Z, A = Color.W };
+        comp = new MeshComponent
+        {
+            MeshHandle     = MeshHandle     != uint.MaxValue ? MeshHandle     : DefaultMeshHandle,
+            MaterialHandle = MaterialHandle != uint.MaxValue ? MaterialHandle : DefaultMaterialHandle,
+        };
     }
 }

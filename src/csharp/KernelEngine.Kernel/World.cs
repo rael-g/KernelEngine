@@ -70,6 +70,9 @@ public sealed unsafe class World : IDisposable
     /// <summary>The ECS registry for this world.</summary>
     public EcsRegistry Registry => _registry ??= new EcsRegistry(_native->get_registry(_native));
 
+    /// <summary>Entity ID of the active camera. <see cref="CameraRenderSystem"/> reads this each frame.</summary>
+    public ulong ActiveCamera { get; set; }
+
     // ── Systems ───────────────────────────────────────────────────────────────
 
     /// <summary>Registers a managed system to be called each frame after the built-in C systems.</summary>
