@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
+    <ProjectReference Include="../../../src/csharp/Native/KernelEngine.Glfw.Native/KernelEngine.Glfw.Native.csproj" />
+    <ProjectReference Include="../../../src/csharp/Native/KernelEngine.Bgfx.Native/KernelEngine.Bgfx.Native.csproj" />
+  </ItemGroup>
+
+</Project>
