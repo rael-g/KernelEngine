@@ -1,4 +1,5 @@
 using KernelEngine;
+using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 using ILogger = Serilog.ILogger;
 
