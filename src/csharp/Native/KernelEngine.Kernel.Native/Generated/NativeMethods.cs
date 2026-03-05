@@ -75,14 +75,11 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_component_get", ExactSpelling = true)]
     public static extern void* ecs_component_get(ke_ecs_registry* registry, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint component);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_create", ExactSpelling = true)]
-    public static extern ke_result node_create([NativeTypeName("const ke_node_descriptor *")] ke_node_descriptor* desc, ke_node** out_node);
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_registry_query", ExactSpelling = true)]
+    public static extern void ecs_registry_query(ke_ecs_registry* registry, [NativeTypeName("ke_component_id")] uint component, [NativeTypeName("ke_entity **")] ulong** out_entities, void** out_data, [NativeTypeName("size_t *")] nuint* out_count);
 
     [NativeTypeName("#define KE_ENTITY_INVALID 0")]
-    public const int KE_ENTITY_INVALID = 0;
-
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_create", ExactSpelling = true)]
-    public static extern ke_result scene_create([NativeTypeName("const ke_scene_descriptor *")] ke_scene_descriptor* desc, ke_scene** out_scene);
+    public const ulong KE_ENTITY_INVALID = 0;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_create", ExactSpelling = true)]
     public static extern ke_result world_create([NativeTypeName("const ke_world_descriptor *")] ke_world_descriptor* desc, ke_world** out_world);

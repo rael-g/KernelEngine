@@ -1,7 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine;
 
 namespace KernelEngine.Framework;
 
+/// <summary>
+/// Application shell: resolves services from DI, creates the world, and runs the main loop.
+/// </summary>
 public class Application : IDisposable
 {
     public IServiceProvider Services { get; private set; } = null!;
@@ -11,7 +15,7 @@ public class Application : IDisposable
     public Window Window { get; private set; } = null!;
     public Renderer Renderer { get; private set; } = null!;
 
-    /// <summary>The current simulation world containing the Scene Graph and ECS Registry.</summary>
+    /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
     public World ActiveWorld { get; set; } = null!;
 
     /// <summary>Called once after the world is created and before the main loop starts.</summary>
@@ -39,6 +43,9 @@ public class Application : IDisposable
 
         if (ActiveWorld == null)
             ActiveWorld = new World(Allocator, Renderer, Window);
+
+        MeshNode.Initialize(ActiveWorld.Registry);
+        ActiveWorld.AddSystem(new MeshRenderSystem(Renderer));
 
         OnReady?.Invoke();
 

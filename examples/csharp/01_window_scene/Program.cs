@@ -1,3 +1,4 @@
+using System.Numerics;
 using KernelEngine;
 using KernelEngine.Bgfx;
 using KernelEngine.Framework;
@@ -18,7 +19,11 @@ using var app = new Application();
 
 app.OnReady = () =>
 {
-    app.ActiveWorld.Scene.AddNode(new SpinnerNode(), "Spinner");
+    var spinner = app.ActiveWorld.Scene.AddNode(new SpinnerNode(), "Spinner");
+    app.ActiveWorld.Scene.AddNode(
+        new MeshNode { Color = new Vector4(1f, 0.5f, 0f, 1f) },
+        "Quad",
+        parent: spinner);
 };
 
 app.OnUpdate = () =>
@@ -34,7 +39,7 @@ app.OnUpdate = () =>
 
 app.Run(services);
 
-// ── Scripted node ─────────────────────────────────────────────────────────────
+// ── Scripted spinner node ──────────────────────────────────────────────────────
 
 sealed class SpinnerNode : Node
 {

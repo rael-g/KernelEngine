@@ -6,152 +6,187 @@ using KernelEngine.Kernel.Native;
 namespace KernelEngine;
 
 /// <summary>
-/// A scene node — represents a spatial object and a unit of behavior.
-/// Non-owning wrapper: the <see cref="Scene"/> that created it owns the lifetime.
+/// A scene node backed by an ECS entity. Represents a spatial object with optional behavior.
 /// <para>
 /// Subclass and override <see cref="OnStart"/>/<see cref="OnUpdate"/> to attach behavior.
-/// Pass your subclass instance to <see cref="Scene.CreateNode(Node, string, Allocator)"/>.
+/// The entity is created by the world; transform and hierarchy live in ECS components.
 /// </para>
 /// </summary>
 public unsafe class Node
 {
-    // Static registry: ke_node* address → managed Node, used by native callbacks.
-    private static readonly Dictionary<nint, Node> s_registry = [];
+    // Entity → managed Node, used by the [UnmanagedCallersOnly] script callbacks.
+    private static readonly Dictionary<ulong, Node> s_registry = [];
 
-    private ke_node* _native;
+    private ulong _entity;
+    private World? _world;
+    private string _name = "";
 
-    internal ke_node* Native => _native;
-
-    /// <summary>Internal constructor used when wrapping an existing native node.</summary>
-    internal Node(ke_node* native) => _native = native;
-
-    /// <summary>
-    /// Protected parameterless constructor for user subclasses.
-    /// The native pointer is set by <see cref="Scene.CreateNode(Node, string, Allocator)"/>.
-    /// </summary>
+    /// <summary>Parameterless constructor for user subclasses.</summary>
     protected Node() { }
 
-    internal void SetNative(ke_node* native) => _native = native;
+    /// <summary>Internal constructor for wrapping an existing entity (e.g. root).</summary>
+    internal Node(ulong entity, World world, string name)
+    {
+        _entity = entity;
+        _world = world;
+        _name = name;
+    }
 
-    // ── Properties ──────────────────────────────────────────────────────────
+    /// <summary>Called by <see cref="Scene.AddNode{T}"/> to bind this instance to an entity.</summary>
+    internal void Initialize(ulong entity, World world, string name)
+    {
+        _entity = entity;
+        _world = world;
+        _name = name;
+    }
 
-    public string Name =>
-        Marshal.PtrToStringAnsi((nint)_native->get_name(_native)) ?? string.Empty;
+    /// <summary>
+    /// Adds a <see cref="ScriptComponent"/> to the ECS entity so the C ScriptSystem
+    /// will call <see cref="OnStart"/> and <see cref="OnUpdate"/> each frame.
+    /// </summary>
+    internal void RegisterScript()
+    {
+        if (_world == null) return;
+        s_registry[_entity] = this;
 
+        ref var script = ref _world.Registry.AddComponent<ScriptComponent>(_entity, _world.ScriptComponentId);
+        script = new ScriptComponent
+        {
+            Started = 0,
+            OnStart = &NativeOnStart,
+            OnUpdate = &NativeOnUpdate,
+        };
+    }
+
+    // ── Identity ──────────────────────────────────────────────────────────────
+
+    /// <summary>The ECS entity ID. Immutable after node creation.</summary>
+    public ulong Entity => _entity;
+
+    /// <summary>The name given at node creation.</summary>
+    public string Name => _name;
+
+    // ── Transform ─────────────────────────────────────────────────────────────
+
+    /// <summary>Local spatial transform (position, rotation, scale).</summary>
     public Transform LocalTransform
     {
         get
         {
-            ke_transform t;
-            KernelException.ThrowIfFailed(_native->get_local_transform(_native, &t));
-            return Transform.FromNative(t);
+            var c = TransformPtr;
+            if (c == null) return Transform.Identity;
+            return new Transform { Position = c->Position, Rotation = c->Rotation, Scale = c->Scale };
         }
         set
         {
-            var t = value.ToNative();
-            KernelException.ThrowIfFailed(_native->set_local_transform(_native, &t));
+            var c = TransformPtr;
+            if (c == null) return;
+            c->Position = value.Position;
+            c->Rotation = value.Rotation;
+            c->Scale = value.Scale;
         }
     }
 
+    /// <summary>World-space matrix, computed each frame by the TransformSystem.</summary>
     public Matrix4x4 WorldMatrix
     {
         get
         {
-            ke_mat4 m;
-            KernelException.ThrowIfFailed(_native->get_world_matrix(_native, &m));
-            return Unsafe.As<ke_mat4, Matrix4x4>(ref m);
+            var c = TransformPtr;
+            return c != null ? c->WorldMatrix : Matrix4x4.Identity;
         }
     }
 
-    // ── Hierarchy ────────────────────────────────────────────────────────────
+    private TransformComponent* TransformPtr
+    {
+        get
+        {
+            if (_world == null) return null;
+            return _world.Registry.GetComponent<TransformComponent>(_entity, _world.TransformComponentId);
+        }
+    }
 
+    // ── Hierarchy ─────────────────────────────────────────────────────────────
+
+    /// <summary>Parent node, or <c>null</c> if this is the root.</summary>
     public Node? Parent
     {
         get
         {
-            var p = _native->get_parent(_native);
-            return p == null ? null : GetOrWrap(p);
+            var h = HierarchyPtr;
+            return h != null && h->Parent != 0 ? s_registry.GetValueOrDefault(h->Parent) : null;
         }
     }
 
+    /// <summary>First child, or <c>null</c> if none.</summary>
     public Node? FirstChild
     {
         get
         {
-            var c = _native->get_first_child(_native);
-            return c == null ? null : GetOrWrap(c);
+            var h = HierarchyPtr;
+            return h != null && h->FirstChild != 0 ? s_registry.GetValueOrDefault(h->FirstChild) : null;
         }
     }
 
+    /// <summary>Next sibling, or <c>null</c> if this is the last child.</summary>
     public Node? NextSibling
     {
         get
         {
-            var s = _native->get_next_sibling(_native);
-            return s == null ? null : GetOrWrap(s);
+            var h = HierarchyPtr;
+            return h != null && h->NextSibling != 0 ? s_registry.GetValueOrDefault(h->NextSibling) : null;
         }
     }
 
-    public void AddChild(Node child) =>
-        KernelException.ThrowIfFailed(_native->add_child(_native, child._native));
+    private HierarchyComponent* HierarchyPtr
+    {
+        get
+        {
+            if (_world == null) return null;
+            return _world.Registry.GetComponent<HierarchyComponent>(_entity, _world.HierarchyComponentId);
+        }
+    }
 
-    public void RemoveChild(Node child) =>
-        KernelException.ThrowIfFailed(_native->remove_child(_native, child._native));
+    // ── ECS helpers for subclasses ────────────────────────────────────────────
 
-    // ── ECS Entity Link ──────────────────────────────────────────────────────
+    /// <summary>Adds a component to this node's entity and returns a reference to it.</summary>
+    protected ref T AddComponent<T>(uint componentId) where T : unmanaged =>
+        ref _world!.Registry.AddComponent<T>(_entity, componentId);
 
-    public ulong Entity => _native->get_entity(_native);
+    /// <summary>Returns a pointer to the component, or <c>null</c> if not present.</summary>
+    protected T* GetComponent<T>(uint componentId) where T : unmanaged =>
+        _world!.Registry.GetComponent<T>(_entity, componentId);
 
-    // ── Script Overrides ─────────────────────────────────────────────────────
+    /// <summary>Removes a component from this node's entity.</summary>
+    protected void RemoveComponent(uint componentId) =>
+        _world!.Registry.RemoveComponent(_entity, componentId);
 
-    /// <summary>Called once when the world starts this node.</summary>
+    // ── Script overrides ──────────────────────────────────────────────────────
+
+    /// <summary>Called once before the first <see cref="OnUpdate"/> call.</summary>
     protected virtual void OnStart() { }
 
-    /// <summary>Called every frame by the world update loop.</summary>
+    /// <summary>Called every frame.</summary>
     protected virtual void OnUpdate(float deltaTime) { }
 
-    // ── Internal ─────────────────────────────────────────────────────────────
+    // ── Internal registry ─────────────────────────────────────────────────────
 
-    private bool _started;
+    internal static void Unregister(ulong entity) => s_registry.Remove(entity);
 
-    internal void InvokeLifecycle(float dt)
-    {
-        if (!_started)
-        {
-            _started = true;
-            OnStart();
-        }
-        OnUpdate(dt);
-    }
-
-    internal static IEnumerable<Node> AllScripted => s_registry.Values;
-
-    internal void Register() => s_registry[(nint)_native] = this;
-
-    internal static void Unregister(ke_node* native) =>
-        s_registry.Remove((nint)native);
-
-    internal static Node GetOrWrap(ke_node* native)
-    {
-        if (s_registry.TryGetValue((nint)native, out var existing))
-            return existing;
-        return new Node(native);
-    }
-
-    // ── Unmanaged Script Callbacks ────────────────────────────────────────────
+    // ── Unmanaged callbacks (called by the C ScriptSystem) ────────────────────
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    internal static ke_result NativeOnStart(ke_node* self)
+    internal static ke_result NativeOnStart(ulong entity)
     {
-        if (s_registry.TryGetValue((nint)self, out var node))
+        if (s_registry.TryGetValue(entity, out var node))
             node.OnStart();
         return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    internal static ke_result NativeOnUpdate(ke_node* self, float dt)
+    internal static ke_result NativeOnUpdate(ulong entity, float dt)
     {
-        if (s_registry.TryGetValue((nint)self, out var node))
+        if (s_registry.TryGetValue(entity, out var node))
             node.OnUpdate(dt);
         return ke_result.KE_OK;
     }

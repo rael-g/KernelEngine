@@ -1,9 +1,12 @@
 #ifndef KERNEL_ENGINE_KERNEL_WORLD_WORLD_H_
 #define KERNEL_ENGINE_KERNEL_WORLD_WORLD_H_
 
-#include <kernel_engine/kernel/world/scene.h>
+#include <kernel_engine/kernel/world/ecs.h>
+#include <kernel_engine/kernel/world/components.h>
+#include <kernel_engine/kernel/world/system.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/engine/frame.h>
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/window/window.h>
@@ -14,18 +17,43 @@ extern "C"
 #endif
 
     /// @brief Public interface for the Simulation World.
-    /// Container for the Scene Graph, ECS, and core services.
+    /// The world is the single source of truth for scene hierarchy and ECS state.
+    /// It owns the ECS registry and drives all built-in systems each frame.
     typedef struct ke_world
     {
         void *handle;
         void (*destroy)(struct ke_world *self);
 
-        struct ke_scene *(*get_scene)(struct ke_world *self);
+        /// @brief Returns the ECS registry.
         struct ke_ecs_registry *(*get_registry)(struct ke_world *self);
 
-        /// @brief Main entry point for the simulation loop.
-        /// Processes behaviors, physics, and updates the scene.
+        /// @brief Advances the simulation by one frame.
+        /// Runs ScriptSystem → TransformSystem → user systems.
         ke_result (*update)(struct ke_world *self, const struct ke_frame *frame);
+
+        // ── Node management (replaces ke_scene) ──────────────────────────────
+
+        /// @brief Creates a node entity (TransformComponent + HierarchyComponent +
+        ///        NameComponent) and links it to @p parent (root if KE_ENTITY_INVALID).
+        ke_entity (*create_node)(struct ke_world *self, const char *name, ke_entity parent);
+
+        /// @brief Destroys a node and all its descendants recursively.
+        ke_result (*destroy_node)(struct ke_world *self, ke_entity entity);
+
+        /// @brief Returns the implicit root node entity (always entity 1).
+        ke_entity (*get_root)(struct ke_world *self);
+
+        // ── Built-in component IDs ────────────────────────────────────────────
+
+        ke_component_id (*transform_id)(struct ke_world *self);
+        ke_component_id (*hierarchy_id)(struct ke_world *self);
+        ke_component_id (*name_id)(struct ke_world *self);
+        ke_component_id (*script_id)(struct ke_world *self);
+
+        // ── System management ─────────────────────────────────────────────────
+
+        /// @brief Registers a C system to be called each frame by update().
+        ke_result (*add_system)(struct ke_world *self, const ke_system *system);
 
     } ke_world;
 
