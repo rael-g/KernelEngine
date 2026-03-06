@@ -56,7 +56,7 @@ If a choice exists between two valid approaches, the one that reduces ambiguity 
 
 ## Memory and ownership
 * Ownership MUST be explicit.
-* Use the provided Engine Allocators (Malloc, Arena, Pool) for all plugin-level allocations to ensure telemetry and safety (Canaries).
+* Use the provided Engine Allocators (Malloc, Arena, Pool) for all service-level allocations to ensure telemetry and safety (Canaries).
 * Raw pointers represent non-owning references unless documented otherwise.
 
 ---

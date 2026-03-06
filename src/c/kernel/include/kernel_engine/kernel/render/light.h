@@ -6,7 +6,7 @@ extern "C"
 {
 #endif
 
-    /// @brief Directional light descriptor for ke_render::set_directional_light.
+    /// @brief Directional light parameters for ke_render::set_directional_light.
     typedef struct ke_directional_light
     {
         float dir_x, dir_y, dir_z; ///< Direction toward the light source (world space, normalized)

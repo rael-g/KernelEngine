@@ -61,14 +61,14 @@ Key types (see `src/c/kernel/include/kernel_engine/kernel/`):
 
 CMake target: `ke_kernel` (alias `ke::kernel`). Public headers live under `include/`, private implementation under `src/`.
 
-### Layer 2 — C++ plugins (`src/cpp/`)
+### Layer 2 — C++ implementations (`src/cpp/`)
 
 Concrete implementations of the C kernel interfaces, compiled as shared libraries:
 - `src/cpp/window/glfw` — `ke_window_glfw_create` — GLFW-backed window
 - `src/cpp/render/bgfx` — `ke_render_bgfx_create` — bgfx-backed renderer
-- `src/cpp/render/shader_compiler` — bgfx shader compiler wrapper
+- `src/cpp/render/bgfx_shader_compiler` — bgfx shader compiler wrapper
 
-Plugins expose only a C factory function (e.g., `ke_window_glfw_create`) so the kernel layer stays unaware of C++ or vendor libraries.
+Implementations expose only a C factory function (e.g., `ke_window_glfw_create`) so the kernel layer stays unaware of C++ or vendor libraries.
 
 ### Layer 3 — C# native bindings (`src/csharp/Native/`)
 
@@ -116,7 +116,7 @@ Users subclass `Application` and register concrete services into `IServiceCollec
 ### Memory
 - Every major component requires an explicit `ke_allocator*`.
 - Raw pointers are non-owning unless documented otherwise.
-- Use engine allocators for all plugin-level allocations.
+- Use engine allocators for all implementation-level allocations.
 
 ### Git / commits
 - All commits must follow Conventional Commits (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`).

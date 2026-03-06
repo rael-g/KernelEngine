@@ -23,14 +23,9 @@ public sealed unsafe class MessagePipe : IDisposable
     /// <summary>Creates a new message pipe using the given allocator.</summary>
     public MessagePipe(Allocator allocator, Logger? logger = null)
     {
-        var desc = new ke_descriptor
-        {
-            allocator = allocator.Native,
-            logger = logger != null ? logger.Native : null,
-        };
         ke_message_pipe* pipe;
         // In constructor we still throw because if creation fails, the object is unusable.
-        KernelException.ThrowIfFailed(NativeMethods.message_pipe_create(&desc, &pipe));
+        KernelException.ThrowIfFailed(NativeMethods.message_pipe_create(allocator.Native, logger != null ? logger.Native : null, &pipe));
         _native = pipe;
     }
 

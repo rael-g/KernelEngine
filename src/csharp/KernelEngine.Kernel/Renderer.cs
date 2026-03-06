@@ -5,7 +5,7 @@ using KernelEngine.Kernel.Native;
 namespace KernelEngine;
 
 /// <summary>
-/// Hardware-accelerated renderer. Takes ownership of a <c>ke_render*</c> created by a plugin factory,
+/// Hardware-accelerated renderer. Takes ownership of a <c>ke_render*</c> created by a service factory,
 /// calls <c>on_initialize</c> on construction, and <c>on_shutdown</c>/<c>destroy</c> on disposal.
 /// </summary>
 public sealed unsafe class Renderer : IDisposable
@@ -80,14 +80,14 @@ public sealed unsafe class Renderer : IDisposable
     /// <summary>Releases GPU resources for a texture handle.</summary>
     public Result DestroyTexture(uint handle) => _native->destroy_texture(_native, handle);
 
-    /// <summary>Creates a material from a color tint and optional albedo texture, returning a stable handle.</summary>
+    /// <summary>Creates a material from properties, returning a stable handle.</summary>
     public Result<uint> CreateMaterial(float r, float g, float b, float a, uint textureHandle = 0,
                                float metallic = 0f, float roughness = 0.5f)
     {
         uint handle;
-        var desc = new ke_material_descriptor { r = r, g = g, b = b, a = a, albedo = textureHandle,
-                                                metallic = metallic, roughness = roughness };
-        var res = _native->create_material(_native, &desc, &handle);
+        var mat = new ke_material { r = r, g = g, b = b, a = a, albedo = textureHandle,
+                                    metallic = metallic, roughness = roughness };
+        var res = _native->create_material(_native, &mat, &handle);
         return new Result<uint>(res, handle);
     }
 

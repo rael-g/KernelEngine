@@ -46,14 +46,14 @@ public sealed unsafe class World : IDisposable
     /// <summary>Creates a world bound to the given renderer and window.</summary>
     public World(Allocator allocator, Renderer renderer, Window window)
     {
-        var desc = new ke_world_descriptor
+        var parameters = new ke_world_params
         {
             allocator = allocator.Native,
             renderer = renderer.Native,
             window = window.Native,
         };
         ke_world* world;
-        KernelException.ThrowIfFailed(NativeMethods.world_create(&desc, &world));
+        KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world));
         _native = world;
 
         TransformComponentId = _native->transform_id(_native);

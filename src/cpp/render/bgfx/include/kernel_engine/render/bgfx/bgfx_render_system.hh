@@ -1,14 +1,13 @@
 #pragma once
 
 #include <cstdint>
-#include <kernel_engine/kernel/common/descriptor.h>
 #include <kernel_engine/kernel/engine/frame.h>
 #include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/render/light.h>
 #include <kernel_engine/kernel/render/material.h>
 #include <kernel_engine/kernel/render/texture.h>
 #include <kernel_engine/kernel/render/mesh.h>
-#include <kernel_engine/render/bgfx/render_plugin.hh>
+#include <kernel_engine/render/bgfx/bgfx_render.hh>
 #include <string>
 #include <vector>
 
@@ -20,7 +19,7 @@ namespace kernel_engine::render::bgfx
 class BgfxRenderSystem
 {
   public:
-    explicit BgfxRenderSystem(const ke_render_bgfx_descriptor *desc);
+    explicit BgfxRenderSystem(const ke_render_bgfx_params *params);
     ~BgfxRenderSystem();
 
     ke_result OnInitialize();
@@ -49,7 +48,7 @@ class BgfxRenderSystem
     ke_result SubmitSkybox(ke_texture_handle cubemap_handle);
 
     // Material operations
-    ke_result CreateMaterial(const ke_material_descriptor *desc, ke_material_handle *out_handle);
+    ke_result CreateMaterial(const ke_material *mat, ke_material_handle *out_handle);
     ke_result DestroyMaterial(ke_material_handle handle);
 
     // Light operations

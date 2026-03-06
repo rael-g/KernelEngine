@@ -9,12 +9,12 @@
 ### 🏛️ The "Hostless" Kernel
 *   **The Engine object (`ke_engine`) is deleted.** It was a redundant middleman.
 *   **Systems are renamed to Services.** They are passive tools (Renderer, Window, Logger).
-*   **World is the Simulation Master.** It receives Service pointers via Dependency Injection (Descriptors).
+*   **World is the Simulation Master.** It receives Service pointers via Dependency Injection (Parameters).
 *   **Framework is the Shell.** It manages the loop and high-level orchestration.
 
 ### 🧩 Everything is an Interface
 *   C# layer will interact exclusively with interfaces (`IWorld`, `IScene`, `INode`, `IRenderer`, `IAllocator`).
-*   Implementations (C Core or Plugins) are optional and swappable.
+*   Implementations (C Core or External Services) are optional and swappable.
 
 ---
 
@@ -23,7 +23,7 @@
 ### ✅ Milestone 1: Core Architecture Cleanup (Current Task)
 - [ ] Rename `ke_system` to `ke_service` in C Core.
 - [ ] Delete `ke_engine` and `ke_engine_tick` from C and C#.
-- [ ] Update `ke_world_descriptor` to receive `ke_render` and `ke_window` directly.
+- [ ] Update `ke_world_params` to receive `ke_render` and `ke_window` directly.
 - [ ] Refactor C# `Application` to orchestrate `MessagePipe` and `World` without an `Engine` middleman.
 - [ ] **Validation**: `SimpleFrameworkWorldApp` must run successfully.
 
@@ -53,7 +53,7 @@ graph TD
     World -->|Uses| ECS(ECS Registry)
     World -->|Uses| Scene(Scene Graph)
     World -->|Commands| Render(Render Service)
-    Render -->|GPU| BGFX(BGFX Plugin)
+    Render -->|GPU| BGFX(BGFX Implementation)
 ```
 
 # 4. Success Criteria

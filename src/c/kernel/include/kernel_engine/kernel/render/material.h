@@ -9,19 +9,19 @@ extern "C"
 {
 #endif
 
-    /// @brief Stable opaque handle to a material. Returned by ke_render::create_material.
+    /// @brief Stable opaque handle to a material.
     typedef uint32_t ke_material_handle;
 
 #define KE_MATERIAL_HANDLE_INVALID ((ke_material_handle)UINT32_MAX)
 
-    /// @brief Descriptor passed to ke_render::create_material.
-    typedef struct ke_material_descriptor
+    /// @brief Material properties defining its appearance.
+    typedef struct ke_material
     {
         float r, g, b, a;           ///< Albedo color tint (multiplied with texture)
         ke_texture_handle albedo;   ///< Albedo texture handle; KE_TEXTURE_HANDLE_WHITE for solid color
         float metallic;             ///< [0..1]: 0 = dielectric, 1 = metallic
         float roughness;            ///< [0..1]: 0 = mirror, 1 = fully rough
-    } ke_material_descriptor;
+    } ke_material;
 
 #ifdef __cplusplus
 }

@@ -28,9 +28,8 @@ public sealed unsafe class Logger : IDisposable
     /// <summary>Creates a logger using the given allocator.</summary>
     public Logger(Allocator allocator)
     {
-        var desc = new ke_descriptor { allocator = allocator.Native };
         ke_logger* logger;
-        KernelException.ThrowIfFailed(NativeMethods.logger_create(&desc, &logger));
+        KernelException.ThrowIfFailed(NativeMethods.logger_create(allocator.Native, &logger));
         _native = logger;
     }
 
