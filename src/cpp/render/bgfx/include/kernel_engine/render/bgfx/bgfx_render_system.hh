@@ -72,12 +72,29 @@ class BgfxRenderSystem
     // PBR camera
     ke_result SetCameraPos(float x, float y, float z);
 
+    // SSAO
+    ke_result SetSsao(bool enabled, float radius, float bias, float strength);
+
     ke_render *ToApi();
 
   private:
     ke_result SetupShader();
     ke_result SetupPostProcess();
     ke_result SubmitPostProcess();
+    ke_result SetupSsao();
+    ke_result SubmitSsao();
+
+    // ── bgfx view IDs ─────────────────────────────────────────────────────────
+    static constexpr uint8_t kShadowView   = 0; // depth-only shadow pass
+    static constexpr uint8_t kPrepassView  = 1; // G-buffer (normals + linear depth)
+    static constexpr uint8_t kSsaoView     = 2; // SSAO occlusion raw
+    static constexpr uint8_t kSsaoBlurView = 3; // SSAO 5x5 blur
+    static constexpr uint8_t kSceneView    = 4; // main forward pass
+    static constexpr uint8_t kSkyboxView   = 5; // skybox
+    static constexpr uint8_t kBrightView   = 6; // bloom bright-pass
+    static constexpr uint8_t kBlurHView    = 7; // bloom blur horizontal
+    static constexpr uint8_t kBlurVView    = 8; // bloom blur vertical
+    static constexpr uint8_t kTonemapView  = 9; // tonemap → backbuffer
 
     struct TextureEntry
     {
@@ -211,6 +228,43 @@ class BgfxRenderSystem
     float bloom_intensity_ = 0.5f;
 
     int pp_w_ = 0, pp_h_ = 0; // half-resolution for bloom passes
+
+    // ── SSAO ──────────────────────────────────────────────────────────────────
+    static constexpr uint32_t kSsaoKernelSize = 16;
+
+    uint16_t prepass_program_       = kInvalidHandle;
+    uint16_t ssao_program_          = kInvalidHandle;
+    uint16_t ssao_blur_program_     = kInvalidHandle;
+
+    uint16_t gbuf_fb_               = kInvalidHandle; // G-buffer framebuffer
+    uint16_t gbuf_normal_tex_       = kInvalidHandle; // RGBA8 view-space normals
+    uint16_t gbuf_lin_depth_tex_    = kInvalidHandle; // R16F linear depth
+
+    uint16_t ssao_raw_fb_           = kInvalidHandle;
+    uint16_t ssao_raw_tex_          = kInvalidHandle;
+    uint16_t ssao_blur_fb_          = kInvalidHandle;
+    uint16_t ssao_blur_tex_         = kInvalidHandle;
+
+    uint16_t ssao_noise_tex_        = kInvalidHandle;
+
+    uint16_t s_gbuf_normal_u_       = kInvalidHandle; // s_gbufNormal
+    uint16_t s_gbuf_depth_u_        = kInvalidHandle; // s_gbufDepth
+    uint16_t s_ssao_noise_u_        = kInvalidHandle; // s_ssaoNoise
+    uint16_t s_ssao_input_u_        = kInvalidHandle; // s_ssaoInput (blur pass)
+    uint16_t s_ssao_blurred_u_      = kInvalidHandle; // s_ssaoBlurred (scene pass)
+    uint16_t ssao_kernel_u_         = kInvalidHandle; // u_ssaoKernel[16]
+    uint16_t ssao_params_u_         = kInvalidHandle; // u_ssaoParams
+    uint16_t ssao_proj_info_u_      = kInvalidHandle; // u_ssaoProjInfo
+    uint16_t ssao_blur_params_u_    = kInvalidHandle; // u_ssaoBlurParams
+    uint16_t ssao_state_u_          = kInvalidHandle; // u_ssaoState
+
+    float ssao_kernel_data_[kSsaoKernelSize * 4]{};
+    float ssao_proj_info_[4]{};
+
+    bool  ssao_enabled_  = false;
+    float ssao_radius_   = 0.5f;
+    float ssao_bias_     = 0.025f;
+    float ssao_strength_ = 1.0f;
 
     // ── Shadow maps ───────────────────────────────────────────────────────────
     uint16_t shadow_program_        = kInvalidHandle;

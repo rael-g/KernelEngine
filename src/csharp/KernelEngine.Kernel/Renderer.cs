@@ -133,6 +133,18 @@ public sealed unsafe class Renderer : IDisposable
     }
 
     /// <summary>
+    /// Enables or disables screen-space ambient occlusion (SSAO).
+    /// When enabled, a G-buffer pre-pass is performed each frame to compute per-pixel occlusion,
+    /// which is then applied to the ambient term in the PBR shader.
+    /// </summary>
+    /// <param name="enabled">Whether SSAO is active.</param>
+    /// <param name="radius">World-space hemisphere sample radius (default 0.5).</param>
+    /// <param name="bias">Depth bias to prevent self-occlusion (default 0.025).</param>
+    /// <param name="strength">Occlusion intensity multiplier (default 1.0).</param>
+    public Result SetSsao(bool enabled, float radius = 0.5f, float bias = 0.025f, float strength = 1.0f)
+        => _native->set_ssao(_native, enabled, radius, bias, strength);
+
+    /// <summary>
     /// Uploads 6 RGBA8 face images into a GPU cubemap and returns a stable handle.
     /// <paramref name="faces"/> must contain exactly 6 arrays of equal size (width × height × 4 bytes each),
     /// ordered: +X, -X, +Y, -Y, +Z, -Z. All faces must be square and the same size.

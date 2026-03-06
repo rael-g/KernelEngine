@@ -117,6 +117,9 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     render_api_.set_spot_lights = [](ke_render *self, const ke_spot_light *lights, uint32_t count) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetSpotLights(lights, count);
     };
+    render_api_.set_ssao = [](ke_render *self, bool enabled, float radius, float bias, float strength) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SetSsao(enabled, radius, bias, strength);
+    };
 }
 
 BgfxRenderSystem::~BgfxRenderSystem() {}
@@ -153,18 +156,20 @@ ke_result BgfxRenderSystem::OnInitialize()
     view_w_ = w;
     view_h_ = h;
 
-    // View 0: shadow depth pass — framebuffer and transform set dynamically by BeginShadowPass.
-    // View 1: main scene pass.
-    ::bgfx::setViewClear(1, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
-    ::bgfx::setViewRect(1, 0, 0, (uint16_t)w, (uint16_t)h);
-
-    // View 2: skybox pass — no clear, renders only where scene left depth=1.
-    ::bgfx::setViewClear(2, BGFX_CLEAR_NONE);
-    ::bgfx::setViewRect(2, 0, 0, (uint16_t)w, (uint16_t)h);
+    // View 0: shadow depth pass — FB and transform set dynamically by BeginShadowPass.
+    // Views 1-3: SSAO prepass, SSAO raw, SSAO blur — set up in SetupSsao / Frame.
+    // View 4: main scene forward pass.
+    ::bgfx::setViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
+    ::bgfx::setViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
+    // View 5: skybox pass — no clear, renders only where scene left depth=1.
+    ::bgfx::setViewClear(kSkyboxView, BGFX_CLEAR_NONE);
+    ::bgfx::setViewRect(kSkyboxView, 0, 0, (uint16_t)w, (uint16_t)h);
 
     ke_result res = SetupShader();
     if (res != KE_OK) return res;
-    return SetupPostProcess();
+    res = SetupPostProcess();
+    if (res != KE_OK) return res;
+    return SetupSsao();
 }
 
 ke_result BgfxRenderSystem::SetupShader()
@@ -310,6 +315,13 @@ ke_result BgfxRenderSystem::OnShutdown()
     auto destroy_uniform = [](uint16_t u) {
         if (::bgfx::isValid(::bgfx::UniformHandle{u})) ::bgfx::destroy(::bgfx::UniformHandle{u});
     };
+    auto destroy_fb = [](uint16_t h) {
+        if (::bgfx::isValid(::bgfx::FrameBufferHandle{h})) ::bgfx::destroy(::bgfx::FrameBufferHandle{h});
+    };
+    auto destroy_tex = [](uint16_t h) {
+        if (::bgfx::isValid(::bgfx::TextureHandle{h})) ::bgfx::destroy(::bgfx::TextureHandle{h});
+    };
+
     // Post-process uniforms
     destroy_uniform(tonemap_params_uniform_);
     destroy_uniform(blur_params_uniform_);
@@ -318,10 +330,29 @@ ke_result BgfxRenderSystem::OnShutdown()
     destroy_uniform(bloom_tex_uniform_);
     destroy_uniform(hdr_tex_uniform_);
 
+    // SSAO resources
+    destroy_fb(gbuf_fb_);
+    destroy_fb(ssao_raw_fb_);
+    destroy_fb(ssao_blur_fb_);
+    destroy_tex(ssao_noise_tex_);
+    destroy_uniform(ssao_state_u_);
+    destroy_uniform(ssao_blur_params_u_);
+    destroy_uniform(ssao_proj_info_u_);
+    destroy_uniform(ssao_params_u_);
+    destroy_uniform(ssao_kernel_u_);
+    destroy_uniform(s_ssao_blurred_u_);
+    destroy_uniform(s_ssao_input_u_);
+    destroy_uniform(s_ssao_noise_u_);
+    destroy_uniform(s_gbuf_depth_u_);
+    destroy_uniform(s_gbuf_normal_u_);
+    if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_blur_program_}))
+        ::bgfx::destroy(::bgfx::ProgramHandle{ssao_blur_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_program_}))
+        ::bgfx::destroy(::bgfx::ProgramHandle{ssao_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{prepass_program_}))
+        ::bgfx::destroy(::bgfx::ProgramHandle{prepass_program_});
+
     // Post-process framebuffers and programs
-    auto destroy_fb = [](uint16_t h) {
-        if (::bgfx::isValid(::bgfx::FrameBufferHandle{h})) ::bgfx::destroy(::bgfx::FrameBufferHandle{h});
-    };
     destroy_fb(blur_b_fb_);
     destroy_fb(blur_a_fb_);
     destroy_fb(bright_fb_);
@@ -384,27 +415,51 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
     if (!view || !proj) return KE_ERROR_INVALID_ARGUMENT;
     memcpy(last_view_, view->m, sizeof(float) * 16);
     memcpy(last_proj_, proj->m, sizeof(float) * 16);
-    ::bgfx::setViewTransform(1, view->m, proj->m);
+    // Extract projection parameters for SSAO depth reconstruction.
+    // Column-major layout: m[0] = proj[0][0], m[5] = proj[1][1].
+    ssao_proj_info_[0] = (proj->m[0] != 0.f) ? (1.0f / proj->m[0]) : 1.0f;
+    ssao_proj_info_[1] = (proj->m[5] != 0.f) ? (1.0f / proj->m[5]) : 1.0f;
+    ::bgfx::setViewTransform(kPrepassView, view->m, proj->m);
+    ::bgfx::setViewTransform(kSsaoView,    view->m, proj->m); // u_proj available in fs_ssao
+    ::bgfx::setViewTransform(kSceneView,   view->m, proj->m);
     return KE_OK;
 }
 
 ke_result BgfxRenderSystem::Frame()
 {
+    // ── SSAO passes ────────────────────────────────────────────────────────────
+    if (ssao_enabled_ && gbuf_fb_ != kInvalidHandle)
+    {
+        ::bgfx::setViewFrameBuffer(kPrepassView,  ::bgfx::FrameBufferHandle{gbuf_fb_});
+        ::bgfx::setViewClear(kPrepassView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
+        ::bgfx::setViewRect(kPrepassView,  0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
+
+        ::bgfx::setViewFrameBuffer(kSsaoView, ::bgfx::FrameBufferHandle{ssao_raw_fb_});
+        ::bgfx::setViewClear(kSsaoView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
+        ::bgfx::setViewRect(kSsaoView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
+
+        ::bgfx::setViewFrameBuffer(kSsaoBlurView, ::bgfx::FrameBufferHandle{ssao_blur_fb_});
+        ::bgfx::setViewClear(kSsaoBlurView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
+        ::bgfx::setViewRect(kSsaoBlurView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
+
+        SubmitSsao();
+    }
+
+    // ── Post-processing / scene routing ────────────────────────────────────────
     if (pp_enabled_ && hdr_fb_ != kInvalidHandle)
     {
-        // Route scene and skybox views into the HDR offscreen framebuffer.
-        ::bgfx::setViewFrameBuffer(1, ::bgfx::FrameBufferHandle{hdr_fb_});
-        ::bgfx::setViewFrameBuffer(2, ::bgfx::FrameBufferHandle{hdr_fb_});
+        ::bgfx::setViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{hdr_fb_});
+        ::bgfx::setViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{hdr_fb_});
         SubmitPostProcess();
     }
     else
     {
-        ::bgfx::setViewFrameBuffer(1, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
-        ::bgfx::setViewFrameBuffer(2, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        ::bgfx::setViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        ::bgfx::setViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
     }
 
-    ::bgfx::touch(1);
-    ::bgfx::touch(2);
+    ::bgfx::touch(kSceneView);
+    ::bgfx::touch(kSkyboxView);
     ::bgfx::frame();
     has_skybox_           = false;
     active_env_tex_       = kInvalidHandle;
@@ -418,7 +473,7 @@ ke_result BgfxRenderSystem::ClearColor(float r, float g, float b, float a)
 {
     uint32_t color = (uint32_t(r * 255.0F) << 24) | (uint32_t(g * 255.0F) << 16) |
                      (uint32_t(b * 255.0F) << 8)  | (uint32_t(a * 255.0F));
-    ::bgfx::setViewClear(1, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
+    ::bgfx::setViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
     return KE_OK;
 }
 
@@ -529,7 +584,7 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
     float rotView[16];
     memcpy(rotView, last_view_, sizeof(rotView));
     rotView[12] = 0.f; rotView[13] = 0.f; rotView[14] = 0.f;
-    ::bgfx::setViewTransform(2, rotView, last_proj_);
+    ::bgfx::setViewTransform(kSkyboxView, rotView, last_proj_);
 
     float tint[4] = {1.f, 1.f, 1.f, 1.f};
     ::bgfx::setUniform(::bgfx::UniformHandle{skybox_tint_uniform_}, tint);
@@ -537,7 +592,7 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{skybox_vb_});
     ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{skybox_ib_});
     ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_LEQUAL);
-    ::bgfx::submit(2, ::bgfx::ProgramHandle{skybox_program_});
+    ::bgfx::submit(kSkyboxView, ::bgfx::ProgramHandle{skybox_program_});
 
     has_skybox_     = true;
     active_env_tex_ = tex.idx;
@@ -572,9 +627,22 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     if (!::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb}) || !mat.valid) return KE_ERROR_INVALID_ARGUMENT;
 
     uint32_t tex_idx   = (mat.texture_handle < textures_.size()) ? mat.texture_handle : 0;
+    uint32_t nmap_idx  = (mat.normal_map_handle < textures_.size()) ? mat.normal_map_handle : 0;
     float color[4]     = {mat.r, mat.g, mat.b, mat.a};
     float pbr_params[4]= {mat.metallic, mat.roughness, 0.f, 0.f};
 
+    // ── G-buffer prepass (if SSAO enabled) ────────────────────────────────────
+    if (ssao_enabled_ && prepass_program_ != kInvalidHandle)
+    {
+        ::bgfx::setTransform(transform->m);
+        ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
+        ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
+        ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
+                         BGFX_STATE_WRITE_Z   | BGFX_STATE_DEPTH_TEST_LESS);
+        ::bgfx::submit(kPrepassView, ::bgfx::ProgramHandle{prepass_program_});
+    }
+
+    // ── Main scene pass ────────────────────────────────────────────────────────
     ::bgfx::setUniform(::bgfx::UniformHandle{color_uniform_},         color);
     ::bgfx::setUniform(::bgfx::UniformHandle{light_dir_uniform_},     light_dir_);
     ::bgfx::setUniform(::bgfx::UniformHandle{light_color_uniform_},   light_color_);
@@ -595,7 +663,6 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
         ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
-    // Shadow map binding
     if (active_shadow_handle_ != kInvalidShadowHandle)
     {
         float shadow_params[4] = {1.f, 0.f, 0.f, 0.f};
@@ -614,8 +681,6 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
             ::bgfx::TextureHandle{textures_[0].idx});
     }
 
-    // Normal map binding (slot 3)
-    uint32_t nmap_idx = (mat.normal_map_handle < textures_.size()) ? mat.normal_map_handle : 0;
     if (nmap_idx != 0)
     {
         float normal_params[4] = {1.f, 0.f, 0.f, 0.f};
@@ -629,7 +694,6 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
         ::bgfx::setTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
-    // Point / spot light counts and arrays
     float light_counts[4] = {(float)point_light_count_, (float)spot_light_count_, 0.f, 0.f};
     ::bgfx::setUniform(::bgfx::UniformHandle{light_counts_uniform_}, light_counts);
     ::bgfx::setUniform(::bgfx::UniformHandle{point_lights_pos_r_uniform_},
@@ -643,12 +707,26 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_color_outer_uniform_},
                        spot_lights_color_outer_, (uint16_t)kMaxSpotLights);
 
+    // SSAO blurred occlusion texture (slot 4) and state uniform
+    {
+        float ssao_state[4] = {
+            ssao_enabled_ ? 1.f : 0.f,
+            (view_w_ > 0) ? 1.f / (float)view_w_ : 0.f,
+            (view_h_ > 0) ? 1.f / (float)view_h_ : 0.f,
+            0.f
+        };
+        ::bgfx::setUniform(::bgfx::UniformHandle{ssao_state_u_}, ssao_state);
+        uint16_t ao_tex = (ssao_enabled_ && ssao_blur_tex_ != kInvalidHandle)
+                              ? ssao_blur_tex_ : textures_[0].idx;
+        ::bgfx::setTexture(4, ::bgfx::UniformHandle{s_ssao_blurred_u_}, ::bgfx::TextureHandle{ao_tex});
+    }
+
     ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
     ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
     ::bgfx::setTransform(transform->m);
     ::bgfx::setState(BGFX_STATE_DEFAULT);
-    ::bgfx::submit(1, ::bgfx::ProgramHandle{program_});
+    ::bgfx::submit(kSceneView, ::bgfx::ProgramHandle{program_});
     return KE_OK;
 }
 
@@ -975,43 +1053,197 @@ ke_result BgfxRenderSystem::SubmitPostProcess()
         ::bgfx::submit(view, ::bgfx::ProgramHandle{prog});
     };
 
-    // Bloom passes (views 3–5): bright-pass → blur H → blur V.
+    // Bloom passes (views 6–8): bright-pass → blur H → blur V.
     uint16_t bloom_result_tex = textures_[0].idx; // black/white fallback
     if (bloom_enabled_ && bright_fb_ != kInvalidHandle)
     {
-        // View 3: bright-pass.
+        // View 6: bright-pass.
         float bp[4] = {bloom_threshold_, 0.f, 0.f, 0.f};
         ::bgfx::setUniform(::bgfx::UniformHandle{bloom_params_uniform_}, bp);
         ::bgfx::setTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
             ::bgfx::TextureHandle{hdr_color_tex_});
-        submit_fs(3, bright_fb_, pp_w_, pp_h_, bright_pass_program_);
+        submit_fs(kBrightView, bright_fb_, pp_w_, pp_h_, bright_pass_program_);
 
-        // View 4: blur horizontal.
+        // View 7: blur horizontal.
         float bh[4] = {1.f / (float)pp_w_, 0.f, 0.f, 0.f};
         ::bgfx::setUniform(::bgfx::UniformHandle{blur_params_uniform_}, bh);
         ::bgfx::setTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
             ::bgfx::getTexture(::bgfx::FrameBufferHandle{bright_fb_}));
-        submit_fs(4, blur_a_fb_, pp_w_, pp_h_, blur_program_);
+        submit_fs(kBlurHView, blur_a_fb_, pp_w_, pp_h_, blur_program_);
 
-        // View 5: blur vertical.
+        // View 8: blur vertical.
         float bv[4] = {0.f, 1.f / (float)pp_h_, 0.f, 0.f};
         ::bgfx::setUniform(::bgfx::UniformHandle{blur_params_uniform_}, bv);
         ::bgfx::setTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
             ::bgfx::getTexture(::bgfx::FrameBufferHandle{blur_a_fb_}));
-        submit_fs(5, blur_b_fb_, pp_w_, pp_h_, blur_program_);
+        submit_fs(kBlurVView, blur_b_fb_, pp_w_, pp_h_, blur_program_);
 
         bloom_result_tex = ::bgfx::getTexture(::bgfx::FrameBufferHandle{blur_b_fb_}).idx;
     }
 
-    // View 6: tonemap composite → backbuffer.
+    // View 9: tonemap composite → backbuffer.
     float tp[4] = {exposure_, bloom_enabled_ ? bloom_intensity_ : 0.f, 1.f / gamma_, 0.f};
     ::bgfx::setUniform(::bgfx::UniformHandle{tonemap_params_uniform_}, tp);
     ::bgfx::setTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
         ::bgfx::TextureHandle{hdr_color_tex_});
     ::bgfx::setTexture(1, ::bgfx::UniformHandle{bloom_tex_uniform_},
         ::bgfx::TextureHandle{bloom_result_tex});
-    submit_fs(6, kInvalidHandle, view_w_, view_h_, tonemap_program_);
+    submit_fs(kTonemapView, kInvalidHandle, view_w_, view_h_, tonemap_program_);
 
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetupSsao()
+{
+    auto load_shader = [&](const char *name) -> ::bgfx::ShaderHandle {
+        std::string path = shader_path_ + "/" + name + ".bin";
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
+        auto size = file.tellg();
+        file.seekg(0);
+        const ::bgfx::Memory *mem = ::bgfx::alloc((uint32_t)size);
+        file.read(reinterpret_cast<char *>(mem->data), size);
+        return ::bgfx::createShader(mem);
+    };
+
+    auto load_program = [&](const char *vs, const char *fs) -> uint16_t {
+        auto v = load_shader(vs);
+        auto f = load_shader(fs);
+        if (!::bgfx::isValid(v) || !::bgfx::isValid(f)) {
+            if (::bgfx::isValid(v)) ::bgfx::destroy(v);
+            if (::bgfx::isValid(f)) ::bgfx::destroy(f);
+            return kInvalidHandle;
+        }
+        return ::bgfx::createProgram(v, f, true).idx;
+    };
+
+    prepass_program_    = load_program("vs_prepass",   "fs_prepass");
+    ssao_program_       = load_program("vs_screen",    "fs_ssao");
+    ssao_blur_program_  = load_program("vs_screen",    "fs_ssao_blur");
+
+    // ── SSAO hemisphere kernel ─────────────────────────────────────────────────
+    // Fixed seed for reproducible results.
+    srand(42);
+    auto rnd01 = []() -> float { return (float)rand() / (float)RAND_MAX; };
+    auto rnd11 = []() -> float { return (float)rand() / (float)RAND_MAX * 2.f - 1.f; };
+
+    for (uint32_t i = 0; i < kSsaoKernelSize; ++i)
+    {
+        float x = rnd11(), y = rnd11(), z = rnd01();
+        float len = sqrtf(x*x + y*y + z*z);
+        if (len < 0.0001f) { x = 0; y = 0; z = 1; len = 1; }
+        x /= len; y /= len; z /= len;
+        // Accelerate interpolation toward hemisphere surface.
+        float scale = (float)i / (float)kSsaoKernelSize;
+        scale = 0.1f + scale * scale * 0.9f;
+        ssao_kernel_data_[i * 4 + 0] = x * scale;
+        ssao_kernel_data_[i * 4 + 1] = y * scale;
+        ssao_kernel_data_[i * 4 + 2] = z * scale;
+        ssao_kernel_data_[i * 4 + 3] = 0.f;
+    }
+
+    // ── 4×4 random rotation noise texture (XY plane vectors) ──────────────────
+    uint8_t noise_pixels[4 * 4 * 4]; // 16 pixels × RGBA8
+    for (int i = 0; i < 16; ++i)
+    {
+        float rx = rnd11(), ry = rnd11();
+        float rlen = sqrtf(rx*rx + ry*ry);
+        if (rlen > 0.0001f) { rx /= rlen; ry /= rlen; }
+        noise_pixels[i * 4 + 0] = (uint8_t)((rx * 0.5f + 0.5f) * 255.f);
+        noise_pixels[i * 4 + 1] = (uint8_t)((ry * 0.5f + 0.5f) * 255.f);
+        noise_pixels[i * 4 + 2] = 128;
+        noise_pixels[i * 4 + 3] = 255;
+    }
+    ssao_noise_tex_ = ::bgfx::createTexture2D(
+        4, 4, false, 1, ::bgfx::TextureFormat::RGBA8,
+        BGFX_SAMPLER_POINT, // wrap is the default UV mode
+        ::bgfx::copy(noise_pixels, sizeof(noise_pixels))).idx;
+
+    // ── Uniforms ───────────────────────────────────────────────────────────────
+    s_gbuf_normal_u_    = ::bgfx::createUniform("s_gbufNormal",    ::bgfx::UniformType::Sampler).idx;
+    s_gbuf_depth_u_     = ::bgfx::createUniform("s_gbufDepth",     ::bgfx::UniformType::Sampler).idx;
+    s_ssao_noise_u_     = ::bgfx::createUniform("s_ssaoNoise",     ::bgfx::UniformType::Sampler).idx;
+    s_ssao_input_u_     = ::bgfx::createUniform("s_ssaoInput",     ::bgfx::UniformType::Sampler).idx;
+    s_ssao_blurred_u_   = ::bgfx::createUniform("s_ssaoBlurred",   ::bgfx::UniformType::Sampler).idx;
+    ssao_kernel_u_      = ::bgfx::createUniform("u_ssaoKernel",    ::bgfx::UniformType::Vec4, kSsaoKernelSize).idx;
+    ssao_params_u_      = ::bgfx::createUniform("u_ssaoParams",    ::bgfx::UniformType::Vec4).idx;
+    ssao_proj_info_u_   = ::bgfx::createUniform("u_ssaoProjInfo",  ::bgfx::UniformType::Vec4).idx;
+    ssao_blur_params_u_ = ::bgfx::createUniform("u_ssaoBlurParams",::bgfx::UniformType::Vec4).idx;
+    ssao_state_u_       = ::bgfx::createUniform("u_ssaoState",     ::bgfx::UniformType::Vec4).idx;
+
+    // ── G-buffer framebuffer ───────────────────────────────────────────────────
+    // Attachment 0: RGBA8 (view-space normals), Attachment 1: R16F (linear depth).
+    // Attachment 2: D24S8 for depth testing (write-only, not sampled).
+    ::bgfx::TextureHandle gbuf_texs[3] = {
+        ::bgfx::createTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+            ::bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT),
+        ::bgfx::createTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+            ::bgfx::TextureFormat::R16F,  BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT),
+        ::bgfx::createTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+            ::bgfx::TextureFormat::D24S8, BGFX_TEXTURE_RT_WRITE_ONLY),
+    };
+    gbuf_fb_ = ::bgfx::createFrameBuffer(3, gbuf_texs, true).idx;
+    gbuf_normal_tex_    = ::bgfx::getTexture(::bgfx::FrameBufferHandle{gbuf_fb_}, 0).idx;
+    gbuf_lin_depth_tex_ = ::bgfx::getTexture(::bgfx::FrameBufferHandle{gbuf_fb_}, 1).idx;
+
+    // ── SSAO raw + blur framebuffers ───────────────────────────────────────────
+    ::bgfx::TextureHandle ssao_raw_t = ::bgfx::createTexture2D(
+        (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+        ::bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT);
+    ssao_raw_fb_  = ::bgfx::createFrameBuffer(1, &ssao_raw_t, true).idx;
+    ssao_raw_tex_ = ::bgfx::getTexture(::bgfx::FrameBufferHandle{ssao_raw_fb_}).idx;
+
+    ::bgfx::TextureHandle ssao_blur_t = ::bgfx::createTexture2D(
+        (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+        ::bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT);
+    ssao_blur_fb_  = ::bgfx::createFrameBuffer(1, &ssao_blur_t, true).idx;
+    ssao_blur_tex_ = ::bgfx::getTexture(::bgfx::FrameBufferHandle{ssao_blur_fb_}).idx;
+
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SubmitSsao()
+{
+    if (!ssao_enabled_) return KE_OK;
+    if (gbuf_normal_tex_ == kInvalidHandle || ssao_raw_tex_ == kInvalidHandle) return KE_OK;
+
+    // ── View kSsaoView: compute raw SSAO occlusion ─────────────────────────────
+    float ssao_params[4]    = {ssao_radius_, ssao_bias_, ssao_strength_, 0.f};
+    float ssao_proj_info[4] = {ssao_proj_info_[0], ssao_proj_info_[1], 0.f, 0.f};
+
+    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_kernel_u_},    ssao_kernel_data_, kSsaoKernelSize);
+    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_params_u_},    ssao_params);
+    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_proj_info_u_}, ssao_proj_info);
+    ::bgfx::setTexture(0, ::bgfx::UniformHandle{s_gbuf_normal_u_}, ::bgfx::TextureHandle{gbuf_normal_tex_});
+    ::bgfx::setTexture(1, ::bgfx::UniformHandle{s_gbuf_depth_u_},  ::bgfx::TextureHandle{gbuf_lin_depth_tex_});
+    ::bgfx::setTexture(2, ::bgfx::UniformHandle{s_ssao_noise_u_},  ::bgfx::TextureHandle{ssao_noise_tex_});
+    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
+    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
+    ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    ::bgfx::submit(kSsaoView, ::bgfx::ProgramHandle{ssao_program_});
+
+    // ── View kSsaoBlurView: 5×5 box blur ──────────────────────────────────────
+    float blur_params[4] = {
+        (view_w_ > 0) ? 1.f / (float)view_w_ : 0.f,
+        (view_h_ > 0) ? 1.f / (float)view_h_ : 0.f,
+        0.f, 0.f
+    };
+    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_blur_params_u_}, blur_params);
+    ::bgfx::setTexture(0, ::bgfx::UniformHandle{s_ssao_input_u_}, ::bgfx::TextureHandle{ssao_raw_tex_});
+    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
+    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
+    ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    ::bgfx::submit(kSsaoBlurView, ::bgfx::ProgramHandle{ssao_blur_program_});
+
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetSsao(bool enabled, float radius, float bias, float strength)
+{
+    ssao_enabled_  = enabled;
+    ssao_radius_   = radius;
+    ssao_bias_     = bias;
+    ssao_strength_ = strength;
     return KE_OK;
 }
 

@@ -105,6 +105,12 @@ extern "C"
         ke_result (*set_spot_lights)(struct ke_render *self,
                                      const ke_spot_light *lights, uint32_t count);
 
+        /// @brief Enables or disables screen-space ambient occlusion (SSAO).
+        ///        When enabled, a G-buffer pre-pass is added each frame. No-op if
+        ///        the underlying renderer does not support SSAO.
+        ke_result (*set_ssao)(struct ke_render *self, bool enabled,
+                              float radius, float bias, float strength);
+
     } ke_render;
 
 #ifdef __cplusplus

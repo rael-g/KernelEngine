@@ -11,3 +11,4 @@ vec3 v_worldPos  : TEXCOORD2;
 vec3 v_dir       : TEXCOORD3;
 vec4 v_shadowCoord : TEXCOORD4;
 vec4 v_tangent     : TEXCOORD5;
+vec3 v_viewPos     : TEXCOORD6;

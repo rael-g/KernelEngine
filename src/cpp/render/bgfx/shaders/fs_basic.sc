@@ -2,10 +2,11 @@ $input v_color0, v_normal, v_texcoord0, v_worldPos, v_shadowCoord, v_tangent
 
 #include <bgfx_shader.sh>
 
-SAMPLER2D(s_texColor,  0);
-SAMPLERCUBE(s_envMap,  1);
-SAMPLER2D(s_shadowMap, 2);
-SAMPLER2D(s_normalMap, 3);
+SAMPLER2D(s_texColor,    0);
+SAMPLERCUBE(s_envMap,    1);
+SAMPLER2D(s_shadowMap,   2);
+SAMPLER2D(s_normalMap,   3);
+SAMPLER2D(s_ssaoBlurred, 4);
 
 uniform vec4 u_color;
 uniform vec4 u_lightDir;     // xyz = direction toward light source (world space)
@@ -17,6 +18,7 @@ uniform vec4 u_iblParams;    // x = 1 if IBL active, else 0
 uniform vec4 u_shadowParams; // x = 1 if shadow map active, else 0
 uniform vec4 u_normalParams; // x = 1 if normal map active, else 0
 uniform vec4 u_lightCounts;  // x = point light count, y = spot light count
+uniform vec4 u_ssaoState;    // x = 1 if SSAO active, yz = texel size (1/w, 1/h)
 
 uniform vec4 u_pointLightsPosR[8];      // xyz = position, w = radius
 uniform vec4 u_pointLightsColorI[8];    // xyz = color * intensity, w = unused
@@ -180,6 +182,14 @@ void main()
     else
     {
         ambient = u_ambientColor.xyz * albedo.xyz;
+    }
+
+    // ── SSAO ambient occlusion ─────────────────────────────────────────────────
+    if (u_ssaoState.x > 0.5)
+    {
+        vec2 screenUV = gl_FragCoord.xy * u_ssaoState.yz;
+        float ao = texture2D(s_ssaoBlurred, screenUV).r;
+        ambient *= ao;
     }
 
     // ── Shadow factor ──────────────────────────────────────────────────────────
