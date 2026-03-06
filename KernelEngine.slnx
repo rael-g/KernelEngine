@@ -15,4 +15,8 @@
     <Project Path="src/csharp/Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.ShaderCompiler.Native/KernelEngine.ShaderCompiler.Native.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
+    <Project Path="tests/csharp/KernelEngine.Framework.Tests/KernelEngine.Framework.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -24,34 +24,34 @@ extern "C"
     } ke_ecs_registry;
 
     /// @brief Creates a new ECS registry.
-    ke_result ke_ecs_registry_create(struct ke_allocator *alloc, ke_ecs_registry **out_registry);
+    KE_API ke_result ke_ecs_registry_create(struct ke_allocator *alloc, ke_ecs_registry **out_registry);
 
     /// @brief Destroys an ECS registry and all component data.
-    void ke_ecs_registry_destroy(ke_ecs_registry *registry);
+    KE_API void ke_ecs_registry_destroy(ke_ecs_registry *registry);
 
     /// @brief Creates a new entity and returns its ID.
-    ke_entity ke_ecs_entity_create(ke_ecs_registry *registry);
+    KE_API ke_entity ke_ecs_entity_create(ke_ecs_registry *registry);
 
     /// @brief Destroys an entity and removes all its components.
-    void ke_ecs_entity_destroy(ke_ecs_registry *registry, ke_entity entity);
+    KE_API void ke_ecs_entity_destroy(ke_ecs_registry *registry, ke_entity entity);
 
     /// @brief Registers a component type with a given element size.
-    ke_component_id ke_ecs_component_register(ke_ecs_registry *registry, const char *name, size_t size);
+    KE_API ke_component_id ke_ecs_component_register(ke_ecs_registry *registry, const char *name, size_t size);
 
     /// @brief Adds a component to an entity (zeroed). Returns a pointer to it.
-    void *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
+    KE_API void *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
 
     /// @brief Removes a component from an entity.
-    void ke_ecs_component_remove(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
+    KE_API void ke_ecs_component_remove(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
 
     /// @brief Returns a pointer to a component, or NULL if not present.
-    void *ke_ecs_component_get(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
+    KE_API void *ke_ecs_component_get(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
 
     /// @brief Zero-copy query: returns pointers to the contiguous entity + component arrays.
     /// @param out_entities  Pointer to the entity ID array (valid until next structural change).
     /// @param out_data      Pointer to the contiguous component data array.
     /// @param out_count     Number of entities with this component.
-    void ke_ecs_registry_query(ke_ecs_registry *registry, ke_component_id component,
+    KE_API void ke_ecs_registry_query(ke_ecs_registry *registry, ke_component_id component,
                                ke_entity **out_entities, void **out_data, size_t *out_count);
 
 #ifdef __cplusplus

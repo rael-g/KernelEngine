@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.15)
 
 project(kernel_engine LANGUAGES C CXX)
 
+include(cmake/Coverage.cmake)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -21,4 +23,15 @@ add_subdirectory(examples/c/02_window_graphics)
 add_subdirectory(examples/c/03_input_scene)
 add_subdirectory(examples/c/04_shader_compile)
 
+enable_testing()
+add_subdirectory(tests/c/kernel)
+add_subdirectory(tests/cpp)
+
 include(cmake/CodeQuality.cmake)
+
+if(KE_COVERAGE)
+    enable_coverage(ke_kernel)
+    enable_coverage(ke_render_bgfx)
+    enable_coverage(ke_window_glfw)
+    enable_coverage(ke_shader_compiler_bgfx)
+endif()

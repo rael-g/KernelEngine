@@ -31,13 +31,13 @@ extern "C"
     KE_API ke_result ke_hash_map_init(ke_hash_map *map, size_t initial_capacity, struct ke_allocator *alloc);
 
     /// @brief Destroys a hash map.
-    void ke_hash_map_destroy(ke_hash_map *map);
+    KE_API void ke_hash_map_destroy(ke_hash_map *map);
 
     /// @brief Inserts a value into the hash map.
-    ke_result ke_hash_map_insert(ke_hash_map *map, uint64_t key, void *value);
+    KE_API ke_result ke_hash_map_insert(ke_hash_map *map, uint64_t key, void *value);
 
     /// @brief Retrieves a value from the hash map.
-    void *ke_hash_map_get(const ke_hash_map *map, uint64_t key);
+    KE_API void *ke_hash_map_get(const ke_hash_map *map, uint64_t key);
 
 #ifdef __cplusplus
 }

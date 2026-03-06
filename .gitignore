@@ -18,6 +18,7 @@
 *.manifest
 *.res
 *.bin
+*.gcov
 
 # Build artifacts for C#
 [Bb]in/
@@ -95,6 +96,7 @@ node_modules/
 
 # Generated Shaders
 src/cpp/render/bgfx/shaders/*.bin
+*.gcov
 
 # Mac
 .DS_Store
