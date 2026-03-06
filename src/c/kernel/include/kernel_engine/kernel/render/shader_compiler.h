@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_KERNEL_RENDER_SHADER_COMPILER_H_
 #define KERNEL_ENGINE_KERNEL_RENDER_SHADER_COMPILER_H_
 
-#include <kernel_engine/kernel/common/descriptor.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
 
@@ -27,12 +26,12 @@ extern "C"
     } ke_shader_compiler;
 
     /// @brief Configuration for the BGFX shader compiler system.
-    typedef struct ke_shader_compiler_bgfx_descriptor
+    typedef struct ke_shader_compiler_bgfx_params
     {
         struct ke_allocator *allocator;
         struct ke_logger *logger;
         const char *shaderc_path;
-    } ke_shader_compiler_bgfx_descriptor;
+    } ke_shader_compiler_bgfx_params;
 
 #ifndef KE_SHADER_COMPILER_API
 #ifdef KE_SHADER_COMPILER_STATIC
@@ -47,7 +46,7 @@ extern "C"
 #endif
 
     /// @brief Creates a BGFX shader compiler system instance.
-    KE_SHADER_COMPILER_API ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_descriptor *desc,
+    KE_SHADER_COMPILER_API ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_params *params,
                                                                     ke_shader_compiler **out_compiler);
 
 #ifdef __cplusplus

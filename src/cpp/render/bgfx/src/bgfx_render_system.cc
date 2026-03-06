@@ -13,9 +13,9 @@
 namespace kernel_engine::render::bgfx
 {
 
-BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_descriptor *desc)
-    : allocator_(desc->allocator), logger_(desc->logger), window_(desc->window),
-      shader_path_((desc->shader_path != nullptr) ? desc->shader_path : "")
+BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
+    : allocator_(params->allocator), logger_(params->logger), window_(params->window),
+      shader_path_((params->shader_path != nullptr) ? params->shader_path : "")
 {
     render_api_.handle = this;
     render_api_.on_initialize = [](ke_render *self) {
@@ -56,9 +56,9 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_descriptor *desc)
     render_api_.destroy_mesh = [](ke_render *self, ke_mesh_handle handle) {
         return static_cast<BgfxRenderSystem *>(self->handle)->DestroyMesh(handle);
     };
-    render_api_.create_material = [](ke_render *self, const ke_material_descriptor *desc,
+    render_api_.create_material = [](ke_render *self, const ke_material *mat,
                                       ke_material_handle *out) {
-        return static_cast<BgfxRenderSystem *>(self->handle)->CreateMaterial(desc, out);
+        return static_cast<BgfxRenderSystem *>(self->handle)->CreateMaterial(mat, out);
     };
     render_api_.destroy_material = [](ke_render *self, ke_material_handle handle) {
         return static_cast<BgfxRenderSystem *>(self->handle)->DestroyMaterial(handle);
@@ -119,11 +119,9 @@ ke_result BgfxRenderSystem::OnInitialize()
     view_w_ = w;
     view_h_ = h;
 
-    // View 0: scene geometry (sequential order so skybox is always behind)
     ::bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
     ::bgfx::setViewRect(0, 0, 0, (uint16_t)w, (uint16_t)h);
 
-    // View 1: skybox (no clear, renders after scene; depth trick keeps it behind)
     ::bgfx::setViewClear(1, BGFX_CLEAR_NONE);
     ::bgfx::setViewRect(1, 0, 0, (uint16_t)w, (uint16_t)h);
 
@@ -144,7 +142,6 @@ ke_result BgfxRenderSystem::SetupShader()
         return ::bgfx::createShader(mem);
     };
 
-    // ── PBR scene program ─────────────────────────────────────────────────────
     ::bgfx::ShaderHandle vs = load_shader("vs_basic");
     ::bgfx::ShaderHandle fs = load_shader("fs_basic");
     if (!::bgfx::isValid(vs) || !::bgfx::isValid(fs))
@@ -157,7 +154,6 @@ ke_result BgfxRenderSystem::SetupShader()
     if (!::bgfx::isValid(prog)) return KE_ERROR_RENDER;
     program_ = prog.idx;
 
-    // ── Skybox program ────────────────────────────────────────────────────────
     ::bgfx::ShaderHandle sky_vs = load_shader("vs_skybox");
     ::bgfx::ShaderHandle sky_fs = load_shader("fs_skybox");
     if (::bgfx::isValid(sky_vs) && ::bgfx::isValid(sky_fs))
@@ -168,14 +164,12 @@ ke_result BgfxRenderSystem::SetupShader()
     }
     else
     {
-        // skybox shaders optional: just destroy to avoid leak
         if (::bgfx::isValid(sky_vs)) ::bgfx::destroy(sky_vs);
         if (::bgfx::isValid(sky_fs)) ::bgfx::destroy(sky_fs);
         ke_log_event ev = {KE_LOG_LEVEL_WARNING, "bgfx", "Skybox shaders not found — skybox disabled"};
         if (logger_) logger_->log(logger_, &ev);
     }
 
-    // ── Built-in unit quad (handle 0) ─────────────────────────────────────────
     static const ke_vertex kVerts[4] = {
         {-0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f},
         { 0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  1.0f, 0.0f},
@@ -186,27 +180,13 @@ ke_result BgfxRenderSystem::SetupShader()
     ke_mesh_handle quad_handle;
     if (CreateMesh(kVerts, 4, kIndices, 6, &quad_handle) != KE_OK) return KE_ERROR_RENDER;
 
-    // ── Skybox unit cube geometry ─────────────────────────────────────────────
-    // Positions serve as the cubemap sampling direction.  Winding is CCW when
-    // viewed from inside so we don't need face culling.
     struct SkyVert { float x, y, z; };
     static const SkyVert kSkyVerts[8] = {
         {-1,-1,-1}, { 1,-1,-1}, { 1, 1,-1}, {-1, 1,-1},
         {-1,-1, 1}, { 1,-1, 1}, { 1, 1, 1}, {-1, 1, 1},
     };
     static const uint16_t kSkyIdx[36] = {
-        // -Z
-        0,2,1, 0,3,2,
-        // +Z
-        4,5,6, 4,6,7,
-        // -X
-        0,4,7, 0,7,3,
-        // +X
-        1,2,6, 1,6,5,
-        // -Y
-        0,1,5, 0,5,4,
-        // +Y
-        2,3,7, 2,7,6,
+        0,2,1, 0,3,2, 4,5,6, 4,6,7, 0,4,7, 0,7,3, 1,2,6, 1,6,5, 0,1,5, 0,5,4, 2,3,7, 2,7,6,
     };
     ::bgfx::VertexLayout skyLayout;
     skyLayout.begin()
@@ -217,13 +197,11 @@ ke_result BgfxRenderSystem::SetupShader()
     skybox_ib_ = ::bgfx::createIndexBuffer(
         ::bgfx::copy(kSkyIdx, sizeof(kSkyIdx))).idx;
 
-    // ── Built-in white 1×1 texture (handle 0) ────────────────────────────────
     uint32_t white = 0xffffffff;
     ke_texture_handle white_handle;
     if (CreateTextureRgba(1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
         return KE_ERROR_RENDER;
 
-    // ── Scene uniforms ────────────────────────────────────────────────────────
     sampler_uniform_       = ::bgfx::createUniform("s_texColor",     ::bgfx::UniformType::Sampler).idx;
     env_map_uniform_       = ::bgfx::createUniform("s_envMap",       ::bgfx::UniformType::Sampler).idx;
     color_uniform_         = ::bgfx::createUniform("u_color",         ::bgfx::UniformType::Vec4).idx;
@@ -233,13 +211,10 @@ ke_result BgfxRenderSystem::SetupShader()
     pbr_params_uniform_    = ::bgfx::createUniform("u_pbrParams",     ::bgfx::UniformType::Vec4).idx;
     camera_pos_uniform_    = ::bgfx::createUniform("u_cameraPos",     ::bgfx::UniformType::Vec4).idx;
     ibl_params_uniform_    = ::bgfx::createUniform("u_iblParams",     ::bgfx::UniformType::Vec4).idx;
-
-    // ── Skybox uniforms ───────────────────────────────────────────────────────
     skybox_sampler_uniform_ = ::bgfx::createUniform("s_skybox",       ::bgfx::UniformType::Sampler).idx;
     skybox_tint_uniform_    = ::bgfx::createUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4).idx;
 
-    // ── Built-in white material (handle 0) ───────────────────────────────────
-    ke_material_descriptor white_mat = {1.f, 1.f, 1.f, 1.f};
+    ke_material white_mat = {1.f, 1.f, 1.f, 1.f};
     ke_material_handle mat_handle;
     if (CreateMaterial(&white_mat, &mat_handle) != KE_OK) return KE_ERROR_RENDER;
 
@@ -307,7 +282,6 @@ ke_result BgfxRenderSystem::Frame()
     ::bgfx::touch(0);
     ::bgfx::touch(1);
     ::bgfx::frame();
-    // Reset per-frame IBL state for next frame
     has_skybox_     = false;
     active_env_tex_ = kInvalidHandle;
     return KE_OK;
@@ -325,8 +299,7 @@ ke_result BgfxRenderSystem::CreateMesh(const ke_vertex *verts, uint32_t vert_cou
                                         const uint16_t *indices, uint32_t index_count,
                                         ke_mesh_handle *out_handle)
 {
-    if (!verts || !indices || !out_handle) return KE_ERROR_INVALID_ARGUMENT;
-    if (vert_count == 0 || index_count == 0) return KE_ERROR_INVALID_ARGUMENT;
+    if (!verts || !indices || !out_handle || vert_count == 0 || index_count == 0) return KE_ERROR_INVALID_ARGUMENT;
 
     struct GpuVert { float x, y, z; uint32_t abgr; float nx, ny, nz; float u, v; };
     std::vector<GpuVert> expanded(vert_count);
@@ -401,7 +374,7 @@ ke_result BgfxRenderSystem::CreateCubemapRgba(uint32_t size, const uint8_t *data
     if (!data || !out_handle || size == 0) return KE_ERROR_INVALID_ARGUMENT;
     uint32_t total = 6u * size * size * 4u;
     uint16_t idx = ::bgfx::createTextureCube(
-        (uint16_t)size, false /*hasMips*/, 1 /*numLayers*/,
+        (uint16_t)size, false, 1,
         ::bgfx::TextureFormat::RGBA8, 0,
         ::bgfx::copy(data, total)).idx;
     if (!::bgfx::isValid(::bgfx::TextureHandle{idx})) return KE_ERROR_RENDER;
@@ -418,37 +391,29 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
     const auto &tex = textures_[cubemap_handle];
     if (!tex.valid) return KE_ERROR_INVALID_ARGUMENT;
 
-    // Build rotation-only view for the skybox (strip translation from last row:
-    // m[12], m[13], m[14] in bgfx row-major layout).
     float rotView[16];
     memcpy(rotView, last_view_, sizeof(rotView));
-    rotView[12] = 0.f;
-    rotView[13] = 0.f;
-    rotView[14] = 0.f;
+    rotView[12] = 0.f; rotView[13] = 0.f; rotView[14] = 0.f;
     ::bgfx::setViewTransform(1, rotView, last_proj_);
 
-    float tint[4] = {1.f, 1.f, 1.f, 1.f}; // white tint, exposure = 1
+    float tint[4] = {1.f, 1.f, 1.f, 1.f};
     ::bgfx::setUniform(::bgfx::UniformHandle{skybox_tint_uniform_}, tint);
-    ::bgfx::setTexture(0, ::bgfx::UniformHandle{skybox_sampler_uniform_},
-                       ::bgfx::TextureHandle{tex.idx});
+    ::bgfx::setTexture(0, ::bgfx::UniformHandle{skybox_sampler_uniform_}, ::bgfx::TextureHandle{tex.idx});
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{skybox_vb_});
     ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{skybox_ib_});
-    // No depth write, LEQUAL test: skybox passes where depth = 1.0 (unwritten by scene)
     ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_LEQUAL);
     ::bgfx::submit(1, ::bgfx::ProgramHandle{skybox_program_});
 
-    // Mark IBL active for this frame so SubmitMesh binds the env map
     has_skybox_     = true;
     active_env_tex_ = tex.idx;
     return KE_OK;
 }
 
-ke_result BgfxRenderSystem::CreateMaterial(const ke_material_descriptor *desc,
-                                            ke_material_handle *out_handle)
+ke_result BgfxRenderSystem::CreateMaterial(const ke_material *mat, ke_material_handle *out_handle)
 {
-    if (!desc || !out_handle) return KE_ERROR_INVALID_ARGUMENT;
-    uint32_t tex = (desc->albedo < (ke_texture_handle)textures_.size()) ? desc->albedo : 0;
-    materials_.push_back({desc->r, desc->g, desc->b, desc->a, tex, desc->metallic, desc->roughness, true});
+    if (!mat || !out_handle) return KE_ERROR_INVALID_ARGUMENT;
+    uint32_t tex = (mat->albedo < (ke_texture_handle)textures_.size()) ? mat->albedo : 0;
+    materials_.push_back({mat->r, mat->g, mat->b, mat->a, tex, mat->metallic, mat->roughness, true});
     *out_handle = (ke_material_handle)(materials_.size() - 1);
     return KE_OK;
 }
@@ -460,8 +425,7 @@ ke_result BgfxRenderSystem::DestroyMaterial(ke_material_handle handle)
     return KE_OK;
 }
 
-ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle material,
-                                        const ke_mat4 *transform)
+ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle material, const ke_mat4 *transform)
 {
     if (!transform) return KE_ERROR_INVALID_ARGUMENT;
     if (!::bgfx::isValid(::bgfx::ProgramHandle{program_})) return KE_ERROR_NOT_INITIALIZED;
@@ -469,8 +433,7 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     if (material >= (ke_material_handle)materials_.size()) return KE_ERROR_INVALID_ARGUMENT;
     const auto &entry = meshes_[mesh];
     const auto &mat   = materials_[material];
-    if (!::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb}) || !mat.valid)
-        return KE_ERROR_INVALID_ARGUMENT;
+    if (!::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb}) || !mat.valid) return KE_ERROR_INVALID_ARGUMENT;
 
     uint32_t tex_idx   = (mat.texture_handle < textures_.size()) ? mat.texture_handle : 0;
     float color[4]     = {mat.r, mat.g, mat.b, mat.a};
@@ -487,20 +450,16 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     {
         float ibl_params[4] = {1.f, 0.f, 0.f, 0.f};
         ::bgfx::setUniform(::bgfx::UniformHandle{ibl_params_uniform_}, ibl_params);
-        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_},
-                           ::bgfx::TextureHandle{active_env_tex_});
+        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{active_env_tex_});
     }
     else
     {
         float ibl_params[4] = {0.f, 0.f, 0.f, 0.f};
         ::bgfx::setUniform(::bgfx::UniformHandle{ibl_params_uniform_}, ibl_params);
-        // Bind the white 1×1 texture as a dummy env map (slot 1 must be bound)
-        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_},
-                           ::bgfx::TextureHandle{textures_[0].idx});
+        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
-    ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_},
-                       ::bgfx::TextureHandle{textures_[tex_idx].idx});
+    ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
     ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
     ::bgfx::setTransform(transform->m);
@@ -512,42 +471,30 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
 ke_result BgfxRenderSystem::SetDirectionalLight(const ke_directional_light *light)
 {
     if (!light) return KE_ERROR_INVALID_ARGUMENT;
-    light_dir_[0] = light->dir_x;
-    light_dir_[1] = light->dir_y;
-    light_dir_[2] = light->dir_z;
-    light_dir_[3] = 0.f;
-    light_color_[0] = light->r * light->intensity;
-    light_color_[1] = light->g * light->intensity;
-    light_color_[2] = light->b * light->intensity;
-    light_color_[3] = 0.f;
+    light_dir_[0] = light->dir_x; light_dir_[1] = light->dir_y; light_dir_[2] = light->dir_z; light_dir_[3] = 0.f;
+    light_color_[0] = light->r * light->intensity; light_color_[1] = light->g * light->intensity; light_color_[2] = light->b * light->intensity; light_color_[3] = 0.f;
     return KE_OK;
 }
 
 ke_result BgfxRenderSystem::SetAmbientLight(float r, float g, float b)
 {
-    ambient_color_[0] = r;
-    ambient_color_[1] = g;
-    ambient_color_[2] = b;
-    ambient_color_[3] = 0.f;
+    ambient_color_[0] = r; ambient_color_[1] = g; ambient_color_[2] = b; ambient_color_[3] = 0.f;
     return KE_OK;
 }
 
 ke_result BgfxRenderSystem::SetCameraPos(float x, float y, float z)
 {
-    camera_pos_[0] = x;
-    camera_pos_[1] = y;
-    camera_pos_[2] = z;
-    camera_pos_[3] = 0.f;
+    camera_pos_[0] = x; camera_pos_[1] = y; camera_pos_[2] = z; camera_pos_[3] = 0.f;
     return KE_OK;
 }
 
 } // namespace kernel_engine::render::bgfx
 
 extern "C" {
-    ke_result ke_render_bgfx_create(const ke_render_bgfx_descriptor *desc, ke_render **out_render) {
-        if (!out_render || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
-        void *mem = desc->allocator->alloc(desc->allocator, sizeof(kernel_engine::render::bgfx::BgfxRenderSystem), 0);
-        auto *sys = new (mem) kernel_engine::render::bgfx::BgfxRenderSystem(desc);
+    ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render) {
+        if (!out_render || !params || !params->allocator) return KE_ERROR_INVALID_ARGUMENT;
+        void *mem = params->allocator->alloc(params->allocator, sizeof(kernel_engine::render::bgfx::BgfxRenderSystem), 0);
+        auto *sys = new (mem) kernel_engine::render::bgfx::BgfxRenderSystem(params);
         *out_render = sys->ToApi();
         return KE_OK;
     }

@@ -23,9 +23,9 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
     }
 }
 
-GlfwWindowSystem::GlfwWindowSystem(const ke_window_glfw_descriptor *desc)
-    : width_(desc->width), height_(desc->height), title_(desc->title), allocator_(desc->allocator),
-      pipe_api_(desc->message_pipe), logger_(desc->logger)
+GlfwWindowSystem::GlfwWindowSystem(const ke_window_glfw_params *params)
+    : width_(params->width), height_(params->height), title_(params->title), allocator_(params->allocator),
+      pipe_api_(params->message_pipe), logger_(params->logger)
 {
     window_api_.handle = this;
     window_api_.on_initialize = [](ke_window *self) {
@@ -61,7 +61,7 @@ ke_window *GlfwWindowSystem::ToApi() { return &window_api_; }
 
 static void glfw_log(ke_logger *logger, ke_log_level level, const char *msg)
 {
-    if (!logger || level < logger->runtime_limit) return;
+    if (!logger || level < (ke_log_level)logger->runtime_limit) return;
     ke_log_event ev = {(int)level, "glfw", msg};
     logger->log(logger, &ev);
 }
@@ -115,10 +115,10 @@ bool GlfwWindowSystem::ShouldClose() const {
 } // namespace kernel_engine::window::glfw
 
 extern "C" {
-    ke_result ke_window_glfw_create(const ke_window_glfw_descriptor *desc, ke_window **out_window) {
-        if (!out_window || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
-        void *mem = desc->allocator->alloc(desc->allocator, sizeof(kernel_engine::window::glfw::GlfwWindowSystem), 0);
-        auto *sys = new (mem) kernel_engine::window::glfw::GlfwWindowSystem(desc);
+    ke_result ke_window_glfw_create(const ke_window_glfw_params *params, ke_window **out_window) {
+        if (!out_window || !params || !params->allocator) return KE_ERROR_INVALID_ARGUMENT;
+        void *mem = params->allocator->alloc(params->allocator, sizeof(kernel_engine::window::glfw::GlfwWindowSystem), 0);
+        auto *sys = new (mem) kernel_engine::window::glfw::GlfwWindowSystem(params);
         *out_window = sys->ToApi();
         return KE_OK;
     }
