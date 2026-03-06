@@ -10,8 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
-    <ProjectReference Include="../../../src/csharp/Native/KernelEngine.Window.Glfw.Native/KernelEngine.Window.Glfw.Native.csproj" />
-    <ProjectReference Include="../../../src/csharp/Native/KernelEngine.Render.Bgfx.Native/KernelEngine.Render.Bgfx.Native.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
   </ItemGroup>
 
 </Project>
