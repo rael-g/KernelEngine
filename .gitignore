@@ -17,6 +17,7 @@
 *.psess
 *.manifest
 *.res
+*.bin
 
 # Build artifacts for C#
 [Bb]in/
@@ -93,7 +94,7 @@ packages/
 node_modules/
 
 # Generated Shaders
-src/cpp/systems/render_system/shaders/*.bin
+src/cpp/render/bgfx/shaders/*.bin
 
 # Mac
 .DS_Store
