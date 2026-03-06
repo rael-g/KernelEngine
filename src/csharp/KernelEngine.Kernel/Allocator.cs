@@ -1,6 +1,6 @@
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Base class for native memory allocators.

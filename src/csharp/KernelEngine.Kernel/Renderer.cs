@@ -2,7 +2,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Hardware-accelerated renderer. Takes ownership of a <c>ke_render*</c> created by a service factory,

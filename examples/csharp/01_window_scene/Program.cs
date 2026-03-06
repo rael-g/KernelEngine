@@ -1,8 +1,8 @@
 using System.Numerics;
-using KernelEngine;
-using KernelEngine.Bgfx;
+using KernelEngine.Kernel;
+using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
-using KernelEngine.Glfw;
+using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()

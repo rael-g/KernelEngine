@@ -1,7 +1,7 @@
 using KernelEngine.Kernel.Native;
 using System.Runtime.InteropServices;
 
-namespace KernelEngine.Glfw.Native;
+namespace KernelEngine.Window.Glfw.Native;
 
 public static unsafe partial class NativeMethods
 {

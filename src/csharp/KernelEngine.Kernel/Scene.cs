@@ -1,4 +1,4 @@
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Thin facade over the world's ECS node management.

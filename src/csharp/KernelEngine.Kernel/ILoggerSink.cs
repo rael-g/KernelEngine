@@ -1,6 +1,6 @@
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Receives structured log events dispatched by a <see cref="Logger"/>.

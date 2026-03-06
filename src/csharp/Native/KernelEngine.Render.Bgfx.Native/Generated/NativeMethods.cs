@@ -1,7 +1,7 @@
 using KernelEngine.Kernel.Native;
 using System.Runtime.InteropServices;
 
-namespace KernelEngine.Bgfx.Native;
+namespace KernelEngine.Render.Bgfx.Native;
 
 public static unsafe partial class NativeMethods
 {

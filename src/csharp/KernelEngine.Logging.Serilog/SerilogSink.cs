@@ -1,3 +1,4 @@
+using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using Serilog.Events;
 using ILogger = Serilog.ILogger;

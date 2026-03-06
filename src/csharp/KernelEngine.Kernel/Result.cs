@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// A lightweight, allocation-free result container for kernel operations.

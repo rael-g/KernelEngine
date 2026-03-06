@@ -1,4 +1,4 @@
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// A managed simulation system registered with <see cref="World.AddSystem"/>.

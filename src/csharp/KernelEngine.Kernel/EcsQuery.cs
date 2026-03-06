@@ -1,4 +1,4 @@
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Zero-copy query result from <see cref="EcsRegistry.Query{T}"/>.

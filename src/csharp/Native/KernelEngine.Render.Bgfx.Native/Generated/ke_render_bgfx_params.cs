@@ -1,6 +1,6 @@
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine.Bgfx.Native;
+namespace KernelEngine.Render.Bgfx.Native;
 
 public unsafe partial struct ke_render_bgfx_params
 {

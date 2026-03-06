@@ -1,7 +1,7 @@
 using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 public static class ServiceCollectionExtensions
 {

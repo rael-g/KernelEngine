@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Managed wrapper for <c>ke_ecs_registry</c>. Provides typed component registration,

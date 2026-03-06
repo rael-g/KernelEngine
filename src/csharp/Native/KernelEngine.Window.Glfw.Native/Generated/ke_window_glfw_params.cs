@@ -1,6 +1,6 @@
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine.Glfw.Native;
+namespace KernelEngine.Window.Glfw.Native;
 
 public unsafe partial struct ke_window_glfw_params
 {

@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Structured logger. Dispatches events to registered sinks.

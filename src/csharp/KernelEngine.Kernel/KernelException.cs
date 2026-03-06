@@ -1,6 +1,6 @@
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Thrown when a native kernel operation returns a non-OK result.

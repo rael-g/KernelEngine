@@ -1,22 +1,22 @@
 using System.Runtime.InteropServices;
-using KernelEngine;
-using KernelEngine.Bgfx.Native;
+using KernelEngine.Kernel;
+using KernelEngine.Render.Bgfx.Native;
 using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KernelEngine.Bgfx;
+namespace KernelEngine.Render.Bgfx;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers a bgfx-backed <see cref="Renderer"/> singleton.
-    /// Requires <c>AddKernel()</c> and a registered <see cref="Window"/> to be called first.
+    /// Registers a bgfx-backed <see cref="KernelEngine.Kernel.Renderer"/> singleton.
+    /// Requires <c>AddKernel()</c> and a registered <see cref="KernelEngine.Kernel.Window"/> to be called first.
     /// </summary>
     public static IServiceCollection AddBgfxRenderer(
         this IServiceCollection services,
         string shaderPath)
     {
-        services.AddSingleton<Renderer>(sp =>
+        services.AddSingleton<KernelEngine.Kernel.Renderer>(sp =>
         {
             var shaderPtr = Marshal.StringToHGlobalAnsi(shaderPath);
             try
@@ -31,14 +31,14 @@ public static class ServiceCollectionExtensions
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
                         message_pipe = pipe != null ? pipe.Native : null,
-                        window = sp.GetRequiredService<Window>().Native,
+                        window = sp.GetRequiredService<KernelEngine.Kernel.Window>().Native,
                         shader_path = (sbyte*)shaderPtr,
                     };
 
                     ke_render* native;
                     KernelException.ThrowIfFailed(
-                        KernelEngine.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native));
-                    return new Renderer(native);
+                        KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native));
+                    return new KernelEngine.Kernel.Renderer(native);
                 }
             }
             finally
@@ -50,3 +50,4 @@ public static class ServiceCollectionExtensions
         return services;
     }
 }
+

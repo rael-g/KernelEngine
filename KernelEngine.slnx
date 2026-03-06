@@ -10,8 +10,8 @@
     <Project Path="src/csharp/KernelEngine.Logging.Serilog/KernelEngine.Logging.Serilog.csproj" />
   </Folder>
   <Folder Name="/src/csharp/Native/">
-    <Project Path="src/csharp/Native/KernelEngine.Bgfx.Native/KernelEngine.Bgfx.Native.csproj" />
-    <Project Path="src/csharp/Native/KernelEngine.Glfw.Native/KernelEngine.Glfw.Native.csproj" />
+    <Project Path="src/csharp/Native/KernelEngine.Render.Bgfx.Native/KernelEngine.Render.Bgfx.Native.csproj" />
+    <Project Path="src/csharp/Native/KernelEngine.Window.Glfw.Native/KernelEngine.Window.Glfw.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.ShaderCompiler.Native/KernelEngine.ShaderCompiler.Native.csproj" />
   </Folder>

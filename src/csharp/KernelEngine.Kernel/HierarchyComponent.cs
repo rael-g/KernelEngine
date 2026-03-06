@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// ECS component that stores scene-graph hierarchy links as entity IDs.

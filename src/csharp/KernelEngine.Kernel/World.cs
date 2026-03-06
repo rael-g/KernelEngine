@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// The simulation world — owns the ECS registry, drives per-frame systems, and

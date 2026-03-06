@@ -1,4 +1,4 @@
-using KernelEngine;
+using KernelEngine.Kernel;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 

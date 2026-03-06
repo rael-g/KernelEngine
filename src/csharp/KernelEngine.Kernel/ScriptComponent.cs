@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// ECS component holding the managed script callbacks for a node.

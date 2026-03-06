@@ -2,7 +2,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Spatial transform: position, rotation (quaternion), and scale.

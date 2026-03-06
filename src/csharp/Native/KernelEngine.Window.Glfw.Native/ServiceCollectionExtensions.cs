@@ -1,22 +1,22 @@
 using System.Runtime.InteropServices;
-using KernelEngine;
-using KernelEngine.Glfw.Native;
+using KernelEngine.Kernel;
+using KernelEngine.Window.Glfw.Native;
 using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KernelEngine.Glfw;
+namespace KernelEngine.Window.Glfw;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers a GLFW-backed <see cref="Window"/> singleton.
+    /// Registers a GLFW-backed <see cref="KernelEngine.Kernel.Window"/> singleton.
     /// Requires <c>AddKernel()</c> to be called first.
     /// </summary>
     public static IServiceCollection AddGlfwWindow(
         this IServiceCollection services,
         int width, int height, string title)
     {
-        services.AddSingleton<Window>(sp =>
+        services.AddSingleton<KernelEngine.Kernel.Window>(sp =>
         {
             var titlePtr = Marshal.StringToHGlobalAnsi(title);
             try
@@ -38,8 +38,8 @@ public static class ServiceCollectionExtensions
 
                     ke_window* native;
                     KernelException.ThrowIfFailed(
-                        KernelEngine.Glfw.Native.NativeMethods.window_glfw_create(&@params, &native));
-                    return new Window(native);
+                        KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &native));
+                    return new KernelEngine.Kernel.Window(native);
                 }
             }
             finally
