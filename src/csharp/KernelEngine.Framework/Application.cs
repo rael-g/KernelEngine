@@ -45,6 +45,8 @@ public class Application : IDisposable
             ActiveWorld = new World(Allocator, Renderer, Window);
 
         LightNode.Initialize(ActiveWorld.Registry);
+        PointLightNode.Initialize(ActiveWorld.Registry);
+        SpotLightNode.Initialize(ActiveWorld.Registry);
         CameraNode.Initialize(ActiveWorld.Registry);
         MeshNode.Initialize(ActiveWorld.Registry);
         SkyboxNode.Initialize();

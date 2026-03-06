@@ -118,6 +118,20 @@ public sealed unsafe class Renderer : IDisposable
     /// <summary>Sets the camera world-space position used for PBR specular calculations. Call once per frame.</summary>
     public Result SetCameraPos(float x, float y, float z) => _native->set_camera_pos(_native, x, y, z);
 
+    /// <summary>Uploads up to 8 point lights for the current frame. Replaces any previously set point lights.</summary>
+    public Result SetPointLights(ReadOnlySpan<ke_point_light> lights)
+    {
+        fixed (ke_point_light* p = lights)
+            return _native->set_point_lights(_native, p, (uint)lights.Length);
+    }
+
+    /// <summary>Uploads up to 8 spot lights for the current frame. Replaces any previously set spot lights.</summary>
+    public Result SetSpotLights(ReadOnlySpan<ke_spot_light> lights)
+    {
+        fixed (ke_spot_light* p = lights)
+            return _native->set_spot_lights(_native, p, (uint)lights.Length);
+    }
+
     /// <summary>
     /// Uploads 6 RGBA8 face images into a GPU cubemap and returns a stable handle.
     /// <paramref name="faces"/> must contain exactly 6 arrays of equal size (width × height × 4 bytes each),

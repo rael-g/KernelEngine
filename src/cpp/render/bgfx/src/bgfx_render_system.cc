@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <cmath>
 
 namespace kernel_engine::render::bgfx
 {
@@ -109,6 +110,12 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     };
     render_api_.set_bloom = [](ke_render *self, bool enabled, float threshold, float intensity) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetBloom(enabled, threshold, intensity);
+    };
+    render_api_.set_point_lights = [](ke_render *self, const ke_point_light *lights, uint32_t count) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SetPointLights(lights, count);
+    };
+    render_api_.set_spot_lights = [](ke_render *self, const ke_spot_light *lights, uint32_t count) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SetSpotLights(lights, count);
     };
 }
 
@@ -268,6 +275,13 @@ ke_result BgfxRenderSystem::SetupShader()
     light_vp_uniform_       = ::bgfx::createUniform("u_lightVP",      ::bgfx::UniformType::Mat4).idx;
     shadow_params_uniform_  = ::bgfx::createUniform("u_shadowParams", ::bgfx::UniformType::Vec4).idx;
 
+    point_lights_pos_r_uniform_      = ::bgfx::createUniform("u_pointLightsPosR",      ::bgfx::UniformType::Vec4, kMaxPointLights).idx;
+    point_lights_color_i_uniform_    = ::bgfx::createUniform("u_pointLightsColorI",    ::bgfx::UniformType::Vec4, kMaxPointLights).idx;
+    spot_lights_pos_r_uniform_       = ::bgfx::createUniform("u_spotLightsPosR",       ::bgfx::UniformType::Vec4, kMaxSpotLights).idx;
+    spot_lights_dir_cos_uniform_     = ::bgfx::createUniform("u_spotLightsDirCos",     ::bgfx::UniformType::Vec4, kMaxSpotLights).idx;
+    spot_lights_color_outer_uniform_ = ::bgfx::createUniform("u_spotLightsColorOuter", ::bgfx::UniformType::Vec4, kMaxSpotLights).idx;
+    light_counts_uniform_            = ::bgfx::createUniform("u_lightCounts",           ::bgfx::UniformType::Vec4).idx;
+
     ke_material white_mat = {1.f, 1.f, 1.f, 1.f};
     ke_material_handle mat_handle;
     if (CreateMaterial(&white_mat, &mat_handle) != KE_OK) return KE_ERROR_RENDER;
@@ -319,6 +333,12 @@ ke_result BgfxRenderSystem::OnShutdown()
     if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        ::bgfx::destroy(::bgfx::ProgramHandle{blur_program_});
     if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{bright_pass_program_});
 
+    destroy_uniform(light_counts_uniform_);
+    destroy_uniform(spot_lights_color_outer_uniform_);
+    destroy_uniform(spot_lights_dir_cos_uniform_);
+    destroy_uniform(spot_lights_pos_r_uniform_);
+    destroy_uniform(point_lights_color_i_uniform_);
+    destroy_uniform(point_lights_pos_r_uniform_);
     destroy_uniform(shadow_params_uniform_);
     destroy_uniform(light_vp_uniform_);
     destroy_uniform(shadow_map_uniform_);
@@ -389,6 +409,8 @@ ke_result BgfxRenderSystem::Frame()
     has_skybox_           = false;
     active_env_tex_       = kInvalidHandle;
     active_shadow_handle_ = kInvalidShadowHandle;
+    point_light_count_    = 0;
+    spot_light_count_     = 0;
     return KE_OK;
 }
 
@@ -607,6 +629,20 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
         ::bgfx::setTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
+    // Point / spot light counts and arrays
+    float light_counts[4] = {(float)point_light_count_, (float)spot_light_count_, 0.f, 0.f};
+    ::bgfx::setUniform(::bgfx::UniformHandle{light_counts_uniform_}, light_counts);
+    ::bgfx::setUniform(::bgfx::UniformHandle{point_lights_pos_r_uniform_},
+                       point_lights_pos_r_, (uint16_t)kMaxPointLights);
+    ::bgfx::setUniform(::bgfx::UniformHandle{point_lights_color_i_uniform_},
+                       point_lights_color_i_, (uint16_t)kMaxPointLights);
+    ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_pos_r_uniform_},
+                       spot_lights_pos_r_, (uint16_t)kMaxSpotLights);
+    ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_dir_cos_uniform_},
+                       spot_lights_dir_cos_, (uint16_t)kMaxSpotLights);
+    ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_color_outer_uniform_},
+                       spot_lights_color_outer_, (uint16_t)kMaxSpotLights);
+
     ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
     ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
@@ -748,6 +784,45 @@ ke_result BgfxRenderSystem::SetAmbientLight(float r, float g, float b)
 ke_result BgfxRenderSystem::SetCameraPos(float x, float y, float z)
 {
     camera_pos_[0] = x; camera_pos_[1] = y; camera_pos_[2] = z; camera_pos_[3] = 0.f;
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetPointLights(const ke_point_light *lights, uint32_t count)
+{
+    if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
+    point_light_count_ = (count > kMaxPointLights) ? kMaxPointLights : count;
+    for (uint32_t i = 0; i < point_light_count_; ++i)
+    {
+        float *pos_r   = &point_lights_pos_r_[i * 4];
+        float *color_i = &point_lights_color_i_[i * 4];
+        pos_r[0] = lights[i].pos_x; pos_r[1] = lights[i].pos_y;
+        pos_r[2] = lights[i].pos_z; pos_r[3] = lights[i].radius;
+        color_i[0] = lights[i].r * lights[i].intensity;
+        color_i[1] = lights[i].g * lights[i].intensity;
+        color_i[2] = lights[i].b * lights[i].intensity;
+        color_i[3] = 0.f;
+    }
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetSpotLights(const ke_spot_light *lights, uint32_t count)
+{
+    if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
+    spot_light_count_ = (count > kMaxSpotLights) ? kMaxSpotLights : count;
+    for (uint32_t i = 0; i < spot_light_count_; ++i)
+    {
+        float *pos_r   = &spot_lights_pos_r_[i * 4];
+        float *dir_cos = &spot_lights_dir_cos_[i * 4];
+        float *color_o = &spot_lights_color_outer_[i * 4];
+        pos_r[0] = lights[i].pos_x; pos_r[1] = lights[i].pos_y;
+        pos_r[2] = lights[i].pos_z; pos_r[3] = lights[i].range;
+        dir_cos[0] = lights[i].dir_x; dir_cos[1] = lights[i].dir_y;
+        dir_cos[2] = lights[i].dir_z; dir_cos[3] = cosf(lights[i].inner_angle);
+        color_o[0] = lights[i].r * lights[i].intensity;
+        color_o[1] = lights[i].g * lights[i].intensity;
+        color_o[2] = lights[i].b * lights[i].intensity;
+        color_o[3] = cosf(lights[i].outer_angle);
+    }
     return KE_OK;
 }
 

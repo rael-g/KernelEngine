@@ -84,4 +84,10 @@ public unsafe partial struct ke_render
 
     [NativeTypeName("ke_result (*)(struct ke_render *, bool, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_render*, bool, float, float, ke_result> set_bloom;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, const ke_point_light *, uint32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_point_light*, uint, ke_result> set_point_lights;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, const ke_spot_light *, uint32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_spot_light*, uint, ke_result> set_spot_lights;
 }

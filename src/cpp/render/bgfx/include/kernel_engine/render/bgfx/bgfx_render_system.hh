@@ -66,6 +66,8 @@ class BgfxRenderSystem
     // Light operations
     ke_result SetDirectionalLight(const ke_directional_light *light);
     ke_result SetAmbientLight(float r, float g, float b);
+    ke_result SetPointLights(const ke_point_light *lights, uint32_t count);
+    ke_result SetSpotLights(const ke_spot_light *lights, uint32_t count);
 
     // PBR camera
     ke_result SetCameraPos(float x, float y, float z);
@@ -143,6 +145,26 @@ class BgfxRenderSystem
     float light_color_[4]   = {0.f,  0.f, 0.f, 0.f};
     float ambient_color_[4] = {0.1f, 0.1f, 0.1f, 0.f};
     float camera_pos_[4]    = {0.f,  0.f, 0.f, 0.f};
+
+    // ── Point / Spot lights ───────────────────────────────────────────────────
+    static constexpr uint32_t kMaxPointLights = 8;
+    static constexpr uint32_t kMaxSpotLights  = 8;
+
+    uint16_t point_lights_pos_r_uniform_        = kInvalidHandle; // u_pointLightsPosR[8]
+    uint16_t point_lights_color_i_uniform_      = kInvalidHandle; // u_pointLightsColorI[8]
+    uint16_t spot_lights_pos_r_uniform_         = kInvalidHandle; // u_spotLightsPosR[8]
+    uint16_t spot_lights_dir_cos_uniform_       = kInvalidHandle; // u_spotLightsDirCos[8]
+    uint16_t spot_lights_color_outer_uniform_   = kInvalidHandle; // u_spotLightsColorOuter[8]
+    uint16_t light_counts_uniform_              = kInvalidHandle; // u_lightCounts
+
+    float point_lights_pos_r_[kMaxPointLights * 4]{};
+    float point_lights_color_i_[kMaxPointLights * 4]{};
+    float spot_lights_pos_r_[kMaxSpotLights * 4]{};
+    float spot_lights_dir_cos_[kMaxSpotLights * 4]{};
+    float spot_lights_color_outer_[kMaxSpotLights * 4]{};
+
+    uint32_t point_light_count_ = 0;
+    uint32_t spot_light_count_  = 0;
 
     // ── Skybox program ────────────────────────────────────────────────────────
     uint16_t skybox_program_         = kInvalidHandle;

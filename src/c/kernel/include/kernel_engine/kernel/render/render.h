@@ -95,6 +95,16 @@ extern "C"
         ke_result (*set_bloom)(struct ke_render *self, bool enabled,
                                float threshold, float intensity);
 
+        /// @brief Uploads an array of point lights for the current frame (max 8).
+        ///        Replaces any previously set point lights.
+        ke_result (*set_point_lights)(struct ke_render *self,
+                                      const ke_point_light *lights, uint32_t count);
+
+        /// @brief Uploads an array of spot lights for the current frame (max 8).
+        ///        Replaces any previously set spot lights.
+        ke_result (*set_spot_lights)(struct ke_render *self,
+                                     const ke_spot_light *lights, uint32_t count);
+
     } ke_render;
 
 #ifdef __cplusplus
