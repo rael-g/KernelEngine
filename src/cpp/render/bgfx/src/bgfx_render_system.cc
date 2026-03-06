@@ -218,11 +218,12 @@ ke_result BgfxRenderSystem::SetupShader()
         if (logger_) logger_->log(logger_, &ev);
     }
 
+    // Normal=(0,0,1) Tangent=(1,0,0,1) → Bitangent=cross(N,T)*1=(0,1,0)
     static const ke_vertex kVerts[4] = {
-        {-0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f},
-        { 0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  1.0f, 0.0f},
-        { 0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  1.0f, 1.0f},
-        {-0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f},
+        {-0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,  1.0f, 0.0f, 0.0f, 1.0f},
+        { 0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  1.0f, 0.0f,  1.0f, 0.0f, 0.0f, 1.0f},
+        { 0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  1.0f, 1.0f,  1.0f, 0.0f, 0.0f, 1.0f},
+        {-0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f,  1.0f, 0.0f, 0.0f, 1.0f},
     };
     static const uint16_t kIndices[6] = {0, 1, 2, 0, 2, 3};
     ke_mesh_handle quad_handle;
@@ -259,6 +260,8 @@ ke_result BgfxRenderSystem::SetupShader()
     pbr_params_uniform_    = ::bgfx::createUniform("u_pbrParams",     ::bgfx::UniformType::Vec4).idx;
     camera_pos_uniform_    = ::bgfx::createUniform("u_cameraPos",     ::bgfx::UniformType::Vec4).idx;
     ibl_params_uniform_    = ::bgfx::createUniform("u_iblParams",     ::bgfx::UniformType::Vec4).idx;
+    normal_map_uniform_    = ::bgfx::createUniform("s_normalMap",     ::bgfx::UniformType::Sampler).idx;
+    normal_params_uniform_ = ::bgfx::createUniform("u_normalParams",  ::bgfx::UniformType::Vec4).idx;
     skybox_sampler_uniform_ = ::bgfx::createUniform("s_skybox",       ::bgfx::UniformType::Sampler).idx;
     skybox_tint_uniform_    = ::bgfx::createUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4).idx;
     shadow_map_uniform_     = ::bgfx::createUniform("s_shadowMap",    ::bgfx::UniformType::Sampler).idx;
@@ -319,6 +322,8 @@ ke_result BgfxRenderSystem::OnShutdown()
     destroy_uniform(shadow_params_uniform_);
     destroy_uniform(light_vp_uniform_);
     destroy_uniform(shadow_map_uniform_);
+    destroy_uniform(normal_params_uniform_);
+    destroy_uniform(normal_map_uniform_);
     destroy_uniform(ibl_params_uniform_);
     destroy_uniform(env_map_uniform_);
     destroy_uniform(camera_pos_uniform_);
@@ -401,12 +406,19 @@ ke_result BgfxRenderSystem::CreateMesh(const ke_vertex *verts, uint32_t vert_cou
 {
     if (!verts || !indices || !out_handle || vert_count == 0 || index_count == 0) return KE_ERROR_INVALID_ARGUMENT;
 
-    struct GpuVert { float x, y, z; uint32_t abgr; float nx, ny, nz; float u, v; };
+    struct GpuVert {
+        float x, y, z;
+        uint32_t abgr;
+        float nx, ny, nz;
+        float u, v;
+        float tx, ty, tz, tw; // tangent xyz + bitangent sign
+    };
     std::vector<GpuVert> expanded(vert_count);
     for (uint32_t i = 0; i < vert_count; i++)
         expanded[i] = {verts[i].x, verts[i].y, verts[i].z, 0xffffffff,
                        verts[i].nx, verts[i].ny, verts[i].nz,
-                       verts[i].u, verts[i].v};
+                       verts[i].u, verts[i].v,
+                       verts[i].tx, verts[i].ty, verts[i].tz, verts[i].tw};
 
     ::bgfx::VertexLayout layout;
     layout.begin()
@@ -414,6 +426,7 @@ ke_result BgfxRenderSystem::CreateMesh(const ke_vertex *verts, uint32_t vert_cou
         .add(::bgfx::Attrib::Color0,    4, ::bgfx::AttribType::Uint8,  true)
         .add(::bgfx::Attrib::Normal,    3, ::bgfx::AttribType::Float)
         .add(::bgfx::Attrib::TexCoord0, 2, ::bgfx::AttribType::Float)
+        .add(::bgfx::Attrib::Tangent,   4, ::bgfx::AttribType::Float)
         .end();
 
     MeshEntry entry;
@@ -512,8 +525,9 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
 ke_result BgfxRenderSystem::CreateMaterial(const ke_material *mat, ke_material_handle *out_handle)
 {
     if (!mat || !out_handle) return KE_ERROR_INVALID_ARGUMENT;
-    uint32_t tex = (mat->albedo < (ke_texture_handle)textures_.size()) ? mat->albedo : 0;
-    materials_.push_back({mat->r, mat->g, mat->b, mat->a, tex, mat->metallic, mat->roughness, true});
+    uint32_t tex  = (mat->albedo     < (ke_texture_handle)textures_.size()) ? mat->albedo     : 0;
+    uint32_t nmap = (mat->normal_map < (ke_texture_handle)textures_.size()) ? mat->normal_map : 0;
+    materials_.push_back({mat->r, mat->g, mat->b, mat->a, tex, mat->metallic, mat->roughness, nmap, true});
     *out_handle = (ke_material_handle)(materials_.size() - 1);
     return KE_OK;
 }
@@ -576,6 +590,21 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
         ::bgfx::setUniform(::bgfx::UniformHandle{light_vp_uniform_}, identity);
         ::bgfx::setTexture(2, ::bgfx::UniformHandle{shadow_map_uniform_},
             ::bgfx::TextureHandle{textures_[0].idx});
+    }
+
+    // Normal map binding (slot 3)
+    uint32_t nmap_idx = (mat.normal_map_handle < textures_.size()) ? mat.normal_map_handle : 0;
+    if (nmap_idx != 0)
+    {
+        float normal_params[4] = {1.f, 0.f, 0.f, 0.f};
+        ::bgfx::setUniform(::bgfx::UniformHandle{normal_params_uniform_}, normal_params);
+        ::bgfx::setTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[nmap_idx].idx});
+    }
+    else
+    {
+        float normal_params[4] = {0.f, 0.f, 0.f, 0.f};
+        ::bgfx::setUniform(::bgfx::UniformHandle{normal_params_uniform_}, normal_params);
+        ::bgfx::setTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
     ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});

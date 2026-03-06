@@ -14,4 +14,8 @@ public struct ke_vertex
     [NativeTypeName("float")] public float nz;
     [NativeTypeName("float")] public float u;
     [NativeTypeName("float")] public float v;
+    [NativeTypeName("float")] public float tx;
+    [NativeTypeName("float")] public float ty;
+    [NativeTypeName("float")] public float tz;
+    [NativeTypeName("float")] public float tw;
 }

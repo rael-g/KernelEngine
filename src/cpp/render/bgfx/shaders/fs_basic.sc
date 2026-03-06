@@ -1,10 +1,11 @@
-$input v_color0, v_normal, v_texcoord0, v_worldPos, v_shadowCoord
+$input v_color0, v_normal, v_texcoord0, v_worldPos, v_shadowCoord, v_tangent
 
 #include <bgfx_shader.sh>
 
 SAMPLER2D(s_texColor,  0);
 SAMPLERCUBE(s_envMap,  1);
 SAMPLER2D(s_shadowMap, 2);
+SAMPLER2D(s_normalMap, 3);
 
 uniform vec4 u_color;
 uniform vec4 u_lightDir;     // xyz = direction toward light source (world space)
@@ -14,6 +15,7 @@ uniform vec4 u_pbrParams;    // x = metallic, y = roughness
 uniform vec4 u_cameraPos;    // xyz = camera world position
 uniform vec4 u_iblParams;    // x = 1 if IBL active, else 0
 uniform vec4 u_shadowParams; // x = 1 if shadow map active, else 0
+uniform vec4 u_normalParams; // x = 1 if normal map active, else 0
 
 #define PI 3.14159265358979
 
@@ -65,7 +67,19 @@ void main()
     float metallic  = u_pbrParams.x;
     float roughness = max(u_pbrParams.y, 0.04);
 
-    vec3 N = normalize(v_normal);
+    vec3 N;
+    if (u_normalParams.x > 0.5)
+    {
+        vec3 Tv = normalize(v_tangent.xyz);
+        vec3 Nv = normalize(v_normal);
+        vec3 Bv = cross(Nv, Tv) * v_tangent.w;
+        vec3 ns = texture2D(s_normalMap, v_texcoord0).xyz * 2.0 - 1.0;
+        N = normalize(Tv * ns.x + Bv * ns.y + Nv * ns.z);
+    }
+    else
+    {
+        N = normalize(v_normal);
+    }
     vec3 V = normalize(u_cameraPos.xyz - v_worldPos);
     vec3 R = reflect(-V, N);
 

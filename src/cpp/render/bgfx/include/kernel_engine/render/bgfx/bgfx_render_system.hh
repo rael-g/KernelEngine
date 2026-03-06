@@ -103,9 +103,10 @@ class BgfxRenderSystem
     struct MaterialEntry
     {
         float r = 1.f, g = 1.f, b = 1.f, a = 1.f;
-        uint32_t texture_handle = 0; // index into textures_
-        float metallic  = 0.f;
-        float roughness = 0.5f;
+        uint32_t texture_handle     = 0;            // index into textures_
+        float metallic              = 0.f;
+        float roughness             = 0.5f;
+        uint32_t normal_map_handle  = 0;            // 0 = disabled (white = flat normal)
         bool valid = false;
     };
 
@@ -135,6 +136,8 @@ class BgfxRenderSystem
     uint16_t camera_pos_uniform_    = kInvalidHandle;
     uint16_t ibl_params_uniform_    = kInvalidHandle;
     uint16_t env_map_uniform_       = kInvalidHandle; // s_envMap for IBL
+    uint16_t normal_map_uniform_    = kInvalidHandle; // s_normalMap
+    uint16_t normal_params_uniform_ = kInvalidHandle; // u_normalParams
 
     float light_dir_[4]     = {0.f,  1.f, 0.f, 0.f};
     float light_color_[4]   = {0.f,  0.f, 0.f, 0.f};

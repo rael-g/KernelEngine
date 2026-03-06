@@ -82,19 +82,20 @@ public sealed unsafe class Renderer : IDisposable
 
     /// <summary>Creates a material from properties, returning a stable handle.</summary>
     public Result<uint> CreateMaterial(float r, float g, float b, float a, uint textureHandle = 0,
-                               float metallic = 0f, float roughness = 0.5f)
+                               float metallic = 0f, float roughness = 0.5f, uint normalMapHandle = 0)
     {
         uint handle;
         var mat = new ke_material { r = r, g = g, b = b, a = a, albedo = textureHandle,
-                                    metallic = metallic, roughness = roughness };
+                                    metallic = metallic, roughness = roughness,
+                                    normal_map = normalMapHandle };
         var res = _native->create_material(_native, &mat, &handle);
         return new Result<uint>(res, handle);
     }
 
-    /// <inheritdoc cref="CreateMaterial(float,float,float,float,uint,float,float)"/>
+    /// <inheritdoc cref="CreateMaterial(float,float,float,float,uint,float,float,uint)"/>
     public Result<uint> CreateMaterial(Vector4 color, uint textureHandle = 0,
-                               float metallic = 0f, float roughness = 0.5f) =>
-        CreateMaterial(color.X, color.Y, color.Z, color.W, textureHandle, metallic, roughness);
+                               float metallic = 0f, float roughness = 0.5f, uint normalMapHandle = 0) =>
+        CreateMaterial(color.X, color.Y, color.Z, color.W, textureHandle, metallic, roughness, normalMapHandle);
 
     /// <summary>Releases a material handle.</summary>
     public Result DestroyMaterial(uint handle) => _native->destroy_material(_native, handle);
