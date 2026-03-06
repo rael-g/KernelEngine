@@ -1,9 +1,10 @@
-$input v_color0, v_normal, v_texcoord0, v_worldPos
+$input v_color0, v_normal, v_texcoord0, v_worldPos, v_shadowCoord
 
 #include <bgfx_shader.sh>
 
-SAMPLER2D(s_texColor, 0);
+SAMPLER2D(s_texColor,  0);
 SAMPLERCUBE(s_envMap,  1);
+SAMPLER2D(s_shadowMap, 2);
 
 uniform vec4 u_color;
 uniform vec4 u_lightDir;     // xyz = direction toward light source (world space)
@@ -12,6 +13,7 @@ uniform vec4 u_ambientColor; // xyz = ambient color (used when IBL is off)
 uniform vec4 u_pbrParams;    // x = metallic, y = roughness
 uniform vec4 u_cameraPos;    // xyz = camera world position
 uniform vec4 u_iblParams;    // x = 1 if IBL active, else 0
+uniform vec4 u_shadowParams; // x = 1 if shadow map active, else 0
 
 #define PI 3.14159265358979
 
@@ -42,6 +44,20 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 vec3 FresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
+}
+
+float ComputeShadow(vec4 shadowCoord)
+{
+    vec3 coord = shadowCoord.xyz / shadowCoord.w;
+    // Convert NDC [-1,1] XY to texture UV [0,1]
+    coord.xy = coord.xy * 0.5 + 0.5;
+    // Discard if outside shadow frustum
+    if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 ||
+        coord.z < 0.0 || coord.z > 1.0)
+        return 1.0;
+    float occluderDepth = texture2D(s_shadowMap, coord.xy).x;
+    float bias = 0.005;
+    return (coord.z - bias > occluderDepth) ? 0.3 : 1.0;
 }
 
 void main()
@@ -97,5 +113,10 @@ void main()
         ambient = u_ambientColor.xyz * albedo.xyz;
     }
 
-    gl_FragColor = vec4(ambient + direct, albedo.w);
+    // ── Shadow factor ──────────────────────────────────────────────────────────
+    float shadow = 1.0;
+    if (u_shadowParams.x > 0.5)
+        shadow = ComputeShadow(v_shadowCoord);
+
+    gl_FragColor = vec4(ambient + direct * shadow, albedo.w);
 }

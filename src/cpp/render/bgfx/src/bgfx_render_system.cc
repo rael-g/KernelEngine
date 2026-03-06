@@ -83,6 +83,27 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     render_api_.submit_skybox = [](ke_render *self, ke_texture_handle handle) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SubmitSkybox(handle);
     };
+    render_api_.create_shadow_map = [](ke_render *self, uint32_t w, uint32_t h,
+                                        ke_shadow_map_handle *out) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->CreateShadowMap(w, h, out);
+    };
+    render_api_.destroy_shadow_map = [](ke_render *self, ke_shadow_map_handle handle) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->DestroyShadowMap(handle);
+    };
+    render_api_.begin_shadow_pass = [](ke_render *self, ke_shadow_map_handle handle,
+                                        const ke_mat4 *lv, const ke_mat4 *lp) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->BeginShadowPass(handle, lv, lp);
+    };
+    render_api_.submit_mesh_shadow = [](ke_render *self, ke_mesh_handle mesh,
+                                         const ke_mat4 *transform) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SubmitMeshShadow(mesh, transform);
+    };
+    render_api_.end_shadow_pass = [](ke_render *self) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->EndShadowPass();
+    };
+    render_api_.set_shadow_map = [](ke_render *self, ke_shadow_map_handle handle) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SetShadowMap(handle);
+    };
 }
 
 BgfxRenderSystem::~BgfxRenderSystem() {}
@@ -119,11 +140,14 @@ ke_result BgfxRenderSystem::OnInitialize()
     view_w_ = w;
     view_h_ = h;
 
-    ::bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
-    ::bgfx::setViewRect(0, 0, 0, (uint16_t)w, (uint16_t)h);
-
-    ::bgfx::setViewClear(1, BGFX_CLEAR_NONE);
+    // View 0: shadow depth pass — framebuffer and transform set dynamically by BeginShadowPass.
+    // View 1: main scene pass.
+    ::bgfx::setViewClear(1, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
     ::bgfx::setViewRect(1, 0, 0, (uint16_t)w, (uint16_t)h);
+
+    // View 2: skybox pass — no clear, renders only where scene left depth=1.
+    ::bgfx::setViewClear(2, BGFX_CLEAR_NONE);
+    ::bgfx::setViewRect(2, 0, 0, (uint16_t)w, (uint16_t)h);
 
     return SetupShader();
 }
@@ -153,6 +177,22 @@ ke_result BgfxRenderSystem::SetupShader()
     ::bgfx::ProgramHandle prog = ::bgfx::createProgram(vs, fs, true);
     if (!::bgfx::isValid(prog)) return KE_ERROR_RENDER;
     program_ = prog.idx;
+
+    ::bgfx::ShaderHandle shd_vs = load_shader("vs_shadow");
+    ::bgfx::ShaderHandle shd_fs = load_shader("fs_shadow");
+    if (::bgfx::isValid(shd_vs) && ::bgfx::isValid(shd_fs))
+    {
+        ::bgfx::ProgramHandle shd_prog = ::bgfx::createProgram(shd_vs, shd_fs, true);
+        if (::bgfx::isValid(shd_prog))
+            shadow_program_ = shd_prog.idx;
+    }
+    else
+    {
+        if (::bgfx::isValid(shd_vs)) ::bgfx::destroy(shd_vs);
+        if (::bgfx::isValid(shd_fs)) ::bgfx::destroy(shd_fs);
+        ke_log_event ev = {KE_LOG_LEVEL_WARNING, "bgfx", "Shadow shaders not found — shadows disabled"};
+        if (logger_) logger_->log(logger_, &ev);
+    }
 
     ::bgfx::ShaderHandle sky_vs = load_shader("vs_skybox");
     ::bgfx::ShaderHandle sky_fs = load_shader("fs_skybox");
@@ -213,6 +253,9 @@ ke_result BgfxRenderSystem::SetupShader()
     ibl_params_uniform_    = ::bgfx::createUniform("u_iblParams",     ::bgfx::UniformType::Vec4).idx;
     skybox_sampler_uniform_ = ::bgfx::createUniform("s_skybox",       ::bgfx::UniformType::Sampler).idx;
     skybox_tint_uniform_    = ::bgfx::createUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4).idx;
+    shadow_map_uniform_     = ::bgfx::createUniform("s_shadowMap",    ::bgfx::UniformType::Sampler).idx;
+    light_vp_uniform_       = ::bgfx::createUniform("u_lightVP",      ::bgfx::UniformType::Mat4).idx;
+    shadow_params_uniform_  = ::bgfx::createUniform("u_shadowParams", ::bgfx::UniformType::Vec4).idx;
 
     ke_material white_mat = {1.f, 1.f, 1.f, 1.f};
     ke_material_handle mat_handle;
@@ -242,6 +285,9 @@ ke_result BgfxRenderSystem::OnShutdown()
     auto destroy_uniform = [](uint16_t u) {
         if (::bgfx::isValid(::bgfx::UniformHandle{u})) ::bgfx::destroy(::bgfx::UniformHandle{u});
     };
+    destroy_uniform(shadow_params_uniform_);
+    destroy_uniform(light_vp_uniform_);
+    destroy_uniform(shadow_map_uniform_);
     destroy_uniform(ibl_params_uniform_);
     destroy_uniform(env_map_uniform_);
     destroy_uniform(camera_pos_uniform_);
@@ -254,6 +300,15 @@ ke_result BgfxRenderSystem::OnShutdown()
     destroy_uniform(skybox_sampler_uniform_);
     destroy_uniform(skybox_tint_uniform_);
 
+    for (auto &sm : shadow_maps_)
+    {
+        if (::bgfx::isValid(::bgfx::FrameBufferHandle{sm.fb}))   ::bgfx::destroy(::bgfx::FrameBufferHandle{sm.fb});
+        if (::bgfx::isValid(::bgfx::TextureHandle{sm.depth_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.depth_tex});
+        if (::bgfx::isValid(::bgfx::TextureHandle{sm.color_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.color_tex});
+    }
+    shadow_maps_.clear();
+
+    if (::bgfx::isValid(::bgfx::ProgramHandle{shadow_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{shadow_program_});
     if (::bgfx::isValid(::bgfx::ProgramHandle{skybox_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{skybox_program_});
     if (::bgfx::isValid(::bgfx::ProgramHandle{program_}))         ::bgfx::destroy(::bgfx::ProgramHandle{program_});
 
@@ -273,17 +328,18 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
     if (!view || !proj) return KE_ERROR_INVALID_ARGUMENT;
     memcpy(last_view_, view->m, sizeof(float) * 16);
     memcpy(last_proj_, proj->m, sizeof(float) * 16);
-    ::bgfx::setViewTransform(0, view->m, proj->m);
+    ::bgfx::setViewTransform(1, view->m, proj->m);
     return KE_OK;
 }
 
 ke_result BgfxRenderSystem::Frame()
 {
-    ::bgfx::touch(0);
     ::bgfx::touch(1);
+    ::bgfx::touch(2);
     ::bgfx::frame();
-    has_skybox_     = false;
-    active_env_tex_ = kInvalidHandle;
+    has_skybox_           = false;
+    active_env_tex_       = kInvalidHandle;
+    active_shadow_handle_ = kInvalidShadowHandle;
     return KE_OK;
 }
 
@@ -291,7 +347,7 @@ ke_result BgfxRenderSystem::ClearColor(float r, float g, float b, float a)
 {
     uint32_t color = (uint32_t(r * 255.0F) << 24) | (uint32_t(g * 255.0F) << 16) |
                      (uint32_t(b * 255.0F) << 8)  | (uint32_t(a * 255.0F));
-    ::bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
+    ::bgfx::setViewClear(1, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
     return KE_OK;
 }
 
@@ -394,7 +450,7 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
     float rotView[16];
     memcpy(rotView, last_view_, sizeof(rotView));
     rotView[12] = 0.f; rotView[13] = 0.f; rotView[14] = 0.f;
-    ::bgfx::setViewTransform(1, rotView, last_proj_);
+    ::bgfx::setViewTransform(2, rotView, last_proj_);
 
     float tint[4] = {1.f, 1.f, 1.f, 1.f};
     ::bgfx::setUniform(::bgfx::UniformHandle{skybox_tint_uniform_}, tint);
@@ -402,7 +458,7 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{skybox_vb_});
     ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{skybox_ib_});
     ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_LEQUAL);
-    ::bgfx::submit(1, ::bgfx::ProgramHandle{skybox_program_});
+    ::bgfx::submit(2, ::bgfx::ProgramHandle{skybox_program_});
 
     has_skybox_     = true;
     active_env_tex_ = tex.idx;
@@ -459,12 +515,146 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
         ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
+    // Shadow map binding
+    if (active_shadow_handle_ != kInvalidShadowHandle)
+    {
+        float shadow_params[4] = {1.f, 0.f, 0.f, 0.f};
+        ::bgfx::setUniform(::bgfx::UniformHandle{shadow_params_uniform_}, shadow_params);
+        ::bgfx::setUniform(::bgfx::UniformHandle{light_vp_uniform_}, active_light_vp_);
+        ::bgfx::setTexture(2, ::bgfx::UniformHandle{shadow_map_uniform_},
+            ::bgfx::TextureHandle{shadow_maps_[active_shadow_handle_].color_tex});
+    }
+    else
+    {
+        float shadow_params[4] = {0.f, 0.f, 0.f, 0.f};
+        ::bgfx::setUniform(::bgfx::UniformHandle{shadow_params_uniform_}, shadow_params);
+        float identity[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+        ::bgfx::setUniform(::bgfx::UniformHandle{light_vp_uniform_}, identity);
+        ::bgfx::setTexture(2, ::bgfx::UniformHandle{shadow_map_uniform_},
+            ::bgfx::TextureHandle{textures_[0].idx});
+    }
+
     ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
     ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
     ::bgfx::setTransform(transform->m);
     ::bgfx::setState(BGFX_STATE_DEFAULT);
-    ::bgfx::submit(0, ::bgfx::ProgramHandle{program_});
+    ::bgfx::submit(1, ::bgfx::ProgramHandle{program_});
+    return KE_OK;
+}
+
+static void MulMat4(const float *a, const float *b, float *r)
+{
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+        {
+            r[i * 4 + j] = 0.f;
+            for (int k = 0; k < 4; ++k)
+                r[i * 4 + j] += a[i * 4 + k] * b[k * 4 + j];
+        }
+}
+
+ke_result BgfxRenderSystem::CreateShadowMap(uint32_t w, uint32_t h, ke_shadow_map_handle *out_handle)
+{
+    if (!out_handle || w == 0 || h == 0) return KE_ERROR_INVALID_ARGUMENT;
+
+    // R32F color texture — stores depth value written by fs_shadow.
+    ::bgfx::TextureHandle color = ::bgfx::createTexture2D(
+        (uint16_t)w, (uint16_t)h, false, 1,
+        ::bgfx::TextureFormat::R32F, BGFX_TEXTURE_RT);
+
+    // D16 depth texture — drives hardware depth test during the shadow pass.
+    ::bgfx::TextureHandle depth = ::bgfx::createTexture2D(
+        (uint16_t)w, (uint16_t)h, false, 1,
+        ::bgfx::TextureFormat::D16, BGFX_TEXTURE_RT_WRITE_ONLY);
+
+    if (!::bgfx::isValid(color) || !::bgfx::isValid(depth))
+    {
+        if (::bgfx::isValid(color)) ::bgfx::destroy(color);
+        if (::bgfx::isValid(depth)) ::bgfx::destroy(depth);
+        return KE_ERROR_RENDER;
+    }
+
+    ::bgfx::TextureHandle attachments[2] = {color, depth};
+    ::bgfx::FrameBufferHandle fb = ::bgfx::createFrameBuffer(2, attachments, false);
+    if (!::bgfx::isValid(fb))
+    {
+        ::bgfx::destroy(color);
+        ::bgfx::destroy(depth);
+        return KE_ERROR_RENDER;
+    }
+
+    shadow_maps_.push_back({color.idx, depth.idx, fb.idx, w, h, true});
+    *out_handle = (ke_shadow_map_handle)(shadow_maps_.size() - 1);
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::DestroyShadowMap(ke_shadow_map_handle handle)
+{
+    if (handle >= (ke_shadow_map_handle)shadow_maps_.size() || !shadow_maps_[handle].valid)
+        return KE_ERROR_INVALID_ARGUMENT;
+    auto &sm = shadow_maps_[handle];
+    if (::bgfx::isValid(::bgfx::FrameBufferHandle{sm.fb}))   ::bgfx::destroy(::bgfx::FrameBufferHandle{sm.fb});
+    if (::bgfx::isValid(::bgfx::TextureHandle{sm.depth_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.depth_tex});
+    if (::bgfx::isValid(::bgfx::TextureHandle{sm.color_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.color_tex});
+    sm = {};
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::BeginShadowPass(ke_shadow_map_handle handle,
+                                              const ke_mat4 *light_view, const ke_mat4 *light_proj)
+{
+    if (handle >= (ke_shadow_map_handle)shadow_maps_.size() || !shadow_maps_[handle].valid)
+        return KE_ERROR_INVALID_ARGUMENT;
+    if (!light_view || !light_proj) return KE_ERROR_INVALID_ARGUMENT;
+
+    const auto &sm = shadow_maps_[handle];
+
+    ::bgfx::setViewFrameBuffer(0, ::bgfx::FrameBufferHandle{sm.fb});
+    ::bgfx::setViewRect(0, 0, 0, (uint16_t)sm.width, (uint16_t)sm.height);
+    ::bgfx::setViewTransform(0, light_view->m, light_proj->m);
+
+    // Clear R32F to 1.0 (max depth) via palette, and clear hardware depth to 1.0.
+    ::bgfx::setPaletteColor(0, 1.0f, 0.0f, 0.0f, 0.0f);
+    ::bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 1.0f, 0, 0);
+
+    active_shadow_handle_ = handle;
+    MulMat4(light_view->m, light_proj->m, active_light_vp_);
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SubmitMeshShadow(ke_mesh_handle mesh, const ke_mat4 *transform)
+{
+    if (!::bgfx::isValid(::bgfx::ProgramHandle{shadow_program_})) return KE_ERROR_NOT_INITIALIZED;
+    if (!transform) return KE_ERROR_INVALID_ARGUMENT;
+    if (mesh >= (ke_mesh_handle)meshes_.size()) return KE_ERROR_INVALID_ARGUMENT;
+    const auto &entry = meshes_[mesh];
+    if (!::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb})) return KE_ERROR_INVALID_ARGUMENT;
+
+    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
+    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
+    ::bgfx::setTransform(transform->m);
+    ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
+    ::bgfx::submit(0, ::bgfx::ProgramHandle{shadow_program_});
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::EndShadowPass()
+{
+    // active_shadow_handle_ stays set so SubmitMesh can bind the shadow map.
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetShadowMap(ke_shadow_map_handle handle)
+{
+    if (handle == KE_INVALID_SHADOW_MAP_HANDLE)
+    {
+        active_shadow_handle_ = kInvalidShadowHandle;
+        return KE_OK;
+    }
+    if (handle >= (ke_shadow_map_handle)shadow_maps_.size() || !shadow_maps_[handle].valid)
+        return KE_ERROR_INVALID_ARGUMENT;
+    active_shadow_handle_ = handle;
     return KE_OK;
 }
 

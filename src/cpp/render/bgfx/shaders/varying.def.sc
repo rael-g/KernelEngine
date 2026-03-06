@@ -8,3 +8,4 @@ vec3 v_normal    : TEXCOORD1;
 vec2 v_texcoord0 : TEXCOORD0;
 vec3 v_worldPos  : TEXCOORD2;
 vec3 v_dir       : TEXCOORD3;
+vec4 v_shadowCoord : TEXCOORD4;

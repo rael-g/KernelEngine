@@ -47,6 +47,14 @@ class BgfxRenderSystem
     ke_result CreateCubemapRgba(uint32_t size, const uint8_t *data, ke_texture_handle *out_handle);
     ke_result SubmitSkybox(ke_texture_handle cubemap_handle);
 
+    // Shadow map operations
+    ke_result CreateShadowMap(uint32_t width, uint32_t height, ke_shadow_map_handle *out_handle);
+    ke_result DestroyShadowMap(ke_shadow_map_handle handle);
+    ke_result BeginShadowPass(ke_shadow_map_handle handle, const ke_mat4 *light_view, const ke_mat4 *light_proj);
+    ke_result SubmitMeshShadow(ke_mesh_handle mesh, const ke_mat4 *transform);
+    ke_result EndShadowPass();
+    ke_result SetShadowMap(ke_shadow_map_handle handle);
+
     // Material operations
     ke_result CreateMaterial(const ke_material *mat, ke_material_handle *out_handle);
     ke_result DestroyMaterial(ke_material_handle handle);
@@ -74,6 +82,16 @@ class BgfxRenderSystem
         uint16_t vb          = UINT16_MAX;
         uint16_t ib          = UINT16_MAX;
         uint32_t index_count = 0;
+    };
+
+    struct ShadowMapEntry
+    {
+        uint16_t color_tex = UINT16_MAX; // R32F — sampled by scene shader
+        uint16_t depth_tex = UINT16_MAX; // D16  — depth testing during shadow pass
+        uint16_t fb        = UINT16_MAX;
+        uint32_t width     = 0;
+        uint32_t height    = 0;
+        bool valid         = false;
     };
 
     struct MaterialEntry
@@ -132,6 +150,19 @@ class BgfxRenderSystem
     // IBL state (set by SubmitSkybox, read by SubmitMesh within the same frame)
     bool     has_skybox_       = false;
     uint16_t active_env_tex_   = kInvalidHandle;
+
+    // ── Shadow maps ───────────────────────────────────────────────────────────
+    uint16_t shadow_program_        = kInvalidHandle;
+    uint16_t shadow_map_uniform_    = kInvalidHandle; // s_shadowMap sampler
+    uint16_t light_vp_uniform_      = kInvalidHandle; // u_lightVP mat4
+    uint16_t shadow_params_uniform_ = kInvalidHandle; // u_shadowParams vec4
+
+    std::vector<ShadowMapEntry> shadow_maps_;
+
+    // Per-frame shadow state (reset each Frame())
+    static constexpr uint32_t kInvalidShadowHandle = UINT32_MAX;
+    uint32_t active_shadow_handle_ = kInvalidShadowHandle;
+    float    active_light_vp_[16]{};
 };
 
 } // namespace kernel_engine::render::bgfx

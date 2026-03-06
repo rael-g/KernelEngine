@@ -60,4 +60,22 @@ public unsafe partial struct ke_render
 
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_texture_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> submit_skybox;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, uint32_t, uint32_t, ke_shadow_map_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, uint, uint, uint*, ke_result> create_shadow_map;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_shadow_map_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> destroy_shadow_map;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_shadow_map_handle, const ke_mat4 *, const ke_mat4 *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_mat4*, ke_mat4*, ke_result> begin_shadow_pass;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_mesh_handle, const ke_mat4 *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_mat4*, ke_result> submit_mesh_shadow;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_result> end_shadow_pass;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_shadow_map_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> set_shadow_map;
 }

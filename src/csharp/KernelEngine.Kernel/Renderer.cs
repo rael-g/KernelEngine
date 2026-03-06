@@ -145,6 +145,41 @@ public sealed unsafe class Renderer : IDisposable
         return _native->submit_mesh(_native, meshHandle, materialHandle, &mat);
     }
 
+    /// <summary>Allocates a GPU shadow map of the given dimensions. Returns a stable handle.</summary>
+    public Result<uint> CreateShadowMap(uint width, uint height)
+    {
+        uint handle;
+        var res = _native->create_shadow_map(_native, width, height, &handle);
+        return new Result<uint>(res, handle);
+    }
+
+    /// <summary>Releases a shadow map and its GPU resources.</summary>
+    public Result DestroyShadowMap(uint handle) => _native->destroy_shadow_map(_native, handle);
+
+    /// <summary>
+    /// Begins the shadow depth pass for the given shadow map. Call once per frame before
+    /// any <see cref="SubmitMeshShadow"/> calls. Stores the combined light VP for the scene pass.
+    /// </summary>
+    public Result BeginShadowPass(uint shadowMapHandle, Matrix4x4 lightView, Matrix4x4 lightProj)
+    {
+        var v = Unsafe.As<Matrix4x4, ke_mat4>(ref lightView);
+        var p = Unsafe.As<Matrix4x4, ke_mat4>(ref lightProj);
+        return _native->begin_shadow_pass(_native, shadowMapHandle, &v, &p);
+    }
+
+    /// <summary>Submits a mesh to the shadow depth pass. Call between Begin/EndShadowPass.</summary>
+    public Result SubmitMeshShadow(uint meshHandle, Matrix4x4 transform)
+    {
+        var mat = Unsafe.As<Matrix4x4, ke_mat4>(ref transform);
+        return _native->submit_mesh_shadow(_native, meshHandle, &mat);
+    }
+
+    /// <summary>Ends the shadow depth pass. The shadow map is now available for scene rendering.</summary>
+    public Result EndShadowPass() => _native->end_shadow_pass(_native);
+
+    /// <summary>Overrides which shadow map is bound during the current frame's scene pass.</summary>
+    public Result SetShadowMap(uint shadowMapHandle) => _native->set_shadow_map(_native, shadowMapHandle);
+
     public void Dispose()
     {
         if (_native != null)

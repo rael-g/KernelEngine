@@ -54,7 +54,8 @@ public class Application : IDisposable
         Renderer.SetAmbientLight(0.15f, 0.15f, 0.15f);
         ActiveWorld.AddSystem(new LightRenderSystem(Renderer));
         ActiveWorld.AddSystem(new CameraRenderSystem(Renderer, Window));
-        ActiveWorld.AddSystem(new SkyboxRenderSystem(Renderer)); // after camera, before meshes
+        ActiveWorld.AddSystem(new SkyboxRenderSystem(Renderer));    // after camera, before meshes
+        ActiveWorld.AddSystem(new ShadowRenderSystem(Renderer));    // depth pass before scene
         ActiveWorld.AddSystem(new MeshRenderSystem(Renderer));
 
         OnReady?.Invoke();

@@ -17,6 +17,10 @@ extern "C"
 
 #define KE_ID_RENDER "ke_render"
 
+    /// @brief Opaque handle to a depth-buffer shadow map and its associated framebuffer.
+    typedef uint32_t ke_shadow_map_handle;
+#define KE_INVALID_SHADOW_MAP_HANDLE UINT32_MAX
+
     /// @brief Public interface for rendering operations.
     typedef struct ke_render
     {
@@ -66,6 +70,21 @@ extern "C"
                                          ke_texture_handle *out_handle);
 
         ke_result (*submit_skybox)(struct ke_render *self, ke_texture_handle cubemap_handle);
+
+        ke_result (*create_shadow_map)(struct ke_render *self, uint32_t width, uint32_t height,
+                                       ke_shadow_map_handle *out_handle);
+
+        ke_result (*destroy_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle);
+
+        ke_result (*begin_shadow_pass)(struct ke_render *self, ke_shadow_map_handle handle,
+                                      const ke_mat4 *light_view, const ke_mat4 *light_proj);
+
+        ke_result (*submit_mesh_shadow)(struct ke_render *self, ke_mesh_handle mesh,
+                                        const ke_mat4 *transform);
+
+        ke_result (*end_shadow_pass)(struct ke_render *self);
+
+        ke_result (*set_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle);
 
     } ke_render;
 
