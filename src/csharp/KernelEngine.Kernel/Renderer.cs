@@ -180,6 +180,20 @@ public sealed unsafe class Renderer : IDisposable
     /// <summary>Overrides which shadow map is bound during the current frame's scene pass.</summary>
     public Result SetShadowMap(uint shadowMapHandle) => _native->set_shadow_map(_native, shadowMapHandle);
 
+    /// <summary>
+    /// Enables HDR tonemapping. When enabled, the scene renders to an offscreen RGBA16F
+    /// framebuffer; ACES tonemapping and gamma correction are applied before display.
+    /// </summary>
+    public Result SetTonemapping(bool enabled, float exposure = 1.0f, float gamma = 2.2f) =>
+        _native->set_tonemapping(_native, enabled, exposure, gamma);
+
+    /// <summary>
+    /// Enables bloom post-processing. Requires <see cref="SetTonemapping"/> to be active.
+    /// Bright pixels above <paramref name="threshold"/> are blurred and additively composited.
+    /// </summary>
+    public Result SetBloom(bool enabled, float threshold = 1.0f, float intensity = 0.5f) =>
+        _native->set_bloom(_native, enabled, threshold, intensity);
+
     public void Dispose()
     {
         if (_native != null)

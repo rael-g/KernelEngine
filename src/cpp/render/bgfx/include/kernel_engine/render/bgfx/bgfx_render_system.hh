@@ -47,6 +47,10 @@ class BgfxRenderSystem
     ke_result CreateCubemapRgba(uint32_t size, const uint8_t *data, ke_texture_handle *out_handle);
     ke_result SubmitSkybox(ke_texture_handle cubemap_handle);
 
+    // Post-processing
+    ke_result SetTonemapping(bool enabled, float exposure, float gamma);
+    ke_result SetBloom(bool enabled, float threshold, float intensity);
+
     // Shadow map operations
     ke_result CreateShadowMap(uint32_t width, uint32_t height, ke_shadow_map_handle *out_handle);
     ke_result DestroyShadowMap(ke_shadow_map_handle handle);
@@ -70,6 +74,8 @@ class BgfxRenderSystem
 
   private:
     ke_result SetupShader();
+    ke_result SetupPostProcess();
+    ke_result SubmitPostProcess();
 
     struct TextureEntry
     {
@@ -150,6 +156,36 @@ class BgfxRenderSystem
     // IBL state (set by SubmitSkybox, read by SubmitMesh within the same frame)
     bool     has_skybox_       = false;
     uint16_t active_env_tex_   = kInvalidHandle;
+
+    // ── Post-processing ───────────────────────────────────────────────────────
+    uint16_t hdr_fb_          = kInvalidHandle; // RGBA16F color + D24 depth
+    uint16_t hdr_color_tex_   = kInvalidHandle; // RGBA16F color attachment (for sampling)
+    uint16_t bright_fb_       = kInvalidHandle; // bright-pass result (half-res RGBA16F)
+    uint16_t blur_a_fb_       = kInvalidHandle; // horizontal blur result (half-res RGBA16F)
+    uint16_t blur_b_fb_       = kInvalidHandle; // vertical blur result = final bloom
+
+    uint16_t fullscreen_vb_   = kInvalidHandle;
+    uint16_t fullscreen_ib_   = kInvalidHandle;
+
+    uint16_t bright_pass_program_ = kInvalidHandle;
+    uint16_t blur_program_        = kInvalidHandle;
+    uint16_t tonemap_program_     = kInvalidHandle;
+
+    uint16_t hdr_tex_uniform_      = kInvalidHandle; // s_hdrTex
+    uint16_t bloom_tex_uniform_    = kInvalidHandle; // s_bloomTex
+    uint16_t blur_tex_uniform_     = kInvalidHandle; // s_blurTex
+    uint16_t bloom_params_uniform_ = kInvalidHandle; // u_bloomParams
+    uint16_t blur_params_uniform_  = kInvalidHandle; // u_blurParams
+    uint16_t tonemap_params_uniform_ = kInvalidHandle; // u_tonemapParams
+
+    bool  pp_enabled_      = false;
+    float exposure_        = 1.0f;
+    float gamma_           = 2.2f;
+    bool  bloom_enabled_   = false;
+    float bloom_threshold_ = 1.0f;
+    float bloom_intensity_ = 0.5f;
+
+    int pp_w_ = 0, pp_h_ = 0; // half-resolution for bloom passes
 
     // ── Shadow maps ───────────────────────────────────────────────────────────
     uint16_t shadow_program_        = kInvalidHandle;

@@ -86,6 +86,15 @@ extern "C"
 
         ke_result (*set_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle);
 
+        /// @brief Enables HDR tonemapping. When enabled, the scene renders to an offscreen
+        ///        RGBA16F framebuffer and the final output goes through ACES tonemapping.
+        ke_result (*set_tonemapping)(struct ke_render *self, bool enabled,
+                                     float exposure, float gamma);
+
+        /// @brief Enables bloom post-processing. Requires tonemapping to be enabled first.
+        ke_result (*set_bloom)(struct ke_render *self, bool enabled,
+                               float threshold, float intensity);
+
     } ke_render;
 
 #ifdef __cplusplus

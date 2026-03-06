@@ -78,4 +78,10 @@ public unsafe partial struct ke_render
 
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_shadow_map_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> set_shadow_map;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, bool, float, float)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, bool, float, float, ke_result> set_tonemapping;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, bool, float, float)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, bool, float, float, ke_result> set_bloom;
 }

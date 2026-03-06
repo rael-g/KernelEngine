@@ -104,6 +104,12 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     render_api_.set_shadow_map = [](ke_render *self, ke_shadow_map_handle handle) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetShadowMap(handle);
     };
+    render_api_.set_tonemapping = [](ke_render *self, bool enabled, float exposure, float gamma) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SetTonemapping(enabled, exposure, gamma);
+    };
+    render_api_.set_bloom = [](ke_render *self, bool enabled, float threshold, float intensity) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SetBloom(enabled, threshold, intensity);
+    };
 }
 
 BgfxRenderSystem::~BgfxRenderSystem() {}
@@ -149,7 +155,9 @@ ke_result BgfxRenderSystem::OnInitialize()
     ::bgfx::setViewClear(2, BGFX_CLEAR_NONE);
     ::bgfx::setViewRect(2, 0, 0, (uint16_t)w, (uint16_t)h);
 
-    return SetupShader();
+    ke_result res = SetupShader();
+    if (res != KE_OK) return res;
+    return SetupPostProcess();
 }
 
 ke_result BgfxRenderSystem::SetupShader()
@@ -285,6 +293,29 @@ ke_result BgfxRenderSystem::OnShutdown()
     auto destroy_uniform = [](uint16_t u) {
         if (::bgfx::isValid(::bgfx::UniformHandle{u})) ::bgfx::destroy(::bgfx::UniformHandle{u});
     };
+    // Post-process uniforms
+    destroy_uniform(tonemap_params_uniform_);
+    destroy_uniform(blur_params_uniform_);
+    destroy_uniform(bloom_params_uniform_);
+    destroy_uniform(blur_tex_uniform_);
+    destroy_uniform(bloom_tex_uniform_);
+    destroy_uniform(hdr_tex_uniform_);
+
+    // Post-process framebuffers and programs
+    auto destroy_fb = [](uint16_t h) {
+        if (::bgfx::isValid(::bgfx::FrameBufferHandle{h})) ::bgfx::destroy(::bgfx::FrameBufferHandle{h});
+    };
+    destroy_fb(blur_b_fb_);
+    destroy_fb(blur_a_fb_);
+    destroy_fb(bright_fb_);
+    destroy_fb(hdr_fb_);
+    if (::bgfx::isValid(::bgfx::TextureHandle{hdr_color_tex_})) ::bgfx::destroy(::bgfx::TextureHandle{hdr_color_tex_});
+    if (::bgfx::isValid(::bgfx::IndexBufferHandle{fullscreen_ib_}))  ::bgfx::destroy(::bgfx::IndexBufferHandle{fullscreen_ib_});
+    if (::bgfx::isValid(::bgfx::VertexBufferHandle{fullscreen_vb_})) ::bgfx::destroy(::bgfx::VertexBufferHandle{fullscreen_vb_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{tonemap_program_}))     ::bgfx::destroy(::bgfx::ProgramHandle{tonemap_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        ::bgfx::destroy(::bgfx::ProgramHandle{blur_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{bright_pass_program_});
+
     destroy_uniform(shadow_params_uniform_);
     destroy_uniform(light_vp_uniform_);
     destroy_uniform(shadow_map_uniform_);
@@ -334,6 +365,19 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
 
 ke_result BgfxRenderSystem::Frame()
 {
+    if (pp_enabled_ && hdr_fb_ != kInvalidHandle)
+    {
+        // Route scene and skybox views into the HDR offscreen framebuffer.
+        ::bgfx::setViewFrameBuffer(1, ::bgfx::FrameBufferHandle{hdr_fb_});
+        ::bgfx::setViewFrameBuffer(2, ::bgfx::FrameBufferHandle{hdr_fb_});
+        SubmitPostProcess();
+    }
+    else
+    {
+        ::bgfx::setViewFrameBuffer(1, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        ::bgfx::setViewFrameBuffer(2, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+    }
+
     ::bgfx::touch(1);
     ::bgfx::touch(2);
     ::bgfx::frame();
@@ -675,6 +719,195 @@ ke_result BgfxRenderSystem::SetAmbientLight(float r, float g, float b)
 ke_result BgfxRenderSystem::SetCameraPos(float x, float y, float z)
 {
     camera_pos_[0] = x; camera_pos_[1] = y; camera_pos_[2] = z; camera_pos_[3] = 0.f;
+    return KE_OK;
+}
+
+// ── Post-processing ────────────────────────────────────────────────────────
+
+ke_result BgfxRenderSystem::SetupPostProcess()
+{
+    auto load_shader = [&](const char *name) -> ::bgfx::ShaderHandle {
+        std::string path = shader_path_ + "/" + name + ".bin";
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
+        auto size = (uint32_t)file.tellg();
+        file.seekg(0);
+        const ::bgfx::Memory *mem = ::bgfx::alloc(size + 1);
+        file.read(reinterpret_cast<char *>(mem->data), size);
+        mem->data[size] = '\0';
+        return ::bgfx::createShader(mem);
+    };
+
+    // Load post-process programs (optional — PP is off by default).
+    auto load_pp_program = [&](const char *vs_name, const char *fs_name) -> uint16_t {
+        ::bgfx::ShaderHandle vs = load_shader(vs_name);
+        ::bgfx::ShaderHandle fs = load_shader(fs_name);
+        if (!::bgfx::isValid(vs) || !::bgfx::isValid(fs))
+        {
+            if (::bgfx::isValid(vs)) ::bgfx::destroy(vs);
+            if (::bgfx::isValid(fs)) ::bgfx::destroy(fs);
+            return kInvalidHandle;
+        }
+        ::bgfx::ProgramHandle prog = ::bgfx::createProgram(vs, fs, true);
+        return ::bgfx::isValid(prog) ? prog.idx : kInvalidHandle;
+    };
+
+    bright_pass_program_ = load_pp_program("vs_fullscreen", "fs_bright_pass");
+    blur_program_        = load_pp_program("vs_fullscreen", "fs_blur");
+    tonemap_program_     = load_pp_program("vs_fullscreen", "fs_tonemap");
+
+    if (bright_pass_program_ == kInvalidHandle ||
+        blur_program_        == kInvalidHandle ||
+        tonemap_program_     == kInvalidHandle)
+    {
+        ke_log_event ev = {KE_LOG_LEVEL_WARNING, "bgfx", "Post-process shaders not found — PP disabled"};
+        if (logger_) logger_->log(logger_, &ev);
+        return KE_OK; // non-fatal
+    }
+
+    // Fullscreen triangle (position-only, z=0).
+    ::bgfx::VertexLayout pos3;
+    pos3.begin().add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float).end();
+    static const float kFSVerts[9] = {-1.f,-1.f,0.f,  3.f,-1.f,0.f,  -1.f,3.f,0.f};
+    static const uint16_t kFSIdx[3] = {0, 1, 2};
+    fullscreen_vb_ = ::bgfx::createVertexBuffer(::bgfx::copy(kFSVerts, sizeof(kFSVerts)), pos3).idx;
+    fullscreen_ib_ = ::bgfx::createIndexBuffer(::bgfx::copy(kFSIdx, sizeof(kFSIdx))).idx;
+
+    // HDR framebuffer: RGBA16F color + D24 depth (full resolution).
+    ::bgfx::TextureHandle hdr_color = ::bgfx::createTexture2D(
+        (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+        ::bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT);
+    ::bgfx::TextureHandle hdr_depth = ::bgfx::createTexture2D(
+        (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+        ::bgfx::TextureFormat::D24, BGFX_TEXTURE_RT_WRITE_ONLY);
+
+    if (!::bgfx::isValid(hdr_color) || !::bgfx::isValid(hdr_depth))
+    {
+        if (::bgfx::isValid(hdr_color)) ::bgfx::destroy(hdr_color);
+        if (::bgfx::isValid(hdr_depth)) ::bgfx::destroy(hdr_depth);
+        ke_log_event ev = {KE_LOG_LEVEL_WARNING, "bgfx", "HDR framebuffer creation failed — PP disabled"};
+        if (logger_) logger_->log(logger_, &ev);
+        return KE_OK;
+    }
+
+    ::bgfx::TextureHandle hdr_attachments[2] = {hdr_color, hdr_depth};
+    ::bgfx::FrameBufferHandle hdr_fb = ::bgfx::createFrameBuffer(2, hdr_attachments, false);
+    if (!::bgfx::isValid(hdr_fb))
+    {
+        ::bgfx::destroy(hdr_color);
+        ::bgfx::destroy(hdr_depth);
+        return KE_OK;
+    }
+    hdr_fb_        = hdr_fb.idx;
+    hdr_color_tex_ = hdr_color.idx;
+    // Destroy depth separately — it's not used for sampling.
+    ::bgfx::destroy(hdr_depth);
+
+    // Half-resolution for bloom passes.
+    pp_w_ = (view_w_ + 1) / 2;
+    pp_h_ = (view_h_ + 1) / 2;
+
+    auto make_color_fb = [&](int w, int h) -> uint16_t {
+        ::bgfx::TextureHandle tex = ::bgfx::createTexture2D(
+            (uint16_t)w, (uint16_t)h, false, 1,
+            ::bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT);
+        if (!::bgfx::isValid(tex)) return kInvalidHandle;
+        ::bgfx::FrameBufferHandle fb = ::bgfx::createFrameBuffer(1, &tex, true);
+        return ::bgfx::isValid(fb) ? fb.idx : kInvalidHandle;
+    };
+
+    bright_fb_ = make_color_fb(pp_w_, pp_h_);
+    blur_a_fb_ = make_color_fb(pp_w_, pp_h_);
+    blur_b_fb_ = make_color_fb(pp_w_, pp_h_);
+
+    // Post-process uniforms.
+    hdr_tex_uniform_       = ::bgfx::createUniform("s_hdrTex",       ::bgfx::UniformType::Sampler).idx;
+    bloom_tex_uniform_     = ::bgfx::createUniform("s_bloomTex",     ::bgfx::UniformType::Sampler).idx;
+    blur_tex_uniform_      = ::bgfx::createUniform("s_blurTex",      ::bgfx::UniformType::Sampler).idx;
+    bloom_params_uniform_  = ::bgfx::createUniform("u_bloomParams",  ::bgfx::UniformType::Vec4).idx;
+    blur_params_uniform_   = ::bgfx::createUniform("u_blurParams",   ::bgfx::UniformType::Vec4).idx;
+    tonemap_params_uniform_= ::bgfx::createUniform("u_tonemapParams",::bgfx::UniformType::Vec4).idx;
+
+    ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "Post-process pipeline ready"};
+    if (logger_) logger_->log(logger_, &ev);
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetTonemapping(bool enabled, float exposure, float gamma)
+{
+    if (enabled && hdr_fb_ == kInvalidHandle) return KE_ERROR_NOT_INITIALIZED;
+    pp_enabled_ = enabled;
+    exposure_   = exposure;
+    gamma_      = gamma;
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetBloom(bool enabled, float threshold, float intensity)
+{
+    if (enabled && bright_fb_ == kInvalidHandle) return KE_ERROR_NOT_INITIALIZED;
+    bloom_enabled_   = enabled;
+    bloom_threshold_ = threshold;
+    bloom_intensity_ = intensity;
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SubmitPostProcess()
+{
+    auto submit_fs = [&](uint8_t view, uint16_t fb, int w, int h, uint16_t prog) {
+        if (fb != kInvalidHandle)
+        {
+            ::bgfx::setViewFrameBuffer(view, ::bgfx::FrameBufferHandle{fb});
+            ::bgfx::setViewClear(view, BGFX_CLEAR_COLOR, 0x000000ff, 1.0f, 0);
+        }
+        else
+        {
+            ::bgfx::setViewFrameBuffer(view, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+            ::bgfx::setViewClear(view, BGFX_CLEAR_NONE);
+        }
+        ::bgfx::setViewRect(view, 0, 0, (uint16_t)w, (uint16_t)h);
+        ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
+        ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
+        ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+        ::bgfx::submit(view, ::bgfx::ProgramHandle{prog});
+    };
+
+    // Bloom passes (views 3–5): bright-pass → blur H → blur V.
+    uint16_t bloom_result_tex = textures_[0].idx; // black/white fallback
+    if (bloom_enabled_ && bright_fb_ != kInvalidHandle)
+    {
+        // View 3: bright-pass.
+        float bp[4] = {bloom_threshold_, 0.f, 0.f, 0.f};
+        ::bgfx::setUniform(::bgfx::UniformHandle{bloom_params_uniform_}, bp);
+        ::bgfx::setTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
+            ::bgfx::TextureHandle{hdr_color_tex_});
+        submit_fs(3, bright_fb_, pp_w_, pp_h_, bright_pass_program_);
+
+        // View 4: blur horizontal.
+        float bh[4] = {1.f / (float)pp_w_, 0.f, 0.f, 0.f};
+        ::bgfx::setUniform(::bgfx::UniformHandle{blur_params_uniform_}, bh);
+        ::bgfx::setTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
+            ::bgfx::getTexture(::bgfx::FrameBufferHandle{bright_fb_}));
+        submit_fs(4, blur_a_fb_, pp_w_, pp_h_, blur_program_);
+
+        // View 5: blur vertical.
+        float bv[4] = {0.f, 1.f / (float)pp_h_, 0.f, 0.f};
+        ::bgfx::setUniform(::bgfx::UniformHandle{blur_params_uniform_}, bv);
+        ::bgfx::setTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
+            ::bgfx::getTexture(::bgfx::FrameBufferHandle{blur_a_fb_}));
+        submit_fs(5, blur_b_fb_, pp_w_, pp_h_, blur_program_);
+
+        bloom_result_tex = ::bgfx::getTexture(::bgfx::FrameBufferHandle{blur_b_fb_}).idx;
+    }
+
+    // View 6: tonemap composite → backbuffer.
+    float tp[4] = {exposure_, bloom_enabled_ ? bloom_intensity_ : 0.f, 1.f / gamma_, 0.f};
+    ::bgfx::setUniform(::bgfx::UniformHandle{tonemap_params_uniform_}, tp);
+    ::bgfx::setTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
+        ::bgfx::TextureHandle{hdr_color_tex_});
+    ::bgfx::setTexture(1, ::bgfx::UniformHandle{bloom_tex_uniform_},
+        ::bgfx::TextureHandle{bloom_result_tex});
+    submit_fs(6, kInvalidHandle, view_w_, view_h_, tonemap_program_);
+
     return KE_OK;
 }
 
