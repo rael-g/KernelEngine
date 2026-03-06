@@ -209,8 +209,9 @@ If a commit message requires more than one line to explain what was done, it is 
 
 * Use a single Conventional Commit type per commit (e.g. `feat`, `fix`, `refactor`, `docs`, `test`, `chore`)
 * The commit message subject must describe **one operation only**
-* Avoid long descriptions, explanations, or justifications in the commit body
-* If a long explanation feels necessary, the changes are likely too broad for a single commit
+* Commit messages MUST be **one-line only**. Long descriptions, bodies, explanations, or justifications in the commit are forbidden.
+* If a long explanation feels necessary, the changes are likely too broad for a single commit.
+* Co-authorship or other metadata must not be included in the commit message.
 
 #### Staging rules
 
