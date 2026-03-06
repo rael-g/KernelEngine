@@ -5,9 +5,11 @@ KernelEngine.Glfw.Native
 --libraryPath
 ke_window_glfw
 --include-directory
-../../../../build/native/include
+../../../c/kernel/include
+--include-directory
+../../../cpp/window/glfw/include
 --file
-../../../../build/native/include/kernel_engine/window/glfw/window_plugin.hh
+../../../cpp/window/glfw/include/kernel_engine/window/glfw/glfw_window.hh
 --methodClassName
 NativeMethods
 --prefixStrip
@@ -21,7 +23,6 @@ ke_context_h
 ke_result
 ke_frame
 ke_service_id
-ke_descriptor
 ke_window
 CreateGlfwWindowSystem
 --with-using

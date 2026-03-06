@@ -6,5 +6,5 @@ namespace KernelEngine.Bgfx.Native;
 public static unsafe partial class NativeMethods
 {
     [DllImport("ke_render_bgfx", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_bgfx_create", ExactSpelling = true)]
-    public static extern ke_result render_bgfx_create([NativeTypeName("const ke_render_bgfx_descriptor *")] ke_render_bgfx_descriptor* desc, ke_render** out_render);
+    public static extern ke_result render_bgfx_create([NativeTypeName("const ke_render_bgfx_params *")] ke_render_bgfx_params* @params, ke_render** out_render);
 }

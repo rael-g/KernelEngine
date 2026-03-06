@@ -5,9 +5,11 @@ KernelEngine.ShaderCompiler.Native
 --libraryPath
 ke_shader_compiler_bgfx
 --include-directory
-../../../../build/native/include
+../../../c/kernel/include
+--include-directory
+../../../cpp/render/bgfx_shader_compiler/include
 --file
-../../../../build/native/include/kernel_engine/kernel/render/shader_compiler.h
+../../../cpp/render/bgfx_shader_compiler/include/kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.hh
 --methodClassName
 NativeMethods
 --prefixStrip
@@ -21,10 +23,8 @@ ke_context_h
 ke_result
 ke_frame
 ke_service_id
-ke_descriptor
 ke_window
 ke_shader_compiler
-ke_shader_compiler_bgfx_descriptor
 BgfxShaderCompiler
 --with-using
 *=KernelEngine.Kernel.Native

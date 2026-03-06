@@ -2,9 +2,9 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Kernel.Native;
 
-/// <summary>Descriptor passed to <c>ke_render::create_material</c>.</summary>
+/// <summary>Material properties defining its appearance.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public struct ke_material_descriptor
+public struct ke_material
 {
     [NativeTypeName("float")] public float r;
     [NativeTypeName("float")] public float g;

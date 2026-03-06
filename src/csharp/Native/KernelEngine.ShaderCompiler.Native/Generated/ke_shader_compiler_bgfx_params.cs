@@ -1,6 +1,8 @@
-namespace KernelEngine.Kernel.Native;
+using KernelEngine.Kernel.Native;
 
-public unsafe partial struct ke_shader_compiler_bgfx_descriptor
+namespace KernelEngine.ShaderCompiler.Native;
+
+public unsafe partial struct ke_shader_compiler_bgfx_params
 {
     [NativeTypeName("struct ke_allocator *")]
     public ke_allocator* allocator;

@@ -1,9 +1,5 @@
 namespace KernelEngine.Kernel.Native;
 
-public partial struct ke_allocator
-{
-}
-
 public unsafe partial struct ke_allocator
 {
     public void* handle;

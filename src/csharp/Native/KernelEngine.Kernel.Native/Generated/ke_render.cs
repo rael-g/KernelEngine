@@ -25,26 +25,26 @@ public unsafe partial struct ke_render
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_mat4 *, const ke_mat4 *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_mat4*, ke_mat4*, ke_result> set_view_transform;
 
-    [NativeTypeName("ke_result (*)(struct ke_render *, uint32_t, uint32_t, const uint8_t *, ke_texture_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, uint, uint, byte*, uint*, ke_result> create_texture_rgba;
-
-    [NativeTypeName("ke_result (*)(struct ke_render *, ke_texture_handle)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> destroy_texture;
-
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_vertex *, uint32_t, const uint16_t *, uint32_t, ke_mesh_handle *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_vertex*, uint, ushort*, uint, uint*, ke_result> create_mesh;
 
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_mesh_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> destroy_mesh;
 
-    [NativeTypeName("ke_result (*)(struct ke_render *, const ke_material_descriptor *, ke_material_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, ke_material_descriptor*, uint*, ke_result> create_material;
+    [NativeTypeName("ke_result (*)(struct ke_render *, const ke_material *, ke_material_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_material*, uint*, ke_result> create_material;
 
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> destroy_material;
 
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_mesh_handle, ke_material_handle, const ke_mat4 *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, uint, uint, ke_mat4*, ke_result> submit_mesh;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, uint32_t, uint32_t, const uint8_t *, ke_texture_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, uint, uint, byte*, uint*, ke_result> create_texture_rgba;
+
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_texture_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, uint, ke_result> destroy_texture;
 
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_directional_light *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_directional_light*, ke_result> set_directional_light;

@@ -1,10 +1,9 @@
 #pragma once
 
-#include <kernel_engine/kernel/common/descriptor.h>
 #include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/messaging/message_pipe.h>
 #include <kernel_engine/kernel/window/window.h>
-#include <kernel_engine/window/glfw/window_plugin.hh>
+#include <kernel_engine/window/glfw/glfw_window.hh>
 #include <string>
 
 struct GLFWwindow;
@@ -15,7 +14,7 @@ namespace kernel_engine::window::glfw
 class GlfwWindowSystem
 {
   public:
-    explicit GlfwWindowSystem(const ke_window_glfw_descriptor *desc);
+    explicit GlfwWindowSystem(const ke_window_glfw_params *params);
     ~GlfwWindowSystem();
 
     ke_result OnInitialize();

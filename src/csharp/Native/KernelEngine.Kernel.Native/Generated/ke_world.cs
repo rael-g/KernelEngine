@@ -1,5 +1,9 @@
 namespace KernelEngine.Kernel.Native;
 
+public partial struct ke_world
+{
+}
+
 public unsafe partial struct ke_world
 {
     public void* handle;
@@ -35,5 +39,5 @@ public unsafe partial struct ke_world
     public delegate* unmanaged[Cdecl]<ke_world*, uint> script_id;
 
     [NativeTypeName("ke_result (*)(struct ke_world *, const ke_system *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, void*, ke_result> add_system;
+    public delegate* unmanaged[Cdecl]<ke_world*, ke_system*, ke_result> add_system;
 }

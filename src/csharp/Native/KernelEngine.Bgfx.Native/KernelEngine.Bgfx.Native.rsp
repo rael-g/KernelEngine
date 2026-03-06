@@ -5,9 +5,11 @@ KernelEngine.Bgfx.Native
 --libraryPath
 ke_render_bgfx
 --include-directory
-../../../../build/native/include
+../../../c/kernel/include
+--include-directory
+../../../cpp/render/bgfx/include
 --file
-../../../../build/native/include/kernel_engine/render/bgfx/render_plugin.hh
+../../../cpp/render/bgfx/include/kernel_engine/render/bgfx/bgfx_render.hh
 --methodClassName
 NativeMethods
 --prefixStrip
@@ -21,7 +23,6 @@ ke_context_h
 ke_result
 ke_frame
 ke_service_id
-ke_descriptor
 ke_window
 CreateBgfxRenderSystem
 --with-using

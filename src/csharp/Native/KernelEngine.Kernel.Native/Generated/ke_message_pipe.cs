@@ -1,9 +1,5 @@
 namespace KernelEngine.Kernel.Native;
 
-public partial struct ke_message_pipe
-{
-}
-
 public unsafe partial struct ke_message_pipe
 {
     public void* handle;
@@ -28,4 +24,12 @@ public unsafe partial struct ke_message_pipe
 
     [NativeTypeName("ke_result (*)(struct ke_message_pipe *)")]
     public delegate* unmanaged[Cdecl]<ke_message_pipe*, ke_result> pump;
+
+    public partial struct ke_allocator
+    {
+    }
+
+    public partial struct ke_logger
+    {
+    }
 }

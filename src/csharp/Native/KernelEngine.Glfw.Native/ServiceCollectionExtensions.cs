@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
                     var logger = sp.GetService<Logger>();
                     var pipe = sp.GetService<MessagePipe>();
 
-                    var desc = new ke_window_glfw_descriptor
+                    var @params = new ke_window_glfw_params
                     {
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
@@ -38,7 +38,7 @@ public static class ServiceCollectionExtensions
 
                     ke_window* native;
                     KernelException.ThrowIfFailed(
-                        KernelEngine.Glfw.Native.NativeMethods.window_glfw_create(&desc, &native));
+                        KernelEngine.Glfw.Native.NativeMethods.window_glfw_create(&@params, &native));
                     return new Window(native);
                 }
             }

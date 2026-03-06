@@ -27,4 +27,16 @@ public unsafe partial struct ke_input
 
     [NativeTypeName("bool (*)(struct ke_input *, int)")]
     public delegate* unmanaged[Cdecl]<ke_input*, int, bool> is_key_down;
+
+    public partial struct ke_allocator
+    {
+    }
+
+    public partial struct ke_logger
+    {
+    }
+
+    public partial struct ke_message_pipe
+    {
+    }
 }

@@ -1,8 +1,8 @@
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine.Glfw.Native;
+namespace KernelEngine.Bgfx.Native;
 
-public unsafe partial struct ke_window_glfw_descriptor
+public unsafe partial struct ke_render_bgfx_params
 {
     [NativeTypeName("struct ke_allocator *")]
     public ke_allocator* allocator;
@@ -13,10 +13,9 @@ public unsafe partial struct ke_window_glfw_descriptor
     [NativeTypeName("struct ke_message_pipe *")]
     public ke_message_pipe* message_pipe;
 
-    public int width;
-
-    public int height;
+    [NativeTypeName("struct ke_window *")]
+    public ke_window* window;
 
     [NativeTypeName("const char *")]
-    public sbyte* title;
+    public sbyte* shader_path;
 }

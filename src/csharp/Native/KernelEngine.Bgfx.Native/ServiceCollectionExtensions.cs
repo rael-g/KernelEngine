@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
                     var logger = sp.GetService<Logger>();
                     var pipe = sp.GetService<MessagePipe>();
 
-                    var desc = new ke_render_bgfx_descriptor
+                    var @params = new ke_render_bgfx_params
                     {
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
@@ -37,7 +37,7 @@ public static class ServiceCollectionExtensions
 
                     ke_render* native;
                     KernelException.ThrowIfFailed(
-                        KernelEngine.Bgfx.Native.NativeMethods.render_bgfx_create(&desc, &native));
+                        KernelEngine.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native));
                     return new Renderer(native);
                 }
             }

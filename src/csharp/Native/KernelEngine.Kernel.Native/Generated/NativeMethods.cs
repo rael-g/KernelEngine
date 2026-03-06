@@ -38,13 +38,13 @@ public static unsafe partial class NativeMethods
     public static extern sbyte* log_level_to_string(int level);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_logger_create", ExactSpelling = true)]
-    public static extern ke_result logger_create([NativeTypeName("const ke_descriptor *")] ke_descriptor* desc, ke_logger** out_logger);
+    public static extern ke_result logger_create(ke_allocator* allocator, ke_logger** out_logger);
 
     [NativeTypeName("#define KE_ID_LOGGER \"ke_logger\"")]
     public static ReadOnlySpan<byte> KE_ID_LOGGER => "ke_logger"u8;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_message_pipe_create", ExactSpelling = true)]
-    public static extern ke_result message_pipe_create([NativeTypeName("const ke_descriptor *")] ke_descriptor* desc, ke_message_pipe** out_pipe);
+    public static extern ke_result message_pipe_create([NativeTypeName("struct ke_allocator *")] ke_allocator* allocator, [NativeTypeName("struct ke_logger *")] ke_logger* logger, ke_message_pipe** out_pipe);
 
     [NativeTypeName("#define KE_ID_MESSAGE_PIPE \"ke_message_pipe\"")]
     public static ReadOnlySpan<byte> KE_ID_MESSAGE_PIPE => "ke_message_pipe"u8;
@@ -79,15 +79,15 @@ public static unsafe partial class NativeMethods
     public static extern void ecs_registry_query(ke_ecs_registry* registry, [NativeTypeName("ke_component_id")] uint component, [NativeTypeName("ke_entity **")] ulong** out_entities, void** out_data, [NativeTypeName("size_t *")] nuint* out_count);
 
     [NativeTypeName("#define KE_ENTITY_INVALID 0")]
-    public const ulong KE_ENTITY_INVALID = 0;
+    public const int KE_ENTITY_INVALID = 0;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_create", ExactSpelling = true)]
-    public static extern ke_result world_create([NativeTypeName("const ke_world_descriptor *")] ke_world_descriptor* desc, ke_world** out_world);
+    public static extern ke_result world_create([NativeTypeName("const ke_world_params *")] ke_world_params* @params, ke_world** out_world);
 
     public const int KE_MSG_KEY_EVENT = 0x1001;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_create", ExactSpelling = true)]
-    public static extern ke_result input_create([NativeTypeName("const ke_descriptor *")] ke_descriptor* desc, ke_input** out_input);
+    public static extern ke_result input_create([NativeTypeName("struct ke_allocator *")] ke_allocator* allocator, [NativeTypeName("struct ke_logger *")] ke_logger* logger, [NativeTypeName("struct ke_message_pipe *")] ke_message_pipe* pipe, ke_input** out_input);
 
     [NativeTypeName("#define KE_ID_INPUT \"ke_input\"")]
     public static ReadOnlySpan<byte> KE_ID_INPUT => "ke_input"u8;
@@ -96,7 +96,7 @@ public static unsafe partial class NativeMethods
     public static ReadOnlySpan<byte> KE_ID_RENDER => "ke_render"u8;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_shader_compiler_bgfx_create", ExactSpelling = true)]
-    public static extern ke_result shader_compiler_bgfx_create([NativeTypeName("const ke_shader_compiler_bgfx_descriptor *")] ke_shader_compiler_bgfx_descriptor* desc, ke_shader_compiler** out_compiler);
+    public static extern ke_result shader_compiler_bgfx_create([NativeTypeName("const ke_shader_compiler_bgfx_params *")] ke_shader_compiler_bgfx_params* @params, ke_shader_compiler** out_compiler);
 
     [NativeTypeName("#define KE_ID_SHADER_COMPILER \"ke_shader_compiler\"")]
     public static ReadOnlySpan<byte> KE_ID_SHADER_COMPILER => "ke_shader_compiler"u8;
