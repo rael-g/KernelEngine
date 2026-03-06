@@ -82,6 +82,8 @@ def collect_cs_coverage():
         root_node = tree.getroot()
         for package in root_node.findall(".//package"):
             name = package.get("name")
+            if ".Native" in name:
+                continue
             line_rate = float(package.get("line-rate")) * 100
             if name not in combined_results or line_rate > combined_results[name]:
                 combined_results[name] = line_rate
@@ -112,7 +114,14 @@ def main():
     ]
     
     for test_proj in cs_tests:
-        run_command(["dotnet", "test", test_proj, "--collect:XPlat Code Coverage"])
+        run_command([
+            "dotnet", "test", test_proj, 
+            "--collect:XPlat Code Coverage", 
+            "--", 
+            "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura", 
+            "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*.Native]*",
+            "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include=[KernelEngine.*]*"
+        ])
 
     # 3. Summarize
     collect_native_coverage()

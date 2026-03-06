@@ -5,11 +5,15 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
+    <Project Path="src/csharp/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/KernelEngine.Logging.Serilog/KernelEngine.Logging.Serilog.csproj" />
+    <Project Path="src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
+    <Project Path="src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
   </Folder>
   <Folder Name="/src/csharp/Native/">
+    <Project Path="src/csharp/Native/KernelEngine.Asset.Assimp.Native/KernelEngine.Asset.Assimp.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.Render.Bgfx.Native/KernelEngine.Render.Bgfx.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.Window.Glfw.Native/KernelEngine.Window.Glfw.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
