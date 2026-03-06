@@ -28,10 +28,7 @@ typedef struct ke_message_pipe_impl
 
 static ke_result pipe_broadcast(ke_message_pipe *self, uint64_t msg_id, const void *data, size_t size)
 {
-    if (!self)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
+    if (!self) return KE_ERROR_INVALID_ARGUMENT;
     ke_message_pipe_impl *impl = (ke_message_pipe_impl *)self->handle;
     if (impl->message_count >= KE_MESSAGE_MAX_COUNT || impl->pool_offset + size > KE_MESSAGE_DATA_POOL_SIZE)
     {
@@ -52,20 +49,14 @@ static ke_result pipe_broadcast(ke_message_pipe *self, uint64_t msg_id, const vo
 
 static ke_result pipe_create_reader(ke_message_pipe *self, ke_message_pipe **out_reader)
 {
-    if (!self || !out_reader)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
+    if (!self || !out_reader) return KE_ERROR_INVALID_ARGUMENT;
     *out_reader = self;
     return KE_OK;
 }
 
 static bool pipe_try_receive(ke_message_pipe *self, uint64_t msg_id, void *out_data, size_t max_size)
 {
-    if (!self)
-    {
-        return false;
-    }
+    if (!self) return false;
     ke_message_pipe_impl *impl = (ke_message_pipe_impl *)self->handle;
     size_t *offset_ptr = &impl->reader_offsets[0];
     while (*offset_ptr < impl->message_count)
@@ -86,10 +77,7 @@ static bool pipe_try_receive(ke_message_pipe *self, uint64_t msg_id, void *out_d
 
 static ke_result pipe_pump(ke_message_pipe *self)
 {
-    if (!self)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
+    if (!self) return KE_ERROR_INVALID_ARGUMENT;
     ke_message_pipe_impl *impl = (ke_message_pipe_impl *)self->handle;
     impl->message_count = 0;
     impl->pool_offset = 0;
@@ -99,10 +87,7 @@ static ke_result pipe_pump(ke_message_pipe *self)
 
 static void pipe_destroy(ke_message_pipe *self)
 {
-    if (!self)
-    {
-        return;
-    }
+    if (!self) return;
     ke_allocator *alloc = self->allocator;
     if (alloc)
     {
@@ -111,41 +96,26 @@ static void pipe_destroy(ke_message_pipe *self)
     }
 }
 
-ke_result ke_message_pipe_create(const ke_descriptor *desc, ke_message_pipe **out_pipe)
+ke_result ke_message_pipe_create(struct ke_allocator *allocator, struct ke_logger *logger, ke_message_pipe **out_pipe)
 {
-    if (!out_pipe)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
+    if (!out_pipe || !allocator) return KE_ERROR_INVALID_ARGUMENT;
     *out_pipe = NULL;
 
-    if (!desc || !desc->allocator)
-    {
-        return KE_ERROR_INVALID_ARGUMENT;
-    }
-    ke_allocator *alloc = desc->allocator;
-
-    ke_message_pipe_impl *impl = (ke_message_pipe_impl *)alloc->alloc(alloc, sizeof(ke_message_pipe_impl), 0);
-    ke_message_pipe *api = (ke_message_pipe *)alloc->alloc(alloc, sizeof(ke_message_pipe), 0);
+    ke_message_pipe_impl *impl = (ke_message_pipe_impl *)allocator->alloc(allocator, sizeof(ke_message_pipe_impl), 0);
+    ke_message_pipe *api = (ke_message_pipe *)allocator->alloc(allocator, sizeof(ke_message_pipe), 0);
 
     if (!impl || !api)
     {
-        if (impl)
-        {
-            alloc->free(alloc, impl);
-        }
-        if (api)
-        {
-            alloc->free(alloc, api);
-        }
+        if (impl) allocator->free(allocator, impl);
+        if (api) allocator->free(allocator, api);
         return KE_ERROR_OUT_OF_MEMORY;
     }
 
     memset(impl, 0, sizeof(ke_message_pipe_impl));
 
     api->handle = impl;
-    api->allocator = alloc;
-    api->logger = desc->logger;
+    api->allocator = allocator;
+    api->logger = logger;
 
     api->broadcast = pipe_broadcast;
     api->create_reader = pipe_create_reader;

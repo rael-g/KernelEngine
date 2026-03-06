@@ -10,15 +10,14 @@ int main(void)
 
     ke_allocator *alloc = ke_allocator_malloc_create();
     ke_logger *logger = NULL;
-    ke_descriptor core_desc = {.allocator = alloc, .logger = NULL, .message_pipe = NULL};
-    ke_logger_create(&core_desc, &logger);
+    ke_logger_create(alloc, &logger);
 
     logger->add_sink(logger, ke_console_sink_create(KE_LOG_LEVEL_TRACE));
 
-    ke_shader_compiler_bgfx_descriptor compiler_desc = {
+    ke_shader_compiler_bgfx_params compiler_params = {
         .allocator = alloc, .logger = logger, .shaderc_path = "vcpkg_installed/x64-windows-static-md/tools/bgfx/shaderc.exe"};
     ke_shader_compiler *compiler = NULL;
-    ke_shader_compiler_bgfx_create(&compiler_desc, &compiler);
+    ke_shader_compiler_bgfx_create(&compiler_params, &compiler);
     compiler->on_initialize(compiler);
 
     ke_log_event ev_start = {KE_LOG_LEVEL_INFO, "app", "Compiling test shader..."};

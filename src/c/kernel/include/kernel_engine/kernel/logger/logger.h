@@ -1,15 +1,17 @@
 #ifndef KERNEL_ENGINE_KERNEL_LOGGER_LOGGER_H_
 #define KERNEL_ENGINE_KERNEL_LOGGER_LOGGER_H_
 
-#include <kernel_engine/kernel/common/descriptor.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/logger/log_level.h>
+#include <kernel_engine/kernel/context/allocator.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+typedef struct ke_logger ke_logger; 
 
 #define KE_ID_LOGGER "ke_logger"
 
@@ -50,7 +52,7 @@ extern "C"
     } ke_logger;
 
     /// @brief Creates a logger instance.
-    KE_API ke_result ke_logger_create(const ke_descriptor *desc, ke_logger **out_logger);
+    KE_API ke_result ke_logger_create(ke_allocator *allocator, ke_logger **out_logger);
 
 #ifdef __cplusplus
 }

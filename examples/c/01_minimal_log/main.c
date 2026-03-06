@@ -10,10 +10,8 @@ int main(void)
     ke_allocator *alloc = ke_allocator_malloc_create();
     if (!alloc) return 1;
 
-    ke_descriptor desc = {.allocator = alloc, .logger = NULL, .message_pipe = NULL};
-
     ke_logger *logger = NULL;
-    ke_result res = ke_logger_create(&desc, &logger);
+    ke_result res = ke_logger_create(alloc, &logger);
 
     if (res == KE_OK)
     {

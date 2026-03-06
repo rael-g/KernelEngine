@@ -13,23 +13,18 @@ typedef struct ke_world_impl
     struct ke_window *window;
     struct ke_allocator *allocator;
 
-    // Built-in component IDs (registered at world creation)
     ke_component_id transform_cid;
     ke_component_id hierarchy_cid;
     ke_component_id name_cid;
     ke_component_id script_cid;
 
-    // Root entity (always entity 1)
     ke_entity root_entity;
 
-    // User-registered C systems
     ke_system systems[KE_WORLD_MAX_SYSTEMS];
     size_t system_count;
 
     ke_world api;
 } ke_world_impl;
-
-// ── Vtable accessors ─────────────────────────────────────────────────────────
 
 static struct ke_ecs_registry *world_get_registry(ke_world *self)
 {
@@ -69,15 +64,11 @@ static ke_result world_add_system(ke_world *self, const ke_system *system)
     return KE_OK;
 }
 
-// ── Node creation ─────────────────────────────────────────────────────────────
-
 static ke_entity world_create_node(ke_world *self, const char *name, ke_entity parent)
 {
     ke_world_impl *impl = (ke_world_impl *)self->handle;
-
     ke_entity entity = ke_ecs_entity_create(impl->registry);
 
-    // TransformComponent
     ke_transform_component *t = (ke_transform_component *)ke_ecs_component_add(
         impl->registry, entity, impl->transform_cid);
     if (t)
@@ -88,7 +79,6 @@ static ke_entity world_create_node(ke_world *self, const char *name, ke_entity p
         ke_mat4_identity(&t->world_matrix);
     }
 
-    // HierarchyComponent
     ke_hierarchy_component *h = (ke_hierarchy_component *)ke_ecs_component_add(
         impl->registry, entity, impl->hierarchy_cid);
     if (h)
@@ -99,7 +89,6 @@ static ke_entity world_create_node(ke_world *self, const char *name, ke_entity p
         h->prev_sibling = KE_ENTITY_INVALID;
     }
 
-    // NameComponent
     ke_name_component *n = (ke_name_component *)ke_ecs_component_add(
         impl->registry, entity, impl->name_cid);
     if (n && name)
@@ -108,7 +97,6 @@ static ke_entity world_create_node(ke_world *self, const char *name, ke_entity p
         n->name[sizeof(n->name) - 1] = '\0';
     }
 
-    // Link into parent's child list (prepend)
     if (parent != KE_ENTITY_INVALID && h)
     {
         ke_hierarchy_component *ph = (ke_hierarchy_component *)ke_ecs_component_get(
@@ -129,15 +117,12 @@ static ke_entity world_create_node(ke_world *self, const char *name, ke_entity p
     return entity;
 }
 
-// ── Node destruction ──────────────────────────────────────────────────────────
-
 static void destroy_node_recursive(ke_world_impl *impl, ke_entity entity)
 {
     ke_hierarchy_component *h = (ke_hierarchy_component *)ke_ecs_component_get(
         impl->registry, entity, impl->hierarchy_cid);
     if (!h) return;
 
-    // Destroy children first (snapshot next before destroying)
     ke_entity child = h->first_child;
     while (child != KE_ENTITY_INVALID)
     {
@@ -148,7 +133,6 @@ static void destroy_node_recursive(ke_world_impl *impl, ke_entity entity)
         child = next;
     }
 
-    // Unlink from parent's child list
     if (h->parent != KE_ENTITY_INVALID)
     {
         ke_hierarchy_component *ph = (ke_hierarchy_component *)ke_ecs_component_get(
@@ -182,8 +166,6 @@ static ke_result world_destroy_node(ke_world *self, ke_entity entity)
     return KE_OK;
 }
 
-// ── TransformSystem ───────────────────────────────────────────────────────────
-
 static void update_transform_recursive(ke_world_impl *impl, ke_entity entity,
                                        const ke_mat4 *parent_world)
 {
@@ -212,8 +194,6 @@ static void update_transform_recursive(ke_world_impl *impl, ke_entity entity,
     }
 }
 
-// ── ScriptSystem ──────────────────────────────────────────────────────────────
-
 static void run_script_system(ke_world_impl *impl, float dt)
 {
     ke_entity *entities;
@@ -234,8 +214,6 @@ static void run_script_system(ke_world_impl *impl, float dt)
     }
 }
 
-// ── World update ──────────────────────────────────────────────────────────────
-
 static ke_result world_update(ke_world *self, const struct ke_frame *frame)
 {
     ke_world_impl *impl = (ke_world_impl *)self->handle;
@@ -253,8 +231,6 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
     return KE_OK;
 }
 
-// ── World destroy ─────────────────────────────────────────────────────────────
-
 static void world_destroy(ke_world *self)
 {
     ke_world_impl *impl = (ke_world_impl *)self->handle;
@@ -267,20 +243,18 @@ static void world_destroy(ke_world *self)
     impl->allocator->free(impl->allocator, impl);
 }
 
-// ── World create ──────────────────────────────────────────────────────────────
-
-ke_result ke_world_create(const ke_world_descriptor *desc, ke_world **out_world)
+ke_result ke_world_create(const ke_world_params *params, ke_world **out_world)
 {
-    if (!desc || !desc->allocator || !out_world) return KE_ERROR_INVALID_ARGUMENT;
+    if (!params || !params->allocator || !out_world) return KE_ERROR_INVALID_ARGUMENT;
 
-    ke_world_impl *impl = (ke_world_impl *)desc->allocator->alloc(
-        desc->allocator, sizeof(ke_world_impl), 0);
+    ke_world_impl *impl = (ke_world_impl *)params->allocator->alloc(
+        params->allocator, sizeof(ke_world_impl), 0);
     if (!impl) return KE_ERROR_OUT_OF_MEMORY;
 
     memset(impl, 0, sizeof(ke_world_impl));
-    impl->allocator = desc->allocator;
-    impl->renderer  = desc->renderer;
-    impl->window    = desc->window;
+    impl->allocator = params->allocator;
+    impl->renderer  = params->renderer;
+    impl->window    = params->window;
 
     ke_result res = ke_ecs_registry_create(impl->allocator, &impl->registry);
     if (res != KE_OK)
@@ -289,17 +263,11 @@ ke_result ke_world_create(const ke_world_descriptor *desc, ke_world **out_world)
         return res;
     }
 
-    // Register built-in components
-    impl->transform_cid = ke_ecs_component_register(impl->registry, "ke_transform",
-                                                      sizeof(ke_transform_component));
-    impl->hierarchy_cid = ke_ecs_component_register(impl->registry, "ke_hierarchy",
-                                                      sizeof(ke_hierarchy_component));
-    impl->name_cid      = ke_ecs_component_register(impl->registry, "ke_name",
-                                                      sizeof(ke_name_component));
-    impl->script_cid    = ke_ecs_component_register(impl->registry, "ke_script",
-                                                      sizeof(ke_script_component));
+    impl->transform_cid = ke_ecs_component_register(impl->registry, "ke_transform", sizeof(ke_transform_component));
+    impl->hierarchy_cid = ke_ecs_component_register(impl->registry, "ke_hierarchy", sizeof(ke_hierarchy_component));
+    impl->name_cid      = ke_ecs_component_register(impl->registry, "ke_name", sizeof(ke_name_component));
+    impl->script_cid    = ke_ecs_component_register(impl->registry, "ke_script", sizeof(ke_script_component));
 
-    // Wire vtable
     impl->api.handle       = impl;
     impl->api.destroy      = world_destroy;
     impl->api.get_registry = world_get_registry;
@@ -313,7 +281,6 @@ ke_result ke_world_create(const ke_world_descriptor *desc, ke_world **out_world)
     impl->api.script_id    = world_script_id;
     impl->api.add_system   = world_add_system;
 
-    // Create root entity
     impl->root_entity = world_create_node(&impl->api, "Root", KE_ENTITY_INVALID);
 
     *out_world = &impl->api;

@@ -59,28 +59,27 @@ static void logger_destroy(ke_logger *self)
     self->allocator->free(self->allocator, self);
 }
 
-ke_result ke_logger_create(const ke_descriptor *desc, ke_logger **out_logger)
+ke_result ke_logger_create(struct ke_allocator *allocator, ke_logger **out_logger)
 {
-    if (!out_logger || !desc || !desc->allocator) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out_logger || !allocator) return KE_ERROR_INVALID_ARGUMENT;
     *out_logger = NULL;
 
-    ke_allocator *alloc = desc->allocator;
-    ke_logger_internal *impl = (ke_logger_internal *)alloc->alloc(alloc, sizeof(ke_logger_internal), 0);
-    ke_logger *api = (ke_logger *)alloc->alloc(alloc, sizeof(ke_logger), 0);
+    ke_logger_internal *impl = (ke_logger_internal *)allocator->alloc(allocator, sizeof(ke_logger_internal), 0);
+    ke_logger *api = (ke_logger *)allocator->alloc(allocator, sizeof(ke_logger), 0);
 
     if (!impl || !api)
     {
-        if (impl) alloc->free(alloc, impl);
-        if (api) alloc->free(alloc, api);
+        if (impl) allocator->free(allocator, impl);
+        if (api) allocator->free(allocator, api);
         return KE_ERROR_OUT_OF_MEMORY;
     }
 
     memset(impl, 0, sizeof(ke_logger_internal));
-    ke_array_init(&impl->sinks, 4, alloc);
+    ke_array_init(&impl->sinks, 4, allocator);
 
     api->handle = impl;
     api->runtime_limit = 0;
-    api->allocator = alloc;
+    api->allocator = allocator;
 
     api->log = logger_log;
     api->add_sink = logger_add_sink;

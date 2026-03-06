@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_KERNEL_INPUT_INPUT_H_
 #define KERNEL_ENGINE_KERNEL_INPUT_INPUT_H_
 
-#include <kernel_engine/kernel/common/descriptor.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <stdbool.h>
@@ -36,7 +35,7 @@ extern "C"
     } ke_input;
 
     /// @brief Creates an input system.
-    KE_API ke_result ke_input_create(const ke_descriptor *desc, ke_input **out_input);
+    KE_API ke_result ke_input_create(struct ke_allocator *allocator, struct ke_logger *logger, struct ke_message_pipe *pipe, ke_input **out_input);
 
 #ifdef __cplusplus
 }
