@@ -33,6 +33,7 @@ extern "C"
         ke_component_id (*hierarchy_id)(struct ke_world *self);
         ke_component_id (*name_id)(struct ke_world *self);
         ke_component_id (*script_id)(struct ke_world *self);
+        ke_component_id (*mesh_renderer_id)(struct ke_world *self);
 
         ke_result (*add_system)(struct ke_world *self, const ke_system *system);
 

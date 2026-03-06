@@ -17,6 +17,7 @@ typedef struct ke_world_impl
     ke_component_id hierarchy_cid;
     ke_component_id name_cid;
     ke_component_id script_cid;
+    ke_component_id mesh_renderer_cid;
 
     ke_entity root_entity;
 
@@ -49,6 +50,11 @@ static ke_component_id world_name_id(ke_world *self)
 static ke_component_id world_script_id(ke_world *self)
 {
     return ((ke_world_impl *)self->handle)->script_cid;
+}
+
+static ke_component_id world_mesh_renderer_id(ke_world *self)
+{
+    return ((ke_world_impl *)self->handle)->mesh_renderer_cid;
 }
 
 static ke_entity world_get_root(ke_world *self)
@@ -267,6 +273,7 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world)
     impl->hierarchy_cid = ke_ecs_component_register(impl->registry, "ke_hierarchy", sizeof(ke_hierarchy_component));
     impl->name_cid      = ke_ecs_component_register(impl->registry, "ke_name", sizeof(ke_name_component));
     impl->script_cid    = ke_ecs_component_register(impl->registry, "ke_script", sizeof(ke_script_component));
+    impl->mesh_renderer_cid = ke_ecs_component_register(impl->registry, "ke_mesh_renderer", sizeof(ke_mesh_renderer_component));
 
     impl->api.handle       = impl;
     impl->api.destroy      = world_destroy;
@@ -279,6 +286,7 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world)
     impl->api.hierarchy_id = world_hierarchy_id;
     impl->api.name_id      = world_name_id;
     impl->api.script_id    = world_script_id;
+    impl->api.mesh_renderer_id = world_mesh_renderer_id;
     impl->api.add_system   = world_add_system;
 
     impl->root_entity = world_create_node(&impl->api, "Root", KE_ENTITY_INVALID);

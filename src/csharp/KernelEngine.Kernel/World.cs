@@ -41,6 +41,9 @@ public sealed unsafe class World : IDisposable
     /// <summary>Component ID for <see cref="ScriptComponent"/>.</summary>
     public uint ScriptComponentId { get; private set; }
 
+    /// <summary>Component ID for the mesh renderer component.</summary>
+    public uint MeshRendererComponentId { get; private set; }
+
     // ── Construction ──────────────────────────────────────────────────────────
 
     /// <summary>Creates a world bound to the given renderer and window.</summary>
@@ -56,10 +59,11 @@ public sealed unsafe class World : IDisposable
         KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world));
         _native = world;
 
-        TransformComponentId = _native->transform_id(_native);
-        HierarchyComponentId = _native->hierarchy_id(_native);
-        NameComponentId      = _native->name_id(_native);
-        ScriptComponentId    = _native->script_id(_native);
+        TransformComponentId   = _native->transform_id(_native);
+        HierarchyComponentId   = _native->hierarchy_id(_native);
+        NameComponentId        = _native->name_id(_native);
+        ScriptComponentId      = _native->script_id(_native);
+        MeshRendererComponentId = _native->mesh_renderer_id(_native);
     }
 
     // ── Public properties ─────────────────────────────────────────────────────

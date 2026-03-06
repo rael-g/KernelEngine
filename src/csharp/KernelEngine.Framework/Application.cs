@@ -48,7 +48,7 @@ public class Application : IDisposable
         PointLightNode.Initialize(ActiveWorld.Registry);
         SpotLightNode.Initialize(ActiveWorld.Registry);
         CameraNode.Initialize(ActiveWorld.Registry);
-        MeshNode.Initialize(ActiveWorld.Registry);
+        MeshNode.ComponentId = ActiveWorld.MeshRendererComponentId;
         SkyboxNode.Initialize();
         // Handles 0 are built-in defaults created by the renderer during initialization.
         MeshNode.DefaultMeshHandle     = 0; // unit quad

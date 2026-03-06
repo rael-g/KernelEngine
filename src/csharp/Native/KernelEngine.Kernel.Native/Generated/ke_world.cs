@@ -38,6 +38,9 @@ public unsafe partial struct ke_world
     [NativeTypeName("ke_component_id (*)(struct ke_world *)")]
     public delegate* unmanaged[Cdecl]<ke_world*, uint> script_id;
 
+    [NativeTypeName("ke_component_id (*)(struct ke_world *)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, uint> mesh_renderer_id;
+
     [NativeTypeName("ke_result (*)(struct ke_world *, const ke_system *)")]
     public delegate* unmanaged[Cdecl]<ke_world*, ke_system*, ke_result> add_system;
 }

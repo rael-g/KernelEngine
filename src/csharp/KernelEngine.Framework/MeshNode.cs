@@ -11,19 +11,13 @@ public class MeshNode : Node
 {
     // ── ECS registration (shared across all MeshNode instances) ──────────────
 
-    internal static uint ComponentId { get; private set; } = uint.MaxValue;
+    internal static uint ComponentId { get; set; } = uint.MaxValue;
 
     /// <summary>Handle of the built-in unit quad mesh (handle 0, created by the renderer at init).</summary>
     public static uint DefaultMeshHandle { get; internal set; } = 0;
 
     /// <summary>Handle of the built-in white material (handle 0, created by the renderer at init).</summary>
     public static uint DefaultMaterialHandle { get; internal set; } = 0;
-
-    internal static void Initialize(EcsRegistry registry)
-    {
-        if (ComponentId == uint.MaxValue)
-            ComponentId = registry.RegisterComponent<MeshComponent>("MeshComponent");
-    }
 
     // ── Per-instance ──────────────────────────────────────────────────────────
 
