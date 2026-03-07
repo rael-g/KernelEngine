@@ -120,6 +120,9 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     render_api_.set_ssao = [](ke_render *self, bool enabled, float radius, float bias, float strength) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetSsao(enabled, radius, bias, strength);
     };
+    render_api_.set_cluster_config = [](ke_render *self, const ke_cluster_config *config) {
+        return static_cast<BgfxRenderSystem *>(self->handle)->SetClusterConfig(config);
+    };
 }
 
 BgfxRenderSystem::~BgfxRenderSystem() {}
@@ -157,11 +160,16 @@ ke_result BgfxRenderSystem::OnInitialize()
     view_h_ = h;
 
     // View 0: shadow depth pass — FB and transform set dynamically by BeginShadowPass.
-    // Views 1-3: SSAO prepass, SSAO raw, SSAO blur — set up in SetupSsao / Frame.
-    // View 4: main scene forward pass.
+    // View 1: Light Cull (Compute)
+    // View 2: Depth Prepass (for Cluster Culling)
+    // Views 3-5: SSAO prepass, SSAO raw, SSAO blur.
+    // View 6: main scene forward pass.
+    ::bgfx::setViewClear(kDepthView, BGFX_CLEAR_DEPTH, 0, 1.0f, 0);
+    ::bgfx::setViewRect(kDepthView, 0, 0, (uint16_t)w, (uint16_t)h);
+
     ::bgfx::setViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
     ::bgfx::setViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
-    // View 5: skybox pass — no clear, renders only where scene left depth=1.
+    // View 7: skybox pass — no clear, renders only where scene left depth=1.
     ::bgfx::setViewClear(kSkyboxView, BGFX_CLEAR_NONE);
     ::bgfx::setViewRect(kSkyboxView, 0, 0, (uint16_t)w, (uint16_t)h);
 
@@ -169,7 +177,9 @@ ke_result BgfxRenderSystem::OnInitialize()
     if (res != KE_OK) return res;
     res = SetupPostProcess();
     if (res != KE_OK) return res;
-    return SetupSsao();
+    res = SetupSsao();
+    if (res != KE_OK) return res;
+    return SetupClustered();
 }
 
 ke_result BgfxRenderSystem::SetupShader()
@@ -279,13 +289,7 @@ ke_result BgfxRenderSystem::SetupShader()
     shadow_map_uniform_     = ::bgfx::createUniform("s_shadowMap",    ::bgfx::UniformType::Sampler).idx;
     light_vp_uniform_       = ::bgfx::createUniform("u_lightVP",      ::bgfx::UniformType::Mat4).idx;
     shadow_params_uniform_  = ::bgfx::createUniform("u_shadowParams", ::bgfx::UniformType::Vec4).idx;
-
-    point_lights_pos_r_uniform_      = ::bgfx::createUniform("u_pointLightsPosR",      ::bgfx::UniformType::Vec4, kMaxPointLights).idx;
-    point_lights_color_i_uniform_    = ::bgfx::createUniform("u_pointLightsColorI",    ::bgfx::UniformType::Vec4, kMaxPointLights).idx;
-    spot_lights_pos_r_uniform_       = ::bgfx::createUniform("u_spotLightsPosR",       ::bgfx::UniformType::Vec4, kMaxSpotLights).idx;
-    spot_lights_dir_cos_uniform_     = ::bgfx::createUniform("u_spotLightsDirCos",     ::bgfx::UniformType::Vec4, kMaxSpotLights).idx;
-    spot_lights_color_outer_uniform_ = ::bgfx::createUniform("u_spotLightsColorOuter", ::bgfx::UniformType::Vec4, kMaxSpotLights).idx;
-    light_counts_uniform_            = ::bgfx::createUniform("u_lightCounts",           ::bgfx::UniformType::Vec4).idx;
+    light_counts_uniform_   = ::bgfx::createUniform("u_lightCounts",  ::bgfx::UniformType::Vec4).idx;
 
     ke_material white_mat = {1.f, 1.f, 1.f, 1.f};
     ke_material_handle mat_handle;
@@ -364,12 +368,25 @@ ke_result BgfxRenderSystem::OnShutdown()
     if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        ::bgfx::destroy(::bgfx::ProgramHandle{blur_program_});
     if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{bright_pass_program_});
 
+    // Clustered shading resources
+    destroy_uniform(cluster_params_u_);
+    destroy_uniform(cluster_params2_u_);
+    destroy_uniform(compute_view_u_);
+    if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{depth_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{cull_program_}))  ::bgfx::destroy(::bgfx::ProgramHandle{cull_program_});
+
+    auto destroy_dyn_ib = [](uint16_t h) {
+        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) ::bgfx::destroy(::bgfx::DynamicIndexBufferHandle{h});
+    };
+    destroy_dyn_ib(b_cluster_bounds_);
+    destroy_dyn_ib(b_point_lights_);
+    destroy_dyn_ib(b_spot_lights_);
+    destroy_dyn_ib(b_p_light_indices_);
+    destroy_dyn_ib(b_p_light_count_);
+    destroy_dyn_ib(b_s_light_indices_);
+    destroy_dyn_ib(b_s_light_count_);
+
     destroy_uniform(light_counts_uniform_);
-    destroy_uniform(spot_lights_color_outer_uniform_);
-    destroy_uniform(spot_lights_dir_cos_uniform_);
-    destroy_uniform(spot_lights_pos_r_uniform_);
-    destroy_uniform(point_lights_color_i_uniform_);
-    destroy_uniform(point_lights_pos_r_uniform_);
     destroy_uniform(shadow_params_uniform_);
     destroy_uniform(light_vp_uniform_);
     destroy_uniform(shadow_map_uniform_);
@@ -415,6 +432,18 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
     if (!view || !proj) return KE_ERROR_INVALID_ARGUMENT;
     memcpy(last_view_, view->m, sizeof(float) * 16);
     memcpy(last_proj_, proj->m, sizeof(float) * 16);
+
+    // Extract near/far planes from standard projection matrix.
+    // near = proj[14] / (proj[10] + 1)
+    // far  = proj[14] / (proj[10] - 1)
+    float n = proj->m[14] / (proj->m[10] + 1.0f);
+    float f = proj->m[14] / (proj->m[10] - 1.0f);
+    if (std::abs(n - near_z_) > 0.0001f || std::abs(f - far_z_) > 0.0001f) {
+        near_z_ = n;
+        far_z_  = f;
+        bounds_dirty_ = true;
+    }
+
     // Extract projection parameters for SSAO depth reconstruction.
     // Column-major layout: m[0] = proj[0][0], m[5] = proj[1][1].
     ssao_proj_info_[0] = (proj->m[0] != 0.f) ? (1.0f / proj->m[0]) : 1.0f;
@@ -427,6 +456,10 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
 
 ke_result BgfxRenderSystem::Frame()
 {
+    // ── Clustered Culling ──────────────────────────────────────────────────────
+    UpdateClusterBounds();
+    DispatchLightCull();
+
     // ── SSAO passes ────────────────────────────────────────────────────────────
     if (ssao_enabled_ && gbuf_fb_ != kInvalidHandle)
     {
@@ -464,8 +497,9 @@ ke_result BgfxRenderSystem::Frame()
     has_skybox_           = false;
     active_env_tex_       = kInvalidHandle;
     active_shadow_handle_ = kInvalidShadowHandle;
-    point_light_count_    = 0;
-    spot_light_count_     = 0;
+    // Lights are cleared each frame; the engine must re-submit them.
+    point_lights_.clear();
+    spot_lights_.clear();
     return KE_OK;
 }
 
@@ -714,6 +748,16 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     float color[4]     = {mat.r, mat.g, mat.b, mat.a};
     float pbr_params[4]= {mat.metallic, mat.roughness, 0.f, 0.f};
 
+    // ── Depth prepass (for culling/SSAO) ──────────────────────────────────────
+    if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_}))
+    {
+        ::bgfx::setTransform(transform->m);
+        ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
+        ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
+        ::bgfx::setState(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
+        ::bgfx::submit(kDepthView, ::bgfx::ProgramHandle{depth_program_});
+    }
+
     // ── G-buffer prepass (if SSAO enabled) ────────────────────────────────────
     if (ssao_enabled_ && prepass_program_ != kInvalidHandle)
     {
@@ -732,6 +776,14 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     ::bgfx::setUniform(::bgfx::UniformHandle{ambient_color_uniform_}, ambient_color_);
     ::bgfx::setUniform(::bgfx::UniformHandle{pbr_params_uniform_},    pbr_params);
     ::bgfx::setUniform(::bgfx::UniformHandle{camera_pos_uniform_},    camera_pos_);
+
+    // Cluster Params
+    float clusterParams[4] = {(float)cluster_config_.grid_x, (float)cluster_config_.grid_y,
+                              (float)cluster_config_.grid_z, (float)cluster_config_.max_lights_per_cluster};
+    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params_u_}, clusterParams);
+
+    float clusterParams2[4] = {(float)point_lights_.size(), (float)spot_lights_.size(), near_z_, far_z_};
+    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params2_u_}, clusterParams2);
 
     if (has_skybox_ && active_env_tex_ != kInvalidHandle)
     {
@@ -777,19 +829,6 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
         ::bgfx::setTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
-    float light_counts[4] = {(float)point_light_count_, (float)spot_light_count_, 0.f, 0.f};
-    ::bgfx::setUniform(::bgfx::UniformHandle{light_counts_uniform_}, light_counts);
-    ::bgfx::setUniform(::bgfx::UniformHandle{point_lights_pos_r_uniform_},
-                       point_lights_pos_r_, (uint16_t)kMaxPointLights);
-    ::bgfx::setUniform(::bgfx::UniformHandle{point_lights_color_i_uniform_},
-                       point_lights_color_i_, (uint16_t)kMaxPointLights);
-    ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_pos_r_uniform_},
-                       spot_lights_pos_r_, (uint16_t)kMaxSpotLights);
-    ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_dir_cos_uniform_},
-                       spot_lights_dir_cos_, (uint16_t)kMaxSpotLights);
-    ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_color_outer_uniform_},
-                       spot_lights_color_outer_, (uint16_t)kMaxSpotLights);
-
     // SSAO blurred occlusion texture (slot 4) and state uniform
     {
         float ssao_state[4] = {
@@ -803,6 +842,14 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
                               ? ssao_blur_tex_ : textures_[0].idx;
         ::bgfx::setTexture(4, ::bgfx::UniformHandle{s_ssao_blurred_u_}, ::bgfx::TextureHandle{ao_tex});
     }
+
+    // Clustered Buffers (slots 5-10)
+    ::bgfx::setBuffer(5,  ::bgfx::DynamicIndexBufferHandle{b_point_lights_},    ::bgfx::Access::Read);
+    ::bgfx::setBuffer(6,  ::bgfx::DynamicIndexBufferHandle{b_spot_lights_},     ::bgfx::Access::Read);
+    ::bgfx::setBuffer(7,  ::bgfx::DynamicIndexBufferHandle{b_p_light_indices_}, ::bgfx::Access::Read);
+    ::bgfx::setBuffer(8,  ::bgfx::DynamicIndexBufferHandle{b_p_light_count_},   ::bgfx::Access::Read);
+    ::bgfx::setBuffer(9,  ::bgfx::DynamicIndexBufferHandle{b_s_light_indices_}, ::bgfx::Access::Read);
+    ::bgfx::setBuffer(10, ::bgfx::DynamicIndexBufferHandle{b_s_light_count_},   ::bgfx::Access::Read);
 
     ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
@@ -951,17 +998,26 @@ ke_result BgfxRenderSystem::SetCameraPos(float x, float y, float z)
 ke_result BgfxRenderSystem::SetPointLights(const ke_point_light *lights, uint32_t count)
 {
     if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
-    point_light_count_ = (count > kMaxPointLights) ? kMaxPointLights : count;
-    for (uint32_t i = 0; i < point_light_count_; ++i)
+    point_lights_.assign(lights, lights + count);
+
+    struct GpuPointLight { float pos_r[4]; float color[4]; };
+    std::vector<GpuPointLight> gpuLights(count);
+    for (uint32_t i = 0; i < count; ++i)
     {
-        float *pos_r   = &point_lights_pos_r_[i * 4];
-        float *color_i = &point_lights_color_i_[i * 4];
-        pos_r[0] = lights[i].pos_x; pos_r[1] = lights[i].pos_y;
-        pos_r[2] = lights[i].pos_z; pos_r[3] = lights[i].radius;
-        color_i[0] = lights[i].r * lights[i].intensity;
-        color_i[1] = lights[i].g * lights[i].intensity;
-        color_i[2] = lights[i].b * lights[i].intensity;
-        color_i[3] = 0.f;
+        gpuLights[i].pos_r[0] = lights[i].pos_x;
+        gpuLights[i].pos_r[1] = lights[i].pos_y;
+        gpuLights[i].pos_r[2] = lights[i].pos_z;
+        gpuLights[i].pos_r[3] = lights[i].radius;
+        gpuLights[i].color[0] = lights[i].r * lights[i].intensity;
+        gpuLights[i].color[1] = lights[i].g * lights[i].intensity;
+        gpuLights[i].color[2] = lights[i].b * lights[i].intensity;
+        gpuLights[i].color[3] = 0.f;
+    }
+
+    if (count > 0)
+    {
+        ::bgfx::update(::bgfx::DynamicIndexBufferHandle{b_point_lights_}, 0,
+                       ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuPointLight))));
     }
     return KE_OK;
 }
@@ -969,20 +1025,30 @@ ke_result BgfxRenderSystem::SetPointLights(const ke_point_light *lights, uint32_
 ke_result BgfxRenderSystem::SetSpotLights(const ke_spot_light *lights, uint32_t count)
 {
     if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
-    spot_light_count_ = (count > kMaxSpotLights) ? kMaxSpotLights : count;
-    for (uint32_t i = 0; i < spot_light_count_; ++i)
+    spot_lights_.assign(lights, lights + count);
+
+    struct GpuSpotLight { float pos_r[4]; float dir_cosI[4]; float color_cosO[4]; };
+    std::vector<GpuSpotLight> gpuLights(count);
+    for (uint32_t i = 0; i < count; ++i)
     {
-        float *pos_r   = &spot_lights_pos_r_[i * 4];
-        float *dir_cos = &spot_lights_dir_cos_[i * 4];
-        float *color_o = &spot_lights_color_outer_[i * 4];
-        pos_r[0] = lights[i].pos_x; pos_r[1] = lights[i].pos_y;
-        pos_r[2] = lights[i].pos_z; pos_r[3] = lights[i].range;
-        dir_cos[0] = lights[i].dir_x; dir_cos[1] = lights[i].dir_y;
-        dir_cos[2] = lights[i].dir_z; dir_cos[3] = cosf(lights[i].inner_angle);
-        color_o[0] = lights[i].r * lights[i].intensity;
-        color_o[1] = lights[i].g * lights[i].intensity;
-        color_o[2] = lights[i].b * lights[i].intensity;
-        color_o[3] = cosf(lights[i].outer_angle);
+        gpuLights[i].pos_r[0] = lights[i].pos_x;
+        gpuLights[i].pos_r[1] = lights[i].pos_y;
+        gpuLights[i].pos_r[2] = lights[i].pos_z;
+        gpuLights[i].pos_r[3] = lights[i].range;
+        gpuLights[i].dir_cosI[0] = lights[i].dir_x;
+        gpuLights[i].dir_cosI[1] = lights[i].dir_y;
+        gpuLights[i].dir_cosI[2] = lights[i].dir_z;
+        gpuLights[i].dir_cosI[3] = cosf(lights[i].inner_angle);
+        gpuLights[i].color_cosO[0] = lights[i].r * lights[i].intensity;
+        gpuLights[i].color_cosO[1] = lights[i].g * lights[i].intensity;
+        gpuLights[i].color_cosO[2] = lights[i].b * lights[i].intensity;
+        gpuLights[i].color_cosO[3] = cosf(lights[i].outer_angle);
+    }
+
+    if (count > 0)
+    {
+        ::bgfx::update(::bgfx::DynamicIndexBufferHandle{b_spot_lights_}, 0,
+                       ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuSpotLight))));
     }
     return KE_OK;
 }
@@ -1327,6 +1393,175 @@ ke_result BgfxRenderSystem::SetSsao(bool enabled, float radius, float bias, floa
     ssao_radius_   = radius;
     ssao_bias_     = bias;
     ssao_strength_ = strength;
+    return KE_OK;
+}
+
+ke_result BgfxRenderSystem::SetupClustered()
+{
+    auto load_shader = [&](const char *name) -> ::bgfx::ShaderHandle {
+        std::string path = shader_path_ + "/" + name + ".bin";
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
+        auto size = (uint32_t)file.tellg();
+        file.seekg(0);
+        const ::bgfx::Memory *mem = ::bgfx::alloc(size);
+        file.read(reinterpret_cast<char *>(mem->data), size);
+        return ::bgfx::createShader(mem);
+    };
+
+    ::bgfx::ShaderHandle vs_d = load_shader("vs_depth");
+    ::bgfx::ShaderHandle fs_d = load_shader("fs_depth");
+    if (::bgfx::isValid(vs_d) && ::bgfx::isValid(fs_d))
+        depth_program_ = ::bgfx::createProgram(vs_d, fs_d, true).idx;
+
+    ::bgfx::ShaderHandle cs_c = load_shader("cs_light_cull");
+    if (::bgfx::isValid(cs_c))
+        cull_program_ = ::bgfx::createProgram(cs_c, true).idx;
+
+    cluster_params_u_  = ::bgfx::createUniform("u_clusterParams",  ::bgfx::UniformType::Vec4).idx;
+    cluster_params2_u_ = ::bgfx::createUniform("u_clusterParams2", ::bgfx::UniformType::Vec4).idx;
+    compute_view_u_    = ::bgfx::createUniform("u_computeView",    ::bgfx::UniformType::Mat4).idx;
+
+    RebuildClusterBuffers();
+    return KE_OK;
+}
+
+void BgfxRenderSystem::RebuildClusterBuffers()
+{
+    auto destroy_buffer = [](uint16_t &h) {
+        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) ::bgfx::destroy(::bgfx::DynamicIndexBufferHandle{h});
+        h = kInvalidHandle;
+    };
+
+    destroy_buffer(b_cluster_bounds_);
+    destroy_buffer(b_point_lights_);
+    destroy_buffer(b_spot_lights_);
+    destroy_buffer(b_p_light_indices_);
+    destroy_buffer(b_p_light_count_);
+    destroy_buffer(b_s_light_indices_);
+    destroy_buffer(b_s_light_count_);
+
+    uint32_t numClusters = cluster_config_.grid_x * cluster_config_.grid_y * cluster_config_.grid_z;
+
+    // ClusterBounds: AABB (min vec4, max vec4) = 32 bytes
+    b_cluster_bounds_ = ::bgfx::createDynamicIndexBuffer(numClusters * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
+
+    // Light storage: PointLight=32b, SpotLight=48b
+    b_point_lights_ = ::bgfx::createDynamicIndexBuffer(cluster_config_.max_total_lights * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
+    b_spot_lights_  = ::bgfx::createDynamicIndexBuffer(cluster_config_.max_total_lights * 48 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
+
+    // Light lists: uint32 per slot
+    b_p_light_indices_ = ::bgfx::createDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+    b_s_light_indices_ = ::bgfx::createDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+
+    // Light counts: uint32 per cluster
+    b_p_light_count_ = ::bgfx::createDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+    b_s_light_count_ = ::bgfx::createDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+
+    bounds_dirty_ = true;
+}
+
+void BgfxRenderSystem::UpdateClusterBounds()
+{
+    if (!bounds_dirty_) return;
+
+    float nearZ = near_z_;
+    float farZ  = far_z_;
+
+    uint32_t numX = cluster_config_.grid_x;
+    uint32_t numY = cluster_config_.grid_y;
+    uint32_t numZ = cluster_config_.grid_z;
+
+    struct AABB { float min[4]; float max[4]; };
+    std::vector<AABB> bounds(numX * numY * numZ);
+
+    // Invert projection to get view-space coords from NDC.
+    // Column-major: m[0]=1/tan(fovX/2), m[5]=1/tan(fovY/2).
+    float invProj00 = 1.0f / last_proj_[0];
+    float invProj11 = 1.0f / last_proj_[5];
+
+    for (uint32_t iz = 0; iz < numZ; ++iz)
+    {
+        float z0 = nearZ * powf(farZ / nearZ, (float)iz / numZ);
+        float z1 = nearZ * powf(farZ / nearZ, (float)(iz + 1) / numZ);
+
+        for (uint32_t iy = 0; iy < numY; ++iy)
+        {
+            float yNDC0 = (float)iy / numY * 2.0f - 1.0f;
+            float yNDC1 = (float)(iy + 1) / numY * 2.0f - 1.0f;
+
+            for (uint32_t ix = 0; ix < numX; ++ix)
+            {
+                float xNDC0 = (float)ix / numX * 2.0f - 1.0f;
+                float xNDC1 = (float)(ix + 1) / numX * 2.0f - 1.0f;
+
+                // Points at z0 and z1 in view space
+                // View space: -Z is forward. Cluster Z is positive forward.
+                float vz0 = -z0;
+                float vz1 = -z1;
+
+                float x0z0 = xNDC0 * z0 * invProj00;
+                float x1z0 = xNDC1 * z0 * invProj00;
+                float y0z0 = yNDC0 * z0 * invProj11;
+                float y1z0 = yNDC1 * z0 * invProj11;
+
+                float x0z1 = xNDC0 * z1 * invProj00;
+                float x1z1 = xNDC1 * z1 * invProj00;
+                float y0z1 = yNDC0 * z1 * invProj11;
+                float y1z1 = yNDC1 * z1 * invProj11;
+
+                AABB &b = bounds[iz * numX * numY + iy * numX + ix];
+                b.min[0] = std::min({x0z0, x1z0, x0z1, x1z1});
+                b.min[1] = std::min({y0z0, y1z0, y0z1, y1z1});
+                b.min[2] = vz1; // -farZ_cluster is more negative
+                b.min[3] = 0.0f;
+
+                b.max[0] = std::max({x0z0, x1z0, x0z1, x1z1});
+                b.max[1] = std::max({y0z0, y1z0, y0z1, y1z1});
+                b.max[2] = vz0; // -nearZ_cluster
+                b.max[3] = 0.0f;
+            }
+        }
+    }
+
+    ::bgfx::update(::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, 0,
+                   ::bgfx::copy(bounds.data(), (uint32_t)(bounds.size() * sizeof(AABB))));
+    bounds_dirty_ = false;
+}
+
+void BgfxRenderSystem::DispatchLightCull()
+{
+    if (cull_program_ == kInvalidHandle) return;
+
+    // View-space transformation for light positions
+    ::bgfx::setUniform(::bgfx::UniformHandle{compute_view_u_}, last_view_);
+
+    float params[4] = {(float)cluster_config_.grid_x, (float)cluster_config_.grid_y,
+                       (float)cluster_config_.grid_z, (float)cluster_config_.max_lights_per_cluster};
+    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params_u_}, params);
+
+    float params2[4] = {(float)point_lights_.size(), (float)spot_lights_.size(), 0.f, 0.f};
+    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params2_u_}, params2);
+
+    ::bgfx::setBuffer(0, ::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, ::bgfx::Access::Read);
+    ::bgfx::setBuffer(1, ::bgfx::DynamicIndexBufferHandle{b_point_lights_},   ::bgfx::Access::Read);
+    ::bgfx::setBuffer(2, ::bgfx::DynamicIndexBufferHandle{b_spot_lights_},    ::bgfx::Access::Read);
+
+    ::bgfx::setBuffer(3, ::bgfx::DynamicIndexBufferHandle{b_p_light_indices_}, ::bgfx::Access::ReadWrite);
+    ::bgfx::setBuffer(4, ::bgfx::DynamicIndexBufferHandle{b_p_light_count_},   ::bgfx::Access::ReadWrite);
+    ::bgfx::setBuffer(5, ::bgfx::DynamicIndexBufferHandle{b_s_light_indices_}, ::bgfx::Access::ReadWrite);
+    ::bgfx::setBuffer(6, ::bgfx::DynamicIndexBufferHandle{b_s_light_count_},   ::bgfx::Access::ReadWrite);
+
+    ::bgfx::dispatch(kLightCullView, ::bgfx::ProgramHandle{cull_program_},
+                     (uint16_t)cluster_config_.grid_x, (uint16_t)cluster_config_.grid_y, (uint16_t)cluster_config_.grid_z);
+}
+
+ke_result BgfxRenderSystem::SetClusterConfig(const ke_cluster_config *config)
+{
+    if (!config) return KE_ERROR_INVALID_ARGUMENT;
+    if (config->grid_x == 0 || config->grid_y == 0 || config->grid_z == 0) return KE_ERROR_INVALID_ARGUMENT;
+    cluster_config_ = *config;
+    RebuildClusterBuffers();
     return KE_OK;
 }
 

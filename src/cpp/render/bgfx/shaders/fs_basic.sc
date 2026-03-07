@@ -1,6 +1,7 @@
 $input v_color0, v_normal, v_texcoord0, v_worldPos, v_shadowCoord, v_tangent
 
 #include <bgfx_shader.sh>
+#include <bgfx_compute.sh>
 
 SAMPLER2D(s_texColor,    0);
 SAMPLERCUBE(s_envMap,    1);
@@ -17,14 +18,16 @@ uniform vec4 u_cameraPos;    // xyz = camera world position
 uniform vec4 u_iblParams;    // x = 1 if IBL active, else 0
 uniform vec4 u_shadowParams; // x = 1 if shadow map active, else 0
 uniform vec4 u_normalParams; // x = 1 if normal map active, else 0
-uniform vec4 u_lightCounts;  // x = point light count, y = spot light count
 uniform vec4 u_ssaoState;    // x = 1 if SSAO active, yz = texel size (1/w, 1/h)
+uniform vec4 u_clusterParams;  // x=numX, y=numY, z=numZ, w=maxLightsPerCluster
+uniform vec4 u_clusterParams2; // x=pointLightCount, y=spotLightCount, z=nearZ, w=farZ
 
-uniform vec4 u_pointLightsPosR[8];      // xyz = position, w = radius
-uniform vec4 u_pointLightsColorI[8];    // xyz = color * intensity, w = unused
-uniform vec4 u_spotLightsPosR[8];       // xyz = position, w = range
-uniform vec4 u_spotLightsDirCos[8];     // xyz = direction, w = cos(inner_angle)
-uniform vec4 u_spotLightsColorOuter[8]; // xyz = color * intensity, w = cos(outer_angle)
+BUFFER_RO(b_pointLights,       vec4, 5);
+BUFFER_RO(b_spotLights,        vec4, 6);
+BUFFER_RO(b_pointLightIndices, uint, 7);
+BUFFER_RO(b_pointLightCount,   uint, 8);
+BUFFER_RO(b_spotLightIndices,  uint, 9);
+BUFFER_RO(b_spotLightCount,    uint, 10);
 
 #define PI 3.14159265358979
 
@@ -115,13 +118,34 @@ void main()
 
     vec3 direct = (kD * albedo.xyz / PI + specular) * u_lightColor.xyz * NdotL;
 
+    // ── Clustered Forward Shading ──────────────────────────────────────────────
+    float nearZ = u_clusterParams2.z;
+    float farZ  = u_clusterParams2.w;
+    float viewZ = (u_view[0].z * v_worldPos.x + u_view[1].z * v_worldPos.y + u_view[2].z * v_worldPos.z + u_view[3].z);
+    viewZ = -viewZ; // positive Z is forward in view space
+
+    uint numX = uint(u_clusterParams.x);
+    uint numY = uint(u_clusterParams.y);
+    uint numZ = uint(u_clusterParams.z);
+    uint maxLights = uint(u_clusterParams.w);
+
+    uint ix = uint(gl_FragCoord.x / (u_viewRect[2] / float(numX)));
+    uint iy = uint(gl_FragCoord.y / (u_viewRect[3] / float(numY)));
+    uint iz = uint(clamp(log(viewZ / nearZ) / log(farZ / nearZ) * float(numZ), 0.0, float(numZ - 1)));
+
+    uint clusterIndex = iz * (numX * numY) + iy * numX + ix;
+
     // ── Point lights ───────────────────────────────────────────────────────────
-    int pointCount = int(u_lightCounts.x);
-    for (int pi = 0; pi < pointCount; ++pi)
+    uint pCount = b_pointLightCount[clusterIndex];
+    for (uint i = 0; i < pCount; ++i)
     {
-        vec3  Lp   = u_pointLightsPosR[pi].xyz - v_worldPos;
+        uint pi = b_pointLightIndices[clusterIndex * maxLights + i];
+        vec4 pos_r = b_pointLights[pi * 2u];
+        vec4 color = b_pointLights[pi * 2u + 1u];
+
+        vec3  Lp   = pos_r.xyz - v_worldPos;
         float dist = length(Lp);
-        float rad  = u_pointLightsPosR[pi].w;
+        float rad  = pos_r.w;
         float t    = clamp(1.0 - (dist / rad) * (dist / rad), 0.0, 1.0);
         float att  = t * t;
         vec3  Ldir = normalize(Lp);
@@ -133,25 +157,30 @@ void main()
         vec3  kSp  = Fp;
         vec3  kDp  = (vec3_splat(1.0) - kSp) * (1.0 - metallic);
         vec3  specP = (NDFp * Gp * Fp) / (4.0 * max(dot(N, V), 0.0) * NdotLp + 0.0001);
-        direct += (kDp * albedo.xyz / PI + specP) * u_pointLightsColorI[pi].xyz * NdotLp * att;
+        direct += (kDp * albedo.xyz / PI + specP) * color.xyz * NdotLp * att;
     }
 
     // ── Spot lights ────────────────────────────────────────────────────────────
-    int spotCount = int(u_lightCounts.y);
-    for (int si = 0; si < spotCount; ++si)
+    uint sCount = b_spotLightCount[clusterIndex];
+    for (uint j = 0; j < sCount; ++j)
     {
-        vec3  Ls    = u_spotLightsPosR[si].xyz - v_worldPos;
+        uint si = b_spotLightIndices[clusterIndex * maxLights + j];
+        vec4 pos_r      = b_spotLights[si * 3u];
+        vec4 dir_cosI   = b_spotLights[si * 3u + 1u];
+        vec4 color_cosO = b_spotLights[si * 3u + 2u];
+
+        vec3  Ls    = pos_r.xyz - v_worldPos;
         float distS = length(Ls);
-        float rng   = u_spotLightsPosR[si].w;
+        float rng   = pos_r.w;
         float ts    = clamp(1.0 - (distS / rng) * (distS / rng), 0.0, 1.0);
         float attS  = ts * ts;
         vec3  Ldir  = normalize(Ls);
-        vec3  sDir  = normalize(u_spotLightsDirCos[si].xyz);
-        float cosI  = u_spotLightsDirCos[si].w;
-        float cosO  = u_spotLightsColorOuter[si].w;
+        vec3  sDir  = normalize(dir_cosI.xyz);
+        float cosI  = dir_cosI.w;
+        float cosO  = color_cosO.w;
         float cosA  = dot(-Ldir, sDir);
         float spotF = clamp((cosA - cosO) / max(cosI - cosO, 0.0001), 0.0, 1.0);
-        attS *= spotF * spotF; // smooth falloff
+        attS *= spotF * spotF;
         vec3  Hs    = normalize(V + Ldir);
         float NdotLs = max(dot(N, Ldir), 0.0);
         float NDFs = DistributionGGX(N, Hs, roughness);
@@ -160,7 +189,7 @@ void main()
         vec3  kSs  = Fs;
         vec3  kDs  = (vec3_splat(1.0) - kSs) * (1.0 - metallic);
         vec3  specS = (NDFs * Gs * Fs) / (4.0 * max(dot(N, V), 0.0) * NdotLs + 0.0001);
-        direct += (kDs * albedo.xyz / PI + specS) * u_spotLightsColorOuter[si].xyz * NdotLs * attS;
+        direct += (kDs * albedo.xyz / PI + specS) * color_cosO.xyz * NdotLs * attS;
     }
 
     // ── Ambient: IBL or constant ───────────────────────────────────────────────

@@ -75,6 +75,9 @@ class BgfxRenderSystem
     // SSAO
     ke_result SetSsao(bool enabled, float radius, float bias, float strength);
 
+    // Clustered Forward Shading
+    ke_result SetClusterConfig(const ke_cluster_config *config);
+
     ke_render *ToApi();
 
   private:
@@ -84,17 +87,24 @@ class BgfxRenderSystem
     ke_result SetupSsao();
     ke_result SubmitSsao();
 
+    ke_result SetupClustered();
+    void RebuildClusterBuffers();
+    void UpdateClusterBounds();
+    void DispatchLightCull();
+
     // ── bgfx view IDs ─────────────────────────────────────────────────────────
-    static constexpr uint8_t kShadowView   = 0; // depth-only shadow pass
-    static constexpr uint8_t kPrepassView  = 1; // G-buffer (normals + linear depth)
-    static constexpr uint8_t kSsaoView     = 2; // SSAO occlusion raw
-    static constexpr uint8_t kSsaoBlurView = 3; // SSAO 5x5 blur
-    static constexpr uint8_t kSceneView    = 4; // main forward pass
-    static constexpr uint8_t kSkyboxView   = 5; // skybox
-    static constexpr uint8_t kBrightView   = 6; // bloom bright-pass
-    static constexpr uint8_t kBlurHView    = 7; // bloom blur horizontal
-    static constexpr uint8_t kBlurVView    = 8; // bloom blur vertical
-    static constexpr uint8_t kTonemapView  = 9; // tonemap → backbuffer
+    static constexpr uint8_t kShadowView    = 0; // depth-only shadow pass
+    static constexpr uint8_t kLightCullView = 1; // compute light culling
+    static constexpr uint8_t kDepthView     = 2; // depth-only prepass for culling
+    static constexpr uint8_t kPrepassView   = 3; // G-buffer (normals + linear depth)
+    static constexpr uint8_t kSsaoView      = 4; // SSAO occlusion raw
+    static constexpr uint8_t kSsaoBlurView  = 5; // SSAO 5x5 blur
+    static constexpr uint8_t kSceneView     = 6; // main forward pass
+    static constexpr uint8_t kSkyboxView    = 7; // skybox
+    static constexpr uint8_t kBrightView    = 8; // bloom bright-pass
+    static constexpr uint8_t kBlurHView     = 9; // bloom blur horizontal
+    static constexpr uint8_t kBlurVView     = 10; // bloom blur vertical
+    static constexpr uint8_t kTonemapView   = 11; // tonemap → backbuffer
 
     struct TextureEntry
     {
@@ -141,6 +151,8 @@ class BgfxRenderSystem
 
     // ── Scene program (PBR) ───────────────────────────────────────────────────
     uint16_t program_         = kInvalidHandle;
+    uint16_t depth_program_   = kInvalidHandle;
+    uint16_t cull_program_    = kInvalidHandle;
     uint16_t sampler_uniform_ = kInvalidHandle;
     uint16_t color_uniform_   = kInvalidHandle;
 
@@ -163,25 +175,29 @@ class BgfxRenderSystem
     float ambient_color_[4] = {0.1f, 0.1f, 0.1f, 0.f};
     float camera_pos_[4]    = {0.f,  0.f, 0.f, 0.f};
 
-    // ── Point / Spot lights ───────────────────────────────────────────────────
-    static constexpr uint32_t kMaxPointLights = 8;
-    static constexpr uint32_t kMaxSpotLights  = 8;
+    float near_z_ = 0.1f;
+    float far_z_  = 1000.0f;
 
-    uint16_t point_lights_pos_r_uniform_        = kInvalidHandle; // u_pointLightsPosR[8]
-    uint16_t point_lights_color_i_uniform_      = kInvalidHandle; // u_pointLightsColorI[8]
-    uint16_t spot_lights_pos_r_uniform_         = kInvalidHandle; // u_spotLightsPosR[8]
-    uint16_t spot_lights_dir_cos_uniform_       = kInvalidHandle; // u_spotLightsDirCos[8]
-    uint16_t spot_lights_color_outer_uniform_   = kInvalidHandle; // u_spotLightsColorOuter[8]
-    uint16_t light_counts_uniform_              = kInvalidHandle; // u_lightCounts
+    // ── Clustered Lighting ───────────────────────────────────────────────────
+    ke_cluster_config cluster_config_{16, 8, 24, 64, 4096};
+    bool bounds_dirty_ = true;
 
-    float point_lights_pos_r_[kMaxPointLights * 4]{};
-    float point_lights_color_i_[kMaxPointLights * 4]{};
-    float spot_lights_pos_r_[kMaxSpotLights * 4]{};
-    float spot_lights_dir_cos_[kMaxSpotLights * 4]{};
-    float spot_lights_color_outer_[kMaxSpotLights * 4]{};
+    uint16_t cluster_params_u_  = kInvalidHandle; // u_clusterParams
+    uint16_t cluster_params2_u_ = kInvalidHandle; // u_clusterParams2
+    uint16_t compute_view_u_    = kInvalidHandle; // u_view (explicit for compute)
 
-    uint32_t point_light_count_ = 0;
-    uint32_t spot_light_count_  = 0;
+    uint16_t b_cluster_bounds_   = kInvalidHandle;
+    uint16_t b_point_lights_     = kInvalidHandle;
+    uint16_t b_spot_lights_      = kInvalidHandle;
+    uint16_t b_p_light_indices_  = kInvalidHandle;
+    uint16_t b_p_light_count_    = kInvalidHandle;
+    uint16_t b_s_light_indices_  = kInvalidHandle;
+    uint16_t b_s_light_count_    = kInvalidHandle;
+
+    std::vector<ke_point_light> point_lights_;
+    std::vector<ke_spot_light>  spot_lights_;
+
+    uint16_t light_counts_uniform_ = kInvalidHandle; // u_lightCounts (still used for global counts)
 
     // ── Skybox program ────────────────────────────────────────────────────────
     uint16_t skybox_program_         = kInvalidHandle;
