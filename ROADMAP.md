@@ -83,63 +83,100 @@ On error (any ke_result != KE_OK):
 
 ---
 
-## Debugging plan
+## Observabilidade — plano de refatoração
 
-### Problem statement
+### Objetivo
 
-Crashes in the engine layer (native DLL) surface as silent exits with non-zero codes (e.g. `0x80000003` STATUS_BREAKPOINT from bgfx debug asserts) with no log output, making root-cause analysis very slow. The managed layer has no way to distinguish a bgfx assert from a Vulkan driver crash or an ordinary .NET exception.
+Com `KE_LOG_LEVEL_DEBUG` ativo, o log deve ser suficiente para reconstruir a sequência de eventos que levou à falha do programa, sem necessidade de debugger. Atualmente o sistema tem quatro pontos de silêncio estrutural descritos abaixo.
 
-### Root causes identified
+### Crashes conhecidos e status
 
-| Symptom | Root cause | Status |
-|---------|------------|--------|
-| Exit `0x80000003`, no log | `bgfx::setBuffer()` before `bgfx::submit()` — compute-only API in draw call | **Fixed** — replaced with `setUniform` arrays |
-| Silent exit from repo root | Shaders compiled on Linux, SPIRV incompatible with Windows Vulkan driver | **Fixed** — recompiled with local `shaderc.exe` |
-| "Failed to load scene shaders" | Shader path resolved relative to CWD | **Fixed** — `AppContext.BaseDirectory` + `Directory.Build.targets` copies shaders |
+| Sintoma | Causa | Status |
+|---------|-------|--------|
+| Exit `0x80000003`, sem log | `bgfx::setBuffer()` antes de `bgfx::submit()` — API compute usada em draw call | **Corrigido** — substituído por `setUniform` |
+| Exit silencioso na raiz do repo | Shaders compilados no Linux, SPIRV incompatível com driver Vulkan Windows | **Corrigido** — recompilado com `shaderc.exe` local |
+| "Failed to load scene shaders" | Shader path relativo ao CWD | **Corrigido** — `AppContext.BaseDirectory` + `Directory.Build.targets` |
 
-### Plan
+### Ponto de silêncio 1 — bgfx não fala com o logger
 
-#### 1. bgfx callback → engine logger (Priority: High)
+**Problema:** bgfx possui `bgfx::CallbackI` com `fatal()` e `traceVargs()`. Sem implementação, `fatal()` chama `debugBreak()` diretamente e o processo termina com `0x80000003` sem nenhuma linha de log. `traceVargs()` descarta validação de API, avisos de shader e vazamentos de recurso.
 
-bgfx exposes a `bgfx::CallbackI` interface. Implement `BgfxCallback : bgfx::CallbackI` in `bgfx_render_system.cc` that forwards `fatal()` and `traceVargs()` to `ke_logger`. Pass it via `bgfx::Init::callback` in `OnInitialize()`.
+**Tarefa DB-01:** Implementar `BgfxLogCallback : bgfx::CallbackI` em `bgfx_render_system.cc`.
+- Campo `ke_logger* logger_` injetado no construtor
+- `fatal(filePath, line, code, str)` → emite `KE_LOG_LEVEL_ERROR` com código bgfx, arquivo, linha e mensagem; depois chama `abort()` (não `debugBreak()`) para garantir exit code 3 e flush do log
+- `traceVargs(filePath, line, format, argList)` → formata com `vsnprintf` e emite `KE_LOG_LEVEL_DEBUG` com tag `"bgfx"`
+- Em `OnInitialize()`, atribuir `init.callback = &callback_` antes de `bgfx::init(init)`
+- Em builds sem `NDEBUG`, setar `init.debug = true` para ativar validação interna e `VK_LAYER_KHRONOS_validation`
 
-- `fatal()` receives the error type and message before `debugBreak()` fires — log it as `KE_LOG_LEVEL_ERROR` and return without crashing in debug builds
-- `traceVargs()` receives shader validation warnings, resource leaks, and API misuse — log as `KE_LOG_LEVEL_DEBUG`
+**Critério de aceite:** o erro de `setBuffer+submit` (que causou o crash) deve aparecer no log como linha `[ERROR][bgfx] ...` antes da terminação, sem abrir o debugger.
 
-This converts silent STATUS_BREAKPOINT crashes into logged errors with a call site.
+---
 
-#### 2. Vulkan validation layers in debug builds (Priority: High)
+### Ponto de silêncio 2 — ke_result falha sem log em C++
 
-In `OnInitialize()`, when `NDEBUG` is not defined, enable Vulkan validation:
-```cpp
-init.debug = true;  // enables bgfx internal validation + VK_LAYER_KHRONOS_validation
+**Problema:** em `bgfx_render_system.cc`, a maioria dos caminhos de erro retorna `KE_ERROR_*` sem emitir log. O chamador C# recebe o código mas não sabe de qual função nem com quais argumentos.
+
+Exemplos reais:
+- `if (!bgfx::isValid(...)) return KE_ERROR_RENDER;` — sem log
+- `if (material >= materials_.size()) return KE_ERROR_INVALID_ARGUMENT;` — sem log
+
+**Tarefa DB-02:** Criar helper `LogErr` local em `bgfx_render_system.cc`:
 ```
-Validation layer messages are routed through `CallbackI::traceVargs()` (see item 1), so they will appear in the engine log automatically once the callback is wired.
-
-Requires `VK_LAYER_PATH` pointing to the Khronos validation layer SDK on the developer machine (installed with Vulkan SDK).
-
-#### 3. Non-zero exit code propagation (Priority: High)
-
-The C# `Application.Run()` currently does not return the engine exit code. Change it so that if any `ke_result != KE_OK` is returned from the main loop or initialization, `Environment.Exit(1)` is called. This makes the crash visible in the terminal immediately (`dotnet run` will print the non-zero exit code).
-
-#### 4. Structured startup diagnostic (Priority: Medium)
-
-At the start of `OnInitialize()`, log:
+ke_result LogErr(ke_logger*, ke_result, const char* context, const char* detail)
 ```
-[bgfx] Renderer: Vulkan  Device: <GPU name>  Driver: <version>
-[bgfx] Shader path: <resolved path>  Shaders: <count loaded>
-[bgfx] Max draw calls: <caps>  Max textures: <caps>
-```
-This makes it immediately visible whether initialization succeeded and what resources are available.
+Emite `KE_LOG_LEVEL_ERROR` com `context` e `detail`, retorna `r`. Substituir todos os `return KE_ERROR_*` que possuem `logger_` disponível.
 
-#### 5. `ke_result` guard macro (Priority: Medium)
+**Tarefa DB-03:** Em `OnInitialize()`, adicionar log `KE_LOG_LEVEL_DEBUG` para cada etapa:
+- Shader path resolvido e se o arquivo existe
+- Resultado de cada `load_shader()` (nome + valid/invalid)
+- Resultado de cada `createUniform()`, `createFrameBuffer()`
+- Ao final: GPU name via `bgfx::getCaps()->vendorId`, renderer type
 
-Add a `KE_CHECK(expr)` macro in C headers that logs the call site and result when `expr != KE_OK`, then returns the result. Use it in `bgfx_render_system.cc` at every internal call site. This ensures any internal failure emits a log line before the function returns.
+**Critério de aceite:** com `KE_LOG_LEVEL_DEBUG`, uma falha de shader load produz linha como `[DEBUG][bgfx] load_shader("fs_basic"): NOT FOUND at path/shaders/fs_basic.bin`.
 
-#### 6. Shader compiler script (Priority: Medium)
+---
 
-Add `tools/compile_shaders.bat` that invokes the local `shaderc.exe` for every `.sc` source in `src/cpp/render/bgfx/shaders/`. Run it as a CMake `POST_BUILD` step on `ke_render_bgfx` so shaders are always in sync with the source. This eliminates the "SPIRV compiled on wrong platform" class of crashes.
+### Ponto de silêncio 3 — C# engole contexto das exceções
 
-#### 7. Example exit-code CI check (Priority: Low)
+**Problema:** `KernelException.ThrowIfFailed(ke_result)` lança com apenas o valor inteiro. Callers no framework descartam resultados com `_ = renderer.Method()` sem logar falhas.
 
-In CI, run each example headlessly for 5 seconds using a virtual framebuffer (Xvfb on Linux) and assert `$? == 0`. Any crash or non-zero exit fails the build. This catches regressions introduced by new render system changes before they reach the developer.
+**Tarefa DB-04:** Enriquecer `KernelException`:
+- Adicionar `static readonly Dictionary<int, string> ResultNames` mapeando cada valor `ke_result` ao nome simbólico (`KE_ERROR_RENDER`, `KE_ERROR_NOT_INITIALIZED`, etc.)
+- `ThrowIfFailed(ke_result r, string context = "")` — mensagem: `"KE_ERROR_RENDER in Renderer.SubmitMesh"`
+
+**Tarefa DB-05:** Auditar todos os `_ = ` em `KernelEngine.Framework`. Para cada um: ou logar via `ILogger` quando o resultado for falha, ou substituir por `KernelException.ThrowIfFailed(result, nameof(método))`.
+
+**Tarefa DB-06:** Em `Application.Run()`, envolver o loop principal em `try/catch(Exception ex)` que loga via logger antes de relançar. O objetivo é garantir que exceções C# apareçam no log mesmo se o sink não fizer flush automático no unwind.
+
+**Critério de aceite:** um `ke_result` que falhe em qualquer ponto do framework produz linha de log com nome simbólico e função de origem antes de propagar.
+
+---
+
+### Ponto de silêncio 4 — crash nativo bypassa tudo
+
+**Problema:** quando bgfx chama `debugBreak()` ou ocorre access violation na DLL, o processo termina via SEH (Windows Structured Exception Handling). Nesse momento: nenhum `finally` do C# executa, `AppDomain.UnhandledException` não dispara para SEH nativo, o log não é flushado se o sink usar buffer.
+
+**Tarefa DB-07:** Garantir flush síncrono nos sinks. Em `ConsoleSink` e `SerilogSink`, verificar que `Log()` escreve diretamente sem buffering. Se houver buffer, adicionar `Flush()` ao final de cada `Log()` call.
+
+**Tarefa DB-08:** Em `Application.Run()`, registrar `SetUnhandledExceptionFilter` via P/Invoke antes de iniciar o loop:
+- Captura o código SEH (`ExceptionCode` do `EXCEPTION_RECORD`)
+- Escreve via `Console.Error.WriteLine` (não via logger — estado pode estar corrompido): `[FATAL] Native crash SEH 0x80000003 (STATUS_BREAKPOINT)`
+- Mapear os códigos mais comuns: `0x80000003` = bgfx assert, `0xC0000005` = access violation, `0xC00000FD` = stack overflow
+- Chamar `Environment.Exit(1)` para garantir código 1 no terminal
+
+**Critério de aceite:** executar o binário com o bug original (setBuffer+submit) produz `[FATAL] Native crash SEH 0x80000003 (STATUS_BREAKPOINT — bgfx debug assert)` em stderr antes de terminar.
+
+---
+
+### Ordem de execução
+
+| Ordem | Tarefa | Impacto | Esforço |
+|-------|--------|---------|---------|
+| 1 | DB-01 — BgfxLogCallback | Elimina silêncio do crash mais grave | Médio |
+| 2 | DB-07 — Flush síncrono nos sinks | Garante que logs aparecem antes da morte | Baixo |
+| 3 | DB-08 — SetUnhandledExceptionFilter | Torna crashes nativos visíveis no terminal | Médio |
+| 4 | DB-02 — LogErr em ke_result C++ | Localiza falhas de inicialização e render | Médio |
+| 5 | DB-03 — Logs DEBUG em OnInitialize | Permite diagnóstico de boot sem debugger | Baixo |
+| 6 | DB-04 — ThrowIfFailed com nomes simbólicos | Melhora mensagens C# | Baixo |
+| 7 | DB-05 — Audit de `_ =` no framework | Elimina resultados silenciosamente descartados | Baixo |
+| 8 | DB-06 — try/catch no loop principal | Garante flush em exceções C# | Baixo |
