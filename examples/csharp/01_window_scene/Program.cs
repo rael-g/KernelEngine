@@ -11,7 +11,7 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .AddMessagePipe()
     .AddGlfwWindow(800, 600, "KernelEngine — C# Window/Scene")
-    .AddBgfxRenderer("src/cpp/render/bgfx/shaders");
+    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 float hue = 0f;
 

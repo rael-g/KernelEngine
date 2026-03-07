@@ -1,0 +1,15 @@
+<Project>
+  <!-- Copy compiled bgfx shader binaries into the output directory alongside the exe. -->
+  <!-- This allows examples to run from any working directory via AppContext.BaseDirectory. -->
+  <Target Name="CopyBgfxShaders" AfterTargets="Build">
+    <PropertyGroup>
+      <_ShadersOut>$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)\shaders</_ShadersOut>
+      <_ShaderSrc>$(MSBuildThisFileDirectory)..\..\src\cpp\render\bgfx\shaders</_ShaderSrc>
+    </PropertyGroup>
+    <ItemGroup>
+      <_ShaderBins Include="$(_ShaderSrc)\*.bin" />
+    </ItemGroup>
+    <MakeDir Directories="$(_ShadersOut)" />
+    <Copy SourceFiles="@(_ShaderBins)" DestinationFolder="$(_ShadersOut)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
