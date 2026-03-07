@@ -20,5 +20,6 @@ public sealed class ConsoleSink : ILoggerSink
         int idx = (int)level;
         string label = (idx >= 0 && idx < s_levels.Length) ? s_levels[idx] : "?";
         Console.Error.WriteLine($"[{label}] {tag}: {message}");
+        Console.Error.Flush();
     }
 }
