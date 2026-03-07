@@ -290,6 +290,8 @@ ke_result BgfxRenderSystem::SetupShader()
     light_vp_uniform_       = ::bgfx::createUniform("u_lightVP",      ::bgfx::UniformType::Mat4).idx;
     shadow_params_uniform_  = ::bgfx::createUniform("u_shadowParams", ::bgfx::UniformType::Vec4).idx;
     light_counts_uniform_   = ::bgfx::createUniform("u_lightCounts",  ::bgfx::UniformType::Vec4).idx;
+    point_lights_uniform_   = ::bgfx::createUniform("u_pointLights",  ::bgfx::UniformType::Vec4, 128).idx;
+    spot_lights_uniform_    = ::bgfx::createUniform("u_spotLights",   ::bgfx::UniformType::Vec4, 192).idx;
 
     ke_material white_mat = {1.f, 1.f, 1.f, 1.f};
     ke_material_handle mat_handle;
@@ -386,6 +388,8 @@ ke_result BgfxRenderSystem::OnShutdown()
     destroy_dyn_ib(b_s_light_indices_);
     destroy_dyn_ib(b_s_light_count_);
 
+    destroy_uniform(spot_lights_uniform_);
+    destroy_uniform(point_lights_uniform_);
     destroy_uniform(light_counts_uniform_);
     destroy_uniform(shadow_params_uniform_);
     destroy_uniform(light_vp_uniform_);
@@ -782,7 +786,8 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
                               (float)cluster_config_.grid_z, (float)cluster_config_.max_lights_per_cluster};
     ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params_u_}, clusterParams);
 
-    float clusterParams2[4] = {(float)point_lights_.size(), (float)spot_lights_.size(), near_z_, far_z_};
+    float clusterParams2[4] = {(float)std::min(point_lights_.size(), (size_t)64),
+                               (float)std::min(spot_lights_.size(), (size_t)64), near_z_, far_z_};
     ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params2_u_}, clusterParams2);
 
     if (has_skybox_ && active_env_tex_ != kInvalidHandle)
@@ -843,13 +848,47 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
         ::bgfx::setTexture(4, ::bgfx::UniformHandle{s_ssao_blurred_u_}, ::bgfx::TextureHandle{ao_tex});
     }
 
-    // Clustered Buffers (slots 5-10)
-    ::bgfx::setBuffer(5,  ::bgfx::DynamicIndexBufferHandle{b_point_lights_},    ::bgfx::Access::Read);
-    ::bgfx::setBuffer(6,  ::bgfx::DynamicIndexBufferHandle{b_spot_lights_},     ::bgfx::Access::Read);
-    ::bgfx::setBuffer(7,  ::bgfx::DynamicIndexBufferHandle{b_p_light_indices_}, ::bgfx::Access::Read);
-    ::bgfx::setBuffer(8,  ::bgfx::DynamicIndexBufferHandle{b_p_light_count_},   ::bgfx::Access::Read);
-    ::bgfx::setBuffer(9,  ::bgfx::DynamicIndexBufferHandle{b_s_light_indices_}, ::bgfx::Access::Read);
-    ::bgfx::setBuffer(10, ::bgfx::DynamicIndexBufferHandle{b_s_light_count_},   ::bgfx::Access::Read);
+    // Point lights uniform array (2 vec4 per light, up to 64)
+    {
+        static float pl_data[128 * 4] = {};
+        uint32_t pCount = (uint32_t)std::min(point_lights_.size(), (size_t)64);
+        for (uint32_t i = 0; i < pCount; ++i)
+        {
+            const auto &l = point_lights_[i];
+            pl_data[i * 8 + 0] = l.pos_x;
+            pl_data[i * 8 + 1] = l.pos_y;
+            pl_data[i * 8 + 2] = l.pos_z;
+            pl_data[i * 8 + 3] = l.radius;
+            pl_data[i * 8 + 4] = l.r * l.intensity;
+            pl_data[i * 8 + 5] = l.g * l.intensity;
+            pl_data[i * 8 + 6] = l.b * l.intensity;
+            pl_data[i * 8 + 7] = 0.f;
+        }
+        ::bgfx::setUniform(::bgfx::UniformHandle{point_lights_uniform_}, pl_data, 128);
+    }
+
+    // Spot lights uniform array (3 vec4 per light, up to 64)
+    {
+        static float sl_data[192 * 4] = {};
+        uint32_t sCount = (uint32_t)std::min(spot_lights_.size(), (size_t)64);
+        for (uint32_t j = 0; j < sCount; ++j)
+        {
+            const auto &l = spot_lights_[j];
+            sl_data[j * 12 + 0]  = l.pos_x;
+            sl_data[j * 12 + 1]  = l.pos_y;
+            sl_data[j * 12 + 2]  = l.pos_z;
+            sl_data[j * 12 + 3]  = l.range;
+            sl_data[j * 12 + 4]  = l.dir_x;
+            sl_data[j * 12 + 5]  = l.dir_y;
+            sl_data[j * 12 + 6]  = l.dir_z;
+            sl_data[j * 12 + 7]  = cosf(l.inner_angle);
+            sl_data[j * 12 + 8]  = l.r * l.intensity;
+            sl_data[j * 12 + 9]  = l.g * l.intensity;
+            sl_data[j * 12 + 10] = l.b * l.intensity;
+            sl_data[j * 12 + 11] = cosf(l.outer_angle);
+        }
+        ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_uniform_}, sl_data, 192);
+    }
 
     ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
     ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});

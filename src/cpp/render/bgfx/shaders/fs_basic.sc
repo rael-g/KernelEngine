@@ -1,7 +1,6 @@
 $input v_color0, v_normal, v_texcoord0, v_worldPos, v_shadowCoord, v_tangent
 
 #include <bgfx_shader.sh>
-#include <bgfx_compute.sh>
 
 SAMPLER2D(s_texColor,    0);
 SAMPLERCUBE(s_envMap,    1);
@@ -19,15 +18,12 @@ uniform vec4 u_iblParams;    // x = 1 if IBL active, else 0
 uniform vec4 u_shadowParams; // x = 1 if shadow map active, else 0
 uniform vec4 u_normalParams; // x = 1 if normal map active, else 0
 uniform vec4 u_ssaoState;    // x = 1 if SSAO active, yz = texel size (1/w, 1/h)
-uniform vec4 u_clusterParams;  // x=numX, y=numY, z=numZ, w=maxLightsPerCluster
-uniform vec4 u_clusterParams2; // x=pointLightCount, y=spotLightCount, z=nearZ, w=farZ
+uniform vec4 u_clusterParams2; // x = pointLightCount, y = spotLightCount
 
-BUFFER_RO(b_pointLights,       vec4, 5);
-BUFFER_RO(b_spotLights,        vec4, 6);
-BUFFER_RO(b_pointLightIndices, uint, 7);
-BUFFER_RO(b_pointLightCount,   uint, 8);
-BUFFER_RO(b_spotLightIndices,  uint, 9);
-BUFFER_RO(b_spotLightCount,    uint, 10);
+// Point lights: 2 vec4 per light (up to 64). Layout: [pos.xyz, radius], [color.xyz, 0]
+uniform vec4 u_pointLights[128];
+// Spot lights: 3 vec4 per light (up to 64). Layout: [pos.xyz, range], [dir.xyz, cosInner], [color.xyz, cosOuter]
+uniform vec4 u_spotLights[192];
 
 #define PI 3.14159265358979
 
@@ -118,30 +114,12 @@ void main()
 
     vec3 direct = (kD * albedo.xyz / PI + specular) * u_lightColor.xyz * NdotL;
 
-    // ── Clustered Forward Shading ──────────────────────────────────────────────
-    float nearZ = u_clusterParams2.z;
-    float farZ  = u_clusterParams2.w;
-    float viewZ = (u_view[0].z * v_worldPos.x + u_view[1].z * v_worldPos.y + u_view[2].z * v_worldPos.z + u_view[3].z);
-    viewZ = -viewZ; // positive Z is forward in view space
-
-    uint numX = uint(u_clusterParams.x);
-    uint numY = uint(u_clusterParams.y);
-    uint numZ = uint(u_clusterParams.z);
-    uint maxLights = uint(u_clusterParams.w);
-
-    uint ix = uint(gl_FragCoord.x / (u_viewRect[2] / float(numX)));
-    uint iy = uint(gl_FragCoord.y / (u_viewRect[3] / float(numY)));
-    uint iz = uint(clamp(log(viewZ / nearZ) / log(farZ / nearZ) * float(numZ), 0.0, float(numZ - 1)));
-
-    uint clusterIndex = iz * (numX * numY) + iy * numX + ix;
-
     // ── Point lights ───────────────────────────────────────────────────────────
-    uint pCount = b_pointLightCount[clusterIndex];
-    for (uint i = 0; i < pCount; ++i)
+    int pCount = int(u_clusterParams2.x);
+    for (int i = 0; i < pCount; ++i)
     {
-        uint pi = b_pointLightIndices[clusterIndex * maxLights + i];
-        vec4 pos_r = b_pointLights[pi * 2u];
-        vec4 color = b_pointLights[pi * 2u + 1u];
+        vec4 pos_r = u_pointLights[i * 2];
+        vec4 color = u_pointLights[i * 2 + 1];
 
         vec3  Lp   = pos_r.xyz - v_worldPos;
         float dist = length(Lp);
@@ -161,13 +139,12 @@ void main()
     }
 
     // ── Spot lights ────────────────────────────────────────────────────────────
-    uint sCount = b_spotLightCount[clusterIndex];
-    for (uint j = 0; j < sCount; ++j)
+    int sCount = int(u_clusterParams2.y);
+    for (int j = 0; j < sCount; ++j)
     {
-        uint si = b_spotLightIndices[clusterIndex * maxLights + j];
-        vec4 pos_r      = b_spotLights[si * 3u];
-        vec4 dir_cosI   = b_spotLights[si * 3u + 1u];
-        vec4 color_cosO = b_spotLights[si * 3u + 2u];
+        vec4 pos_r      = u_spotLights[j * 3];
+        vec4 dir_cosI   = u_spotLights[j * 3 + 1];
+        vec4 color_cosO = u_spotLights[j * 3 + 2];
 
         vec3  Ls    = pos_r.xyz - v_worldPos;
         float distS = length(Ls);

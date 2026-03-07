@@ -197,7 +197,9 @@ class BgfxRenderSystem
     std::vector<ke_point_light> point_lights_;
     std::vector<ke_spot_light>  spot_lights_;
 
-    uint16_t light_counts_uniform_ = kInvalidHandle; // u_lightCounts (still used for global counts)
+    uint16_t light_counts_uniform_  = kInvalidHandle; // u_lightCounts (still used for global counts)
+    uint16_t point_lights_uniform_  = kInvalidHandle; // u_pointLights[128]
+    uint16_t spot_lights_uniform_   = kInvalidHandle; // u_spotLights[192]
 
     // ── Skybox program ────────────────────────────────────────────────────────
     uint16_t skybox_program_         = kInvalidHandle;

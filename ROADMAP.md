@@ -80,3 +80,66 @@ On error (any ke_result != KE_OK):
 - Depth prepass (early-Z): always-on geometry pass before main scene, share depth with HDR framebuffer for DEPTH_TEST_EQUAL optimization
 - KTX2 support: GPU-compressed textures with embedded mipmaps (BC7/ASTC)
 - Offline asset pipeline: bake glTF + PNG → engine binary format at build time
+
+---
+
+## Debugging plan
+
+### Problem statement
+
+Crashes in the engine layer (native DLL) surface as silent exits with non-zero codes (e.g. `0x80000003` STATUS_BREAKPOINT from bgfx debug asserts) with no log output, making root-cause analysis very slow. The managed layer has no way to distinguish a bgfx assert from a Vulkan driver crash or an ordinary .NET exception.
+
+### Root causes identified
+
+| Symptom | Root cause | Status |
+|---------|------------|--------|
+| Exit `0x80000003`, no log | `bgfx::setBuffer()` before `bgfx::submit()` — compute-only API in draw call | **Fixed** — replaced with `setUniform` arrays |
+| Silent exit from repo root | Shaders compiled on Linux, SPIRV incompatible with Windows Vulkan driver | **Fixed** — recompiled with local `shaderc.exe` |
+| "Failed to load scene shaders" | Shader path resolved relative to CWD | **Fixed** — `AppContext.BaseDirectory` + `Directory.Build.targets` copies shaders |
+
+### Plan
+
+#### 1. bgfx callback → engine logger (Priority: High)
+
+bgfx exposes a `bgfx::CallbackI` interface. Implement `BgfxCallback : bgfx::CallbackI` in `bgfx_render_system.cc` that forwards `fatal()` and `traceVargs()` to `ke_logger`. Pass it via `bgfx::Init::callback` in `OnInitialize()`.
+
+- `fatal()` receives the error type and message before `debugBreak()` fires — log it as `KE_LOG_LEVEL_ERROR` and return without crashing in debug builds
+- `traceVargs()` receives shader validation warnings, resource leaks, and API misuse — log as `KE_LOG_LEVEL_DEBUG`
+
+This converts silent STATUS_BREAKPOINT crashes into logged errors with a call site.
+
+#### 2. Vulkan validation layers in debug builds (Priority: High)
+
+In `OnInitialize()`, when `NDEBUG` is not defined, enable Vulkan validation:
+```cpp
+init.debug = true;  // enables bgfx internal validation + VK_LAYER_KHRONOS_validation
+```
+Validation layer messages are routed through `CallbackI::traceVargs()` (see item 1), so they will appear in the engine log automatically once the callback is wired.
+
+Requires `VK_LAYER_PATH` pointing to the Khronos validation layer SDK on the developer machine (installed with Vulkan SDK).
+
+#### 3. Non-zero exit code propagation (Priority: High)
+
+The C# `Application.Run()` currently does not return the engine exit code. Change it so that if any `ke_result != KE_OK` is returned from the main loop or initialization, `Environment.Exit(1)` is called. This makes the crash visible in the terminal immediately (`dotnet run` will print the non-zero exit code).
+
+#### 4. Structured startup diagnostic (Priority: Medium)
+
+At the start of `OnInitialize()`, log:
+```
+[bgfx] Renderer: Vulkan  Device: <GPU name>  Driver: <version>
+[bgfx] Shader path: <resolved path>  Shaders: <count loaded>
+[bgfx] Max draw calls: <caps>  Max textures: <caps>
+```
+This makes it immediately visible whether initialization succeeded and what resources are available.
+
+#### 5. `ke_result` guard macro (Priority: Medium)
+
+Add a `KE_CHECK(expr)` macro in C headers that logs the call site and result when `expr != KE_OK`, then returns the result. Use it in `bgfx_render_system.cc` at every internal call site. This ensures any internal failure emits a log line before the function returns.
+
+#### 6. Shader compiler script (Priority: Medium)
+
+Add `tools/compile_shaders.bat` that invokes the local `shaderc.exe` for every `.sc` source in `src/cpp/render/bgfx/shaders/`. Run it as a CMake `POST_BUILD` step on `ke_render_bgfx` so shaders are always in sync with the source. This eliminates the "SPIRV compiled on wrong platform" class of crashes.
+
+#### 7. Example exit-code CI check (Priority: Low)
+
+In CI, run each example headlessly for 5 seconds using a virtual framebuffer (Xvfb on Linux) and assert `$? == 0`. Any crash or non-zero exit fails the build. This catches regressions introduced by new render system changes before they reach the developer.
