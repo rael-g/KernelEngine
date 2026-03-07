@@ -233,6 +233,19 @@ ke_result BgfxRenderSystem::OnInitialize()
     return KE_OK;
 }
 
+::bgfx::ShaderHandle BgfxRenderSystem::LoadShader(const char *name)
+{
+    std::string path = shader_path_ + "/" + name + ".bin";
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
+    auto size = (uint32_t)file.tellg();
+    file.seekg(0);
+    const ::bgfx::Memory *mem = ::bgfx::alloc(size + 1);
+    file.read(reinterpret_cast<char *>(mem->data), size);
+    mem->data[size] = '\0';
+    return ::bgfx::createShader(mem);
+}
+
 ke_result BgfxRenderSystem::SetupShader()
 {
     ::bgfx::ShaderHandle vs = LoadShader("vs_basic");
@@ -310,6 +323,17 @@ ke_result BgfxRenderSystem::SetupShader()
     if (CreateTextureRgba(1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
         return KE_ERROR_RENDER;
 
+    // Default 1x1 white cubemap — bound to s_envMap slot when no skybox is active.
+    // Required because the Vulkan backend always needs a valid cube image view at that slot.
+    {
+        static const uint8_t kWhiteFace[4] = {0xff, 0xff, 0xff, 0xff};
+        const ::bgfx::Memory *mem = ::bgfx::alloc(6 * 4);
+        for (int f = 0; f < 6; ++f)
+            std::memcpy(mem->data + f * 4, kWhiteFace, 4);
+        ::bgfx::TextureHandle h = ::bgfx::createTextureCube(1, false, 1, ::bgfx::TextureFormat::RGBA8, 0, mem);
+        default_cube_tex_ = ::bgfx::isValid(h) ? h.idx : kInvalidHandle;
+    }
+
     sampler_uniform_       = ::bgfx::createUniform("s_texColor",     ::bgfx::UniformType::Sampler).idx;
     env_map_uniform_       = ::bgfx::createUniform("s_envMap",       ::bgfx::UniformType::Sampler).idx;
     color_uniform_         = ::bgfx::createUniform("u_color",         ::bgfx::UniformType::Vec4).idx;
@@ -352,8 +376,9 @@ ke_result BgfxRenderSystem::OnShutdown()
     }
     meshes_.clear();
 
-    if (::bgfx::isValid(::bgfx::VertexBufferHandle{skybox_vb_})) ::bgfx::destroy(::bgfx::VertexBufferHandle{skybox_vb_});
-    if (::bgfx::isValid(::bgfx::IndexBufferHandle{skybox_ib_}))  ::bgfx::destroy(::bgfx::IndexBufferHandle{skybox_ib_});
+    if (::bgfx::isValid(::bgfx::VertexBufferHandle{skybox_vb_}))  ::bgfx::destroy(::bgfx::VertexBufferHandle{skybox_vb_});
+    if (::bgfx::isValid(::bgfx::IndexBufferHandle{skybox_ib_}))   ::bgfx::destroy(::bgfx::IndexBufferHandle{skybox_ib_});
+    if (::bgfx::isValid(::bgfx::TextureHandle{default_cube_tex_})) ::bgfx::destroy(::bgfx::TextureHandle{default_cube_tex_});
 
     auto destroy_uniform = [](uint16_t u) {
         if (::bgfx::isValid(::bgfx::UniformHandle{u})) ::bgfx::destroy(::bgfx::UniformHandle{u});
@@ -848,7 +873,8 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     {
         float ibl_params[4] = {0.f, 0.f, 0.f, 0.f};
         ::bgfx::setUniform(::bgfx::UniformHandle{ibl_params_uniform_}, ibl_params);
-        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
+        uint16_t cube_fb = (default_cube_tex_ != kInvalidHandle) ? default_cube_tex_ : textures_[0].idx;
+        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{cube_fb});
     }
 
     if (active_shadow_handle_ != kInvalidShadowHandle)

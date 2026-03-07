@@ -176,11 +176,12 @@ public:
     static constexpr uint16_t kInvalidHandle = UINT16_MAX;
 
     // ── Scene program (PBR) ───────────────────────────────────────────────────
-    uint16_t program_         = kInvalidHandle;
-    uint16_t depth_program_   = kInvalidHandle;
-    uint16_t cull_program_    = kInvalidHandle;
-    uint16_t sampler_uniform_ = kInvalidHandle;
-    uint16_t color_uniform_   = kInvalidHandle;
+    uint16_t program_           = kInvalidHandle;
+    uint16_t depth_program_     = kInvalidHandle;
+    uint16_t cull_program_      = kInvalidHandle;
+    uint16_t sampler_uniform_   = kInvalidHandle;
+    uint16_t color_uniform_     = kInvalidHandle;
+    uint16_t default_cube_tex_  = kInvalidHandle; // fallback 1x1 white cubemap for s_envMap
 
     std::vector<TextureEntry>  textures_;  // handle 0 = built-in white
     std::vector<MeshEntry>     meshes_;    // handle 0 = built-in unit quad
