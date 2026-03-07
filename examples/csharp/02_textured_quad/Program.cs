@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Diagnostics;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
@@ -10,7 +11,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddMessagePipe()
-    .AddGlfwWindow(800, 600, "Example 02 — Textured Quad")
+    .AddGlfwWindow(1280, 720, "KernelEngine — 02 Textured Quad")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
@@ -36,17 +37,19 @@ app.OnReady = () =>
     }
 
     var texRes = app.Renderer.CreateTexture(width, height, pixels);
+    KernelException.ThrowIfFailed(texRes.Code, nameof(app.Renderer.CreateTexture));
     uint texHandle = texRes.Value;
-    Console.WriteLine($"[Example] 02_textured_quad — texture: {width}x{height} checkerboard, handle: {texHandle}");
 
     // Create material with checkerboard texture
-    var matHandle = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, textureHandle: texHandle).Value;
+    var matRes = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, textureHandle: texHandle);
+    KernelException.ThrowIfFailed(matRes.Code, nameof(app.Renderer.CreateMaterial));
+    uint matHandle = matRes.Value;
 
-    // Directional light from top
+    // Directional light from top-front
     app.ActiveWorld.Scene.AddNode(
         new LightNode
         {
-            Direction = new Vector3(0f, 1f, 0f),
+            Direction = Vector3.Normalize(new(0.2f, 1f, 0.5f)),
             Color     = Vector3.One,
             Intensity = 1f,
         },
@@ -68,20 +71,22 @@ app.OnReady = () =>
         "Quad");
 };
 
-DateTime lastFpsLog = DateTime.Now;
+Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
 app.OnUpdate = () =>
 {
-    _ = app.Renderer.ClearColor(0.1f, 0.1f, 0.1f, 1f);
+    // Background padrão (0.05, 0.05, 0.05, 1.0)
+    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
+    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
 
     frameCount++;
-    if ((DateTime.Now - lastFpsLog).TotalSeconds >= 5.0)
+    if (sw.Elapsed.TotalSeconds >= 5.0)
     {
-        double fps = frameCount / (DateTime.Now - lastFpsLog).TotalSeconds;
-        Console.WriteLine($"[Example] FPS: {fps:F2}");
-        lastFpsLog = DateTime.Now;
+        double fps = frameCount / sw.Elapsed.TotalSeconds;
+        Console.WriteLine($"[Example 02] FPS: {fps:F2}");
         frameCount = 0;
+        sw.Restart();
     }
 };
 

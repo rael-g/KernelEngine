@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Diagnostics;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
@@ -10,18 +11,14 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddMessagePipe()
-    .AddGlfwWindow(800, 600, "Example 03 — PBR Directional")
+    .AddGlfwWindow(1280, 720, "KernelEngine — 03 PBR Directional")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
 
 app.OnReady = () =>
 {
-    Console.WriteLine("[Example] 03_pbr_directional — 3 materials: dielectric/metal/mixed");
-
     // ── Lights ──────────────────────────────────────────────────────────────
-
-    // Directional light (0.5, 1.0, 0.3), white, intensity 2.0
     app.ActiveWorld.Scene.AddNode(
         new LightNode
         {
@@ -32,8 +29,6 @@ app.OnReady = () =>
         "Sun");
 
     // ── Camera ──────────────────────────────────────────────────────────────
-
-    // Camera at Z=5, Y=1, looking at origin
     var cam = app.ActiveWorld.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
@@ -44,54 +39,45 @@ app.OnReady = () =>
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // ── Materials ───────────────────────────────────────────────────────────
-
-    // Material 1: metallic=0.0, roughness=0.8 (dielectric rugoso)
     var mat1 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 0.0f, roughness: 0.8f).Value;
-
-    // Material 2: metallic=1.0, roughness=0.1 (metal espelhado)
     var mat2 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 1.0f, roughness: 0.1f).Value;
-
-    // Material 3: metallic=0.5, roughness=0.5 (intermediário)
     var mat3 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 0.5f, roughness: 0.5f).Value;
 
     // ── Meshes ──────────────────────────────────────────────────────────────
-
-    // Create shared mesh for the quads
     var quadMesh = app.Renderer.CreateMesh(MeshGeometry.QuadVertices, MeshGeometry.QuadIndices).Value;
 
-    // Quad 1 (Left)
     var node1 = app.ActiveWorld.Scene.AddNode(
         new MeshNode { MeshHandle = quadMesh, MaterialHandle = mat1 },
         "QuadDielectric");
     node1.LocalTransform = node1.LocalTransform with { Position = new Vector3(-2.0f, 0f, 0f) };
 
-    // Quad 2 (Center)
     var node2 = app.ActiveWorld.Scene.AddNode(
         new MeshNode { MeshHandle = quadMesh, MaterialHandle = mat2 },
         "QuadMetal");
     node2.LocalTransform = node2.LocalTransform with { Position = new Vector3(0f, 0f, 0f) };
 
-    // Quad 3 (Right)
     var node3 = app.ActiveWorld.Scene.AddNode(
         new MeshNode { MeshHandle = quadMesh, MaterialHandle = mat3 },
         "QuadMixed");
     node3.LocalTransform = node3.LocalTransform with { Position = new Vector3(2.0f, 0f, 0f) };
 };
 
-DateTime lastFpsLog = DateTime.Now;
+Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
 app.OnUpdate = () =>
 {
-    _ = app.Renderer.ClearColor(0.1f, 0.1f, 0.1f, 1f);
+    // Background padrão (0.05, 0.05, 0.05, 1.0)
+    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
+    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
 
     frameCount++;
-    if ((DateTime.Now - lastFpsLog).TotalSeconds >= 5.0)
+    if (sw.Elapsed.TotalSeconds >= 5.0)
     {
-        double fps = frameCount / (DateTime.Now - lastFpsLog).TotalSeconds;
-        Console.WriteLine($"[Example] FPS: {fps:F2}");
-        lastFpsLog = DateTime.Now;
+        double fps = frameCount / sw.Elapsed.TotalSeconds;
+        Console.WriteLine($"[Example 03] FPS: {fps:F2}");
         frameCount = 0;
+        sw.Restart();
     }
 };
 
