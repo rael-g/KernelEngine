@@ -104,6 +104,7 @@ public:
     ke_render *ToApi();
 
   private:
+    ::bgfx::ShaderHandle LoadShader(const char *name);
     ke_result SetupShader();
     ke_result SetupPostProcess();
     ke_result SubmitPostProcess();

@@ -174,6 +174,11 @@ ke_result BgfxRenderSystem::OnInitialize()
     ::bgfx::Init init;
     init.type = ::bgfx::RendererType::Vulkan;
     init.platformData.nwh = nwh;
+    init.callback = &callback_;
+
+#ifndef NDEBUG
+    init.debug = true;
+#endif
 
     int w, h;
     window_->get_size(window_, &w, &h);
@@ -183,13 +188,15 @@ ke_result BgfxRenderSystem::OnInitialize()
 
     if (!::bgfx::init(init))
     {
-        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "bgfx", "bgfx::init() failed"};
-        if (logger_) logger_->log(logger_, &ev);
-        return KE_ERROR_RENDER;
+        return LogErr(logger_, KE_ERROR_RENDER, "OnInitialize", "bgfx::init() failed");
     }
 
     {
-        ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "bgfx initialized"};
+        const ::bgfx::Caps* caps = ::bgfx::getCaps();
+        char info[256];
+        snprintf(info, sizeof(info), "bgfx initialized. Vendor ID: 0x%04x, Renderer: %s", 
+                 caps->vendorId, ::bgfx::getRendererName(caps->rendererType));
+        ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", info};
         if (logger_) logger_->log(logger_, &ev);
     }
 
@@ -216,37 +223,30 @@ ke_result BgfxRenderSystem::OnInitialize()
     if (res != KE_OK) return res;
     res = SetupSsao();
     if (res != KE_OK) return res;
-    return SetupClustered();
+    res = SetupClustered();
+    if (res != KE_OK) return res;
+
+    {
+        ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "BgfxRenderSystem initialization complete"};
+        if (logger_) logger_->log(logger_, &ev);
+    }
+    return KE_OK;
 }
 
 ke_result BgfxRenderSystem::SetupShader()
 {
-    auto load_shader = [&](const char *name) -> ::bgfx::ShaderHandle {
-        std::string path = shader_path_ + "/" + name + ".bin";
-        std::ifstream file(path, std::ios::binary | std::ios::ate);
-        if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
-        auto size = (uint32_t)file.tellg();
-        file.seekg(0);
-        const ::bgfx::Memory *mem = ::bgfx::alloc(size + 1);
-        file.read(reinterpret_cast<char *>(mem->data), size);
-        mem->data[size] = '\0';
-        return ::bgfx::createShader(mem);
-    };
-
-    ::bgfx::ShaderHandle vs = load_shader("vs_basic");
-    ::bgfx::ShaderHandle fs = load_shader("fs_basic");
+    ::bgfx::ShaderHandle vs = LoadShader("vs_basic");
+    ::bgfx::ShaderHandle fs = LoadShader("fs_basic");
     if (!::bgfx::isValid(vs) || !::bgfx::isValid(fs))
     {
-        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "bgfx", "Failed to load scene shaders"};
-        if (logger_) logger_->log(logger_, &ev);
-        return KE_ERROR_RENDER;
+        return LogErr(logger_, KE_ERROR_RENDER, "SetupShader", "Failed to load basics");
     }
     ::bgfx::ProgramHandle prog = ::bgfx::createProgram(vs, fs, true);
-    if (!::bgfx::isValid(prog)) return KE_ERROR_RENDER;
+    if (!::bgfx::isValid(prog)) return LogErr(logger_, KE_ERROR_RENDER, "SetupShader", "Program creation failed");
     program_ = prog.idx;
 
-    ::bgfx::ShaderHandle shd_vs = load_shader("vs_shadow");
-    ::bgfx::ShaderHandle shd_fs = load_shader("fs_shadow");
+    ::bgfx::ShaderHandle shd_vs = LoadShader("vs_shadow");
+    ::bgfx::ShaderHandle shd_fs = LoadShader("fs_shadow");
     if (::bgfx::isValid(shd_vs) && ::bgfx::isValid(shd_fs))
     {
         ::bgfx::ProgramHandle shd_prog = ::bgfx::createProgram(shd_vs, shd_fs, true);
@@ -261,8 +261,8 @@ ke_result BgfxRenderSystem::SetupShader()
         if (logger_) logger_->log(logger_, &ev);
     }
 
-    ::bgfx::ShaderHandle sky_vs = load_shader("vs_skybox");
-    ::bgfx::ShaderHandle sky_fs = load_shader("fs_skybox");
+    ::bgfx::ShaderHandle sky_vs = LoadShader("vs_skybox");
+    ::bgfx::ShaderHandle sky_fs = LoadShader("fs_skybox");
     if (::bgfx::isValid(sky_vs) && ::bgfx::isValid(sky_fs))
     {
         ::bgfx::ProgramHandle sky_prog = ::bgfx::createProgram(sky_vs, sky_fs, true);
@@ -497,9 +497,20 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
 
 ke_result BgfxRenderSystem::Frame()
 {
+    static uint32_t frame_counter = 0;
+    frame_counter++;
+
     // ── Clustered Culling ──────────────────────────────────────────────────────
     UpdateClusterBounds();
     DispatchLightCull();
+
+    if (frame_counter % 300 == 0)
+    {
+        char info[128];
+        snprintf(info, sizeof(info), "Frame %u: lights P=%zu, S=%zu", frame_counter, point_lights_.size(), spot_lights_.size());
+        ke_log_event ev = {KE_LOG_LEVEL_DEBUG, "bgfx", info};
+        if (logger_) logger_->log(logger_, &ev);
+    }
 
     // ── SSAO passes ────────────────────────────────────────────────────────────
     if (ssao_enabled_ && gbuf_fb_ != kInvalidHandle)
