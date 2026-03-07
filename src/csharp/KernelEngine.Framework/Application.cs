@@ -62,6 +62,10 @@ public class Application : IDisposable
 
         OnReady?.Invoke();
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var lastFpsLog = sw.Elapsed;
+        int frameCount = 0;
+
         while (!Window.ShouldClose())
         {
             MessagePipe?.Pump();
@@ -69,6 +73,16 @@ public class Application : IDisposable
             OnUpdate?.Invoke();
             Renderer.Frame();
             Window.PollEvents();
+
+            frameCount++;
+            var now = sw.Elapsed;
+            if ((now - lastFpsLog).TotalSeconds >= 5.0)
+            {
+                double fps = frameCount / (now - lastFpsLog).TotalSeconds;
+                Logger?.Debug("Example", $"FPS: {fps:F2}");
+                lastFpsLog = now;
+                frameCount = 0;
+            }
         }
     }
 

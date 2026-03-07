@@ -5,20 +5,43 @@
 #include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/render/light.h>
 #include <kernel_engine/kernel/render/material.h>
-#include <kernel_engine/kernel/render/texture.h>
 #include <kernel_engine/kernel/render/mesh.h>
+#include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/kernel/window/window.h>
 #include <kernel_engine/render/bgfx/bgfx_render.hh>
-#include <string>
+#include <bgfx/bgfx.h>
 #include <vector>
-
-struct ke_window;
+#include <string>
 
 namespace kernel_engine::render::bgfx
 {
 
+class BgfxLogCallback : public ::bgfx::CallbackI
+{
+public:
+    void SetLogger(struct ke_logger *logger) { logger_ = logger; }
+
+    virtual void fatal(const char *_filePath, uint16_t _line, ::bgfx::Fatal::Enum _code, const char *_str) override;
+    virtual void traceVargs(const char *_filePath, uint16_t _line, const char *_format, va_list _argList) override;
+
+    virtual void profilerBegin(const char*, uint32_t, const char*, uint16_t) override {}
+    virtual void profilerBeginLiteral(const char*, uint32_t, const char*, uint16_t) override {}
+    virtual void profilerEnd() override {}
+    virtual uint32_t cacheReadSize(uint64_t) override { return 0; }
+    virtual bool cacheRead(uint64_t, void*, uint32_t) override { return false; }
+    virtual void cacheWrite(uint64_t, const void*, uint32_t) override {}
+    virtual void screenShot(const char*, uint32_t, uint32_t, uint32_t, const void*, uint32_t, bool) override {}
+    virtual void captureBegin(uint32_t, uint32_t, uint32_t, ::bgfx::TextureFormat::Enum, bool) override {}
+    virtual void captureEnd() override {}
+    virtual void captureFrame(const void*, uint32_t) override {}
+
+private:
+    struct ke_logger *logger_ = nullptr;
+};
+
 class BgfxRenderSystem
 {
-  public:
+public:
     explicit BgfxRenderSystem(const ke_render_bgfx_params *params);
     ~BgfxRenderSystem();
 
@@ -91,6 +114,8 @@ class BgfxRenderSystem
     void RebuildClusterBuffers();
     void UpdateClusterBounds();
     void DispatchLightCull();
+
+    BgfxLogCallback callback_;
 
     // ── bgfx view IDs ─────────────────────────────────────────────────────────
     static constexpr uint8_t kShadowView    = 0; // depth-only shadow pass
@@ -184,7 +209,7 @@ class BgfxRenderSystem
 
     uint16_t cluster_params_u_  = kInvalidHandle; // u_clusterParams
     uint16_t cluster_params2_u_ = kInvalidHandle; // u_clusterParams2
-    uint16_t compute_view_u_    = kInvalidHandle; // u_view (explicit for compute)
+    uint16_t compute_view_u_    = kInvalidHandle; // u_computeView
 
     uint16_t b_cluster_bounds_   = kInvalidHandle;
     uint16_t b_point_lights_     = kInvalidHandle;
@@ -203,19 +228,17 @@ class BgfxRenderSystem
 
     // ── Skybox program ────────────────────────────────────────────────────────
     uint16_t skybox_program_         = kInvalidHandle;
+    uint16_t skybox_sampler_uniform_ = kInvalidHandle;
+    uint16_t skybox_tint_uniform_    = kInvalidHandle;
     uint16_t skybox_vb_              = kInvalidHandle;
     uint16_t skybox_ib_              = kInvalidHandle;
-    uint16_t skybox_sampler_uniform_ = kInvalidHandle; // s_skybox
-    uint16_t skybox_tint_uniform_    = kInvalidHandle; // u_skyboxTint
+    bool     has_skybox_             = false;
+    uint16_t active_env_tex_         = kInvalidHandle;
 
-    // Stored per-frame for skybox rotation-only view
+    // View state
+    int view_w_ = 0, view_h_ = 0;
     float last_view_[16]{};
     float last_proj_[16]{};
-    int   view_w_ = 0, view_h_ = 0;
-
-    // IBL state (set by SubmitSkybox, read by SubmitMesh within the same frame)
-    bool     has_skybox_       = false;
-    uint16_t active_env_tex_   = kInvalidHandle;
 
     // ── Post-processing ───────────────────────────────────────────────────────
     uint16_t hdr_fb_          = kInvalidHandle; // RGBA16F color + D24 depth

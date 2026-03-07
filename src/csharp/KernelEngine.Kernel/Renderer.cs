@@ -64,7 +64,11 @@ public sealed unsafe class Renderer : IDisposable
     }
 
     /// <summary>Releases GPU resources for a mesh handle.</summary>
-    public Result DestroyMesh(uint handle) => _native->destroy_mesh(_native, handle);
+    public Result DestroyMesh(uint handle)
+    {
+        if (handle == uint.MaxValue) throw new ArgumentException("Invalid mesh handle", nameof(handle));
+        return _native->destroy_mesh(_native, handle);
+    }
 
     /// <summary>Uploads raw RGBA8 pixel data to the GPU and returns a stable texture handle.</summary>
     public Result<uint> CreateTexture(uint width, uint height, byte[] pixels)
@@ -78,7 +82,11 @@ public sealed unsafe class Renderer : IDisposable
     }
 
     /// <summary>Releases GPU resources for a texture handle.</summary>
-    public Result DestroyTexture(uint handle) => _native->destroy_texture(_native, handle);
+    public Result DestroyTexture(uint handle)
+    {
+        if (handle == uint.MaxValue) throw new ArgumentException("Invalid texture handle", nameof(handle));
+        return _native->destroy_texture(_native, handle);
+    }
 
     /// <summary>Creates a material from properties, returning a stable handle.</summary>
     public Result<uint> CreateMaterial(float r, float g, float b, float a, uint textureHandle = 0,
@@ -98,7 +106,11 @@ public sealed unsafe class Renderer : IDisposable
         CreateMaterial(color.X, color.Y, color.Z, color.W, textureHandle, metallic, roughness, normalMapHandle);
 
     /// <summary>Releases a material handle.</summary>
-    public Result DestroyMaterial(uint handle) => _native->destroy_material(_native, handle);
+    public Result DestroyMaterial(uint handle)
+    {
+        if (handle == uint.MaxValue) throw new ArgumentException("Invalid material handle", nameof(handle));
+        return _native->destroy_material(_native, handle);
+    }
 
     /// <summary>Sets the active directional light for the current frame.</summary>
     public Result SetDirectionalLight(float dirX, float dirY, float dirZ,

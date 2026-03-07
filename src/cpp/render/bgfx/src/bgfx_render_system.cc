@@ -10,14 +10,51 @@
 #include <vector>
 #include <cstring>
 #include <cmath>
+#include <stdarg.h>
 
 namespace kernel_engine::render::bgfx
 {
+
+void BgfxLogCallback::fatal(const char *_filePath, uint16_t _line, ::bgfx::Fatal::Enum _code, const char *_str)
+{
+    if (logger_)
+    {
+        char msg[1024];
+        snprintf(msg, sizeof(msg), "FATAL 0x%08x at %s:%d: %s", _code, _filePath, _line, _str);
+        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "bgfx", msg};
+        logger_->log(logger_, &ev);
+    }
+    abort();
+}
+
+void BgfxLogCallback::traceVargs(const char *_filePath, uint16_t _line, const char *_format, va_list _argList)
+{
+    if (logger_)
+    {
+        char msg[1024];
+        vsnprintf(msg, sizeof(msg), _format, _argList);
+        ke_log_event ev = {KE_LOG_LEVEL_DEBUG, "bgfx", msg};
+        logger_->log(logger_, &ev);
+    }
+}
+
+static ke_result LogErr(ke_logger *logger, ke_result r, const char *context, const char *detail)
+{
+    if (logger)
+    {
+        char msg[1024];
+        snprintf(msg, sizeof(msg), "%s: %s (result: %d)", context, detail, r);
+        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "bgfx", msg};
+        logger->log(logger, &ev);
+    }
+    return r;
+}
 
 BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     : allocator_(params->allocator), logger_(params->logger), window_(params->window),
       shader_path_((params->shader_path != nullptr) ? params->shader_path : "")
 {
+    callback_.SetLogger(logger_);
     render_api_.handle = this;
     render_api_.on_initialize = [](ke_render *self) {
         return static_cast<BgfxRenderSystem *>(self->handle)->OnInitialize();
