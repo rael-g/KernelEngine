@@ -145,6 +145,24 @@ public sealed unsafe class Renderer : IDisposable
         => _native->set_ssao(_native, enabled, radius, bias, strength);
 
     /// <summary>
+    /// Configures the grid dimensions and light density limits for the Clustered Forward Shading pipeline.
+    /// <paramref name="gridX"/> and <paramref name="gridY"/> are screen-space tiles; <paramref name="gridZ"/> is
+    /// the logarithmic depth slices. Higher values improve culling accuracy at the cost of memory.
+    /// </summary>
+    public Result SetClusterConfig(uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster, uint maxTotalLights)
+    {
+        var config = new ke_cluster_config
+        {
+            grid_x = gridX,
+            grid_y = gridY,
+            grid_z = gridZ,
+            max_lights_per_cluster = maxLightsPerCluster,
+            max_total_lights = maxTotalLights,
+        };
+        return _native->set_cluster_config(_native, &config);
+    }
+
+    /// <summary>
     /// Uploads 6 RGBA8 face images into a GPU cubemap and returns a stable handle.
     /// <paramref name="faces"/> must contain exactly 6 arrays of equal size (width × height × 4 bytes each),
     /// ordered: +X, -X, +Y, -Y, +Z, -Z. All faces must be square and the same size.

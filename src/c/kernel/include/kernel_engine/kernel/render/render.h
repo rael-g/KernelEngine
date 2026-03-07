@@ -21,6 +21,16 @@ extern "C"
     typedef uint32_t ke_shadow_map_handle;
 #define KE_INVALID_SHADOW_MAP_HANDLE UINT32_MAX
 
+    /// @brief Configuration for the Clustered Forward Shading grid.
+    typedef struct ke_cluster_config
+    {
+        uint32_t grid_x;
+        uint32_t grid_y;
+        uint32_t grid_z;
+        uint32_t max_lights_per_cluster;
+        uint32_t max_total_lights;
+    } ke_cluster_config;
+
     /// @brief Public interface for rendering operations.
     typedef struct ke_render
     {
@@ -95,12 +105,12 @@ extern "C"
         ke_result (*set_bloom)(struct ke_render *self, bool enabled,
                                float threshold, float intensity);
 
-        /// @brief Uploads an array of point lights for the current frame (max 8).
+        /// @brief Uploads an array of point lights for the current frame.
         ///        Replaces any previously set point lights.
         ke_result (*set_point_lights)(struct ke_render *self,
                                       const ke_point_light *lights, uint32_t count);
 
-        /// @brief Uploads an array of spot lights for the current frame (max 8).
+        /// @brief Uploads an array of spot lights for the current frame.
         ///        Replaces any previously set spot lights.
         ke_result (*set_spot_lights)(struct ke_render *self,
                                      const ke_spot_light *lights, uint32_t count);
@@ -110,6 +120,9 @@ extern "C"
         ///        the underlying renderer does not support SSAO.
         ke_result (*set_ssao)(struct ke_render *self, bool enabled,
                               float radius, float bias, float strength);
+
+        /// @brief Configures the cluster grid dimensions and light density limits.
+        ke_result (*set_cluster_config)(struct ke_render *self, const ke_cluster_config *config);
 
     } ke_render;
 
