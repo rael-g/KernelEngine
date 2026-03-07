@@ -40,9 +40,11 @@ public sealed unsafe class CameraRenderSystem : ISystem
             ? Matrix4x4.CreateOrthographic(aspect * 10f, 10f, cc->Near, cc->Far)
             : Matrix4x4.CreatePerspectiveFieldOfView(cc->Fov * MathF.PI / 180f, aspect, cc->Near, cc->Far);
 
-        _renderer.SetViewTransform(view, proj);
+        var res = _renderer.SetViewTransform(view, proj);
+        KernelException.ThrowIfFailed(res, nameof(_renderer.SetViewTransform));
 
         // Upload camera world position for PBR specular
-        _renderer.SetCameraPos(tc->WorldMatrix.M41, tc->WorldMatrix.M42, tc->WorldMatrix.M43);
+        res = _renderer.SetCameraPos(tc->WorldMatrix.M41, tc->WorldMatrix.M42, tc->WorldMatrix.M43);
+        KernelException.ThrowIfFailed(res, nameof(_renderer.SetCameraPos));
     }
 }

@@ -62,27 +62,64 @@ public class Application : IDisposable
 
         OnReady?.Invoke();
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        var lastFpsLog = sw.Elapsed;
-        int frameCount = 0;
+        // ── DB-08: Native crash handling (SEH) ─────────────────────────────────
+        NativeExceptionFilter.Register();
 
-        while (!Window.ShouldClose())
+        try
         {
-            MessagePipe?.Pump();
-            ActiveWorld?.Update();
-            OnUpdate?.Invoke();
-            Renderer.Frame();
-            Window.PollEvents();
-
-            frameCount++;
-            var now = sw.Elapsed;
-            if ((now - lastFpsLog).TotalSeconds >= 5.0)
+            while (!Window.ShouldClose())
             {
-                double fps = frameCount / (now - lastFpsLog).TotalSeconds;
-                Logger?.Debug("Example", $"FPS: {fps:F2}");
-                lastFpsLog = now;
-                frameCount = 0;
+                MessagePipe?.Pump();
+                ActiveWorld?.Update();
+                OnUpdate?.Invoke();
+                Renderer.Frame();
+                Window.PollEvents();
             }
+        }
+        catch (Exception ex)
+        {
+            Logger?.Error("Application", $"Managed exception in main loop: {ex}");
+            throw;
+        }
+    }
+
+    // ── DB-08: P/Invoke for SEH ───────────────────────────────────────────────
+    private static class NativeExceptionFilter
+    {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern IntPtr SetUnhandledExceptionFilter(UnhandledExceptionFilter lpTopLevelExceptionFilter);
+
+        private delegate int UnhandledExceptionFilter(IntPtr exceptionInfo);
+
+        private static UnhandledExceptionFilter? _filter;
+
+        public static void Register()
+        {
+            _filter = Filter;
+            SetUnhandledExceptionFilter(_filter);
+        }
+
+        private static int Filter(IntPtr exceptionInfo)
+        {
+            // Simplified SEH extraction. In real world, we'd use ExceptionRecord struct.
+            // exceptionInfo points to EXCEPTION_POINTERS
+            // First member is ExceptionRecord pointer.
+            // ExceptionCode is the first member of ExceptionRecord.
+            int code = System.Runtime.InteropServices.Marshal.ReadInt32(
+                System.Runtime.InteropServices.Marshal.ReadIntPtr(exceptionInfo));
+
+            string name = code switch
+            {
+                unchecked((int)0x80000003) => "STATUS_BREAKPOINT (bgfx debug assert)",
+                unchecked((int)0xC0000005) => "STATUS_ACCESS_VIOLATION",
+                unchecked((int)0xC00000FD) => "STATUS_STACK_OVERFLOW",
+                _ => $"0x{code:X8}"
+            };
+
+            Console.Error.WriteLine($"\n[FATAL] Native crash SEH {name}");
+            Console.Error.Flush();
+            Environment.Exit(1);
+            return 0; // EXCEPTION_EXECUTE_HANDLER
         }
     }
 

@@ -39,7 +39,11 @@ public sealed unsafe class ShadowRenderSystem : ISystem
 
         // Lazy-create shadow map on first use.
         if (_shadowMapHandle == uint.MaxValue)
-            _shadowMapHandle = _renderer.CreateShadowMap(Resolution, Resolution).Value;
+        {
+            var createRes = _renderer.CreateShadowMap(Resolution, Resolution);
+            _shadowMapHandle = createRes.Value;
+            KernelException.ThrowIfFailed(createRes.Code, nameof(_renderer.CreateShadowMap));
+        }
 
         ref readonly var light = ref lights[0];
         var lightDir = Vector3.Normalize(new Vector3(light.DirX, light.DirY, light.DirZ));
@@ -52,7 +56,8 @@ public sealed unsafe class ShadowRenderSystem : ISystem
         var lightView = Matrix4x4.CreateLookAt(lightPos, Vector3.Zero, up);
         var lightProj = Matrix4x4.CreateOrthographic(FrustumSize, FrustumSize, 0.1f, FarPlane);
 
-        _renderer.BeginShadowPass(_shadowMapHandle, lightView, lightProj);
+        var beginRes = _renderer.BeginShadowPass(_shadowMapHandle, lightView, lightProj);
+        KernelException.ThrowIfFailed(beginRes, nameof(_renderer.BeginShadowPass));
 
         if (MeshNode.ComponentId != uint.MaxValue)
         {
@@ -63,10 +68,14 @@ public sealed unsafe class ShadowRenderSystem : ISystem
                 var tc = world.Registry.GetComponent<TransformComponent>(
                     entities[i], world.TransformComponentId);
                 if (tc != null)
-                    _renderer.SubmitMeshShadow(meshComps[i].MeshHandle, tc->WorldMatrix);
+                {
+                    var subRes = _renderer.SubmitMeshShadow(meshComps[i].MeshHandle, tc->WorldMatrix);
+                    KernelException.ThrowIfFailed(subRes, nameof(_renderer.SubmitMeshShadow));
+                }
             }
         }
 
-        _renderer.EndShadowPass();
+        var endRes = _renderer.EndShadowPass();
+        KernelException.ThrowIfFailed(endRes, nameof(_renderer.EndShadowPass));
     }
 }

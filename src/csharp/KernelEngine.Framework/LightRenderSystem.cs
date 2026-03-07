@@ -12,8 +12,8 @@ public sealed unsafe class LightRenderSystem : ISystem
     private readonly Renderer _renderer;
 
     // Reusable upload buffers (avoids allocation per frame)
-    private ke_point_light[] _pointBuf = new ke_point_light[8];
-    private ke_spot_light[]  _spotBuf  = new ke_spot_light[8];
+    private ke_point_light[] _pointBuf = new ke_point_light[64];
+    private ke_spot_light[]  _spotBuf  = new ke_spot_light[64];
 
     public LightRenderSystem(Renderer renderer) => _renderer = renderer;
 
@@ -26,9 +26,10 @@ public sealed unsafe class LightRenderSystem : ISystem
             if (lights.Length > 0)
             {
                 ref readonly var light = ref lights[0];
-                _renderer.SetDirectionalLight(
+                var res = _renderer.SetDirectionalLight(
                     light.DirX, light.DirY, light.DirZ,
                     light.R, light.G, light.B, light.Intensity);
+                KernelException.ThrowIfFailed(res, nameof(_renderer.SetDirectionalLight));
             }
         }
 
@@ -53,7 +54,8 @@ public sealed unsafe class LightRenderSystem : ISystem
                     intensity = c.Intensity,
                 };
             }
-            _renderer.SetPointLights(_pointBuf.AsSpan(0, count));
+            var res = _renderer.SetPointLights(_pointBuf.AsSpan(0, count));
+            KernelException.ThrowIfFailed(res, nameof(_renderer.SetPointLights));
         }
 
         // ── Spot lights ────────────────────────────────────────────────────────
@@ -82,7 +84,8 @@ public sealed unsafe class LightRenderSystem : ISystem
                     outer_angle = c.OuterAngle,
                 };
             }
-            _renderer.SetSpotLights(_spotBuf.AsSpan(0, count));
+            var res = _renderer.SetSpotLights(_spotBuf.AsSpan(0, count));
+            KernelException.ThrowIfFailed(res, nameof(_renderer.SetSpotLights));
         }
     }
 }
