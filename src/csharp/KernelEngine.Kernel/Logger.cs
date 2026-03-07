@@ -50,6 +50,11 @@ public sealed unsafe class Logger : IDisposable
         }
     }
 
+    public void Debug(string tag, string message)   => Log(ke_log_level.KE_LOG_LEVEL_DEBUG, tag, message);
+    public void Info(string tag, string message)    => Log(ke_log_level.KE_LOG_LEVEL_INFO, tag, message);
+    public void Warning(string tag, string message) => Log(ke_log_level.KE_LOG_LEVEL_WARNING, tag, message);
+    public void Error(string tag, string message)   => Log(ke_log_level.KE_LOG_LEVEL_ERROR, tag, message);
+
     /// <summary>Registers a managed sink to receive all subsequent log events.</summary>
     /// <param name="sink">The sink implementation.</param>
     /// <param name="minLevel">Minimum level forwarded to this sink. Defaults to <see cref="ke_log_level.KE_LOG_LEVEL_TRACE"/>.</param>
