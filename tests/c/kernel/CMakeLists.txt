@@ -6,6 +6,8 @@ add_executable(test_ke_kernel
     test_message_pipe.cpp
     test_ecs.cpp
     test_world.cpp
+    test_input.cpp
+    test_logger.cpp
 )
 
 target_link_libraries(test_ke_kernel PRIVATE
