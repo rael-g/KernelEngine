@@ -60,7 +60,7 @@
   <PropertyGroup>
     <!-- Relative to src/csharp/Native/NativeDependencies.targets -->
     <RepoRoot>$(MSBuildThisFileDirectory)..\..\..\</RepoRoot>
-    <NativeFinalDir>$(RepoRoot)build\native\$(NativeTypeDir)</NativeFinalDir>
+    <NativeFinalDir>$(RepoRoot)build\$(NativeOS)\$(NativeTypeDir)</NativeFinalDir>
     <NativeTargetBinary>$(NativeFinalDir)\$(NativePre)$(NativeTarget).$(NativeExt)</NativeTargetBinary>
   </PropertyGroup>
 
