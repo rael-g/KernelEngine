@@ -15,6 +15,8 @@ public class Application : IDisposable
     public Window Window { get; private set; } = null!;
     public Renderer Renderer { get; private set; } = null!;
 
+    public Input Input { get; private set; } = null!;
+
     /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
     public World ActiveWorld { get; set; } = null!;
 
@@ -40,6 +42,7 @@ public class Application : IDisposable
 
         Window = Services.GetRequiredService<Window>();
         Renderer = Services.GetRequiredService<Renderer>();
+        Input = Services.GetRequiredService<Input>();
 
         if (ActiveWorld == null)
             ActiveWorld = new World(Allocator, Renderer, Window);
@@ -69,11 +72,11 @@ public class Application : IDisposable
         {
             while (!Window.ShouldClose())
             {
-                MessagePipe?.Pump();
                 ActiveWorld?.Update();
                 OnUpdate?.Invoke();
                 Renderer.Frame();
                 Window.PollEvents();
+                MessagePipe?.Pump();
             }
         }
         catch (Exception ex)
