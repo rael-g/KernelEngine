@@ -47,13 +47,13 @@ public sealed unsafe class World : IDisposable
     // ── Construction ──────────────────────────────────────────────────────────
 
     /// <summary>Creates a world bound to the given renderer and window.</summary>
-    public World(Allocator allocator, Renderer renderer, Window window)
+    public World(Allocator allocator, Renderer? renderer = null, Window? window = null)
     {
         var parameters = new ke_world_params
         {
             allocator = allocator.Native,
-            renderer = renderer.Native,
-            window = window.Native,
+            renderer = renderer != null ? renderer.Native : null,
+            window = window != null ? window.Native : null,
         };
         ke_world* world;
         KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world));

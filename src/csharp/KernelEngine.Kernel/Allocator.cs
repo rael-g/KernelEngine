@@ -20,6 +20,24 @@ public abstract unsafe class Allocator : IDisposable
 
     private protected Allocator(ke_allocator* native) => _native = native;
 
+    public void* Allocate(nuint size, nuint alignment = 0)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        return _native->alloc(_native, size, alignment);
+    }
+
+    public void Free(void* ptr)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        _native->free(_native, ptr);
+    }
+
+    public void* Reallocate(void* ptr, nuint newSize)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        return _native->realloc(_native, ptr, newSize);
+    }
+
     /// <summary>Resets the allocator state without freeing its backing memory.</summary>
     public void Reset()
     {

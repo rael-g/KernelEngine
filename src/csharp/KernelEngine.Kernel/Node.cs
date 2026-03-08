@@ -30,6 +30,7 @@ public unsafe class Node
         _entity = entity;
         _world = world;
         _name = name;
+        s_registry[_entity] = this;
     }
 
     /// <summary>Called by <see cref="Scene.AddNode{T}"/> to bind this instance to an entity.</summary>
@@ -38,6 +39,7 @@ public unsafe class Node
         _entity = entity;
         _world = world;
         _name = name;
+        s_registry[_entity] = this;
     }
 
     /// <summary>
