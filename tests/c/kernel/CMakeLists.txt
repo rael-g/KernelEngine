@@ -8,6 +8,8 @@ add_executable(test_ke_kernel
     test_world.cpp
     test_input.cpp
     test_logger.cpp
+    test_hash.cpp
+    test_array.cpp
 )
 
 target_link_libraries(test_ke_kernel PRIVATE

@@ -2,6 +2,7 @@
 #include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/logger/console_sink.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <string.h>
 
 class LoggerTest : public ::testing::Test {
 protected:
@@ -16,55 +17,154 @@ protected:
     }
 
     void TearDown() override {
-        if (logger) {
-            logger->destroy(logger);
-        }
-        if (alloc) {
-            alloc->destroy(alloc);
-        }
+        if (logger) logger->destroy(logger);
+        if (alloc) alloc->destroy(alloc);
     }
 };
 
-TEST_F(LoggerTest, BasicLogging) {
-    ke_log_event ev;
-    ev.level = KE_LOG_LEVEL_INFO;
-    ev.tag = "TEST";
-    ev.message = "Test message";
-    
-    // Should not crash even without sinks
-    logger->log(logger, &ev);
+// --- Creation Tests ---
+
+TEST(LoggerInitTest, Create_NullOutLogger_ReturnsInvalidArgument) {
+    ke_allocator* a = ke_allocator_malloc_create();
+    ASSERT_EQ(ke_logger_create(a, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    a->destroy(a);
 }
 
-TEST_F(LoggerTest, ConsoleSink) {
-    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_TRACE);
-    
+TEST(LoggerInitTest, Create_NullAllocator_ReturnsInvalidArgument) {
+    ke_logger* l = nullptr;
+    ASSERT_EQ(ke_logger_create(nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
+}
+
+static void* fail_alloc(ke_allocator* alloc, size_t size, size_t alignment) { return nullptr; }
+static void fail_free(ke_allocator* alloc, void* ptr) {}
+
+TEST(LoggerInitTest, Create_AllocationFailure_ReturnsOutOfMemory) {
+    ke_allocator fa;
+    fa.alloc = fail_alloc;
+    fa.free = fail_free;
+    ke_logger* l = nullptr;
+    ASSERT_EQ(ke_logger_create(&fa, &l), KE_ERROR_OUT_OF_MEMORY);
+}
+
+// --- Destroy Tests ---
+
+TEST_F(LoggerTest, Destroy_NullLogger_DoesNotCrash) {
+    auto destroy_fn = logger->destroy;
+    destroy_fn(nullptr);
+    SUCCEED();
+}
+
+TEST_F(LoggerTest, Destroy_WithSinks_Works) {
+    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_INFO);
+    logger->add_sink(logger, sink);
+    logger->destroy(logger);
+    logger = nullptr;
+    SUCCEED();
+}
+
+// --- Log and Sink Tests ---
+
+TEST_F(LoggerTest, Log_NullSelf_DoesNotCrash) {
+    ke_log_event ev = { KE_LOG_LEVEL_INFO, "TAG", "Msg" };
+    auto log_fn = logger->log;
+    log_fn(nullptr, &ev);
+    SUCCEED();
+}
+
+TEST_F(LoggerTest, Log_NullEvent_DoesNotCrash) {
+    logger->log(logger, nullptr);
+    SUCCEED();
+}
+
+TEST_F(LoggerTest, AddSink_NullSelf_ReturnsInvalidArgument) {
+    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_INFO);
+    auto add_sink_fn = logger->add_sink;
+    ASSERT_EQ(add_sink_fn(nullptr, sink), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(LoggerTest, AddSink_AllocationFailure_ReturnsOutOfMemory) {
+    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_INFO);
+    // Force OOM by swapping allocator temporarily
+    ke_allocator fa;
+    fa.alloc = fail_alloc;
+    fa.free = fail_free;
+    auto original_alloc = logger->allocator;
+    logger->allocator = &fa;
     ke_result res = logger->add_sink(logger, sink);
-    ASSERT_EQ(res, KE_OK);
-    
-    ke_log_event ev;
-    ev.level = KE_LOG_LEVEL_INFO;
-    ev.tag = "TEST";
-    ev.message = "Testing console sink";
-    
-    logger->log(logger, &ev);
+    logger->allocator = original_alloc;
+    ASSERT_EQ(res, KE_ERROR_OUT_OF_MEMORY);
 }
 
-TEST_F(LoggerTest, LevelFiltering) {
-    // Sink only accepts ERROR (value 4)
-    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_ERROR);
+static void mock_sink_log(ke_logger_sink* self, const ke_log_event* event) {
+    int* count = (int*)self->handle;
+    (*count)++;
+}
+
+TEST_F(LoggerTest, Log_CallsSink_WhenLevelMatches) {
+    int call_count = 0;
+    ke_logger_sink sink;
+    sink.handle = &call_count;
+    sink.min_level = KE_LOG_LEVEL_INFO;
+    sink.log = mock_sink_log;
+    sink.destroy = nullptr;
     
     logger->add_sink(logger, sink);
     
-    ke_log_event ev;
-    ev.tag = "TEST";
-    
-    // This should be filtered out
-    ev.level = KE_LOG_LEVEL_INFO;
-    ev.message = "This should not be logged";
+    ke_log_event ev = { KE_LOG_LEVEL_INFO, "TEST", "Message" };
     logger->log(logger, &ev);
     
-    // This should pass
-    ev.level = KE_LOG_LEVEL_ERROR;
-    ev.message = "This SHOULD be logged";
+    ASSERT_EQ(call_count, 1);
+}
+
+TEST_F(LoggerTest, Log_DoesNotCallSink_WhenLevelIsLower) {
+    int call_count = 0;
+    ke_logger_sink sink;
+    sink.handle = &call_count;
+    sink.min_level = KE_LOG_LEVEL_ERROR;
+    sink.log = mock_sink_log;
+    sink.destroy = nullptr;
+    
+    logger->add_sink(logger, sink);
+    
+    ke_log_event ev = { KE_LOG_LEVEL_INFO, "TEST", "Message" };
     logger->log(logger, &ev);
+    
+    ASSERT_EQ(call_count, 0);
+}
+
+TEST_F(LoggerTest, Log_SkipsSink_WhenLogFnIsNull) {
+    ke_logger_sink sink;
+    sink.handle = nullptr;
+    sink.min_level = KE_LOG_LEVEL_TRACE;
+    sink.log = nullptr; // Null log function
+    sink.destroy = nullptr;
+    
+    logger->add_sink(logger, sink);
+    
+    ke_log_event ev = { KE_LOG_LEVEL_INFO, "TEST", "Message" };
+    logger->log(logger, &ev);
+    SUCCEED();
+}
+
+TEST_F(LoggerTest, ConsoleSink_NullTagAndMessage_DoesNotCrash) {
+    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_TRACE);
+    logger->add_sink(logger, sink);
+    
+    ke_log_event ev = { KE_LOG_LEVEL_INFO, nullptr, nullptr };
+    logger->log(logger, &ev);
+    SUCCEED();
+}
+
+// --- Helper Tests ---
+
+TEST(LoggerHelperTest, LevelToString_ValidLevels) {
+    ASSERT_STREQ(ke_log_level_to_string(KE_LOG_LEVEL_INFO), "INFO");
+}
+
+TEST(LoggerHelperTest, LevelToString_InvalidLevel_Low) {
+    ASSERT_STREQ(ke_log_level_to_string(-1), "UNKNOWN");
+}
+
+TEST(LoggerHelperTest, LevelToString_InvalidLevel_High) {
+    ASSERT_STREQ(ke_log_level_to_string(6), "UNKNOWN");
 }

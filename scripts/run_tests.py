@@ -182,7 +182,9 @@ def main():
             "--collect:XPlat Code Coverage", 
             "--results-directory", str(test_proj.parent / "bin" / "TestResults"),
             "--", 
-            "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura"
+            "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura",
+            "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include=[KernelEngine.*]*",
+            "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Native*]*"
         ])
 
     # 3. Summarize

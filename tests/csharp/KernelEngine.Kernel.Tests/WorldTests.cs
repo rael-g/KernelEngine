@@ -4,6 +4,7 @@ using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
 
+[Collection("KernelRegistry")]
 public class WorldTests
 {
     [Fact]
@@ -29,6 +30,7 @@ public class WorldTests
     [Fact]
     public void World_HierarchyWorks()
     {
+        Node.ClearRegistry();
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
