@@ -30,7 +30,7 @@ public sealed unsafe class Window : IDisposable
     }
 
     /// <summary>Returns <see langword="true"/> when the user has requested the window to close.</summary>
-    public bool ShouldClose() => _native->should_close(_native);
+    public bool ShouldClose() => _native->should_close(_native) != 0;
 
     /// <summary>Processes pending OS events. Call once per frame.</summary>
     public Result PollEvents() => _native->poll_events(_native);

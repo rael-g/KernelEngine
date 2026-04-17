@@ -173,7 +173,11 @@ public unsafe class Node
 
     // ── Internal registry ─────────────────────────────────────────────────────
 
+    internal static Node? FromEntity(ulong entity) => s_registry.GetValueOrDefault(entity);
+
     internal static void Unregister(ulong entity) => s_registry.Remove(entity);
+
+    internal static void ClearRegistry() => s_registry.Clear();
 
     // ── Unmanaged callbacks (called by the C ScriptSystem) ────────────────────
 

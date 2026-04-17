@@ -4,6 +4,7 @@ public unsafe partial struct ke_logger
 {
     public void* handle;
 
+    [NativeTypeName("int32_t")]
     public int runtime_limit;
 
     [NativeTypeName("struct ke_allocator *")]

@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
   </ItemGroup>
 

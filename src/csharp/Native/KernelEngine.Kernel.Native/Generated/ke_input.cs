@@ -19,14 +19,14 @@ public unsafe partial struct ke_input
     [NativeTypeName("ke_result (*)(struct ke_input *)")]
     public delegate* unmanaged[Cdecl]<ke_input*, ke_result> update;
 
-    [NativeTypeName("bool (*)(struct ke_input *, int)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, int, bool> is_key_pressed;
+    [NativeTypeName("ke_bool (*)(struct ke_input *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, int, byte> is_key_pressed;
 
-    [NativeTypeName("bool (*)(struct ke_input *, int)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, int, bool> is_key_released;
+    [NativeTypeName("ke_bool (*)(struct ke_input *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, int, byte> is_key_released;
 
-    [NativeTypeName("bool (*)(struct ke_input *, int)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, int, bool> is_key_down;
+    [NativeTypeName("ke_bool (*)(struct ke_input *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, int, byte> is_key_down;
 
     public partial struct ke_allocator
     {

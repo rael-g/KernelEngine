@@ -18,31 +18,26 @@ public sealed unsafe class MessagePipe : IDisposable
         }
     }
 
-    private MessagePipe(ke_message_pipe* native) => _native = native;
-
-    /// <summary>Creates a new message pipe using the given allocator.</summary>
-    public MessagePipe(Allocator allocator, Logger? logger = null)
+    public MessagePipe(Allocator allocator, Logger? logger)
     {
-        ke_message_pipe* pipe;
-        // In constructor we still throw because if creation fails, the object is unusable.
-        KernelException.ThrowIfFailed(NativeMethods.message_pipe_create(allocator.Native, logger != null ? logger.Native : null, &pipe));
-        _native = pipe;
+        ke_message_pipe* native;
+        var res = NativeMethods.message_pipe_create(
+            allocator.Native,
+            logger != null ? logger.Native : null,
+            &native);
+
+        KernelException.ThrowIfFailed(res, nameof(NativeMethods.message_pipe_create));
+        _native = native;
     }
 
-    /// <summary>
-    /// Moves all pending broadcast messages into reader queues.
-    /// Call once per frame before any <see cref="TryReceive{T}"/> calls.
-    /// </summary>
-    public Result Pump() => _native->pump(_native);
+    internal MessagePipe(ke_message_pipe* native) => _native = native;
 
-    /// <summary>Broadcasts an unmanaged value to all readers.</summary>
-    public Result Broadcast<T>(ulong messageId, T value) where T : unmanaged =>
+    public void Broadcast<T>(ulong messageId, T value) where T : unmanaged
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
         _native->broadcast(_native, messageId, &value, (nuint)sizeof(T));
+    }
 
-    /// <summary>
-    /// Attempts to dequeue one message of the given type.
-    /// Returns <see langword="true"/> and populates <paramref name="value"/> if a message was available.
-    /// </summary>
     public bool TryReceive<T>(ulong messageId, out T value) where T : unmanaged
     {
         T tmp = default;
@@ -51,11 +46,16 @@ public sealed unsafe class MessagePipe : IDisposable
         return received;
     }
 
-    /// <summary>Creates a reader pipe that receives a copy of every message broadcast on this pipe.</summary>
-    public Result<MessagePipe> CreateReader()
+    public void Pump()
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        _native->pump(_native);
+    }
+
+    public static Result<MessagePipe> CreateReader(MessagePipe pipe)
     {
         ke_message_pipe* reader;
-        var res = _native->create_reader(_native, &reader);
+        var res = pipe.Native->create_reader(pipe.Native, &reader);
         return new Result<MessagePipe>(res, new MessagePipe(reader));
     }
 

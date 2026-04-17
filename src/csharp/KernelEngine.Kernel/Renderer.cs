@@ -41,7 +41,7 @@ public sealed unsafe class Renderer : IDisposable
     public Result ClearColor(Vector4 color) => ClearColor(color.X, color.Y, color.Z, color.W);
 
     /// <summary>Toggles orthographic projection mode.</summary>
-    public Result SetOrthographic(bool enabled) => _native->set_orthographic(_native, enabled);
+    public Result SetOrthographic(bool enabled) => _native->set_orthographic(_native, (byte)(enabled ? 1 : 0));
 
     /// <summary>Sets the view and projection matrices for the active view. Call once per frame before draw calls.</summary>
     public Result SetViewTransform(Matrix4x4 view, Matrix4x4 proj)
@@ -154,7 +154,7 @@ public sealed unsafe class Renderer : IDisposable
     /// <param name="bias">Depth bias to prevent self-occlusion (default 0.025).</param>
     /// <param name="strength">Occlusion intensity multiplier (default 1.0).</param>
     public Result SetSsao(bool enabled, float radius = 0.5f, float bias = 0.025f, float strength = 1.0f)
-        => _native->set_ssao(_native, enabled, radius, bias, strength);
+        => _native->set_ssao(_native, (byte)(enabled ? 1 : 0), radius, bias, strength);
 
     /// <summary>
     /// Configures the grid dimensions and light density limits for the Clustered Forward Shading pipeline.
@@ -242,14 +242,14 @@ public sealed unsafe class Renderer : IDisposable
     /// framebuffer; ACES tonemapping and gamma correction are applied before display.
     /// </summary>
     public Result SetTonemapping(bool enabled, float exposure = 1.0f, float gamma = 2.2f) =>
-        _native->set_tonemapping(_native, enabled, exposure, gamma);
+        _native->set_tonemapping(_native, (byte)(enabled ? 1 : 0), exposure, gamma);
 
     /// <summary>
     /// Enables bloom post-processing. Requires <see cref="SetTonemapping"/> to be active.
     /// Bright pixels above <paramref name="threshold"/> are blurred and additively composited.
     /// </summary>
     public Result SetBloom(bool enabled, float threshold = 1.0f, float intensity = 0.5f) =>
-        _native->set_bloom(_native, enabled, threshold, intensity);
+        _native->set_bloom(_native, (byte)(enabled ? 1 : 0), threshold, intensity);
 
     public void Dispose()
     {

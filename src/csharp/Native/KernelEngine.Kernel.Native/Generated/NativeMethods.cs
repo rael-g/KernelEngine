@@ -35,7 +35,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_log_level_to_string", ExactSpelling = true)]
     [return: NativeTypeName("const char *")]
-    public static extern sbyte* log_level_to_string(int level);
+    public static extern sbyte* log_level_to_string([NativeTypeName("int32_t")] int level);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_logger_create", ExactSpelling = true)]
     public static extern ke_result logger_create(ke_allocator* allocator, ke_logger** out_logger);
@@ -94,6 +94,9 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_ID_RENDER \"ke_render\"")]
     public static ReadOnlySpan<byte> KE_ID_RENDER => "ke_render"u8;
+
+    [NativeTypeName("#define KE_INVALID_SHADOW_MAP_HANDLE UINT32_MAX")]
+    public const uint KE_INVALID_SHADOW_MAP_HANDLE = 0xffffffffU;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_shader_compiler_bgfx_create", ExactSpelling = true)]
     public static extern ke_result shader_compiler_bgfx_create([NativeTypeName("const ke_shader_compiler_bgfx_params *")] ke_shader_compiler_bgfx_params* @params, ke_shader_compiler** out_compiler);
