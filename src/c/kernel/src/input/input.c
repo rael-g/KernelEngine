@@ -44,19 +44,19 @@ static ke_result input_update(ke_input *self)
     return KE_OK;
 }
 
-static bool input_is_key_pressed(ke_input *self, int key)
+static ke_bool input_is_key_pressed(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return false;
     return ((ke_input_internal *)self->handle)->keys_pressed[key];
 }
 
-static bool input_is_key_released(ke_input *self, int key)
+static ke_bool input_is_key_released(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return false;
     return ((ke_input_internal *)self->handle)->keys_released[key];
 }
 
-static bool input_is_key_down(ke_input *self, int key)
+static ke_bool input_is_key_down(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return false;
     return ((ke_input_internal *)self->handle)->keys_down[key];

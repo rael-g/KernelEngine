@@ -12,6 +12,8 @@
 #include <cmath>
 #include <stdarg.h>
 
+#include "bgfx_interface.hh"
+
 namespace kernel_engine::render::bgfx
 {
 
@@ -54,6 +56,15 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     : allocator_(params->allocator), logger_(params->logger), window_(params->window),
       shader_path_((params->shader_path != nullptr) ? params->shader_path : "")
 {
+    std::memset(&render_api_, 0, sizeof(render_api_));
+    std::memset(last_view_, 0, sizeof(last_view_));
+    std::memset(last_proj_ , 0, sizeof(last_proj_));
+    std::memset(active_light_vp_, 0, sizeof(active_light_vp_));
+
+    void* backend_mem = allocator_->alloc(allocator_, sizeof(RealBgfxBackend), 0);
+    bgfx_ = new (backend_mem) RealBgfxBackend();
+    own_bgfx_ = true;
+
     callback_.SetLogger(logger_);
     render_api_.handle = this;
     render_api_.on_initialize = [](ke_render *self) {
@@ -63,6 +74,7 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
         return static_cast<BgfxRenderSystem *>(self->handle)->OnShutdown();
     };
     render_api_.destroy = [](ke_render *self) {
+        if (!self) return;
         auto *sys = static_cast<BgfxRenderSystem *>(self->handle);
         auto *alloc = sys->allocator_;
         sys->~BgfxRenderSystem();
@@ -74,7 +86,7 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     render_api_.clear_color = [](ke_render *self, float r, float g, float b, float a) {
         return static_cast<BgfxRenderSystem *>(self->handle)->ClearColor(r, g, b, a);
     };
-    render_api_.set_orthographic = [](ke_render *self, bool enabled) {
+    render_api_.set_orthographic = [](ke_render *self, ke_bool enabled) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetOrthographic(enabled);
     };
     render_api_.set_view_transform = [](ke_render *self, const ke_mat4 *view, const ke_mat4 *proj) {
@@ -142,10 +154,10 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     render_api_.set_shadow_map = [](ke_render *self, ke_shadow_map_handle handle) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetShadowMap(handle);
     };
-    render_api_.set_tonemapping = [](ke_render *self, bool enabled, float exposure, float gamma) {
+    render_api_.set_tonemapping = [](ke_render *self, ke_bool enabled, float exposure, float gamma) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetTonemapping(enabled, exposure, gamma);
     };
-    render_api_.set_bloom = [](ke_render *self, bool enabled, float threshold, float intensity) {
+    render_api_.set_bloom = [](ke_render *self, ke_bool enabled, float threshold, float intensity) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetBloom(enabled, threshold, intensity);
     };
     render_api_.set_point_lights = [](ke_render *self, const ke_point_light *lights, uint32_t count) {
@@ -154,7 +166,7 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     render_api_.set_spot_lights = [](ke_render *self, const ke_spot_light *lights, uint32_t count) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetSpotLights(lights, count);
     };
-    render_api_.set_ssao = [](ke_render *self, bool enabled, float radius, float bias, float strength) {
+    render_api_.set_ssao = [](ke_render *self, ke_bool enabled, float radius, float bias, float strength) {
         return static_cast<BgfxRenderSystem *>(self->handle)->SetSsao(enabled, radius, bias, strength);
     };
     render_api_.set_cluster_config = [](ke_render *self, const ke_cluster_config *config) {
@@ -162,14 +174,83 @@ BgfxRenderSystem::BgfxRenderSystem(const ke_render_bgfx_params *params)
     };
 }
 
-BgfxRenderSystem::~BgfxRenderSystem() {}
+BgfxRenderSystem::~BgfxRenderSystem() {
+    if (own_bgfx_ && bgfx_) {
+        bgfx_->~BgfxBackend();
+        allocator_->free(allocator_, bgfx_);
+    }
+}
 ke_render *BgfxRenderSystem::ToApi() { return &render_api_; }
+
+void BgfxRenderSystem::set_bgfx(BgfxBackend* bgfx) {
+    if (own_bgfx_ && bgfx_) {
+        bgfx_->~BgfxBackend();
+        allocator_->free(allocator_, bgfx_);
+    }
+    bgfx_ = bgfx;
+    own_bgfx_ = false;
+}
+
+void BgfxRenderSystem::set_all_handles_valid_for_test() {
+    program_ = 1;
+    depth_program_ = 1;
+    cull_program_ = 1;
+    skybox_program_ = 1;
+    bright_pass_program_ = 1;
+    blur_program_ = 1;
+    tonemap_program_ = 1;
+    prepass_program_ = 1;
+    ssao_program_ = 1;
+    ssao_blur_program_ = 1;
+    shadow_program_ = 1;
+
+    color_uniform_ = 1;
+    light_dir_uniform_ = 1;
+    light_color_uniform_ = 1;
+    ambient_color_uniform_ = 1;
+    pbr_params_uniform_ = 1;
+    camera_pos_uniform_ = 1;
+    ibl_params_uniform_ = 1;
+    env_map_uniform_ = 1;
+    normal_map_uniform_ = 1;
+    normal_params_uniform_ = 1;
+    skybox_sampler_uniform_ = 1;
+    skybox_tint_uniform_ = 1;
+    shadow_map_uniform_ = 1;
+    light_vp_uniform_ = 1;
+    shadow_params_uniform_ = 1;
+    light_counts_uniform_ = 1;
+    point_lights_uniform_ = 1;
+    spot_lights_uniform_ = 1;
+    cluster_params_u_ = 1;
+    cluster_params2_u_ = 1;
+    compute_view_u_ = 1;
+    ssao_state_u_ = 1;
+    s_ssao_blurred_u_ = 1;
+    sampler_uniform_ = 1;
+
+    hdr_fb_ = 1;
+    bright_fb_ = 1;
+    
+    // Add dummy mesh and texture to avoid empty vector access if any
+    if (meshes_.empty()) meshes_.push_back({1, 1, 0});
+    if (textures_.empty()) textures_.push_back({1, true});
+    if (materials_.empty()) materials_.push_back({1,1,1,1, 0, 0, 0.5f, 0, true});
+}
 
 ke_result BgfxRenderSystem::OnInitialize()
 {
     if (!window_) return KE_ERROR_NOT_INITIALIZED;
     void *nwh = window_->get_native_handle(window_);
     if (!nwh) return KE_ERROR_WINDOW;
+
+    if (logger_)
+    {
+        char msg[512];
+        snprintf(msg, sizeof(msg), "shader_path: \"%s\"", shader_path_.c_str());
+        ke_log_event ev = {KE_LOG_LEVEL_DEBUG, "bgfx", msg};
+        logger_->log(logger_, &ev);
+    }
 
     ::bgfx::Init init;
     init.type = ::bgfx::RendererType::Vulkan;
@@ -180,19 +261,19 @@ ke_result BgfxRenderSystem::OnInitialize()
     init.debug = true;
 #endif
 
-    int w, h;
+    int32_t w, h;
     window_->get_size(window_, &w, &h);
     init.resolution.width  = (uint32_t)w;
     init.resolution.height = (uint32_t)h;
     init.resolution.reset  = BGFX_RESET_VSYNC;
 
-    if (!::bgfx::init(init))
+    if (!bgfx_->Init(init))
     {
         return LogErr(logger_, KE_ERROR_RENDER, "OnInitialize", "bgfx::init() failed");
     }
 
     {
-        const ::bgfx::Caps* caps = ::bgfx::getCaps();
+        const ::bgfx::Caps* caps = bgfx_->GetCaps();
         char info[256];
         snprintf(info, sizeof(info), "bgfx initialized. Vendor ID: 0x%04x, Renderer: %s", 
                  caps->vendorId, ::bgfx::getRendererName(caps->rendererType));
@@ -208,14 +289,14 @@ ke_result BgfxRenderSystem::OnInitialize()
     // View 2: Depth Prepass (for Cluster Culling)
     // Views 3-5: SSAO prepass, SSAO raw, SSAO blur.
     // View 6: main scene forward pass.
-    ::bgfx::setViewClear(kDepthView, BGFX_CLEAR_DEPTH, 0, 1.0f, 0);
-    ::bgfx::setViewRect(kDepthView, 0, 0, (uint16_t)w, (uint16_t)h);
+    bgfx_->SetViewClear(kDepthView, BGFX_CLEAR_DEPTH, 0, 1.0f, 0);
+    bgfx_->SetViewRect(kDepthView, 0, 0, (uint16_t)w, (uint16_t)h);
 
-    ::bgfx::setViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
-    ::bgfx::setViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
+    bgfx_->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
+    bgfx_->SetViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
     // View 7: skybox pass — no clear, renders only where scene left depth=1.
-    ::bgfx::setViewClear(kSkyboxView, BGFX_CLEAR_NONE);
-    ::bgfx::setViewRect(kSkyboxView, 0, 0, (uint16_t)w, (uint16_t)h);
+    bgfx_->SetViewClear(kSkyboxView, BGFX_CLEAR_NONE, 0, 1.0f, 0);
+    bgfx_->SetViewRect(kSkyboxView, 0, 0, (uint16_t)w, (uint16_t)h);
 
     ke_result res = SetupShader();
     if (res != KE_OK) return res;
@@ -230,6 +311,7 @@ ke_result BgfxRenderSystem::OnInitialize()
         ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "BgfxRenderSystem initialization complete"};
         if (logger_) logger_->log(logger_, &ev);
     }
+    initialized_ = true;
     return KE_OK;
 }
 
@@ -237,13 +319,32 @@ ke_result BgfxRenderSystem::OnInitialize()
 {
     std::string path = shader_path_ + "/" + name + ".bin";
     std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
+    if (!file.is_open())
+    {
+        if (logger_)
+        {
+            char msg[512];
+            snprintf(msg, sizeof(msg), "load_shader(\"%s\"): NOT FOUND at %s", name, path.c_str());
+            ke_log_event ev = {KE_LOG_LEVEL_DEBUG, "bgfx", msg};
+            logger_->log(logger_, &ev);
+        }
+        return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
+    }
     auto size = (uint32_t)file.tellg();
     file.seekg(0);
     const ::bgfx::Memory *mem = ::bgfx::alloc(size + 1);
     file.read(reinterpret_cast<char *>(mem->data), size);
     mem->data[size] = '\0';
-    return ::bgfx::createShader(mem);
+    ::bgfx::ShaderHandle sh = bgfx_->CreateShader(mem);
+    if (logger_)
+    {
+        char msg[512];
+        snprintf(msg, sizeof(msg), "load_shader(\"%s\"): %s (%u bytes)",
+                 name, ::bgfx::isValid(sh) ? "OK" : "INVALID", size);
+        ke_log_event ev = {KE_LOG_LEVEL_DEBUG, "bgfx", msg};
+        logger_->log(logger_, &ev);
+    }
+    return sh;
 }
 
 ke_result BgfxRenderSystem::SetupShader()
@@ -254,7 +355,7 @@ ke_result BgfxRenderSystem::SetupShader()
     {
         return LogErr(logger_, KE_ERROR_RENDER, "SetupShader", "Failed to load basics");
     }
-    ::bgfx::ProgramHandle prog = ::bgfx::createProgram(vs, fs, true);
+    ::bgfx::ProgramHandle prog = bgfx_->CreateProgram(vs, fs, true);
     if (!::bgfx::isValid(prog)) return LogErr(logger_, KE_ERROR_RENDER, "SetupShader", "Program creation failed");
     program_ = prog.idx;
 
@@ -262,14 +363,14 @@ ke_result BgfxRenderSystem::SetupShader()
     ::bgfx::ShaderHandle shd_fs = LoadShader("fs_shadow");
     if (::bgfx::isValid(shd_vs) && ::bgfx::isValid(shd_fs))
     {
-        ::bgfx::ProgramHandle shd_prog = ::bgfx::createProgram(shd_vs, shd_fs, true);
+        ::bgfx::ProgramHandle shd_prog = bgfx_->CreateProgram(shd_vs, shd_fs, true);
         if (::bgfx::isValid(shd_prog))
             shadow_program_ = shd_prog.idx;
     }
     else
     {
-        if (::bgfx::isValid(shd_vs)) ::bgfx::destroy(shd_vs);
-        if (::bgfx::isValid(shd_fs)) ::bgfx::destroy(shd_fs);
+        if (::bgfx::isValid(shd_vs)) bgfx_->Destroy(shd_vs);
+        if (::bgfx::isValid(shd_fs)) bgfx_->Destroy(shd_fs);
         ke_log_event ev = {KE_LOG_LEVEL_WARNING, "bgfx", "Shadow shaders not found — shadows disabled"};
         if (logger_) logger_->log(logger_, &ev);
     }
@@ -278,14 +379,14 @@ ke_result BgfxRenderSystem::SetupShader()
     ::bgfx::ShaderHandle sky_fs = LoadShader("fs_skybox");
     if (::bgfx::isValid(sky_vs) && ::bgfx::isValid(sky_fs))
     {
-        ::bgfx::ProgramHandle sky_prog = ::bgfx::createProgram(sky_vs, sky_fs, true);
+        ::bgfx::ProgramHandle sky_prog = bgfx_->CreateProgram(sky_vs, sky_fs, true);
         if (::bgfx::isValid(sky_prog))
             skybox_program_ = sky_prog.idx;
     }
     else
     {
-        if (::bgfx::isValid(sky_vs)) ::bgfx::destroy(sky_vs);
-        if (::bgfx::isValid(sky_fs)) ::bgfx::destroy(sky_fs);
+        if (::bgfx::isValid(sky_vs)) bgfx_->Destroy(sky_vs);
+        if (::bgfx::isValid(sky_fs)) bgfx_->Destroy(sky_fs);
         ke_log_event ev = {KE_LOG_LEVEL_WARNING, "bgfx", "Skybox shaders not found — skybox disabled"};
         if (logger_) logger_->log(logger_, &ev);
     }
@@ -313,9 +414,9 @@ ke_result BgfxRenderSystem::SetupShader()
     skyLayout.begin()
         .add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float)
         .end();
-    skybox_vb_ = ::bgfx::createVertexBuffer(
+    skybox_vb_ = bgfx_->CreateVertexBuffer(
         ::bgfx::copy(kSkyVerts, sizeof(kSkyVerts)), skyLayout).idx;
-    skybox_ib_ = ::bgfx::createIndexBuffer(
+    skybox_ib_ = bgfx_->CreateIndexBuffer(
         ::bgfx::copy(kSkyIdx, sizeof(kSkyIdx))).idx;
 
     uint32_t white = 0xffffffff;
@@ -330,29 +431,29 @@ ke_result BgfxRenderSystem::SetupShader()
         const ::bgfx::Memory *mem = ::bgfx::alloc(6 * 4);
         for (int f = 0; f < 6; ++f)
             std::memcpy(mem->data + f * 4, kWhiteFace, 4);
-        ::bgfx::TextureHandle h = ::bgfx::createTextureCube(1, false, 1, ::bgfx::TextureFormat::RGBA8, 0, mem);
+        ::bgfx::TextureHandle h = bgfx_->CreateTextureCube(1, false, 1, ::bgfx::TextureFormat::RGBA8, 0, mem);
         default_cube_tex_ = ::bgfx::isValid(h) ? h.idx : kInvalidHandle;
     }
 
-    sampler_uniform_       = ::bgfx::createUniform("s_texColor",     ::bgfx::UniformType::Sampler).idx;
-    env_map_uniform_       = ::bgfx::createUniform("s_envMap",       ::bgfx::UniformType::Sampler).idx;
-    color_uniform_         = ::bgfx::createUniform("u_color",         ::bgfx::UniformType::Vec4).idx;
-    light_dir_uniform_     = ::bgfx::createUniform("u_lightDir",      ::bgfx::UniformType::Vec4).idx;
-    light_color_uniform_   = ::bgfx::createUniform("u_lightColor",    ::bgfx::UniformType::Vec4).idx;
-    ambient_color_uniform_ = ::bgfx::createUniform("u_ambientColor",  ::bgfx::UniformType::Vec4).idx;
-    pbr_params_uniform_    = ::bgfx::createUniform("u_pbrParams",     ::bgfx::UniformType::Vec4).idx;
-    camera_pos_uniform_    = ::bgfx::createUniform("u_cameraPos",     ::bgfx::UniformType::Vec4).idx;
-    ibl_params_uniform_    = ::bgfx::createUniform("u_iblParams",     ::bgfx::UniformType::Vec4).idx;
-    normal_map_uniform_    = ::bgfx::createUniform("s_normalMap",     ::bgfx::UniformType::Sampler).idx;
-    normal_params_uniform_ = ::bgfx::createUniform("u_normalParams",  ::bgfx::UniformType::Vec4).idx;
-    skybox_sampler_uniform_ = ::bgfx::createUniform("s_skybox",       ::bgfx::UniformType::Sampler).idx;
-    skybox_tint_uniform_    = ::bgfx::createUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4).idx;
-    shadow_map_uniform_     = ::bgfx::createUniform("s_shadowMap",    ::bgfx::UniformType::Sampler).idx;
-    light_vp_uniform_       = ::bgfx::createUniform("u_lightVP",      ::bgfx::UniformType::Mat4).idx;
-    shadow_params_uniform_  = ::bgfx::createUniform("u_shadowParams", ::bgfx::UniformType::Vec4).idx;
-    light_counts_uniform_   = ::bgfx::createUniform("u_lightCounts",  ::bgfx::UniformType::Vec4).idx;
-    point_lights_uniform_   = ::bgfx::createUniform("u_pointLights",  ::bgfx::UniformType::Vec4, 128).idx;
-    spot_lights_uniform_    = ::bgfx::createUniform("u_spotLights",   ::bgfx::UniformType::Vec4, 192).idx;
+    sampler_uniform_       = bgfx_->CreateUniform("s_texColor",     ::bgfx::UniformType::Sampler).idx;
+    env_map_uniform_       = bgfx_->CreateUniform("s_envMap",       ::bgfx::UniformType::Sampler).idx;
+    color_uniform_         = bgfx_->CreateUniform("u_color",         ::bgfx::UniformType::Vec4).idx;
+    light_dir_uniform_     = bgfx_->CreateUniform("u_lightDir",      ::bgfx::UniformType::Vec4).idx;
+    light_color_uniform_   = bgfx_->CreateUniform("u_lightColor",    ::bgfx::UniformType::Vec4).idx;
+    ambient_color_uniform_ = bgfx_->CreateUniform("u_ambientColor",  ::bgfx::UniformType::Vec4).idx;
+    pbr_params_uniform_    = bgfx_->CreateUniform("u_pbrParams",     ::bgfx::UniformType::Vec4).idx;
+    camera_pos_uniform_    = bgfx_->CreateUniform("u_cameraPos",     ::bgfx::UniformType::Vec4).idx;
+    ibl_params_uniform_    = bgfx_->CreateUniform("u_iblParams",     ::bgfx::UniformType::Vec4).idx;
+    normal_map_uniform_    = bgfx_->CreateUniform("s_normalMap",     ::bgfx::UniformType::Sampler).idx;
+    normal_params_uniform_ = bgfx_->CreateUniform("u_normalParams",  ::bgfx::UniformType::Vec4).idx;
+    skybox_sampler_uniform_ = bgfx_->CreateUniform("s_skybox",       ::bgfx::UniformType::Sampler).idx;
+    skybox_tint_uniform_    = bgfx_->CreateUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4).idx;
+    shadow_map_uniform_     = bgfx_->CreateUniform("s_shadowMap",    ::bgfx::UniformType::Sampler).idx;
+    light_vp_uniform_       = bgfx_->CreateUniform("u_lightVP",      ::bgfx::UniformType::Mat4).idx;
+    shadow_params_uniform_  = bgfx_->CreateUniform("u_shadowParams", ::bgfx::UniformType::Vec4).idx;
+    light_counts_uniform_   = bgfx_->CreateUniform("u_lightCounts",  ::bgfx::UniformType::Vec4).idx;
+    point_lights_uniform_   = bgfx_->CreateUniform("u_pointLights",  ::bgfx::UniformType::Vec4, 128).idx;
+    spot_lights_uniform_    = bgfx_->CreateUniform("u_spotLights",   ::bgfx::UniformType::Vec4, 192).idx;
 
     ke_material white_mat = {1.f, 1.f, 1.f, 1.f};
     ke_material_handle mat_handle;
@@ -366,28 +467,28 @@ ke_result BgfxRenderSystem::SetupShader()
 ke_result BgfxRenderSystem::OnShutdown()
 {
     for (auto &t : textures_)
-        if (::bgfx::isValid(::bgfx::TextureHandle{t.idx})) ::bgfx::destroy(::bgfx::TextureHandle{t.idx});
+        if (::bgfx::isValid(::bgfx::TextureHandle{t.idx})) bgfx_->Destroy(::bgfx::TextureHandle{t.idx});
     textures_.clear();
 
     for (auto &entry : meshes_)
     {
-        if (::bgfx::isValid(::bgfx::IndexBufferHandle{entry.ib}))  ::bgfx::destroy(::bgfx::IndexBufferHandle{entry.ib});
-        if (::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb})) ::bgfx::destroy(::bgfx::VertexBufferHandle{entry.vb});
+        if (::bgfx::isValid(::bgfx::IndexBufferHandle{entry.ib}))  bgfx_->Destroy(::bgfx::IndexBufferHandle{entry.ib});
+        if (::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb})) bgfx_->Destroy(::bgfx::VertexBufferHandle{entry.vb});
     }
     meshes_.clear();
 
-    if (::bgfx::isValid(::bgfx::VertexBufferHandle{skybox_vb_}))  ::bgfx::destroy(::bgfx::VertexBufferHandle{skybox_vb_});
-    if (::bgfx::isValid(::bgfx::IndexBufferHandle{skybox_ib_}))   ::bgfx::destroy(::bgfx::IndexBufferHandle{skybox_ib_});
-    if (::bgfx::isValid(::bgfx::TextureHandle{default_cube_tex_})) ::bgfx::destroy(::bgfx::TextureHandle{default_cube_tex_});
+    if (::bgfx::isValid(::bgfx::VertexBufferHandle{skybox_vb_}))  bgfx_->Destroy(::bgfx::VertexBufferHandle{skybox_vb_});
+    if (::bgfx::isValid(::bgfx::IndexBufferHandle{skybox_ib_}))   bgfx_->Destroy(::bgfx::IndexBufferHandle{skybox_ib_});
+    if (::bgfx::isValid(::bgfx::TextureHandle{default_cube_tex_})) bgfx_->Destroy(::bgfx::TextureHandle{default_cube_tex_});
 
-    auto destroy_uniform = [](uint16_t u) {
-        if (::bgfx::isValid(::bgfx::UniformHandle{u})) ::bgfx::destroy(::bgfx::UniformHandle{u});
+    auto destroy_uniform = [this](uint16_t u) {
+        if (::bgfx::isValid(::bgfx::UniformHandle{u})) bgfx_->Destroy(::bgfx::UniformHandle{u});
     };
-    auto destroy_fb = [](uint16_t h) {
-        if (::bgfx::isValid(::bgfx::FrameBufferHandle{h})) ::bgfx::destroy(::bgfx::FrameBufferHandle{h});
+    auto destroy_fb = [this](uint16_t h) {
+        if (::bgfx::isValid(::bgfx::FrameBufferHandle{h})) bgfx_->Destroy(::bgfx::FrameBufferHandle{h});
     };
-    auto destroy_tex = [](uint16_t h) {
-        if (::bgfx::isValid(::bgfx::TextureHandle{h})) ::bgfx::destroy(::bgfx::TextureHandle{h});
+    auto destroy_tex = [this](uint16_t h) {
+        if (::bgfx::isValid(::bgfx::TextureHandle{h})) bgfx_->Destroy(::bgfx::TextureHandle{h});
     };
 
     // Post-process uniforms
@@ -414,33 +515,33 @@ ke_result BgfxRenderSystem::OnShutdown()
     destroy_uniform(s_gbuf_depth_u_);
     destroy_uniform(s_gbuf_normal_u_);
     if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_blur_program_}))
-        ::bgfx::destroy(::bgfx::ProgramHandle{ssao_blur_program_});
+        bgfx_->Destroy(::bgfx::ProgramHandle{ssao_blur_program_});
     if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_program_}))
-        ::bgfx::destroy(::bgfx::ProgramHandle{ssao_program_});
+        bgfx_->Destroy(::bgfx::ProgramHandle{ssao_program_});
     if (::bgfx::isValid(::bgfx::ProgramHandle{prepass_program_}))
-        ::bgfx::destroy(::bgfx::ProgramHandle{prepass_program_});
+        bgfx_->Destroy(::bgfx::ProgramHandle{prepass_program_});
 
     // Post-process framebuffers and programs
     destroy_fb(blur_b_fb_);
     destroy_fb(blur_a_fb_);
     destroy_fb(bright_fb_);
     destroy_fb(hdr_fb_);
-    if (::bgfx::isValid(::bgfx::TextureHandle{hdr_color_tex_})) ::bgfx::destroy(::bgfx::TextureHandle{hdr_color_tex_});
-    if (::bgfx::isValid(::bgfx::IndexBufferHandle{fullscreen_ib_}))  ::bgfx::destroy(::bgfx::IndexBufferHandle{fullscreen_ib_});
-    if (::bgfx::isValid(::bgfx::VertexBufferHandle{fullscreen_vb_})) ::bgfx::destroy(::bgfx::VertexBufferHandle{fullscreen_vb_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{tonemap_program_}))     ::bgfx::destroy(::bgfx::ProgramHandle{tonemap_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        ::bgfx::destroy(::bgfx::ProgramHandle{blur_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{bright_pass_program_});
+    if (::bgfx::isValid(::bgfx::TextureHandle{hdr_color_tex_})) bgfx_->Destroy(::bgfx::TextureHandle{hdr_color_tex_});
+    if (::bgfx::isValid(::bgfx::IndexBufferHandle{fullscreen_ib_}))  bgfx_->Destroy(::bgfx::IndexBufferHandle{fullscreen_ib_});
+    if (::bgfx::isValid(::bgfx::VertexBufferHandle{fullscreen_vb_})) bgfx_->Destroy(::bgfx::VertexBufferHandle{fullscreen_vb_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{tonemap_program_}))     bgfx_->Destroy(::bgfx::ProgramHandle{tonemap_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        bgfx_->Destroy(::bgfx::ProgramHandle{blur_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{bright_pass_program_});
 
     // Clustered shading resources
     destroy_uniform(cluster_params_u_);
     destroy_uniform(cluster_params2_u_);
     destroy_uniform(compute_view_u_);
-    if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{depth_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{cull_program_}))  ::bgfx::destroy(::bgfx::ProgramHandle{cull_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{depth_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{cull_program_}))  bgfx_->Destroy(::bgfx::ProgramHandle{cull_program_});
 
-    auto destroy_dyn_ib = [](uint16_t h) {
-        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) ::bgfx::destroy(::bgfx::DynamicIndexBufferHandle{h});
+    auto destroy_dyn_ib = [this](uint16_t h) {
+        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) bgfx_->Destroy(::bgfx::DynamicIndexBufferHandle{h});
     };
     destroy_dyn_ib(b_cluster_bounds_);
     destroy_dyn_ib(b_point_lights_);
@@ -472,24 +573,25 @@ ke_result BgfxRenderSystem::OnShutdown()
 
     for (auto &sm : shadow_maps_)
     {
-        if (::bgfx::isValid(::bgfx::FrameBufferHandle{sm.fb}))   ::bgfx::destroy(::bgfx::FrameBufferHandle{sm.fb});
-        if (::bgfx::isValid(::bgfx::TextureHandle{sm.depth_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.depth_tex});
-        if (::bgfx::isValid(::bgfx::TextureHandle{sm.color_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.color_tex});
+        if (::bgfx::isValid(::bgfx::FrameBufferHandle{sm.fb}))   bgfx_->Destroy(::bgfx::FrameBufferHandle{sm.fb});
+        if (::bgfx::isValid(::bgfx::TextureHandle{sm.depth_tex})) bgfx_->Destroy(::bgfx::TextureHandle{sm.depth_tex});
+        if (::bgfx::isValid(::bgfx::TextureHandle{sm.color_tex})) bgfx_->Destroy(::bgfx::TextureHandle{sm.color_tex});
     }
     shadow_maps_.clear();
 
-    if (::bgfx::isValid(::bgfx::ProgramHandle{shadow_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{shadow_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{skybox_program_})) ::bgfx::destroy(::bgfx::ProgramHandle{skybox_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{program_}))         ::bgfx::destroy(::bgfx::ProgramHandle{program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{shadow_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{shadow_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{skybox_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{skybox_program_});
+    if (::bgfx::isValid(::bgfx::ProgramHandle{program_}))         bgfx_->Destroy(::bgfx::ProgramHandle{program_});
 
     ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "bgfx shutdown"};
     if (logger_) logger_->log(logger_, &ev);
-    ::bgfx::shutdown();
+    bgfx_->Shutdown();
+    initialized_ = false;
     return KE_OK;
 }
 
-ke_result BgfxRenderSystem::SetOrthographic(bool enabled) {
-    orthographic_ = enabled;
+ke_result BgfxRenderSystem::SetOrthographic(ke_bool enabled) {
+    orthographic_ = (enabled != 0);
     return KE_OK;
 }
 
@@ -514,9 +616,9 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
     // Column-major layout: m[0] = proj[0][0], m[5] = proj[1][1].
     ssao_proj_info_[0] = (proj->m[0] != 0.f) ? (1.0f / proj->m[0]) : 1.0f;
     ssao_proj_info_[1] = (proj->m[5] != 0.f) ? (1.0f / proj->m[5]) : 1.0f;
-    ::bgfx::setViewTransform(kPrepassView, view->m, proj->m);
-    ::bgfx::setViewTransform(kSsaoView,    view->m, proj->m); // u_proj available in fs_ssao
-    ::bgfx::setViewTransform(kSceneView,   view->m, proj->m);
+    bgfx_->SetViewTransform(kPrepassView, view->m, proj->m);
+    bgfx_->SetViewTransform(kSsaoView,    view->m, proj->m); // u_proj available in fs_ssao
+    bgfx_->SetViewTransform(kSceneView,   view->m, proj->m);
     return KE_OK;
 }
 
@@ -540,17 +642,17 @@ ke_result BgfxRenderSystem::Frame()
     // ── SSAO passes ────────────────────────────────────────────────────────────
     if (ssao_enabled_ && gbuf_fb_ != kInvalidHandle)
     {
-        ::bgfx::setViewFrameBuffer(kPrepassView,  ::bgfx::FrameBufferHandle{gbuf_fb_});
-        ::bgfx::setViewClear(kPrepassView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
-        ::bgfx::setViewRect(kPrepassView,  0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
+        bgfx_->SetViewFrameBuffer(kPrepassView,  ::bgfx::FrameBufferHandle{gbuf_fb_});
+        bgfx_->SetViewClear(kPrepassView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
+        bgfx_->SetViewRect(kPrepassView,  0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
 
-        ::bgfx::setViewFrameBuffer(kSsaoView, ::bgfx::FrameBufferHandle{ssao_raw_fb_});
-        ::bgfx::setViewClear(kSsaoView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
-        ::bgfx::setViewRect(kSsaoView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
+        bgfx_->SetViewFrameBuffer(kSsaoView, ::bgfx::FrameBufferHandle{ssao_raw_fb_});
+        bgfx_->SetViewClear(kSsaoView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
+        bgfx_->SetViewRect(kSsaoView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
 
-        ::bgfx::setViewFrameBuffer(kSsaoBlurView, ::bgfx::FrameBufferHandle{ssao_blur_fb_});
-        ::bgfx::setViewClear(kSsaoBlurView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
-        ::bgfx::setViewRect(kSsaoBlurView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
+        bgfx_->SetViewFrameBuffer(kSsaoBlurView, ::bgfx::FrameBufferHandle{ssao_blur_fb_});
+        bgfx_->SetViewClear(kSsaoBlurView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
+        bgfx_->SetViewRect(kSsaoBlurView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
 
         SubmitSsao();
     }
@@ -558,19 +660,19 @@ ke_result BgfxRenderSystem::Frame()
     // ── Post-processing / scene routing ────────────────────────────────────────
     if (pp_enabled_ && hdr_fb_ != kInvalidHandle)
     {
-        ::bgfx::setViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{hdr_fb_});
-        ::bgfx::setViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{hdr_fb_});
+        bgfx_->SetViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{hdr_fb_});
+        bgfx_->SetViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{hdr_fb_});
         SubmitPostProcess();
     }
     else
     {
-        ::bgfx::setViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
-        ::bgfx::setViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        bgfx_->SetViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        bgfx_->SetViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
     }
 
-    ::bgfx::touch(kSceneView);
-    ::bgfx::touch(kSkyboxView);
-    ::bgfx::frame();
+    bgfx_->Touch(kSceneView);
+    bgfx_->Touch(kSkyboxView);
+    bgfx_->Frame();
     has_skybox_           = false;
     active_env_tex_       = kInvalidHandle;
     active_shadow_handle_ = kInvalidShadowHandle;
@@ -582,9 +684,10 @@ ke_result BgfxRenderSystem::Frame()
 
 ke_result BgfxRenderSystem::ClearColor(float r, float g, float b, float a)
 {
+    if (!initialized_) return KE_ERROR_NOT_INITIALIZED;
     uint32_t color = (uint32_t(r * 255.0F) << 24) | (uint32_t(g * 255.0F) << 16) |
                      (uint32_t(b * 255.0F) << 8)  | (uint32_t(a * 255.0F));
-    ::bgfx::setViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
+    bgfx_->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
     return KE_OK;
 }
 
@@ -618,9 +721,9 @@ ke_result BgfxRenderSystem::CreateMesh(const ke_vertex *verts, uint32_t vert_cou
         .end();
 
     MeshEntry entry;
-    entry.vb = ::bgfx::createVertexBuffer(
+    entry.vb = bgfx_->CreateVertexBuffer(
         ::bgfx::copy(expanded.data(), (uint32_t)(sizeof(GpuVert) * vert_count)), layout).idx;
-    entry.ib = ::bgfx::createIndexBuffer(
+    entry.ib = bgfx_->CreateIndexBuffer(
         ::bgfx::copy(indices, sizeof(uint16_t) * index_count)).idx;
     entry.index_count = index_count;
 
@@ -637,8 +740,8 @@ ke_result BgfxRenderSystem::DestroyMesh(ke_mesh_handle handle)
 {
     if (handle >= (ke_mesh_handle)meshes_.size()) return KE_ERROR_INVALID_ARGUMENT;
     auto &entry = meshes_[handle];
-    if (::bgfx::isValid(::bgfx::IndexBufferHandle{entry.ib}))  ::bgfx::destroy(::bgfx::IndexBufferHandle{entry.ib});
-    if (::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb})) ::bgfx::destroy(::bgfx::VertexBufferHandle{entry.vb});
+    if (::bgfx::isValid(::bgfx::IndexBufferHandle{entry.ib}))  bgfx_->Destroy(::bgfx::IndexBufferHandle{entry.ib});
+    if (::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb})) bgfx_->Destroy(::bgfx::VertexBufferHandle{entry.vb});
     entry.vb = kInvalidHandle;
     entry.ib = kInvalidHandle;
     return KE_OK;
@@ -701,7 +804,7 @@ ke_result BgfxRenderSystem::CreateTextureRgba(uint32_t width, uint32_t height,
     if (!pixels || !out_handle || width == 0 || height == 0) return KE_ERROR_INVALID_ARGUMENT;
     uint8_t numMips;
     std::vector<uint8_t> mipData = GenerateMips(width, height, pixels, &numMips);
-    uint16_t idx = ::bgfx::createTexture2D(
+    uint16_t idx = bgfx_->CreateTexture2D(
         (uint16_t)width, (uint16_t)height, numMips > 1, 1,
         ::bgfx::TextureFormat::RGBA8, 0,
         ::bgfx::copy(mipData.data(), (uint32_t)mipData.size())).idx;
@@ -715,7 +818,7 @@ ke_result BgfxRenderSystem::DestroyTexture(ke_texture_handle handle)
 {
     if (handle >= (ke_texture_handle)textures_.size()) return KE_ERROR_INVALID_ARGUMENT;
     auto &t = textures_[handle];
-    if (::bgfx::isValid(::bgfx::TextureHandle{t.idx})) ::bgfx::destroy(::bgfx::TextureHandle{t.idx});
+    if (::bgfx::isValid(::bgfx::TextureHandle{t.idx})) bgfx_->Destroy(::bgfx::TextureHandle{t.idx});
     t.idx   = kInvalidHandle;
     t.valid = false;
     return KE_OK;
@@ -757,7 +860,7 @@ ke_result BgfxRenderSystem::CreateCubemapRgba(uint32_t size, const uint8_t *data
         faceOffset += mipFaceSize[m];
     }
 
-    uint16_t idx = ::bgfx::createTextureCube(
+    uint16_t idx = bgfx_->CreateTextureCube(
         (uint16_t)size, numMips > 1, 1,
         ::bgfx::TextureFormat::RGBA8, 0,
         ::bgfx::copy(cubeBuf.data(), (uint32_t)cubeBuf.size())).idx;
@@ -778,15 +881,15 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
     float rotView[16];
     memcpy(rotView, last_view_, sizeof(rotView));
     rotView[12] = 0.f; rotView[13] = 0.f; rotView[14] = 0.f;
-    ::bgfx::setViewTransform(kSkyboxView, rotView, last_proj_);
+    bgfx_->SetViewTransform(kSkyboxView, rotView, last_proj_);
 
     float tint[4] = {1.f, 1.f, 1.f, 1.f};
-    ::bgfx::setUniform(::bgfx::UniformHandle{skybox_tint_uniform_}, tint);
-    ::bgfx::setTexture(0, ::bgfx::UniformHandle{skybox_sampler_uniform_}, ::bgfx::TextureHandle{tex.idx});
-    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{skybox_vb_});
-    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{skybox_ib_});
-    ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_LEQUAL);
-    ::bgfx::submit(kSkyboxView, ::bgfx::ProgramHandle{skybox_program_});
+    bgfx_->SetUniform(::bgfx::UniformHandle{skybox_tint_uniform_}, tint);
+    bgfx_->SetTexture(0, ::bgfx::UniformHandle{skybox_sampler_uniform_}, ::bgfx::TextureHandle{tex.idx});
+    bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{skybox_vb_});
+    bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{skybox_ib_});
+    bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_LEQUAL);
+    bgfx_->Submit(kSkyboxView, ::bgfx::ProgramHandle{skybox_program_});
 
     has_skybox_     = true;
     active_env_tex_ = tex.idx;
@@ -828,84 +931,84 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     // ── Depth prepass (for culling/SSAO) ──────────────────────────────────────
     if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_}))
     {
-        ::bgfx::setTransform(transform->m);
-        ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
-        ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
-        ::bgfx::setState(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
-        ::bgfx::submit(kDepthView, ::bgfx::ProgramHandle{depth_program_});
+        bgfx_->SetTransform(transform->m);
+        bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
+        bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
+        bgfx_->SetState(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
+        bgfx_->Submit(kDepthView, ::bgfx::ProgramHandle{depth_program_});
     }
 
     // ── G-buffer prepass (if SSAO enabled) ────────────────────────────────────
     if (ssao_enabled_ && prepass_program_ != kInvalidHandle)
     {
-        ::bgfx::setTransform(transform->m);
-        ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
-        ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
-        ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
+        bgfx_->SetTransform(transform->m);
+        bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
+        bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
+        bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
                          BGFX_STATE_WRITE_Z   | BGFX_STATE_DEPTH_TEST_LESS);
-        ::bgfx::submit(kPrepassView, ::bgfx::ProgramHandle{prepass_program_});
+        bgfx_->Submit(kPrepassView, ::bgfx::ProgramHandle{prepass_program_});
     }
 
     // ── Main scene pass ────────────────────────────────────────────────────────
-    ::bgfx::setUniform(::bgfx::UniformHandle{color_uniform_},         color);
-    ::bgfx::setUniform(::bgfx::UniformHandle{light_dir_uniform_},     light_dir_);
-    ::bgfx::setUniform(::bgfx::UniformHandle{light_color_uniform_},   light_color_);
-    ::bgfx::setUniform(::bgfx::UniformHandle{ambient_color_uniform_}, ambient_color_);
-    ::bgfx::setUniform(::bgfx::UniformHandle{pbr_params_uniform_},    pbr_params);
-    ::bgfx::setUniform(::bgfx::UniformHandle{camera_pos_uniform_},    camera_pos_);
+    bgfx_->SetUniform(::bgfx::UniformHandle{color_uniform_},         color);
+    bgfx_->SetUniform(::bgfx::UniformHandle{light_dir_uniform_},     light_dir_);
+    bgfx_->SetUniform(::bgfx::UniformHandle{light_color_uniform_},   light_color_);
+    bgfx_->SetUniform(::bgfx::UniformHandle{ambient_color_uniform_}, ambient_color_);
+    bgfx_->SetUniform(::bgfx::UniformHandle{pbr_params_uniform_},    pbr_params);
+    bgfx_->SetUniform(::bgfx::UniformHandle{camera_pos_uniform_},    camera_pos_);
 
     // Cluster Params
     float clusterParams[4] = {(float)cluster_config_.grid_x, (float)cluster_config_.grid_y,
                               (float)cluster_config_.grid_z, (float)cluster_config_.max_lights_per_cluster};
-    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params_u_}, clusterParams);
+    bgfx_->SetUniform(::bgfx::UniformHandle{cluster_params_u_}, clusterParams);
 
     float clusterParams2[4] = {(float)std::min(point_lights_.size(), (size_t)64),
                                (float)std::min(spot_lights_.size(), (size_t)64), near_z_, far_z_};
-    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params2_u_}, clusterParams2);
+    bgfx_->SetUniform(::bgfx::UniformHandle{cluster_params2_u_}, clusterParams2);
 
     if (has_skybox_ && active_env_tex_ != kInvalidHandle)
     {
         float ibl_params[4] = {1.f, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{ibl_params_uniform_}, ibl_params);
-        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{active_env_tex_});
+        bgfx_->SetUniform(::bgfx::UniformHandle{ibl_params_uniform_}, ibl_params);
+        bgfx_->SetTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{active_env_tex_});
     }
     else
     {
         float ibl_params[4] = {0.f, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{ibl_params_uniform_}, ibl_params);
+        bgfx_->SetUniform(::bgfx::UniformHandle{ibl_params_uniform_}, ibl_params);
         uint16_t cube_fb = (default_cube_tex_ != kInvalidHandle) ? default_cube_tex_ : textures_[0].idx;
-        ::bgfx::setTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{cube_fb});
+        bgfx_->SetTexture(1, ::bgfx::UniformHandle{env_map_uniform_}, ::bgfx::TextureHandle{cube_fb});
     }
 
     if (active_shadow_handle_ != kInvalidShadowHandle)
     {
         float shadow_params[4] = {1.f, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{shadow_params_uniform_}, shadow_params);
-        ::bgfx::setUniform(::bgfx::UniformHandle{light_vp_uniform_}, active_light_vp_);
-        ::bgfx::setTexture(2, ::bgfx::UniformHandle{shadow_map_uniform_},
+        bgfx_->SetUniform(::bgfx::UniformHandle{shadow_params_uniform_}, shadow_params);
+        bgfx_->SetUniform(::bgfx::UniformHandle{light_vp_uniform_}, active_light_vp_);
+        bgfx_->SetTexture(2, ::bgfx::UniformHandle{shadow_map_uniform_},
             ::bgfx::TextureHandle{shadow_maps_[active_shadow_handle_].color_tex});
     }
     else
     {
         float shadow_params[4] = {0.f, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{shadow_params_uniform_}, shadow_params);
+        bgfx_->SetUniform(::bgfx::UniformHandle{shadow_params_uniform_}, shadow_params);
         float identity[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
-        ::bgfx::setUniform(::bgfx::UniformHandle{light_vp_uniform_}, identity);
-        ::bgfx::setTexture(2, ::bgfx::UniformHandle{shadow_map_uniform_},
+        bgfx_->SetUniform(::bgfx::UniformHandle{light_vp_uniform_}, identity);
+        bgfx_->SetTexture(2, ::bgfx::UniformHandle{shadow_map_uniform_},
             ::bgfx::TextureHandle{textures_[0].idx});
     }
 
     if (nmap_idx != 0)
     {
         float normal_params[4] = {1.f, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{normal_params_uniform_}, normal_params);
-        ::bgfx::setTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[nmap_idx].idx});
+        bgfx_->SetUniform(::bgfx::UniformHandle{normal_params_uniform_}, normal_params);
+        bgfx_->SetTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[nmap_idx].idx});
     }
     else
     {
         float normal_params[4] = {0.f, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{normal_params_uniform_}, normal_params);
-        ::bgfx::setTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
+        bgfx_->SetUniform(::bgfx::UniformHandle{normal_params_uniform_}, normal_params);
+        bgfx_->SetTexture(3, ::bgfx::UniformHandle{normal_map_uniform_}, ::bgfx::TextureHandle{textures_[0].idx});
     }
 
     // SSAO blurred occlusion texture (slot 4) and state uniform
@@ -916,10 +1019,10 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
             (view_h_ > 0) ? 1.f / (float)view_h_ : 0.f,
             0.f
         };
-        ::bgfx::setUniform(::bgfx::UniformHandle{ssao_state_u_}, ssao_state);
+        bgfx_->SetUniform(::bgfx::UniformHandle{ssao_state_u_}, ssao_state);
         uint16_t ao_tex = (ssao_enabled_ && ssao_blur_tex_ != kInvalidHandle)
                               ? ssao_blur_tex_ : textures_[0].idx;
-        ::bgfx::setTexture(4, ::bgfx::UniformHandle{s_ssao_blurred_u_}, ::bgfx::TextureHandle{ao_tex});
+        bgfx_->SetTexture(4, ::bgfx::UniformHandle{s_ssao_blurred_u_}, ::bgfx::TextureHandle{ao_tex});
     }
 
     // Point lights uniform array (2 vec4 per light, up to 64)
@@ -938,7 +1041,7 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
             pl_data[i * 8 + 6] = l.b * l.intensity;
             pl_data[i * 8 + 7] = 0.f;
         }
-        ::bgfx::setUniform(::bgfx::UniformHandle{point_lights_uniform_}, pl_data, 128);
+        bgfx_->SetUniform(::bgfx::UniformHandle{point_lights_uniform_}, pl_data, 128);
     }
 
     // Spot lights uniform array (3 vec4 per light, up to 64)
@@ -961,15 +1064,15 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
             sl_data[j * 12 + 10] = l.b * l.intensity;
             sl_data[j * 12 + 11] = cosf(l.outer_angle);
         }
-        ::bgfx::setUniform(::bgfx::UniformHandle{spot_lights_uniform_}, sl_data, 192);
+        bgfx_->SetUniform(::bgfx::UniformHandle{spot_lights_uniform_}, sl_data, 192);
     }
 
-    ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
-    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
-    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
-    ::bgfx::setTransform(transform->m);
-    ::bgfx::setState(BGFX_STATE_DEFAULT);
-    ::bgfx::submit(kSceneView, ::bgfx::ProgramHandle{program_});
+    bgfx_->SetTexture(0, ::bgfx::UniformHandle{sampler_uniform_}, ::bgfx::TextureHandle{textures_[tex_idx].idx});
+    bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
+    bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
+    bgfx_->SetTransform(transform->m);
+    bgfx_->SetState(BGFX_STATE_DEFAULT);
+    bgfx_->Submit(kSceneView, ::bgfx::ProgramHandle{program_});
     return KE_OK;
 }
 
@@ -989,28 +1092,28 @@ ke_result BgfxRenderSystem::CreateShadowMap(uint32_t w, uint32_t h, ke_shadow_ma
     if (!out_handle || w == 0 || h == 0) return KE_ERROR_INVALID_ARGUMENT;
 
     // R32F color texture — stores depth value written by fs_shadow.
-    ::bgfx::TextureHandle color = ::bgfx::createTexture2D(
+    ::bgfx::TextureHandle color = bgfx_->CreateTexture2D(
         (uint16_t)w, (uint16_t)h, false, 1,
         ::bgfx::TextureFormat::R32F, BGFX_TEXTURE_RT);
 
     // D16 depth texture — drives hardware depth test during the shadow pass.
-    ::bgfx::TextureHandle depth = ::bgfx::createTexture2D(
+    ::bgfx::TextureHandle depth = bgfx_->CreateTexture2D(
         (uint16_t)w, (uint16_t)h, false, 1,
         ::bgfx::TextureFormat::D16, BGFX_TEXTURE_RT_WRITE_ONLY);
 
     if (!::bgfx::isValid(color) || !::bgfx::isValid(depth))
     {
-        if (::bgfx::isValid(color)) ::bgfx::destroy(color);
-        if (::bgfx::isValid(depth)) ::bgfx::destroy(depth);
+        if (::bgfx::isValid(color)) bgfx_->Destroy(color);
+        if (::bgfx::isValid(depth)) bgfx_->Destroy(depth);
         return KE_ERROR_RENDER;
     }
 
     ::bgfx::TextureHandle attachments[2] = {color, depth};
-    ::bgfx::FrameBufferHandle fb = ::bgfx::createFrameBuffer(2, attachments, false);
+    ::bgfx::FrameBufferHandle fb = bgfx_->CreateFrameBuffer(2, attachments, false);
     if (!::bgfx::isValid(fb))
     {
-        ::bgfx::destroy(color);
-        ::bgfx::destroy(depth);
+        bgfx_->Destroy(color);
+        bgfx_->Destroy(depth);
         return KE_ERROR_RENDER;
     }
 
@@ -1024,9 +1127,9 @@ ke_result BgfxRenderSystem::DestroyShadowMap(ke_shadow_map_handle handle)
     if (handle >= (ke_shadow_map_handle)shadow_maps_.size() || !shadow_maps_[handle].valid)
         return KE_ERROR_INVALID_ARGUMENT;
     auto &sm = shadow_maps_[handle];
-    if (::bgfx::isValid(::bgfx::FrameBufferHandle{sm.fb}))   ::bgfx::destroy(::bgfx::FrameBufferHandle{sm.fb});
-    if (::bgfx::isValid(::bgfx::TextureHandle{sm.depth_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.depth_tex});
-    if (::bgfx::isValid(::bgfx::TextureHandle{sm.color_tex})) ::bgfx::destroy(::bgfx::TextureHandle{sm.color_tex});
+    if (::bgfx::isValid(::bgfx::FrameBufferHandle{sm.fb}))   bgfx_->Destroy(::bgfx::FrameBufferHandle{sm.fb});
+    if (::bgfx::isValid(::bgfx::TextureHandle{sm.depth_tex})) bgfx_->Destroy(::bgfx::TextureHandle{sm.depth_tex});
+    if (::bgfx::isValid(::bgfx::TextureHandle{sm.color_tex})) bgfx_->Destroy(::bgfx::TextureHandle{sm.color_tex});
     sm = {};
     return KE_OK;
 }
@@ -1040,13 +1143,13 @@ ke_result BgfxRenderSystem::BeginShadowPass(ke_shadow_map_handle handle,
 
     const auto &sm = shadow_maps_[handle];
 
-    ::bgfx::setViewFrameBuffer(0, ::bgfx::FrameBufferHandle{sm.fb});
-    ::bgfx::setViewRect(0, 0, 0, (uint16_t)sm.width, (uint16_t)sm.height);
-    ::bgfx::setViewTransform(0, light_view->m, light_proj->m);
+    bgfx_->SetViewFrameBuffer(0, ::bgfx::FrameBufferHandle{sm.fb});
+    bgfx_->SetViewRect(0, 0, 0, (uint16_t)sm.width, (uint16_t)sm.height);
+    bgfx_->SetViewTransform(0, light_view->m, light_proj->m);
 
     // Clear R32F to 1.0 (max depth) via palette, and clear hardware depth to 1.0.
-    ::bgfx::setPaletteColor(0, 1.0f, 0.0f, 0.0f, 0.0f);
-    ::bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 1.0f, 0, 0);
+    bgfx_->SetPaletteColor(0, 1.0f, 0.0f, 0.0f, 0.0f);
+    bgfx_->SetViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 1.0f, 0, 0);
 
     active_shadow_handle_ = handle;
     MulMat4(light_view->m, light_proj->m, active_light_vp_);
@@ -1061,11 +1164,11 @@ ke_result BgfxRenderSystem::SubmitMeshShadow(ke_mesh_handle mesh, const ke_mat4 
     const auto &entry = meshes_[mesh];
     if (!::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb})) return KE_ERROR_INVALID_ARGUMENT;
 
-    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
-    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
-    ::bgfx::setTransform(transform->m);
-    ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
-    ::bgfx::submit(0, ::bgfx::ProgramHandle{shadow_program_});
+    bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
+    bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
+    bgfx_->SetTransform(transform->m);
+    bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
+    bgfx_->Submit(0, ::bgfx::ProgramHandle{shadow_program_});
     return KE_OK;
 }
 
@@ -1129,7 +1232,7 @@ ke_result BgfxRenderSystem::SetPointLights(const ke_point_light *lights, uint32_
 
     if (count > 0)
     {
-        ::bgfx::update(::bgfx::DynamicIndexBufferHandle{b_point_lights_}, 0,
+        bgfx_->Update(::bgfx::DynamicIndexBufferHandle{b_point_lights_}, 0,
                        ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuPointLight))));
     }
     return KE_OK;
@@ -1160,7 +1263,7 @@ ke_result BgfxRenderSystem::SetSpotLights(const ke_spot_light *lights, uint32_t 
 
     if (count > 0)
     {
-        ::bgfx::update(::bgfx::DynamicIndexBufferHandle{b_spot_lights_}, 0,
+        bgfx_->Update(::bgfx::DynamicIndexBufferHandle{b_spot_lights_}, 0,
                        ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuSpotLight))));
     }
     return KE_OK;
@@ -1179,7 +1282,7 @@ ke_result BgfxRenderSystem::SetupPostProcess()
         const ::bgfx::Memory *mem = ::bgfx::alloc(size + 1);
         file.read(reinterpret_cast<char *>(mem->data), size);
         mem->data[size] = '\0';
-        return ::bgfx::createShader(mem);
+        return bgfx_->CreateShader(mem);
     };
 
     // Load post-process programs (optional — PP is off by default).
@@ -1188,11 +1291,11 @@ ke_result BgfxRenderSystem::SetupPostProcess()
         ::bgfx::ShaderHandle fs = load_shader(fs_name);
         if (!::bgfx::isValid(vs) || !::bgfx::isValid(fs))
         {
-            if (::bgfx::isValid(vs)) ::bgfx::destroy(vs);
-            if (::bgfx::isValid(fs)) ::bgfx::destroy(fs);
+            if (::bgfx::isValid(vs)) bgfx_->Destroy(vs);
+            if (::bgfx::isValid(fs)) bgfx_->Destroy(fs);
             return kInvalidHandle;
         }
-        ::bgfx::ProgramHandle prog = ::bgfx::createProgram(vs, fs, true);
+        ::bgfx::ProgramHandle prog = bgfx_->CreateProgram(vs, fs, true);
         return ::bgfx::isValid(prog) ? prog.idx : kInvalidHandle;
     };
 
@@ -1214,49 +1317,49 @@ ke_result BgfxRenderSystem::SetupPostProcess()
     pos3.begin().add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float).end();
     static const float kFSVerts[9] = {-1.f,-1.f,0.f,  3.f,-1.f,0.f,  -1.f,3.f,0.f};
     static const uint16_t kFSIdx[3] = {0, 1, 2};
-    fullscreen_vb_ = ::bgfx::createVertexBuffer(::bgfx::copy(kFSVerts, sizeof(kFSVerts)), pos3).idx;
-    fullscreen_ib_ = ::bgfx::createIndexBuffer(::bgfx::copy(kFSIdx, sizeof(kFSIdx))).idx;
+    fullscreen_vb_ = bgfx_->CreateVertexBuffer(::bgfx::copy(kFSVerts, sizeof(kFSVerts)), pos3).idx;
+    fullscreen_ib_ = bgfx_->CreateIndexBuffer(::bgfx::copy(kFSIdx, sizeof(kFSIdx))).idx;
 
     // HDR framebuffer: RGBA16F color + D24 depth (full resolution).
-    ::bgfx::TextureHandle hdr_color = ::bgfx::createTexture2D(
+    ::bgfx::TextureHandle hdr_color = bgfx_->CreateTexture2D(
         (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
         ::bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT);
-    ::bgfx::TextureHandle hdr_depth = ::bgfx::createTexture2D(
+    ::bgfx::TextureHandle hdr_depth = bgfx_->CreateTexture2D(
         (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
         ::bgfx::TextureFormat::D24, BGFX_TEXTURE_RT_WRITE_ONLY);
 
     if (!::bgfx::isValid(hdr_color) || !::bgfx::isValid(hdr_depth))
     {
-        if (::bgfx::isValid(hdr_color)) ::bgfx::destroy(hdr_color);
-        if (::bgfx::isValid(hdr_depth)) ::bgfx::destroy(hdr_depth);
+        if (::bgfx::isValid(hdr_color)) bgfx_->Destroy(hdr_color);
+        if (::bgfx::isValid(hdr_depth)) bgfx_->Destroy(hdr_depth);
         ke_log_event ev = {KE_LOG_LEVEL_WARNING, "bgfx", "HDR framebuffer creation failed — PP disabled"};
         if (logger_) logger_->log(logger_, &ev);
         return KE_OK;
     }
 
     ::bgfx::TextureHandle hdr_attachments[2] = {hdr_color, hdr_depth};
-    ::bgfx::FrameBufferHandle hdr_fb = ::bgfx::createFrameBuffer(2, hdr_attachments, false);
+    ::bgfx::FrameBufferHandle hdr_fb = bgfx_->CreateFrameBuffer(2, hdr_attachments, false);
     if (!::bgfx::isValid(hdr_fb))
     {
-        ::bgfx::destroy(hdr_color);
-        ::bgfx::destroy(hdr_depth);
+        bgfx_->Destroy(hdr_color);
+        bgfx_->Destroy(hdr_depth);
         return KE_OK;
     }
     hdr_fb_        = hdr_fb.idx;
     hdr_color_tex_ = hdr_color.idx;
     // Destroy depth separately — it's not used for sampling.
-    ::bgfx::destroy(hdr_depth);
+    bgfx_->Destroy(hdr_depth);
 
     // Half-resolution for bloom passes.
     pp_w_ = (view_w_ + 1) / 2;
     pp_h_ = (view_h_ + 1) / 2;
 
     auto make_color_fb = [&](int w, int h) -> uint16_t {
-        ::bgfx::TextureHandle tex = ::bgfx::createTexture2D(
+        ::bgfx::TextureHandle tex = bgfx_->CreateTexture2D(
             (uint16_t)w, (uint16_t)h, false, 1,
             ::bgfx::TextureFormat::RGBA16F, BGFX_TEXTURE_RT);
         if (!::bgfx::isValid(tex)) return kInvalidHandle;
-        ::bgfx::FrameBufferHandle fb = ::bgfx::createFrameBuffer(1, &tex, true);
+        ::bgfx::FrameBufferHandle fb = bgfx_->CreateFrameBuffer(1, &tex, true);
         return ::bgfx::isValid(fb) ? fb.idx : kInvalidHandle;
     };
 
@@ -1265,31 +1368,31 @@ ke_result BgfxRenderSystem::SetupPostProcess()
     blur_b_fb_ = make_color_fb(pp_w_, pp_h_);
 
     // Post-process uniforms.
-    hdr_tex_uniform_       = ::bgfx::createUniform("s_hdrTex",       ::bgfx::UniformType::Sampler).idx;
-    bloom_tex_uniform_     = ::bgfx::createUniform("s_bloomTex",     ::bgfx::UniformType::Sampler).idx;
-    blur_tex_uniform_      = ::bgfx::createUniform("s_blurTex",      ::bgfx::UniformType::Sampler).idx;
-    bloom_params_uniform_  = ::bgfx::createUniform("u_bloomParams",  ::bgfx::UniformType::Vec4).idx;
-    blur_params_uniform_   = ::bgfx::createUniform("u_blurParams",   ::bgfx::UniformType::Vec4).idx;
-    tonemap_params_uniform_= ::bgfx::createUniform("u_tonemapParams",::bgfx::UniformType::Vec4).idx;
+    hdr_tex_uniform_       = bgfx_->CreateUniform("s_hdrTex",       ::bgfx::UniformType::Sampler).idx;
+    bloom_tex_uniform_     = bgfx_->CreateUniform("s_bloomTex",     ::bgfx::UniformType::Sampler).idx;
+    blur_tex_uniform_      = bgfx_->CreateUniform("s_blurTex",      ::bgfx::UniformType::Sampler).idx;
+    bloom_params_uniform_  = bgfx_->CreateUniform("u_bloomParams",  ::bgfx::UniformType::Vec4).idx;
+    blur_params_uniform_   = bgfx_->CreateUniform("u_blurParams",   ::bgfx::UniformType::Vec4).idx;
+    tonemap_params_uniform_= bgfx_->CreateUniform("u_tonemapParams",::bgfx::UniformType::Vec4).idx;
 
     ke_log_event ev = {KE_LOG_LEVEL_INFO, "bgfx", "Post-process pipeline ready"};
     if (logger_) logger_->log(logger_, &ev);
     return KE_OK;
 }
 
-ke_result BgfxRenderSystem::SetTonemapping(bool enabled, float exposure, float gamma)
+ke_result BgfxRenderSystem::SetTonemapping(ke_bool enabled, float exposure, float gamma)
 {
     if (enabled && hdr_fb_ == kInvalidHandle) return KE_ERROR_NOT_INITIALIZED;
-    pp_enabled_ = enabled;
+    pp_enabled_ = (enabled != 0);
     exposure_   = exposure;
     gamma_      = gamma;
     return KE_OK;
 }
 
-ke_result BgfxRenderSystem::SetBloom(bool enabled, float threshold, float intensity)
+ke_result BgfxRenderSystem::SetBloom(ke_bool enabled, float threshold, float intensity)
 {
     if (enabled && bright_fb_ == kInvalidHandle) return KE_ERROR_NOT_INITIALIZED;
-    bloom_enabled_   = enabled;
+    bloom_enabled_   = (enabled != 0);
     bloom_threshold_ = threshold;
     bloom_intensity_ = intensity;
     return KE_OK;
@@ -1300,19 +1403,19 @@ ke_result BgfxRenderSystem::SubmitPostProcess()
     auto submit_fs = [&](uint8_t view, uint16_t fb, int w, int h, uint16_t prog) {
         if (fb != kInvalidHandle)
         {
-            ::bgfx::setViewFrameBuffer(view, ::bgfx::FrameBufferHandle{fb});
-            ::bgfx::setViewClear(view, BGFX_CLEAR_COLOR, 0x000000ff, 1.0f, 0);
+            bgfx_->SetViewFrameBuffer(view, ::bgfx::FrameBufferHandle{fb});
+            bgfx_->SetViewClear(view, BGFX_CLEAR_COLOR, 0x000000ff, 1.0f, 0);
         }
         else
         {
-            ::bgfx::setViewFrameBuffer(view, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
-            ::bgfx::setViewClear(view, BGFX_CLEAR_NONE);
+            bgfx_->SetViewFrameBuffer(view, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+            bgfx_->SetViewClear(view, BGFX_CLEAR_NONE);
         }
-        ::bgfx::setViewRect(view, 0, 0, (uint16_t)w, (uint16_t)h);
-        ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
-        ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
-        ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-        ::bgfx::submit(view, ::bgfx::ProgramHandle{prog});
+        bgfx_->SetViewRect(view, 0, 0, (uint16_t)w, (uint16_t)h);
+        bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
+        bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
+        bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+        bgfx_->Submit(view, ::bgfx::ProgramHandle{prog});
     };
 
     // Bloom passes (views 6–8): bright-pass → blur H → blur V.
@@ -1321,34 +1424,34 @@ ke_result BgfxRenderSystem::SubmitPostProcess()
     {
         // View 6: bright-pass.
         float bp[4] = {bloom_threshold_, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{bloom_params_uniform_}, bp);
-        ::bgfx::setTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
+        bgfx_->SetUniform(::bgfx::UniformHandle{bloom_params_uniform_}, bp);
+        bgfx_->SetTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
             ::bgfx::TextureHandle{hdr_color_tex_});
         submit_fs(kBrightView, bright_fb_, pp_w_, pp_h_, bright_pass_program_);
 
         // View 7: blur horizontal.
         float bh[4] = {1.f / (float)pp_w_, 0.f, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{blur_params_uniform_}, bh);
-        ::bgfx::setTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
-            ::bgfx::getTexture(::bgfx::FrameBufferHandle{bright_fb_}));
+        bgfx_->SetUniform(::bgfx::UniformHandle{blur_params_uniform_}, bh);
+        bgfx_->SetTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
+            bgfx_->GetTexture(::bgfx::FrameBufferHandle{bright_fb_}));
         submit_fs(kBlurHView, blur_a_fb_, pp_w_, pp_h_, blur_program_);
 
         // View 8: blur vertical.
         float bv[4] = {0.f, 1.f / (float)pp_h_, 0.f, 0.f};
-        ::bgfx::setUniform(::bgfx::UniformHandle{blur_params_uniform_}, bv);
-        ::bgfx::setTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
-            ::bgfx::getTexture(::bgfx::FrameBufferHandle{blur_a_fb_}));
+        bgfx_->SetUniform(::bgfx::UniformHandle{blur_params_uniform_}, bv);
+        bgfx_->SetTexture(0, ::bgfx::UniformHandle{blur_tex_uniform_},
+            bgfx_->GetTexture(::bgfx::FrameBufferHandle{blur_a_fb_}));
         submit_fs(kBlurVView, blur_b_fb_, pp_w_, pp_h_, blur_program_);
 
-        bloom_result_tex = ::bgfx::getTexture(::bgfx::FrameBufferHandle{blur_b_fb_}).idx;
+        bloom_result_tex = bgfx_->GetTexture(::bgfx::FrameBufferHandle{blur_b_fb_}).idx;
     }
 
     // View 9: tonemap composite → backbuffer.
     float tp[4] = {exposure_, bloom_enabled_ ? bloom_intensity_ : 0.f, 1.f / gamma_, 0.f};
-    ::bgfx::setUniform(::bgfx::UniformHandle{tonemap_params_uniform_}, tp);
-    ::bgfx::setTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
+    bgfx_->SetUniform(::bgfx::UniformHandle{tonemap_params_uniform_}, tp);
+    bgfx_->SetTexture(0, ::bgfx::UniformHandle{hdr_tex_uniform_},
         ::bgfx::TextureHandle{hdr_color_tex_});
-    ::bgfx::setTexture(1, ::bgfx::UniformHandle{bloom_tex_uniform_},
+    bgfx_->SetTexture(1, ::bgfx::UniformHandle{bloom_tex_uniform_},
         ::bgfx::TextureHandle{bloom_result_tex});
     submit_fs(kTonemapView, kInvalidHandle, view_w_, view_h_, tonemap_program_);
 
@@ -1365,18 +1468,18 @@ ke_result BgfxRenderSystem::SetupSsao()
         file.seekg(0);
         const ::bgfx::Memory *mem = ::bgfx::alloc((uint32_t)size);
         file.read(reinterpret_cast<char *>(mem->data), size);
-        return ::bgfx::createShader(mem);
+        return bgfx_->CreateShader(mem);
     };
 
     auto load_program = [&](const char *vs, const char *fs) -> uint16_t {
         auto v = load_shader(vs);
         auto f = load_shader(fs);
         if (!::bgfx::isValid(v) || !::bgfx::isValid(f)) {
-            if (::bgfx::isValid(v)) ::bgfx::destroy(v);
-            if (::bgfx::isValid(f)) ::bgfx::destroy(f);
+            if (::bgfx::isValid(v)) bgfx_->Destroy(v);
+            if (::bgfx::isValid(f)) bgfx_->Destroy(f);
             return kInvalidHandle;
         }
-        return ::bgfx::createProgram(v, f, true).idx;
+        return bgfx_->CreateProgram(v, f, true).idx;
     };
 
     prepass_program_    = load_program("vs_prepass",   "fs_prepass");
@@ -1416,50 +1519,50 @@ ke_result BgfxRenderSystem::SetupSsao()
         noise_pixels[i * 4 + 2] = 128;
         noise_pixels[i * 4 + 3] = 255;
     }
-    ssao_noise_tex_ = ::bgfx::createTexture2D(
+    ssao_noise_tex_ = bgfx_->CreateTexture2D(
         4, 4, false, 1, ::bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_POINT, // wrap is the default UV mode
         ::bgfx::copy(noise_pixels, sizeof(noise_pixels))).idx;
 
     // ── Uniforms ───────────────────────────────────────────────────────────────
-    s_gbuf_normal_u_    = ::bgfx::createUniform("s_gbufNormal",    ::bgfx::UniformType::Sampler).idx;
-    s_gbuf_depth_u_     = ::bgfx::createUniform("s_gbufDepth",     ::bgfx::UniformType::Sampler).idx;
-    s_ssao_noise_u_     = ::bgfx::createUniform("s_ssaoNoise",     ::bgfx::UniformType::Sampler).idx;
-    s_ssao_input_u_     = ::bgfx::createUniform("s_ssaoInput",     ::bgfx::UniformType::Sampler).idx;
-    s_ssao_blurred_u_   = ::bgfx::createUniform("s_ssaoBlurred",   ::bgfx::UniformType::Sampler).idx;
-    ssao_kernel_u_      = ::bgfx::createUniform("u_ssaoKernel",    ::bgfx::UniformType::Vec4, kSsaoKernelSize).idx;
-    ssao_params_u_      = ::bgfx::createUniform("u_ssaoParams",    ::bgfx::UniformType::Vec4).idx;
-    ssao_proj_info_u_   = ::bgfx::createUniform("u_ssaoProjInfo",  ::bgfx::UniformType::Vec4).idx;
-    ssao_blur_params_u_ = ::bgfx::createUniform("u_ssaoBlurParams",::bgfx::UniformType::Vec4).idx;
-    ssao_state_u_       = ::bgfx::createUniform("u_ssaoState",     ::bgfx::UniformType::Vec4).idx;
+    s_gbuf_normal_u_    = bgfx_->CreateUniform("s_gbufNormal",    ::bgfx::UniformType::Sampler).idx;
+    s_gbuf_depth_u_     = bgfx_->CreateUniform("s_gbufDepth",     ::bgfx::UniformType::Sampler).idx;
+    s_ssao_noise_u_     = bgfx_->CreateUniform("s_ssaoNoise",     ::bgfx::UniformType::Sampler).idx;
+    s_ssao_input_u_     = bgfx_->CreateUniform("s_ssaoInput",     ::bgfx::UniformType::Sampler).idx;
+    s_ssao_blurred_u_   = bgfx_->CreateUniform("s_ssaoBlurred",   ::bgfx::UniformType::Sampler).idx;
+    ssao_kernel_u_      = bgfx_->CreateUniform("u_ssaoKernel",    ::bgfx::UniformType::Vec4, kSsaoKernelSize).idx;
+    ssao_params_u_      = bgfx_->CreateUniform("u_ssaoParams",    ::bgfx::UniformType::Vec4).idx;
+    ssao_proj_info_u_   = bgfx_->CreateUniform("u_ssaoProjInfo",  ::bgfx::UniformType::Vec4).idx;
+    ssao_blur_params_u_ = bgfx_->CreateUniform("u_ssaoBlurParams",::bgfx::UniformType::Vec4).idx;
+    ssao_state_u_       = bgfx_->CreateUniform("u_ssaoState",     ::bgfx::UniformType::Vec4).idx;
 
     // ── G-buffer framebuffer ───────────────────────────────────────────────────
     // Attachment 0: RGBA8 (view-space normals), Attachment 1: R16F (linear depth).
     // Attachment 2: D24S8 for depth testing (write-only, not sampled).
     ::bgfx::TextureHandle gbuf_texs[3] = {
-        ::bgfx::createTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+        bgfx_->CreateTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
             ::bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT),
-        ::bgfx::createTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+        bgfx_->CreateTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
             ::bgfx::TextureFormat::R16F,  BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT),
-        ::bgfx::createTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
+        bgfx_->CreateTexture2D((uint16_t)view_w_, (uint16_t)view_h_, false, 1,
             ::bgfx::TextureFormat::D24S8, BGFX_TEXTURE_RT_WRITE_ONLY),
     };
-    gbuf_fb_ = ::bgfx::createFrameBuffer(3, gbuf_texs, true).idx;
-    gbuf_normal_tex_    = ::bgfx::getTexture(::bgfx::FrameBufferHandle{gbuf_fb_}, 0).idx;
-    gbuf_lin_depth_tex_ = ::bgfx::getTexture(::bgfx::FrameBufferHandle{gbuf_fb_}, 1).idx;
+    gbuf_fb_ = bgfx_->CreateFrameBuffer(3, gbuf_texs, true).idx;
+    gbuf_normal_tex_    = bgfx_->GetTexture(::bgfx::FrameBufferHandle{gbuf_fb_}, 0).idx;
+    gbuf_lin_depth_tex_ = bgfx_->GetTexture(::bgfx::FrameBufferHandle{gbuf_fb_}, 1).idx;
 
     // ── SSAO raw + blur framebuffers ───────────────────────────────────────────
-    ::bgfx::TextureHandle ssao_raw_t = ::bgfx::createTexture2D(
+    ::bgfx::TextureHandle ssao_raw_t = bgfx_->CreateTexture2D(
         (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
         ::bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT);
-    ssao_raw_fb_  = ::bgfx::createFrameBuffer(1, &ssao_raw_t, true).idx;
-    ssao_raw_tex_ = ::bgfx::getTexture(::bgfx::FrameBufferHandle{ssao_raw_fb_}).idx;
+    ssao_raw_fb_  = bgfx_->CreateFrameBuffer(1, &ssao_raw_t, true).idx;
+    ssao_raw_tex_ = bgfx_->GetTexture(::bgfx::FrameBufferHandle{ssao_raw_fb_}).idx;
 
-    ::bgfx::TextureHandle ssao_blur_t = ::bgfx::createTexture2D(
+    ::bgfx::TextureHandle ssao_blur_t = bgfx_->CreateTexture2D(
         (uint16_t)view_w_, (uint16_t)view_h_, false, 1,
         ::bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_RT | BGFX_SAMPLER_POINT);
-    ssao_blur_fb_  = ::bgfx::createFrameBuffer(1, &ssao_blur_t, true).idx;
-    ssao_blur_tex_ = ::bgfx::getTexture(::bgfx::FrameBufferHandle{ssao_blur_fb_}).idx;
+    ssao_blur_fb_  = bgfx_->CreateFrameBuffer(1, &ssao_blur_t, true).idx;
+    ssao_blur_tex_ = bgfx_->GetTexture(::bgfx::FrameBufferHandle{ssao_blur_fb_}).idx;
 
     return KE_OK;
 }
@@ -1473,16 +1576,16 @@ ke_result BgfxRenderSystem::SubmitSsao()
     float ssao_params[4]    = {ssao_radius_, ssao_bias_, ssao_strength_, 0.f};
     float ssao_proj_info[4] = {ssao_proj_info_[0], ssao_proj_info_[1], 0.f, 0.f};
 
-    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_kernel_u_},    ssao_kernel_data_, kSsaoKernelSize);
-    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_params_u_},    ssao_params);
-    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_proj_info_u_}, ssao_proj_info);
-    ::bgfx::setTexture(0, ::bgfx::UniformHandle{s_gbuf_normal_u_}, ::bgfx::TextureHandle{gbuf_normal_tex_});
-    ::bgfx::setTexture(1, ::bgfx::UniformHandle{s_gbuf_depth_u_},  ::bgfx::TextureHandle{gbuf_lin_depth_tex_});
-    ::bgfx::setTexture(2, ::bgfx::UniformHandle{s_ssao_noise_u_},  ::bgfx::TextureHandle{ssao_noise_tex_});
-    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
-    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
-    ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    ::bgfx::submit(kSsaoView, ::bgfx::ProgramHandle{ssao_program_});
+    bgfx_->SetUniform(::bgfx::UniformHandle{ssao_kernel_u_},    ssao_kernel_data_, kSsaoKernelSize);
+    bgfx_->SetUniform(::bgfx::UniformHandle{ssao_params_u_},    ssao_params);
+    bgfx_->SetUniform(::bgfx::UniformHandle{ssao_proj_info_u_}, ssao_proj_info);
+    bgfx_->SetTexture(0, ::bgfx::UniformHandle{s_gbuf_normal_u_}, ::bgfx::TextureHandle{gbuf_normal_tex_});
+    bgfx_->SetTexture(1, ::bgfx::UniformHandle{s_gbuf_depth_u_},  ::bgfx::TextureHandle{gbuf_lin_depth_tex_});
+    bgfx_->SetTexture(2, ::bgfx::UniformHandle{s_ssao_noise_u_},  ::bgfx::TextureHandle{ssao_noise_tex_});
+    bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
+    bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
+    bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx_->Submit(kSsaoView, ::bgfx::ProgramHandle{ssao_program_});
 
     // ── View kSsaoBlurView: 5×5 box blur ──────────────────────────────────────
     float blur_params[4] = {
@@ -1490,19 +1593,19 @@ ke_result BgfxRenderSystem::SubmitSsao()
         (view_h_ > 0) ? 1.f / (float)view_h_ : 0.f,
         0.f, 0.f
     };
-    ::bgfx::setUniform(::bgfx::UniformHandle{ssao_blur_params_u_}, blur_params);
-    ::bgfx::setTexture(0, ::bgfx::UniformHandle{s_ssao_input_u_}, ::bgfx::TextureHandle{ssao_raw_tex_});
-    ::bgfx::setVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
-    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
-    ::bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-    ::bgfx::submit(kSsaoBlurView, ::bgfx::ProgramHandle{ssao_blur_program_});
+    bgfx_->SetUniform(::bgfx::UniformHandle{ssao_blur_params_u_}, blur_params);
+    bgfx_->SetTexture(0, ::bgfx::UniformHandle{s_ssao_input_u_}, ::bgfx::TextureHandle{ssao_raw_tex_});
+    bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{fullscreen_vb_});
+    bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{fullscreen_ib_});
+    bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    bgfx_->Submit(kSsaoBlurView, ::bgfx::ProgramHandle{ssao_blur_program_});
 
     return KE_OK;
 }
 
-ke_result BgfxRenderSystem::SetSsao(bool enabled, float radius, float bias, float strength)
+ke_result BgfxRenderSystem::SetSsao(ke_bool enabled, float radius, float bias, float strength)
 {
-    ssao_enabled_  = enabled;
+    ssao_enabled_  = (enabled != 0);
     ssao_radius_   = radius;
     ssao_bias_     = bias;
     ssao_strength_ = strength;
@@ -1519,21 +1622,21 @@ ke_result BgfxRenderSystem::SetupClustered()
         file.seekg(0);
         const ::bgfx::Memory *mem = ::bgfx::alloc(size);
         file.read(reinterpret_cast<char *>(mem->data), size);
-        return ::bgfx::createShader(mem);
+        return bgfx_->CreateShader(mem);
     };
 
     ::bgfx::ShaderHandle vs_d = load_shader("vs_depth");
     ::bgfx::ShaderHandle fs_d = load_shader("fs_depth");
     if (::bgfx::isValid(vs_d) && ::bgfx::isValid(fs_d))
-        depth_program_ = ::bgfx::createProgram(vs_d, fs_d, true).idx;
+        depth_program_ = bgfx_->CreateProgram(vs_d, fs_d, true).idx;
 
     ::bgfx::ShaderHandle cs_c = load_shader("cs_light_cull");
     if (::bgfx::isValid(cs_c))
-        cull_program_ = ::bgfx::createProgram(cs_c, true).idx;
+        cull_program_ = bgfx_->CreateProgram(cs_c, true).idx;
 
-    cluster_params_u_  = ::bgfx::createUniform("u_clusterParams",  ::bgfx::UniformType::Vec4).idx;
-    cluster_params2_u_ = ::bgfx::createUniform("u_clusterParams2", ::bgfx::UniformType::Vec4).idx;
-    compute_view_u_    = ::bgfx::createUniform("u_computeView",    ::bgfx::UniformType::Mat4).idx;
+    cluster_params_u_  = bgfx_->CreateUniform("u_clusterParams",  ::bgfx::UniformType::Vec4).idx;
+    cluster_params2_u_ = bgfx_->CreateUniform("u_clusterParams2", ::bgfx::UniformType::Vec4).idx;
+    compute_view_u_    = bgfx_->CreateUniform("u_computeView",    ::bgfx::UniformType::Mat4).idx;
 
     RebuildClusterBuffers();
     return KE_OK;
@@ -1541,8 +1644,8 @@ ke_result BgfxRenderSystem::SetupClustered()
 
 void BgfxRenderSystem::RebuildClusterBuffers()
 {
-    auto destroy_buffer = [](uint16_t &h) {
-        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) ::bgfx::destroy(::bgfx::DynamicIndexBufferHandle{h});
+    auto destroy_buffer = [this](uint16_t &h) {
+        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) bgfx_->Destroy(::bgfx::DynamicIndexBufferHandle{h});
         h = kInvalidHandle;
     };
 
@@ -1557,19 +1660,19 @@ void BgfxRenderSystem::RebuildClusterBuffers()
     uint32_t numClusters = cluster_config_.grid_x * cluster_config_.grid_y * cluster_config_.grid_z;
 
     // ClusterBounds: AABB (min vec4, max vec4) = 32 bytes
-    b_cluster_bounds_ = ::bgfx::createDynamicIndexBuffer(numClusters * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
+    b_cluster_bounds_ = bgfx_->CreateDynamicIndexBuffer(numClusters * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
 
     // Light storage: PointLight=32b, SpotLight=48b
-    b_point_lights_ = ::bgfx::createDynamicIndexBuffer(cluster_config_.max_total_lights * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
-    b_spot_lights_  = ::bgfx::createDynamicIndexBuffer(cluster_config_.max_total_lights * 48 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
+    b_point_lights_ = bgfx_->CreateDynamicIndexBuffer(cluster_config_.max_total_lights * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
+    b_spot_lights_  = bgfx_->CreateDynamicIndexBuffer(cluster_config_.max_total_lights * 48 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
 
     // Light lists: uint32 per slot
-    b_p_light_indices_ = ::bgfx::createDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
-    b_s_light_indices_ = ::bgfx::createDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+    b_p_light_indices_ = bgfx_->CreateDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+    b_s_light_indices_ = bgfx_->CreateDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
 
     // Light counts: uint32 per cluster
-    b_p_light_count_ = ::bgfx::createDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
-    b_s_light_count_ = ::bgfx::createDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+    b_p_light_count_ = bgfx_->CreateDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+    b_s_light_count_ = bgfx_->CreateDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
 
     bounds_dirty_ = true;
 }
@@ -1637,7 +1740,7 @@ void BgfxRenderSystem::UpdateClusterBounds()
         }
     }
 
-    ::bgfx::update(::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, 0,
+    bgfx_->Update(::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, 0,
                    ::bgfx::copy(bounds.data(), (uint32_t)(bounds.size() * sizeof(AABB))));
     bounds_dirty_ = false;
 }
@@ -1647,30 +1750,31 @@ void BgfxRenderSystem::DispatchLightCull()
     if (cull_program_ == kInvalidHandle) return;
 
     // View-space transformation for light positions
-    ::bgfx::setUniform(::bgfx::UniformHandle{compute_view_u_}, last_view_);
+    bgfx_->SetUniform(::bgfx::UniformHandle{compute_view_u_}, last_view_);
 
     float params[4] = {(float)cluster_config_.grid_x, (float)cluster_config_.grid_y,
                        (float)cluster_config_.grid_z, (float)cluster_config_.max_lights_per_cluster};
-    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params_u_}, params);
+    bgfx_->SetUniform(::bgfx::UniformHandle{cluster_params_u_}, params);
 
     float params2[4] = {(float)point_lights_.size(), (float)spot_lights_.size(), 0.f, 0.f};
-    ::bgfx::setUniform(::bgfx::UniformHandle{cluster_params2_u_}, params2);
+    bgfx_->SetUniform(::bgfx::UniformHandle{cluster_params2_u_}, params2);
 
-    ::bgfx::setBuffer(0, ::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, ::bgfx::Access::Read);
-    ::bgfx::setBuffer(1, ::bgfx::DynamicIndexBufferHandle{b_point_lights_},   ::bgfx::Access::Read);
-    ::bgfx::setBuffer(2, ::bgfx::DynamicIndexBufferHandle{b_spot_lights_},    ::bgfx::Access::Read);
+    bgfx_->SetBuffer(0, ::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, ::bgfx::Access::Read);
+    bgfx_->SetBuffer(1, ::bgfx::DynamicIndexBufferHandle{b_point_lights_},   ::bgfx::Access::Read);
+    bgfx_->SetBuffer(2, ::bgfx::DynamicIndexBufferHandle{b_spot_lights_},    ::bgfx::Access::Read);
 
-    ::bgfx::setBuffer(3, ::bgfx::DynamicIndexBufferHandle{b_p_light_indices_}, ::bgfx::Access::ReadWrite);
-    ::bgfx::setBuffer(4, ::bgfx::DynamicIndexBufferHandle{b_p_light_count_},   ::bgfx::Access::ReadWrite);
-    ::bgfx::setBuffer(5, ::bgfx::DynamicIndexBufferHandle{b_s_light_indices_}, ::bgfx::Access::ReadWrite);
-    ::bgfx::setBuffer(6, ::bgfx::DynamicIndexBufferHandle{b_s_light_count_},   ::bgfx::Access::ReadWrite);
+    bgfx_->SetBuffer(3, ::bgfx::DynamicIndexBufferHandle{b_p_light_indices_}, ::bgfx::Access::ReadWrite);
+    bgfx_->SetBuffer(4, ::bgfx::DynamicIndexBufferHandle{b_p_light_count_},   ::bgfx::Access::ReadWrite);
+    bgfx_->SetBuffer(5, ::bgfx::DynamicIndexBufferHandle{b_s_light_indices_}, ::bgfx::Access::ReadWrite);
+    bgfx_->SetBuffer(6, ::bgfx::DynamicIndexBufferHandle{b_s_light_count_},   ::bgfx::Access::ReadWrite);
 
-    ::bgfx::dispatch(kLightCullView, ::bgfx::ProgramHandle{cull_program_},
+    bgfx_->Dispatch(kLightCullView, ::bgfx::ProgramHandle{cull_program_},
                      (uint16_t)cluster_config_.grid_x, (uint16_t)cluster_config_.grid_y, (uint16_t)cluster_config_.grid_z);
 }
 
 ke_result BgfxRenderSystem::SetClusterConfig(const ke_cluster_config *config)
 {
+    if (!initialized_) return KE_ERROR_NOT_INITIALIZED;
     if (!config) return KE_ERROR_INVALID_ARGUMENT;
     if (config->grid_x == 0 || config->grid_y == 0 || config->grid_z == 0) return KE_ERROR_INVALID_ARGUMENT;
     cluster_config_ = *config;

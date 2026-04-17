@@ -21,10 +21,10 @@ extern "C"
         ke_result (*on_initialize)(struct ke_window *self);
         ke_result (*on_shutdown)(struct ke_window *self);
 
-        bool (*should_close)(struct ke_window *self);
+        ke_bool (*should_close)(struct ke_window *self);
         ke_result (*poll_events)(struct ke_window *self);
         ke_result (*swap_buffers)(struct ke_window *self);
-        ke_result (*get_size)(struct ke_window *self, int *width, int *height);
+        ke_result (*get_size)(struct ke_window *self, int32_t *width, int32_t *height);
         void *(*get_native_handle)(struct ke_window *self);
     } ke_window;
 

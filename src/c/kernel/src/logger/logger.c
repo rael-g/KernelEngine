@@ -89,7 +89,7 @@ ke_result ke_logger_create(struct ke_allocator *allocator, ke_logger **out_logge
     return KE_OK;
 }
 
-const char *ke_log_level_to_string(int level)
+const char *ke_log_level_to_string(int32_t level)
 {
     static const char *levels[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "CRIT"};
     if (level < 0 || level > 5) return "UNKNOWN";

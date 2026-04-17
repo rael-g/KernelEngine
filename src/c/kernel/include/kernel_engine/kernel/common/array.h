@@ -54,6 +54,10 @@ static inline ke_result ke_array_push(ke_array *arr, void *value)
 /// @brief Destroys the array.
 static inline void ke_array_destroy(ke_array *arr)
 {
+    if (!arr)
+    {
+        return;
+    }
     if (arr->data && arr->allocator)
     {
         arr->allocator->free(arr->allocator, arr->data);

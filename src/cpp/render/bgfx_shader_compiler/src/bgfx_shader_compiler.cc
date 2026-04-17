@@ -20,6 +20,7 @@ BgfxShaderCompiler::BgfxShaderCompiler(const ke_shader_compiler_bgfx_params *par
         return static_cast<BgfxShaderCompiler *>(self->handle)->OnShutdown();
     };
     compiler_api_.destroy = [](ke_shader_compiler *self) {
+        if (!self) return;
         auto *sys = static_cast<BgfxShaderCompiler *>(self->handle);
         auto *alloc = sys->allocator_;
         if (alloc)

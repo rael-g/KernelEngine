@@ -40,7 +40,7 @@ extern "C"
         ke_result (*on_initialize)(struct ke_render *self);
         ke_result (*on_shutdown)(struct ke_render *self);
 
-        ke_result (*set_orthographic)(struct ke_render *self, bool enabled);
+        ke_result (*set_orthographic)(struct ke_render *self, ke_bool enabled);
         ke_result (*clear_color)(struct ke_render *self, float r, float g, float b, float a);
 
         ke_result (*frame)(struct ke_render *self);
@@ -98,11 +98,11 @@ extern "C"
 
         /// @brief Enables HDR tonemapping. When enabled, the scene renders to an offscreen
         ///        RGBA16F framebuffer and the final output goes through ACES tonemapping.
-        ke_result (*set_tonemapping)(struct ke_render *self, bool enabled,
+        ke_result (*set_tonemapping)(struct ke_render *self, ke_bool enabled,
                                      float exposure, float gamma);
 
         /// @brief Enables bloom post-processing. Requires tonemapping to be enabled first.
-        ke_result (*set_bloom)(struct ke_render *self, bool enabled,
+        ke_result (*set_bloom)(struct ke_render *self, ke_bool enabled,
                                float threshold, float intensity);
 
         /// @brief Uploads an array of point lights for the current frame.
@@ -118,7 +118,7 @@ extern "C"
         /// @brief Enables or disables screen-space ambient occlusion (SSAO).
         ///        When enabled, a G-buffer pre-pass is added each frame. No-op if
         ///        the underlying renderer does not support SSAO.
-        ke_result (*set_ssao)(struct ke_render *self, bool enabled,
+        ke_result (*set_ssao)(struct ke_render *self, ke_bool enabled,
                               float radius, float bias, float strength);
 
         /// @brief Configures the cluster grid dimensions and light density limits.

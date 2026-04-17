@@ -28,9 +28,9 @@ extern "C"
          */
         ke_result (*update)(struct ke_input *self);
 
-        bool (*is_key_pressed)(struct ke_input *self, int key);
-        bool (*is_key_released)(struct ke_input *self, int key);
-        bool (*is_key_down)(struct ke_input *self, int key);
+        ke_bool (*is_key_pressed)(struct ke_input *self, int32_t key);
+        ke_bool (*is_key_released)(struct ke_input *self, int32_t key);
+        ke_bool (*is_key_down)(struct ke_input *self, int32_t key);
 
     } ke_input;
 

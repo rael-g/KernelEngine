@@ -21,7 +21,7 @@ extern "C"
     } ke_log_level;
 
     /// @brief Converts a log level enum to a human-readable string.
-    KE_API const char *ke_log_level_to_string(int level);
+    KE_API const char *ke_log_level_to_string(int32_t level);
 
 #ifdef __cplusplus
 }

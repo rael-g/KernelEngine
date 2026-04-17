@@ -75,11 +75,6 @@ static void *arena_realloc(ke_allocator *self, void *ptr, size_t new_size)
     void *new_ptr = arena_alloc(self, new_size, 0);
     if (new_ptr)
     {
-        // Warning: arena realloc without size info is dangerous,
-        // but for now we assume it's only used for growing.
-        // We can't know the old size here without headers.
-        // For simplicity in this test, we just copy new_size (risky!)
-        // or better, don't use arena for things that realloc if possible.
         memcpy(new_ptr, ptr, new_size);
     }
     return new_ptr;

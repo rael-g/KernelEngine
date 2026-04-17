@@ -1,8 +1,8 @@
 #pragma once
 
-#include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/messaging/message_pipe.h>
+#include <cstdint>
 #include <kernel_engine/kernel/window/window.h>
+#include <kernel_engine/kernel/messaging/message_pipe.h>
 #include <kernel_engine/window/glfw/glfw_window.hh>
 #include <string>
 
@@ -11,35 +11,35 @@ struct GLFWwindow;
 namespace kernel_engine::window::glfw
 {
 
-class GlfwWindowSystem
+class KE_WINDOW_API GlfwWindowSystem
 {
-  public:
+public:
     explicit GlfwWindowSystem(const ke_window_glfw_params *params);
     ~GlfwWindowSystem();
 
     ke_result OnInitialize();
     ke_result OnShutdown();
 
-    [[nodiscard]] bool ShouldClose() const;
-    ke_result GetSize(int *width, int *height) const;
-    [[nodiscard]] void *GetNativeHandle() const;
+    [[nodiscard]] ke_bool ShouldClose() const;
+    void *GetNativeHandle() const;
+    ke_result GetSize(int32_t *w, int32_t *h) const;
 
     ke_window *ToApi();
+    ke_message_pipe *GetPipe() const { return pipe_api_; }
 
-    [[nodiscard]] ke_message_pipe *GetPipe() const
-    {
-        return pipe_api_;
-    }
+    // Test support
+    void set_glfw(class GlfwBackend* glfw);
 
-  private:
-    int width_, height_;
-    std::string title_;
-    GLFWwindow *window_ = nullptr;
-
+private:
     ke_window window_api_{};
-
-    ke_allocator *allocator_ = nullptr;
-    ke_message_pipe *pipe_api_ = nullptr;
-    ke_logger *logger_ = nullptr;
+    GLFWwindow *window_ = nullptr;
+    int32_t width_, height_;
+    std::string title_;
+    ke_allocator *allocator_;
+    ke_message_pipe *pipe_api_;
+    struct ke_logger *logger_;
+    class GlfwBackend* glfw_ = nullptr;
+    bool own_glfw_ = true;
 };
+
 } // namespace kernel_engine::window::glfw

@@ -16,8 +16,8 @@ extern "C"
     /// @brief Data for a keyboard state change.
     typedef struct ke_msg_key_event
     {
-        int key;
-        int action;
+        int32_t key;
+        int32_t action;
     } ke_msg_key_event;
 
 #ifdef __cplusplus

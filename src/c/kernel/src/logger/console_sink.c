@@ -8,13 +8,14 @@ static void console_sink_log(ke_logger_sink *self, const ke_log_event *event)
             ke_log_level_to_string(event->level),
             event->tag     ? event->tag     : "",
             event->message ? event->message : "");
+    fflush(stderr);
 }
 
 ke_logger_sink ke_console_sink_create(ke_log_level min_level)
 {
     ke_logger_sink sink;
     sink.handle    = NULL;
-    sink.min_level = (int)min_level;
+    sink.min_level = (int32_t)min_level;
     sink.log       = console_sink_log;
     sink.destroy   = NULL;
     return sink;

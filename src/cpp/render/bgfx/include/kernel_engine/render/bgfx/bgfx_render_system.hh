@@ -39,18 +39,17 @@ private:
     struct ke_logger *logger_ = nullptr;
 };
 
-class BgfxRenderSystem
+class KE_RENDER_API BgfxRenderSystem
 {
-public:
+  public:
     explicit BgfxRenderSystem(const ke_render_bgfx_params *params);
     ~BgfxRenderSystem();
-
     ke_result OnInitialize();
     ke_result OnShutdown();
 
     // Render operations
     ke_result Frame();
-    ke_result SetOrthographic(bool enabled);
+    ke_result SetOrthographic(ke_bool enabled);
     ke_result ClearColor(float r, float g, float b, float a);
     ke_result SetViewTransform(const ke_mat4 *view, const ke_mat4 *proj);
 
@@ -71,8 +70,8 @@ public:
     ke_result SubmitSkybox(ke_texture_handle cubemap_handle);
 
     // Post-processing
-    ke_result SetTonemapping(bool enabled, float exposure, float gamma);
-    ke_result SetBloom(bool enabled, float threshold, float intensity);
+    ke_result SetTonemapping(ke_bool enabled, float exposure, float gamma);
+    ke_result SetBloom(ke_bool enabled, float threshold, float intensity);
 
     // Shadow map operations
     ke_result CreateShadowMap(uint32_t width, uint32_t height, ke_shadow_map_handle *out_handle);
@@ -96,42 +95,17 @@ public:
     ke_result SetCameraPos(float x, float y, float z);
 
     // SSAO
-    ke_result SetSsao(bool enabled, float radius, float bias, float strength);
+    ke_result SetSsao(ke_bool enabled, float radius, float bias, float strength);
 
     // Clustered Forward Shading
     ke_result SetClusterConfig(const ke_cluster_config *config);
 
     ke_render *ToApi();
 
-  private:
-    ::bgfx::ShaderHandle LoadShader(const char *name);
-    ke_result SetupShader();
-    ke_result SetupPostProcess();
-    ke_result SubmitPostProcess();
-    ke_result SetupSsao();
-    ke_result SubmitSsao();
+    // Test support
+    void set_bgfx(class BgfxBackend* bgfx);
 
-    ke_result SetupClustered();
-    void RebuildClusterBuffers();
-    void UpdateClusterBounds();
-    void DispatchLightCull();
-
-    BgfxLogCallback callback_;
-
-    // ── bgfx view IDs ─────────────────────────────────────────────────────────
-    static constexpr uint8_t kShadowView    = 0; // depth-only shadow pass
-    static constexpr uint8_t kLightCullView = 1; // compute light culling
-    static constexpr uint8_t kDepthView     = 2; // depth-only prepass for culling
-    static constexpr uint8_t kPrepassView   = 3; // G-buffer (normals + linear depth)
-    static constexpr uint8_t kSsaoView      = 4; // SSAO occlusion raw
-    static constexpr uint8_t kSsaoBlurView  = 5; // SSAO 5x5 blur
-    static constexpr uint8_t kSceneView     = 6; // main forward pass
-    static constexpr uint8_t kSkyboxView    = 7; // skybox
-    static constexpr uint8_t kBrightView    = 8; // bloom bright-pass
-    static constexpr uint8_t kBlurHView     = 9; // bloom blur horizontal
-    static constexpr uint8_t kBlurVView     = 10; // bloom blur vertical
-    static constexpr uint8_t kTonemapView   = 11; // tonemap → backbuffer
-
+  protected:
     struct TextureEntry
     {
         uint16_t idx  = UINT16_MAX;
@@ -165,27 +139,76 @@ public:
         bool valid = false;
     };
 
+    virtual ::bgfx::ShaderHandle LoadShader(const char *name);
+    void set_initialized(bool v) { initialized_ = v; }
+    void set_all_handles_valid_for_test();
+
+    static constexpr uint16_t kInvalidHandle = UINT16_MAX;
+
+    uint16_t program_           = kInvalidHandle;
+    uint16_t depth_program_     = kInvalidHandle;
+    uint16_t cull_program_      = kInvalidHandle;
+    uint16_t skybox_program_    = kInvalidHandle;
+    uint16_t bright_pass_program_ = kInvalidHandle;
+    uint16_t blur_program_        = kInvalidHandle;
+    uint16_t tonemap_program_     = kInvalidHandle;
+    uint16_t prepass_program_     = kInvalidHandle;
+    uint16_t ssao_program_        = kInvalidHandle;
+    uint16_t ssao_blur_program_   = kInvalidHandle;
+    uint16_t shadow_program_      = kInvalidHandle;
+
+    uint16_t sampler_uniform_   = kInvalidHandle;
+    uint16_t color_uniform_     = kInvalidHandle;
+    uint16_t default_cube_tex_  = kInvalidHandle; 
+
+    uint16_t hdr_fb_          = kInvalidHandle;
+    uint16_t bright_fb_       = kInvalidHandle;
+
+    uint16_t skybox_vb_              = kInvalidHandle;
+    uint16_t skybox_ib_              = kInvalidHandle;
+
+    std::vector<TextureEntry>  textures_;
+    std::vector<MeshEntry>     meshes_;
+    std::vector<MaterialEntry> materials_;
+
+  private:
+    ke_result SetupShader();
+    ke_result SetupPostProcess();
+    ke_result SubmitPostProcess();
+    ke_result SetupSsao();
+    ke_result SubmitSsao();
+
+    ke_result SetupClustered();
+    void RebuildClusterBuffers();
+    void UpdateClusterBounds();
+    void DispatchLightCull();
+
+    BgfxLogCallback callback_;
+    class BgfxBackend* bgfx_ = nullptr;
+    bool own_bgfx_ = true;
+
+    // ── bgfx view IDs ─────────────────────────────────────────────────────────
+    static constexpr uint8_t kShadowView    = 0; // depth-only shadow pass
+    static constexpr uint8_t kLightCullView = 1; // compute light culling
+    static constexpr uint8_t kDepthView     = 2; // depth-only prepass for culling
+    static constexpr uint8_t kPrepassView   = 3; // G-buffer (normals + linear depth)
+    static constexpr uint8_t kSsaoView      = 4; // SSAO occlusion raw
+    static constexpr uint8_t kSsaoBlurView  = 5; // SSAO 5x5 blur
+    static constexpr uint8_t kSceneView     = 6; // main forward pass
+    static constexpr uint8_t kSkyboxView    = 7; // skybox
+    static constexpr uint8_t kBrightView    = 8; // bloom bright-pass
+    static constexpr uint8_t kBlurHView     = 9; // bloom blur horizontal
+    static constexpr uint8_t kBlurVView     = 10; // bloom blur vertical
+    static constexpr uint8_t kTonemapView   = 11; // tonemap → backbuffer
+
     ke_render render_api_{};
 
+    bool initialized_ = false;
     struct ke_window* window_ = nullptr;
     ke_allocator *allocator_ = nullptr;
     ke_logger *logger_ = nullptr;
     std::string shader_path_;
     bool orthographic_ = true;
-
-    static constexpr uint16_t kInvalidHandle = UINT16_MAX;
-
-    // ── Scene program (PBR) ───────────────────────────────────────────────────
-    uint16_t program_           = kInvalidHandle;
-    uint16_t depth_program_     = kInvalidHandle;
-    uint16_t cull_program_      = kInvalidHandle;
-    uint16_t sampler_uniform_   = kInvalidHandle;
-    uint16_t color_uniform_     = kInvalidHandle;
-    uint16_t default_cube_tex_  = kInvalidHandle; // fallback 1x1 white cubemap for s_envMap
-
-    std::vector<TextureEntry>  textures_;  // handle 0 = built-in white
-    std::vector<MeshEntry>     meshes_;    // handle 0 = built-in unit quad
-    std::vector<MaterialEntry> materials_; // handle 0 = built-in white material
 
     uint16_t light_dir_uniform_     = kInvalidHandle;
     uint16_t light_color_uniform_   = kInvalidHandle;
@@ -228,33 +251,24 @@ public:
     uint16_t point_lights_uniform_  = kInvalidHandle; // u_pointLights[128]
     uint16_t spot_lights_uniform_   = kInvalidHandle; // u_spotLights[192]
 
-    // ── Skybox program ────────────────────────────────────────────────────────
-    uint16_t skybox_program_         = kInvalidHandle;
+    // ── Skybox resources ──────────────────────────────────────────────────────
     uint16_t skybox_sampler_uniform_ = kInvalidHandle;
     uint16_t skybox_tint_uniform_    = kInvalidHandle;
-    uint16_t skybox_vb_              = kInvalidHandle;
-    uint16_t skybox_ib_              = kInvalidHandle;
     bool     has_skybox_             = false;
     uint16_t active_env_tex_         = kInvalidHandle;
 
     // View state
-    int view_w_ = 0, view_h_ = 0;
+    int32_t view_w_ = 0, view_h_ = 0;
     float last_view_[16]{};
     float last_proj_[16]{};
 
-    // ── Post-processing ───────────────────────────────────────────────────────
-    uint16_t hdr_fb_          = kInvalidHandle; // RGBA16F color + D24 depth
+    // ── Post-processing resources ─────────────────────────────────────────────
     uint16_t hdr_color_tex_   = kInvalidHandle; // RGBA16F color attachment (for sampling)
-    uint16_t bright_fb_       = kInvalidHandle; // bright-pass result (half-res RGBA16F)
     uint16_t blur_a_fb_       = kInvalidHandle; // horizontal blur result (half-res RGBA16F)
     uint16_t blur_b_fb_       = kInvalidHandle; // vertical blur result = final bloom
 
     uint16_t fullscreen_vb_   = kInvalidHandle;
     uint16_t fullscreen_ib_   = kInvalidHandle;
-
-    uint16_t bright_pass_program_ = kInvalidHandle;
-    uint16_t blur_program_        = kInvalidHandle;
-    uint16_t tonemap_program_     = kInvalidHandle;
 
     uint16_t hdr_tex_uniform_      = kInvalidHandle; // s_hdrTex
     uint16_t bloom_tex_uniform_    = kInvalidHandle; // s_bloomTex
@@ -270,14 +284,10 @@ public:
     float bloom_threshold_ = 1.0f;
     float bloom_intensity_ = 0.5f;
 
-    int pp_w_ = 0, pp_h_ = 0; // half-resolution for bloom passes
+    int32_t pp_w_ = 0, pp_h_ = 0; // half-resolution for bloom passes
 
     // ── SSAO ──────────────────────────────────────────────────────────────────
     static constexpr uint32_t kSsaoKernelSize = 16;
-
-    uint16_t prepass_program_       = kInvalidHandle;
-    uint16_t ssao_program_          = kInvalidHandle;
-    uint16_t ssao_blur_program_     = kInvalidHandle;
 
     uint16_t gbuf_fb_               = kInvalidHandle; // G-buffer framebuffer
     uint16_t gbuf_normal_tex_       = kInvalidHandle; // RGBA8 view-space normals
@@ -310,7 +320,6 @@ public:
     float ssao_strength_ = 1.0f;
 
     // ── Shadow maps ───────────────────────────────────────────────────────────
-    uint16_t shadow_program_        = kInvalidHandle;
     uint16_t shadow_map_uniform_    = kInvalidHandle; // s_shadowMap sampler
     uint16_t light_vp_uniform_      = kInvalidHandle; // u_lightVP mat4
     uint16_t shadow_params_uniform_ = kInvalidHandle; // u_shadowParams vec4

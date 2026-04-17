@@ -29,6 +29,9 @@ extern "C"
 #endif
 #endif
 
+    /// @brief Boolean type for stable FFI (exactly 1 byte).
+    typedef uint8_t ke_bool;
+
 #ifdef __cplusplus
 }
 #endif

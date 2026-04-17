@@ -18,7 +18,7 @@ typedef struct ke_logger ke_logger;
     /// @brief Data structure representing a single log entry.
     typedef struct ke_log_event
     {
-        int level;
+        int32_t level;
         const char *tag;
         const char *message;
     } ke_log_event;
@@ -27,7 +27,7 @@ typedef struct ke_logger ke_logger;
     typedef struct ke_logger_sink
     {
         void *handle;
-        int min_level; ///< Events below this level are skipped by the logger before calling log().
+        int32_t min_level; ///< Events below this level are skipped by the logger before calling log().
         void (*log)(struct ke_logger_sink *self, const ke_log_event *event);
         void (*destroy)(struct ke_logger_sink *self);
     } ke_logger_sink;
@@ -36,7 +36,7 @@ typedef struct ke_logger ke_logger;
     typedef struct ke_logger
     {
         void *handle;
-        int runtime_limit;
+        int32_t runtime_limit;
 
         struct ke_allocator *allocator;
 
