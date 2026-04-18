@@ -81,46 +81,47 @@ app.OnUpdate = () =>
 
 app.Run(services);
 
+// Arrow keys: look — WASD: move — Shift/Ctrl: fly up/down
 sealed class FreeLookNode(Input input) : CameraNode
 {
-    private float _speed = 5.0f;
-    private float _sensitivity = 0.1f;
-    private float _pitch = 0f;
-    private float _yaw = -90f;
+    private float _speed       = 8.0f;
+    private float _rotateDeg   = 90.0f; // degrees per second
+    private float _pitch       = 0f;
+    private float _yaw         = 0f;    // start facing -Z
 
     protected override void OnUpdate(float dt)
     {
-        // ── Rotation (Mouse) ──────────────────────────────────────────────────
-        // Vector2 delta = input.MouseDelta;
-        // _yaw   += delta.X * _sensitivity;
-        // _pitch -= delta.Y * _sensitivity;
-        // _pitch = Math.Clamp(_pitch, -89f, 89f);
+        // ── Rotation (arrow keys) ─────────────────────────────────────────────
+        bool anyKey = false;
+        if (input.IsKeyDown(262)) { _yaw   += _rotateDeg * dt; anyKey = true; } // Right arrow
+        if (input.IsKeyDown(263)) { _yaw   -= _rotateDeg * dt; anyKey = true; } // Left arrow
+        if (input.IsKeyDown(265)) { _pitch += _rotateDeg * dt; anyKey = true; } // Up arrow
+        if (input.IsKeyDown(264)) { _pitch -= _rotateDeg * dt; anyKey = true; } // Down arrow
+        if (anyKey) Console.Write($"\r[Camera] yaw={_yaw:F1} pitch={_pitch:F1}          ");
+        _pitch = Math.Clamp(_pitch, -89f, 89f);
 
-        // Quaternion rot = Quaternion.CreateFromYawPitchRoll(
-        //     _yaw * MathF.PI / 180f, 
-        //     _pitch * MathF.PI / 180f, 
-        //     0f);
+        var rot = Quaternion.CreateFromYawPitchRoll(
+            _yaw   * MathF.PI / 180f,
+            _pitch * MathF.PI / 180f,
+            0f);
 
-        // ── Movement (WASD) ───────────────────────────────────────────────────
-        // Vector3 forward = Vector3.Transform(-Vector3.UnitZ, rot);
-        // Vector3 right   = Vector3.Transform(Vector3.UnitX, rot);
-        // Vector3 up      = Vector3.UnitY;
+        // ── Movement (WASD + Shift/Ctrl) ──────────────────────────────────────
+        var forward = Vector3.Transform(-Vector3.UnitZ, rot);
+        var right   = Vector3.Transform( Vector3.UnitX, rot);
 
-        // Vector3 moveDir = Vector3.Zero;
-        // if (input.IsKeyDown(87)) moveDir += forward; // W
-        // if (input.IsKeyDown(83)) moveDir -= forward; // S
-        // if (input.IsKeyDown(65)) moveDir -= right;   // A
-        // if (input.IsKeyDown(68)) moveDir += right;   // D
-        // if (input.IsKeyDown(340)) moveDir += up;     // Shift
-        // if (input.IsKeyDown(341)) moveDir -= up;     // Ctrl
+        var move = Vector3.Zero;
+        if (input.IsKeyDown(87))  move += forward;       // W
+        if (input.IsKeyDown(83))  move -= forward;       // S
+        if (input.IsKeyDown(65))  move -= right;         // A
+        if (input.IsKeyDown(68))  move += right;         // D
+        if (input.IsKeyDown(340)) move += Vector3.UnitY; // Shift
+        if (input.IsKeyDown(341)) move -= Vector3.UnitY; // Ctrl
+        if (move != Vector3.Zero) move  = Vector3.Normalize(move);
 
-        // if (moveDir != Vector3.Zero)
-        //     moveDir = Vector3.Normalize(moveDir);
-
-        // LocalTransform = LocalTransform with
-        // {
-        //     Position = LocalTransform.Position + moveDir * _speed * dt,
-        //     Rotation = rot
-        // };
+        LocalTransform = LocalTransform with
+        {
+            Position = LocalTransform.Position + move * _speed * dt,
+            Rotation = rot,
+        };
     }
 }
