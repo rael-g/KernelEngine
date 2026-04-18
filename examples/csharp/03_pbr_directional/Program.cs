@@ -43,21 +43,19 @@ app.OnReady = () =>
     var mat2 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 1.0f, roughness: 0.1f).Value;
     var mat3 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 0.5f, roughness: 0.5f).Value;
 
-    // ── Meshes ──────────────────────────────────────────────────────────────
-    var quadMesh = app.Renderer.CreateMesh(MeshGeometry.QuadVertices, MeshGeometry.QuadIndices).Value;
-
+    // ── Meshes (handle 0 = built-in unit quad) ──────────────────────────────
     var node1 = app.ActiveWorld.Scene.AddNode(
-        new MeshNode { MeshHandle = quadMesh, MaterialHandle = mat1 },
+        new MeshNode { MaterialHandle = mat1 },
         "QuadDielectric");
     node1.LocalTransform = node1.LocalTransform with { Position = new Vector3(-2.0f, 0f, 0f) };
 
     var node2 = app.ActiveWorld.Scene.AddNode(
-        new MeshNode { MeshHandle = quadMesh, MaterialHandle = mat2 },
+        new MeshNode { MaterialHandle = mat2 },
         "QuadMetal");
     node2.LocalTransform = node2.LocalTransform with { Position = new Vector3(0f, 0f, 0f) };
 
     var node3 = app.ActiveWorld.Scene.AddNode(
-        new MeshNode { MeshHandle = quadMesh, MaterialHandle = mat3 },
+        new MeshNode { MaterialHandle = mat3 },
         "QuadMixed");
     node3.LocalTransform = node3.LocalTransform with { Position = new Vector3(2.0f, 0f, 0f) };
 };

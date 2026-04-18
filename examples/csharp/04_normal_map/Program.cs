@@ -58,14 +58,11 @@ app.OnReady = () =>
     // Right: White with ripples
     var matNormal = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, roughness: 0.3f, normalMapHandle: normalMapHandle).Value;
 
-    // ── Scene ───────────────────────────────────────────────────────────────
-    var meshRes = app.Renderer.CreateMesh(MeshGeometry.QuadVertices, MeshGeometry.QuadIndices);
-    uint quadMesh = meshRes.Value;
-
-    var leftNode = app.ActiveWorld.Scene.AddNode(new MeshNode { MeshHandle = quadMesh, MaterialHandle = matPlain }, "PlainQuad");
+    // ── Scene (handle 0 = built-in unit quad) ───────────────────────────────
+    var leftNode = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = matPlain }, "PlainQuad");
     leftNode.LocalTransform = leftNode.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
 
-    var rightNode = app.ActiveWorld.Scene.AddNode(new MeshNode { MeshHandle = quadMesh, MaterialHandle = matNormal }, "NormalQuad");
+    var rightNode = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = matNormal }, "NormalQuad");
     rightNode.LocalTransform = rightNode.LocalTransform with { Position = new Vector3(1.2f, 0f, 0f) };
 
     // ── Environment ─────────────────────────────────────────────────────────

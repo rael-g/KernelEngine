@@ -19,7 +19,7 @@ public class SkyboxNode : Node
 
     /// <summary>
     /// GPU cubemap handle to use as the skybox. Must be a handle returned by
-    /// <see cref="Renderer.CreateCubemap"/> or <see cref="TextureLoader.LoadCubemapFiles"/>.
+    /// <see cref="Renderer.CreateCubemap"/>.
     /// </summary>
     public uint CubemapHandle { get; init; } = uint.MaxValue;
 
