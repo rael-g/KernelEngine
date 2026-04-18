@@ -1,4 +1,4 @@
-$input v_color0, v_normal, v_texcoord0, v_worldPos, v_shadowCoord, v_tangent
+$input v_normal, v_texcoord0, v_worldPos, v_shadowCoord, v_tangent
 
 #include <bgfx_shader.sh>
 
@@ -59,8 +59,9 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
 float ComputeShadow(vec4 shadowCoord)
 {
     vec3 coord = shadowCoord.xyz / shadowCoord.w;
-    // Convert NDC [-1,1] XY to texture UV [0,1]
-    coord.xy = coord.xy * 0.5 + 0.5;
+    // Convert NDC XY to texture UV. Vulkan NDC Y is top-down, so invert Y.
+    coord.x =  coord.x * 0.5 + 0.5;
+    coord.y = -coord.y * 0.5 + 0.5;
     // Discard if outside shadow frustum
     if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 ||
         coord.z < 0.0 || coord.z > 1.0)
@@ -92,7 +93,7 @@ void main()
     vec3 R = reflect(-V, N);
 
     vec4 texColor = texture2D(s_texColor, v_texcoord0);
-    vec4 albedo   = texColor * v_color0 * u_color;
+    vec4 albedo   = texColor * u_color;
 
     vec3 F0 = mix(vec3_splat(0.04), albedo.xyz, metallic);
 
@@ -203,5 +204,6 @@ void main()
     if (u_shadowParams.x > 0.5)
         shadow = ComputeShadow(v_shadowCoord);
 
-    gl_FragColor = vec4(ambient + direct * shadow, albedo.w);
+    vec3 color = ambient + direct * shadow;
+    gl_FragColor = vec4(color, albedo.w);
 }

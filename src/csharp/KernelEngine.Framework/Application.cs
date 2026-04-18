@@ -15,7 +15,7 @@ public class Application : IDisposable
     public Window Window { get; private set; } = null!;
     public Renderer Renderer { get; private set; } = null!;
 
-    public Input Input { get; private set; } = null!;
+    public Input? Input { get; private set; }
 
     /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
     public World ActiveWorld { get; set; } = null!;
@@ -40,9 +40,8 @@ public class Application : IDisposable
                 Logger.AddSink(sink, sink.MinLevel);
         }
 
-        Window = Services.GetRequiredService<Window>();
-        Renderer = Services.GetRequiredService<Renderer>();
-        Input = Services.GetRequiredService<Input>();
+        ResolveRequiredServices();
+        Input = Services.GetService<Input>();
 
         if (ActiveWorld == null)
             ActiveWorld = new World(Allocator, Renderer, Window);
@@ -56,7 +55,7 @@ public class Application : IDisposable
         // Handles 0 are built-in defaults created by the renderer during initialization.
         MeshNode.DefaultMeshHandle     = 0; // unit quad
         MeshNode.DefaultMaterialHandle = 0; // white material
-        Renderer.SetAmbientLight(0.15f, 0.15f, 0.15f);
+        Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
         ActiveWorld.AddSystem(new LightRenderSystem(Renderer));
         ActiveWorld.AddSystem(new CameraRenderSystem(Renderer, Window));
         ActiveWorld.AddSystem(new SkyboxRenderSystem(Renderer));    // after camera, before meshes
@@ -124,6 +123,36 @@ public class Application : IDisposable
             Environment.Exit(1);
             return 0; // EXCEPTION_EXECUTE_HANDLER
         }
+    }
+
+    private void ResolveRequiredServices()
+    {
+        var missing = new List<(Type type, string hint)>
+        {
+            (typeof(Window),   "AddGlfwWindow(width, height, title)"),
+            (typeof(Renderer), "AddBgfxRenderer(shaderPath)"),
+        };
+
+        var errors = missing
+            .Where(e => Services.GetService(e.type) == null)
+            .ToList();
+
+        if (errors.Count > 0)
+        {
+            var lines = new System.Text.StringBuilder();
+            lines.AppendLine("\n[STARTUP ERROR] Required services are not registered:");
+            foreach (var (type, hint) in errors)
+                lines.AppendLine($"  - {type.Name}  →  add .{hint}");
+            lines.AppendLine("\nCheck your IServiceCollection setup in Program.cs.");
+            var msg = lines.ToString();
+            Console.Error.WriteLine(msg);
+            Console.Error.Flush();
+            Logger?.Error("Application", msg);
+            throw new InvalidOperationException(msg);
+        }
+
+        Window   = Services.GetRequiredService<Window>();
+        Renderer = Services.GetRequiredService<Renderer>();
     }
 
     public virtual void Dispose()

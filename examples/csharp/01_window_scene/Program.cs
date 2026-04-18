@@ -18,13 +18,15 @@ using var app = new Application();
 
 app.OnReady = () =>
 {
+    app.Renderer.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
+
     // Directional light coming from upper-right-front
     app.ActiveWorld.Scene.AddNode(
         new LightNode
         {
             Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
             Color     = Vector3.One,
-            Intensity = 1f,
+            Intensity = 2f,
         },
         "Sun");
 
@@ -49,19 +51,9 @@ app.OnReady = () =>
 
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
-float hue = 0f;
-
 app.OnUpdate = () =>
 {
-    hue += 0.003f;
-    if (hue > 1f) hue -= 1f;
-
-    float r = MathF.Abs(hue * 6f - 3f) - 1f;
-    float g = 2f - MathF.Abs(hue * 6f - 2f);
-    float b = 2f - MathF.Abs(hue * 6f - 4f);
-    
-    // Custom clear color for this example
-    var res = app.Renderer.ClearColor(Math.Clamp(r, 0, 1), Math.Clamp(g, 0, 1), Math.Clamp(b, 0, 1), 1f);
+    var res = app.Renderer.ClearColor(0.15f, 0.15f, 0.15f, 1f);
     KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
 
     frameCount++;

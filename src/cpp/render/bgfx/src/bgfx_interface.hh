@@ -10,6 +10,7 @@ class BgfxBackend {
   virtual bool Init(const ::bgfx::Init& init) = 0;
   virtual void Shutdown() = 0;
   virtual void SetViewClear(::bgfx::ViewId id, uint16_t flags, uint32_t rgba = 0, float depth = 1.0f, uint8_t stencil = 0) = 0;
+  virtual void SetViewClearPalette(::bgfx::ViewId id, uint16_t flags, float depth, uint8_t stencil, uint8_t palette0 = UINT8_MAX) = 0;
   virtual void SetViewRect(::bgfx::ViewId id, uint16_t x, uint16_t y, uint16_t width, uint16_t height) = 0;
   virtual void SetViewTransform(::bgfx::ViewId id, const void* view, const void* proj) = 0;
   virtual void SetViewFrameBuffer(::bgfx::ViewId id, ::bgfx::FrameBufferHandle handle) = 0;
@@ -60,6 +61,7 @@ class RealBgfxBackend : public BgfxBackend {
   bool Init(const ::bgfx::Init& init) override { return ::bgfx::init(init); }
   void Shutdown() override { ::bgfx::shutdown(); }
   void SetViewClear(::bgfx::ViewId id, uint16_t flags, uint32_t rgba, float depth, uint8_t stencil) override { ::bgfx::setViewClear(id, flags, rgba, depth, stencil); }
+  void SetViewClearPalette(::bgfx::ViewId id, uint16_t flags, float depth, uint8_t stencil, uint8_t palette0) override { ::bgfx::setViewClear(id, flags, depth, stencil, palette0); }
   void SetViewRect(::bgfx::ViewId id, uint16_t x, uint16_t y, uint16_t width, uint16_t height) override { ::bgfx::setViewRect(id, x, y, width, height); }
   void SetViewTransform(::bgfx::ViewId id, const void* view, const void* proj) override { ::bgfx::setViewTransform(id, view, proj); }
   void SetViewFrameBuffer(::bgfx::ViewId id, ::bgfx::FrameBufferHandle handle) override { ::bgfx::setViewFrameBuffer(id, handle); }

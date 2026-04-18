@@ -35,7 +35,7 @@ void BgfxLogCallback::traceVargs(const char *_filePath, uint16_t _line, const ch
     {
         char msg[1024];
         vsnprintf(msg, sizeof(msg), _format, _argList);
-        ke_log_event ev = {KE_LOG_LEVEL_DEBUG, "bgfx", msg};
+        ke_log_event ev = {KE_LOG_LEVEL_TRACE, "bgfx", msg};
         logger_->log(logger_, &ev);
     }
 }
@@ -423,6 +423,8 @@ ke_result BgfxRenderSystem::SetupShader()
     ke_texture_handle white_handle;
     if (CreateTextureRgba(1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
         return KE_ERROR_RENDER;
+    // Patch the dummy sentinel so texture_handle=0 in materials resolves to the white texture.
+    textures_[0].idx = textures_[white_handle].idx;
 
     // Default 1x1 white cubemap — bound to s_envMap slot when no skybox is active.
     // Required because the Vulkan backend always needs a valid cube image view at that slot.
@@ -616,6 +618,7 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
     // Column-major layout: m[0] = proj[0][0], m[5] = proj[1][1].
     ssao_proj_info_[0] = (proj->m[0] != 0.f) ? (1.0f / proj->m[0]) : 1.0f;
     ssao_proj_info_[1] = (proj->m[5] != 0.f) ? (1.0f / proj->m[5]) : 1.0f;
+    bgfx_->SetViewTransform(kDepthView,   view->m, proj->m);
     bgfx_->SetViewTransform(kPrepassView, view->m, proj->m);
     bgfx_->SetViewTransform(kSsaoView,    view->m, proj->m); // u_proj available in fs_ssao
     bgfx_->SetViewTransform(kSceneView,   view->m, proj->m);
@@ -624,20 +627,9 @@ ke_result BgfxRenderSystem::SetViewTransform(const ke_mat4 *view, const ke_mat4 
 
 ke_result BgfxRenderSystem::Frame()
 {
-    static uint32_t frame_counter = 0;
-    frame_counter++;
-
     // ── Clustered Culling ──────────────────────────────────────────────────────
     UpdateClusterBounds();
     DispatchLightCull();
-
-    if (frame_counter % 300 == 0)
-    {
-        char info[128];
-        snprintf(info, sizeof(info), "Frame %u: lights P=%zu, S=%zu", frame_counter, point_lights_.size(), spot_lights_.size());
-        ke_log_event ev = {KE_LOG_LEVEL_DEBUG, "bgfx", info};
-        if (logger_) logger_->log(logger_, &ev);
-    }
 
     // ── SSAO passes ────────────────────────────────────────────────────────────
     if (ssao_enabled_ && gbuf_fb_ != kInvalidHandle)
@@ -699,14 +691,13 @@ ke_result BgfxRenderSystem::CreateMesh(const ke_vertex *verts, uint32_t vert_cou
 
     struct GpuVert {
         float x, y, z;
-        uint32_t abgr;
         float nx, ny, nz;
         float u, v;
         float tx, ty, tz, tw; // tangent xyz + bitangent sign
     };
     std::vector<GpuVert> expanded(vert_count);
     for (uint32_t i = 0; i < vert_count; i++)
-        expanded[i] = {verts[i].x, verts[i].y, verts[i].z, 0xffffffff,
+        expanded[i] = {verts[i].x, verts[i].y, verts[i].z,
                        verts[i].nx, verts[i].ny, verts[i].nz,
                        verts[i].u, verts[i].v,
                        verts[i].tx, verts[i].ty, verts[i].tz, verts[i].tw};
@@ -714,7 +705,6 @@ ke_result BgfxRenderSystem::CreateMesh(const ke_vertex *verts, uint32_t vert_cou
     ::bgfx::VertexLayout layout;
     layout.begin()
         .add(::bgfx::Attrib::Position,  3, ::bgfx::AttribType::Float)
-        .add(::bgfx::Attrib::Color0,    4, ::bgfx::AttribType::Uint8,  true)
         .add(::bgfx::Attrib::Normal,    3, ::bgfx::AttribType::Float)
         .add(::bgfx::Attrib::TexCoord0, 2, ::bgfx::AttribType::Float)
         .add(::bgfx::Attrib::Tangent,   4, ::bgfx::AttribType::Float)
@@ -1071,7 +1061,8 @@ ke_result BgfxRenderSystem::SubmitMesh(ke_mesh_handle mesh, ke_material_handle m
     bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{entry.vb});
     bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{entry.ib});
     bgfx_->SetTransform(transform->m);
-    bgfx_->SetState(BGFX_STATE_DEFAULT);
+    uint64_t state = BGFX_STATE_DEFAULT & ~BGFX_STATE_CULL_MASK;
+    bgfx_->SetState(state);
     bgfx_->Submit(kSceneView, ::bgfx::ProgramHandle{program_});
     return KE_OK;
 }
@@ -1149,7 +1140,7 @@ ke_result BgfxRenderSystem::BeginShadowPass(ke_shadow_map_handle handle,
 
     // Clear R32F to 1.0 (max depth) via palette, and clear hardware depth to 1.0.
     bgfx_->SetPaletteColor(0, 1.0f, 0.0f, 0.0f, 0.0f);
-    bgfx_->SetViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 1.0f, 0, 0);
+    bgfx_->SetViewClearPalette(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 1.0f, 0, 0);
 
     active_shadow_handle_ = handle;
     MulMat4(light_view->m, light_proj->m, active_light_vp_);

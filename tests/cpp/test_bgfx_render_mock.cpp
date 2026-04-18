@@ -23,6 +23,7 @@ class MockBgfxBackend : public BgfxBackend {
   bool Init(const ::bgfx::Init& init) override { init_called = true; return true; }
   void Shutdown() override {}
   void SetViewClear(::bgfx::ViewId id, uint16_t flags, uint32_t rgba, float depth, uint8_t stencil) override {}
+  void SetViewClearPalette(::bgfx::ViewId id, uint16_t flags, float depth, uint8_t stencil, uint8_t palette0) override {}
   void SetViewRect(::bgfx::ViewId id, uint16_t x, uint16_t y, uint16_t width, uint16_t height) override {}
   void SetViewTransform(::bgfx::ViewId id, const void* view, const void* proj) override {}
   void SetViewFrameBuffer(::bgfx::ViewId id, ::bgfx::FrameBufferHandle handle) override {}
