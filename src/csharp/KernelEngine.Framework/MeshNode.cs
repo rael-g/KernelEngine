@@ -11,13 +11,22 @@ public class MeshNode : Node
 {
     // ── ECS registration (shared across all MeshNode instances) ──────────────
 
-    internal static uint ComponentId { get; set; } = uint.MaxValue;
+    internal static uint ComponentId { get; private set; } = uint.MaxValue;
 
     /// <summary>Handle of the built-in unit quad mesh (handle 0, created by the renderer at init).</summary>
     public static uint DefaultMeshHandle { get; internal set; } = 0;
 
     /// <summary>Handle of the built-in white material (handle 0, created by the renderer at init).</summary>
     public static uint DefaultMaterialHandle { get; internal set; } = 0;
+
+    /// <summary>
+    /// Registers the MeshComponent with the ECS registry and stores the component ID.
+    /// Must be called once per world, before any MeshNode is added to the scene.
+    /// </summary>
+    internal static void Initialize(EcsRegistry registry)
+    {
+        ComponentId = registry.RegisterComponent<MeshComponent>("ke_mesh_renderer");
+    }
 
     // ── Per-instance ──────────────────────────────────────────────────────────
 

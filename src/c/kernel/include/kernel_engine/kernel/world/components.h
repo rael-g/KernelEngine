@@ -59,10 +59,6 @@ extern "C"
         ke_vec3 scale;
     } ke_transform;
 
-    typedef struct ke_mesh_renderer_component {
-        uint32_t mesh_handle;
-        uint32_t material_handle;
-    } ke_mesh_renderer_component;
 
 #ifdef __cplusplus
 }

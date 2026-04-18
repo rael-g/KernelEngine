@@ -1,17 +1,15 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 
 /// <summary>
-/// The simulation world — owns the ECS registry, drives per-frame systems, and
-/// exposes the scene-graph facade.
+/// The ECS simulation world — owns the registry, drives built-in systems (ScriptSystem,
+/// TransformSystem), and exposes the built-in component IDs.
 /// </summary>
 public sealed unsafe class World : IDisposable
 {
     private ke_world* _native;
-    private Scene? _scene;
     private EcsRegistry? _registry;
     private readonly List<ISystem> _systems = [];
 
@@ -41,38 +39,34 @@ public sealed unsafe class World : IDisposable
     /// <summary>Component ID for <see cref="ScriptComponent"/>.</summary>
     public uint ScriptComponentId { get; private set; }
 
-    /// <summary>Component ID for the mesh renderer component.</summary>
-    public uint MeshRendererComponentId { get; private set; }
-
     // ── Construction ──────────────────────────────────────────────────────────
 
-    /// <summary>Creates a world bound to the given renderer and window.</summary>
-    public World(Allocator allocator, Renderer? renderer = null, Window? window = null)
+    /// <summary>Creates a world bound to the given allocator.</summary>
+    public World(Allocator allocator)
     {
         var parameters = new ke_world_params
         {
             allocator = allocator.Native,
-            renderer = renderer != null ? renderer.Native : null,
-            window = window != null ? window.Native : null,
         };
         ke_world* world;
         KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world));
         _native = world;
 
-        TransformComponentId   = _native->transform_id(_native);
-        HierarchyComponentId   = _native->hierarchy_id(_native);
-        NameComponentId        = _native->name_id(_native);
-        ScriptComponentId      = _native->script_id(_native);
-        MeshRendererComponentId = _native->mesh_renderer_id(_native);
+        TransformComponentId = _native->transform_id(_native);
+        HierarchyComponentId = _native->hierarchy_id(_native);
+        NameComponentId      = _native->name_id(_native);
+        ScriptComponentId    = _native->script_id(_native);
     }
 
     // ── Public properties ─────────────────────────────────────────────────────
 
-    /// <summary>The scene facade for this world.</summary>
-    public Scene Scene => _scene ??= new Scene(this);
-
     /// <summary>The ECS registry for this world.</summary>
     public EcsRegistry Registry => _registry ??= new EcsRegistry(_native->get_registry(_native));
+
+    private Scene? _scene;
+
+    /// <summary>The scene graph facade for this world.</summary>
+    public Scene Scene => _scene ??= new Scene(this);
 
     /// <summary>Entity ID of the active camera. <see cref="CameraRenderSystem"/> reads this each frame.</summary>
     public ulong ActiveCamera { get; set; }
@@ -104,19 +98,6 @@ public sealed unsafe class World : IDisposable
         return ke_result.KE_OK;
     }
 
-    // ── Internal helpers used by Scene ────────────────────────────────────────
-
-    internal ulong GetRoot() => Native->get_root(Native);
-
-    internal ulong CreateNode(string name, ulong parent)
-    {
-        var namePtr = Marshal.StringToHGlobalAnsi(name);
-        try { return Native->create_node(Native, (sbyte*)namePtr, parent); }
-        finally { Marshal.FreeHGlobal(namePtr); }
-    }
-
-    internal Result DestroyNode(ulong entity) => Native->destroy_node(Native, entity);
-
     // ── Disposal ──────────────────────────────────────────────────────────────
 
     public void Dispose()
@@ -125,7 +106,6 @@ public sealed unsafe class World : IDisposable
         {
             _native->destroy(_native);
             _native = null;
-            _scene = null;
             _registry = null;
         }
     }

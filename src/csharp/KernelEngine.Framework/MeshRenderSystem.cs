@@ -15,9 +15,9 @@ public sealed unsafe class MeshRenderSystem : ISystem
 
     public void Update(World world, float dt)
     {
-        if (world.MeshRendererComponentId == uint.MaxValue) return;
+        if (MeshNode.ComponentId == uint.MaxValue) return;
 
-        var (entities, data) = world.Registry.Query<MeshComponent>(world.MeshRendererComponentId);
+        var (entities, data) = world.Registry.Query<MeshComponent>(MeshNode.ComponentId);
         for (int i = 0; i < entities.Length; i++)
         {
             var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);

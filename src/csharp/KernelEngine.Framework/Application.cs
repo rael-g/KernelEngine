@@ -44,13 +44,13 @@ public class Application : IDisposable
         Input = Services.GetService<Input>();
 
         if (ActiveWorld == null)
-            ActiveWorld = new World(Allocator, Renderer, Window);
+            ActiveWorld = new World(Allocator);
 
         LightNode.Initialize(ActiveWorld.Registry);
         PointLightNode.Initialize(ActiveWorld.Registry);
         SpotLightNode.Initialize(ActiveWorld.Registry);
         CameraNode.Initialize(ActiveWorld.Registry);
-        MeshNode.ComponentId = ActiveWorld.MeshRendererComponentId;
+        MeshNode.Initialize(ActiveWorld.Registry);
         SkyboxNode.Initialize();
         // Handles 0 are built-in defaults created by the renderer during initialization.
         MeshNode.DefaultMeshHandle     = 0; // unit quad
