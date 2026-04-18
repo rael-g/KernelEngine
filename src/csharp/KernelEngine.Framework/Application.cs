@@ -71,11 +71,12 @@ public class Application : IDisposable
         {
             while (!Window.ShouldClose())
             {
+                Window.PollEvents();
+                Input?.Update();
+                MessagePipe?.Pump();
                 ActiveWorld?.Update();
                 OnUpdate?.Invoke();
                 Renderer.Frame();
-                Window.PollEvents();
-                MessagePipe?.Pump();
             }
         }
         catch (Exception ex)

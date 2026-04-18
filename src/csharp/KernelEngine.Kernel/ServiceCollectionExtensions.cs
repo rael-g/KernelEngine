@@ -36,4 +36,13 @@ public static class ServiceCollectionExtensions
         ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE) =>
         services.AddSingleton<ILoggerSink>(_ => new ConsoleSink { MinLevel = minLevel });
 
+    /// <summary>Registers an <see cref="Input"/> singleton. Requires <c>AddMessagePipe()</c>.</summary>
+    public static IServiceCollection AddInput(this IServiceCollection services)
+    {
+        services.AddSingleton(sp => new Input(
+            sp.GetRequiredService<Allocator>(),
+            sp.GetService<Logger>(),
+            sp.GetRequiredService<MessagePipe>()));
+        return services;
+    }
 }
