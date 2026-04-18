@@ -18,6 +18,8 @@ using var app = new Application();
 
 app.OnReady = () =>
 {
+    app.Renderer.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
+
     // ── Lights ──────────────────────────────────────────────────────────────
     app.ActiveWorld.Scene.AddNode(
         new LightNode

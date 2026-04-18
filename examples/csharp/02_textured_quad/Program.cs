@@ -18,6 +18,8 @@ using var app = new Application();
 
 app.OnReady = () =>
 {
+    app.Renderer.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
+
     // Generate checkerboard texture (128x128, 16px squares)
     uint width = 128;
     uint height = 128;
