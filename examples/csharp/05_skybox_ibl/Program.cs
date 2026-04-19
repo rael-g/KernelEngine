@@ -47,7 +47,7 @@ app.OnReady = () =>
     var cubeHandle = app.Renderer.CreateCubemap(faceSize, cubeData).Value;
     app.ActiveWorld.Scene.AddNode(new SkyboxNode { CubemapHandle = cubeHandle }, "Skybox");
 
-    var mirrorMat = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 1.0f, roughness: 0.05f).Value;
+    var mirrorMat = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 0.5f, roughness: 0.5f).Value;
     app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mirrorMat }, "MirrorQuad");
 
     var camNode = new FreeLookNode(app.Input!) { Fov = 60f };
@@ -60,6 +60,7 @@ app.OnReady = () =>
         Intensity = 1.0f 
     }, "Sun");
 
+    app.Renderer.SetTonemapping(true, 1.0f, 2.2f);
     Console.WriteLine("[Example] 05_skybox_ibl — WASD to move, Mouse to look, Shift/Ctrl to fly");
 };
 
@@ -93,8 +94,8 @@ sealed class FreeLookNode(Input input) : CameraNode
     {
         // ── Rotation (arrow keys) ─────────────────────────────────────────────
         bool anyKey = false;
-        if (input.IsKeyDown(262)) { _yaw   += _rotateDeg * dt; anyKey = true; } // Right arrow
-        if (input.IsKeyDown(263)) { _yaw   -= _rotateDeg * dt; anyKey = true; } // Left arrow
+        if (input.IsKeyDown(262)) { _yaw   -= _rotateDeg * dt; anyKey = true; } // Right arrow
+        if (input.IsKeyDown(263)) { _yaw   += _rotateDeg * dt; anyKey = true; } // Left arrow
         if (input.IsKeyDown(265)) { _pitch += _rotateDeg * dt; anyKey = true; } // Up arrow
         if (input.IsKeyDown(264)) { _pitch -= _rotateDeg * dt; anyKey = true; } // Down arrow
         if (anyKey) Console.Write($"\r[Camera] yaw={_yaw:F1} pitch={_pitch:F1}          ");
