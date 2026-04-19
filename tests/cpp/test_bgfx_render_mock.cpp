@@ -27,6 +27,7 @@ class MockBgfxBackend : public BgfxBackend {
   void SetViewRect(::bgfx::ViewId id, uint16_t x, uint16_t y, uint16_t width, uint16_t height) override {}
   void SetViewTransform(::bgfx::ViewId id, const void* view, const void* proj) override {}
   void SetViewFrameBuffer(::bgfx::ViewId id, ::bgfx::FrameBufferHandle handle) override {}
+  void SetViewMode(::bgfx::ViewId id, ::bgfx::ViewMode::Enum mode) override {}
   uint32_t Frame(bool capture) override { return 0; }
   void Touch(::bgfx::ViewId id) override {}
   
@@ -67,6 +68,8 @@ class MockBgfxBackend : public BgfxBackend {
   ::bgfx::TextureHandle GetTexture(::bgfx::FrameBufferHandle handle, uint8_t attachment) override { return {next_handle++}; }
   void Update(::bgfx::DynamicIndexBufferHandle handle, uint32_t start_index, const ::bgfx::Memory* mem) override {}
   void SetPaletteColor(uint8_t index, float r, float g, float b, float a) override {}
+  const ::bgfx::Memory* Copy(const void* data, uint32_t size) override { return (const ::bgfx::Memory*)0xDEADBEEF; }
+  const ::bgfx::Memory* Alloc(uint32_t size) override { return (const ::bgfx::Memory*)0xDEADBEEF; }
 };
 
 class TestBgfxRenderSystem : public BgfxRenderSystem {
