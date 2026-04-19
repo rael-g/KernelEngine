@@ -294,9 +294,8 @@ ke_result BgfxRenderSystem::OnInitialize()
 
     bgfx_->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
     bgfx_->SetViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
-    // View 7: skybox pass — no clear, renders only where scene left depth=1.
-    bgfx_->SetViewClear(kSkyboxView, BGFX_CLEAR_NONE, 0, 1.0f, 0);
-    bgfx_->SetViewRect(kSkyboxView, 0, 0, (uint16_t)w, (uint16_t)h);
+    // Sequential mode preserves submission order — required so skybox draws before scene geometry.
+    bgfx_->SetViewMode(kSceneView, ::bgfx::ViewMode::Sequential);
 
     ke_result res = SetupShader();
     if (res != KE_OK) return res;
@@ -332,7 +331,7 @@ ke_result BgfxRenderSystem::OnInitialize()
     }
     auto size = (uint32_t)file.tellg();
     file.seekg(0);
-    const ::bgfx::Memory *mem = ::bgfx::alloc(size + 1);
+    const ::bgfx::Memory *mem = bgfx_->Alloc(size + 1);
     file.read(reinterpret_cast<char *>(mem->data), size);
     mem->data[size] = '\0';
     ::bgfx::ShaderHandle sh = bgfx_->CreateShader(mem);
@@ -408,16 +407,21 @@ ke_result BgfxRenderSystem::SetupShader()
         {-1,-1, 1}, { 1,-1, 1}, { 1, 1, 1}, {-1, 1, 1},
     };
     static const uint16_t kSkyIdx[36] = {
-        0,2,1, 0,3,2, 4,5,6, 4,6,7, 0,4,7, 0,7,3, 1,2,6, 1,6,5, 0,1,5, 0,5,4, 2,3,7, 2,7,6,
+        0, 1, 2,  0, 2, 3, // -Z (Yellow)
+        5, 4, 7,  5, 7, 6, // +Z (Blue)
+        4, 0, 3,  4, 3, 7, // -X (Cyan)
+        1, 5, 6,  1, 6, 2, // +X (Red)
+        4, 5, 1,  4, 1, 0, // -Y (Magenta)
+        3, 2, 6,  3, 6, 7  // +Y (Green)
     };
     ::bgfx::VertexLayout skyLayout;
     skyLayout.begin()
         .add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float)
         .end();
     skybox_vb_ = bgfx_->CreateVertexBuffer(
-        ::bgfx::copy(kSkyVerts, sizeof(kSkyVerts)), skyLayout).idx;
+        bgfx_->Copy(kSkyVerts, sizeof(kSkyVerts)), skyLayout).idx;
     skybox_ib_ = bgfx_->CreateIndexBuffer(
-        ::bgfx::copy(kSkyIdx, sizeof(kSkyIdx))).idx;
+        bgfx_->Copy(kSkyIdx, sizeof(kSkyIdx))).idx;
 
     uint32_t white = 0xffffffff;
     ke_texture_handle white_handle;
@@ -430,7 +434,7 @@ ke_result BgfxRenderSystem::SetupShader()
     // Required because the Vulkan backend always needs a valid cube image view at that slot.
     {
         static const uint8_t kWhiteFace[4] = {0xff, 0xff, 0xff, 0xff};
-        const ::bgfx::Memory *mem = ::bgfx::alloc(6 * 4);
+        const ::bgfx::Memory *mem = bgfx_->Alloc(6 * 4);
         for (int f = 0; f < 6; ++f)
             std::memcpy(mem->data + f * 4, kWhiteFace, 4);
         ::bgfx::TextureHandle h = bgfx_->CreateTextureCube(1, false, 1, ::bgfx::TextureFormat::RGBA8, 0, mem);
@@ -652,18 +656,15 @@ ke_result BgfxRenderSystem::Frame()
     // ── Post-processing / scene routing ────────────────────────────────────────
     if (pp_enabled_ && hdr_fb_ != kInvalidHandle)
     {
-        bgfx_->SetViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{hdr_fb_});
-        bgfx_->SetViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{hdr_fb_});
+        bgfx_->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{hdr_fb_});
         SubmitPostProcess();
     }
     else
     {
-        bgfx_->SetViewFrameBuffer(kSceneView,  ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
-        bgfx_->SetViewFrameBuffer(kSkyboxView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        bgfx_->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
     }
 
     bgfx_->Touch(kSceneView);
-    bgfx_->Touch(kSkyboxView);
     bgfx_->Frame();
     has_skybox_           = false;
     active_env_tex_       = kInvalidHandle;
@@ -712,9 +713,9 @@ ke_result BgfxRenderSystem::CreateMesh(const ke_vertex *verts, uint32_t vert_cou
 
     MeshEntry entry;
     entry.vb = bgfx_->CreateVertexBuffer(
-        ::bgfx::copy(expanded.data(), (uint32_t)(sizeof(GpuVert) * vert_count)), layout).idx;
+        bgfx_->Copy(expanded.data(), (uint32_t)(sizeof(GpuVert) * vert_count)), layout).idx;
     entry.ib = bgfx_->CreateIndexBuffer(
-        ::bgfx::copy(indices, sizeof(uint16_t) * index_count)).idx;
+        bgfx_->Copy(indices, sizeof(uint16_t) * index_count)).idx;
     entry.index_count = index_count;
 
     if (!::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb}) ||
@@ -739,8 +740,8 @@ ke_result BgfxRenderSystem::DestroyMesh(ke_mesh_handle handle)
 
 // Generates a full RGBA8 mip chain (mip0|mip1|...) using a 2×2 box filter.
 // Returns the packed buffer; sets *out_num_mips to the level count.
-static std::vector<uint8_t> GenerateMips(uint32_t width, uint32_t height,
-                                          const uint8_t *pixels, uint8_t *out_num_mips)
+std::vector<uint8_t> BgfxRenderSystem::GenerateMips(uint32_t width, uint32_t height,
+                                                     const uint8_t *pixels, uint8_t *out_num_mips)
 {
     uint32_t maxDim = width > height ? width : height;
     uint8_t  numMips = 0;
@@ -797,7 +798,7 @@ ke_result BgfxRenderSystem::CreateTextureRgba(uint32_t width, uint32_t height,
     uint16_t idx = bgfx_->CreateTexture2D(
         (uint16_t)width, (uint16_t)height, numMips > 1, 1,
         ::bgfx::TextureFormat::RGBA8, 0,
-        ::bgfx::copy(mipData.data(), (uint32_t)mipData.size())).idx;
+        bgfx_->Copy(mipData.data(), (uint32_t)mipData.size())).idx;
     if (!::bgfx::isValid(::bgfx::TextureHandle{idx})) return KE_ERROR_RENDER;
     textures_.push_back({idx, true});
     *out_handle = (ke_texture_handle)(textures_.size() - 1);
@@ -835,25 +836,25 @@ ke_result BgfxRenderSystem::CreateCubemapRgba(uint32_t size, const uint8_t *data
       }
     }
 
-    // bgfx cubemap layout: for each mip level, all 6 faces in order
+    // bgfx cubemap layout: face-major (all mip levels for face 0, then face 1, ...)
     uint32_t total = 0;
     for (uint8_t m = 0; m < numMips; ++m) total += 6u * mipFaceSize[m];
 
     std::vector<uint8_t> cubeBuf(total);
     uint8_t *p = cubeBuf.data();
-    uint32_t faceOffset = 0;
-    for (uint8_t m = 0; m < numMips; ++m) {
-        for (int f = 0; f < 6; ++f) {
+    for (int f = 0; f < 6; ++f) {
+        uint32_t faceOffset = 0;
+        for (uint8_t m = 0; m < numMips; ++m) {
             std::memcpy(p, faceMips[f].data() + faceOffset, mipFaceSize[m]);
             p += mipFaceSize[m];
+            faceOffset += mipFaceSize[m];
         }
-        faceOffset += mipFaceSize[m];
     }
 
     uint16_t idx = bgfx_->CreateTextureCube(
         (uint16_t)size, numMips > 1, 1,
         ::bgfx::TextureFormat::RGBA8, 0,
-        ::bgfx::copy(cubeBuf.data(), (uint32_t)cubeBuf.size())).idx;
+        bgfx_->Copy(cubeBuf.data(), (uint32_t)cubeBuf.size())).idx;
     if (!::bgfx::isValid(::bgfx::TextureHandle{idx})) return KE_ERROR_RENDER;
     textures_.push_back({idx, true});
     *out_handle = (ke_texture_handle)(textures_.size() - 1);
@@ -868,18 +869,26 @@ ke_result BgfxRenderSystem::SubmitSkybox(ke_texture_handle cubemap_handle)
     const auto &tex = textures_[cubemap_handle];
     if (!tex.valid) return KE_ERROR_INVALID_ARGUMENT;
 
-    float rotView[16];
-    memcpy(rotView, last_view_, sizeof(rotView));
-    rotView[12] = 0.f; rotView[13] = 0.f; rotView[14] = 0.f;
-    bgfx_->SetViewTransform(kSkyboxView, rotView, last_proj_);
+    // Build a translation-only model matrix at camera position.
+    // The view matrix cancels the translation leaving rotation-only effect in view space.
+    float model[16] = {
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        camera_pos_[0], camera_pos_[1], camera_pos_[2], 1.f
+    };
+    bgfx_->SetTransform(model);
 
     float tint[4] = {1.f, 1.f, 1.f, 1.f};
     bgfx_->SetUniform(::bgfx::UniformHandle{skybox_tint_uniform_}, tint);
     bgfx_->SetTexture(0, ::bgfx::UniformHandle{skybox_sampler_uniform_}, ::bgfx::TextureHandle{tex.idx});
     bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{skybox_vb_});
     bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{skybox_ib_});
-    bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_LEQUAL);
-    bgfx_->Submit(kSkyboxView, ::bgfx::ProgramHandle{skybox_program_});
+    // Skybox fragment shader writes gl_FragDepth = 1.0. We disable depth write 
+    // and use DEPTH_TEST_LEQUAL so it only fills background pixels (depth >= 1.0).
+    bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
+                    BGFX_STATE_DEPTH_TEST_LEQUAL | BGFX_STATE_CULL_CW);
+    bgfx_->Submit(kSceneView, ::bgfx::ProgramHandle{skybox_program_});
 
     has_skybox_     = true;
     active_env_tex_ = tex.idx;
@@ -1224,7 +1233,7 @@ ke_result BgfxRenderSystem::SetPointLights(const ke_point_light *lights, uint32_
     if (count > 0)
     {
         bgfx_->Update(::bgfx::DynamicIndexBufferHandle{b_point_lights_}, 0,
-                       ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuPointLight))));
+                       bgfx_->Copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuPointLight))));
     }
     return KE_OK;
 }
@@ -1255,7 +1264,7 @@ ke_result BgfxRenderSystem::SetSpotLights(const ke_spot_light *lights, uint32_t 
     if (count > 0)
     {
         bgfx_->Update(::bgfx::DynamicIndexBufferHandle{b_spot_lights_}, 0,
-                       ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuSpotLight))));
+                       bgfx_->Copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuSpotLight))));
     }
     return KE_OK;
 }
@@ -1270,7 +1279,7 @@ ke_result BgfxRenderSystem::SetupPostProcess()
         if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
         auto size = (uint32_t)file.tellg();
         file.seekg(0);
-        const ::bgfx::Memory *mem = ::bgfx::alloc(size + 1);
+        const ::bgfx::Memory *mem = bgfx_->Alloc(size + 1);
         file.read(reinterpret_cast<char *>(mem->data), size);
         mem->data[size] = '\0';
         return bgfx_->CreateShader(mem);
@@ -1308,8 +1317,8 @@ ke_result BgfxRenderSystem::SetupPostProcess()
     pos3.begin().add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float).end();
     static const float kFSVerts[9] = {-1.f,-1.f,0.f,  3.f,-1.f,0.f,  -1.f,3.f,0.f};
     static const uint16_t kFSIdx[3] = {0, 1, 2};
-    fullscreen_vb_ = bgfx_->CreateVertexBuffer(::bgfx::copy(kFSVerts, sizeof(kFSVerts)), pos3).idx;
-    fullscreen_ib_ = bgfx_->CreateIndexBuffer(::bgfx::copy(kFSIdx, sizeof(kFSIdx))).idx;
+    fullscreen_vb_ = bgfx_->CreateVertexBuffer(bgfx_->Copy(kFSVerts, sizeof(kFSVerts)), pos3).idx;
+    fullscreen_ib_ = bgfx_->CreateIndexBuffer(bgfx_->Copy(kFSIdx, sizeof(kFSIdx))).idx;
 
     // HDR framebuffer: RGBA16F color + D24 depth (full resolution).
     ::bgfx::TextureHandle hdr_color = bgfx_->CreateTexture2D(
@@ -1457,7 +1466,7 @@ ke_result BgfxRenderSystem::SetupSsao()
         if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
         auto size = file.tellg();
         file.seekg(0);
-        const ::bgfx::Memory *mem = ::bgfx::alloc((uint32_t)size);
+        const ::bgfx::Memory *mem = bgfx_->Alloc((uint32_t)size);
         file.read(reinterpret_cast<char *>(mem->data), size);
         return bgfx_->CreateShader(mem);
     };
@@ -1513,7 +1522,7 @@ ke_result BgfxRenderSystem::SetupSsao()
     ssao_noise_tex_ = bgfx_->CreateTexture2D(
         4, 4, false, 1, ::bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_POINT, // wrap is the default UV mode
-        ::bgfx::copy(noise_pixels, sizeof(noise_pixels))).idx;
+        bgfx_->Copy(noise_pixels, sizeof(noise_pixels))).idx;
 
     // ── Uniforms ───────────────────────────────────────────────────────────────
     s_gbuf_normal_u_    = bgfx_->CreateUniform("s_gbufNormal",    ::bgfx::UniformType::Sampler).idx;
@@ -1611,7 +1620,7 @@ ke_result BgfxRenderSystem::SetupClustered()
         if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
         auto size = (uint32_t)file.tellg();
         file.seekg(0);
-        const ::bgfx::Memory *mem = ::bgfx::alloc(size);
+        const ::bgfx::Memory *mem = bgfx_->Alloc(size);
         file.read(reinterpret_cast<char *>(mem->data), size);
         return bgfx_->CreateShader(mem);
     };
@@ -1732,7 +1741,7 @@ void BgfxRenderSystem::UpdateClusterBounds()
     }
 
     bgfx_->Update(::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, 0,
-                   ::bgfx::copy(bounds.data(), (uint32_t)(bounds.size() * sizeof(AABB))));
+                   bgfx_->Copy(bounds.data(), (uint32_t)(bounds.size() * sizeof(AABB))));
     bounds_dirty_ = false;
 }
 

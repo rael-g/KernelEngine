@@ -172,6 +172,9 @@ class KE_RENDER_API BgfxRenderSystem
     std::vector<MaterialEntry> materials_;
 
   private:
+    std::vector<uint8_t> GenerateMips(uint32_t width, uint32_t height,
+                                       const uint8_t *pixels, uint8_t *out_num_mips);
+
     ke_result SetupShader();
     ke_result SetupPostProcess();
     ke_result SubmitPostProcess();
@@ -194,8 +197,8 @@ class KE_RENDER_API BgfxRenderSystem
     static constexpr uint8_t kPrepassView   = 3; // G-buffer (normals + linear depth)
     static constexpr uint8_t kSsaoView      = 4; // SSAO occlusion raw
     static constexpr uint8_t kSsaoBlurView  = 5; // SSAO 5x5 blur
-    static constexpr uint8_t kSceneView     = 6; // main forward pass
-    static constexpr uint8_t kSkyboxView    = 7; // skybox
+    static constexpr uint8_t kSkyboxView    = 7; // unused — skybox submits into kSceneView
+    static constexpr uint8_t kSceneView     = 6; // main forward pass (skybox + geometry)
     static constexpr uint8_t kBrightView    = 8; // bloom bright-pass
     static constexpr uint8_t kBlurHView     = 9; // bloom blur horizontal
     static constexpr uint8_t kBlurVView     = 10; // bloom blur vertical

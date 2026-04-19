@@ -14,6 +14,7 @@ class BgfxBackend {
   virtual void SetViewRect(::bgfx::ViewId id, uint16_t x, uint16_t y, uint16_t width, uint16_t height) = 0;
   virtual void SetViewTransform(::bgfx::ViewId id, const void* view, const void* proj) = 0;
   virtual void SetViewFrameBuffer(::bgfx::ViewId id, ::bgfx::FrameBufferHandle handle) = 0;
+  virtual void SetViewMode(::bgfx::ViewId id, ::bgfx::ViewMode::Enum mode) = 0;
   virtual uint32_t Frame(bool capture = false) = 0;
   virtual void Touch(::bgfx::ViewId id) = 0;
   
@@ -54,6 +55,8 @@ class BgfxBackend {
   virtual ::bgfx::TextureHandle GetTexture(::bgfx::FrameBufferHandle handle, uint8_t attachment = 0) = 0;
   virtual void Update(::bgfx::DynamicIndexBufferHandle handle, uint32_t start_index, const ::bgfx::Memory* mem) = 0;
   virtual void SetPaletteColor(uint8_t index, float r, float g, float b, float a) = 0;
+  virtual const ::bgfx::Memory* Copy(const void* data, uint32_t size) = 0;
+  virtual const ::bgfx::Memory* Alloc(uint32_t size) = 0;
 };
 
 class RealBgfxBackend : public BgfxBackend {
@@ -65,6 +68,7 @@ class RealBgfxBackend : public BgfxBackend {
   void SetViewRect(::bgfx::ViewId id, uint16_t x, uint16_t y, uint16_t width, uint16_t height) override { ::bgfx::setViewRect(id, x, y, width, height); }
   void SetViewTransform(::bgfx::ViewId id, const void* view, const void* proj) override { ::bgfx::setViewTransform(id, view, proj); }
   void SetViewFrameBuffer(::bgfx::ViewId id, ::bgfx::FrameBufferHandle handle) override { ::bgfx::setViewFrameBuffer(id, handle); }
+  void SetViewMode(::bgfx::ViewId id, ::bgfx::ViewMode::Enum mode) override { ::bgfx::setViewMode(id, mode); }
   uint32_t Frame(bool capture) override { return ::bgfx::frame(capture); }
   void Touch(::bgfx::ViewId id) override { ::bgfx::touch(id); }
   
@@ -105,6 +109,8 @@ class RealBgfxBackend : public BgfxBackend {
   ::bgfx::TextureHandle GetTexture(::bgfx::FrameBufferHandle handle, uint8_t attachment) override { return ::bgfx::getTexture(handle, attachment); }
   void Update(::bgfx::DynamicIndexBufferHandle handle, uint32_t start_index, const ::bgfx::Memory* mem) override { ::bgfx::update(handle, start_index, mem); }
   void SetPaletteColor(uint8_t index, float r, float g, float b, float a) override { ::bgfx::setPaletteColor(index, r, g, b, a); }
+  const ::bgfx::Memory* Copy(const void* data, uint32_t size) override { return ::bgfx::copy(data, size); }
+  const ::bgfx::Memory* Alloc(uint32_t size) override { return ::bgfx::alloc(size); }
 };
 
 } // namespace kernel_engine::render::bgfx
