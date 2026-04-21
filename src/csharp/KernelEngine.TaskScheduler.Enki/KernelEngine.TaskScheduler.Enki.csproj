@@ -8,6 +8,6 @@
     <ProjectReference Include="..\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
     <ProjectReference Include="..\Native\KernelEngine.TaskScheduler.Enki.Native\KernelEngine.TaskScheduler.Enki.Native.csproj" />
     <ProjectReference Include="..\KernelEngine.Framework\KernelEngine.Framework.csproj" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
   </ItemGroup>
 </Project>

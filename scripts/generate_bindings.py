@@ -3,7 +3,7 @@ import subprocess
 import sys
 
 def run_command(command, cwd=None):
-    print(f"Running: {' '.join(command)}")
+    print(f"Running: {' '.join(command)} in {cwd}")
     result = subprocess.run(command, cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"FAILED: {command[-1]}")
@@ -15,10 +15,12 @@ def run_command(command, cwd=None):
 
 def generate():
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    print("Restoring .NET tools...")
-    subprocess.run(["dotnet", "tool", "restore"], cwd=root_dir)
+    csharp_dir = os.path.join(root_dir, "src", "csharp")
+    
+    print(f"Restoring .NET tools in {csharp_dir}...")
+    subprocess.run(["dotnet", "tool", "restore"], cwd=csharp_dir)
 
-    native_dir = os.path.join(root_dir, "src", "csharp", "Native")
+    native_dir = os.path.join(csharp_dir, "Native")
     rsp_files = []
     for root, dirs, files in os.walk(native_dir):
         for file in files:
@@ -29,7 +31,8 @@ def generate():
     success_count = 0
     for rsp in rsp_files:
         print(f"\n--- Generating: {os.path.relpath(rsp, root_dir)} ---")
-        if run_command(["dotnet", "clangsharp", f"@{rsp}"], cwd=os.path.dirname(rsp)):
+        # Run as a local dotnet tool
+        if run_command(["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", f"@{rsp}"], cwd=os.path.dirname(rsp)):
             success_count += 1
     
     print(f"\nDone. {success_count}/{len(rsp_files)} bindings regenerated successfully.")

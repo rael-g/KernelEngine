@@ -6,12 +6,15 @@ KernelEngine.TaskScheduler.Enki.Native
 ke_task_scheduler_enki
 --include-directory
 ../../../../cpp/task_scheduler/enki/include
+../../../../c/kernel/include
 --file
 ../../../../cpp/task_scheduler/enki/include/kernel_engine/task_scheduler/enki/enki_task_scheduler.h
 --methodClassName
 NativeMethods
 --prefixStrip
 ke_
+--with-using
+*=KernelEngine.Kernel.Native
 --config
 multi-file
 latest-codegen

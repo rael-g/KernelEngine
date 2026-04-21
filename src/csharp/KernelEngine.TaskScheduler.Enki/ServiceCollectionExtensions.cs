@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
-using KernelEngine.TaskScheduler.Enki.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.TaskScheduler.Enki;
@@ -14,10 +13,12 @@ public static class ServiceCollectionExtensions
         {
             var allocator = sp.GetRequiredService<Allocator>();
             
-            ke_task_scheduler* nativeScheduler;
-            KernelException.ThrowIfFailed(NativeMethods.task_scheduler_enki_create(allocator.Native, &nativeScheduler));
-            
-            return new KernelEngine.Kernel.TaskScheduler(nativeScheduler);
+            unsafe
+            {
+                ke_task_scheduler* nativeScheduler;
+                KernelException.ThrowIfFailed(KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(allocator.Native, &nativeScheduler));
+                return new KernelEngine.Kernel.TaskScheduler(nativeScheduler);
+            }
         });
         
         return services;

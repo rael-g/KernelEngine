@@ -18,8 +18,6 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/messaging/message_pipe.h
 ../../../c/kernel/include/kernel_engine/kernel/common/math.h
 ../../../c/kernel/include/kernel_engine/kernel/world/ecs.h
-../../../c/kernel/include/kernel_engine/kernel/world/node.h
-../../../c/kernel/include/kernel_engine/kernel/world/scene.h
 ../../../c/kernel/include/kernel_engine/kernel/world/system.h
 ../../../c/kernel/include/kernel_engine/kernel/world/components.h
 ../../../c/kernel/include/kernel_engine/kernel/world/world.h
