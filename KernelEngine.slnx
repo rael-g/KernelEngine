@@ -15,6 +15,7 @@
     <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/KernelEngine.Logging.Serilog/KernelEngine.Logging.Serilog.csproj" />
     <Project Path="src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
+    <Project Path="src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
     <Project Path="src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
   </Folder>
   <Folder Name="/src/csharp/Native/">
@@ -23,6 +24,7 @@
     <Project Path="src/csharp/Native/KernelEngine.Window.Glfw.Native/KernelEngine.Window.Glfw.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
     <Project Path="src/csharp/Native/KernelEngine.ShaderCompiler.Native/KernelEngine.ShaderCompiler.Native.csproj" />
+    <Project Path="src/csharp/Native/KernelEngine.TaskScheduler.Enki.Native/KernelEngine.TaskScheduler.Enki.Native.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
