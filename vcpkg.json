@@ -9,6 +9,7 @@
     "bgfx",
     "assimp",
     "gtest",
+    "enkits",
     {
       "name": "bgfx",
       "features": [ "tools" ],
