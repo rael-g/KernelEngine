@@ -13,7 +13,7 @@ target_link_libraries(test_cpp_services PRIVATE
     ke_render_bgfx
     ke_window_glfw
     ke_shader_compiler_bgfx
-    ke_asset_loader_assimp
+    ke_asset_assimp
     GTest::gtest_main
     GTest::gmock
 )

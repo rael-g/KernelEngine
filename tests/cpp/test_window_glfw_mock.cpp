@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/window/glfw/glfw_window_system.hh>
+#include <GlfwWindow.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/messaging/message_pipe.h>
 #include <kernel_engine/kernel/input/input_messages.h>
 #include <kernel_engine/kernel/logger/logger.h>
-#include "glfw_interface.hh"
+#include "GlfwInterface.hpp"
 
 using namespace kernel_engine::window::glfw;
 
@@ -40,7 +40,7 @@ class GlfwWindowMockTest : public ::testing::Test {
   ke_allocator* alloc = nullptr;
   ke_message_pipe* pipe = nullptr;
   ke_logger* logger = nullptr;
-  GlfwWindowSystem* system = nullptr;
+  GlfwWindow* window_obj = nullptr;
   MockGlfwBackend* mock_glfw = nullptr;
   bool log_called = false;
 
@@ -57,13 +57,13 @@ class GlfwWindowMockTest : public ::testing::Test {
     logger->handle = this;
 
     ke_window_glfw_params params = { alloc, logger, pipe, 800, 600, "Test" };
-    system = new GlfwWindowSystem(&params);
+    window_obj = new GlfwWindow(&params);
     mock_glfw = new MockGlfwBackend();
-    system->set_glfw(mock_glfw);
+    window_obj->set_glfw(mock_glfw);
   }
 
   void TearDown() override {
-    if (system) delete system;
+    if (window_obj) delete window_obj;
     if (mock_glfw) delete mock_glfw;
     if (pipe) pipe->destroy(pipe);
     if (logger) free(logger);
@@ -73,19 +73,19 @@ class GlfwWindowMockTest : public ::testing::Test {
 
 TEST_F(GlfwWindowMockTest, Initialize_Fail_LogsError) {
   mock_glfw->init_ret = 0;
-  system->OnInitialize();
+  window_obj->OnInitialize();
   ASSERT_TRUE(log_called);
 }
 
 TEST_F(GlfwWindowMockTest, Initialize_Success_LogsInfo) {
-  system->OnInitialize();
+  window_obj->OnInitialize();
   ASSERT_TRUE(log_called);
 }
 
 TEST_F(GlfwWindowMockTest, Shutdown_WithWindow_LogsInfo) {
-  system->OnInitialize();
+  window_obj->OnInitialize();
   log_called = false;
-  system->OnShutdown();
+  window_obj->OnShutdown();
   ASSERT_TRUE(log_called);
 }
 
@@ -93,7 +93,7 @@ TEST_F(GlfwWindowMockTest, KeyCallback_BroadcastsMessage) {
   ke_message_pipe* reader = nullptr;
   pipe->create_reader(pipe, &reader);
 
-  system->OnInitialize();
+  window_obj->OnInitialize();
 
   // Trigger the callback with the mock's window handle
   if (mock_glfw->key_cb) {
@@ -110,25 +110,20 @@ TEST_F(GlfwWindowMockTest, KeyCallback_BroadcastsMessage) {
 }
 
 TEST_F(GlfwWindowMockTest, PollEvents_CallsBackend) {
-  ke_window* api = system->ToApi();
+  ke_window* api = window_obj->ToApi();
   api->poll_events(api);
   ASSERT_EQ(mock_glfw->poll_count, 1);
 }
 
 TEST_F(GlfwWindowMockTest, GetNativeHandle_NullWhenNoWindow) {
-  ASSERT_EQ(system->GetNativeHandle(), nullptr);
+  ASSERT_EQ(window_obj->GetNativeHandle(), nullptr);
 }
 
 TEST_F(GlfwWindowMockTest, Destroy_ViaApi_Works) {
-    ke_window* api = system->ToApi();
-    // In our implementation, destroy calls delete sys and free mem.
-    // Since we managed system with new standard, we need to be careful.
-    // But ke_window_glfw_create uses allocator->alloc.
-    
     ke_window_glfw_params p = { alloc, nullptr, nullptr, 800, 600, "API" };
     ke_window* win = nullptr;
     ke_window_glfw_create(&p, &win);
     
-    win->destroy(win); // Should not crash
+    win->destroy(win); 
     SUCCEED();
 }

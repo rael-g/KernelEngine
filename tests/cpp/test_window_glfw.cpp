@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/window/glfw/glfw_window.hh>
+#include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/kernel/context/allocator.h>
 
 class GlfwWindowTest : public ::testing::Test {
@@ -10,10 +10,12 @@ protected:
     void SetUp() override {
         alloc = ke_allocator_malloc_create();
         ke_window_glfw_params params = { 
-            .allocator = alloc,
-            .width = 800,
-            .height = 600,
-            .title = "Test"
+            alloc,
+            nullptr,
+            nullptr,
+            800,
+            600,
+            "Test"
         };
         ke_window_glfw_create(&params, &window);
     }
@@ -37,7 +39,7 @@ TEST(GlfwWindowInitTest, Create_NullParams_ReturnsInvalidArgument) {
 
 TEST(GlfwWindowInitTest, Create_NullAllocator_ReturnsInvalidArgument) {
     ke_window* w = nullptr;
-    ke_window_glfw_params params = { .allocator = nullptr };
+    ke_window_glfw_params params = { nullptr, nullptr, nullptr, 800, 600, "Test" };
     ASSERT_EQ(ke_window_glfw_create(&params, &w), KE_ERROR_INVALID_ARGUMENT);
 }
 

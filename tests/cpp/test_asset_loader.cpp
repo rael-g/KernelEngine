@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/asset/assimp/ke_asset_loader_assimp.hh>
+#include <kernel_engine/asset/assimp/assimp_loader.h>
 #include <kernel_engine/kernel/context/allocator.h>
 
 class AssetLoaderTest : public ::testing::Test {

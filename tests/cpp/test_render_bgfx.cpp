@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/render/bgfx/bgfx_render.hh>
+#include <kernel_engine/render/bgfx/bgfx_render.h>
 #include <kernel_engine/kernel/context/allocator.h>
 
 class BgfxRenderTest : public ::testing::Test {
