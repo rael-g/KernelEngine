@@ -77,7 +77,8 @@ public:
 
 protected:
     virtual ::bgfx::ShaderHandle LoadShader(const char *name);
-    
+    virtual ke_result SetupShader();
+
     uint16_t program_             = kInvalidHandle;
     uint16_t depth_program_       = kInvalidHandle;
     uint16_t cull_program_        = kInvalidHandle;
@@ -89,8 +90,6 @@ protected:
     uint16_t ssao_program_        = kInvalidHandle;
     uint16_t ssao_blur_program_   = kInvalidHandle;
     uint16_t shadow_program_      = kInvalidHandle;
-
-    ke_result SetupShader();
 
     BgfxLogCallback callback_;
     class BgfxBackend* bgfx_ = nullptr;

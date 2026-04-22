@@ -3,6 +3,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/render/light.h>
 #include <kernel_engine/kernel/render/material.h>
+#include <kernel_engine/render/bgfx/bgfx_render.h>
 #include "InternalTypes.hpp"
 #include <vector>
 
@@ -22,7 +23,7 @@ struct MaterialEntry
 /**
  * @brief Manages light sources and PBR materials.
  */
-class LightingManager
+class KE_RENDER_API LightingManager
 {
 public:
     ke_result SetDirectionalLight(const ke_directional_light *light);

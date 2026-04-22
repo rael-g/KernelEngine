@@ -2,6 +2,7 @@
 
 #include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/render/bgfx/bgfx_render.h>
 #include "InternalTypes.hpp"
 #include <cstdint>
 
@@ -11,7 +12,7 @@ namespace kernel_engine::render::bgfx
 /**
  * @brief Manages HDR, Bloom, SSAO and Tonemapping passes.
  */
-class PostProcessPipeline
+class KE_RENDER_API PostProcessPipeline
 {
 public:
     ke_result SetTonemapping(ke_bool enabled, float exposure, float gamma);
@@ -19,10 +20,10 @@ public:
     ke_result SetSsao(ke_bool enabled, float radius, float bias, float strength);
 
 protected:
-    ke_result SetupPostProcess();
-    ke_result SubmitPostProcess();
-    ke_result SetupSsao();
-    ke_result SubmitSsao();
+    virtual ke_result SetupPostProcess();
+    virtual ke_result SubmitPostProcess();
+    virtual ke_result SetupSsao();
+    virtual ke_result SubmitSsao();
 
     uint16_t hdr_fb_          = kInvalidHandle;
     uint16_t bright_fb_       = kInvalidHandle;

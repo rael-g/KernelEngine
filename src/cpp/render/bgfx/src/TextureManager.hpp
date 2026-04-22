@@ -3,6 +3,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/asset/asset_loader.h>
+#include <kernel_engine/render/bgfx/bgfx_render.h>
 #include "InternalTypes.hpp"
 #include <vector>
 #include <cstdint>
@@ -19,7 +20,7 @@ struct TextureEntry
 /**
  * @brief Manages texture resources and cubemaps.
  */
-class TextureManager
+class KE_RENDER_API TextureManager
 {
 public:
     ke_result CreateTextureRgba(uint32_t width, uint32_t height, const uint8_t *pixels,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/render/bgfx/bgfx_render.h>
 #include "InternalTypes.hpp"
 #include <vector>
 
@@ -20,7 +21,7 @@ struct ShadowMapEntry
 /**
  * @brief Manages shadow map resources and shadow passes.
  */
-class ShadowPipeline
+class KE_RENDER_API ShadowPipeline
 {
 public:
     ke_result CreateShadowMap(uint32_t width, uint32_t height, ke_shadow_map_handle *out_handle);

@@ -4,6 +4,7 @@
 #include <kernel_engine/kernel/render/mesh.h>
 #include <kernel_engine/kernel/render/material.h>
 #include <kernel_engine/kernel/common/math.h>
+#include <kernel_engine/render/bgfx/bgfx_render.h>
 #include "InternalTypes.hpp"
 #include <vector>
 
@@ -20,7 +21,7 @@ struct MeshEntry
 /**
  * @brief Manages geometry resources (Vertex Buffers, Index Buffers).
  */
-class GeometryManager
+class KE_RENDER_API GeometryManager
 {
 public:
     ke_result CreateMesh(const ke_vertex *verts, uint32_t vert_count,
