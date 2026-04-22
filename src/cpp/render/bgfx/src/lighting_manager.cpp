@@ -1,5 +1,5 @@
-#include "LightingManager.hpp"
-#include "BgfxRenderer.hpp"
+#include "lighting_manager.hpp"
+#include "bgfx_renderer.hpp"
 #include "bgfx_interface.hh"
 #include <vector>
 #include <cstring>

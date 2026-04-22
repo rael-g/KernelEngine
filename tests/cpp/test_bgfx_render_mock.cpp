@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <BgfxRenderer.hpp>
+#include <bgfx_renderer.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/messaging/message_pipe.h>
 #include <kernel_engine/kernel/logger/logger.h>

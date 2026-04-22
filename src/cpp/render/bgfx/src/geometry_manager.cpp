@@ -1,5 +1,5 @@
-#include "GeometryManager.hpp"
-#include "BgfxRenderer.hpp"
+#include "geometry_manager.hpp"
+#include "bgfx_renderer.hpp"
 #include "bgfx_interface.hh"
 #include <vector>
 #include <cstring>

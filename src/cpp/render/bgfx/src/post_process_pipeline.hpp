@@ -3,7 +3,7 @@
 #include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/render/bgfx/bgfx_render.h>
-#include "InternalTypes.hpp"
+#include "internal_types.hpp"
 #include <cstdint>
 
 namespace kernel_engine::render::bgfx

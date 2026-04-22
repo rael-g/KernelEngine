@@ -5,7 +5,7 @@
 #include <kernel_engine/kernel/render/material.h>
 #include <kernel_engine/kernel/common/math.h>
 #include <kernel_engine/render/bgfx/bgfx_render.h>
-#include "InternalTypes.hpp"
+#include "internal_types.hpp"
 #include <vector>
 
 namespace kernel_engine::render::bgfx

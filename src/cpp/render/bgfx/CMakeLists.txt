@@ -1,11 +1,11 @@
 add_library(ke_render_bgfx
-    src/BgfxRenderer.cpp
-    src/GeometryManager.cpp
-    src/TextureManager.cpp
-    src/LightingManager.cpp
-    src/ShadowPipeline.cpp
-    src/PostProcessPipeline.cpp
-    src/ClusteredForward.cpp
+    src/bgfx_renderer.cpp
+    src/geometry_manager.cpp
+    src/texture_manager.cpp
+    src/lighting_manager.cpp
+    src/shadow_pipeline.cpp
+    src/post_process_pipeline.cpp
+    src/clustered_forward.cpp
 )
 
 get_target_property(target_type ke_render_bgfx TYPE)

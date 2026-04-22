@@ -7,13 +7,13 @@
 #include <bgfx/bgfx.h>
 #include <string>
 
-#include "InternalTypes.hpp"
-#include "GeometryManager.hpp"
-#include "TextureManager.hpp"
-#include "LightingManager.hpp"
-#include "ShadowPipeline.hpp"
-#include "PostProcessPipeline.hpp"
-#include "ClusteredForward.hpp"
+#include "internal_types.hpp"
+#include "geometry_manager.hpp"
+#include "texture_manager.hpp"
+#include "lighting_manager.hpp"
+#include "shadow_pipeline.hpp"
+#include "post_process_pipeline.hpp"
+#include "clustered_forward.hpp"
 
 namespace kernel_engine::render::bgfx
 {

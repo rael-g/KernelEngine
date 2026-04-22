@@ -1,5 +1,5 @@
-#include "TextureManager.hpp"
-#include "BgfxRenderer.hpp"
+#include "texture_manager.hpp"
+#include "bgfx_renderer.hpp"
 #include "bgfx_interface.hh"
 #include <vector>
 #include <cstring>

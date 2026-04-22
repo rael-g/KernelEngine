@@ -1,5 +1,5 @@
-#include "ClusteredForward.hpp"
-#include "BgfxRenderer.hpp"
+#include "clustered_forward.hpp"
+#include "bgfx_renderer.hpp"
 #include "bgfx_interface.hh"
 #include <fstream>
 #include <vector>

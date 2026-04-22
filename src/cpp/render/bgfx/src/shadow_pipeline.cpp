@@ -1,5 +1,5 @@
-#include "ShadowPipeline.hpp"
-#include "BgfxRenderer.hpp"
+#include "shadow_pipeline.hpp"
+#include "bgfx_renderer.hpp"
 #include "bgfx_interface.hh"
 #include <vector>
 #include <cstring>
