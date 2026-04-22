@@ -1,10 +1,10 @@
 #pragma once
 
 #include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
-#include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
+#include <kernel_engine/task_scheduler/enki/enki_task_scheduler_public.h>
+#include <atomic>
 
-// Forward declarations to keep the header clean and binding-friendly
-namespace enki { class TaskScheduler; }
+namespace enki { class TaskScheduler; class ITaskSet; }
 
 namespace kernel_engine::task_scheduler::enki {
 

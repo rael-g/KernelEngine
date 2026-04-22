@@ -1,4 +1,4 @@
-#include "enki_task_scheduler.hh"
+#include "EnkiTaskScheduler.hpp"
 #include <TaskScheduler.h>
 #include <atomic>
 #include <new>
@@ -14,6 +14,8 @@ public:
     std::atomic<bool> completed{false};
 
     void ExecuteRange(::enki::TaskSetPartition range, uint32_t threadnum) override {
+        (void)range;
+        (void)threadnum;
         if (func) func(data);
         completed.store(true, std::memory_order_release);
         
