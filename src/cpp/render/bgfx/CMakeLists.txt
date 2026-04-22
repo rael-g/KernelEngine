@@ -1,8 +1,11 @@
-find_package(bgfx CONFIG REQUIRED)
-find_package(glm CONFIG REQUIRED)
-
 add_library(ke_render_bgfx
-    src/bgfx_render_system.cc
+    src/BgfxRenderer.cpp
+    src/GeometryManager.cpp
+    src/TextureManager.cpp
+    src/LightingManager.cpp
+    src/ShadowPipeline.cpp
+    src/PostProcessPipeline.cpp
+    src/ClusteredForward.cpp
 )
 
 get_target_property(target_type ke_render_bgfx TYPE)
@@ -17,12 +20,20 @@ target_include_directories(ke_render_bgfx PUBLIC
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
-target_link_libraries(ke_render_bgfx PUBLIC 
+target_include_directories(ke_render_bgfx PRIVATE
+    src
+)
+
+find_package(bgfx CONFIG REQUIRED)
+
+target_link_libraries(ke_render_bgfx PUBLIC
     ke_kernel
     bgfx::bgfx
-    bgfx::bx
+)
+
+target_link_libraries(ke_render_bgfx PRIVATE
     bgfx::bimg
-    glm::glm
+    bgfx::bx
 )
 
 install(TARGETS ke_render_bgfx
@@ -32,5 +43,4 @@ install(TARGETS ke_render_bgfx
     ARCHIVE DESTINATION lib
 )
 
-# Install the kernel_engine folder into include/
-install(DIRECTORY include/kernel_engine DESTINATION include)
+install(DIRECTORY include/ DESTINATION include)
