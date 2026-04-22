@@ -1,7 +1,8 @@
-find_package(glfw3 CONFIG REQUIRED)
-
 add_library(ke_window_glfw
-    src/glfw_window_system.cc
+    src/GlfwWindow.cpp
+    src/GlfwWindow.hpp
+    src/GlfwInterface.hpp
+    src/InternalHelpers.hpp
 )
 
 get_target_property(target_type ke_window_glfw TYPE)
@@ -16,7 +17,13 @@ target_include_directories(ke_window_glfw PUBLIC
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
-target_link_libraries(ke_window_glfw PUBLIC 
+target_include_directories(ke_window_glfw PRIVATE
+    src
+)
+
+find_package(glfw3 CONFIG REQUIRED)
+
+target_link_libraries(ke_window_glfw PUBLIC
     ke_kernel
     glfw
 )
@@ -28,5 +35,4 @@ install(TARGETS ke_window_glfw
     ARCHIVE DESTINATION lib
 )
 
-# Install the kernel_engine folder into include/
-install(DIRECTORY include/kernel_engine DESTINATION include)
+install(DIRECTORY include/ DESTINATION include)

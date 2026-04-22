@@ -1,9 +1,8 @@
 #pragma once
 
-#include <cstdint>
 #include <kernel_engine/kernel/window/window.h>
 #include <kernel_engine/kernel/messaging/message_pipe.h>
-#include <kernel_engine/window/glfw/glfw_window.hh>
+#include <kernel_engine/window/glfw/glfw_window.h>
 #include <string>
 
 struct GLFWwindow;
@@ -11,11 +10,11 @@ struct GLFWwindow;
 namespace kernel_engine::window::glfw
 {
 
-class KE_WINDOW_API GlfwWindowSystem
+class KE_WINDOW_API GlfwWindow
 {
 public:
-    explicit GlfwWindowSystem(const ke_window_glfw_params *params);
-    ~GlfwWindowSystem();
+    explicit GlfwWindow(const ke_window_glfw_params *params);
+    ~GlfwWindow();
 
     ke_result OnInitialize();
     ke_result OnShutdown();
