@@ -22,13 +22,13 @@ If a choice exists between two valid approaches, the one that reduces ambiguity 
 * Standard pattern: `kernel_engine::domain::<subdomain>?::<name>`.
 * Namespaces MUST reflect the logical domain boundaries, which in turn SHOULD align with the physical directory structure.
 * `using namespace` is strictly FORBIDDEN.
-* `using` declarations for specific types are RECOMMENDED in `.cc` files to shorten fully qualified names. They MUST be placed at the top of the file, BEFORE the namespace block.
-* `using` declarations are FORBIDDEN in header files (`.hh`).
+* `using` declarations for specific types are RECOMMENDED in `.cpp` files to shorten fully qualified names. They MUST be placed at the top of the file, BEFORE the namespace block.
+* `using` declarations are FORBIDDEN in header files (`.hpp`).
 
 ### File Naming and Extensions
 * Files MUST use `snake_case`.
-* C++ Headers: `.hh`
-* C++ Implementation: `.cc`
+* C++ Headers: `.hpp`
+* C++ Implementation: `.cpp`
 * C Headers: `.h`
 * C Implementation: `.c`
 * Header/Source pairs MUST match the primary type name they implement (but in snake_case).
