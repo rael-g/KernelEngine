@@ -5,8 +5,23 @@
 #include <kernel_engine/kernel/input/input_messages.h>
 #include <kernel_engine/kernel/logger/logger.h>
 #include "GlfwInterface.hpp"
+#include <vector>
 
 using namespace kernel_engine::window::glfw;
+
+// --- Pure Mock Message Pipe ---
+
+struct MockPipeState {
+    std::vector<std::pair<uint64_t, ke_msg_key_event>> messages;
+};
+
+static ke_result mock_pipe_broadcast(ke_message_pipe* self, uint64_t type, const void* data, size_t size) {
+    if (type == KE_MSG_KEY_EVENT && size == sizeof(ke_msg_key_event)) {
+        auto* state = static_cast<MockPipeState*>(self->handle);
+        state->messages.push_back({type, *static_cast<const ke_msg_key_event*>(data)});
+    }
+    return KE_OK;
+}
 
 class MockGlfwBackend : public GlfwBackend {
  public:
@@ -39,6 +54,7 @@ class GlfwWindowMockTest : public ::testing::Test {
  protected:
   ke_allocator* alloc = nullptr;
   ke_message_pipe* pipe = nullptr;
+  MockPipeState* pipe_state = nullptr;
   ke_logger* logger = nullptr;
   GlfwWindow* window_obj = nullptr;
   MockGlfwBackend* mock_glfw = nullptr;
@@ -46,12 +62,19 @@ class GlfwWindowMockTest : public ::testing::Test {
 
   void SetUp() override {
     alloc = ke_allocator_malloc_create();
-    ke_message_pipe_create(alloc, nullptr, &pipe);
     
+    // Create a pure mock pipe
+    pipe = (ke_message_pipe*)calloc(1, sizeof(ke_message_pipe));
+    pipe_state = new MockPipeState();
+    pipe->handle = pipe_state;
+    pipe->broadcast = mock_pipe_broadcast;
+    pipe->destroy = [](ke_message_pipe* self) { (void)self; }; 
+
     logger = (ke_logger*)calloc(1, sizeof(ke_logger));
     logger->runtime_limit = KE_LOG_LEVEL_DEBUG;
     logger->log = [](ke_logger* self, const ke_log_event* ev) {
         (void)ev;
+        if (!self->handle) return;
         auto* test = (GlfwWindowMockTest*)self->handle;
         test->log_called = true;
     };
@@ -65,6 +88,7 @@ class GlfwWindowMockTest : public ::testing::Test {
 
   void TearDown() override {
     if (window_obj) {
+        window_obj->release_glfw();
         delete window_obj;
         window_obj = nullptr;
     }
@@ -73,10 +97,15 @@ class GlfwWindowMockTest : public ::testing::Test {
         mock_glfw = nullptr;
     }
     if (pipe) {
-        pipe->destroy(pipe);
+        free(pipe);
         pipe = nullptr;
     }
+    if (pipe_state) {
+        delete pipe_state;
+        pipe_state = nullptr;
+    }
     if (logger) {
+        logger->handle = nullptr; // Neutralize callback
         free(logger);
         logger = nullptr;
     }
@@ -106,22 +135,15 @@ TEST_F(GlfwWindowMockTest, Shutdown_WithWindow_LogsInfo) {
 }
 
 TEST_F(GlfwWindowMockTest, KeyCallback_BroadcastsMessage) {
-  ke_message_pipe* reader = nullptr;
-  pipe->create_reader(pipe, &reader);
-
   window_obj->OnInitialize();
 
   if (mock_glfw->key_cb) {
       mock_glfw->key_cb(mock_glfw->create_ret, 65, 0, 1, 0); // Key A, Press
   }
 
-  ke_msg_key_event received_msg = {};
-  bool received = reader->try_receive(reader, KE_MSG_KEY_EVENT, &received_msg, sizeof(received_msg));
-
-  ASSERT_TRUE(received);
-  ASSERT_EQ(received_msg.key, 65);
-  
-  reader->destroy(reader);
+  ASSERT_FALSE(pipe_state->messages.empty());
+  ASSERT_EQ(pipe_state->messages[0].first, KE_MSG_KEY_EVENT);
+  ASSERT_EQ(pipe_state->messages[0].second.key, 65);
 }
 
 TEST_F(GlfwWindowMockTest, PollEvents_CallsBackend) {
