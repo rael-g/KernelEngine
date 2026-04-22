@@ -73,6 +73,7 @@ public:
 
     // Test support
     void set_bgfx(class BgfxBackend* bgfx);
+    class BgfxBackend* release_bgfx();
 
 protected:
     virtual ::bgfx::ShaderHandle LoadShader(const char *name);
@@ -93,7 +94,7 @@ protected:
 
     BgfxLogCallback callback_;
     class BgfxBackend* bgfx_ = nullptr;
-    bool own_glfw_ = true; // internal flag for backend ownership
+    bool own_bgfx_ = true; // internal flag for backend ownership
     bool initialized_ = false;
 
     ke_render render_api_{};

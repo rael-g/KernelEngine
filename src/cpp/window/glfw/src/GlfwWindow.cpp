@@ -95,6 +95,14 @@ void GlfwWindow::set_glfw(GlfwBackend* glfw) {
     own_glfw_ = false;
 }
 
+class GlfwBackend* GlfwWindow::release_glfw() {
+    class GlfwBackend* g = glfw_;
+    glfw_ = nullptr;
+    own_glfw_ = false;
+    if (s_glfw_backend == g) s_glfw_backend = nullptr;
+    return g;
+}
+
 ke_window *GlfwWindow::ToApi() { return &window_api_; }
 
 ke_result GlfwWindow::OnInitialize()
@@ -124,6 +132,7 @@ ke_result GlfwWindow::OnShutdown()
         glfw_->Terminate();
         window_ = nullptr;
     }
+    if (s_glfw_backend == glfw_) s_glfw_backend = nullptr;
     return KE_OK;
 }
 

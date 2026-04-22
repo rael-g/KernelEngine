@@ -64,7 +64,7 @@ BgfxRenderer::BgfxRenderer(const ke_render_bgfx_params *params)
 
     void* backend_mem = allocator_->alloc(allocator_, sizeof(RealBgfxBackend), alignof(RealBgfxBackend));
     bgfx_ = new (backend_mem) RealBgfxBackend();
-    own_glfw_ = true;
+    own_bgfx_ = true;
 
     callback_.SetLogger(logger_);
     render_api_.handle = this;
@@ -165,7 +165,7 @@ BgfxRenderer::BgfxRenderer(const ke_render_bgfx_params *params)
 
 BgfxRenderer::~BgfxRenderer()
 {
-    if (own_glfw_ && bgfx_)
+    if (own_bgfx_ && bgfx_)
     {
         bgfx_->~BgfxBackend();
         allocator_->free(allocator_, bgfx_);
@@ -523,13 +523,21 @@ ke_render *BgfxRenderer::ToApi() { return &render_api_; }
 
 void BgfxRenderer::set_bgfx(class BgfxBackend* bgfx)
 {
-    if (own_glfw_ && bgfx_)
+    if (own_bgfx_ && bgfx_)
     {
         bgfx_->~BgfxBackend();
         allocator_->free(allocator_, bgfx_);
     }
     bgfx_ = bgfx;
-    own_glfw_ = false;
+    own_bgfx_ = false;
+}
+
+class BgfxBackend* BgfxRenderer::release_bgfx()
+{
+    class BgfxBackend* b = bgfx_;
+    bgfx_ = nullptr;
+    own_bgfx_ = false;
+    return b;
 }
 
 } // namespace kernel_engine::render::bgfx

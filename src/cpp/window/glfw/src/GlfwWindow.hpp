@@ -28,6 +28,7 @@ public:
 
     // Test support
     void set_glfw(class GlfwBackend* glfw);
+    class GlfwBackend* release_glfw();
 
 private:
     ke_window window_api_{};

@@ -21,17 +21,17 @@ class MockGlfwBackend : public GlfwBackend {
 
   int Init() override { return init_ret; }
   void Terminate() override { term_count++; }
-  void WindowHint(int hint, int value) override {}
-  GLFWwindow* GlfwCreateWindow(int width, int height, const char* title, GLFWmonitor* monitor, GLFWwindow* share) override { return create_ret; }
-  void DestroyWindow(GLFWwindow* window) override {}
-  void SetWindowUserPointer(GLFWwindow* window, void* pointer) override { user_ptr = pointer; }
-  void* GetWindowUserPointer(GLFWwindow* window) override { return user_ptr; }
-  GLFWkeyfun SetKeyCallback(GLFWwindow* window, GLFWkeyfun callback) override { key_cb = callback; return nullptr; }
+  void WindowHint(int hint, int value) override { (void)hint; (void)value; }
+  GLFWwindow* GlfwCreateWindow(int width, int height, const char* title, GLFWmonitor* monitor, GLFWwindow* share) override { (void)width; (void)height; (void)title; (void)monitor; (void)share; return create_ret; }
+  void DestroyWindow(GLFWwindow* window) override { (void)window; }
+  void SetWindowUserPointer(GLFWwindow* window, void* pointer) override { (void)window; user_ptr = pointer; }
+  void* GetWindowUserPointer(GLFWwindow* window) override { (void)window; return user_ptr; }
+  GLFWkeyfun SetKeyCallback(GLFWwindow* window, GLFWkeyfun callback) override { (void)window; key_cb = callback; return nullptr; }
   void PollEvents() override { poll_count++; }
-  void GetWindowSize(GLFWwindow* window, int* width, int* height) override { *width = w; *height = h; }
-  int WindowShouldClose(GLFWwindow* window) override { return should_close; }
+  void GetWindowSize(GLFWwindow* window, int* width, int* height) override { (void)window; *width = w; *height = h; }
+  int WindowShouldClose(GLFWwindow* window) override { (void)window; return should_close; }
 #ifdef _WIN32
-  void* GetWin32Window(GLFWwindow* window) override { return (void*)0x5678; }
+  void* GetWin32Window(GLFWwindow* window) override { (void)window; return (void*)0x5678; }
 #endif
 };
 
@@ -51,6 +51,7 @@ class GlfwWindowMockTest : public ::testing::Test {
     logger = (ke_logger*)calloc(1, sizeof(ke_logger));
     logger->runtime_limit = KE_LOG_LEVEL_DEBUG;
     logger->log = [](ke_logger* self, const ke_log_event* ev) {
+        (void)ev;
         auto* test = (GlfwWindowMockTest*)self->handle;
         test->log_called = true;
     };
@@ -63,11 +64,26 @@ class GlfwWindowMockTest : public ::testing::Test {
   }
 
   void TearDown() override {
-    if (window_obj) delete window_obj;
-    if (mock_glfw) delete mock_glfw;
-    if (pipe) pipe->destroy(pipe);
-    if (logger) free(logger);
-    if (alloc) alloc->destroy(alloc);
+    if (window_obj) {
+        delete window_obj;
+        window_obj = nullptr;
+    }
+    if (mock_glfw) {
+        delete mock_glfw;
+        mock_glfw = nullptr;
+    }
+    if (pipe) {
+        pipe->destroy(pipe);
+        pipe = nullptr;
+    }
+    if (logger) {
+        free(logger);
+        logger = nullptr;
+    }
+    if (alloc) {
+        alloc->destroy(alloc);
+        alloc = nullptr;
+    }
   }
 };
 
@@ -95,7 +111,6 @@ TEST_F(GlfwWindowMockTest, KeyCallback_BroadcastsMessage) {
 
   window_obj->OnInitialize();
 
-  // Trigger the callback with the mock's window handle
   if (mock_glfw->key_cb) {
       mock_glfw->key_cb(mock_glfw->create_ret, 65, 0, 1, 0); // Key A, Press
   }
