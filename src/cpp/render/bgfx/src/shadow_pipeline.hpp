@@ -8,6 +8,9 @@
 namespace kernel_engine::render::bgfx
 {
 
+struct RenderContext;
+class GeometryManager;
+
 struct ShadowMapEntry
 {
     uint16_t color_tex = kInvalidHandle;
@@ -24,21 +27,25 @@ struct ShadowMapEntry
 class KE_RENDER_API ShadowPipeline
 {
 public:
-    ke_result CreateShadowMap(uint32_t width, uint32_t height, ke_shadow_map_handle *out_handle);
-    ke_result DestroyShadowMap(ke_shadow_map_handle handle);
-    ke_result BeginShadowPass(ke_shadow_map_handle handle, const ke_mat4 *light_view, const ke_mat4 *light_proj);
-    ke_result SubmitMeshShadow(ke_mesh_handle mesh, const ke_mat4 *transform);
-    ke_result EndShadowPass();
-    ke_result SetShadowMap(ke_shadow_map_handle handle);
+    ke_result CreateShadowMap(RenderContext& ctx, uint32_t width, uint32_t height, ke_shadow_map_handle *out_handle);
+    ke_result DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle handle);
+    ke_result BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle handle, const ke_mat4 *light_view, const ke_mat4 *light_proj);
+    ke_result SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geometry, uint16_t shadow_program, ke_mesh_handle mesh, const ke_mat4 *transform);
+    ke_result EndShadowPass(RenderContext& ctx);
+    ke_result SetShadowMap(RenderContext& ctx, ke_shadow_map_handle handle);
 
-protected:
+    void Shutdown();
+
+    uint16_t GetActiveShadowMapTex() const;
+
+    uint16_t shadow_map_uniform    = kInvalidHandle;
+    uint16_t light_vp_uniform      = kInvalidHandle;
+    uint16_t shadow_params_uniform = kInvalidHandle;
+    uint32_t active_shadow_handle  = kInvalidShadowHandle;
+    float    active_light_vp[16]{};
+
+private:
     std::vector<ShadowMapEntry> shadow_maps_;
-    uint32_t active_shadow_handle_ = kInvalidShadowHandle;
-    float    active_light_vp_[16]{};
-
-    uint16_t shadow_map_uniform_    = kInvalidHandle;
-    uint16_t light_vp_uniform_      = kInvalidHandle;
-    uint16_t shadow_params_uniform_ = kInvalidHandle;
 };
 
 } // namespace kernel_engine::render::bgfx

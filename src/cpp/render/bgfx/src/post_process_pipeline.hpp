@@ -9,22 +9,57 @@
 namespace kernel_engine::render::bgfx
 {
 
+struct RenderContext;
+class GeometryManager;
+class TextureManager;
+
 /**
  * @brief Manages HDR, Bloom, SSAO and Tonemapping passes.
  */
 class KE_RENDER_API PostProcessPipeline
 {
 public:
-    ke_result SetTonemapping(ke_bool enabled, float exposure, float gamma);
-    ke_result SetBloom(ke_bool enabled, float threshold, float intensity);
-    ke_result SetSsao(ke_bool enabled, float radius, float bias, float strength);
+    ke_result SetTonemapping(RenderContext& ctx, ke_bool enabled, float exposure, float gamma);
+    ke_result SetBloom(RenderContext& ctx, ke_bool enabled, float threshold, float intensity);
+    ke_result SetSsao(RenderContext& ctx, ke_bool enabled, float radius, float bias, float strength);
 
-protected:
-    virtual ke_result SetupPostProcess();
-    virtual ke_result SubmitPostProcess();
-    virtual ke_result SetupSsao();
-    virtual ke_result SubmitSsao();
+    ke_result SetupPostProcess(RenderContext& ctx, 
+                               GeometryManager& geometry,
+                               uint16_t& out_bright_prog, 
+                               uint16_t& out_blur_prog, 
+                               uint16_t& out_tonemap_prog);
 
+    ke_result SubmitPostProcess(RenderContext& ctx, 
+                                const GeometryManager& geometry,
+                                const TextureManager& textures,
+                                uint16_t bright_prog, 
+                                uint16_t blur_prog, 
+                                uint16_t tonemap_prog);
+
+    ke_result SetupSsao(RenderContext& ctx, 
+                        uint16_t& out_prepass_prog, 
+                        uint16_t& out_ssao_prog, 
+                        uint16_t& out_ssao_blur_prog);
+
+    ke_result SubmitSsao(RenderContext& ctx, 
+                         const GeometryManager& geometry,
+                         const TextureManager& textures,
+                         uint16_t ssao_prog, 
+                         uint16_t ssao_blur_prog);
+
+    void Shutdown();
+
+    bool IsSsaoEnabled() const { return ssao_enabled_; }
+    uint16_t GetGbufFb() const { return gbuf_fb_; }
+    uint16_t GetHdrFb() const { return hdr_fb_; }
+    uint16_t GetSsaoBlurTex() const { return ssao_blur_tex_; }
+
+    uint16_t s_gbuf_normal_u  = kInvalidHandle;
+    uint16_t s_gbuf_depth_u   = kInvalidHandle;
+    uint16_t s_ssao_blurred_u = kInvalidHandle;
+    uint16_t ssao_state_u     = kInvalidHandle;
+
+private:
     uint16_t hdr_fb_          = kInvalidHandle;
     uint16_t bright_fb_       = kInvalidHandle;
     uint16_t hdr_color_tex_   = kInvalidHandle;
@@ -57,19 +92,14 @@ protected:
     uint16_t ssao_blur_tex_      = kInvalidHandle;
     uint16_t ssao_noise_tex_     = kInvalidHandle;
 
-    uint16_t s_gbuf_normal_u_  = kInvalidHandle;
-    uint16_t s_gbuf_depth_u_   = kInvalidHandle;
-    uint16_t s_ssao_noise_u_   = kInvalidHandle;
-    uint16_t s_ssao_input_u_   = kInvalidHandle;
-    uint16_t s_ssao_blurred_u_ = kInvalidHandle;
-    uint16_t ssao_kernel_u_    = kInvalidHandle;
-    uint16_t ssao_params_u_    = kInvalidHandle;
-    uint16_t ssao_proj_info_u_ = kInvalidHandle;
+    uint16_t s_ssao_noise_u_     = kInvalidHandle;
+    uint16_t s_ssao_input_u_     = kInvalidHandle;
+    uint16_t ssao_params_u_      = kInvalidHandle;
+    uint16_t ssao_proj_info_u_   = kInvalidHandle;
     uint16_t ssao_blur_params_u_ = kInvalidHandle;
-    uint16_t ssao_state_u_     = kInvalidHandle;
+    uint16_t ssao_kernel_u_      = kInvalidHandle;
 
-    float ssao_kernel_data_[kSsaoKernelSize * 4]{};
-    float ssao_proj_info_[4]{};
+    float ssao_kernel_data_[kSsaoKernelSize * 4]{};    float ssao_proj_info_[4]{};
 
     bool  ssao_enabled_  = false;
     float ssao_radius_   = 0.5f;

@@ -1,9 +1,11 @@
 #include "texture_manager.hpp"
-#include "bgfx_renderer.hpp"
-#include "bgfx_interface.hh"
+#include "render_context.hpp"
+#include "gpu_device.hpp"
+#include <bgfx/bgfx.h>
 #include <vector>
 #include <cstring>
 #include <cmath>
+#include <algorithm>
 
 namespace kernel_engine::render::bgfx
 {
@@ -11,7 +13,7 @@ namespace kernel_engine::render::bgfx
 std::vector<uint8_t> TextureManager::GenerateMips(uint32_t width, uint32_t height,
                                                      const uint8_t *pixels, uint8_t *out_num_mips)
 {
-    uint32_t maxDim = width > height ? width : height;
+    uint32_t maxDim = std::max(width, height);
     uint8_t  numMips = 0;
     for (uint32_t d = maxDim; d > 0; d >>= 1) ++numMips;
 
@@ -56,19 +58,18 @@ std::vector<uint8_t> TextureManager::GenerateMips(uint32_t width, uint32_t heigh
     return buf;
 }
 
-ke_result TextureManager::CreateTextureRgba(uint32_t width, uint32_t height,
+ke_result TextureManager::CreateTextureRgba(RenderContext& ctx, uint32_t width, uint32_t height,
                                                const uint8_t *pixels,
                                                ke_texture_handle *out_handle)
 {
-    if (!pixels || !out_handle || width == 0 || height == 0) return KE_ERROR_INVALID_ARGUMENT;
-    auto* renderer = static_cast<BgfxRenderer*>(this);
+    if (!pixels || !out_handle || width == 0 || height == 0 || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
 
     uint8_t numMips;
     std::vector<uint8_t> mipData = GenerateMips(width, height, pixels, &numMips);
-    uint16_t idx = renderer->bgfx_->CreateTexture2D(
+    uint16_t idx = ctx.gpu->CreateTexture2D(
         (uint16_t)width, (uint16_t)height, numMips > 1, 1,
         ::bgfx::TextureFormat::RGBA8, 0,
-        renderer->bgfx_->Copy(mipData.data(), (uint32_t)mipData.size())).idx;
+        ctx.gpu->Copy(mipData.data(), (uint32_t)mipData.size())).idx;
 
     if (!::bgfx::isValid(::bgfx::TextureHandle{idx})) return KE_ERROR_RENDER;
     textures_.push_back({idx, true});
@@ -76,22 +77,20 @@ ke_result TextureManager::CreateTextureRgba(uint32_t width, uint32_t height,
     return KE_OK;
 }
 
-ke_result TextureManager::DestroyTexture(ke_texture_handle handle)
+ke_result TextureManager::DestroyTexture(RenderContext& ctx, ke_texture_handle handle)
 {
-    if (handle >= (ke_texture_handle)textures_.size()) return KE_ERROR_INVALID_ARGUMENT;
-    auto* renderer = static_cast<BgfxRenderer*>(this);
+    if (handle >= (ke_texture_handle)textures_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
     auto &t = textures_[handle];
-    if (::bgfx::isValid(::bgfx::TextureHandle{t.idx})) renderer->bgfx_->Destroy(::bgfx::TextureHandle{t.idx});
+    if (::bgfx::isValid(::bgfx::TextureHandle{t.idx})) ctx.gpu->Destroy(::bgfx::TextureHandle{t.idx});
     t.idx   = kInvalidHandle;
     t.valid = false;
     return KE_OK;
 }
 
-ke_result TextureManager::CreateCubemapRgba(uint32_t size, const uint8_t *data,
+ke_result TextureManager::CreateCubemapRgba(RenderContext& ctx, uint32_t size, const uint8_t *data,
                                                ke_texture_handle *out_handle)
 {
-    if (!data || !out_handle || size == 0) return KE_ERROR_INVALID_ARGUMENT;
-    auto* renderer = static_cast<BgfxRenderer*>(this);
+    if (!data || !out_handle || size == 0 || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
 
     uint32_t faceBytes = size * size * 4u;
     uint8_t numMips;
@@ -121,10 +120,10 @@ ke_result TextureManager::CreateCubemapRgba(uint32_t size, const uint8_t *data,
         }
     }
 
-    uint16_t idx = renderer->bgfx_->CreateTextureCube(
+    uint16_t idx = ctx.gpu->CreateTextureCube(
         (uint16_t)size, numMips > 1, 1,
         ::bgfx::TextureFormat::RGBA8, 0,
-        renderer->bgfx_->Copy(cubeBuf.data(), (uint32_t)cubeBuf.size())).idx;
+        ctx.gpu->Copy(cubeBuf.data(), (uint32_t)cubeBuf.size())).idx;
 
     if (!::bgfx::isValid(::bgfx::TextureHandle{idx})) return KE_ERROR_RENDER;
     textures_.push_back({idx, true});
@@ -132,11 +131,17 @@ ke_result TextureManager::CreateCubemapRgba(uint32_t size, const uint8_t *data,
     return KE_OK;
 }
 
-ke_result TextureManager::SubmitSkybox(ke_texture_handle cubemap_handle)
+ke_result TextureManager::SubmitSkybox(RenderContext& ctx, 
+                                       ke_texture_handle cubemap_handle,
+                                       uint16_t skybox_program,
+                                       uint16_t skybox_vb,
+                                       uint16_t skybox_ib,
+                                       uint16_t skybox_sampler,
+                                       uint16_t skybox_tint)
 {
-    auto* renderer = static_cast<BgfxRenderer*>(this);
-    if (!::bgfx::isValid(::bgfx::ProgramHandle{renderer->skybox_program_})) return KE_ERROR_NOT_INITIALIZED;
-    if (!::bgfx::isValid(::bgfx::VertexBufferHandle{renderer->skybox_vb_})) return KE_ERROR_NOT_INITIALIZED;
+    if (!ctx.gpu) return KE_ERROR_RENDER;
+    if (!::bgfx::isValid(::bgfx::ProgramHandle{skybox_program})) return KE_ERROR_NOT_INITIALIZED;
+    if (!::bgfx::isValid(::bgfx::VertexBufferHandle{skybox_vb})) return KE_ERROR_NOT_INITIALIZED;
     if (cubemap_handle >= (ke_texture_handle)textures_.size())     return KE_ERROR_INVALID_ARGUMENT;
     const auto &tex = textures_[cubemap_handle];
     if (!tex.valid) return KE_ERROR_INVALID_ARGUMENT;
@@ -145,23 +150,35 @@ ke_result TextureManager::SubmitSkybox(ke_texture_handle cubemap_handle)
         1.f, 0.f, 0.f, 0.f,
         0.f, 1.f, 0.f, 0.f,
         0.f, 0.f, 1.f, 0.f,
-        renderer->camera_pos_[0], renderer->camera_pos_[1], renderer->camera_pos_[2], 1.f
+        ctx.camera_pos[0], ctx.camera_pos[1], ctx.camera_pos[2], 1.f
     };
-    renderer->bgfx_->SetTransform(model);
+    ctx.gpu->SetTransform(model, 1);
 
     float tint[4] = {1.f, 1.f, 1.f, 1.f};
-    renderer->bgfx_->SetUniform(::bgfx::UniformHandle{renderer->skybox_tint_uniform_}, tint);
-    renderer->bgfx_->SetTexture(0, ::bgfx::UniformHandle{renderer->skybox_sampler_uniform_}, ::bgfx::TextureHandle{tex.idx});
-    renderer->bgfx_->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{renderer->skybox_vb_});
-    renderer->bgfx_->SetIndexBuffer(::bgfx::IndexBufferHandle{renderer->skybox_ib_});
+    ctx.gpu->SetUniform(::bgfx::UniformHandle{skybox_tint}, tint, 1);
+    ctx.gpu->SetTexture(0, ::bgfx::UniformHandle{skybox_sampler}, ::bgfx::TextureHandle{tex.idx}, 0xFFFFFFFF);
+    ctx.gpu->SetVertexBuffer(0, ::bgfx::VertexBufferHandle{skybox_vb});
+    ctx.gpu->SetIndexBuffer(::bgfx::IndexBufferHandle{skybox_ib});
     
-    renderer->bgfx_->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
-                             BGFX_STATE_DEPTH_TEST_LEQUAL | BGFX_STATE_CULL_CW);
-    renderer->bgfx_->Submit(kSceneView, ::bgfx::ProgramHandle{renderer->skybox_program_});
+    ctx.gpu->SetState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
+                             BGFX_STATE_DEPTH_TEST_LEQUAL | BGFX_STATE_CULL_CW, 0);
+    ctx.gpu->Submit(kSceneView, ::bgfx::ProgramHandle{skybox_program}, 0, false);
 
-    has_skybox_     = true;
-    active_env_tex_ = tex.idx;
+    has_skybox     = true;
+    active_env_tex = tex.idx;
     return KE_OK;
+}
+
+void TextureManager::Shutdown()
+{
+    // GPU device handles cleanup
+    textures_.clear();
+}
+
+uint16_t TextureManager::GetTextureIdx(uint32_t handle) const
+{
+    if (handle < textures_.size() && textures_[handle].valid) return textures_[handle].idx;
+    return kInvalidHandle;
 }
 
 } // namespace kernel_engine::render::bgfx
