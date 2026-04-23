@@ -6,14 +6,18 @@
 #include <kernel_engine/render/bgfx/bgfx_render.h>
 #include <bgfx/bgfx.h>
 #include <string>
+#include <memory>
 
 #include "internal_types.hpp"
+#include "render_context.hpp"
 #include "geometry_manager.hpp"
 #include "texture_manager.hpp"
 #include "lighting_manager.hpp"
 #include "shadow_pipeline.hpp"
 #include "post_process_pipeline.hpp"
 #include "clustered_forward.hpp"
+#include "shader_provider.hpp"
+#include "gpu_device.hpp"
 
 namespace kernel_engine::render::bgfx
 {
@@ -41,21 +45,8 @@ private:
     struct ke_logger *logger_ = nullptr;
 };
 
-class KE_RENDER_API BgfxRenderer : 
-    public GeometryManager, 
-    public TextureManager, 
-    public LightingManager,
-    public ShadowPipeline,
-    public PostProcessPipeline,
-    public ClusteredForward
+class KE_RENDER_API BgfxRenderer
 {
-    friend class GeometryManager;
-    friend class TextureManager;
-    friend class LightingManager;
-    friend class ShadowPipeline;
-    friend class PostProcessPipeline;
-    friend class ClusteredForward;
-
 public:
     explicit BgfxRenderer(const ke_render_bgfx_params *params);
     ~BgfxRenderer();
@@ -69,15 +60,41 @@ public:
     ke_result SetViewTransform(const ke_mat4 *view, const ke_mat4 *proj);
     ke_result SetCameraPos(float x, float y, float z);
 
+    // Delegators to managers
+    ke_result SetDirectionalLight(const ke_directional_light *light);
+    ke_result SetAmbientLight(float r, float g, float b);
+    ke_result SetPointLights(const ke_point_light *lights, uint32_t count);
+    ke_result SetSpotLights(const ke_spot_light *lights, uint32_t count);
+    ke_result SetClusterConfig(const ke_cluster_config *config);
+    ke_result SetSsao(ke_bool enabled, float radius, float bias, float strength);
+    ke_result SetTonemapping(ke_bool enabled, float exposure, float gamma);
+    ke_result SetBloom(ke_bool enabled, float threshold, float intensity);
+
     ke_render *ToApi();
 
-    // Test support
-    void set_bgfx(class BgfxBackend* bgfx);
-    class BgfxBackend* release_bgfx();
+    // Injects a custom shader provider (useful for testing)
+    void SetShaderProvider(ShaderProviderInterface* provider);
+    
+    // Injects a custom GPU device (useful for testing)
+    void SetGpuDevice(GpuDeviceInterface* gpu);
+
+    // Virtual for testing
+    virtual ::bgfx::ShaderHandle LoadShader(const char *name);
 
 protected:
-    virtual ::bgfx::ShaderHandle LoadShader(const char *name);
     virtual ke_result SetupShader();
+
+private:
+    RenderContext ctx_;
+    bool own_gpu_device_ = false;
+    
+    // Modular components (Composition)
+    GeometryManager     geometry_;
+    TextureManager      textures_;
+    LightingManager     lighting_;
+    ShadowPipeline      shadows_;
+    PostProcessPipeline post_process_;
+    ClusteredForward    clustered_;
 
     uint16_t program_             = kInvalidHandle;
     uint16_t depth_program_       = kInvalidHandle;
@@ -92,23 +109,14 @@ protected:
     uint16_t shadow_program_      = kInvalidHandle;
 
     BgfxLogCallback callback_;
-    class BgfxBackend* bgfx_ = nullptr;
-    bool own_bgfx_ = true; // internal flag for backend ownership
     bool initialized_ = false;
+    bool own_shader_provider_ = false;
 
     ke_render render_api_{};
     struct ke_window* window_ = nullptr;
-    ke_allocator *allocator_ = nullptr;
-    ke_logger *logger_ = nullptr;
     std::string shader_path_;
+    ::bgfx::RendererType::Enum renderer_type_ = ::bgfx::RendererType::Vulkan;
     bool orthographic_ = true;
-
-    float near_z_ = 0.1f;
-    float far_z_  = 1000.0f;
-    
-    int32_t view_w_ = 0, view_h_ = 0;
-    float last_view_[16]{};
-    float last_proj_[16]{};
 };
 
 } // namespace kernel_engine::render::bgfx

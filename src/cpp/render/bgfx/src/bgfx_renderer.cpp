@@ -1,7 +1,6 @@
 #include "bgfx_renderer.hpp"
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/window/window.h>
-#include "bgfx_interface.hh"
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 #include <new>
@@ -37,7 +36,6 @@ void BgfxLogCallback::fatal(const char *_filePath, uint16_t _line, ::bgfx::Fatal
         ke_log_event ev = {KE_LOG_LEVEL_ERROR, "bgfx", msg};
         logger_->log(logger_, &ev);
     }
-    abort();
 }
 
 void BgfxLogCallback::traceVargs(const char *_filePath, uint16_t _line, const char *_format, va_list _argList)
@@ -54,138 +52,224 @@ void BgfxLogCallback::traceVargs(const char *_filePath, uint16_t _line, const ch
 // ── BgfxRenderer Implementation ───────────────────────────────────────────
 
 BgfxRenderer::BgfxRenderer(const ke_render_bgfx_params *params)
-    : allocator_(params->allocator), logger_(params->logger), window_(params->window),
-      shader_path_((params->shader_path != nullptr) ? params->shader_path : "")
+    : window_(params ? params->window : nullptr),
+      shader_path_((params && params->shader_path != nullptr) ? params->shader_path : ""),
+      renderer_type_((params && params->renderer_type != 0) ? (::bgfx::RendererType::Enum)params->renderer_type : ::bgfx::RendererType::Vulkan)
 {
+    std::memset(&ctx_, 0, sizeof(ctx_));
     std::memset(&render_api_, 0, sizeof(render_api_));
-    std::memset(last_view_, 0, sizeof(last_view_));
-    std::memset(last_proj_ , 0, sizeof(last_proj_));
-    std::memset(active_light_vp_, 0, sizeof(active_light_vp_));
+    
+    if (params) {
+        ctx_.allocator = params->allocator;
+        ctx_.logger    = params->logger;
+    }
 
-    void* backend_mem = allocator_->alloc(allocator_, sizeof(RealBgfxBackend), alignof(RealBgfxBackend));
-    bgfx_ = new (backend_mem) RealBgfxBackend();
-    own_bgfx_ = true;
-
-    callback_.SetLogger(logger_);
+    callback_.SetLogger(ctx_.logger);
     render_api_.handle = this;
+
+    // Default GPU Device
+    if (ctx_.allocator) {
+        void* gpu_mem = ctx_.allocator->alloc(ctx_.allocator, sizeof(GpuDevice), alignof(GpuDevice));
+        ctx_.gpu = new (gpu_mem) GpuDevice();
+        own_gpu_device_ = true;
+    }
+
+    // Default shader provider (File system)
+    if (ctx_.allocator) {
+        void* provider_mem = ctx_.allocator->alloc(ctx_.allocator, sizeof(FileShaderProvider), alignof(FileShaderProvider));
+        if (provider_mem) {
+            ctx_.shader_provider = new (provider_mem) FileShaderProvider(shader_path_);
+            own_shader_provider_ = true;
+        }
+    }
     
     // Wire up the C API dispatchers
-    render_api_.on_initialize = [](ke_render *self) { return static_cast<BgfxRenderer *>(self->handle)->OnInitialize(); };
-    render_api_.on_shutdown = [](ke_render *self) { return static_cast<BgfxRenderer *>(self->handle)->OnShutdown(); };
-    render_api_.destroy = [](ke_render *self) {
-        if (!self) return;
-        auto *sys = static_cast<BgfxRenderer *>(self->handle);
-        auto *alloc = sys->allocator_;
-        sys->~BgfxRenderer();
-        alloc->free(alloc, sys);
+    render_api_.on_initialize = [](ke_render *self) { 
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->OnInitialize() : KE_ERROR_INVALID_ARGUMENT; 
     };
-    render_api_.frame = [](ke_render *self) { return static_cast<BgfxRenderer *>(self->handle)->Frame(); };
+    render_api_.on_shutdown = [](ke_render *self) { 
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->OnShutdown() : KE_ERROR_INVALID_ARGUMENT; 
+    };
+    render_api_.destroy = [](ke_render *self) {
+        if (!self || !self->handle) return;
+        auto *sys = static_cast<BgfxRenderer *>(self->handle);
+        auto *alloc = sys->ctx_.allocator;
+        sys->~BgfxRenderer();
+        if (alloc) alloc->free(alloc, sys);
+    };
+    render_api_.frame = [](ke_render *self) { 
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->Frame() : KE_ERROR_INVALID_ARGUMENT; 
+    };
     render_api_.clear_color = [](ke_render *self, float r, float g, float b, float a) {
-        return static_cast<BgfxRenderer *>(self->handle)->ClearColor(r, g, b, a);
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->ClearColor(r, g, b, a) : KE_ERROR_INVALID_ARGUMENT; 
     };
     render_api_.set_orthographic = [](ke_render *self, ke_bool enabled) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetOrthographic(enabled);
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->SetOrthographic(enabled) : KE_ERROR_INVALID_ARGUMENT; 
     };
     render_api_.set_view_transform = [](ke_render *self, const ke_mat4 *view, const ke_mat4 *proj) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetViewTransform(view, proj);
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->SetViewTransform(view, proj) : KE_ERROR_INVALID_ARGUMENT; 
     };
     render_api_.create_texture_rgba = [](ke_render *self, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out) {
-        return static_cast<BgfxRenderer *>(self->handle)->CreateTextureRgba(w, h, px, out);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->textures_.CreateTextureRgba(renderer_impl->ctx_, w, h, px, out);
     };
     render_api_.destroy_texture = [](ke_render *self, ke_texture_handle handle) {
-        return static_cast<BgfxRenderer *>(self->handle)->DestroyTexture(handle);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->textures_.DestroyTexture(renderer_impl->ctx_, handle);
     };
     render_api_.create_mesh = [](ke_render *self, const ke_vertex *v, uint32_t vc, const uint16_t *i, uint32_t ic, ke_mesh_handle *out) {
-        return static_cast<BgfxRenderer *>(self->handle)->CreateMesh(v, vc, i, ic, out);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->geometry_.CreateMesh(renderer_impl->ctx_, v, vc, i, ic, out);
     };
     render_api_.destroy_mesh = [](ke_render *self, ke_mesh_handle h) {
-        return static_cast<BgfxRenderer *>(self->handle)->DestroyMesh(h);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->geometry_.DestroyMesh(renderer_impl->ctx_, h);
     };
     render_api_.submit_mesh = [](ke_render *self, ke_mesh_handle m, ke_material_handle mat, const ke_mat4 *t) {
-        return static_cast<BgfxRenderer *>(self->handle)->SubmitMesh(m, mat, t);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->geometry_.SubmitMesh(renderer_impl->ctx_, m, mat, t, renderer_impl->lighting_, renderer_impl->textures_, renderer_impl->program_, renderer_impl->depth_program_, renderer_impl->prepass_program_);
     };
     render_api_.create_cubemap_rgba = [](ke_render *self, uint32_t s, const uint8_t *d, ke_texture_handle *out) {
-        return static_cast<BgfxRenderer *>(self->handle)->CreateCubemapRgba(s, d, out);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->textures_.CreateCubemapRgba(renderer_impl->ctx_, s, d, out);
     };
     render_api_.submit_skybox = [](ke_render *self, ke_texture_handle h) {
-        return static_cast<BgfxRenderer *>(self->handle)->SubmitSkybox(h);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->textures_.SubmitSkybox(renderer_impl->ctx_, h, renderer_impl->skybox_program_, renderer_impl->geometry_.skybox_vb, renderer_impl->geometry_.skybox_ib, renderer_impl->textures_.skybox_sampler_uniform, renderer_impl->textures_.skybox_tint_uniform);
     };
     render_api_.set_tonemapping = [](ke_render *self, ke_bool e, float ex, float g) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetTonemapping(e, ex, g);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->post_process_.SetTonemapping(renderer_impl->ctx_, e, ex, g);
     };
     render_api_.set_bloom = [](ke_render *self, ke_bool e, float t, float i) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetBloom(e, t, i);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->post_process_.SetBloom(renderer_impl->ctx_, e, t, i);
     };
     render_api_.create_shadow_map = [](ke_render *self, uint32_t w, uint32_t h, ke_shadow_map_handle *out) {
-        return static_cast<BgfxRenderer *>(self->handle)->CreateShadowMap(w, h, out);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->shadows_.CreateShadowMap(renderer_impl->ctx_, w, h, out);
     };
     render_api_.destroy_shadow_map = [](ke_render *self, ke_shadow_map_handle h) {
-        return static_cast<BgfxRenderer *>(self->handle)->DestroyShadowMap(h);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->shadows_.DestroyShadowMap(renderer_impl->ctx_, h);
     };
     render_api_.begin_shadow_pass = [](ke_render *self, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p) {
-        return static_cast<BgfxRenderer *>(self->handle)->BeginShadowPass(h, v, p);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->shadows_.BeginShadowPass(renderer_impl->ctx_, h, v, p);
     };
     render_api_.submit_mesh_shadow = [](ke_render *self, ke_mesh_handle m, const ke_mat4 *t) {
-        return static_cast<BgfxRenderer *>(self->handle)->SubmitMeshShadow(m, t);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->shadows_.SubmitMeshShadow(renderer_impl->ctx_, renderer_impl->geometry_, renderer_impl->shadow_program_, m, t);
     };
     render_api_.end_shadow_pass = [](ke_render *self) {
-        return static_cast<BgfxRenderer *>(self->handle)->EndShadowPass();
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->shadows_.EndShadowPass(renderer_impl->ctx_);
     };
     render_api_.set_shadow_map = [](ke_render *self, ke_shadow_map_handle h) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetShadowMap(h);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->shadows_.SetShadowMap(renderer_impl->ctx_, h);
     };
     render_api_.create_material = [](ke_render *self, const ke_material *m, ke_material_handle *out) {
-        return static_cast<BgfxRenderer *>(self->handle)->CreateMaterial(m, out);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->lighting_.CreateMaterial(renderer_impl->ctx_, renderer_impl->textures_, m, out);
     };
     render_api_.destroy_material = [](ke_render *self, ke_material_handle h) {
-        return static_cast<BgfxRenderer *>(self->handle)->DestroyMaterial(h);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->lighting_.DestroyMaterial(renderer_impl->ctx_, h);
     };
     render_api_.set_directional_light = [](ke_render *self, const ke_directional_light *l) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetDirectionalLight(l);
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->lighting_.SetDirectionalLight(l) : KE_ERROR_INVALID_ARGUMENT;
     };
     render_api_.set_ambient_light = [](ke_render *self, float r, float g, float b) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetAmbientLight(r, g, b);
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->lighting_.SetAmbientLight(r, g, b) : KE_ERROR_INVALID_ARGUMENT;
     };
     render_api_.set_point_lights = [](ke_render *self, const ke_point_light *ls, uint32_t c) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetPointLights(ls, c);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->lighting_.SetPointLights(renderer_impl->ctx_, renderer_impl->clustered_.b_point_lights, ls, c);
     };
     render_api_.set_spot_lights = [](ke_render *self, const ke_spot_light *ls, uint32_t c) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetSpotLights(ls, c);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->lighting_.SetSpotLights(renderer_impl->ctx_, renderer_impl->clustered_.b_spot_lights, ls, c);
     };
     render_api_.set_camera_pos = [](ke_render *self, float x, float y, float z) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetCameraPos(x, y, z);
+        return (self && self->handle) ? static_cast<BgfxRenderer *>(self->handle)->SetCameraPos(x, y, z) : KE_ERROR_INVALID_ARGUMENT;
     };
     render_api_.set_ssao = [](ke_render *self, ke_bool e, float r, float b, float s) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetSsao(e, r, b, s);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->post_process_.SetSsao(renderer_impl->ctx_, e, r, b, s);
     };
     render_api_.set_cluster_config = [](ke_render *self, const ke_cluster_config *cfg) {
-        return static_cast<BgfxRenderer *>(self->handle)->SetClusterConfig(cfg);
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        auto* renderer_impl = static_cast<BgfxRenderer *>(self->handle);
+        return renderer_impl->clustered_.SetClusterConfig(renderer_impl->ctx_, cfg);
     };
 }
 
 BgfxRenderer::~BgfxRenderer()
 {
-    if (own_bgfx_ && bgfx_)
-    {
-        bgfx_->~BgfxBackend();
-        allocator_->free(allocator_, bgfx_);
+    if (own_gpu_device_ && ctx_.gpu) {
+        ctx_.gpu->~GpuDeviceInterface();
+        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.gpu);
     }
+    if (own_shader_provider_ && ctx_.shader_provider)
+    {
+        ctx_.shader_provider->~ShaderProviderInterface();
+        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.shader_provider);
+    }
+}
+
+void BgfxRenderer::SetShaderProvider(ShaderProviderInterface* provider)
+{
+    if (own_shader_provider_ && ctx_.shader_provider)
+    {
+        ctx_.shader_provider->~ShaderProviderInterface();
+        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.shader_provider);
+    }
+    ctx_.shader_provider = provider;
+    own_shader_provider_ = false;
+}
+
+void BgfxRenderer::SetGpuDevice(GpuDeviceInterface* gpu)
+{
+    if (own_gpu_device_ && ctx_.gpu) {
+        ctx_.gpu->~GpuDeviceInterface();
+        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.gpu);
+    }
+    ctx_.gpu = gpu;
+    own_gpu_device_ = false;
 }
 
 ke_result BgfxRenderer::OnInitialize()
 {
+    if (!ctx_.gpu) return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "GPU device not set");
     if (!window_) return KE_ERROR_NOT_INITIALIZED;
     void *nwh = window_->get_native_handle(window_);
     if (!nwh) return KE_ERROR_WINDOW;
 
     ::bgfx::Init init;
-    init.type = ::bgfx::RendererType::Vulkan;
+    init.type = renderer_type_;
     init.platformData.nwh = nwh;
     init.callback = &callback_;
-
-#ifndef NDEBUG
-    init.debug = true;
-#endif
 
     int32_t w, h;
     window_->get_size(window_, &w, &h);
@@ -193,28 +277,31 @@ ke_result BgfxRenderer::OnInitialize()
     init.resolution.height = (uint32_t)h;
     init.resolution.reset  = BGFX_RESET_VSYNC;
 
-    if (!bgfx_->Init(init))
+    if (!ctx_.gpu->Init(init))
     {
-        return LogErr(logger_, KE_ERROR_RENDER, "OnInitialize", "bgfx::init() failed");
+        return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "gpu->Init failed");
     }
 
-    view_w_ = w;
-    view_h_ = h;
+    ctx_.view_w = w;
+    ctx_.view_h = h;
 
-    bgfx_->SetViewClear(kDepthView, BGFX_CLEAR_DEPTH, 0, 1.0f, 0);
-    bgfx_->SetViewRect(kDepthView, 0, 0, (uint16_t)w, (uint16_t)h);
+    ctx_.gpu->SetViewClear(kDepthView, BGFX_CLEAR_DEPTH, 0, 1.0f, 0);
+    ctx_.gpu->SetViewRect(kDepthView, 0, 0, (uint16_t)w, (uint16_t)h);
 
-    bgfx_->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
-    bgfx_->SetViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
-    bgfx_->SetViewMode(kSceneView, ::bgfx::ViewMode::Sequential);
+    ctx_.gpu->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
+    ctx_.gpu->SetViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
+    ctx_.gpu->SetViewMode(kSceneView, ::bgfx::ViewMode::Sequential);
 
     ke_result res = SetupShader();
     if (res != KE_OK) return res;
-    res = SetupPostProcess();
+    
+    res = post_process_.SetupPostProcess(ctx_, geometry_, bright_pass_program_, blur_program_, tonemap_program_);
     if (res != KE_OK) return res;
-    res = SetupSsao();
+    
+    res = post_process_.SetupSsao(ctx_, prepass_program_, ssao_program_, ssao_blur_program_);
     if (res != KE_OK) return res;
-    res = SetupClustered();
+    
+    res = clustered_.SetupClustered(ctx_, depth_program_, cull_program_);
     if (res != KE_OK) return res;
 
     initialized_ = true;
@@ -223,162 +310,63 @@ ke_result BgfxRenderer::OnInitialize()
 
 ke_result BgfxRenderer::OnShutdown()
 {
-    for (auto &t : textures_)
-        if (::bgfx::isValid(::bgfx::TextureHandle{t.idx})) bgfx_->Destroy(::bgfx::TextureHandle{t.idx});
-    textures_.clear();
+    textures_.Shutdown();
+    geometry_.Shutdown();
+    lighting_.Shutdown();
+    shadows_.Shutdown();
+    post_process_.Shutdown();
+    clustered_.Shutdown(ctx_);
 
-    for (auto &entry : meshes_)
-    {
-        if (::bgfx::isValid(::bgfx::IndexBufferHandle{entry.ib}))  bgfx_->Destroy(::bgfx::IndexBufferHandle{entry.ib});
-        if (::bgfx::isValid(::bgfx::VertexBufferHandle{entry.vb})) bgfx_->Destroy(::bgfx::VertexBufferHandle{entry.vb});
+    if (ctx_.gpu) {
+        if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_blur_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{ssao_blur_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_program_}))      ctx_.gpu->Destroy(::bgfx::ProgramHandle{ssao_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{prepass_program_}))   ctx_.gpu->Destroy(::bgfx::ProgramHandle{prepass_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{tonemap_program_}))     ctx_.gpu->Destroy(::bgfx::ProgramHandle{tonemap_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        ctx_.gpu->Destroy(::bgfx::ProgramHandle{blur_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{bright_pass_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{depth_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{cull_program_}))  ctx_.gpu->Destroy(::bgfx::ProgramHandle{cull_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{shadow_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{shadow_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{skybox_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{skybox_program_});
+        if (::bgfx::isValid(::bgfx::ProgramHandle{program_}))         ctx_.gpu->Destroy(::bgfx::ProgramHandle{program_});
+
+        ctx_.gpu->Shutdown();
     }
-    meshes_.clear();
-
-    if (::bgfx::isValid(::bgfx::VertexBufferHandle{skybox_vb_}))  bgfx_->Destroy(::bgfx::VertexBufferHandle{skybox_vb_});
-    if (::bgfx::isValid(::bgfx::IndexBufferHandle{skybox_ib_}))   bgfx_->Destroy(::bgfx::IndexBufferHandle{skybox_ib_});
-    if (::bgfx::isValid(::bgfx::TextureHandle{default_cube_tex_})) bgfx_->Destroy(::bgfx::TextureHandle{default_cube_tex_});
-
-    auto destroy_uniform = [this](uint16_t u) {
-        if (::bgfx::isValid(::bgfx::UniformHandle{u})) bgfx_->Destroy(::bgfx::UniformHandle{u});
-    };
-    auto destroy_fb = [this](uint16_t h) {
-        if (::bgfx::isValid(::bgfx::FrameBufferHandle{h})) bgfx_->Destroy(::bgfx::FrameBufferHandle{h});
-    };
-    auto destroy_tex = [this](uint16_t h) {
-        if (::bgfx::isValid(::bgfx::TextureHandle{h})) bgfx_->Destroy(::bgfx::TextureHandle{h});
-    };
-
-    destroy_uniform(tonemap_params_uniform_);
-    destroy_uniform(blur_params_uniform_);
-    destroy_uniform(bloom_params_uniform_);
-    destroy_uniform(blur_tex_uniform_);
-    destroy_uniform(bloom_tex_uniform_);
-    destroy_uniform(hdr_tex_uniform_);
-
-    destroy_fb(gbuf_fb_);
-    destroy_fb(ssao_raw_fb_);
-    destroy_fb(ssao_blur_fb_);
-    destroy_tex(ssao_noise_tex_);
-    destroy_uniform(ssao_state_u_);
-    destroy_uniform(ssao_blur_params_u_);
-    destroy_uniform(ssao_proj_info_u_);
-    destroy_uniform(ssao_params_u_);
-    destroy_uniform(ssao_kernel_u_);
-    destroy_uniform(s_ssao_blurred_u_);
-    destroy_uniform(s_ssao_input_u_);
-    destroy_uniform(s_ssao_noise_u_);
-    destroy_uniform(s_gbuf_depth_u_);
-    destroy_uniform(s_gbuf_normal_u_);
-    if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_blur_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{ssao_blur_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_program_}))      bgfx_->Destroy(::bgfx::ProgramHandle{ssao_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{prepass_program_}))   bgfx_->Destroy(::bgfx::ProgramHandle{prepass_program_});
-
-    destroy_fb(blur_b_fb_);
-    destroy_fb(blur_a_fb_);
-    destroy_fb(bright_fb_);
-    destroy_fb(hdr_fb_);
-    if (::bgfx::isValid(::bgfx::TextureHandle{hdr_color_tex_})) bgfx_->Destroy(::bgfx::TextureHandle{hdr_color_tex_});
-    if (::bgfx::isValid(::bgfx::IndexBufferHandle{fullscreen_ib_}))  bgfx_->Destroy(::bgfx::IndexBufferHandle{fullscreen_ib_});
-    if (::bgfx::isValid(::bgfx::VertexBufferHandle{fullscreen_vb_})) bgfx_->Destroy(::bgfx::VertexBufferHandle{fullscreen_vb_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{tonemap_program_}))     bgfx_->Destroy(::bgfx::ProgramHandle{tonemap_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        bgfx_->Destroy(::bgfx::ProgramHandle{blur_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{bright_pass_program_});
-
-    destroy_uniform(cluster_params_u_);
-    destroy_uniform(cluster_params2_u_);
-    destroy_uniform(compute_view_u_);
-    if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{depth_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{cull_program_}))  bgfx_->Destroy(::bgfx::ProgramHandle{cull_program_});
-
-    auto destroy_dyn_ib = [this](uint16_t h) {
-        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) bgfx_->Destroy(::bgfx::DynamicIndexBufferHandle{h});
-    };
-    destroy_dyn_ib(b_cluster_bounds_);
-    destroy_dyn_ib(b_point_lights_);
-    destroy_dyn_ib(b_spot_lights_);
-    destroy_dyn_ib(b_p_light_indices_);
-    destroy_dyn_ib(b_p_light_count_);
-    destroy_dyn_ib(b_s_light_indices_);
-    destroy_dyn_ib(b_s_light_count_);
-
-    destroy_uniform(spot_lights_uniform_);
-    destroy_uniform(point_lights_uniform_);
-    destroy_uniform(light_counts_uniform_);
-    destroy_uniform(shadow_params_uniform_);
-    destroy_uniform(light_vp_uniform_);
-    destroy_uniform(shadow_map_uniform_);
-    destroy_uniform(normal_params_uniform_);
-    destroy_uniform(normal_map_uniform_);
-    destroy_uniform(ibl_params_uniform_);
-    destroy_uniform(env_map_uniform_);
-    destroy_uniform(camera_pos_uniform_);
-    destroy_uniform(pbr_params_uniform_);
-    destroy_uniform(ambient_color_uniform_);
-    destroy_uniform(light_color_uniform_);
-    destroy_uniform(light_dir_uniform_);
-    destroy_uniform(color_uniform_);
-    destroy_uniform(sampler_uniform_);
-    destroy_uniform(skybox_sampler_uniform_);
-    destroy_uniform(skybox_tint_uniform_);
-
-    for (auto &sm : shadow_maps_)
-    {
-        if (::bgfx::isValid(::bgfx::FrameBufferHandle{sm.fb}))   bgfx_->Destroy(::bgfx::FrameBufferHandle{sm.fb});
-        if (::bgfx::isValid(::bgfx::TextureHandle{sm.depth_tex})) bgfx_->Destroy(::bgfx::TextureHandle{sm.depth_tex});
-        if (::bgfx::isValid(::bgfx::TextureHandle{sm.color_tex})) bgfx_->Destroy(::bgfx::TextureHandle{sm.color_tex});
-    }
-    shadow_maps_.clear();
-
-    if (::bgfx::isValid(::bgfx::ProgramHandle{shadow_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{shadow_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{skybox_program_})) bgfx_->Destroy(::bgfx::ProgramHandle{skybox_program_});
-    if (::bgfx::isValid(::bgfx::ProgramHandle{program_}))         bgfx_->Destroy(::bgfx::ProgramHandle{program_});
-
-    bgfx_->Shutdown();
     initialized_ = false;
     return KE_OK;
 }
 
 ke_result BgfxRenderer::Frame()
 {
-    if (!initialized_) return KE_ERROR_NOT_INITIALIZED;
-    UpdateClusterBounds();
-    DispatchLightCull();
+    if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
+    clustered_.UpdateClusterBounds(ctx_);
+    clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
 
-    if (ssao_enabled_ && gbuf_fb_ != kInvalidHandle)
+    if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kInvalidHandle)
     {
-        bgfx_->SetViewFrameBuffer(kPrepassView,  ::bgfx::FrameBufferHandle{gbuf_fb_});
-        bgfx_->SetViewClear(kPrepassView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
-        bgfx_->SetViewRect(kPrepassView,  0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
+        ctx_.gpu->SetViewFrameBuffer(kPrepassView,  ::bgfx::FrameBufferHandle{post_process_.GetGbufFb()});
+        ctx_.gpu->SetViewClear(kPrepassView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
+        ctx_.gpu->SetViewRect(kPrepassView,  0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
 
-        bgfx_->SetViewFrameBuffer(kSsaoView, ::bgfx::FrameBufferHandle{ssao_raw_fb_});
-        bgfx_->SetViewClear(kSsaoView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
-        bgfx_->SetViewRect(kSsaoView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
-
-        bgfx_->SetViewFrameBuffer(kSsaoBlurView, ::bgfx::FrameBufferHandle{ssao_blur_fb_});
-        bgfx_->SetViewClear(kSsaoBlurView, BGFX_CLEAR_COLOR, 0xffffffff, 1.0f, 0);
-        bgfx_->SetViewRect(kSsaoBlurView, 0, 0, (uint16_t)view_w_, (uint16_t)view_h_);
-
-        SubmitSsao();
+        post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
     }
 
-    if (pp_enabled_ && hdr_fb_ != kInvalidHandle)
+    if (post_process_.GetHdrFb() != kInvalidHandle)
     {
-        bgfx_->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{hdr_fb_});
-        SubmitPostProcess();
+        ctx_.gpu->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{post_process_.GetHdrFb()});
+        post_process_.SubmitPostProcess(ctx_, geometry_, textures_, bright_pass_program_, blur_program_, tonemap_program_);
     }
     else
     {
-        bgfx_->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        ctx_.gpu->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
     }
 
-    bgfx_->Touch(kSceneView);
-    bgfx_->Frame();
+    ctx_.gpu->Touch(kSceneView);
+    ctx_.gpu->Frame();
     
-    has_skybox_           = false;
-    active_env_tex_       = kInvalidHandle;
-    active_shadow_handle_ = kInvalidShadowHandle;
-    point_lights_.clear();
-    spot_lights_.clear();
+    textures_.has_skybox       = false;
+    textures_.active_env_tex   = kInvalidHandle;
+    shadows_.active_shadow_handle = kInvalidShadowHandle;
     return KE_OK;
 }
 
@@ -389,96 +377,113 @@ ke_result BgfxRenderer::SetOrthographic(ke_bool enabled) {
 
 ke_result BgfxRenderer::ClearColor(float r, float g, float b, float a)
 {
-    if (!initialized_) return KE_ERROR_NOT_INITIALIZED;
+    if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
     uint32_t color = (uint32_t(r * 255.0F) << 24) | (uint32_t(g * 255.0F) << 16) |
                      (uint32_t(b * 255.0F) << 8)  | (uint32_t(a * 255.0F));
-    bgfx_->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
+    ctx_.gpu->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
     return KE_OK;
 }
 
 ke_result BgfxRenderer::SetViewTransform(const ke_mat4 *view, const ke_mat4 *proj)
 {
-    if (!view || !proj) return KE_ERROR_INVALID_ARGUMENT;
-    std::memcpy(last_view_, view->m, sizeof(float) * 16);
-    std::memcpy(last_proj_, proj->m, sizeof(float) * 16);
+    if (!view || !proj || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    std::memcpy(ctx_.last_view, view->m, sizeof(float) * 16);
+    std::memcpy(ctx_.last_proj, proj->m, sizeof(float) * 16);
 
-    // Default near/far if math fails
     float n = 0.1f;
     float f = 1000.0f;
-
-    // Basic extraction from standard projection matrix
     if (std::abs(proj->m[10] - proj->m[11]) > 0.0001f) {
         n = proj->m[14] / (proj->m[10] + 1.0f);
         f = proj->m[14] / (proj->m[10] - 1.0f);
     }
     
-    if (std::abs(n - near_z_) > 0.0001f || std::abs(f - far_z_) > 0.0001f) {
-        near_z_ = n;
-        far_z_  = f;
-        bounds_dirty_ = true;
+    if (std::abs(n - ctx_.near_z) > 0.0001f || std::abs(f - ctx_.far_z) > 0.0001f) {
+        ctx_.near_z = n;
+        ctx_.far_z  = f;
     }
 
-    ssao_proj_info_[0] = (proj->m[0] != 0.f) ? (1.0f / proj->m[0]) : 1.0f;
-    ssao_proj_info_[1] = (proj->m[5] != 0.f) ? (1.0f / proj->m[5]) : 1.0f;
-    
-    bgfx_->SetViewTransform(kDepthView,   view->m, proj->m);
-    bgfx_->SetViewTransform(kPrepassView, view->m, proj->m);
-    bgfx_->SetViewTransform(kSsaoView,    view->m, proj->m);
-    bgfx_->SetViewTransform(kSceneView,   view->m, proj->m);
+    ctx_.gpu->SetViewTransform(kDepthView,   view->m, proj->m);
+    ctx_.gpu->SetViewTransform(kPrepassView, view->m, proj->m);
+    ctx_.gpu->SetViewTransform(kSsaoView,    view->m, proj->m);
+    ctx_.gpu->SetViewTransform(kSceneView,   view->m, proj->m);
     return KE_OK;
 }
 
 ke_result BgfxRenderer::SetCameraPos(float x, float y, float z)
 {
-    camera_pos_[0] = x; camera_pos_[1] = y; camera_pos_[2] = z; camera_pos_[3] = 0.f;
+    ctx_.camera_pos[0] = x; ctx_.camera_pos[1] = y; ctx_.camera_pos[2] = z; ctx_.camera_pos[3] = 0.f;
     return KE_OK;
+}
+
+ke_result BgfxRenderer::SetDirectionalLight(const ke_directional_light *light) {
+    return lighting_.SetDirectionalLight(light);
+}
+
+ke_result BgfxRenderer::SetAmbientLight(float r, float g, float b) {
+    return lighting_.SetAmbientLight(r, g, b);
+}
+
+ke_result BgfxRenderer::SetPointLights(const ke_point_light *lights, uint32_t count) {
+    return lighting_.SetPointLights(ctx_, clustered_.b_point_lights, lights, count);
+}
+
+ke_result BgfxRenderer::SetSpotLights(const ke_spot_light *lights, uint32_t count) {
+    return lighting_.SetSpotLights(ctx_, clustered_.b_spot_lights, lights, count);
+}
+
+ke_result BgfxRenderer::SetClusterConfig(const ke_cluster_config *config) {
+    if (!initialized_) return KE_ERROR_NOT_INITIALIZED;
+    return clustered_.SetClusterConfig(ctx_, config);
+}
+
+ke_result BgfxRenderer::SetSsao(ke_bool enabled, float radius, float bias, float strength) {
+    return post_process_.SetSsao(ctx_, enabled, radius, bias, strength);
+}
+
+ke_result BgfxRenderer::SetTonemapping(ke_bool enabled, float exposure, float gamma) {
+    return post_process_.SetTonemapping(ctx_, enabled, exposure, gamma);
+}
+
+ke_result BgfxRenderer::SetBloom(ke_bool enabled, float threshold, float intensity) {
+    return post_process_.SetBloom(ctx_, enabled, threshold, intensity);
 }
 
 ::bgfx::ShaderHandle BgfxRenderer::LoadShader(const char *name)
 {
-    std::string path = shader_path_ + "/" + name + ".bin";
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) return ::bgfx::ShaderHandle{::bgfx::kInvalidHandle};
-    auto size = (uint32_t)file.tellg();
-    file.seekg(0);
-    const ::bgfx::Memory *mem = bgfx_->Alloc(size + 1);
-    file.read(reinterpret_cast<char *>(mem->data), size);
-    mem->data[size] = '\0';
-    return bgfx_->CreateShader(mem);
+    if (!ctx_.shader_provider || !ctx_.gpu) return { ::bgfx::kInvalidHandle };
+    const ::bgfx::Memory* mem = ctx_.shader_provider->LoadShaderBinary(ctx_, name);
+    if (!mem) return { ::bgfx::kInvalidHandle };
+    return ctx_.gpu->CreateShader(mem);
 }
 
 ke_result BgfxRenderer::SetupShader()
 {
+    if (!ctx_.gpu) return KE_ERROR_RENDER;
     ::bgfx::ShaderHandle vs = LoadShader("vs_basic");
     ::bgfx::ShaderHandle fs = LoadShader("fs_basic");
     if (!::bgfx::isValid(vs) || !::bgfx::isValid(fs)) return KE_ERROR_RENDER;
     
-    ::bgfx::ProgramHandle prog = bgfx_->CreateProgram(vs, fs, true);
+    ::bgfx::ProgramHandle prog = ctx_.gpu->CreateProgram(vs, fs, true);
     if (!::bgfx::isValid(prog)) return KE_ERROR_RENDER;
     program_ = prog.idx;
 
-    // Default white texture
     uint32_t white = 0xffffffff;
     ke_texture_handle white_handle;
-    if (CreateTextureRgba(1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
+    if (textures_.CreateTextureRgba(ctx_, 1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
         return KE_ERROR_RENDER;
-    textures_[0].idx = textures_[white_handle].idx;
-
-    // Default white cubemap
+    
     {
         static const uint8_t kWhiteFace[4] = {0xff, 0xff, 0xff, 0xff};
-        const ::bgfx::Memory *mem = bgfx_->Alloc(6 * 4);
-        for (int f = 0; f < 6; ++f) std::memcpy(mem->data + f * 4, kWhiteFace, 4);
-        ::bgfx::TextureHandle h = bgfx_->CreateTextureCube(1, false, 1, ::bgfx::TextureFormat::RGBA8, 0, mem);
-        default_cube_tex_ = ::bgfx::isValid(h) ? h.idx : kInvalidHandle;
+        const ::bgfx::Memory *mem = ctx_.gpu->Copy(kWhiteFace, 4);
+        ::bgfx::TextureHandle h = ctx_.gpu->CreateTextureCube(1, false, 1, ::bgfx::TextureFormat::RGBA8, 0, mem);
+        textures_.default_cube_tex = ::bgfx::isValid(h) ? h.idx : kInvalidHandle;
     }
 
-    // Load extra programs
-    auto load_extra = [&](const char* vs_n, const char* fs_n, uint16_t& out_p) {
+    auto load_extra = [this](const char* vs_n, const char* fs_n, uint16_t& out_p) {
         auto v = LoadShader(vs_n);
         auto f = LoadShader(fs_n);
         if (::bgfx::isValid(v) && ::bgfx::isValid(f)) {
-            auto p = bgfx_->CreateProgram(v, f, true);
+            auto p = ctx_.gpu->CreateProgram(v, f, true);
             if (::bgfx::isValid(p)) out_p = p.idx;
         }
     };
@@ -486,59 +491,38 @@ ke_result BgfxRenderer::SetupShader()
     load_extra("vs_shadow", "fs_shadow", shadow_program_);
     load_extra("vs_skybox", "fs_skybox", skybox_program_);
 
-    // Internal primitives
     struct SkyVert { float x, y, z; };
     static const SkyVert kSkyVerts[8] = {{-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1}, {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1}};
     static const uint16_t kSkyIdx[36] = {0,1,2, 0,2,3, 5,4,7, 5,7,6, 4,0,3, 4,3,7, 1,5,6, 1,6,2, 4,5,1, 4,1,0, 3,2,6, 3,6,7};
     ::bgfx::VertexLayout skyLayout;
     skyLayout.begin().add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float).end();
-    skybox_vb_ = bgfx_->CreateVertexBuffer(bgfx_->Copy(kSkyVerts, sizeof(kSkyVerts)), skyLayout).idx;
-    skybox_ib_ = bgfx_->CreateIndexBuffer(bgfx_->Copy(kSkyIdx, sizeof(kSkyIdx))).idx;
+    geometry_.skybox_vb = ctx_.gpu->CreateVertexBuffer(ctx_.gpu->Copy(kSkyVerts, sizeof(kSkyVerts)), skyLayout).idx;
+    geometry_.skybox_ib = ctx_.gpu->CreateIndexBuffer(ctx_.gpu->Copy(kSkyIdx, sizeof(kSkyIdx))).idx;
 
-    // Uniforms
-    sampler_uniform_       = bgfx_->CreateUniform("s_texColor",     ::bgfx::UniformType::Sampler).idx;
-    env_map_uniform_       = bgfx_->CreateUniform("s_envMap",       ::bgfx::UniformType::Sampler).idx;
-    color_uniform_         = bgfx_->CreateUniform("u_color",         ::bgfx::UniformType::Vec4).idx;
-    light_dir_uniform_     = bgfx_->CreateUniform("u_lightDir",      ::bgfx::UniformType::Vec4).idx;
-    light_color_uniform_   = bgfx_->CreateUniform("u_lightColor",    ::bgfx::UniformType::Vec4).idx;
-    ambient_color_uniform_ = bgfx_->CreateUniform("u_ambientColor",  ::bgfx::UniformType::Vec4).idx;
-    pbr_params_uniform_    = bgfx_->CreateUniform("u_pbrParams",     ::bgfx::UniformType::Vec4).idx;
-    camera_pos_uniform_    = bgfx_->CreateUniform("u_cameraPos",     ::bgfx::UniformType::Vec4).idx;
-    ibl_params_uniform_    = bgfx_->CreateUniform("u_iblParams",     ::bgfx::UniformType::Vec4).idx;
-    normal_map_uniform_    = bgfx_->CreateUniform("s_normalMap",     ::bgfx::UniformType::Sampler).idx;
-    normal_params_uniform_ = bgfx_->CreateUniform("u_normalParams",  ::bgfx::UniformType::Vec4).idx;
-    skybox_sampler_uniform_ = bgfx_->CreateUniform("s_skybox",       ::bgfx::UniformType::Sampler).idx;
-    skybox_tint_uniform_    = bgfx_->CreateUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4).idx;
-    shadow_map_uniform_     = bgfx_->CreateUniform("s_shadowMap",    ::bgfx::UniformType::Sampler).idx;
-    light_vp_uniform_       = bgfx_->CreateUniform("u_lightVP",      ::bgfx::UniformType::Mat4).idx;
-    shadow_params_uniform_  = bgfx_->CreateUniform("u_shadowParams", ::bgfx::UniformType::Vec4).idx;
-    light_counts_uniform_   = bgfx_->CreateUniform("u_lightCounts",  ::bgfx::UniformType::Vec4).idx;
-    point_lights_uniform_   = bgfx_->CreateUniform("u_pointLights",  ::bgfx::UniformType::Vec4, 128).idx;
-    spot_lights_uniform_    = bgfx_->CreateUniform("u_spotLights",   ::bgfx::UniformType::Vec4, 192).idx;
+    textures_.sampler_uniform        = ctx_.gpu->CreateUniform("s_texColor",     ::bgfx::UniformType::Sampler, 1).idx;
+    lighting_.env_map_uniform        = ctx_.gpu->CreateUniform("s_envMap",       ::bgfx::UniformType::Sampler, 1).idx;
+    lighting_.color_uniform          = ctx_.gpu->CreateUniform("u_color",         ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.light_dir_uniform      = ctx_.gpu->CreateUniform("u_lightDir",      ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.light_color_uniform    = ctx_.gpu->CreateUniform("u_lightColor",    ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.ambient_color_uniform  = ctx_.gpu->CreateUniform("u_ambientColor",  ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.pbr_params_uniform     = ctx_.gpu->CreateUniform("u_pbrParams",     ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.camera_pos_uniform     = ctx_.gpu->CreateUniform("u_cameraPos",     ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.ibl_params_uniform     = ctx_.gpu->CreateUniform("u_iblParams",     ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.normal_map_uniform     = ctx_.gpu->CreateUniform("s_normalMap",     ::bgfx::UniformType::Sampler, 1).idx;
+    lighting_.normal_params_uniform  = ctx_.gpu->CreateUniform("u_normalParams",  ::bgfx::UniformType::Vec4, 1).idx;
+    textures_.skybox_sampler_uniform = ctx_.gpu->CreateUniform("s_skybox",       ::bgfx::UniformType::Sampler, 1).idx;
+    textures_.skybox_tint_uniform    = ctx_.gpu->CreateUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4, 1).idx;
+    shadows_.shadow_map_uniform      = ctx_.gpu->CreateUniform("s_shadowMap",    ::bgfx::UniformType::Sampler, 1).idx;
+    shadows_.light_vp_uniform        = ctx_.gpu->CreateUniform("u_lightVP",      ::bgfx::UniformType::Mat4, 1).idx;
+    shadows_.shadow_params_uniform   = ctx_.gpu->CreateUniform("u_shadowParams", ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.light_counts_uniform   = ctx_.gpu->CreateUniform("u_lightCounts",  ::bgfx::UniformType::Vec4, 1).idx;
+    lighting_.point_lights_uniform   = ctx_.gpu->CreateUniform("u_pointLights",  ::bgfx::UniformType::Vec4, 128).idx;
+    lighting_.spot_lights_uniform    = ctx_.gpu->CreateUniform("u_spotLights",   ::bgfx::UniformType::Vec4, 192).idx;
 
     return KE_OK;
 }
 
 ke_render *BgfxRenderer::ToApi() { return &render_api_; }
-
-void BgfxRenderer::set_bgfx(class BgfxBackend* bgfx)
-{
-    if (own_bgfx_ && bgfx_)
-    {
-        bgfx_->~BgfxBackend();
-        allocator_->free(allocator_, bgfx_);
-    }
-    bgfx_ = bgfx;
-    own_bgfx_ = false;
-}
-
-class BgfxBackend* BgfxRenderer::release_bgfx()
-{
-    class BgfxBackend* b = bgfx_;
-    bgfx_ = nullptr;
-    own_bgfx_ = false;
-    return b;
-}
 
 } // namespace kernel_engine::render::bgfx
 
