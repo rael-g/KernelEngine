@@ -7,10 +7,11 @@ add_executable(test_cpp_services
     test_asset_loader.cpp
 )
 
-# Explicitly add directories so we can use #include <bgfx_renderer.hpp> etc.
+# Consolidated include paths for the 4-tier architecture
 target_include_directories(test_cpp_services PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx/src
+    ${CMAKE_SOURCE_DIR}/src/cpp/render/hal/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
     ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx/include
     ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw/src
     ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw/include

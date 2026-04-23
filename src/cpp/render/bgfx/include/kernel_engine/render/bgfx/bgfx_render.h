@@ -20,14 +20,15 @@ extern "C" {
 #endif
 
 struct ke_window;
-
-/// @brief Configuration for the BGFX render system.
-typedef struct ke_render_bgfx_params {
-    struct ke_allocator* allocator;
-    struct ke_logger* logger;
-    struct ke_message_pipe* message_pipe;
-    struct ke_window* window;
-    const char* shader_path;
+/// @brief Parameters for BGFX render system creation.
+typedef struct ke_render_bgfx_params
+{
+    struct ke_allocator *allocator;
+    struct ke_logger *logger;
+    struct ke_message_pipe *message_pipe;
+    struct ke_window *window;
+    const char *shader_path;
+    uint32_t renderer_type; // 0 = Default (Vulkan), or bgfx::RendererType
 } ke_render_bgfx_params;
 
 /**

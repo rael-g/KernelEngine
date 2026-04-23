@@ -1,7 +1,7 @@
 #pragma once
 
 #include <kernel_engine/kernel/render/render.h>
-#include <kernel_engine/render/bgfx/bgfx_render.h>
+#include "render_export.h"
 #include "geometry_manager.hpp"
 #include "texture_manager.hpp"
 #include "lighting_manager.hpp"
@@ -18,16 +18,14 @@ namespace kernel_engine::render::bgfx
 {
 
 /**
- * @brief High-level renderer service implementing the bgfx backend.
- * 100% Backend agnostic in its logic.
+ * @brief High-level renderer service implementing the agnostic core logic.
  */
-class KE_RENDER_API BgfxRenderer
+class KE_RENDER_API CoreRenderer
 {
 public:
-    explicit BgfxRenderer(const ke_render_bgfx_params *params);
-    virtual ~BgfxRenderer();
+    explicit CoreRenderer(const GpuRendererParams& params); 
+    virtual ~CoreRenderer();
 
-    // ── Service API ──────────────────────────────────────────────────────────
     ke_result OnInitialize();
     ke_result OnShutdown();
     ke_result Frame();
@@ -49,13 +47,9 @@ public:
 
     ke_render *ToApi();
 
-    // Injects a custom shader provider (useful for testing)
     void SetShaderProvider(ShaderProviderInterface* provider);
-    
-    // Injects a custom GPU device (useful for testing)
     void SetGpuDevice(GpuDeviceInterface* gpu);
 
-    // Virtual for testing
     virtual GpuShaderHandle LoadShader(const char *name);
 
 protected:
@@ -67,7 +61,6 @@ private:
     bool own_shader_provider_ = false;
     bool initialized_ = false;
     
-    // Modular components (Composition)
     GeometryManager     geometry_;
     TextureManager      textures_;
     LightingManager     lighting_;
@@ -75,7 +68,6 @@ private:
     PostProcessPipeline post_process_;
     ClusteredForward    clustered_;
 
-    // Global resources
     GpuProgramHandle program_             = kGpuInvalidHandle;
     GpuProgramHandle shadow_program_      = kGpuInvalidHandle;
     GpuProgramHandle skybox_program_      = kGpuInvalidHandle;

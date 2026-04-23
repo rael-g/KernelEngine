@@ -1,6 +1,12 @@
 #pragma once
 
+#include "render_export.h"
 #include <cstdint>
+
+// Forward declarations for kernel types (outside renderer namespace)
+struct ke_allocator;
+struct ke_logger;
+struct ke_window;
 
 namespace kernel_engine::render::bgfx
 {
@@ -20,10 +26,6 @@ static constexpr uint16_t kGpuInvalidHandle = 0xffff;
 
 // ── Memory Management ────────────────────────────────────────────────────────
 
-/**
- * @brief Abstract representation of a memory buffer owned by the GPU library.
- * Mirrors bgfx::Memory structure but stays neutral.
- */
 struct GpuMemoryBuffer
 {
     uint8_t* data;
@@ -58,16 +60,25 @@ enum class GpuAccess : uint8_t
 
 // ── Configuration Structs ───────────────────────────────────────────────────
 
-/**
- * @brief Neutral configuration for backend initialization.
- */
 struct GpuInitConfig
 {
     void*    native_window_handle;
     uint32_t width;
     uint32_t height;
-    uint32_t renderer_type; // Maps to bgfx::RendererType
+    uint32_t renderer_type;
     bool     debug;
+};
+
+/**
+ * @brief Neutral parameters for core renderer initialization.
+ */
+struct GpuRendererParams
+{
+    ::ke_allocator* allocator;
+    ::ke_logger*    logger;
+    const char*     shader_path;
+    ::ke_window*    window;
+    uint32_t        renderer_type;
 };
 
 } // namespace kernel_engine::render::bgfx

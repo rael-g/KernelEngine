@@ -1,13 +1,22 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <bgfx_renderer.hpp>
+
+// Product Header (Entry point)
+#include <kernel_engine/render/bgfx/bgfx_render.h>
+
+// Internal Core Headers
+#include <core_renderer.hpp>
 #include <shader_provider.hpp>
 #include <gpu_device.hpp>
+
+// Kernel Headers (Full definitions)
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/logger/logger.h>
 #include <kernel_engine/kernel/window/window.h>
+
 #include <memory>
 #include <vector>
+#include <cstring>
 
 using namespace kernel_engine::render::bgfx;
 using ::testing::Return;
@@ -86,10 +95,10 @@ public:
 class BgfxRenderTest : public ::testing::Test
 {
 protected:
-    ke_allocator* alloc = nullptr;
-    ke_window* window = nullptr;
-    ke_logger* logger = nullptr;
-    BgfxRenderer* impl = nullptr;
+    ::ke_allocator* alloc = nullptr;
+    ::ke_window* window = nullptr;
+    ::ke_logger* logger = nullptr;
+    CoreRenderer* impl = nullptr;
     std::unique_ptr<NiceMock<MockShaderProvider>> shader_mock;
     std::unique_ptr<NiceMock<MockGpuDevice>> gpu_mock;
     
@@ -101,23 +110,22 @@ protected:
     {
         alloc = ke_allocator_malloc_create();
         
-        window = static_cast<ke_window*>(calloc(1, sizeof(ke_window)));
-        window->get_native_handle = [](ke_window*) -> void* { return (void*)0x1234; };
-        window->get_size = [](ke_window*, int32_t* w, int32_t* h) { *w = 800; *h = 600; return KE_OK; };
+        window = static_cast<::ke_window*>(calloc(1, sizeof(::ke_window)));
+        window->get_native_handle = [](::ke_window*) -> void* { return (void*)0x1234; };
+        window->get_size = [](::ke_window*, int32_t* w, int32_t* h) { *w = 800; *h = 600; return KE_OK; };
 
-        logger = static_cast<ke_logger*>(calloc(1, sizeof(ke_logger)));
-        logger->log = [](ke_logger*, const ke_log_event*) {};
+        logger = static_cast<::ke_logger*>(calloc(1, sizeof(::ke_logger)));
+        logger->log = [](::ke_logger*, const ke_log_event*) {};
 
-        ke_render_bgfx_params params = { 
-            alloc, 
-            logger, 
-            nullptr, 
-            window, 
+        GpuRendererParams core_params = {
+            alloc,
+            logger,
             "shaders",
+            window,
             (uint32_t)0 // Noop or default
         };
-        
-        impl = new BgfxRenderer(&params);
+
+        impl = new CoreRenderer(core_params);
 
         shader_mock = std::make_unique<NiceMock<MockShaderProvider>>();
         gpu_mock    = std::make_unique<NiceMock<MockGpuDevice>>();
