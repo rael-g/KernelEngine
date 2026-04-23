@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bgfx/bgfx.h>
+#include "gpu_types.hpp"
 #include <string>
 #include <vector>
 
@@ -22,9 +22,9 @@ public:
      * @brief Loads a shader binary by name.
      * @param ctx The current render context.
      * @param name The name of the shader (without extension).
-     * @return A bgfx memory pointer containing the shader data, or nullptr on failure.
+     * @return A GPU memory pointer containing the shader data, or nullptr on failure.
      */
-    virtual const ::bgfx::Memory* LoadShaderBinary(RenderContext& ctx, const std::string& name) = 0;
+    virtual const GpuMemoryBuffer* LoadShaderBinary(RenderContext& ctx, const std::string& name) = 0;
 };
 
 /**
@@ -34,7 +34,7 @@ class FileShaderProvider : public ShaderProviderInterface
 {
 public:
     explicit FileShaderProvider(const std::string& base_path);
-    const ::bgfx::Memory* LoadShaderBinary(RenderContext& ctx, const std::string& name) override;
+    const GpuMemoryBuffer* LoadShaderBinary(RenderContext& ctx, const std::string& name) override;
 
 private:
     std::string base_path_;

@@ -11,7 +11,7 @@ FileShaderProvider::FileShaderProvider(const std::string& base_path)
     : base_path_(base_path)
 {}
 
-const ::bgfx::Memory* FileShaderProvider::LoadShaderBinary(RenderContext& ctx, const std::string& name)
+const GpuMemoryBuffer* FileShaderProvider::LoadShaderBinary(RenderContext& ctx, const std::string& name)
 {
     if (!ctx.gpu) return nullptr;
 
@@ -22,10 +22,10 @@ const ::bgfx::Memory* FileShaderProvider::LoadShaderBinary(RenderContext& ctx, c
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
 
-    const ::bgfx::Memory* mem = ctx.gpu->Alloc(static_cast<uint32_t>(size + 1));
-    if (file.read(reinterpret_cast<char*>(mem->data), size))
+    const GpuMemoryBuffer* mem = ctx.gpu->Alloc(static_cast<uint32_t>(size + 1));
+    if (mem && file.read(reinterpret_cast<char*>(mem->data), size))
     {
-        mem->data[mem->size - 1] = '\0';
+        mem->data[size] = '\0';
         return mem;
     }
 

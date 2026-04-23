@@ -2,7 +2,6 @@
 #include "texture_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
-#include <bgfx/bgfx.h>
 #include <vector>
 #include <cstring>
 #include <cmath>
@@ -25,7 +24,7 @@ ke_result LightingManager::SetAmbientLight(float r, float g, float b)
     return KE_OK;
 }
 
-ke_result LightingManager::SetPointLights(RenderContext& ctx, uint16_t buffer_handle, const ke_point_light *lights, uint32_t count)
+ke_result LightingManager::SetPointLights(RenderContext& ctx, GpuDynamicIndexBufferHandle buffer_handle, const ke_point_light *lights, uint32_t count)
 {
     if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
     if (!ctx.gpu) return KE_ERROR_RENDER;
@@ -45,15 +44,15 @@ ke_result LightingManager::SetPointLights(RenderContext& ctx, uint16_t buffer_ha
         gpuLights[i].color[3] = 0.f;
     }
 
-    if (count > 0 && ::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{buffer_handle}))
+    if (count > 0 && buffer_handle != kGpuInvalidHandle)
     {
-        ctx.gpu->UpdateDynamicIndexBuffer(::bgfx::DynamicIndexBufferHandle{buffer_handle}, 0,
-                       ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuPointLight))));
+        ctx.gpu->UpdateDynamicIndexBuffer(buffer_handle, 0,
+                       ctx.gpu->Copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuPointLight))));
     }
     return KE_OK;
 }
 
-ke_result LightingManager::SetSpotLights(RenderContext& ctx, uint16_t buffer_handle, const ke_spot_light *lights, uint32_t count)
+ke_result LightingManager::SetSpotLights(RenderContext& ctx, GpuDynamicIndexBufferHandle buffer_handle, const ke_spot_light *lights, uint32_t count)
 {
     if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
     if (!ctx.gpu) return KE_ERROR_RENDER;
@@ -77,10 +76,10 @@ ke_result LightingManager::SetSpotLights(RenderContext& ctx, uint16_t buffer_han
         gpuLights[i].color_cosO[3] = cosf(lights[i].outer_angle);
     }
 
-    if (count > 0 && ::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{buffer_handle}))
+    if (count > 0 && buffer_handle != kGpuInvalidHandle)
     {
-        ctx.gpu->UpdateDynamicIndexBuffer(::bgfx::DynamicIndexBufferHandle{buffer_handle}, 0,
-                       ::bgfx::copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuSpotLight))));
+        ctx.gpu->UpdateDynamicIndexBuffer(buffer_handle, 0,
+                       ctx.gpu->Copy(gpuLights.data(), (uint32_t)(count * sizeof(GpuSpotLight))));
     }
     return KE_OK;
 }
@@ -104,7 +103,6 @@ ke_result LightingManager::DestroyMaterial(RenderContext& ctx, ke_material_handl
 
 void LightingManager::Shutdown()
 {
-    // GPU device handles cleanup
     materials_.clear();
 }
 

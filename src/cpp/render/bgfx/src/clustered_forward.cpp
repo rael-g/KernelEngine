@@ -3,7 +3,6 @@
 #include "lighting_manager.hpp"
 #include "shader_provider.hpp"
 #include "gpu_device.hpp"
-#include <bgfx/bgfx.h>
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -12,29 +11,29 @@ namespace kernel_engine::render::bgfx
 {
 
 ke_result ClusteredForward::SetupClustered(RenderContext& ctx, 
-                                         uint16_t& out_depth_prog, 
-                                         uint16_t& out_cull_prog)
+                                         GpuProgramHandle& out_depth_prog, 
+                                         GpuProgramHandle& out_cull_prog)
 {
     if (!ctx.gpu || !ctx.shader_provider) return KE_ERROR_RENDER;
 
-    auto load_shader = [&](const char* name) -> ::bgfx::ShaderHandle {
-        const ::bgfx::Memory* mem = ctx.shader_provider->LoadShaderBinary(ctx, name);
-        if (!mem) return { ::bgfx::kInvalidHandle };
+    auto load_shader = [&](const char* name) -> GpuShaderHandle {
+        const GpuMemoryBuffer* mem = ctx.shader_provider->LoadShaderBinary(ctx, name);
+        if (!mem) return kGpuInvalidHandle;
         return ctx.gpu->CreateShader(mem);
     };
 
-    ::bgfx::ShaderHandle vs_d = load_shader("vs_depth");
-    ::bgfx::ShaderHandle fs_d = load_shader("fs_depth");
-    if (::bgfx::isValid(vs_d) && ::bgfx::isValid(fs_d))
-        out_depth_prog = ctx.gpu->CreateProgram(vs_d, fs_d, true).idx;
+    GpuShaderHandle vs_d = load_shader("vs_depth");
+    GpuShaderHandle fs_d = load_shader("fs_depth");
+    if (vs_d != kGpuInvalidHandle && fs_d != kGpuInvalidHandle)
+        out_depth_prog = ctx.gpu->CreateProgram(vs_d, fs_d, true);
 
-    ::bgfx::ShaderHandle cs_c = load_shader("cs_light_cull");
-    if (::bgfx::isValid(cs_c))
-        out_cull_prog = ctx.gpu->CreateComputeProgram(cs_c, true).idx;
+    GpuShaderHandle cs_c = load_shader("cs_light_cull");
+    if (cs_c != kGpuInvalidHandle)
+        out_cull_prog = ctx.gpu->CreateComputeProgram(cs_c, true);
 
-    cluster_params_u  = ctx.gpu->CreateUniform("u_clusterParams",  ::bgfx::UniformType::Vec4, 1).idx;
-    cluster_params2_u = ctx.gpu->CreateUniform("u_clusterParams2", ::bgfx::UniformType::Vec4, 1).idx;
-    compute_view_u_   = ctx.gpu->CreateUniform("u_computeView",    ::bgfx::UniformType::Mat4, 1).idx;
+    cluster_params_u  = ctx.gpu->CreateUniform("u_clusterParams",  GpuUniformType::Vec4, 1);
+    cluster_params2_u = ctx.gpu->CreateUniform("u_clusterParams2", GpuUniformType::Vec4, 1);
+    compute_view_u_   = ctx.gpu->CreateUniform("u_computeView",    GpuUniformType::Mat4, 1);
 
     RebuildClusterBuffers(ctx);
     return KE_OK;
@@ -44,9 +43,9 @@ void ClusteredForward::RebuildClusterBuffers(RenderContext& ctx)
 {
     if (!ctx.gpu) return;
 
-    auto destroy_buffer = [&](uint16_t &h) {
-        if (::bgfx::isValid(::bgfx::DynamicIndexBufferHandle{h})) ctx.gpu->Destroy(::bgfx::DynamicIndexBufferHandle{h});
-        h = kInvalidHandle;
+    auto destroy_buffer = [&](GpuDynamicIndexBufferHandle &h) {
+        if (h != kGpuInvalidHandle) ctx.gpu->DestroyDynamicIndexBuffer(h);
+        h = kGpuInvalidHandle;
     };
 
     destroy_buffer(b_cluster_bounds_);
@@ -59,13 +58,16 @@ void ClusteredForward::RebuildClusterBuffers(RenderContext& ctx)
 
     uint32_t numClusters = cluster_config_.grid_x * cluster_config_.grid_y * cluster_config_.grid_z;
 
-    b_cluster_bounds_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
-    b_point_lights = ctx.gpu->CreateDynamicIndexBuffer(cluster_config_.max_total_lights * 32 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
-    b_spot_lights  = ctx.gpu->CreateDynamicIndexBuffer(cluster_config_.max_total_lights * 48 / 2, BGFX_BUFFER_COMPUTE_READ).idx;
-    b_p_light_indices_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
-    b_s_light_indices_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
-    b_p_light_count_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
-    b_s_light_count_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * 4 / 2, BGFX_BUFFER_COMPUTE_READ_WRITE).idx;
+    // BGFX_BUFFER_COMPUTE_READ (0x0100)
+    b_cluster_bounds_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * 32 / 2, 0x0100);
+    b_point_lights = ctx.gpu->CreateDynamicIndexBuffer(cluster_config_.max_total_lights * 32 / 2, 0x0100);
+    b_spot_lights  = ctx.gpu->CreateDynamicIndexBuffer(cluster_config_.max_total_lights * 48 / 2, 0x0100);
+    
+    // BGFX_BUFFER_COMPUTE_READ_WRITE (0x0300)
+    b_p_light_indices_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, 0x0300);
+    b_s_light_indices_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * cluster_config_.max_lights_per_cluster * 4 / 2, 0x0300);
+    b_p_light_count_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * 4 / 2, 0x0300);
+    b_s_light_count_ = ctx.gpu->CreateDynamicIndexBuffer(numClusters * 4 / 2, 0x0300);
 
     bounds_dirty_ = true;
 }
@@ -122,36 +124,36 @@ void ClusteredForward::UpdateClusterBounds(RenderContext& ctx)
         }
     }
 
-    ctx.gpu->UpdateDynamicIndexBuffer(::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, 0,
-                   ::bgfx::copy(bounds.data(), (uint32_t)(bounds.size() * sizeof(AABB))));
+    ctx.gpu->UpdateDynamicIndexBuffer(b_cluster_bounds_, 0,
+                   ctx.gpu->Copy(bounds.data(), (uint32_t)(bounds.size() * sizeof(AABB))));
     bounds_dirty_ = false;
 }
 
 void ClusteredForward::DispatchLightCull(RenderContext& ctx, 
                                         const LightingManager& lighting,
-                                        uint16_t cull_program)
+                                        GpuProgramHandle cull_program)
 {
-    if (cull_program == kInvalidHandle || !ctx.gpu) return;
+    if (cull_program == kGpuInvalidHandle || !ctx.gpu) return;
 
-    ctx.gpu->SetUniform(::bgfx::UniformHandle{compute_view_u_}, ctx.last_view, 1);
+    ctx.gpu->SetUniform(compute_view_u_, ctx.last_view, 1);
 
     float params[4] = {(float)cluster_config_.grid_x, (float)cluster_config_.grid_y,
                        (float)cluster_config_.grid_z, (float)cluster_config_.max_lights_per_cluster};
-    ctx.gpu->SetUniform(::bgfx::UniformHandle{cluster_params_u}, params, 1);
+    ctx.gpu->SetUniform(cluster_params_u, params, 1);
 
     float params2[4] = {(float)lighting.GetPointLightCount(), (float)lighting.GetSpotLightCount(), 0.f, 0.f};
-    ctx.gpu->SetUniform(::bgfx::UniformHandle{cluster_params2_u}, params2, 1);
+    ctx.gpu->SetUniform(cluster_params2_u, params2, 1);
 
-    ctx.gpu->SetBuffer(0, ::bgfx::DynamicIndexBufferHandle{b_cluster_bounds_}, ::bgfx::Access::Read);
-    ctx.gpu->SetBuffer(1, ::bgfx::DynamicIndexBufferHandle{b_point_lights},   ::bgfx::Access::Read);
-    ctx.gpu->SetBuffer(2, ::bgfx::DynamicIndexBufferHandle{b_spot_lights},    ::bgfx::Access::Read);
+    ctx.gpu->SetBuffer(0, b_cluster_bounds_, GpuAccess::Read);
+    ctx.gpu->SetBuffer(1, b_point_lights,   GpuAccess::Read);
+    ctx.gpu->SetBuffer(2, b_spot_lights,    GpuAccess::Read);
 
-    ctx.gpu->SetBuffer(3, ::bgfx::DynamicIndexBufferHandle{b_p_light_indices_}, ::bgfx::Access::ReadWrite);
-    ctx.gpu->SetBuffer(4, ::bgfx::DynamicIndexBufferHandle{b_p_light_count_},   ::bgfx::Access::ReadWrite);
-    ctx.gpu->SetBuffer(5, ::bgfx::DynamicIndexBufferHandle{b_s_light_indices_}, ::bgfx::Access::ReadWrite);
-    ctx.gpu->SetBuffer(6, ::bgfx::DynamicIndexBufferHandle{b_s_light_count_},   ::bgfx::Access::ReadWrite);
+    ctx.gpu->SetBuffer(3, b_p_light_indices_, GpuAccess::ReadWrite);
+    ctx.gpu->SetBuffer(4, b_p_light_count_,   GpuAccess::ReadWrite);
+    ctx.gpu->SetBuffer(5, b_s_light_indices_, GpuAccess::ReadWrite);
+    ctx.gpu->SetBuffer(6, b_s_light_count_,   GpuAccess::ReadWrite);
 
-    ctx.gpu->Dispatch(kLightCullView, ::bgfx::ProgramHandle{cull_program},
+    ctx.gpu->Dispatch(kLightCullView, cull_program,
                      (uint16_t)cluster_config_.grid_x, (uint16_t)cluster_config_.grid_y, (uint16_t)cluster_config_.grid_z);
 }
 
@@ -166,7 +168,6 @@ ke_result ClusteredForward::SetClusterConfig(RenderContext& ctx, const ke_cluste
 
 void ClusteredForward::Shutdown(RenderContext& ctx)
 {
-    // GPU device handles cleanup
 }
 
 } // namespace kernel_engine::render::bgfx

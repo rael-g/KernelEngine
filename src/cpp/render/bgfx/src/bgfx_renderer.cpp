@@ -1,8 +1,6 @@
 #include "bgfx_renderer.hpp"
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/window/window.h>
-#include <bgfx/bgfx.h>
-#include <bgfx/platform.h>
 #include <new>
 #include <cstring>
 #include <fstream>
@@ -25,36 +23,12 @@ static ke_result LogErr(ke_logger *logger, ke_result r, const char *context, con
     return r;
 }
 
-// ── BgfxLogCallback Implementation ────────────────────────────────────────
-
-void BgfxLogCallback::fatal(const char *_filePath, uint16_t _line, ::bgfx::Fatal::Enum _code, const char *_str)
-{
-    if (logger_)
-    {
-        char msg[1024];
-        snprintf(msg, sizeof(msg), "FATAL 0x%08x at %s:%d: %s", _code, _filePath, _line, _str);
-        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "bgfx", msg};
-        logger_->log(logger_, &ev);
-    }
-}
-
-void BgfxLogCallback::traceVargs(const char *_filePath, uint16_t _line, const char *_format, va_list _argList)
-{
-    if (logger_)
-    {
-        char msg[1024];
-        vsnprintf(msg, sizeof(msg), _format, _argList);
-        ke_log_event ev = {KE_LOG_LEVEL_TRACE, "bgfx", msg};
-        logger_->log(logger_, &ev);
-    }
-}
-
 // ── BgfxRenderer Implementation ───────────────────────────────────────────
 
 BgfxRenderer::BgfxRenderer(const ke_render_bgfx_params *params)
     : window_(params ? params->window : nullptr),
       shader_path_((params && params->shader_path != nullptr) ? params->shader_path : ""),
-      renderer_type_((params && params->renderer_type != 0) ? (::bgfx::RendererType::Enum)params->renderer_type : ::bgfx::RendererType::Vulkan)
+      renderer_type_((params && params->renderer_type != 0) ? params->renderer_type : 0) // Noop or default
 {
     std::memset(&ctx_, 0, sizeof(ctx_));
     std::memset(&render_api_, 0, sizeof(render_api_));
@@ -64,13 +38,12 @@ BgfxRenderer::BgfxRenderer(const ke_render_bgfx_params *params)
         ctx_.logger    = params->logger;
     }
 
-    callback_.SetLogger(ctx_.logger);
     render_api_.handle = this;
 
-    // Default GPU Device
+    // Default GPU Device (Bgfx implementation)
     if (ctx_.allocator) {
-        void* gpu_mem = ctx_.allocator->alloc(ctx_.allocator, sizeof(GpuDevice), alignof(GpuDevice));
-        ctx_.gpu = new (gpu_mem) GpuDevice();
+        void* gpu_mem = ctx_.allocator->alloc(ctx_.allocator, sizeof(BgfxGpuDevice), alignof(BgfxGpuDevice));
+        ctx_.gpu = new (gpu_mem) BgfxGpuDevice();
         own_gpu_device_ = true;
     }
 
@@ -266,18 +239,19 @@ ke_result BgfxRenderer::OnInitialize()
     void *nwh = window_->get_native_handle(window_);
     if (!nwh) return KE_ERROR_WINDOW;
 
-    ::bgfx::Init init;
-    init.type = renderer_type_;
-    init.platformData.nwh = nwh;
-    init.callback = &callback_;
-
     int32_t w, h;
     window_->get_size(window_, &w, &h);
-    init.resolution.width  = (uint32_t)w;
-    init.resolution.height = (uint32_t)h;
-    init.resolution.reset  = BGFX_RESET_VSYNC;
 
-    if (!ctx_.gpu->Init(init))
+    GpuInitConfig config = {};
+    config.native_window_handle = nwh;
+    config.width = (uint32_t)w;
+    config.height = (uint32_t)h;
+    config.renderer_type = renderer_type_;
+#ifndef NDEBUG
+    config.debug = true;
+#endif
+
+    if (!ctx_.gpu->Init(config))
     {
         return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "gpu->Init failed");
     }
@@ -285,12 +259,13 @@ ke_result BgfxRenderer::OnInitialize()
     ctx_.view_w = w;
     ctx_.view_h = h;
 
-    ctx_.gpu->SetViewClear(kDepthView, BGFX_CLEAR_DEPTH, 0, 1.0f, 0);
-    ctx_.gpu->SetViewRect(kDepthView, 0, 0, (uint16_t)w, (uint16_t)h);
+    // Use default values for clear view setup in HAL
+    ctx_.gpu->SetViewClear(0 /*kDepthView*/, 0x0002 /*BGFX_CLEAR_DEPTH*/, 0, 1.0f, 0);
+    ctx_.gpu->SetViewRect(0, 0, 0, (uint16_t)w, (uint16_t)h);
 
-    ctx_.gpu->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
-    ctx_.gpu->SetViewRect(kSceneView, 0, 0, (uint16_t)w, (uint16_t)h);
-    ctx_.gpu->SetViewMode(kSceneView, ::bgfx::ViewMode::Sequential);
+    ctx_.gpu->SetViewClear(1 /*kSceneView*/, 0x0001 | 0x0002, 0x303030ff, 1.0f, 0);
+    ctx_.gpu->SetViewRect(1, 0, 0, (uint16_t)w, (uint16_t)h);
+    ctx_.gpu->SetViewMode(1, GpuViewMode::Sequential);
 
     ke_result res = SetupShader();
     if (res != KE_OK) return res;
@@ -318,17 +293,17 @@ ke_result BgfxRenderer::OnShutdown()
     clustered_.Shutdown(ctx_);
 
     if (ctx_.gpu) {
-        if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_blur_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{ssao_blur_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{ssao_program_}))      ctx_.gpu->Destroy(::bgfx::ProgramHandle{ssao_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{prepass_program_}))   ctx_.gpu->Destroy(::bgfx::ProgramHandle{prepass_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{tonemap_program_}))     ctx_.gpu->Destroy(::bgfx::ProgramHandle{tonemap_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{blur_program_}))        ctx_.gpu->Destroy(::bgfx::ProgramHandle{blur_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{bright_pass_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{bright_pass_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{depth_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{depth_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{cull_program_}))  ctx_.gpu->Destroy(::bgfx::ProgramHandle{cull_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{shadow_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{shadow_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{skybox_program_})) ctx_.gpu->Destroy(::bgfx::ProgramHandle{skybox_program_});
-        if (::bgfx::isValid(::bgfx::ProgramHandle{program_}))         ctx_.gpu->Destroy(::bgfx::ProgramHandle{program_});
+        if (ssao_blur_program_ != kGpuInvalidHandle)   ctx_.gpu->DestroyProgram(ssao_blur_program_);
+        if (ssao_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(ssao_program_);
+        if (prepass_program_ != kGpuInvalidHandle)     ctx_.gpu->DestroyProgram(prepass_program_);
+        if (tonemap_program_ != kGpuInvalidHandle)     ctx_.gpu->DestroyProgram(tonemap_program_);
+        if (blur_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(blur_program_);
+        if (bright_pass_program_ != kGpuInvalidHandle) ctx_.gpu->DestroyProgram(bright_pass_program_);
+        if (depth_program_ != kGpuInvalidHandle)       ctx_.gpu->DestroyProgram(depth_program_);
+        if (cull_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(cull_program_);
+        if (shadow_program_ != kGpuInvalidHandle)      ctx_.gpu->DestroyProgram(shadow_program_);
+        if (skybox_program_ != kGpuInvalidHandle)      ctx_.gpu->DestroyProgram(skybox_program_);
+        if (program_ != kGpuInvalidHandle)              ctx_.gpu->DestroyProgram(program_);
 
         ctx_.gpu->Shutdown();
     }
@@ -342,30 +317,30 @@ ke_result BgfxRenderer::Frame()
     clustered_.UpdateClusterBounds(ctx_);
     clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
 
-    if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kInvalidHandle)
+    if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
     {
-        ctx_.gpu->SetViewFrameBuffer(kPrepassView,  ::bgfx::FrameBufferHandle{post_process_.GetGbufFb()});
-        ctx_.gpu->SetViewClear(kPrepassView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
-        ctx_.gpu->SetViewRect(kPrepassView,  0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
+        ctx_.gpu->SetViewFrameBuffer(2 /*kPrepassView*/,  post_process_.GetGbufFb());
+        ctx_.gpu->SetViewClear(2, 0x0001 | 0x0002, 0x00000000, 1.0f, 0);
+        ctx_.gpu->SetViewRect(2,  0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
 
         post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
     }
 
-    if (post_process_.GetHdrFb() != kInvalidHandle)
+    if (post_process_.GetHdrFb() != kGpuInvalidHandle)
     {
-        ctx_.gpu->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{post_process_.GetHdrFb()});
+        ctx_.gpu->SetViewFrameBuffer(1 /*kSceneView*/, post_process_.GetHdrFb());
         post_process_.SubmitPostProcess(ctx_, geometry_, textures_, bright_pass_program_, blur_program_, tonemap_program_);
     }
     else
     {
-        ctx_.gpu->SetViewFrameBuffer(kSceneView, ::bgfx::FrameBufferHandle{::bgfx::kInvalidHandle});
+        ctx_.gpu->SetViewFrameBuffer(1, kGpuInvalidHandle);
     }
 
-    ctx_.gpu->Touch(kSceneView);
+    ctx_.gpu->Touch(1 /*kSceneView*/);
     ctx_.gpu->Frame();
     
     textures_.has_skybox       = false;
-    textures_.active_env_tex   = kInvalidHandle;
+    textures_.active_env_tex   = kGpuInvalidHandle;
     shadows_.active_shadow_handle = kInvalidShadowHandle;
     return KE_OK;
 }
@@ -380,7 +355,7 @@ ke_result BgfxRenderer::ClearColor(float r, float g, float b, float a)
     if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
     uint32_t color = (uint32_t(r * 255.0F) << 24) | (uint32_t(g * 255.0F) << 16) |
                      (uint32_t(b * 255.0F) << 8)  | (uint32_t(a * 255.0F));
-    ctx_.gpu->SetViewClear(kSceneView, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, color, 1.0f, 0);
+    ctx_.gpu->SetViewClear(1 /*kSceneView*/, 0x0001 | 0x0002, color, 1.0f, 0);
     return KE_OK;
 }
 
@@ -402,10 +377,10 @@ ke_result BgfxRenderer::SetViewTransform(const ke_mat4 *view, const ke_mat4 *pro
         ctx_.far_z  = f;
     }
 
-    ctx_.gpu->SetViewTransform(kDepthView,   view->m, proj->m);
-    ctx_.gpu->SetViewTransform(kPrepassView, view->m, proj->m);
-    ctx_.gpu->SetViewTransform(kSsaoView,    view->m, proj->m);
-    ctx_.gpu->SetViewTransform(kSceneView,   view->m, proj->m);
+    ctx_.gpu->SetViewTransform(0 /*kDepthView*/,   view->m, proj->m);
+    ctx_.gpu->SetViewTransform(2 /*kPrepassView*/, view->m, proj->m);
+    ctx_.gpu->SetViewTransform(3 /*kSsaoView*/,    view->m, proj->m);
+    ctx_.gpu->SetViewTransform(1 /*kSceneView*/,   view->m, proj->m);
     return KE_OK;
 }
 
@@ -448,24 +423,24 @@ ke_result BgfxRenderer::SetBloom(ke_bool enabled, float threshold, float intensi
     return post_process_.SetBloom(ctx_, enabled, threshold, intensity);
 }
 
-::bgfx::ShaderHandle BgfxRenderer::LoadShader(const char *name)
+GpuShaderHandle BgfxRenderer::LoadShader(const char *name)
 {
-    if (!ctx_.shader_provider || !ctx_.gpu) return { ::bgfx::kInvalidHandle };
-    const ::bgfx::Memory* mem = ctx_.shader_provider->LoadShaderBinary(ctx_, name);
-    if (!mem) return { ::bgfx::kInvalidHandle };
+    if (!ctx_.shader_provider || !ctx_.gpu) return kGpuInvalidHandle;
+    const GpuMemoryBuffer* mem = ctx_.shader_provider->LoadShaderBinary(ctx_, name);
+    if (!mem) return kGpuInvalidHandle;
     return ctx_.gpu->CreateShader(mem);
 }
 
 ke_result BgfxRenderer::SetupShader()
 {
     if (!ctx_.gpu) return KE_ERROR_RENDER;
-    ::bgfx::ShaderHandle vs = LoadShader("vs_basic");
-    ::bgfx::ShaderHandle fs = LoadShader("fs_basic");
-    if (!::bgfx::isValid(vs) || !::bgfx::isValid(fs)) return KE_ERROR_RENDER;
+    GpuShaderHandle vs = LoadShader("vs_basic");
+    GpuShaderHandle fs = LoadShader("fs_basic");
+    if (vs == kGpuInvalidHandle || fs == kGpuInvalidHandle) return KE_ERROR_RENDER;
     
-    ::bgfx::ProgramHandle prog = ctx_.gpu->CreateProgram(vs, fs, true);
-    if (!::bgfx::isValid(prog)) return KE_ERROR_RENDER;
-    program_ = prog.idx;
+    GpuProgramHandle prog = ctx_.gpu->CreateProgram(vs, fs, true);
+    if (prog == kGpuInvalidHandle) return KE_ERROR_RENDER;
+    program_ = prog;
 
     uint32_t white = 0xffffffff;
     ke_texture_handle white_handle;
@@ -474,17 +449,17 @@ ke_result BgfxRenderer::SetupShader()
     
     {
         static const uint8_t kWhiteFace[4] = {0xff, 0xff, 0xff, 0xff};
-        const ::bgfx::Memory *mem = ctx_.gpu->Copy(kWhiteFace, 4);
-        ::bgfx::TextureHandle h = ctx_.gpu->CreateTextureCube(1, false, 1, ::bgfx::TextureFormat::RGBA8, 0, mem);
-        textures_.default_cube_tex = ::bgfx::isValid(h) ? h.idx : kInvalidHandle;
+        const GpuMemoryBuffer *mem = ctx_.gpu->Copy(kWhiteFace, 4);
+        GpuTextureHandle h = ctx_.gpu->CreateTextureCube(1, false, 1, 6 /*RGBA8*/, 0, mem);
+        textures_.default_cube_tex = h;
     }
 
-    auto load_extra = [this](const char* vs_n, const char* fs_n, uint16_t& out_p) {
+    auto load_extra = [this](const char* vs_n, const char* fs_n, GpuProgramHandle& out_p) {
         auto v = LoadShader(vs_n);
         auto f = LoadShader(fs_n);
-        if (::bgfx::isValid(v) && ::bgfx::isValid(f)) {
+        if (v != kGpuInvalidHandle && f != kGpuInvalidHandle) {
             auto p = ctx_.gpu->CreateProgram(v, f, true);
-            if (::bgfx::isValid(p)) out_p = p.idx;
+            if (p != kGpuInvalidHandle) out_p = p;
         }
     };
 
@@ -494,30 +469,35 @@ ke_result BgfxRenderer::SetupShader()
     struct SkyVert { float x, y, z; };
     static const SkyVert kSkyVerts[8] = {{-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1}, {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1}};
     static const uint16_t kSkyIdx[36] = {0,1,2, 0,2,3, 5,4,7, 5,7,6, 4,0,3, 4,3,7, 1,5,6, 1,6,2, 4,5,1, 4,1,0, 3,2,6, 3,6,7};
-    ::bgfx::VertexLayout skyLayout;
-    skyLayout.begin().add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float).end();
-    geometry_.skybox_vb = ctx_.gpu->CreateVertexBuffer(ctx_.gpu->Copy(kSkyVerts, sizeof(kSkyVerts)), skyLayout).idx;
-    geometry_.skybox_ib = ctx_.gpu->CreateIndexBuffer(ctx_.gpu->Copy(kSkyIdx, sizeof(kSkyIdx))).idx;
+    
+    // Abstracted Vertex Layout Bridge (Temporary Hack to keep header agnostic)
+    struct LayoutSim { uint32_t m_hash; uint16_t m_stride; uint16_t m_offset[18]; uint16_t m_attributes[18]; };
+    LayoutSim sky_l = {};
+    sky_l.m_stride = 12;
+    sky_l.m_attributes[0] = 0x0001; // Position, 3, Float
+    
+    geometry_.skybox_vb = ctx_.gpu->CreateVertexBuffer(ctx_.gpu->Copy(kSkyVerts, sizeof(kSkyVerts)), ctx_.gpu->CreateVertexLayout(&sky_l));
+    geometry_.skybox_ib = ctx_.gpu->CreateIndexBuffer(ctx_.gpu->Copy(kSkyIdx, sizeof(kSkyIdx)));
 
-    textures_.sampler_uniform        = ctx_.gpu->CreateUniform("s_texColor",     ::bgfx::UniformType::Sampler, 1).idx;
-    lighting_.env_map_uniform        = ctx_.gpu->CreateUniform("s_envMap",       ::bgfx::UniformType::Sampler, 1).idx;
-    lighting_.color_uniform          = ctx_.gpu->CreateUniform("u_color",         ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.light_dir_uniform      = ctx_.gpu->CreateUniform("u_lightDir",      ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.light_color_uniform    = ctx_.gpu->CreateUniform("u_lightColor",    ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.ambient_color_uniform  = ctx_.gpu->CreateUniform("u_ambientColor",  ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.pbr_params_uniform     = ctx_.gpu->CreateUniform("u_pbrParams",     ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.camera_pos_uniform     = ctx_.gpu->CreateUniform("u_cameraPos",     ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.ibl_params_uniform     = ctx_.gpu->CreateUniform("u_iblParams",     ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.normal_map_uniform     = ctx_.gpu->CreateUniform("s_normalMap",     ::bgfx::UniformType::Sampler, 1).idx;
-    lighting_.normal_params_uniform  = ctx_.gpu->CreateUniform("u_normalParams",  ::bgfx::UniformType::Vec4, 1).idx;
-    textures_.skybox_sampler_uniform = ctx_.gpu->CreateUniform("s_skybox",       ::bgfx::UniformType::Sampler, 1).idx;
-    textures_.skybox_tint_uniform    = ctx_.gpu->CreateUniform("u_skyboxTint",   ::bgfx::UniformType::Vec4, 1).idx;
-    shadows_.shadow_map_uniform      = ctx_.gpu->CreateUniform("s_shadowMap",    ::bgfx::UniformType::Sampler, 1).idx;
-    shadows_.light_vp_uniform        = ctx_.gpu->CreateUniform("u_lightVP",      ::bgfx::UniformType::Mat4, 1).idx;
-    shadows_.shadow_params_uniform   = ctx_.gpu->CreateUniform("u_shadowParams", ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.light_counts_uniform   = ctx_.gpu->CreateUniform("u_lightCounts",  ::bgfx::UniformType::Vec4, 1).idx;
-    lighting_.point_lights_uniform   = ctx_.gpu->CreateUniform("u_pointLights",  ::bgfx::UniformType::Vec4, 128).idx;
-    lighting_.spot_lights_uniform    = ctx_.gpu->CreateUniform("u_spotLights",   ::bgfx::UniformType::Vec4, 192).idx;
+    textures_.sampler_uniform        = ctx_.gpu->CreateUniform("s_texColor",     GpuUniformType::Sampler, 1);
+    lighting_.env_map_uniform        = ctx_.gpu->CreateUniform("s_envMap",       GpuUniformType::Sampler, 1);
+    lighting_.color_uniform          = ctx_.gpu->CreateUniform("u_color",         GpuUniformType::Vec4, 1);
+    lighting_.light_dir_uniform      = ctx_.gpu->CreateUniform("u_lightDir",      GpuUniformType::Vec4, 1);
+    lighting_.light_color_uniform    = ctx_.gpu->CreateUniform("u_lightColor",    GpuUniformType::Vec4, 1);
+    lighting_.ambient_color_uniform  = ctx_.gpu->CreateUniform("u_ambientColor",  GpuUniformType::Vec4, 1);
+    lighting_.pbr_params_uniform     = ctx_.gpu->CreateUniform("u_pbrParams",     GpuUniformType::Vec4, 1);
+    lighting_.camera_pos_uniform     = ctx_.gpu->CreateUniform("u_cameraPos",     GpuUniformType::Vec4, 1);
+    lighting_.ibl_params_uniform     = ctx_.gpu->CreateUniform("u_iblParams",     GpuUniformType::Vec4, 1);
+    lighting_.normal_map_uniform     = ctx_.gpu->CreateUniform("s_normalMap",     GpuUniformType::Sampler, 1);
+    lighting_.normal_params_uniform  = ctx_.gpu->CreateUniform("u_normalParams",  GpuUniformType::Vec4, 1);
+    textures_.skybox_sampler_uniform = ctx_.gpu->CreateUniform("s_skybox",       GpuUniformType::Sampler, 1);
+    textures_.skybox_tint_uniform    = ctx_.gpu->CreateUniform("u_skyboxTint",   GpuUniformType::Vec4, 1);
+    shadows_.shadow_map_uniform      = ctx_.gpu->CreateUniform("s_shadowMap",    GpuUniformType::Sampler, 1);
+    shadows_.light_vp_uniform        = ctx_.gpu->CreateUniform("u_lightVP",      GpuUniformType::Mat4, 1);
+    shadows_.shadow_params_uniform   = ctx_.gpu->CreateUniform("u_shadowParams", GpuUniformType::Vec4, 1);
+    lighting_.light_counts_uniform   = ctx_.gpu->CreateUniform("u_lightCounts",  GpuUniformType::Vec4, 1);
+    lighting_.point_lights_uniform   = ctx_.gpu->CreateUniform("u_pointLights",  GpuUniformType::Vec4, 128);
+    lighting_.spot_lights_uniform    = ctx_.gpu->CreateUniform("u_spotLights",   GpuUniformType::Vec4, 192);
 
     return KE_OK;
 }
