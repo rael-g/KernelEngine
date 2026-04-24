@@ -1,54 +1,47 @@
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 
 /// <summary>
-/// A handle to a native task being executed by the <see cref="TaskScheduler"/>.
-/// Can be awaited in C#.
+/// A fire-and-forget task dispatched to the native thread pool.
+/// Supports <c>await</c> identically to <see cref="Task"/>.
 /// </summary>
-public unsafe struct KeTask
+public sealed class KeTask
 {
-    private readonly ke_task* _native;
-    private readonly ke_task_scheduler* _scheduler;
+    private readonly Task _inner;
 
-    internal KeTask(ke_task* native, ke_task_scheduler* scheduler)
-    {
-        _native = native;
-        _scheduler = scheduler;
-    }
+    internal KeTask(Task inner) => _inner = inner;
 
-    public KeTaskAwaiter GetAwaiter() => new KeTaskAwaiter(_native, _scheduler);
+    /// <summary>Whether the task has finished executing.</summary>
+    public bool IsCompleted => _inner.IsCompleted;
+
+    /// <summary>Blocks the calling thread until the task completes.</summary>
+    public void Wait() => _inner.GetAwaiter().GetResult();
+
+    /// <inheritdoc cref="Task.GetAwaiter"/>
+    public TaskAwaiter GetAwaiter() => _inner.GetAwaiter();
 }
 
-public unsafe struct KeTaskAwaiter : ICriticalNotifyCompletion
+/// <summary>
+/// A task dispatched to the native thread pool that produces a value of type <typeparamref name="T"/>.
+/// Supports <c>await</c> identically to <see cref="Task{T}"/>.
+/// </summary>
+/// <typeparam name="T">The type of the result value.</typeparam>
+public sealed class KeTask<T>
 {
-    private readonly ke_task* _task;
-    private readonly ke_task_scheduler* _scheduler;
+    private readonly Task<T> _inner;
 
-    public KeTaskAwaiter(ke_task* task, ke_task_scheduler* scheduler)
-    {
-        _task = task;
-        _scheduler = scheduler;
-    }
+    internal KeTask(Task<T> inner) => _inner = inner;
 
-    public bool IsCompleted => _scheduler->is_completed(_scheduler, _task);
+    /// <summary>Whether the task has finished executing.</summary>
+    public bool IsCompleted => _inner.IsCompleted;
 
-    public void GetResult()
-    {
-        if (_task != null)
-        {
-            _scheduler->wait(_scheduler, _task);
-        }
-    }
+    /// <summary>
+    /// Blocks the calling thread until the task completes and returns the result.
+    /// Prefer <c>await</c> over this on the sim/render threads.
+    /// </summary>
+    public T Result => _inner.GetAwaiter().GetResult();
 
-    public void OnCompleted(Action continuation) => UnsafeOnCompleted(continuation);
-
-    public void UnsafeOnCompleted(Action continuation)
-    {
-        // For KeTask to be fully awaitable via callbacks, it must have been dispatched 
-        // with a completion callback. Currently, TaskScheduler handles this via TaskCompletionSource.
-        // This struct exists to represent a raw native task handle.
-    }
+    /// <inheritdoc cref="Task{T}.GetAwaiter"/>
+    public TaskAwaiter<T> GetAwaiter() => _inner.GetAwaiter();
 }

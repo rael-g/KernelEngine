@@ -24,6 +24,18 @@ public sealed unsafe class TaskScheduler : IDisposable
 
     public TaskScheduler(ke_task_scheduler* native) => _native = native;
 
+    /// <summary>
+    /// Schedules an <see cref="Action"/> on the native thread pool and returns a <see cref="KeTask"/>.
+    /// Identical ergonomics to <see cref="Task"/>: supports <c>await</c>, <c>IsCompleted</c>, and <c>Wait()</c>.
+    /// </summary>
+    public KeTask DispatchKeTask(Action action) => new(Dispatch(action));
+
+    /// <summary>
+    /// Schedules a <see cref="Func{TResult}"/> on the native thread pool and returns a <see cref="KeTask{T}"/>.
+    /// Identical ergonomics to <see cref="Task{T}"/>: supports <c>await</c>, <c>IsCompleted</c>, and <c>Result</c>.
+    /// </summary>
+    public KeTask<T> DispatchKeTask<T>(Func<T> func) => new(Dispatch(func));
+
     /// <summary>Schedules an <see cref="Action"/> on the native thread pool and returns an awaitable <see cref="Task"/>.</summary>
     public Task Dispatch(Action action)
     {
