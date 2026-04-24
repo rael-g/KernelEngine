@@ -22,12 +22,20 @@ public sealed unsafe class Renderer : IDisposable
     }
 
     /// <summary>
-    /// Wraps an already-created <c>ke_render*</c> and calls <c>on_initialize</c>.
+    /// Wraps an already-created <c>ke_render*</c> without triggering backend initialization.
+    /// Call <see cref="Initialize"/> on the thread that should become the bgfx API thread.
     /// </summary>
     public Renderer(ke_render* native)
     {
         _native = native;
-        // In constructor we still throw because if initialization fails, the object is unusable.
+    }
+
+    /// <summary>
+    /// Calls <c>on_initialize</c> (bgfx::init). Must be called on the same thread that will
+    /// subsequently call <see cref="Frame"/>. Typically invoked by the framework on the sim thread.
+    /// </summary>
+    public void Initialize()
+    {
         KernelException.ThrowIfFailed(_native->on_initialize(_native));
     }
 

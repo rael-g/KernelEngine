@@ -263,12 +263,14 @@ This means `MeshRenderSystem`, `LightRenderSystem`, `CameraRenderSystem` etc. ch
 - `Application.Run` names main thread via `KernelThread.SetCurrentName("ke.main")`
 - **No behavior change** — same logical threading model, just kernel-owned threads
 
-### Phase 2 — `ke_frame_packet` + `ke_frame_sync`
-- Define `ke_frame_packet` struct in C kernel
-- C++ `ke_frame_sync` implementation (ring buffer + semaphores)
-- C# `FrameSync` / `FramePacket` wrappers
-- `Application` adopts the double-buffer handoff
-- **Behavior change**: sim and render now run truly concurrently, one frame apart
+### Phase 2 — `ke_frame_packet` + `ke_frame_sync` ✅ DONE
+- Define `ke_frame_packet` struct in C kernel (`src/c/kernel/include/kernel_engine/kernel/engine/frame_packet.h`)
+- C++ `ke_frame_sync` implementation — ring buffer + two counting semaphores (`src/cpp/threading/src/KeFrameSync.cpp`)
+- C# bindings generated: `ke_draw_command`, `ke_frame_camera`, `ke_frame_shadow`, `ke_frame_packet`, `ke_frame_sync`
+- `FrameSync` + `FramePacket` managed wrappers in `KernelEngine.Kernel`
+- `Application` restructured: ke.sim owns bgfx::init + World.Update + Renderer.Frame; ke.main owns PollEvents + FrameSync consumer
+- `Renderer.Initialize()` separated from constructor so ke.sim can be the bgfx API thread
+- **Behavior change**: ke.sim and ke.main now run as separate KernelThreads; FrameSync provides double-buffered handoff (packets filled in Phase 3)
 
 ### Phase 3 — systems record instead of submit
 - `MeshRenderSystem`, `LightRenderSystem`, `CameraRenderSystem` write to packet
