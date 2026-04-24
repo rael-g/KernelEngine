@@ -33,6 +33,9 @@ public sealed class KeTask<T>
 
     internal KeTask(Task<T> inner) => _inner = inner;
 
+    /// <summary>Wraps an existing <see cref="Task{T}"/> as a <see cref="KeTask{T}"/>.</summary>
+    public static KeTask<T> FromTask(Task<T> task) => new(task);
+
     /// <summary>Whether the task has finished executing.</summary>
     public bool IsCompleted => _inner.IsCompleted;
 

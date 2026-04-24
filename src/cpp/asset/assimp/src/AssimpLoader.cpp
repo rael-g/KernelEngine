@@ -8,6 +8,7 @@
 #include <assimp/postprocess.h>
 #include <unordered_map>
 #include <vector>
+#include <string>
 #include <new>
 
 namespace kernel_engine::asset::assimp
@@ -30,6 +31,14 @@ AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
     };
     api_.free_model = [](ke_asset_loader *self, ke_model_data *data) {
         static_cast<AssimpLoader *>(self->handle)->FreeModel(data);
+    };
+    api_.load_model_async = [](ke_asset_loader *self,
+                                ke_task_scheduler *scheduler,
+                                const char *path,
+                                ke_load_model_complete_func on_complete,
+                                void *user_data) -> ke_task * {
+        return static_cast<AssimpLoader *>(self->handle)->LoadModelAsync(
+            scheduler, path, on_complete, user_data);
     };
 }
 
@@ -152,6 +161,57 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out)
     *out = model;
     log_info(logger_, "Model loaded successfully");
     return KE_OK;
+}
+
+ke_task *AssimpLoader::LoadModelAsync(ke_task_scheduler *scheduler,
+                                       const char *path,
+                                       ke_load_model_complete_func on_complete,
+                                       void *user_data)
+{
+    if (!scheduler || !path || !on_complete) return nullptr;
+
+    struct AsyncCtx
+    {
+        AssimpLoader               *self;
+        ke_allocator               *allocator; // cached to avoid private access from lambda
+        char                       *path;      // heap-allocated copy
+        ke_load_model_complete_func on_complete;
+        void                       *user_data;
+    };
+
+    auto *ctx = static_cast<AsyncCtx *>(
+        ke_alloc(allocator_, sizeof(AsyncCtx)));
+    if (!ctx) {
+        on_complete(KE_ERROR_OUT_OF_MEMORY, nullptr, user_data);
+        return nullptr;
+    }
+
+    std::string path_copy(path);
+    char *path_buf = static_cast<char *>(
+        ke_alloc(allocator_, path_copy.size() + 1));
+    if (!path_buf) {
+        ke_free(allocator_, ctx);
+        on_complete(KE_ERROR_OUT_OF_MEMORY, nullptr, user_data);
+        return nullptr;
+    }
+    memcpy(path_buf, path_copy.c_str(), path_copy.size() + 1);
+
+    ctx->self        = this;
+    ctx->allocator   = allocator_;
+    ctx->path        = path_buf;
+    ctx->on_complete = on_complete;
+    ctx->user_data   = user_data;
+
+    return scheduler->dispatch(scheduler,
+        [](void *data) {
+            auto *c = static_cast<AsyncCtx *>(data);
+            ke_model_data *model = nullptr;
+            ke_result result = c->self->LoadModel(c->path, &model);
+            c->on_complete(result, model, c->user_data);
+            ke_free(c->allocator, c->path);
+            ke_free(c->allocator, c);
+        },
+        ctx);
 }
 
 void AssimpLoader::FreeModel(ke_model_data *data)

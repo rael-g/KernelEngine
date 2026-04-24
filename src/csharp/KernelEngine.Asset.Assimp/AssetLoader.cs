@@ -185,6 +185,49 @@ public sealed unsafe class AssetLoader : IDisposable
         }
     }
 
+    /// <summary>
+    /// Asynchronously loads a 3D model from <paramref name="path"/> using <paramref name="scheduler"/>.
+    /// Completes on the scheduler thread; caller must dispose the returned <see cref="ModelData"/>.
+    /// </summary>
+    public KeTask<ModelData> LoadModelAsync(string path, TaskScheduler scheduler)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+
+        var tcs = new TaskCompletionSource<ModelData>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Store loader as nint because pointers cannot be generic type arguments.
+        var state = ((nint)_native, tcs);
+        var stateHandle = GCHandle.Alloc(state);
+
+        var pathPtr = Marshal.StringToHGlobalAnsi(path);
+        _native->load_model_async(
+            _native,
+            scheduler.Native,
+            (sbyte*)pathPtr,
+            &NativeLoadCompleteCallback,
+            (void*)GCHandle.ToIntPtr(stateHandle));
+        Marshal.FreeHGlobal(pathPtr);
+
+        return KeTask<ModelData>.FromTask(tcs.Task);
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void NativeLoadCompleteCallback(
+        ke_result result,
+        KernelEngine.Asset.Assimp.Native.ke_model_data* data,
+        void* userData)
+    {
+        var handle = GCHandle.FromIntPtr((IntPtr)userData);
+        var (loaderPtr, tcs) = ((nint, TaskCompletionSource<ModelData>))handle.Target!;
+        handle.Free();
+
+        if (result == ke_result.KE_OK)
+            tcs.TrySetResult(new ModelData(
+                (KernelEngine.Asset.Assimp.Native.ke_asset_loader*)loaderPtr, data));
+        else
+            tcs.TrySetException(new KernelException(result));
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {

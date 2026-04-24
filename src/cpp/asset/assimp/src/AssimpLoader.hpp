@@ -16,6 +16,10 @@ class AssimpLoader
 
     ke_result LoadModel(const char *path, ke_model_data **out);
     void FreeModel(ke_model_data *data);
+    ke_task *LoadModelAsync(ke_task_scheduler *scheduler,
+                            const char *path,
+                            ke_load_model_complete_func on_complete,
+                            void *user_data);
 
   private:
     ke_allocator    *allocator_;
