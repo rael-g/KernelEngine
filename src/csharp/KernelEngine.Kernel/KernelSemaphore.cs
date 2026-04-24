@@ -21,7 +21,7 @@ public sealed unsafe class KernelSemaphore : IDisposable
     {
         ke_semaphore* native;
         KernelException.ThrowIfFailed(
-            NativeMethods.semaphore_create(alloc.Native, initial, &native));
+            NativeMethods.semaphore_std_create(alloc.Native, initial, &native));
         return new KernelSemaphore(native, alloc);
     }
 
@@ -29,14 +29,14 @@ public sealed unsafe class KernelSemaphore : IDisposable
     public void Signal()
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        NativeMethods.semaphore_signal(_native);
+        _native->signal(_native);
     }
 
     /// <summary>Decrements the count, blocking if it is zero.</summary>
     public void Wait()
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        NativeMethods.semaphore_wait(_native);
+        _native->wait(_native);
     }
 
     /// <inheritdoc/>
@@ -44,7 +44,7 @@ public sealed unsafe class KernelSemaphore : IDisposable
     {
         if (_native != null)
         {
-            NativeMethods.semaphore_destroy(_native, _alloc.Native);
+            _native->destroy(_native, _alloc.Native);
             _native = null;
         }
     }

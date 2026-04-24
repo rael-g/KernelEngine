@@ -34,7 +34,7 @@ public sealed unsafe class FrameSync : IDisposable
     {
         ke_frame_sync* native;
         KernelException.ThrowIfFailed(
-            NativeMethods.frame_sync_create(
+            NativeMethods.frame_sync_std_create(
                 alloc.Native, bufferCount,
                 drawCapacity, pointLightCapacity, spotLightCapacity,
                 &native));
@@ -48,7 +48,7 @@ public sealed unsafe class FrameSync : IDisposable
     public FramePacket BeginWrite()
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        var ptr = NativeMethods.frame_sync_begin_write(_native);
+        var ptr = _native->begin_write(_native);
         return new FramePacket(ptr, _native, isWriter: true);
     }
 
@@ -59,7 +59,7 @@ public sealed unsafe class FrameSync : IDisposable
     public FramePacket BeginRead()
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        var ptr = NativeMethods.frame_sync_begin_read(_native);
+        var ptr = _native->begin_read(_native);
         return new FramePacket(ptr, _native, isWriter: false);
     }
 
@@ -68,7 +68,7 @@ public sealed unsafe class FrameSync : IDisposable
     {
         if (_native != null)
         {
-            NativeMethods.frame_sync_destroy(_native, _alloc.Native);
+            _native->destroy(_native, _alloc.Native);
             _native = null;
         }
     }

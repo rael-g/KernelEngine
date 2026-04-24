@@ -25,7 +25,6 @@ public sealed unsafe class KernelThread : IDisposable
     /// </summary>
     public static KernelThread Create(Allocator alloc, string name, Action action)
     {
-        // Keep the action alive until the thread exits via a GCHandle.
         var actionHandle = GCHandle.Alloc(action);
 
         var nameBytes = Marshal.StringToHGlobalAnsi(name);
@@ -41,7 +40,7 @@ public sealed unsafe class KernelThread : IDisposable
 
             ke_thread* native;
             KernelException.ThrowIfFailed(
-                NativeMethods.thread_create(alloc.Native, &desc, &native));
+                NativeMethods.thread_std_create(alloc.Native, &desc, &native));
 
             return new KernelThread(native, alloc);
         }
@@ -55,7 +54,7 @@ public sealed unsafe class KernelThread : IDisposable
     public void Join()
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        NativeMethods.thread_join(_native);
+        _native->join(_native);
     }
 
     /// <summary>Sets the name of the calling thread (e.g. the main thread).</summary>
@@ -71,7 +70,7 @@ public sealed unsafe class KernelThread : IDisposable
     {
         if (_native != null)
         {
-            NativeMethods.thread_destroy(_native, _alloc.Native);
+            _native->destroy(_native, _alloc.Native);
             _native = null;
         }
     }

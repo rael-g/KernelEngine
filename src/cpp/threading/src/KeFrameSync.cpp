@@ -1,5 +1,6 @@
 #include "KeFrameSync.hpp"
 #include <kernel_engine/threading/frame_sync.h>
+#include <kernel_engine/kernel/threading/frame_sync.h>
 
 #include <cstring>
 #include <new>
@@ -105,65 +106,59 @@ void KeFrameSync::EndRead()
 
 // ── C API ────────────────────────────────────────────────────────────────────
 
+namespace
+{
+
+struct KeFrameSyncHandle
+{
+    ke_frame_sync                            vtable; // MUST be first
+    kernel_engine::threading::KeFrameSync  *impl;
+};
+
+} // namespace
+
 extern "C"
 {
-    struct ke_frame_sync
-    {
-        kernel_engine::threading::KeFrameSync *impl;
-    };
-
-    ke_result ke_frame_sync_create(ke_allocator  *alloc,
-                                    uint32_t       buffer_count,
-                                    uint32_t       draw_capacity,
-                                    uint32_t       point_capacity,
-                                    uint32_t       spot_capacity,
-                                    ke_frame_sync **out)
+    ke_result ke_frame_sync_std_create(ke_allocator  *alloc,
+                                        uint32_t       buffer_count,
+                                        uint32_t       draw_capacity,
+                                        uint32_t       point_capacity,
+                                        uint32_t       spot_capacity,
+                                        ke_frame_sync **out)
     {
         if (!alloc || buffer_count < 2 || !out) return KE_ERROR_INVALID_ARGUMENT;
 
-        auto *handle = static_cast<ke_frame_sync *>(
-            alloc->alloc(alloc, sizeof(ke_frame_sync), alignof(ke_frame_sync)));
-        if (!handle) return KE_ERROR_OUT_OF_MEMORY;
+        auto *h = static_cast<KeFrameSyncHandle *>(
+            alloc->alloc(alloc, sizeof(KeFrameSyncHandle), alignof(KeFrameSyncHandle)));
+        if (!h) return KE_ERROR_OUT_OF_MEMORY;
 
         auto *impl_mem = alloc->alloc(
             alloc, sizeof(kernel_engine::threading::KeFrameSync),
             alignof(kernel_engine::threading::KeFrameSync));
-        if (!impl_mem) { alloc->free(alloc, handle); return KE_ERROR_OUT_OF_MEMORY; }
+        if (!impl_mem) { alloc->free(alloc, h); return KE_ERROR_OUT_OF_MEMORY; }
 
-        handle->impl = new (impl_mem) kernel_engine::threading::KeFrameSync(
+        h->impl = new (impl_mem) kernel_engine::threading::KeFrameSync(
             alloc, buffer_count, draw_capacity, point_capacity, spot_capacity);
-        *out = handle;
+        h->vtable.handle = h;
+        h->vtable.begin_write = [](ke_frame_sync *self) -> ke_frame_packet * {
+            return reinterpret_cast<KeFrameSyncHandle *>(self)->impl->BeginWrite();
+        };
+        h->vtable.end_write = [](ke_frame_sync *self) {
+            reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndWrite();
+        };
+        h->vtable.begin_read = [](ke_frame_sync *self) -> ke_frame_packet * {
+            return reinterpret_cast<KeFrameSyncHandle *>(self)->impl->BeginRead();
+        };
+        h->vtable.end_read = [](ke_frame_sync *self) {
+            reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndRead();
+        };
+        h->vtable.destroy = [](ke_frame_sync *self, ke_allocator *a) {
+            auto *hh = reinterpret_cast<KeFrameSyncHandle *>(self);
+            hh->impl->~KeFrameSync();
+            a->free(a, hh->impl);
+            a->free(a, hh);
+        };
+        *out = &h->vtable;
         return KE_OK;
-    }
-
-    ke_frame_packet *ke_frame_sync_begin_write(ke_frame_sync *fs)
-    {
-        return fs ? fs->impl->BeginWrite() : nullptr;
-    }
-
-    void ke_frame_sync_end_write(ke_frame_sync *fs)
-    {
-        if (fs) fs->impl->EndWrite();
-    }
-
-    ke_frame_packet *ke_frame_sync_begin_read(ke_frame_sync *fs)
-    {
-        return fs ? fs->impl->BeginRead() : nullptr;
-    }
-
-    void ke_frame_sync_end_read(ke_frame_sync *fs)
-    {
-        if (fs) fs->impl->EndRead();
-    }
-
-    void ke_frame_sync_destroy(ke_frame_sync *fs, ke_allocator *alloc)
-    {
-        if (!fs || !alloc) return;
-        if (fs->impl)
-        {
-            fs->impl->~KeFrameSync();
-            alloc->free(alloc, fs->impl);
-        }
-        alloc->free(alloc, fs);
     }
 }

@@ -1,5 +1,6 @@
 #include "KeSemaphore.hpp"
 #include <kernel_engine/threading/semaphore.h>
+#include <kernel_engine/kernel/threading/semaphore.h>
 
 #include <new>
 
@@ -28,55 +29,49 @@ void KeSemaphore::Wait()
 
 // ── C API ────────────────────────────────────────────────────────────────────
 
+namespace
+{
+
+struct KeSemaphoreHandle
+{
+    ke_semaphore                            vtable; // MUST be first
+    kernel_engine::threading::KeSemaphore *impl;
+};
+
+} // namespace
+
 extern "C"
 {
-    struct ke_semaphore
-    {
-        kernel_engine::threading::KeSemaphore *impl;
-    };
-
-    ke_result ke_semaphore_create(ke_allocator  *alloc,
-                                   uint32_t       initial,
-                                   ke_semaphore **out)
+    ke_result ke_semaphore_std_create(ke_allocator  *alloc,
+                                       uint32_t       initial,
+                                       ke_semaphore **out)
     {
         if (!alloc || !out) return KE_ERROR_INVALID_ARGUMENT;
 
-        auto *handle = static_cast<ke_semaphore *>(
-            alloc->alloc(alloc, sizeof(ke_semaphore), alignof(ke_semaphore)));
-        if (!handle) return KE_ERROR_OUT_OF_MEMORY;
+        auto *h = static_cast<KeSemaphoreHandle *>(
+            alloc->alloc(alloc, sizeof(KeSemaphoreHandle), alignof(KeSemaphoreHandle)));
+        if (!h) return KE_ERROR_OUT_OF_MEMORY;
 
         auto *impl_mem = alloc->alloc(
             alloc, sizeof(kernel_engine::threading::KeSemaphore),
             alignof(kernel_engine::threading::KeSemaphore));
-        if (!impl_mem)
-        {
-            alloc->free(alloc, handle);
-            return KE_ERROR_OUT_OF_MEMORY;
-        }
+        if (!impl_mem) { alloc->free(alloc, h); return KE_ERROR_OUT_OF_MEMORY; }
 
-        handle->impl = new (impl_mem) kernel_engine::threading::KeSemaphore(initial);
-        *out         = handle;
+        h->impl = new (impl_mem) kernel_engine::threading::KeSemaphore(initial);
+        h->vtable.handle = h;
+        h->vtable.signal = [](ke_semaphore *self) {
+            reinterpret_cast<KeSemaphoreHandle *>(self)->impl->Signal();
+        };
+        h->vtable.wait = [](ke_semaphore *self) {
+            reinterpret_cast<KeSemaphoreHandle *>(self)->impl->Wait();
+        };
+        h->vtable.destroy = [](ke_semaphore *self, ke_allocator *a) {
+            auto *hh = reinterpret_cast<KeSemaphoreHandle *>(self);
+            hh->impl->~KeSemaphore();
+            a->free(a, hh->impl);
+            a->free(a, hh);
+        };
+        *out = &h->vtable;
         return KE_OK;
-    }
-
-    void ke_semaphore_signal(ke_semaphore *s)
-    {
-        if (s && s->impl) s->impl->Signal();
-    }
-
-    void ke_semaphore_wait(ke_semaphore *s)
-    {
-        if (s && s->impl) s->impl->Wait();
-    }
-
-    void ke_semaphore_destroy(ke_semaphore *s, ke_allocator *alloc)
-    {
-        if (!s || !alloc) return;
-        if (s->impl)
-        {
-            s->impl->~KeSemaphore();
-            alloc->free(alloc, s->impl);
-        }
-        alloc->free(alloc, s);
     }
 }

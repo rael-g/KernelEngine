@@ -1,7 +1,6 @@
 using System.Numerics;
 using KernelEngine.Kernel.Native;
 using KernelEngine.Threading.Native;
-using ThreadingNative = KernelEngine.Threading.Native.NativeMethods;
 
 namespace KernelEngine.Kernel;
 
@@ -123,7 +122,7 @@ public sealed unsafe class FramePacket
     public void EndWrite()
     {
         if (_packet == null) return;
-        ThreadingNative.frame_sync_end_write(_sync);
+        _sync->end_write(_sync);
         _packet = null;
     }
 
@@ -133,7 +132,7 @@ public sealed unsafe class FramePacket
     public void EndRead()
     {
         if (_packet == null) return;
-        ThreadingNative.frame_sync_end_read(_sync);
+        _sync->end_read(_sync);
         _packet = null;
     }
 

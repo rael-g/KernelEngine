@@ -1,5 +1,6 @@
 #include "KeThread.hpp"
 #include <kernel_engine/threading/thread.h>
+#include <kernel_engine/kernel/threading/thread.h>
 
 #include <cstring>
 #include <new>
@@ -68,53 +69,47 @@ void KeThread::Join() { thread_.join(); }
 
 // ── C API ────────────────────────────────────────────────────────────────────
 
+namespace
+{
+
+struct KeThreadHandle
+{
+    ke_thread                           vtable; // MUST be first — ke_thread* aliases this
+    kernel_engine::threading::KeThread *impl;
+};
+
+} // namespace
+
 extern "C"
 {
-    struct ke_thread
-    {
-        kernel_engine::threading::KeThread *impl;
-        ke_allocator                        *alloc;
-    };
-
-    ke_result ke_thread_create(ke_allocator        *alloc,
-                                const ke_thread_desc *desc,
-                                ke_thread           **out)
+    ke_result ke_thread_std_create(ke_allocator        *alloc,
+                                    const ke_thread_desc *desc,
+                                    ke_thread           **out)
     {
         if (!alloc || !desc || !desc->func || !out) return KE_ERROR_INVALID_ARGUMENT;
 
-        auto *handle = static_cast<ke_thread *>(
-            alloc->alloc(alloc, sizeof(ke_thread), alignof(ke_thread)));
-        if (!handle) return KE_ERROR_OUT_OF_MEMORY;
+        auto *h = static_cast<KeThreadHandle *>(
+            alloc->alloc(alloc, sizeof(KeThreadHandle), alignof(KeThreadHandle)));
+        if (!h) return KE_ERROR_OUT_OF_MEMORY;
 
         auto *impl_mem = alloc->alloc(
             alloc, sizeof(kernel_engine::threading::KeThread),
             alignof(kernel_engine::threading::KeThread));
-        if (!impl_mem)
-        {
-            alloc->free(alloc, handle);
-            return KE_ERROR_OUT_OF_MEMORY;
-        }
+        if (!impl_mem) { alloc->free(alloc, h); return KE_ERROR_OUT_OF_MEMORY; }
 
-        handle->impl  = new (impl_mem) kernel_engine::threading::KeThread(desc);
-        handle->alloc = alloc;
-        *out          = handle;
+        h->impl = new (impl_mem) kernel_engine::threading::KeThread(desc);
+        h->vtable.handle = h;
+        h->vtable.join = [](ke_thread *self) {
+            reinterpret_cast<KeThreadHandle *>(self)->impl->Join();
+        };
+        h->vtable.destroy = [](ke_thread *self, ke_allocator *a) {
+            auto *hh = reinterpret_cast<KeThreadHandle *>(self);
+            hh->impl->~KeThread();
+            a->free(a, hh->impl);
+            a->free(a, hh);
+        };
+        *out = &h->vtable;
         return KE_OK;
-    }
-
-    void ke_thread_join(ke_thread *t)
-    {
-        if (t && t->impl) t->impl->Join();
-    }
-
-    void ke_thread_destroy(ke_thread *t, ke_allocator *alloc)
-    {
-        if (!t || !alloc) return;
-        if (t->impl)
-        {
-            t->impl->~KeThread();
-            alloc->free(alloc, t->impl);
-        }
-        alloc->free(alloc, t);
     }
 
     void ke_thread_set_current_name(const char *name)
