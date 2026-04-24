@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <NativeTarget>ke_threading</NativeTarget>
+  </PropertyGroup>
+
+  <Import Project="../NativeDependencies.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="../KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
+  </ItemGroup>
+
+</Project>
