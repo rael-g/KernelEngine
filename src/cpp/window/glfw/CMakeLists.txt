@@ -1,8 +1,22 @@
-add_library(ke_window_glfw
-    src/GlfwWindow.cpp
-    src/GlfwWindow.hpp
-    src/GlfwInterface.hpp
-    src/InternalHelpers.hpp
+# Assembly Layer for Window (GLFW implementation)
+# Joins all tiers into a single library for Windows linker consistency
+add_library(ke_window_glfw SHARED
+    # Assembly
+    src/window_glfw_factory.cpp
+    
+    # Core Layer (Agnostic Logic)
+    ../core/src/window_core.cpp
+    
+    # Device Layer (GLFW Implementation)
+    ../glfw_device/src/glfw_window_device.cpp
+)
+
+find_package(glfw3 CONFIG REQUIRED)
+
+target_link_libraries(ke_window_glfw 
+    PUBLIC 
+        ke_kernel
+        glfw
 )
 
 get_target_property(target_type ke_window_glfw TYPE)
@@ -14,18 +28,13 @@ endif()
 
 target_include_directories(ke_window_glfw PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
 target_include_directories(ke_window_glfw PRIVATE
     src
-)
-
-find_package(glfw3 CONFIG REQUIRED)
-
-target_link_libraries(ke_window_glfw PUBLIC
-    ke_kernel
-    glfw
+    ${CMAKE_SOURCE_DIR}/src/cpp/window/hal/include
+    ../core/src
+    ../glfw_device/src
 )
 
 install(TARGETS ke_window_glfw

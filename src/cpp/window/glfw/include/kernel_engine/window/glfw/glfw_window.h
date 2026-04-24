@@ -1,44 +1,27 @@
-#ifndef KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
-#define KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
+#pragma once
 
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/window/window.h>
+#include <window_export.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-#ifndef KE_WINDOW_API
-#ifdef KE_WINDOW_STATIC
-#define KE_WINDOW_API
-#else
-#ifdef KE_WINDOW_EXPORT
-#define KE_WINDOW_API KE_HELPER_EXPORT
-#else
-#define KE_WINDOW_API KE_HELPER_IMPORT
-#endif
-#endif
-#endif
+typedef struct ke_window_glfw_params {
+    struct ke_allocator* allocator;
+    struct ke_logger*    logger;
+    const char*          title;
+    int32_t              width;
+    int32_t              height;
+    ke_bool              fullscreen;
+} ke_window_glfw_params;
 
-    /// @brief Parameters for GLFW window creation.
-    typedef struct ke_window_glfw_params
-    {
-        struct ke_allocator *allocator;
-        struct ke_logger *logger;
-        struct ke_message_pipe *message_pipe;
-        int width;
-        int height;
-        const char *title;
-    } ke_window_glfw_params;
-
-    /**
-     * @brief Creates the GLFW window implementation.
-     */
-    KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params *params, ke_window **out_window);
+/**
+ * @brief Creates a new window implementation using GLFW3.
+ */
+KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window** out_window);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif // KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
