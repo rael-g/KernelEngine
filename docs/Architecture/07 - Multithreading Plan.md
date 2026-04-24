@@ -255,11 +255,12 @@ This means `MeshRenderSystem`, `LightRenderSystem`, `CameraRenderSystem` etc. ch
 
 ## Implementation phases
 
-### Phase 1 — `ke_thread` + `ke_semaphore`
-- C API headers
-- C++ implementation (`ke_threading` target)
-- C# bindings (generated) + `KernelThread` / `KernelSemaphore` wrappers
-- `Application` stops using `Thread` / `SemaphoreSlim`, uses kernel primitives
+### Phase 1 — `ke_thread` + `ke_semaphore` ✅ DONE
+- C API headers in `src/cpp/threading/include/kernel_engine/threading/`
+- C++ implementation `ke_threading.dll` (`std::thread` + platform thread naming/affinity)
+- C# bindings generated via ClangSharp (`KernelEngine.Threading.Native`)
+- `KernelThread` + `KernelSemaphore` managed wrappers in `KernelEngine.Kernel`
+- `Application.Run` names main thread via `KernelThread.SetCurrentName("ke.main")`
 - **No behavior change** — same logical threading model, just kernel-owned threads
 
 ### Phase 2 — `ke_frame_packet` + `ke_frame_sync`
