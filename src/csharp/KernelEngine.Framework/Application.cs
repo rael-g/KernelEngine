@@ -28,6 +28,8 @@ public class Application : IDisposable
 
     public void Run(IServiceCollection serviceCollection)
     {
+        KernelThread.SetCurrentName("ke.main");
+
         Services = serviceCollection.BuildServiceProvider();
 
         Allocator = Services.GetRequiredService<Allocator>();
