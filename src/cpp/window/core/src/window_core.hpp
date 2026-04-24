@@ -30,12 +30,12 @@ public:
     ke_window* ToApi();
 
     // Dependency Injection
-    void SetDevice(WindowDeviceInterface* device);
+    void SetDevice(WindowDevice* device);
 
 private:
     void HandleEvent(const WindowEvent& ev);
 
-    WindowDeviceInterface* device_ = nullptr;
+    WindowDevice* device_ = nullptr;
     bool own_device_ = false;
     bool initialized_ = false;
 

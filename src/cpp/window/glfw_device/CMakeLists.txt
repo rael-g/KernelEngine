@@ -3,7 +3,7 @@ add_library(ke_window_glfw_device STATIC
 )
 
 target_link_libraries(ke_window_glfw_device PUBLIC
-    ke_window_hal
+    ke_window_contract
     glfw
 )
 

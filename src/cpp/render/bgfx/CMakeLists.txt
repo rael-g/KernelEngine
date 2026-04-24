@@ -43,7 +43,7 @@ target_include_directories(ke_render_bgfx PUBLIC
 target_include_directories(ke_render_bgfx PRIVATE
     src
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/hal/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ../core/src
     ../bgfx_device/src
 )

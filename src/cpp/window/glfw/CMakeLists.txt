@@ -32,7 +32,7 @@ target_include_directories(ke_window_glfw PUBLIC
 
 target_include_directories(ke_window_glfw PRIVATE
     src
-    ${CMAKE_SOURCE_DIR}/src/cpp/window/hal/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/window/contract/include
     ../core/src
     ../glfw_device/src
 )

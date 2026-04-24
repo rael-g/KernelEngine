@@ -7,13 +7,13 @@ namespace kernel_engine::render::bgfx
 {
 
 /**
- * @brief Professional Hardware Abstraction Layer (HAL) for GPU operations.
+ * @brief Contract for GPU backend implementations.
  * 100% independent of BGFX headers.
  */
-class GpuDeviceInterface
+class GpuDevice
 {
 public:
-    virtual ~GpuDeviceInterface() = default;
+    virtual ~GpuDevice() = default;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
     virtual bool Init(const GpuInitConfig& config) = 0;
@@ -80,9 +80,9 @@ public:
 };
 
 /**
- * @brief Real BGFX implementation (HAL implementation).
+ * @brief BGFX implementation of the GpuDevice contract.
  */
-class BgfxGpuDevice : public GpuDeviceInterface
+class BgfxGpuDevice : public GpuDevice
 {
 public:
     bool Init(const GpuInitConfig& config) override;

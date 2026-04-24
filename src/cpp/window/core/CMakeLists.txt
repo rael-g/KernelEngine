@@ -3,7 +3,7 @@ add_library(ke_window_core STATIC
 )
 
 target_link_libraries(ke_window_core PUBLIC
-    ke_window_hal
+    ke_window_contract
     ke_kernel
 )
 

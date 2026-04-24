@@ -12,11 +12,11 @@ add_executable(test_cpp_services
 target_include_directories(test_cpp_services PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     # Render tiers
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/hal/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
     ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx/include
     # Window tiers
-    ${CMAKE_SOURCE_DIR}/src/cpp/window/hal/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/window/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/window/core/src
     ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw/include
     # Asset tiers

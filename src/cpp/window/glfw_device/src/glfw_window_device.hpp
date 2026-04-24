@@ -9,10 +9,10 @@ namespace kernel_engine::window
 {
 
 /**
- * @brief Implementation of WindowDeviceInterface using GLFW.
+ * @brief Implementation of WindowDevice using GLFW.
  * This is the ONLY place that should eventually know about GLFW3.
  */
-class GlfwWindowDevice : public WindowDeviceInterface
+class GlfwWindowDevice : public WindowDevice
 {
 public:
     GlfwWindowDevice() = default;

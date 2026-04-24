@@ -8,7 +8,7 @@ namespace kernel_engine::render::bgfx
 {
 
 class ShaderProviderInterface;
-class GpuDeviceInterface;
+class GpuDevice;
 
 /**
  * @brief Shared state between modular render components.
@@ -19,7 +19,7 @@ struct RenderContext
     ke_allocator* allocator = nullptr;
     ke_logger*    logger    = nullptr;
     ShaderProviderInterface* shader_provider = nullptr;
-    GpuDeviceInterface*      gpu = nullptr;
+    GpuDevice*      gpu = nullptr;
     
     // Global render state
     int32_t view_w = 0;

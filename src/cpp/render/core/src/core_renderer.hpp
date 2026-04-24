@@ -48,7 +48,7 @@ public:
     ke_render *ToApi();
 
     void SetShaderProvider(ShaderProviderInterface* provider);
-    void SetGpuDevice(GpuDeviceInterface* gpu);
+    void SetGpuDevice(GpuDevice* gpu);
 
     virtual GpuShaderHandle LoadShader(const char *name);
 

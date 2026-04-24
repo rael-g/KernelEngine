@@ -208,7 +208,7 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
 CoreRenderer::~CoreRenderer()
 {
     if (own_gpu_device_ && ctx_.gpu) {
-        ctx_.gpu->~GpuDeviceInterface();
+        ctx_.gpu->~GpuDevice();
         if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.gpu);
     }
     if (own_shader_provider_ && ctx_.shader_provider)
@@ -229,10 +229,10 @@ void CoreRenderer::SetShaderProvider(ShaderProviderInterface* provider)
     own_shader_provider_ = false;
 }
 
-void CoreRenderer::SetGpuDevice(GpuDeviceInterface* gpu)
+void CoreRenderer::SetGpuDevice(GpuDevice* gpu)
 {
     if (own_gpu_device_ && ctx_.gpu) {
-        ctx_.gpu->~GpuDeviceInterface();
+        ctx_.gpu->~GpuDevice();
         if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.gpu);
     }
     ctx_.gpu = gpu;

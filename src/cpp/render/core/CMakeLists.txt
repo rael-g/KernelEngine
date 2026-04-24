@@ -15,7 +15,7 @@ target_compile_definitions(ke_render_core PUBLIC KE_RENDER_STATIC)
 target_include_directories(ke_render_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/hal/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
 )
 
 target_include_directories(ke_render_core PRIVATE
@@ -24,7 +24,7 @@ target_include_directories(ke_render_core PRIVATE
 
 target_link_libraries(ke_render_core PUBLIC
     ke_kernel
-    ke_render_hal
+    ke_render_contract
 )
 
 install(TARGETS ke_render_core

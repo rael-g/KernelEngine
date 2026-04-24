@@ -26,7 +26,7 @@ using ::testing::AtLeast;
 
 // ── Professional HAL Mocks ────────────────────────────────────────────────
 
-class MockGpuDevice : public GpuDeviceInterface {
+class MockGpuDevice : public GpuDevice {
 public:
     MOCK_METHOD(bool, Init, (const GpuInitConfig&), (override));
     MOCK_METHOD(void, Shutdown, (), (override));

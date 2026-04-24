@@ -7,23 +7,23 @@ namespace kernel_engine::window
 {
 
 /**
- * @brief Professional Hardware Abstraction Layer (HAL) for Windowing.
+ * @brief Contract for window backend implementations.
  * 100% independent of GLFW or OS-specific headers.
  */
-class WindowDeviceInterface
+class WindowDevice
 {
 public:
-    virtual ~WindowDeviceInterface() = default;
+    virtual ~WindowDevice() = default;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
     virtual bool Initialize(const WindowConfig& config) = 0;
     virtual void Shutdown() = 0;
-    
+
     /**
      * @brief Polls OS events and invokes the callback for each.
      */
     virtual void PollEvents(const std::function<void(const WindowEvent&)>& callback) = 0;
-    
+
     virtual bool ShouldClose() const = 0;
 
     // ── State ────────────────────────────────────────────────────────────────

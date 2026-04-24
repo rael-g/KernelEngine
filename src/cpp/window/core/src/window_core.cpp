@@ -52,7 +52,7 @@ WindowCore::~WindowCore()
     Shutdown();
 }
 
-void WindowCore::SetDevice(WindowDeviceInterface* device)
+void WindowCore::SetDevice(WindowDevice* device)
 {
     if (own_device_ && device_) delete device_;
     device_ = device;

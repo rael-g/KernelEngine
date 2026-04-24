@@ -12,7 +12,7 @@ using ::testing::NiceMock;
 
 // ── Mock ─────────────────────────────────────────────────────────────────────
 
-class MockWindowDevice : public WindowDeviceInterface {
+class MockWindowDevice : public WindowDevice {
 public:
     MOCK_METHOD(bool, Initialize, (const WindowConfig&), (override));
     MOCK_METHOD(void, Shutdown, (), (override));
