@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/kernel/engine/frame_packet.h>
 #include "render_export.h"
 #include "geometry_manager.hpp"
 #include "texture_manager.hpp"
@@ -28,7 +29,12 @@ public:
 
     ke_result OnInitialize();
     ke_result OnShutdown();
+    
+    // Legacy frame (immediate)
     ke_result Frame();
+    
+    // NEW: Multithreaded frame submission
+    ke_result SubmitPacket(const struct ke_frame_packet* packet);
 
     ke_result ClearColor(float r, float g, float b, float a);
     ke_result SetOrthographic(ke_bool enabled);

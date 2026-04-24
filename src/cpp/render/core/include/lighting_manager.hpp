@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/kernel/engine/frame_packet.h>
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
@@ -29,8 +30,14 @@ class KE_RENDER_API LightingManager
 public:
     ke_result SetDirectionalLight(const ke_directional_light *light);
     ke_result SetAmbientLight(float r, float g, float b);
-    ke_result SetPointLights(RenderContext& ctx, GpuDynamicIndexBufferHandle buffer_handle, const ke_point_light *lights, uint32_t count);
-    ke_result SetSpotLights(RenderContext& ctx, GpuDynamicIndexBufferHandle buffer_handle, const ke_spot_light *lights, uint32_t count);
+    
+    // Immediate-mode: store for current frame (used by vtable path)
+    ke_result StorePointLights(const ke_point_light *lights, uint32_t count);
+    ke_result StoreSpotLights(const ke_spot_light *lights, uint32_t count);
+
+    // Recording methods for multithreading
+    ke_result RecordLights(struct ke_frame_packet& packet, const ke_point_light *lights, uint32_t count);
+    ke_result RecordSpotLights(struct ke_frame_packet& packet, const ke_spot_light *lights, uint32_t count);
     
     ke_result CreateMaterial(RenderContext& ctx, const TextureManager& textures, const ke_material *mat, ke_material_handle *out_handle);
     ke_result DestroyMaterial(RenderContext& ctx, ke_material_handle handle);

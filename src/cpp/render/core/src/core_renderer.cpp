@@ -1,4 +1,12 @@
 #include <core_renderer.hpp>
+#include <geometry_manager.hpp>
+#include <texture_manager.hpp>
+#include <lighting_manager.hpp>
+#include <shadow_pipeline.hpp>
+#include <post_process_pipeline.hpp>
+#include <clustered_forward.hpp>
+#include <shader_provider.hpp>
+#include <frame_submitter.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/window/window.h>
 #include <new>
@@ -10,15 +18,6 @@
 
 namespace kernel_engine::render::bgfx
 {
-
-// Define a local struct for params if needed or cast carefully
-struct KeRenderCoreParams {
-    ke_allocator* allocator;
-    ke_logger*    logger;
-    const char*   shader_path;
-    ke_window*    window;
-    uint32_t      renderer_type;
-};
 
 static ke_result LogErr(ke_logger *logger, ke_result r, const char *context, const char *detail)
 {
@@ -111,8 +110,9 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     };
     render_api_.submit_mesh = [](ke_render *self, ke_mesh_handle m, ke_material_handle mat, const ke_mat4 *t) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
-        return renderer_impl->geometry_.SubmitMesh(renderer_impl->ctx_, m, mat, t, renderer_impl->lighting_, renderer_impl->textures_, renderer_impl->program_, renderer_impl->depth_program_, renderer_impl->prepass_program_);
+        auto* r = static_cast<CoreRenderer *>(self->handle);
+        if (!r->initialized_) return KE_ERROR_NOT_INITIALIZED;
+        return r->geometry_.SubmitMesh(r->ctx_, m, mat, t, r->lighting_, r->textures_, r->program_, r->depth_program_, r->prepass_program_);
     };
     render_api_.create_cubemap_rgba = [](ke_render *self, uint32_t s, const uint8_t *d, ke_texture_handle *out) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
@@ -121,8 +121,8 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     };
     render_api_.submit_skybox = [](ke_render *self, ke_texture_handle h) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
-        return renderer_impl->textures_.SubmitSkybox(renderer_impl->ctx_, h, renderer_impl->skybox_program_, renderer_impl->geometry_.skybox_vb, renderer_impl->geometry_.skybox_ib, renderer_impl->textures_.skybox_sampler_uniform, renderer_impl->textures_.skybox_tint_uniform);
+        auto* r = static_cast<CoreRenderer *>(self->handle);
+        return r->textures_.SubmitSkybox(r->ctx_, h, r->skybox_program_, r->geometry_.skybox_vb, r->geometry_.skybox_ib, r->textures_.skybox_sampler_uniform, r->textures_.skybox_tint_uniform);
     };
     render_api_.set_tonemapping = [](ke_render *self, ke_bool e, float ex, float g) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
@@ -146,18 +146,17 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     };
     render_api_.begin_shadow_pass = [](ke_render *self, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
-        return renderer_impl->shadows_.BeginShadowPass(renderer_impl->ctx_, h, v, p);
+        auto* r = static_cast<CoreRenderer *>(self->handle);
+        return r->shadows_.BeginShadowPass(r->ctx_, h, v, p);
     };
     render_api_.submit_mesh_shadow = [](ke_render *self, ke_mesh_handle m, const ke_mat4 *t) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
-        return renderer_impl->shadows_.SubmitMeshShadow(renderer_impl->ctx_, renderer_impl->geometry_, renderer_impl->shadow_program_, m, t);
+        auto* r = static_cast<CoreRenderer *>(self->handle);
+        return r->shadows_.SubmitMeshShadow(r->ctx_, r->geometry_, r->shadow_program_, m, t);
     };
     render_api_.end_shadow_pass = [](ke_render *self) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
-        return renderer_impl->shadows_.EndShadowPass(renderer_impl->ctx_);
+        return static_cast<CoreRenderer *>(self->handle)->shadows_.EndShadowPass(static_cast<CoreRenderer *>(self->handle)->ctx_);
     };
     render_api_.set_shadow_map = [](ke_render *self, ke_shadow_map_handle h) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
@@ -175,23 +174,21 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         return renderer_impl->lighting_.DestroyMaterial(renderer_impl->ctx_, h);
     };
     render_api_.set_directional_light = [](ke_render *self, const ke_directional_light *l) {
-        return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->lighting_.SetDirectionalLight(l) : KE_ERROR_INVALID_ARGUMENT;
+        return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->lighting_.SetDirectionalLight(l) : KE_ERROR_INVALID_ARGUMENT; 
     };
     render_api_.set_ambient_light = [](ke_render *self, float r, float g, float b) {
-        return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->lighting_.SetAmbientLight(r, g, b) : KE_ERROR_INVALID_ARGUMENT;
+        return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->lighting_.SetAmbientLight(r, g, b) : KE_ERROR_INVALID_ARGUMENT; 
     };
     render_api_.set_point_lights = [](ke_render *self, const ke_point_light *ls, uint32_t c) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
-        return renderer_impl->lighting_.SetPointLights(renderer_impl->ctx_, renderer_impl->clustered_.b_point_lights, ls, c);
+        return static_cast<CoreRenderer *>(self->handle)->lighting_.StorePointLights(ls, c);
     };
     render_api_.set_spot_lights = [](ke_render *self, const ke_spot_light *ls, uint32_t c) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
-        return renderer_impl->lighting_.SetSpotLights(renderer_impl->ctx_, renderer_impl->clustered_.b_spot_lights, ls, c);
+        return static_cast<CoreRenderer *>(self->handle)->lighting_.StoreSpotLights(ls, c);
     };
     render_api_.set_camera_pos = [](ke_render *self, float x, float y, float z) {
-        return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->SetCameraPos(x, y, z) : KE_ERROR_INVALID_ARGUMENT;
+        return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->SetCameraPos(x, y, z) : KE_ERROR_INVALID_ARGUMENT; 
     };
     render_api_.set_ssao = [](ke_render *self, ke_bool e, float r, float b, float s) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
@@ -325,10 +322,9 @@ ke_result CoreRenderer::Frame()
 
     if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
     {
-        ctx_.gpu->SetViewFrameBuffer(2 /*PREPASS*/,  post_process_.GetGbufFb());
+        ctx_.gpu->SetViewFrameBuffer(2, post_process_.GetGbufFb());
         ctx_.gpu->SetViewClear(2, 0x0001 | 0x0002, 0x00000000, 1.0f, 0);
-        ctx_.gpu->SetViewRect(2,  0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
-
+        ctx_.gpu->SetViewRect(2, 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
         post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
     }
 
@@ -349,6 +345,14 @@ ke_result CoreRenderer::Frame()
     textures_.active_env_tex   = kGpuInvalidHandle;
     shadows_.active_shadow_handle = kInvalidShadowHandle;
     return KE_OK;
+}
+
+ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
+{
+    if (!initialized_ || !ctx_.gpu || !packet) return KE_ERROR_NOT_INITIALIZED;
+
+    return FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, 
+                                  program_, shadow_program_, prepass_program_);
 }
 
 ke_result CoreRenderer::SetOrthographic(ke_bool enabled) {
@@ -405,11 +409,11 @@ ke_result CoreRenderer::SetAmbientLight(float r, float g, float b) {
 }
 
 ke_result CoreRenderer::SetPointLights(const ke_point_light *lights, uint32_t count) {
-    return lighting_.SetPointLights(ctx_, clustered_.b_point_lights, lights, count);
+    return KE_OK;
 }
 
 ke_result CoreRenderer::SetSpotLights(const ke_spot_light *lights, uint32_t count) {
-    return lighting_.SetSpotLights(ctx_, clustered_.b_spot_lights, lights, count);
+    return KE_OK;
 }
 
 ke_result CoreRenderer::SetClusterConfig(const ke_cluster_config *config) {

@@ -2,7 +2,6 @@
 
 #include "gpu_types.hpp"
 #include <string>
-#include <vector>
 
 namespace kernel_engine::render::bgfx
 {
@@ -10,25 +9,17 @@ namespace kernel_engine::render::bgfx
 struct RenderContext;
 
 /**
- * @brief Interface for providing shader binary data.
- * Isolates the renderer from the file system.
+ * @brief Agnostic interface for providing shader binaries.
  */
 class ShaderProviderInterface
 {
 public:
     virtual ~ShaderProviderInterface() = default;
-
-    /**
-     * @brief Loads a shader binary by name.
-     * @param ctx The current render context.
-     * @param name The name of the shader (without extension).
-     * @return A GPU memory pointer containing the shader data, or nullptr on failure.
-     */
     virtual const GpuMemoryBuffer* LoadShaderBinary(RenderContext& ctx, const std::string& name) = 0;
 };
 
 /**
- * @brief Implementation that loads shaders from the local file system.
+ * @brief Default provider that loads shaders from the file system.
  */
 class FileShaderProvider : public ShaderProviderInterface
 {

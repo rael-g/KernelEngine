@@ -1,6 +1,8 @@
 #pragma once
 
 #include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/kernel/engine/frame_packet.h>
+#include "render_export.h"
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
@@ -30,15 +32,17 @@ public:
                          ke_mesh_handle *out_handle);
     ke_result DestroyMesh(RenderContext& ctx, ke_mesh_handle handle);
 
-    ke_result SubmitMesh(RenderContext& ctx, 
-                         ke_mesh_handle mesh, 
-                         ke_material_handle material, 
-                         const ke_mat4 *transform,
-                         const LightingManager& lighting,
-                         const TextureManager& textures,
-                         GpuProgramHandle main_program,
-                         GpuProgramHandle depth_program,
-                         GpuProgramHandle prepass_program);
+    // Immediate-mode: submit directly to GPU (vtable path)
+    ke_result SubmitMesh(RenderContext& ctx, ke_mesh_handle mesh, ke_material_handle material,
+                         const ke_mat4 *transform, LightingManager& lighting,
+                         TextureManager& textures, GpuProgramHandle program,
+                         GpuProgramHandle depth_program, GpuProgramHandle prepass_program);
+
+    // Records a draw command instead of submitting immediately
+    ke_result RecordDraw(struct ke_frame_packet& packet,
+                         ke_mesh_handle mesh,
+                         ke_material_handle material,
+                         const ke_mat4 *transform);
 
     void Shutdown();
 

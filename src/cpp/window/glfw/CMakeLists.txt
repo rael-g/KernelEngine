@@ -3,18 +3,18 @@
 add_library(ke_window_glfw SHARED
     # Assembly
     src/window_glfw_factory.cpp
-
+    
     # Core Layer (Agnostic Logic)
     ../core/src/window_core.cpp
-
+    
     # Device Layer (GLFW Implementation)
     ../glfw_device/src/glfw_window_device.cpp
 )
 
 find_package(glfw3 CONFIG REQUIRED)
 
-target_link_libraries(ke_window_glfw
-    PUBLIC
+target_link_libraries(ke_window_glfw 
+    PUBLIC 
         ke_kernel
         glfw
 )
@@ -34,6 +34,7 @@ target_include_directories(ke_window_glfw PRIVATE
     src
     ${CMAKE_SOURCE_DIR}/src/cpp/window/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/window/core/include
+    ../core/src
     ../glfw_device/src
 )
 

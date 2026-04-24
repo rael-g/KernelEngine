@@ -1,8 +1,8 @@
 #pragma once
 
+#include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/context/allocator.h>
-#include <string>
+#include <cstdint>
 
 namespace kernel_engine::render::bgfx
 {
@@ -12,16 +12,15 @@ class GpuDevice;
 
 /**
  * @brief Shared state between modular render components.
- * Replaces the need for 'static_cast<BgfxRenderer*>(this)'.
+ * Replaces the need for 'static_cast<CoreRenderer*>(this)'.
  */
 struct RenderContext
 {
     ke_allocator* allocator = nullptr;
     ke_logger*    logger    = nullptr;
     ShaderProviderInterface* shader_provider = nullptr;
-    GpuDevice*      gpu = nullptr;
-    
-    // Global render state
+    GpuDevice*               gpu = nullptr;
+
     int32_t view_w = 0;
     int32_t view_h = 0;
     float near_z = 0.1f;
