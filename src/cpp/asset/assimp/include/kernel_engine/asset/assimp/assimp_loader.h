@@ -1,22 +1,10 @@
 #pragma once
 
 #include <kernel_engine/kernel/asset/asset_loader.h>
-#include <kernel_engine/kernel/context/types.h>
+#include <asset_export.h>
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#ifndef KE_ASSET_ASSIMP_API
-    #ifdef KE_ASSET_ASSIMP_STATIC
-        #define KE_ASSET_ASSIMP_API
-    #else
-        #ifdef KE_ASSET_ASSIMP_EXPORT
-            #define KE_ASSET_ASSIMP_API KE_HELPER_EXPORT
-        #else
-            #define KE_ASSET_ASSIMP_API KE_HELPER_IMPORT
-        #endif
-    #endif
 #endif
 
 /// @brief Construction parameters for the Assimp asset loader.
