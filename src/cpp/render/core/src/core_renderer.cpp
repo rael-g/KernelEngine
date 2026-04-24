@@ -1,4 +1,4 @@
-#include "core_renderer.hpp"
+#include <core_renderer.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/window/window.h>
 #include <new>

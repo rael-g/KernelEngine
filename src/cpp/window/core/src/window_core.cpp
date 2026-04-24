@@ -1,4 +1,4 @@
-#include "window_core.hpp"
+#include <window_core.hpp>
 #include <cstring>
 
 namespace kernel_engine::window

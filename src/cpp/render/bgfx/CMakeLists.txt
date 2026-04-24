@@ -1,8 +1,9 @@
-# Purified Assembly Layer: Joins all tiers into a single library while maintaining physical separation
+# Assembly Layer for Render (bgfx implementation)
+# Joins all tiers into a single library for Windows linker consistency
 add_library(ke_render_bgfx SHARED
     # Assembly
     src/bgfx_render_factory.cpp
-    
+
     # Core Layer (Agnostic Logic)
     ../core/src/core_renderer.cpp
     ../core/src/geometry_manager.cpp
@@ -12,8 +13,8 @@ add_library(ke_render_bgfx SHARED
     ../core/src/post_process_pipeline.cpp
     ../core/src/clustered_forward.cpp
     ../core/src/shader_provider.cpp
-    
-    # Device Layer (Bgfx Implementation)
+
+    # Device Layer (bgfx Implementation)
     ../bgfx_device/src/bgfx_gpu_device.cpp
 )
 
@@ -35,15 +36,14 @@ else()
     target_compile_definitions(ke_render_bgfx PRIVATE KE_RENDER_EXPORT)
 endif()
 
-# Unified Include Paths
 target_include_directories(ke_render_bgfx PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
 target_include_directories(ke_render_bgfx PRIVATE
     src
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
     ../core/src
     ../bgfx_device/src
 )

@@ -9,13 +9,10 @@ add_library(ke_render_core STATIC
     src/shader_provider.cpp
 )
 
-# No need for KE_RENDER_EXPORT if it's static
 target_compile_definitions(ke_render_core PUBLIC KE_RENDER_STATIC)
 
 target_include_directories(ke_render_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
 )
 
 target_include_directories(ke_render_core PRIVATE
