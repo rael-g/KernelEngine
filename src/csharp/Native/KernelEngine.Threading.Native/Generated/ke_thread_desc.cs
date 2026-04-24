@@ -1,14 +1,13 @@
-using System.Runtime.InteropServices;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Threading.Native;
 
-/// <summary>Construction parameters for ke_thread_create.</summary>
 public unsafe partial struct ke_thread_desc
 {
     [NativeTypeName("const char *")]
     public sbyte* name;
 
-    [NativeTypeName("void (*)(void *)")]
+    [NativeTypeName("ke_thread_func")]
     public delegate* unmanaged[Cdecl]<void*, void> func;
 
     public void* user_data;
