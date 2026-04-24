@@ -10,6 +10,8 @@ ke_threading
 --file
 ../../../cpp/threading/include/kernel_engine/threading/thread.h
 ../../../cpp/threading/include/kernel_engine/threading/semaphore.h
+../../../cpp/threading/include/kernel_engine/threading/frame_sync.h
+../../../c/kernel/include/kernel_engine/kernel/engine/frame_packet.h
 --methodClassName
 NativeMethods
 --prefixStrip
@@ -17,6 +19,10 @@ ke_
 --exclude
 ke_allocator
 ke_result
+ke_mat4
+ke_directional_light
+ke_point_light
+ke_spot_light
 --with-using
 *=KernelEngine.Kernel.Native
 --define-macro

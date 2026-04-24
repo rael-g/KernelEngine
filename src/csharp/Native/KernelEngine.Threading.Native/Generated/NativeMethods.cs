@@ -28,4 +28,22 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_threading", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_semaphore_destroy", ExactSpelling = true)]
     public static extern void semaphore_destroy(ke_semaphore* s, ke_allocator* alloc);
+
+    [DllImport("ke_threading", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_sync_create", ExactSpelling = true)]
+    public static extern ke_result frame_sync_create(ke_allocator* alloc, [NativeTypeName("uint32_t")] uint buffer_count, [NativeTypeName("uint32_t")] uint draw_capacity, [NativeTypeName("uint32_t")] uint point_capacity, [NativeTypeName("uint32_t")] uint spot_capacity, ke_frame_sync** @out);
+
+    [DllImport("ke_threading", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_sync_begin_write", ExactSpelling = true)]
+    public static extern ke_frame_packet* frame_sync_begin_write(ke_frame_sync* fs);
+
+    [DllImport("ke_threading", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_sync_end_write", ExactSpelling = true)]
+    public static extern void frame_sync_end_write(ke_frame_sync* fs);
+
+    [DllImport("ke_threading", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_sync_begin_read", ExactSpelling = true)]
+    public static extern ke_frame_packet* frame_sync_begin_read(ke_frame_sync* fs);
+
+    [DllImport("ke_threading", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_sync_end_read", ExactSpelling = true)]
+    public static extern void frame_sync_end_read(ke_frame_sync* fs);
+
+    [DllImport("ke_threading", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_sync_destroy", ExactSpelling = true)]
+    public static extern void frame_sync_destroy(ke_frame_sync* fs, ke_allocator* alloc);
 }

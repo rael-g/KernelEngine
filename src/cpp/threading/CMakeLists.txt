@@ -1,6 +1,7 @@
 add_library(ke_threading
     src/KeThread.cpp
     src/KeSemaphore.cpp
+    src/KeFrameSync.cpp
 )
 
 get_target_property(target_type ke_threading TYPE)
