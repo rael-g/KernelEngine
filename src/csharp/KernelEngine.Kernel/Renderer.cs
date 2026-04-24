@@ -42,6 +42,16 @@ public sealed unsafe class Renderer : IDisposable
     /// <summary>Advances to the next frame and presents the current one. Call once per loop iteration.</summary>
     public Result Frame() => _native->frame(_native);
 
+    /// <summary>
+    /// Submits a pre-recorded frame packet to the hardware.
+    /// Runs strictly on the render thread.
+    /// </summary>
+    public Result SubmitPacket(FramePacket packet)
+    {
+        // Get the internal raw pointer from the FramePacket (needs internal access or helper)
+        return _native->submit_packet(_native, packet.NativePointer);
+    }
+
     /// <summary>Sets the background clear color for the next frame.</summary>
     public Result ClearColor(float r, float g, float b, float a) => _native->clear_color(_native, r, g, b, a);
 

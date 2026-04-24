@@ -15,7 +15,7 @@ public sealed class SkyboxRenderSystem : ISystem
     public SkyboxRenderSystem(Renderer renderer) => _renderer = renderer;
 
     /// <inheritdoc/>
-    public void Update(World world, float dt)
+    public void Update(World world, float dt, FramePacket? packet = null)
     {
         if (SkyboxNode.ActiveHandle != uint.MaxValue)
         {

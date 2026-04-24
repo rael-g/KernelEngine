@@ -30,7 +30,7 @@ public sealed unsafe class ShadowRenderSystem : ISystem
         FarPlane    = farPlane;
     }
 
-    public void Update(World world, float dt)
+    public void Update(World world, float dt, FramePacket? packet = null)
     {
         if (LightNode.ComponentId == uint.MaxValue) return;
 

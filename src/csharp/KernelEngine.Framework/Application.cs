@@ -7,10 +7,9 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Application shell: resolves services from DI, owns the frame loop, and coordinates threads.
 /// <list type="bullet">
-///   <item><b>ke.main</b> — platform loop: PollEvents, Input, MessagePipe, FrameSync consumer.</item>
-///   <item><b>ke.sim</b>  — bgfx API thread: bgfx::init, World.Update, Renderer.Frame, FrameSync producer.</item>
+///   <item><b>ke.main</b> — bgfx API thread: bgfx::init, SubmitPacket, Frame, PollEvents, FrameSync consumer.</item>
+///   <item><b>ke.sim</b>  — simulation thread: World.Update, FrameSync producer.</item>
 /// </list>
-/// Phase 3 will split ke.sim into pure sim + a dedicated render thread that reads the FrameSync packet.
 /// </summary>
 public class Application : IDisposable
 {
@@ -56,9 +55,15 @@ public class Application : IDisposable
         if (ActiveWorld == null)
             ActiveWorld = new World(Allocator);
 
+        // bgfx::init on ke.main — main thread is the bgfx API thread.
+        Renderer = Services.GetRequiredService<Renderer>();
+        Renderer.Initialize();
+
+        InitializeSystems();
+
         _running = true;
 
-        // Double-buffer handoff: ke.sim writes, ke.main reads (Phase 3 will fill the packets).
+        // Double-buffer handoff: ke.sim writes, ke.main reads.
         using var frameSync = FrameSync.Create(Allocator, bufferCount: 2);
 
         Exception? threadException = null;
@@ -67,36 +72,24 @@ public class Application : IDisposable
         {
             try
             {
-                // Resolve Renderer here so bgfx::init runs on ke.sim (bgfx API thread).
-                var renderer = Services.GetRequiredService<Renderer>();
-                renderer.Initialize();
-                Renderer = renderer;
-
-                InitializeSystems();
                 OnReady?.Invoke();
 
                 while (_running)
                 {
                     var packet = frameSync.BeginWrite();
-                    ActiveWorld?.Update();
+                    ActiveWorld?.Update(packet: packet);
                     OnUpdate?.Invoke();
-                    Renderer.Frame();   // bgfx::frame — must be on the API thread (ke.sim)
                     packet.EndWrite();
                 }
 
-                // Poison-pill write: unblocks main's BeginRead so it can exit cleanly.
+                // Poison-pill: unblocks main's BeginRead so it can exit cleanly.
                 var poison = frameSync.BeginWrite();
                 poison.EndWrite();
-
-                // bgfx::shutdown must be on the API thread.
-                Renderer.Dispose();
-                Renderer = null!;
             }
             catch (Exception ex)
             {
                 threadException = ex;
                 _running        = false;
-                // Ensure main is not stuck on BeginRead.
                 try { var p = frameSync.BeginWrite(); p.EndWrite(); } catch { }
             }
         });
@@ -115,7 +108,9 @@ public class Application : IDisposable
                     break;
                 }
 
-                // Phase 3: FrameSubmitter reads the packet and calls bgfx draw calls here.
+                // bgfx API thread: submit draw calls then present.
+                Renderer.SubmitPacket(packet);
+                Renderer.Frame();
 
                 Window.PollEvents();
                 Input?.Update();
@@ -230,7 +225,7 @@ public class Application : IDisposable
     public virtual void Dispose()
     {
         ActiveWorld?.Dispose();
-        // Renderer was disposed on ke.sim (bgfx API thread) — skip here.
+        Renderer?.Dispose();
         (Services as IDisposable)?.Dispose();
     }
 }

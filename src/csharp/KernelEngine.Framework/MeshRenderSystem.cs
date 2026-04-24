@@ -13,9 +13,9 @@ public sealed unsafe class MeshRenderSystem : ISystem
     /// <param name="renderer">The renderer to submit draw calls to.</param>
     public MeshRenderSystem(Renderer renderer) => _renderer = renderer;
 
-    public void Update(World world, float dt)
+    public void Update(World world, float dt, FramePacket? packet = null)
     {
-        if (MeshNode.ComponentId == uint.MaxValue) return;
+        if (MeshNode.ComponentId == uint.MaxValue || packet == null) return;
 
         var (entities, data) = world.Registry.Query<MeshComponent>(MeshNode.ComponentId);
         for (int i = 0; i < entities.Length; i++)
@@ -23,8 +23,7 @@ public sealed unsafe class MeshRenderSystem : ISystem
             var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
             if (tc != null)
             {
-                var res = _renderer.SubmitMesh(data[i].MeshHandle, data[i].MaterialHandle, tc->WorldMatrix);
-                KernelException.ThrowIfFailed(res, nameof(_renderer.SubmitMesh));
+                packet.AddDrawCommand(data[i].MeshHandle, data[i].MaterialHandle, tc->WorldMatrix);
             }
         }
     }

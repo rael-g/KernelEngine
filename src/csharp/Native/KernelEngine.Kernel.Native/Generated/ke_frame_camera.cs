@@ -1,6 +1,4 @@
-using KernelEngine.Kernel.Native;
-
-namespace KernelEngine.Threading.Native;
+namespace KernelEngine.Kernel.Native;
 
 public partial struct ke_frame_camera
 {

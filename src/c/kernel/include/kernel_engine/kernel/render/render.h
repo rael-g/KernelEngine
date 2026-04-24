@@ -124,6 +124,10 @@ extern "C"
         /// @brief Configures the cluster grid dimensions and light density limits.
         ke_result (*set_cluster_config)(struct ke_render *self, const ke_cluster_config *config);
 
+        /// @brief Consumes a pre-recorded frame packet and submits all draw calls to the GPU.
+        ///        Must be called on the bgfx API thread, before @c frame().
+        ke_result (*submit_packet)(struct ke_render *self, const struct ke_frame_packet *packet);
+
     } ke_render;
 
 #ifdef __cplusplus

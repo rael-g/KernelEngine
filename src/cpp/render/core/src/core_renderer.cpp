@@ -200,6 +200,10 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->clustered_.SetClusterConfig(renderer_impl->ctx_, cfg);
     };
+    render_api_.submit_packet = [](ke_render *self, const ke_frame_packet *packet) {
+        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+        return static_cast<CoreRenderer *>(self->handle)->SubmitPacket(packet);
+    };
 }
 
 CoreRenderer::~CoreRenderer()

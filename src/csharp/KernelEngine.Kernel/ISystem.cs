@@ -7,5 +7,5 @@ namespace KernelEngine.Kernel;
 public interface ISystem
 {
     /// <summary>Advances this system by one frame.</summary>
-    void Update(World world, float dt);
+    void Update(World world, float dt, FramePacket? packet = null);
 }

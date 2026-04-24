@@ -19,9 +19,9 @@ public sealed unsafe class CameraRenderSystem : ISystem
         _window = window;
     }
 
-    public void Update(World world, float dt)
+    public void Update(World world, float dt, FramePacket? packet = null)
     {
-        if (world.ActiveCamera == 0) return;
+        if (world.ActiveCamera == 0 || packet == null) return;
 
         var tc = world.Registry.GetComponent<TransformComponent>(world.ActiveCamera, world.TransformComponentId);
         if (tc == null) return;
@@ -40,11 +40,6 @@ public sealed unsafe class CameraRenderSystem : ISystem
             ? Matrix4x4.CreateOrthographic(aspect * 10f, 10f, cc->Near, cc->Far)
             : Matrix4x4.CreatePerspectiveFieldOfView(cc->Fov * MathF.PI / 180f, aspect, cc->Near, cc->Far);
 
-        var res = _renderer.SetViewTransform(view, proj);
-        KernelException.ThrowIfFailed(res, nameof(_renderer.SetViewTransform));
-
-        // Upload camera world position for PBR specular
-        res = _renderer.SetCameraPos(tc->WorldMatrix.M41, tc->WorldMatrix.M42, tc->WorldMatrix.M43);
-        KernelException.ThrowIfFailed(res, nameof(_renderer.SetCameraPos));
+        packet.SetCamera(view, proj, new Vector3(tc->WorldMatrix.M41, tc->WorldMatrix.M42, tc->WorldMatrix.M43));
     }
 }

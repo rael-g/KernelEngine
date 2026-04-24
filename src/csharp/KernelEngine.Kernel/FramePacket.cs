@@ -14,6 +14,8 @@ public sealed unsafe class FramePacket
     private ke_frame_sync*   _sync;
     private readonly bool    _isWriter;
 
+    public ke_frame_packet* NativePointer => _packet;
+
     internal FramePacket(ke_frame_packet* packet, ke_frame_sync* sync, bool isWriter)
     {
         _packet   = packet;

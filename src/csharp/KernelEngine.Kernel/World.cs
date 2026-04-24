@@ -82,7 +82,7 @@ public sealed unsafe class World : IDisposable
     /// Advances the simulation by one frame.
     /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s.
     /// </summary>
-    public Result Update()
+    public Result Update(FramePacket? packet = null)
     {
         var now = _stopwatch.Elapsed;
         var dt = (float)(now - _lastTime).TotalSeconds;
@@ -93,7 +93,7 @@ public sealed unsafe class World : IDisposable
         if (res != ke_result.KE_OK) return res;
 
         foreach (var system in _systems)
-            system.Update(this, dt);
+            system.Update(this, dt, packet);
 
         return ke_result.KE_OK;
     }

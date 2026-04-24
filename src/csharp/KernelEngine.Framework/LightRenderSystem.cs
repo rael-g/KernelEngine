@@ -11,14 +11,12 @@ public sealed unsafe class LightRenderSystem : ISystem
 {
     private readonly Renderer _renderer;
 
-    // Reusable upload buffers (avoids allocation per frame)
-    private ke_point_light[] _pointBuf = new ke_point_light[64];
-    private ke_spot_light[]  _spotBuf  = new ke_spot_light[64];
-
     public LightRenderSystem(Renderer renderer) => _renderer = renderer;
 
-    public void Update(World world, float dt)
+    public void Update(World world, float dt, FramePacket? packet = null)
     {
+        if (packet == null) return;
+
         // ── Directional light ──────────────────────────────────────────────────
         if (LightNode.ComponentId != uint.MaxValue)
         {
@@ -26,10 +24,11 @@ public sealed unsafe class LightRenderSystem : ISystem
             if (lights.Length > 0)
             {
                 ref readonly var light = ref lights[0];
-                var res = _renderer.SetDirectionalLight(
-                    light.DirX, light.DirY, light.DirZ,
-                    light.R, light.G, light.B, light.Intensity);
-                KernelException.ThrowIfFailed(res, nameof(_renderer.SetDirectionalLight));
+                packet.SetDirectionalLight(new ke_directional_light
+                {
+                    dir_x = light.DirX, dir_y = light.DirY, dir_z = light.DirZ,
+                    r = light.R, g = light.G, b = light.B, intensity = light.Intensity,
+                });
             }
         }
 
@@ -37,12 +36,11 @@ public sealed unsafe class LightRenderSystem : ISystem
         if (PointLightNode.ComponentId != uint.MaxValue)
         {
             var (entities, comps) = world.Registry.Query<PointLightComponent>(PointLightNode.ComponentId);
-            int count = Math.Min(entities.Length, _pointBuf.Length);
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < entities.Length; i++)
             {
                 var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
                 ref readonly var c = ref comps[i];
-                _pointBuf[i] = new ke_point_light
+                packet.AddPointLight(new ke_point_light
                 {
                     pos_x = tc != null ? tc->WorldMatrix.M41 : 0f,
                     pos_y = tc != null ? tc->WorldMatrix.M42 : 0f,
@@ -52,22 +50,19 @@ public sealed unsafe class LightRenderSystem : ISystem
                     g         = c.G,
                     b         = c.B,
                     intensity = c.Intensity,
-                };
+                });
             }
-            var res = _renderer.SetPointLights(_pointBuf.AsSpan(0, count));
-            KernelException.ThrowIfFailed(res, nameof(_renderer.SetPointLights));
         }
 
         // ── Spot lights ────────────────────────────────────────────────────────
         if (SpotLightNode.ComponentId != uint.MaxValue)
         {
             var (entities, comps) = world.Registry.Query<SpotLightComponent>(SpotLightNode.ComponentId);
-            int count = Math.Min(entities.Length, _spotBuf.Length);
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < entities.Length; i++)
             {
                 var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
                 ref readonly var c = ref comps[i];
-                _spotBuf[i] = new ke_spot_light
+                packet.AddSpotLight(new ke_spot_light
                 {
                     pos_x       = tc != null ? tc->WorldMatrix.M41 : 0f,
                     pos_y       = tc != null ? tc->WorldMatrix.M42 : 0f,
@@ -82,10 +77,8 @@ public sealed unsafe class LightRenderSystem : ISystem
                     b           = c.B,
                     intensity   = c.Intensity,
                     outer_angle = c.OuterAngle,
-                };
+                });
             }
-            var res = _renderer.SetSpotLights(_spotBuf.AsSpan(0, count));
-            KernelException.ThrowIfFailed(res, nameof(_renderer.SetSpotLights));
         }
     }
 }
