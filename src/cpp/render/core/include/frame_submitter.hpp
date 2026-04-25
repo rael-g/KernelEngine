@@ -12,6 +12,7 @@ struct RenderContext;
 class GeometryManager;
 class LightingManager;
 class TextureManager;
+class ShadowPipeline;
 
 /**
  * @brief Consumes a frame packet and submits draw calls to the HAL.
@@ -20,13 +21,15 @@ class TextureManager;
 class FrameSubmitter
 {
 public:
-    static ke_result Submit(RenderContext& ctx, 
+    static ke_result Submit(RenderContext& ctx,
                            const struct ke_frame_packet& packet,
                            const GeometryManager& geometry,
-                           const LightingManager& lighting,
-                           const TextureManager& textures,
+                           LightingManager& lighting,
+                           TextureManager& textures,
+                           ShadowPipeline& shadows,
                            GpuProgramHandle program,
                            GpuProgramHandle shadow_program,
+                           GpuProgramHandle skybox_program,
                            GpuProgramHandle prepass_program);
 };
 

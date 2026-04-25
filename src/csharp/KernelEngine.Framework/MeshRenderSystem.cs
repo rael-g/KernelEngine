@@ -3,14 +3,14 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Iterates all ECS entities with a <see cref="MeshComponent"/> and submits
-/// colored quad draw calls using their TransformComponent world matrix.
+/// Iterates all ECS entities with a <see cref="MeshComponent"/> and records
+/// draw commands into the frame packet for asynchronous submission.
 /// </summary>
 public sealed unsafe class MeshRenderSystem : ISystem
 {
     private readonly Renderer _renderer;
 
-    /// <param name="renderer">The renderer to submit draw calls to.</param>
+    /// <param name="renderer">The renderer (used for handle lookups if needed).</param>
     public MeshRenderSystem(Renderer renderer) => _renderer = renderer;
 
     public void Update(World world, float dt, FramePacket? packet = null)
@@ -23,6 +23,7 @@ public sealed unsafe class MeshRenderSystem : ISystem
             var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
             if (tc != null)
             {
+                // Record instead of submitting immediately
                 packet.AddDrawCommand(data[i].MeshHandle, data[i].MaterialHandle, tc->WorldMatrix);
             }
         }

@@ -32,12 +32,12 @@ public sealed unsafe class ShadowRenderSystem : ISystem
 
     public void Update(World world, float dt, FramePacket? packet = null)
     {
-        if (LightNode.ComponentId == uint.MaxValue) return;
+        if (LightNode.ComponentId == uint.MaxValue || packet == null) return;
 
         var (_, lights) = world.Registry.Query<LightComponent>(LightNode.ComponentId);
         if (lights.Length == 0) return;
 
-        // Lazy-create shadow map on first use.
+        // Lazy-create shadow map on first use (safe outside render pass).
         if (_shadowMapHandle == uint.MaxValue)
         {
             var createRes = _renderer.CreateShadowMap(Resolution, Resolution);
@@ -56,9 +56,10 @@ public sealed unsafe class ShadowRenderSystem : ISystem
         var lightView = Matrix4x4.CreateLookAt(lightPos, Vector3.Zero, up);
         var lightProj = Matrix4x4.CreateOrthographic(FrustumSize, FrustumSize, 0.1f, FarPlane);
 
-        var beginRes = _renderer.BeginShadowPass(_shadowMapHandle, lightView, lightProj);
-        KernelException.ThrowIfFailed(beginRes, nameof(_renderer.BeginShadowPass));
+        // Record shadow pass state into the packet
+        packet.SetShadow(_shadowMapHandle, lightView, lightProj);
 
+        // Record shadow casters
         if (MeshNode.ComponentId != uint.MaxValue)
         {
             var (entities, meshComps) = world.Registry.Query<MeshComponent>(MeshNode.ComponentId);
@@ -69,13 +70,9 @@ public sealed unsafe class ShadowRenderSystem : ISystem
                     entities[i], world.TransformComponentId);
                 if (tc != null)
                 {
-                    var subRes = _renderer.SubmitMeshShadow(meshComps[i].MeshHandle, tc->WorldMatrix);
-                    KernelException.ThrowIfFailed(subRes, nameof(_renderer.SubmitMeshShadow));
+                    packet.AddShadowDrawCommand(meshComps[i].MeshHandle, tc->WorldMatrix);
                 }
             }
         }
-
-        var endRes = _renderer.EndShadowPass();
-        KernelException.ThrowIfFailed(endRes, nameof(_renderer.EndShadowPass));
     }
 }

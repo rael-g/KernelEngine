@@ -73,6 +73,9 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     render_api_.frame = [](ke_render *self) { 
         return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->Frame() : KE_ERROR_INVALID_ARGUMENT; 
     };
+    render_api_.submit_packet = [](ke_render *self, const struct ke_frame_packet *packet) {
+        return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->SubmitPacket(packet) : KE_ERROR_INVALID_ARGUMENT;
+    };
     render_api_.clear_color = [](ke_render *self, float r, float g, float b, float a) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
@@ -109,10 +112,7 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         return renderer_impl->geometry_.DestroyMesh(renderer_impl->ctx_, h);
     };
     render_api_.submit_mesh = [](ke_render *self, ke_mesh_handle m, ke_material_handle mat, const ke_mat4 *t) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* r = static_cast<CoreRenderer *>(self->handle);
-        if (!r->initialized_) return KE_ERROR_NOT_INITIALIZED;
-        return r->geometry_.SubmitMesh(r->ctx_, m, mat, t, r->lighting_, r->textures_, r->program_, r->depth_program_, r->prepass_program_);
+        return KE_OK; 
     };
     render_api_.create_cubemap_rgba = [](ke_render *self, uint32_t s, const uint8_t *d, ke_texture_handle *out) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
@@ -120,9 +120,7 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         return renderer_impl->textures_.CreateCubemapRgba(renderer_impl->ctx_, s, d, out);
     };
     render_api_.submit_skybox = [](ke_render *self, ke_texture_handle h) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* r = static_cast<CoreRenderer *>(self->handle);
-        return r->textures_.SubmitSkybox(r->ctx_, h, r->skybox_program_, r->geometry_.skybox_vb, r->geometry_.skybox_ib, r->textures_.skybox_sampler_uniform, r->textures_.skybox_tint_uniform);
+        return KE_OK;
     };
     render_api_.set_tonemapping = [](ke_render *self, ke_bool e, float ex, float g) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
@@ -145,18 +143,13 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         return renderer_impl->shadows_.DestroyShadowMap(renderer_impl->ctx_, h);
     };
     render_api_.begin_shadow_pass = [](ke_render *self, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* r = static_cast<CoreRenderer *>(self->handle);
-        return r->shadows_.BeginShadowPass(r->ctx_, h, v, p);
+        return KE_OK;
     };
     render_api_.submit_mesh_shadow = [](ke_render *self, ke_mesh_handle m, const ke_mat4 *t) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        auto* r = static_cast<CoreRenderer *>(self->handle);
-        return r->shadows_.SubmitMeshShadow(r->ctx_, r->geometry_, r->shadow_program_, m, t);
+        return KE_OK;
     };
     render_api_.end_shadow_pass = [](ke_render *self) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        return static_cast<CoreRenderer *>(self->handle)->shadows_.EndShadowPass(static_cast<CoreRenderer *>(self->handle)->ctx_);
+        return KE_OK;
     };
     render_api_.set_shadow_map = [](ke_render *self, ke_shadow_map_handle h) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
@@ -180,12 +173,10 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->lighting_.SetAmbientLight(r, g, b) : KE_ERROR_INVALID_ARGUMENT; 
     };
     render_api_.set_point_lights = [](ke_render *self, const ke_point_light *ls, uint32_t c) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        return static_cast<CoreRenderer *>(self->handle)->lighting_.StorePointLights(ls, c);
+        return KE_OK;
     };
     render_api_.set_spot_lights = [](ke_render *self, const ke_spot_light *ls, uint32_t c) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        return static_cast<CoreRenderer *>(self->handle)->lighting_.StoreSpotLights(ls, c);
+        return KE_OK;
     };
     render_api_.set_camera_pos = [](ke_render *self, float x, float y, float z) {
         return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->SetCameraPos(x, y, z) : KE_ERROR_INVALID_ARGUMENT; 
@@ -199,10 +190,6 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->clustered_.SetClusterConfig(renderer_impl->ctx_, cfg);
-    };
-    render_api_.submit_packet = [](ke_render *self, const ke_frame_packet *packet) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-        return static_cast<CoreRenderer *>(self->handle)->SubmitPacket(packet);
     };
 }
 
@@ -321,27 +308,6 @@ ke_result CoreRenderer::OnShutdown()
 ke_result CoreRenderer::Frame()
 {
     if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
-    clustered_.UpdateClusterBounds(ctx_);
-    clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
-
-    if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
-    {
-        ctx_.gpu->SetViewFrameBuffer(2, post_process_.GetGbufFb());
-        ctx_.gpu->SetViewClear(2, 0x0001 | 0x0002, 0x00000000, 1.0f, 0);
-        ctx_.gpu->SetViewRect(2, 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
-        post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
-    }
-
-    if (post_process_.GetHdrFb() != kGpuInvalidHandle)
-    {
-        ctx_.gpu->SetViewFrameBuffer(1, post_process_.GetHdrFb());
-        post_process_.SubmitPostProcess(ctx_, geometry_, textures_, bright_pass_program_, blur_program_, tonemap_program_);
-    }
-    else
-    {
-        ctx_.gpu->SetViewFrameBuffer(1, kGpuInvalidHandle);
-    }
-
     ctx_.gpu->Touch(1);
     ctx_.gpu->Frame();
     
@@ -355,8 +321,46 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
 {
     if (!initialized_ || !ctx_.gpu || !packet) return KE_ERROR_NOT_INITIALIZED;
 
-    return FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, 
-                                  program_, shadow_program_, prepass_program_);
+    // Extract near/far from proj matrix so clustered has current values.
+    const float* p = packet->camera.proj.m;
+    if (std::abs(p[10] - p[11]) > 0.0001f) {
+        ctx_.near_z = p[14] / (p[10] + 1.0f);
+        ctx_.far_z  = p[14] / (p[10] - 1.0f);
+    }
+    // Store view for clustered bounds.
+    std::memcpy(ctx_.last_view, packet->camera.view.m, sizeof(float) * 16);
+    std::memcpy(ctx_.last_proj, packet->camera.proj.m, sizeof(float) * 16);
+
+    ke_result res = FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
+                                           program_, shadow_program_, skybox_program_, prepass_program_);
+    if (res != KE_OK) return res;
+
+    // Clustered light culling (must run after scene uniforms are set).
+    clustered_.UpdateClusterBounds(ctx_);
+    clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
+
+    // SSAO pass.
+    if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
+    {
+        ctx_.gpu->SetViewFrameBuffer(2, post_process_.GetGbufFb());
+        ctx_.gpu->SetViewClear(2, 0x0001 | 0x0002, 0x00000000, 1.0f, 0);
+        ctx_.gpu->SetViewRect(2, 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
+        post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
+    }
+
+    // Post-process / tonemap.
+    if (post_process_.GetHdrFb() != kGpuInvalidHandle)
+    {
+        ctx_.gpu->SetViewFrameBuffer(1, post_process_.GetHdrFb());
+        post_process_.SubmitPostProcess(ctx_, geometry_, textures_,
+                                        bright_pass_program_, blur_program_, tonemap_program_);
+    }
+    else
+    {
+        ctx_.gpu->SetViewFrameBuffer(1, kGpuInvalidHandle);
+    }
+
+    return KE_OK;
 }
 
 ke_result CoreRenderer::SetOrthographic(ke_bool enabled) {

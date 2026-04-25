@@ -19,8 +19,7 @@ public sealed class SkyboxRenderSystem : ISystem
     {
         if (SkyboxNode.ActiveHandle != uint.MaxValue)
         {
-            var res = _renderer.SubmitSkybox(SkyboxNode.ActiveHandle);
-            KernelException.ThrowIfFailed(res, nameof(_renderer.SubmitSkybox));
+            packet?.SetSkybox(SkyboxNode.ActiveHandle);
         }
     }
 }

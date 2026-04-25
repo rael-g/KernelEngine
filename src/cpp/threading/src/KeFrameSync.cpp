@@ -34,6 +34,12 @@ KeFrameSync::KeFrameSync(ke_allocator *alloc,
                          alignof(ke_draw_command)));
         p.draw_capacity = draw_capacity;
 
+        // Shadow draws reuse the same capacity for simplicity
+        p.shadow_draw_commands = static_cast<ke_draw_command *>(
+            alloc->alloc(alloc, sizeof(ke_draw_command) * draw_capacity,
+                         alignof(ke_draw_command)));
+        p.shadow_draw_capacity = draw_capacity;
+
         p.point_lights = static_cast<ke_point_light *>(
             alloc->alloc(alloc, sizeof(ke_point_light) * point_capacity,
                          alignof(ke_point_light)));
@@ -51,6 +57,7 @@ KeFrameSync::~KeFrameSync()
     for (uint32_t i = 0; i < count_; ++i)
     {
         alloc_->free(alloc_, packets_[i].draw_commands);
+        alloc_->free(alloc_, packets_[i].shadow_draw_commands);
         alloc_->free(alloc_, packets_[i].point_lights);
         alloc_->free(alloc_, packets_[i].spot_lights);
     }
@@ -75,6 +82,7 @@ ke_frame_packet *KeFrameSync::BeginWrite()
     semaphore_wait(write_mtx_, write_cv_, write_sem_);
     auto &p = packets_[write_index_];
     p.draw_count        = 0;
+    p.shadow_draw_count = 0;
     p.point_light_count = 0;
     p.spot_light_count  = 0;
     p.has_dir_light     = false;

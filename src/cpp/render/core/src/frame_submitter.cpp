@@ -3,6 +3,7 @@
 #include "../include/geometry_manager.hpp"
 #include "../include/lighting_manager.hpp"
 #include "../include/texture_manager.hpp"
+#include "../include/shadow_pipeline.hpp"
 #include "gpu_device.hpp"
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
@@ -10,54 +11,89 @@
 namespace kernel_engine::render::bgfx
 {
 
-ke_result FrameSubmitter::Submit(RenderContext& ctx, 
+ke_result FrameSubmitter::Submit(RenderContext& ctx,
                                  const struct ke_frame_packet& packet,
                                  const GeometryManager& geometry,
-                                 const LightingManager& lighting,
-                                 const TextureManager& textures,
+                                 LightingManager& lighting,
+                                 TextureManager& textures,
+                                 ShadowPipeline& shadows,
                                  GpuProgramHandle main_program,
                                  GpuProgramHandle shadow_program,
-                                 GpuProgramHandle prepass_program)
+                                 GpuProgramHandle skybox_program,
+                                 GpuProgramHandle /*prepass_program*/)
 {
     if (!ctx.gpu) return KE_ERROR_RENDER;
 
-    // 1. Update Global Uniforms from Packet
-    ctx.gpu->SetViewTransform(1 /*SceneView*/, packet.camera.view.m, packet.camera.proj.m);
-    
+    // ── 1. Apply lighting from packet ────────────────────────────────────────
+    if (packet.has_dir_light)
+        lighting.SetDirectionalLight(&packet.dir_light);
+
+    if (packet.point_light_count > 0)
+        lighting.StorePointLights(packet.point_lights, packet.point_light_count);
+
+    if (packet.spot_light_count > 0)
+        lighting.StoreSpotLights(packet.spot_lights, packet.spot_light_count);
+
+    ctx.gpu->SetUniform(lighting.light_dir_uniform,     lighting.light_dir,     1);
+    ctx.gpu->SetUniform(lighting.light_color_uniform,   lighting.light_color,   1);
+    ctx.gpu->SetUniform(lighting.ambient_color_uniform, lighting.ambient_color, 1);
+
     float camera_pos[4] = {packet.camera.pos_x, packet.camera.pos_y, packet.camera.pos_z, 1.0f};
     ctx.gpu->SetUniform(lighting.camera_pos_uniform, camera_pos, 1);
 
-    // 2. Process Draw Commands
+    // ── 2. Shadow Pass ───────────────────────────────────────────────────────
+    if (packet.shadow.map_handle != 0xFFFFFFFFu)
+    {
+        shadows.BeginShadowPass(ctx, packet.shadow.map_handle,
+                                &packet.shadow.light_view, &packet.shadow.light_proj);
+
+        for (uint32_t i = 0; i < packet.shadow_draw_count; ++i)
+        {
+            const auto& cmd = packet.shadow_draw_commands[i];
+            shadows.SubmitMeshShadow(ctx, geometry, shadow_program,
+                                     static_cast<ke_mesh_handle>(cmd.mesh_handle), &cmd.transform);
+        }
+
+        shadows.EndShadowPass(ctx);
+    }
+
+    // ── 3. Scene View Transform ──────────────────────────────────────────────
+    ctx.gpu->SetViewTransform(1 /*SCENE*/, packet.camera.view.m, packet.camera.proj.m);
+
+    // ── 4. Skybox Pass ───────────────────────────────────────────────────────
+    if (packet.has_skybox && skybox_program != kGpuInvalidHandle)
+    {
+        textures.SubmitSkybox(ctx, static_cast<ke_texture_handle>(packet.skybox_handle),
+                              skybox_program,
+                              geometry.skybox_vb, geometry.skybox_ib,
+                              textures.skybox_sampler_uniform, textures.skybox_tint_uniform);
+    }
+
+    // ── 5. Main Scene Pass ───────────────────────────────────────────────────
     for (uint32_t i = 0; i < packet.draw_count; ++i)
     {
-        const auto& cmd = packet.draw_commands[i];
-        const auto& entry = geometry.GetMeshEntry(cmd.mesh_handle);
-        const auto& mat = lighting.GetMaterial(cmd.material_handle);
-        
-        if (entry.vb != kGpuInvalidHandle && mat.valid)
-        {
-            // Material Setup (Agnostic)
-            float color[4] = {mat.r, mat.g, mat.b, mat.a};
-            float pbr[4]   = {mat.metallic, mat.roughness, 0.0f, 0.0f};
-            
-            ctx.gpu->SetUniform(lighting.color_uniform, color, 1);
-            ctx.gpu->SetUniform(lighting.pbr_params_uniform, pbr, 1);
-            
-            // Texture Bindings
-            GpuTextureHandle tex = textures.GetTextureIdx(mat.texture_handle);
-            if (tex == kGpuInvalidHandle) tex = textures.default_cube_tex;
-            
-            // Note: sampler_uniform is in TextureManager
-            ctx.gpu->SetTexture(0, textures.sampler_uniform, tex, 0xFFFFFFFF);
+        const auto& cmd   = packet.draw_commands[i];
+        const auto& entry = geometry.GetMeshEntry(static_cast<ke_mesh_handle>(cmd.mesh_handle));
+        const auto& mat   = lighting.GetMaterial(static_cast<ke_material_handle>(cmd.material_handle));
 
-            ctx.gpu->SetTransform(cmd.transform.m, 1);
-            ctx.gpu->SetVertexBuffer(0, entry.vb);
-            ctx.gpu->SetIndexBufferStatic(entry.ib);
-            
-            // BGFX_STATE_DEFAULT
-            ctx.gpu->SetState(0x0000000000000001ULL | 0x0000000000000400ULL | 0x0000000000000010ULL | 0x0000000000000020ULL | 0x0000001000000000ULL, 0);
-            ctx.gpu->Submit(1 /*SceneView*/, main_program, 0, false);
-        }
+        if (entry.vb == kGpuInvalidHandle || !mat.valid) continue;
+
+        float color[4] = {mat.r, mat.g, mat.b, mat.a};
+        float pbr[4]   = {mat.metallic, mat.roughness, 0.0f, 0.0f};
+        ctx.gpu->SetUniform(lighting.color_uniform,      color, 1);
+        ctx.gpu->SetUniform(lighting.pbr_params_uniform, pbr,   1);
+
+        GpuTextureHandle tex = textures.GetTextureIdx(static_cast<ke_texture_handle>(mat.texture_handle));
+        if (tex == kGpuInvalidHandle) tex = textures.default_cube_tex;
+        ctx.gpu->SetTexture(0, textures.sampler_uniform, tex, 0xFFFFFFFF);
+
+        ctx.gpu->SetTransform(cmd.transform.m, 1);
+        ctx.gpu->SetVertexBuffer(0, entry.vb);
+        ctx.gpu->SetIndexBufferStatic(entry.ib);
+        ctx.gpu->SetState(0x0000000000000001ULL | 0x0000000000000400ULL |
+                          0x0000000000000010ULL | 0x0000000000000020ULL |
+                          0x0000001000000000ULL, 0);
+        ctx.gpu->Submit(1 /*SCENE*/, main_program, 0, false);
     }
 
     return KE_OK;

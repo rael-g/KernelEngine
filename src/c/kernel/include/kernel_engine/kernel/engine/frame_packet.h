@@ -7,69 +7,67 @@
 #include <stdbool.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-    /// @brief One mesh draw call recorded by the sim thread, consumed by the render thread.
-    typedef struct ke_draw_command
-    {
+    // ── Draw Commands ─────────────────────────────────────────────────────────
+
+    typedef struct ke_draw_command {
         uint32_t mesh_handle;
         uint32_t material_handle;
         ke_mat4  transform;
     } ke_draw_command;
 
-    /// @brief Camera state snapshot recorded once per frame.
-    typedef struct ke_frame_camera
-    {
-        ke_mat4 view;
-        ke_mat4 proj;
-        float   pos_x, pos_y, pos_z;
+    // ── Camera Snapshot ───────────────────────────────────────────────────────
+
+    typedef struct ke_frame_camera {
+        ke_mat4  view;
+        ke_mat4  proj;
+        float    pos_x, pos_y, pos_z;
     } ke_frame_camera;
 
-    /// @brief Shadow pass data recorded by ShadowRenderSystem.
-    typedef struct ke_frame_shadow
-    {
-        uint32_t map_handle; ///< UINT32_MAX = no shadow this frame
+    // ── Shadow Snapshot ───────────────────────────────────────────────────────
+
+    typedef struct ke_frame_shadow {
+        uint32_t map_handle;
         ke_mat4  light_view;
         ke_mat4  light_proj;
     } ke_frame_shadow;
 
-    /// @brief Immutable snapshot of all render data for one frame.
-    ///        Written by the sim thread, read by the render thread.
-    ///        Memory for the dynamic arrays is owned by ke_frame_sync.
-    typedef struct ke_frame_packet
-    {
+    // ── Frame Packet ──────────────────────────────────────────────────────────
+
+    typedef struct ke_frame_packet {
         uint64_t frame_number;
 
-        // ── Camera ─────────────────────────────────────────────────────────────
-        ke_frame_camera camera;
-
-        // ── Directional light ──────────────────────────────────────────────────
-        ke_directional_light dir_light;
-        bool                 has_dir_light;
-
-        // ── Point lights ───────────────────────────────────────────────────────
-        ke_point_light *point_lights;
-        uint32_t        point_light_count;
-        uint32_t        point_light_capacity;
-
-        // ── Spot lights ────────────────────────────────────────────────────────
-        ke_spot_light *spot_lights;
-        uint32_t       spot_light_count;
-        uint32_t       spot_light_capacity;
-
-        // ── Draw commands ──────────────────────────────────────────────────────
-        ke_draw_command *draw_commands;
+        // ── Scene Pass ────────────────────────────────────────────────────────
+        ke_draw_command* draw_commands;
         uint32_t         draw_count;
         uint32_t         draw_capacity;
 
-        // ── Skybox ─────────────────────────────────────────────────────────────
-        uint32_t skybox_handle; ///< UINT32_MAX = no skybox
-        bool     has_skybox;
+        // ── Shadow Pass ───────────────────────────────────────────────────────
+        ke_frame_shadow  shadow;
+        ke_draw_command* shadow_draw_commands;
+        uint32_t         shadow_draw_count;
+        uint32_t         shadow_draw_capacity;
 
-        // ── Shadows ────────────────────────────────────────────────────────────
-        ke_frame_shadow shadow;
+        // ── Lighting ──────────────────────────────────────────────────────────
+        ke_directional_light dir_light;
+        bool                 has_dir_light;
+
+        ke_point_light* point_lights;
+        uint32_t        point_light_count;
+        uint32_t        point_light_capacity;
+
+        ke_spot_light*  spot_lights;
+        uint32_t        spot_light_count;
+        uint32_t        spot_light_capacity;
+
+        // ── Camera ────────────────────────────────────────────────────────────
+        ke_frame_camera camera;
+
+        // ── Skybox ────────────────────────────────────────────────────────────
+        uint32_t skybox_handle;
+        bool     has_skybox;
     } ke_frame_packet;
 
 #ifdef __cplusplus

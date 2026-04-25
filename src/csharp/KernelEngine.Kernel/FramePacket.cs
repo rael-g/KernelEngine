@@ -56,7 +56,7 @@ public sealed unsafe class FramePacket
             _packet->spot_lights[_packet->spot_light_count++] = light;
     }
 
-    /// <summary>Appends a draw command. Ignored when at capacity.</summary>
+    /// <summary>Appends a draw command to the main scene pass. Ignored when at capacity.</summary>
     public void AddDrawCommand(uint meshHandle, uint materialHandle, Matrix4x4 transform)
     {
         if (_packet->draw_count < _packet->draw_capacity)
@@ -68,11 +68,23 @@ public sealed unsafe class FramePacket
         }
     }
 
+    /// <summary>Appends a draw command to the shadow depth pass. Ignored when at capacity.</summary>
+    public void AddShadowDrawCommand(uint meshHandle, Matrix4x4 transform)
+    {
+        if (_packet->shadow_draw_count < _packet->shadow_draw_capacity)
+        {
+            ref var cmd = ref _packet->shadow_draw_commands[_packet->shadow_draw_count++];
+            cmd.mesh_handle     = meshHandle;
+            cmd.material_handle = uint.MaxValue; // Not used in depth pass
+            cmd.transform       = ToKeMat4(transform);
+        }
+    }
+
     /// <summary>Sets the skybox cubemap handle for this frame.</summary>
     public void SetSkybox(uint cubemapHandle)
     {
         _packet->skybox_handle = cubemapHandle;
-        _packet->has_skybox    = true;
+        _packet->has_skybox    = (cubemapHandle != uint.MaxValue);
     }
 
     /// <summary>Sets the shadow map data for this frame.</summary>
@@ -106,6 +118,10 @@ public sealed unsafe class FramePacket
     /// <summary>Span over the draw commands recorded this frame.</summary>
     public ReadOnlySpan<ke_draw_command> DrawCommands =>
         new(_packet->draw_commands, (int)_packet->draw_count);
+
+    /// <summary>Span over the shadow draw commands recorded this frame.</summary>
+    public ReadOnlySpan<ke_draw_command> ShadowDrawCommands =>
+        new(_packet->shadow_draw_commands, (int)_packet->shadow_draw_count);
 
     /// <summary>Skybox cubemap handle, or <c>uint.MaxValue</c> when absent.</summary>
     public uint SkyboxHandle => _packet->skybox_handle;
