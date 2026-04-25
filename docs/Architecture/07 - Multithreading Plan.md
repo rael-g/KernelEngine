@@ -8,308 +8,289 @@ bgfx is the current render implementation. We do not want the threading model to
 
 ---
 
-## Current state
+## Implemented state (Phases 1–3 complete)
 
 ```
-Main Thread (C#):   bgfx::renderFrame() + window polling + input
-Sim Thread (C#):    Task.Run → World.Update() + ISystem
-Worker Pool:        enkiTS via ke_task_scheduler ✓
+ke.main (C# main thread):   bgfx::renderFrame() + window polling + input + SubmitPacket + Frame()
+ke.sim  (KernelThread):     World.Update(packet) → ISystem records into FramePacket
+Worker Pool:                enkiTS via ke_task_scheduler ✓
 ```
 
-Problems:
-- Threads created with C# `Thread`/`Task.Run` — no names, no affinity, no kernel visibility
-- bgfx owns which thread it considers its "render thread" (the one that called `bgfx::init`)
-- No decoupling between sim state and render submission — systems write directly to bgfx
-- `Application.cs` is the orchestrator, but it does so with C# primitives that bypass the kernel
+- `ke.main` is the bgfx API thread (called `bgfx::init`, owns all bgfx draw calls)
+- `ke.sim` is a `KernelThread` (named, affinity-capable); runs pure simulation, no bgfx calls
+- `FrameSync` (double-buffer ring) hands `ke_frame_packet` from ke.sim to ke.main each frame
+- All render systems (`MeshRenderSystem`, `LightRenderSystem`, `CameraRenderSystem`, `SkyboxRenderSystem`, `ShadowRenderSystem`) **record** into the packet on ke.sim
+- `FrameSubmitter` on ke.main reads the packet and issues all bgfx calls
 
 ---
 
-## Target state
-
-```
-Main Thread:    window polling + input (OS requirement on some platforms)
-Render Thread:  created by framework via ke_thread, passed to bgfx as its home
-Sim Thread:     created by framework via ke_thread, runs World.Update()
-Worker Pool:    enkiTS (already ke_task_scheduler)
-```
-
-The framework (C#) controls all thread lifetimes. The kernel provides the primitives. bgfx adapts to which thread it is given.
-
----
-
-## New C kernel primitives
+## C kernel primitives (all implemented)
 
 ### `ke_thread` — named OS thread
-
 ```c
 // src/c/kernel/include/kernel_engine/kernel/threading/thread.h
+typedef struct ke_thread {
+    void *handle;
+    void (*destroy)(struct ke_thread *self, ke_allocator *alloc);
+    void (*join)(struct ke_thread *self);
+} ke_thread;
 
-typedef struct ke_thread ke_thread;
-
-typedef void (*ke_thread_func)(void* user_data);
-
-typedef struct ke_thread_desc {
-    const char*     name;        // visible in profilers (RenderDoc, PIX, NSight, perf)
-    ke_thread_func  func;
-    void*           user_data;
-    uint64_t        affinity_mask; // 0 = no preference
-} ke_thread_desc;
-
-ke_result ke_thread_create(ke_allocator* alloc, const ke_thread_desc* desc, ke_thread** out);
-void      ke_thread_join(ke_thread* t);
-void      ke_thread_destroy(ke_thread* t, ke_allocator* alloc);
-void      ke_thread_set_name(const char* name);  // sets name on *calling* thread
+ke_result ke_thread_std_create(ke_allocator *alloc, const ke_thread_desc *desc, ke_thread **out);
+void      ke_thread_set_current_name(const char *name);
 ```
 
 ### `ke_semaphore` — lightweight signal/wait
-
 ```c
 // src/c/kernel/include/kernel_engine/kernel/threading/semaphore.h
+typedef struct ke_semaphore {
+    void *handle;
+    void (*destroy)(struct ke_semaphore *self, ke_allocator *alloc);
+    void (*signal)(struct ke_semaphore *self);
+    void (*wait)(struct ke_semaphore *self);
+} ke_semaphore;
 
-typedef struct ke_semaphore ke_semaphore;
-
-ke_result ke_semaphore_create(ke_allocator* alloc, uint32_t initial, ke_semaphore** out);
-void      ke_semaphore_signal(ke_semaphore* s);
-void      ke_semaphore_wait(ke_semaphore* s);
-void      ke_semaphore_destroy(ke_semaphore* s, ke_allocator* alloc);
+ke_result ke_semaphore_std_create(ke_allocator *alloc, uint32_t initial, ke_semaphore **out);
 ```
 
 ### `ke_frame_packet` — sim → render snapshot
-
-The frame packet is the data written by the sim thread and consumed by the render thread. It replaces direct ECS-to-bgfx calls from within systems.
-
 ```c
-// src/c/kernel/include/kernel_engine/kernel/threading/frame_packet.h
-
-typedef struct ke_draw_command {
-    uint32_t  mesh_handle;
-    uint32_t  material_handle;
-    ke_mat4   transform;
-} ke_draw_command;
-
-typedef struct ke_light_entry {
-    ke_vec3   direction;
-    ke_vec3   color;
-    float     intensity;
-} ke_light_entry;
-
-typedef struct ke_camera_data {
-    ke_mat4   view;
-    ke_mat4   proj;
-    bool      orthographic;
-} ke_camera_data;
-
+// src/c/kernel/include/kernel_engine/kernel/engine/frame_packet.h
 typedef struct ke_frame_packet {
     uint64_t         frame_number;
-    ke_draw_command* draw_commands;
-    uint32_t         draw_count;
-    ke_light_entry*  lights;
-    uint32_t         light_count;
-    ke_camera_data   camera;
+    ke_draw_command* draw_commands;       uint32_t draw_count;       uint32_t draw_capacity;
+    ke_frame_shadow  shadow;
+    ke_draw_command* shadow_draw_commands; uint32_t shadow_draw_count; uint32_t shadow_draw_capacity;
+    ke_directional_light dir_light;       bool has_dir_light;
+    ke_point_light*  point_lights;        uint32_t point_light_count; uint32_t point_light_capacity;
+    ke_spot_light*   spot_lights;         uint32_t spot_light_count;  uint32_t spot_light_capacity;
+    ke_frame_camera  camera;
+    uint32_t         skybox_handle;       bool has_skybox;
 } ke_frame_packet;
 ```
 
 ### `ke_frame_sync` — double-buffer handoff
-
-Coordinates ownership of frame packets between the sim thread (writer) and render thread (reader). Uses a double or triple buffer internally — no lock on the hot path, only a semaphore on the handoff point.
-
 ```c
 // src/c/kernel/include/kernel_engine/kernel/threading/frame_sync.h
+typedef struct ke_frame_sync {
+    void *handle;
+    void (*destroy)(struct ke_frame_sync *self, ke_allocator *alloc);
+    ke_frame_packet *(*begin_write)(struct ke_frame_sync *self);
+    void             (*end_write)  (struct ke_frame_sync *self);
+    ke_frame_packet *(*begin_read) (struct ke_frame_sync *self);
+    void             (*end_read)   (struct ke_frame_sync *self);
+} ke_frame_sync;
 
-typedef struct ke_frame_sync ke_frame_sync;
-
-ke_result        ke_frame_sync_create(ke_allocator* alloc, uint32_t buffer_count, ke_frame_sync** out);
-ke_frame_packet* ke_frame_sync_begin_write(ke_frame_sync* fs);   // sim acquires writable buffer
-void             ke_frame_sync_end_write(ke_frame_sync* fs);     // sim hands off to render
-ke_frame_packet* ke_frame_sync_begin_read(ke_frame_sync* fs);    // render waits and acquires
-void             ke_frame_sync_end_read(ke_frame_sync* fs);      // render releases buffer
-void             ke_frame_sync_destroy(ke_frame_sync* fs, ke_allocator* alloc);
+ke_result ke_frame_sync_std_create(ke_allocator *alloc, uint32_t buffer_count,
+                                   uint32_t draw_capacity, uint32_t point_capacity,
+                                   uint32_t spot_capacity, ke_frame_sync **out);
 ```
-
----
-
-## C++ implementations
-
-All primitives get a C++ implementation under `src/cpp/threading/`:
-
-```
-src/cpp/threading/
-  CMakeLists.txt
-  src/
-    ke_thread_impl.cpp      // std::thread + platform SetThreadDescription / pthread_setname_np
-    ke_semaphore_impl.cpp   // std::counting_semaphore (C++20) or platform equivalent
-    ke_frame_sync_impl.cpp  // ring buffer of ke_frame_packet + two semaphores (write-ready, read-ready)
-```
-
-CMake target: `ke_threading` (shared library, follows same 4-tier pattern as render/window).
-
----
-
-## C# managed wrappers
-
-### `KernelThread`
-
-```csharp
-// src/csharp/KernelEngine.Kernel/KernelThread.cs
-public sealed unsafe class KernelThread : IDisposable
-{
-    public static KernelThread Create(Allocator alloc, string name, Action func);
-    public void Join();
-    public void Dispose();
-    // static: sets name on calling thread (useful for main thread)
-    public static void SetCurrentName(string name);
-}
-```
-
-### `KernelSemaphore`
-
-```csharp
-public sealed unsafe class KernelSemaphore : IDisposable
-{
-    public static KernelSemaphore Create(Allocator alloc, uint initial = 0);
-    public void Signal();
-    public void Wait();
-    public void Dispose();
-}
-```
-
-### `FrameSync` + `FramePacket`
-
-```csharp
-public sealed unsafe class FrameSync : IDisposable
-{
-    public static FrameSync Create(Allocator alloc, uint bufferCount = 2);
-    public FramePacketWriter BeginWrite();   // returns ref-struct scoped to sim thread
-    public FramePacketReader BeginRead();    // blocks until sim signals ready
-    public void Dispose();
-}
-```
-
----
-
-## How `Application` changes
-
-Today `Application` uses `Thread` + `SemaphoreSlim`. After this work it becomes:
-
-```csharp
-protected override void Run()
-{
-    // Name the main thread via the kernel
-    KernelThread.SetCurrentName("ke.main");
-
-    var frameSync = FrameSync.Create(Allocator, bufferCount: 2);
-
-    // Create the render thread — this thread will call bgfx::init
-    var renderThread = KernelThread.Create(Allocator, "ke.render", () =>
-    {
-        Renderer.Initialize();   // bgfx::init happens here, on this thread
-        while (!ShouldStop)
-        {
-            using var reader = frameSync.BeginRead();
-            Renderer.SubmitFrame(reader.Packet);
-            Renderer.Frame();           // bgfx::frame()
-        }
-    });
-
-    // Create the sim thread
-    var simThread = KernelThread.Create(Allocator, "ke.sim", () =>
-    {
-        OnReady();
-        while (!ShouldStop)
-        {
-            using var writer = frameSync.BeginWrite();
-            World.Update(writer.Packet);   // systems fill the packet
-            OnUpdate();
-        }
-    });
-
-    // Main thread: platform loop
-    while (!Window.ShouldClose())
-    {
-        Window.PollEvents();
-        Input.Update();
-        MessagePipe.Pump();
-        Renderer.RenderFrame();    // bgfx::renderFrame() — unblocks render thread
-    }
-
-    Stop();
-    simThread.Join();
-    renderThread.Join();
-}
-```
-
-bgfx no longer decides its thread model. We create the thread, it happens to be the one bgfx runs on.
-
----
-
-## Impact on existing render systems
-
-Today `MeshRenderSystem.Update()` calls `renderer.SubmitMesh(...)` directly on the sim thread. After this work:
-
-- Sim thread: systems **write** to `ke_frame_packet` (fill draw commands, lights, camera)
-- Render thread: reads the packet and calls `renderer.SubmitMesh(...)` / bgfx API
-
-This means `MeshRenderSystem`, `LightRenderSystem`, `CameraRenderSystem` etc. change from "submit" to "record". The actual GPU submission moves to a new internal `FrameSubmitter` that reads the packet.
 
 ---
 
 ## Implementation phases
 
 ### Phase 1 — `ke_thread` + `ke_semaphore` ✅ DONE
-- C API headers in `src/cpp/threading/include/kernel_engine/threading/`
-- C++ implementation `ke_threading.dll` (`std::thread` + platform thread naming/affinity)
-- C# bindings generated via ClangSharp (`KernelEngine.Threading.Native`)
-- `KernelThread` + `KernelSemaphore` managed wrappers in `KernelEngine.Kernel`
+- C kernel vtable headers + C++ `std::thread`/`std::counting_semaphore` implementations
+- `ke_threading.dll` (shared library, 4-tier pattern)
+- ClangSharp bindings → `KernelEngine.Threading.Native`
+- `KernelThread` + `KernelSemaphore` managed wrappers
 - `Application.Run` names main thread via `KernelThread.SetCurrentName("ke.main")`
-- **No behavior change** — same logical threading model, just kernel-owned threads
 
 ### Phase 2 — `ke_frame_packet` + `ke_frame_sync` ✅ DONE
-- Define `ke_frame_packet` struct in C kernel (`src/c/kernel/include/kernel_engine/kernel/engine/frame_packet.h`)
-- C++ `ke_frame_sync` implementation — ring buffer + two counting semaphores (`src/cpp/threading/src/KeFrameSync.cpp`)
-- C# bindings generated: `ke_draw_command`, `ke_frame_camera`, `ke_frame_shadow`, `ke_frame_packet`, `ke_frame_sync`
+- `ke_frame_packet` in C kernel (`src/c/kernel/include/kernel_engine/kernel/engine/frame_packet.h`)
+- `KeFrameSync` C++ implementation — ring buffer + two counting semaphores
 - `FrameSync` + `FramePacket` managed wrappers in `KernelEngine.Kernel`
-- `Application` restructured: ke.sim owns bgfx::init + World.Update + Renderer.Frame; ke.main owns PollEvents + FrameSync consumer
-- `Renderer.Initialize()` separated from constructor so ke.sim can be the bgfx API thread
-- **Behavior change**: ke.sim and ke.main now run as separate KernelThreads; FrameSync provides double-buffered handoff (packets filled in Phase 3)
+- `Application` restructured: ke.sim = `KernelThread`; ke.main = bgfx API thread
+- `Renderer.Initialize()` on ke.main (bgfx::init ownership established)
 
-### Phase 3 — systems record instead of submit
-- `MeshRenderSystem`, `LightRenderSystem`, `CameraRenderSystem` write to packet
-- New `FrameSubmitter` reads packet on render thread and calls bgfx
-- `ShadowRenderSystem`, post-process: TBD (may stay on render thread side)
-- **This is the largest change** — touches every render system
+### Phase 3 — systems record instead of submit ✅ DONE
+- `MeshRenderSystem`, `LightRenderSystem`, `CameraRenderSystem`, `SkyboxRenderSystem`, `ShadowRenderSystem` — all record into `ke_frame_packet` on ke.sim
+- `FrameSubmitter` on ke.main reads packet: lighting uniforms → shadow pass → scene pass → skybox
+- `CoreRenderer::SubmitPacket` drives clustered light culling, SSAO, and post-process after scene
+- `shadow_draw_commands` array added to `ke_frame_packet` for shadow casters
 
-### Phase 4 — internal ECS parallelism (future)
-- `ke_world_update` schedules independent systems as enkiTS jobs
-- Systems annotated with read/write component sets for dependency analysis
-- Depends on Phase 3 being stable
+### Phase 4 — internal ECS parallelism
+See detailed plan below.
 
 ---
 
-## What does NOT change
+## Phase 4 — Internal ECS Parallelism
 
-- `ke_task_scheduler` (enkiTS) is the worker pool — unchanged
-- The 4-tier modular architecture of render/window — unchanged
-- C# is still the orchestrator of the frame loop — unchanged
-- The kernel remains contract-only, no built-in threading policy
+### Goal
+
+Each `ISystem` today runs sequentially on ke.sim. Systems that touch disjoint component sets are independent and can run as concurrent enkiTS jobs. Phase 4 introduces a **dependency-declared system graph** that the world schedules automatically.
+
+The kernel does not know about scheduling policy — it only provides the contracts. The C# `World` wrapper builds the job graph and dispatches via `ke_task_scheduler`.
 
 ---
 
-## Files to create / modify
+### New concept: system component access declaration
+
+Systems declare which components they read and which they write. The scheduler uses this to build a dependency graph: two systems that share no write set and no read-write conflict run in parallel.
+
+```csharp
+// src/csharp/KernelEngine.Kernel/ISystem.cs  (extended)
+public interface ISystem
+{
+    void Update(World world, float dt, FramePacket? packet = null);
+
+    // Optional: override to declare component access for parallel scheduling.
+    // Default = empty (treated as serial barrier).
+    ComponentAccess GetAccess() => ComponentAccess.None;
+}
+
+public readonly struct ComponentAccess
+{
+    public IReadOnlyList<uint> Reads  { get; init; }
+    public IReadOnlyList<uint> Writes { get; init; }
+
+    public static readonly ComponentAccess None = new() { Reads = [], Writes = [] };
+}
+```
+
+Systems that don't override `GetAccess` are treated as serial barriers (safe default, zero behavior change).
+
+---
+
+### Scheduling algorithm (C# side, `World.Update`)
 
 ```
-NEW  src/c/kernel/include/kernel_engine/kernel/threading/thread.h
-NEW  src/c/kernel/include/kernel_engine/kernel/threading/semaphore.h
-NEW  src/c/kernel/include/kernel_engine/kernel/threading/frame_packet.h
-NEW  src/c/kernel/include/kernel_engine/kernel/threading/frame_sync.h
-NEW  src/cpp/threading/CMakeLists.txt
-NEW  src/cpp/threading/src/ke_thread_impl.cpp
-NEW  src/cpp/threading/src/ke_semaphore_impl.cpp
-NEW  src/cpp/threading/src/ke_frame_sync_impl.cpp
-NEW  src/csharp/Native/KernelEngine.Threading.Native/   (generated bindings)
-NEW  src/csharp/KernelEngine.Kernel/KernelThread.cs
-NEW  src/csharp/KernelEngine.Kernel/KernelSemaphore.cs
-NEW  src/csharp/KernelEngine.Kernel/FrameSync.cs
-MOD  src/csharp/KernelEngine.Framework/Application.cs
-MOD  src/cpp/render/bgfx/src/bgfx_render_factory.cpp   (Phase 3)
-MOD  src/csharp/KernelEngine.Framework/*RenderSystem.cs (Phase 3)
+1. Build groups: partition systems into waves where no two systems in the same wave conflict.
+   Two systems conflict if:
+     - either declares a write to a component the other reads or writes, OR
+     - either has ComponentAccess.None (serial barrier — forces its own wave)
+
+2. For each wave:
+   a. If wave has 1 system → call Update() directly (no task overhead)
+   b. If wave has N > 1 systems → dispatch N enkiTS tasks, wait for all to finish
+
+3. Proceed to next wave.
 ```
+
+Wave partitioning is computed once at startup (systems don't change at runtime) and cached as a `SystemWave[]`.
+
+---
+
+### New C# types
+
+#### `SystemScheduler` (internal to `World`)
+
+```csharp
+// src/csharp/KernelEngine.Kernel/SystemScheduler.cs  (NEW, internal)
+internal sealed class SystemScheduler
+{
+    // Called once after all AddSystem calls, before first Update.
+    public void Build(IReadOnlyList<ISystem> systems);
+
+    // Called each frame: dispatches waves via TaskScheduler.
+    public void Run(World world, float dt, FramePacket? packet, TaskScheduler scheduler);
+
+    // Exposed for tests.
+    internal SystemWave[] Waves { get; private set; }
+}
+
+internal sealed class SystemWave
+{
+    public ISystem[]  Systems  { get; init; }
+    public bool       Parallel { get; init; }   // false → run directly, no task dispatch
+}
+```
+
+#### `TaskScheduler` C# wrapper (Phase 4 prerequisite)
+
+`ke_task_scheduler` already exists in C (`src/c/kernel/include/kernel_engine/kernel/task_scheduler/task_scheduler.h`) and has a C++ enkiTS implementation. It's used by `AssetLoader` but has no C# managed wrapper yet.
+
+```csharp
+// src/csharp/KernelEngine.Kernel/TaskScheduler.cs  (NEW)
+public sealed unsafe class TaskScheduler : IDisposable
+{
+    public static TaskScheduler Create(Allocator alloc, uint workerCount = 0);
+
+    // Dispatches func as an enkiTS task. Returns a handle to wait on.
+    public TaskHandle Dispatch(Action func);
+
+    // Waits until all tasks in the handle set are complete.
+    public void WaitAll(ReadOnlySpan<TaskHandle> handles);
+
+    public void Dispose();
+}
+```
+
+`TaskHandle` is a thin wrapper over `ke_task*`.
+
+---
+
+### Example: what runs in parallel today vs after Phase 4
+
+```
+Before Phase 4 (sequential):
+  [ShadowRenderSystem] → [CameraRenderSystem] → [LightRenderSystem] → [MeshRenderSystem] → [SkyboxRenderSystem]
+
+After Phase 4 (wave-scheduled):
+  Wave 1 (parallel): [CameraRenderSystem W:Camera]  [LightRenderSystem W:Light]
+  Wave 2 (serial):   [ShadowRenderSystem R:Light,Mesh]   ← needs light data from wave 1
+  Wave 3 (parallel): [MeshRenderSystem R:Mesh]  [SkyboxRenderSystem]
+```
+
+Systems that the user writes and don't declare access remain serial (safe default).
+
+---
+
+### Built-in system access declarations
+
+| System | Reads | Writes |
+|---|---|---|
+| `TransformSystem` (C, built-in) | Hierarchy | Transform |
+| `ScriptSystem` (C, built-in) | Script | — |
+| `CameraRenderSystem` | Transform | CameraComponent |
+| `LightRenderSystem` | Transform | LightComponent |
+| `MeshRenderSystem` | Transform, MeshComponent | — |
+| `ShadowRenderSystem` | Transform, MeshComponent, LightComponent | — |
+| `SkyboxRenderSystem` | — | — |
+
+`TransformSystem` and `ScriptSystem` always run first in C (inside `ke_world::update`) — they are not affected by Phase 4 scheduling.
+
+---
+
+### Implementation steps
+
+**Step 1 — `TaskScheduler` C# wrapper**
+- Add `TaskScheduler.cs` + `TaskHandle.cs` to `KernelEngine.Kernel`
+- Wire into DI: `AddTaskScheduler()` extension method
+- `World` constructor accepts optional `TaskScheduler`
+
+**Step 2 — `ComponentAccess` + `ISystem.GetAccess()`**
+- Add `ComponentAccess` struct and extend `ISystem`
+- Existing systems get `GetAccess()` overrides (table above)
+- No behavior change — scheduler not yet used
+
+**Step 3 — `SystemScheduler` (build + run)**
+- Implement wave partitioning algorithm
+- Single-system waves call `Update()` directly
+- Multi-system waves: dispatch `N` enkiTS tasks, wait for all before next wave
+- Unit test: verify wave partitioning for the known system set
+
+**Step 4 — integrate into `World.Update`**
+- Replace sequential `foreach (var sys in _systems)` with `SystemScheduler.Run(...)`
+- `Application` passes `TaskScheduler` to `World`
+
+**Step 5 — validate + examples**
+- Existing examples must produce identical output
+- Add a stress test: 1000 entities, 4 parallel MeshRenderSystem-like systems
+
+---
+
+### What does NOT change
+
+- `ke_world::update` in C still runs `ScriptSystem` + `TransformSystem` sequentially (they mutate shared state)
+- C# systems that touch ECS directly (read/write same component) remain serial by declaring overlapping write sets
+- `FramePacket` append operations need thread-safety for parallel writes — use atomic `Interlocked.Increment` on `draw_count` or pre-assign each system a slice of the draw_commands array (preferred: slice assignment at wave build time, zero contention)
+- Worker thread count comes from `TaskScheduler` (enkiTS manages the pool) — no new threads created
+
+---
+
+### Thread safety note on `FramePacket`
+
+Parallel systems all write to the same `FramePacket`. The safe approach is **slice pre-assignment**: at wave-build time, each system in a parallel wave is assigned a fixed range `[start, start+capacity)` in `draw_commands`. Each system only writes to its slice. `draw_count` is set atomically after the wave completes. This avoids any lock on the hot path.
+
+For lights and camera (single-writer per frame), parallel waves that write these fields must be in separate waves — enforced by the access declaration.
