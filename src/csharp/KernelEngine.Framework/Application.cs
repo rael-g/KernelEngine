@@ -138,7 +138,7 @@ public class Application : IDisposable
 
     // ── Systems setup ─────────────────────────────────────────────────────────
 
-    private void InitializeSystems()
+    private unsafe void InitializeSystems()
     {
         LightNode.Initialize(ActiveWorld.Registry);
         PointLightNode.Initialize(ActiveWorld.Registry);
@@ -158,7 +158,7 @@ public class Application : IDisposable
         var meshSystem   = new MeshRenderSystem(BgfxSystemDescFactory.CreateMeshSystemDesc(MeshNode.ComponentId, xformCid));
         var lightSystem  = new LightRenderSystem(BgfxSystemDescFactory.CreateLightSystemDesc(LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
         var cameraSystem = new CameraRenderSystem(BgfxSystemDescFactory.CreateCameraSystemDesc(CameraNode.ComponentId, xformCid));
-        var shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(LightNode.ComponentId, MeshNode.ComponentId, xformCid));
+        var shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(Renderer.Native, LightNode.ComponentId, MeshNode.ComponentId, xformCid));
         var skyboxSystem = new SkyboxRenderSystem(BgfxSystemDescFactory.CreateSkyboxSystemDesc(SkyboxNode.ComponentId));
 
         // Register Native parts in Kernel for parallel execution

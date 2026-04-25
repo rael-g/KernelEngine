@@ -8,12 +8,13 @@ namespace kernel_engine::render::bgfx
 
 struct SkyboxSystemContext {
     uint32_t skybox_cid;
+    uint32_t reads[1];
 };
 
 void SkyboxSystem::Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet)
 {
     if (!world || !packet || !handle) return;
-    
+
     SkyboxSystemContext* ctx = static_cast<SkyboxSystemContext*>(handle);
     ke_ecs_registry* reg = world->get_registry(world);
 
@@ -26,7 +27,7 @@ void SkyboxSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
         if (skyboxes[0].cubemap_handle != 0xFFFFFFFF)
         {
             packet->skybox_handle = skyboxes[0].cubemap_handle;
-            packet->has_skybox = true;
+            packet->has_skybox    = true;
         }
     }
 }
@@ -35,17 +36,14 @@ ke_system_desc SkyboxSystem::GetDescription(uint32_t skybox_cid)
 {
     SkyboxSystemContext* ctx = (SkyboxSystemContext*)malloc(sizeof(SkyboxSystemContext));
     ctx->skybox_cid = skybox_cid;
-
-    static uint32_t reads[1];
-    reads[0] = skybox_cid;
+    ctx->reads[0]   = skybox_cid;
 
     ke_system_desc desc = {};
-    desc.name = "SkyboxSystem";
-    desc.update = SkyboxSystem::Update;
-    desc.handle = ctx;
-    desc.reads = reads;
+    desc.name       = "SkyboxSystem";
+    desc.update     = SkyboxSystem::Update;
+    desc.handle     = ctx;
+    desc.reads      = ctx->reads;
     desc.read_count = 1;
-    
     return desc;
 }
 

@@ -10,12 +10,13 @@ namespace kernel_engine::render::bgfx
 struct CameraSystemContext {
     uint32_t camera_cid;
     uint32_t transform_cid;
+    uint32_t reads[2];
 };
 
 void CameraSystem::Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet)
 {
     if (!world || !packet || !handle) return;
-    
+
     CameraSystemContext* ctx = static_cast<CameraSystemContext*>(handle);
     ke_ecs_registry* reg = world->get_registry(world);
 
@@ -24,19 +25,16 @@ void CameraSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
 
     if (count > 0)
     {
-        // For now, we take the first camera found
         ke_camera_component* cc = static_cast<ke_camera_component*>(data);
         ke_transform_component* tc = static_cast<ke_transform_component*>(
             ke_ecs_component_get(reg, entities[0], ctx->transform_cid));
 
         if (tc)
         {
-            // View matrix is inverse of world matrix
             ke_mat4_inv(&packet->camera.view, &tc->world_matrix);
-            
-            // Simplified Projection (Framework usually provides aspect ratio)
-            // In a real engine, we'd read aspect from a Window state or component
-            float aspect = 1.77f; 
+
+            // 16:9 aspect — camera component could carry this if needed in the future
+            float aspect = 1.77f;
             if (cc->orthographic)
                 ke_mat4_ortho(&packet->camera.proj, -aspect * 10.0f, aspect * 10.0f, -10.0f, 10.0f, cc->near_z, cc->far_z);
             else
@@ -52,20 +50,17 @@ void CameraSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
 ke_system_desc CameraSystem::GetDescription(uint32_t camera_cid, uint32_t transform_cid)
 {
     CameraSystemContext* ctx = (CameraSystemContext*)malloc(sizeof(CameraSystemContext));
-    ctx->camera_cid = camera_cid;
+    ctx->camera_cid    = camera_cid;
     ctx->transform_cid = transform_cid;
-
-    static uint32_t reads[2];
-    reads[0] = camera_cid;
-    reads[1] = transform_cid;
+    ctx->reads[0]      = camera_cid;
+    ctx->reads[1]      = transform_cid;
 
     ke_system_desc desc = {};
-    desc.name = "CameraSystem";
-    desc.update = CameraSystem::Update;
-    desc.handle = ctx;
-    desc.reads = reads;
+    desc.name       = "CameraSystem";
+    desc.update     = CameraSystem::Update;
+    desc.handle     = ctx;
+    desc.reads      = ctx->reads;
     desc.read_count = 2;
-    
     return desc;
 }
 

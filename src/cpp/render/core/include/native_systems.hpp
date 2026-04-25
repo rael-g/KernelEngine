@@ -2,6 +2,7 @@
 
 #include <kernel_engine/kernel/world/system.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/world/world.h>
 #include "render_export.h"
 
@@ -45,7 +46,7 @@ class KE_RENDER_API ShadowSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
-    static ke_system_desc GetDescription(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid);
+    static ke_system_desc GetDescription(ke_render* renderer, uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid);
 };
 
 /**

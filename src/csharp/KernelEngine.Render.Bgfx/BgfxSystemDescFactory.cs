@@ -31,10 +31,10 @@ public static unsafe class BgfxSystemDescFactory
         return desc;
     }
 
-    public static ke_system_desc CreateShadowSystemDesc(uint lightCid, uint meshCid, uint transformCid)
+    public static ke_system_desc CreateShadowSystemDesc(ke_render* renderer, uint lightCid, uint meshCid, uint transformCid)
     {
         ke_system_desc desc;
-        KernelException.ThrowIfFailed(BgfxNative.render_bgfx_create_shadow_system_desc(lightCid, meshCid, transformCid, &desc), "create_shadow_system_desc");
+        KernelException.ThrowIfFailed(BgfxNative.render_bgfx_create_shadow_system_desc(renderer, lightCid, meshCid, transformCid, &desc), "create_shadow_system_desc");
         return desc;
     }
 

@@ -43,7 +43,7 @@ KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params* param
 KE_RENDER_API ke_result ke_render_bgfx_create_mesh_system_desc(uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc* out_desc);
 KE_RENDER_API ke_result ke_render_bgfx_create_light_system_desc(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid, ke_system_desc* out_desc);
 KE_RENDER_API ke_result ke_render_bgfx_create_camera_system_desc(uint32_t camera_cid, uint32_t transform_cid, ke_system_desc* out_desc);
-KE_RENDER_API ke_result ke_render_bgfx_create_shadow_system_desc(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc* out_desc);
+KE_RENDER_API ke_result ke_render_bgfx_create_shadow_system_desc(ke_render* renderer, uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc* out_desc);
 KE_RENDER_API ke_result ke_render_bgfx_create_skybox_system_desc(uint32_t skybox_cid, ke_system_desc* out_desc);
 
 #ifdef __cplusplus

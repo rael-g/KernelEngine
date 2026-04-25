@@ -43,9 +43,9 @@ extern "C" {
         return KE_OK;
     }
 
-    KE_RENDER_API ke_result ke_render_bgfx_create_shadow_system_desc(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc *out_desc) {
-        if (!out_desc) return KE_ERROR_INVALID_ARGUMENT;
-        *out_desc = kernel_engine::render::bgfx::ShadowSystem::GetDescription(light_cid, mesh_cid, transform_cid);
+    KE_RENDER_API ke_result ke_render_bgfx_create_shadow_system_desc(ke_render *renderer, uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc *out_desc) {
+        if (!out_desc || !renderer) return KE_ERROR_INVALID_ARGUMENT;
+        *out_desc = kernel_engine::render::bgfx::ShadowSystem::GetDescription(renderer, light_cid, mesh_cid, transform_cid);
         return KE_OK;
     }
 
