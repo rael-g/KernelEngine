@@ -6,10 +6,13 @@ using KernelEngine.Render.Bgfx;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Application shell: resolves services from DI, owns the frame loop, and coordinates threads.
+/// Application shell: resolves services from DI, owns the frame loop, and coordinates three threads.
 /// <list type="bullet">
-///   <item><b>ke.main</b> — bgfx API thread: bgfx::init, SubmitPacket, Frame, PollEvents, FrameSync consumer.</item>
-///   <item><b>ke.sim</b>  — simulation thread: World.Update, FrameSync producer.</item>
+///   <item><b>ke.main</b>   — window/OS thread: GLFW PollEvents, Input, MessagePipe pump.</item>
+///   <item><b>ke.render</b> — renderer thread: on_initialize, SubmitPacket, Frame, on_shutdown.
+///         All renderer API calls are pinned to this thread, making any backend work regardless
+///         of whether it has internal threading support (OpenGL, DX11, bgfx single-thread, etc.).</item>
+///   <item><b>ke.sim</b>    — simulation thread: World.Update, FrameSync producer.</item>
 /// </list>
 /// </summary>
 public class Application : IDisposable
@@ -25,13 +28,12 @@ public class Application : IDisposable
     /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
     public World ActiveWorld { get; set; } = null!;
 
-    /// <summary>Called once on the sim thread after bgfx is initialized and systems are registered.</summary>
+    /// <summary>Called once on ke.sim after ke.render is initialized and systems are registered.</summary>
     public Action? OnReady { get; set; }
 
     /// <summary>Called every sim frame after <see cref="World.Update"/>.</summary>
     public Action? OnUpdate { get; set; }
 
-    // Shared between main and ke.sim — volatile for visibility.
     private volatile bool _running;
 
     public void Run(IServiceCollection serviceCollection)
@@ -48,31 +50,66 @@ public class Application : IDisposable
             foreach (var sink in Services.GetServices<ILoggerSink>())
                 Logger.AddSink(sink, sink.MinLevel);
 
-        // GLFW must be initialized on the main thread.
+        // GLFW window must be created on the main thread.
         ValidateRequiredServices();
-        Window = Services.GetRequiredService<Window>();
-        Input  = Services.GetService<Input>();
+        Window   = Services.GetRequiredService<Window>();
+        Input    = Services.GetService<Input>();
+        Renderer = Services.GetRequiredService<Renderer>();
 
         if (ActiveWorld == null)
             ActiveWorld = new World(Allocator);
-
-        // bgfx::init on ke.main — main thread is the bgfx API thread.
-        Renderer = Services.GetRequiredService<Renderer>();
-        Renderer.Initialize();
 
         InitializeSystems();
 
         _running = true;
 
-        // Double-buffer handoff: ke.sim writes, ke.main reads.
-        using var frameSync = FrameSync.Create(Allocator, bufferCount: 2);
+        // ke.sim writes → ke.render reads.
+        using var frameSync     = FrameSync.Create(Allocator, bufferCount: 2);
+        using var renderReady   = new System.Threading.ManualResetEventSlim(false);
 
-        Exception? threadException = null;
+        Exception? renderException = null;
+        Exception? simException    = null;
 
+        // ke.render: owns every renderer API call for the lifetime of the app.
+        using var renderThread = KernelThread.Create(Allocator, "ke.render", () =>
+        {
+            try
+            {
+                Renderer.Initialize();
+                Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
+                renderReady.Set(); // signal ke.sim that the renderer is ready
+
+                while (_running)
+                {
+                    var packet = frameSync.BeginRead();
+                    if (!_running) { packet.EndRead(); break; }
+
+                    Renderer.SubmitPacket(packet);
+                    Renderer.Frame();
+
+                    packet.EndRead();
+                }
+            }
+            catch (Exception ex)
+            {
+                renderException = ex;
+                _running        = false;
+                renderReady.Set(); // unblock ke.sim even on failure
+            }
+            finally
+            {
+                Renderer.Dispose();
+            }
+        });
+
+        // ke.sim: drives the world and records into FramePackets.
         using var simThread = KernelThread.Create(Allocator, "ke.sim", () =>
         {
             try
             {
+                renderReady.Wait(); // wait for ke.render to finish Initialize()
+                if (!_running) return;
+
                 OnReady?.Invoke();
 
                 while (_running)
@@ -82,58 +119,48 @@ public class Application : IDisposable
                     OnUpdate?.Invoke();
                     packet.EndWrite();
                 }
-
-                // Poison-pill: unblocks main's BeginRead so it can exit cleanly.
-                var poison = frameSync.BeginWrite();
-                poison.EndWrite();
             }
             catch (Exception ex)
             {
-                threadException = ex;
-                _running        = false;
+                simException = ex;
+                _running     = false;
+            }
+            finally
+            {
+                // Poison-pill: unblocks ke.render's BeginRead so it can exit cleanly.
                 try { var p = frameSync.BeginWrite(); p.EndWrite(); } catch { }
             }
         });
 
         NativeExceptionFilter.Register();
 
+        // ke.main: window and OS events only.
         try
         {
-            while (true)
+            while (_running)
             {
-                var packet = frameSync.BeginRead();
-
-                if (!_running)
-                {
-                    packet.EndRead();
-                    break;
-                }
-
-                // bgfx API thread: submit draw calls then present.
-                Renderer.SubmitPacket(packet);
-                Renderer.Frame();
-
                 Window.PollEvents();
                 Input?.Update();
                 MessagePipe?.Pump();
 
                 if (Window.ShouldClose())
                     _running = false;
-
-                packet.EndRead();
             }
         }
         catch (Exception ex)
         {
-            Logger?.Error("Application", $"Main-thread exception: {ex}");
+            Logger?.Error("Application", $"ke.main exception: {ex}");
             _running = false;
         }
 
         _running = false;
         simThread.Join();
+        renderThread.Join();
 
-        if (threadException != null)
-            ExceptionDispatchInfo.Capture(threadException).Throw();
+        var ex1 = renderException;
+        var ex2 = simException;
+        if (ex1 != null) ExceptionDispatchInfo.Capture(ex1).Throw();
+        if (ex2 != null) ExceptionDispatchInfo.Capture(ex2).Throw();
     }
 
     // ── Systems setup ─────────────────────────────────────────────────────────
@@ -147,28 +174,23 @@ public class Application : IDisposable
         MeshNode.Initialize(ActiveWorld.Registry);
         SkyboxNode.Initialize(ActiveWorld.Registry);
 
-        MeshNode.DefaultMeshHandle     = 0; // unit quad (built-in)
-        MeshNode.DefaultMaterialHandle = 0; // white material (built-in)
-
-        Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
+        MeshNode.DefaultMeshHandle     = 0;
+        MeshNode.DefaultMaterialHandle = 0;
 
         var xformCid = ActiveWorld.TransformComponentId;
 
-        // Phase 4: Create native system descriptors via bgfx factory (lives in the bgfx plugin layer).
         var meshSystem   = new MeshRenderSystem(BgfxSystemDescFactory.CreateMeshSystemDesc(MeshNode.ComponentId, xformCid));
         var lightSystem  = new LightRenderSystem(BgfxSystemDescFactory.CreateLightSystemDesc(LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
         var cameraSystem = new CameraRenderSystem(BgfxSystemDescFactory.CreateCameraSystemDesc(CameraNode.ComponentId, xformCid));
         var shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(Renderer.Native, LightNode.ComponentId, MeshNode.ComponentId, xformCid));
         var skyboxSystem = new SkyboxRenderSystem(BgfxSystemDescFactory.CreateSkyboxSystemDesc(SkyboxNode.ComponentId));
 
-        // Register Native parts in Kernel for parallel execution
         ActiveWorld.AddSystem(meshSystem.NativeDescriptor);
         ActiveWorld.AddSystem(lightSystem.NativeDescriptor);
         ActiveWorld.AddSystem(cameraSystem.NativeDescriptor);
         ActiveWorld.AddSystem(shadowSystem.NativeDescriptor);
         ActiveWorld.AddSystem(skyboxSystem.NativeDescriptor);
 
-        // Register Managed parts (NO-OP wrappers)
         ActiveWorld.AddSystem(meshSystem);
         ActiveWorld.AddSystem(lightSystem);
         ActiveWorld.AddSystem(cameraSystem);
@@ -186,9 +208,7 @@ public class Application : IDisposable
             (typeof(Renderer), "AddBgfxRenderer(shaderPath)"),
         };
 
-        var errors = missing
-            .Where(e => Services.GetService(e.type) == null)
-            .ToList();
+        var errors = missing.Where(e => Services.GetService(e.type) == null).ToList();
 
         if (errors.Count == 0) return;
 
@@ -204,7 +224,7 @@ public class Application : IDisposable
         throw new InvalidOperationException(msg);
     }
 
-    // ── DB-08: SEH crash filter ───────────────────────────────────────────────
+    // ── SEH crash filter ──────────────────────────────────────────────────────
 
     private static class NativeExceptionFilter
     {
@@ -244,7 +264,6 @@ public class Application : IDisposable
     public virtual void Dispose()
     {
         ActiveWorld?.Dispose();
-        Renderer?.Dispose();
         (Services as IDisposable)?.Dispose();
     }
 }
