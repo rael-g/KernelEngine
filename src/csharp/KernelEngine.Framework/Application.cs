@@ -185,11 +185,11 @@ public class Application : IDisposable
         var shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(Renderer.Native, LightNode.ComponentId, MeshNode.ComponentId, xformCid));
         var skyboxSystem = new SkyboxRenderSystem(BgfxSystemDescFactory.CreateSkyboxSystemDesc(SkyboxNode.ComponentId));
 
-        ActiveWorld.AddSystem(meshSystem.NativeDescriptor);
-        ActiveWorld.AddSystem(lightSystem.NativeDescriptor);
-        ActiveWorld.AddSystem(cameraSystem.NativeDescriptor);
-        ActiveWorld.AddSystem(shadowSystem.NativeDescriptor);
-        ActiveWorld.AddSystem(skyboxSystem.NativeDescriptor);
+        ActiveWorld.AddSystem(meshSystem);
+        ActiveWorld.AddSystem(lightSystem);
+        ActiveWorld.AddSystem(cameraSystem);
+        ActiveWorld.AddSystem(shadowSystem);
+        ActiveWorld.AddSystem(skyboxSystem);
     }
 
     // ── Service validation ────────────────────────────────────────────────────

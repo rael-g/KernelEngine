@@ -15,7 +15,11 @@ public sealed unsafe class ShadowRenderSystem : ISystem
 
     public ke_system_desc NativeDescriptor => _nativeDesc;
 
-    public void Update(World world, float dt, FramePacket? packet = null) { }
+    public unsafe void Update(World world, float dt, FramePacket? packet = null)
+    {
+        if (packet == null) return;
+        _nativeDesc.update(_nativeDesc.handle, world.Native, dt, packet.NativePointer);
+    }
 
     public ComponentAccess GetAccess() => new()
     {
