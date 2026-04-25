@@ -5,6 +5,7 @@
 #include <gpu_device.hpp>
 #include <native_systems.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <bgfx/bgfx.h>
 #include <new>
 
 extern "C" {
@@ -17,12 +18,17 @@ extern "C" {
         if (!device_mem) return KE_ERROR_OUT_OF_MEMORY;
         auto* device = new (device_mem) kernel_engine::render::bgfx::BgfxGpuDevice();
 
+        // renderer_type == 0 means "use engine default" → Vulkan
+        uint32_t renderer_type = params->renderer_type == 0
+            ? (uint32_t)::bgfx::RendererType::Vulkan
+            : params->renderer_type;
+
         kernel_engine::render::bgfx::GpuRendererParams core_params = {
             params->allocator,
             params->logger,
             params->shader_path,
             params->window,
-            params->renderer_type
+            renderer_type
         };
 
         void* renderer_mem = alloc->alloc(alloc, sizeof(kernel_engine::render::bgfx::CoreRenderer), alignof(kernel_engine::render::bgfx::CoreRenderer));

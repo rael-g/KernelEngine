@@ -52,18 +52,20 @@ ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
         return ctx.gpu->CreateShader(mem);
     };
 
-    GpuShaderHandle vs_screen = load_shader("vs_postprocess");
+    GpuShaderHandle vs_screen = load_shader("vs_screen");
     GpuShaderHandle fs_bright = load_shader("fs_bright_pass");
     GpuShaderHandle fs_blur   = load_shader("fs_blur");
     GpuShaderHandle fs_tone   = load_shader("fs_tonemap");
 
-    if (vs_screen == kGpuInvalidHandle || fs_bright == kGpuInvalidHandle || 
+    if (vs_screen == kGpuInvalidHandle || fs_bright == kGpuInvalidHandle ||
         fs_blur == kGpuInvalidHandle || fs_tone == kGpuInvalidHandle)
         return KE_ERROR_RENDER;
 
-    out_bright_prog  = ctx.gpu->CreateProgram(vs_screen, fs_bright, true);
-    out_blur_prog    = ctx.gpu->CreateProgram(vs_screen, fs_blur, true);
-    out_tonemap_prog = ctx.gpu->CreateProgram(vs_screen, fs_tone, true);
+    // vs_screen is shared; don't destroy it until the last program is created.
+    out_bright_prog  = ctx.gpu->CreateProgram(vs_screen, fs_bright, false);
+    out_blur_prog    = ctx.gpu->CreateProgram(vs_screen, fs_blur,   false);
+    out_tonemap_prog = ctx.gpu->CreateProgram(vs_screen, fs_tone,   true);
+    ctx.gpu->DestroyShader(vs_screen);
 
     uint16_t w = (uint16_t)ctx.view_w;
     uint16_t h = (uint16_t)ctx.view_h;
@@ -72,7 +74,7 @@ ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
     pp_h_ = (uint32_t)(h / 2);
 
     auto make_color_fb = [&](uint32_t fw, uint32_t fh) -> GpuFrameBufferHandle {
-        GpuTextureHandle tex = ctx.gpu->CreateTexture2D((uint16_t)fw, (uint16_t)fh, false, 1, 6 /*RGBA8*/, 0, nullptr);
+        GpuTextureHandle tex = ctx.gpu->CreateTexture2D((uint16_t)fw, (uint16_t)fh, false, 1, kTexFmtRGBA8, kTexFlagRT, nullptr);
         return ctx.gpu->CreateFrameBuffer(1, &tex, true);
     };
 

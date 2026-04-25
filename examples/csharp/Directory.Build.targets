@@ -3,13 +3,13 @@
   <!-- This allows examples to run from any working directory via AppContext.BaseDirectory. -->
   <Target Name="CopyBgfxShaders" AfterTargets="Build">
     <PropertyGroup>
-      <_ShadersOut>$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)\shaders</_ShadersOut>
       <_ShaderSrc>$(MSBuildThisFileDirectory)..\..\src\cpp\render\bgfx\shaders\compiled</_ShaderSrc>
     </PropertyGroup>
     <ItemGroup>
-      <_ShaderBins Include="$(_ShaderSrc)\*.bin" />
+      <_ShaderBins Include="$(_ShaderSrc)\**\*.bin" />
     </ItemGroup>
-    <MakeDir Directories="$(_ShadersOut)" />
-    <Copy SourceFiles="@(_ShaderBins)" DestinationFolder="$(_ShadersOut)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_ShaderBins)"
+          DestinationFiles="@(_ShaderBins->'$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)\shaders\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
   </Target>
 </Project>

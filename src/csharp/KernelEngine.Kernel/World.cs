@@ -103,8 +103,13 @@ public sealed unsafe class World : IDisposable
         var res = Native->update(Native, &frame);
         if (res != ke_result.KE_OK) return res;
 
-        // Ensure we have a task scheduler for parallelism
-        _taskScheduler ??= new TaskScheduler(_native->get_task_scheduler(_native));
+        // Lazily wrap the native task scheduler (null if none is configured — RunAsync falls back to sequential).
+        if (_taskScheduler == null)
+        {
+            var nativeSched = _native->get_task_scheduler(_native);
+            if (nativeSched != null)
+                _taskScheduler = new TaskScheduler(nativeSched);
+        }
 
         if (_schedulerDirty)
         {
@@ -113,7 +118,7 @@ public sealed unsafe class World : IDisposable
         }
 
         // Run systems in waves (Sim thread waits for parallel workers to finish wave by wave)
-        _scheduler.RunAsync(this, dt, packet, _taskScheduler).GetAwaiter().GetResult();
+        _scheduler.RunAsync(this, dt, packet, _taskScheduler!).GetAwaiter().GetResult();
 
         return ke_result.KE_OK;
     }

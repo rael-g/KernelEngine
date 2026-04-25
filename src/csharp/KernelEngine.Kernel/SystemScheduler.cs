@@ -60,7 +60,7 @@ internal sealed class SystemScheduler
                     system.Update(world, dt, packet);
                 }
             }
-            else
+            else if (taskScheduler != null)
             {
                 // Parallel execution: dispatch all systems in the wave to the task pool
                 var tasks = new Task[wave.Systems.Length];
@@ -72,6 +72,12 @@ internal sealed class SystemScheduler
 
                 // Wait for all systems in this wave to finish before starting the next wave
                 await Task.WhenAll(tasks);
+            }
+            else
+            {
+                // No task scheduler — fall back to sequential
+                foreach (var system in wave.Systems)
+                    system.Update(world, dt, packet);
             }
         }
     }

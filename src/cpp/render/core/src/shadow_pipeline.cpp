@@ -12,7 +12,7 @@ ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32
 {
     if (!out || w == 0 || h == 0 || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
 
-    GpuTextureHandle depth_tex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, 10 /*D32F*/, 0x0000000000001000ULL /*SAMPLER_COMPARE_LEQUAL*/, nullptr);
+    GpuTextureHandle depth_tex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtD16, kTexFlagRT, nullptr);
     if (depth_tex == kGpuInvalidHandle) return KE_ERROR_RENDER;
 
     GpuFrameBufferHandle fb = ctx.gpu->CreateFrameBuffer(1, &depth_tex, true);

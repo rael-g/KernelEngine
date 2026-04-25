@@ -452,6 +452,20 @@ GpuShaderHandle CoreRenderer::LoadShader(const char *name)
 ke_result CoreRenderer::SetupShader()
 {
     if (!ctx_.gpu) return KE_ERROR_RENDER;
+
+    // Default quad mesh at handle 0
+    {
+        static const ke_vertex kQuadVerts[4] = {
+            {-0.5f,-0.5f,0.f,  0.f,0.f,1.f,  0.f,0.f,  1.f,0.f,0.f,1.f},
+            { 0.5f,-0.5f,0.f,  0.f,0.f,1.f,  1.f,0.f,  1.f,0.f,0.f,1.f},
+            { 0.5f, 0.5f,0.f,  0.f,0.f,1.f,  1.f,1.f,  1.f,0.f,0.f,1.f},
+            {-0.5f, 0.5f,0.f,  0.f,0.f,1.f,  0.f,1.f,  1.f,0.f,0.f,1.f},
+        };
+        static const uint16_t kQuadIdx[6] = {0,1,2, 0,2,3};
+        ke_mesh_handle quad_handle;
+        geometry_.CreateMesh(ctx_, kQuadVerts, 4, kQuadIdx, 6, &quad_handle);
+    }
+
     GpuShaderHandle vs = LoadShader("vs_basic");
     GpuShaderHandle fs = LoadShader("fs_basic");
     if (vs == kGpuInvalidHandle || fs == kGpuInvalidHandle) return KE_ERROR_RENDER;
@@ -464,11 +478,21 @@ ke_result CoreRenderer::SetupShader()
     ke_texture_handle white_handle;
     if (textures_.CreateTextureRgba(ctx_, 1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
         return KE_ERROR_RENDER;
+
+    // Default white material at handle 0
+    {
+        ke_material white_mat = {1.f, 1.f, 1.f, 1.f, white_handle, 0.f, 1.f, 0};
+        ke_material_handle mat_handle;
+        lighting_.CreateMaterial(ctx_, textures_, &white_mat, &mat_handle);
+    }
     
     {
-        static const uint8_t kWhiteFace[4] = {0xff, 0xff, 0xff, 0xff};
-        const GpuMemoryBuffer *mem = ctx_.gpu->Copy(kWhiteFace, 4);
-        GpuTextureHandle h = ctx_.gpu->CreateTextureCube(1, false, 1, 6 /*RGBA8*/, 0, mem);
+        static const uint8_t kWhiteCube[24] = { // 6 faces × 1×1×RGBA8
+            0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,
+            0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,
+        };
+        const GpuMemoryBuffer *mem = ctx_.gpu->Copy(kWhiteCube, 24);
+        GpuTextureHandle h = ctx_.gpu->CreateTextureCube(1, false, 1, kTexFmtRGBA8, 0, mem);
         textures_.default_cube_tex = h;
     }
 
@@ -488,13 +512,7 @@ ke_result CoreRenderer::SetupShader()
     static const SkyVert kSkyVerts[8] = {{-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1}, {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1}};
     static const uint16_t kSkyIdx[36] = {0,1,2, 0,2,3, 5,4,7, 5,7,6, 4,0,3, 4,3,7, 1,5,6, 1,6,2, 4,5,1, 4,1,0, 3,2,6, 3,6,7};
     
-    // Abstracted Vertex Layout Bridge (Temporary Hack to keep header agnostic)
-    struct LayoutSim { uint32_t m_hash; uint16_t m_stride; uint16_t m_offset[18]; uint16_t m_attributes[18]; };
-    LayoutSim sky_l = {};
-    sky_l.m_stride = 12;
-    sky_l.m_attributes[0] = 0x0001; // Position, 3, Float
-    
-    geometry_.skybox_vb = ctx_.gpu->CreateVertexBuffer(ctx_.gpu->Copy(kSkyVerts, sizeof(kSkyVerts)), ctx_.gpu->CreateVertexLayout(&sky_l));
+    geometry_.skybox_vb = ctx_.gpu->CreateVertexBuffer(ctx_.gpu->Copy(kSkyVerts, sizeof(kSkyVerts)), kVertexLayoutPositionOnly);
     geometry_.skybox_ib = ctx_.gpu->CreateIndexBuffer(ctx_.gpu->Copy(kSkyIdx, sizeof(kSkyIdx)));
 
     textures_.sampler_uniform        = ctx_.gpu->CreateUniform("s_texColor",     GpuUniformType::Sampler, 1);

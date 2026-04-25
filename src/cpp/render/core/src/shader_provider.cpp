@@ -15,7 +15,7 @@ FileShaderProvider::FileShaderProvider(const std::string& base_path)
 const GpuMemoryBuffer* FileShaderProvider::LoadShaderBinary(RenderContext& ctx, const std::string& name)
 {
     if (!ctx.gpu) return nullptr;
-    std::string path = base_path_ + name + ".bin";
+    std::string path = base_path_ + "/" + ctx.gpu->GetShaderSubdir() + "/" + name + ".bin";
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) return nullptr;
 

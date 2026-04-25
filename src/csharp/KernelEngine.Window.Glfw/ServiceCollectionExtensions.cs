@@ -24,16 +24,15 @@ public static class ServiceCollectionExtensions
                 unsafe
                 {
                     var logger = sp.GetService<Logger>();
-                    var pipe = sp.GetService<MessagePipe>();
 
                     var @params = new ke_window_glfw_params
                     {
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
-                        message_pipe = pipe != null ? pipe.Native : null,
+                        title = (sbyte*)titlePtr,
                         width = width,
                         height = height,
-                        title = (sbyte*)titlePtr,
+                        fullscreen = 0,
                     };
 
                     ke_window* native;

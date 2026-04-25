@@ -4,6 +4,10 @@
 #include <cstring>
 #include <vector>
 #include <stdarg.h>
+#include <cstdio>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace kernel_engine::render::bgfx
 {
@@ -13,8 +17,17 @@ namespace kernel_engine::render::bgfx
 class BgfxLogCallback : public ::bgfx::CallbackI
 {
 public:
-    void fatal(const char *_filePath, uint16_t _line, ::bgfx::Fatal::Enum _code, const char *_str) override {}
-    void traceVargs(const char *_filePath, uint16_t _line, const char *_format, va_list _argList) override {}
+    void fatal(const char *_filePath, uint16_t _line, ::bgfx::Fatal::Enum _code, const char *_str) override
+    {
+        fprintf(stderr, "[bgfx FATAL] %s:%u code=%d %s\n", _filePath, _line, (int)_code, _str);
+        fflush(stderr);
+    }
+    void traceVargs(const char *_filePath, uint16_t _line, const char *_format, va_list _argList) override
+    {
+        fprintf(stderr, "[bgfx] %s:%u ", _filePath, _line);
+        vfprintf(stderr, _format, _argList);
+        fflush(stderr);
+    }
     void profilerBegin(const char *, uint32_t, const char *, uint16_t) override {}
     void profilerBeginLiteral(const char *, uint32_t, const char *, uint16_t) override {}
     void profilerEnd() override {}
@@ -75,7 +88,23 @@ bool BgfxGpuDevice::Init(const GpuInitConfig& config)
     init.platformData.nwh = config.native_window_handle;
     init.resolution.width  = config.width;
     init.resolution.height = config.height;
-    init.resolution.reset  = BGFX_RESET_VSYNC;
+    // In Remote Desktop sessions, vsync with Vulkan causes the driver to briefly
+    // request exclusive display access, momentarily changing the screen resolution.
+    uint32_t reset_flags = BGFX_RESET_VSYNC;
+#ifdef _WIN32
+    bool is_remote = GetSystemMetrics(SM_REMOTESESSION) != 0;
+    fprintf(stderr, "[ke] SM_REMOTESESSION = %d\n", (int)is_remote);
+    fflush(stderr);
+    if (is_remote) {
+        reset_flags = BGFX_RESET_NONE;
+        // Force D3D11 in Remote Desktop: Vulkan enumerates VK_KHR_display
+        // which causes the display to momentarily change resolution in RDP.
+        init.type = ::bgfx::RendererType::Direct3D11;
+        fprintf(stderr, "[ke] RDP detected: switching to D3D11\n");
+        fflush(stderr);
+    }
+#endif
+    init.resolution.reset  = reset_flags;
     init.debug = config.debug;
     init.callback = &s_bgfx_callback;
     return ::bgfx::init(init);
@@ -83,6 +112,20 @@ bool BgfxGpuDevice::Init(const GpuInitConfig& config)
 
 void BgfxGpuDevice::Shutdown() { ::bgfx::shutdown(); }
 uint32_t BgfxGpuDevice::Frame(bool capture) { return ::bgfx::frame(capture); }
+
+const char* BgfxGpuDevice::GetShaderSubdir() const
+{
+    switch (::bgfx::getRendererType()) {
+        case ::bgfx::RendererType::Direct3D11: return "dx11";
+        case ::bgfx::RendererType::Direct3D12: return "dx12";
+        case ::bgfx::RendererType::OpenGL:     return "glsl";
+        case ::bgfx::RendererType::OpenGLES:   return "essl";
+        case ::bgfx::RendererType::Metal:      return "metal";
+        case ::bgfx::RendererType::Vulkan:     return "spirv";
+        default:                               return "spirv";
+    }
+}
+
 
 const GpuMemoryBuffer* BgfxGpuDevice::Alloc(uint32_t size) { return (const GpuMemoryBuffer*)::bgfx::alloc(size); }
 const GpuMemoryBuffer* BgfxGpuDevice::Copy(const void* data, uint32_t size) { return (const GpuMemoryBuffer*)::bgfx::copy(data, size); }
@@ -101,15 +144,19 @@ GpuProgramHandle BgfxGpuDevice::CreateComputeProgram(GpuShaderHandle csh, bool d
 
 GpuVertexBufferHandle BgfxGpuDevice::CreateVertexBuffer(const GpuMemoryBuffer* mem, uint16_t layout_handle)
 {
-    // Simplified vertex layout handling: use a standard layout if handle is 0
     ::bgfx::VertexLayout layout;
-    layout.begin()
-        .add(::bgfx::Attrib::Position,  3, ::bgfx::AttribType::Float)
-        .add(::bgfx::Attrib::Normal,    3, ::bgfx::AttribType::Float)
-        .add(::bgfx::Attrib::TexCoord0, 2, ::bgfx::AttribType::Float)
-        .add(::bgfx::Attrib::Tangent,   4, ::bgfx::AttribType::Float)
-        .end();
-
+    if (layout_handle == kVertexLayoutPositionOnly) {
+        layout.begin()
+            .add(::bgfx::Attrib::Position, 3, ::bgfx::AttribType::Float)
+            .end();
+    } else {
+        layout.begin()
+            .add(::bgfx::Attrib::Position,  3, ::bgfx::AttribType::Float)
+            .add(::bgfx::Attrib::Normal,    3, ::bgfx::AttribType::Float)
+            .add(::bgfx::Attrib::TexCoord0, 2, ::bgfx::AttribType::Float)
+            .add(::bgfx::Attrib::Tangent,   4, ::bgfx::AttribType::Float)
+            .end();
+    }
     return ::bgfx::createVertexBuffer((const ::bgfx::Memory*)mem, layout).idx;
 }
 

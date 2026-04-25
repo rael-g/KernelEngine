@@ -12,7 +12,7 @@ ke_result TextureManager::CreateTextureRgba(RenderContext& ctx, uint32_t w, uint
 {
     if (!px || !out || w == 0 || h == 0 || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
     
-    GpuTextureHandle htex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, 6 /*RGBA8*/, 0, ctx.gpu->Copy(px, w * h * 4));
+    GpuTextureHandle htex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtRGBA8, 0, ctx.gpu->Copy(px, w * h * 4));
     if (htex == kGpuInvalidHandle) return KE_ERROR_RENDER;
 
     textures_.push_back(htex);
@@ -23,7 +23,7 @@ ke_result TextureManager::CreateTextureRgba(RenderContext& ctx, uint32_t w, uint
 ke_result TextureManager::CreateCubemapRgba(RenderContext& ctx, uint32_t s, const uint8_t *d, ke_texture_handle *out)
 {
     if (!d || !out || s == 0 || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
-    GpuTextureHandle h = ctx.gpu->CreateTextureCube((uint16_t)s, false, 1, 6 /*RGBA8*/, 0, ctx.gpu->Copy(d, s * s * 4 * 6));
+    GpuTextureHandle h = ctx.gpu->CreateTextureCube((uint16_t)s, false, 1, kTexFmtRGBA8, 0, ctx.gpu->Copy(d, s * s * 4 * 6));
     if (h == kGpuInvalidHandle) return KE_ERROR_RENDER;
     textures_.push_back(h);
     *out = (ke_texture_handle)(textures_.size() - 1);

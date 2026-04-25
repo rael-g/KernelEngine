@@ -30,7 +30,7 @@ typedef struct ke_render_bgfx_params
     struct ke_message_pipe *message_pipe;
     struct ke_window *window;
     const char *shader_path;
-    uint32_t renderer_type; // 0 = Default (Vulkan), or bgfx::RendererType
+    uint32_t renderer_type; // 0 = Vulkan (engine default), or explicit bgfx::RendererType value
 } ke_render_bgfx_params;
 
 /**

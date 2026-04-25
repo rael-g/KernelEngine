@@ -6,6 +6,19 @@
 namespace kernel_engine::render::bgfx
 {
 
+// Common texture format constants (match bgfx::TextureFormat::Enum values).
+static constexpr uint32_t kTexFmtRGBA8   = 67;
+static constexpr uint32_t kTexFmtRGBA16F = 16;
+static constexpr uint32_t kTexFmtD16     = 88;
+static constexpr uint32_t kTexFmtR32F    = 44;
+
+// Texture flags (match BGFX_TEXTURE_* bits).
+static constexpr uint64_t kTexFlagRT = UINT64_C(0x0000001000000000);
+
+// Vertex layout type hints passed as layout_handle to CreateVertexBuffer.
+static constexpr uint16_t kVertexLayoutStandard     = 0xFFFF; // Position+Normal+TexCoord0+Tangent
+static constexpr uint16_t kVertexLayoutPositionOnly = 0xFFFE; // Position only (3 floats)
+
 /**
  * @brief Contract for GPU backend implementations.
  * 100% independent of BGFX headers.
@@ -19,6 +32,10 @@ public:
     virtual bool Init(const GpuInitConfig& config) = 0;
     virtual void Shutdown() = 0;
     virtual uint32_t Frame(bool capture = false) = 0;
+
+    /// Returns the shader subdirectory for the active backend (e.g. "spirv", "dx11").
+    /// Valid only after Init() succeeds.
+    virtual const char* GetShaderSubdir() const = 0;
 
     // ── Memory Management ────────────────────────────────────────────────────
     virtual const GpuMemoryBuffer* Alloc(uint32_t size) = 0;
@@ -88,6 +105,7 @@ public:
     bool Init(const GpuInitConfig& config) override;
     void Shutdown() override;
     uint32_t Frame(bool capture) override;
+    const char* GetShaderSubdir() const override;
 
     const GpuMemoryBuffer* Alloc(uint32_t size) override;
     const GpuMemoryBuffer* Copy(const void* data, uint32_t size) override;

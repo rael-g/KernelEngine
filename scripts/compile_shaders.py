@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(SCRIPT_DIR)
 SHADERC = os.path.join(BASE_DIR, "build", "win", "vcpkg_installed", "x64-windows", "tools", "bgfx", "shaderc.exe")
 INCLUDE_DIR = os.path.join(BASE_DIR, "build", "win", "vcpkg_installed", "x64-windows", "include", "bgfx")
 SHADERS_SRC_DIR = os.path.join(BASE_DIR, "src", "cpp", "render", "bgfx", "shaders")
-SHADERS_OUT_DIR = os.path.join(SHADERS_SRC_DIR, "compiled")
+SHADERS_OUT_DIR = os.path.join(SHADERS_SRC_DIR, "compiled", "spirv")
 VARYING_DEF = os.path.join(SHADERS_SRC_DIR, "varying.def.sc")
 
 # Profiles for Vulkan (SPIR-V)

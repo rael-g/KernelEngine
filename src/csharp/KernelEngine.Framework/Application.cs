@@ -190,12 +190,6 @@ public class Application : IDisposable
         ActiveWorld.AddSystem(cameraSystem.NativeDescriptor);
         ActiveWorld.AddSystem(shadowSystem.NativeDescriptor);
         ActiveWorld.AddSystem(skyboxSystem.NativeDescriptor);
-
-        ActiveWorld.AddSystem(meshSystem);
-        ActiveWorld.AddSystem(lightSystem);
-        ActiveWorld.AddSystem(cameraSystem);
-        ActiveWorld.AddSystem(shadowSystem);
-        ActiveWorld.AddSystem(skyboxSystem);
     }
 
     // ── Service validation ────────────────────────────────────────────────────

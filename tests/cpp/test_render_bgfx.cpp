@@ -19,6 +19,7 @@ public:
     MOCK_METHOD(bool, Init, (const GpuInitConfig& config), (override));
     MOCK_METHOD(void, Shutdown, (), (override));
     MOCK_METHOD(uint32_t, Frame, (bool capture), (override));
+    MOCK_METHOD(const char*, GetShaderSubdir, (), (const, override));
     
     MOCK_METHOD(const GpuMemoryBuffer*, Alloc, (uint32_t size), (override));
     MOCK_METHOD(const GpuMemoryBuffer*, Copy, (const void* data, uint32_t size), (override));
@@ -134,6 +135,7 @@ TEST_F(BgfxRenderTest, ClearColor_ReturnsOk)
 
     EXPECT_CALL(*shader_mock, LoadShaderBinary(_, _)).WillRepeatedly(Return((const GpuMemoryBuffer*)0xdeadbeef));
     EXPECT_CALL(*gpu_mock, Init(_)).WillOnce(Return(true));
+    EXPECT_CALL(*gpu_mock, GetShaderSubdir()).WillRepeatedly(Return("spirv"));
     EXPECT_CALL(*gpu_mock, CreateShader(_)).WillRepeatedly(Return(GpuShaderHandle{1}));
     EXPECT_CALL(*gpu_mock, CreateProgram(_, _, _)).WillRepeatedly(Return(GpuProgramHandle{1}));
     EXPECT_CALL(*gpu_mock, CreateUniform(_, _, _)).WillRepeatedly(Return(GpuUniformHandle{1}));
