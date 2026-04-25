@@ -1,4 +1,5 @@
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
@@ -11,11 +12,12 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class SkyboxNode : Node
 {
-    /// <summary>Cubemap handle that is currently active for the world. Reset by <see cref="Initialize"/>.</summary>
-    internal static uint ActiveHandle { get; private set; } = uint.MaxValue;
+    internal static uint ComponentId { get; private set; } = uint.MaxValue;
 
-    /// <summary>Resets the active skybox handle. Called by <see cref="Application"/> at world creation.</summary>
-    internal static void Initialize() => ActiveHandle = uint.MaxValue;
+    internal static void Initialize(EcsRegistry registry)
+    {
+        ComponentId = registry.RegisterComponent<ke_skybox_component>("ke_skybox");
+    }
 
     /// <summary>
     /// GPU cubemap handle to use as the skybox. Must be a handle returned by
@@ -25,7 +27,8 @@ public class SkyboxNode : Node
 
     protected override void OnStart()
     {
-        if (CubemapHandle != uint.MaxValue)
-            ActiveHandle = CubemapHandle;
+        if (ComponentId == uint.MaxValue || CubemapHandle == uint.MaxValue) return;
+        ref var comp = ref AddComponent<ke_skybox_component>(ComponentId);
+        comp.cubemap_handle = CubemapHandle;
     }
 }

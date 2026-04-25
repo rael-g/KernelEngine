@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="../KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
   </ItemGroup>
 
 </Project>

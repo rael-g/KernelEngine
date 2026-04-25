@@ -2,15 +2,15 @@ namespace KernelEngine.Kernel.Native;
 
 public partial struct ke_hierarchy_component
 {
-    [NativeTypeName("uint64_t")]
+    [NativeTypeName("ke_entity")]
     public ulong parent;
 
-    [NativeTypeName("uint64_t")]
+    [NativeTypeName("ke_entity")]
     public ulong first_child;
 
-    [NativeTypeName("uint64_t")]
+    [NativeTypeName("ke_entity")]
     public ulong next_sibling;
 
-    [NativeTypeName("uint64_t")]
+    [NativeTypeName("ke_entity")]
     public ulong prev_sibling;
 }

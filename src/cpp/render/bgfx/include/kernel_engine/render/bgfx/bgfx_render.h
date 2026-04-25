@@ -2,6 +2,8 @@
 
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/kernel/world/system.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +37,14 @@ typedef struct ke_render_bgfx_params
  * @brief Creates the BGFX render system implementation.
  */
 KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params* params, ke_render** out_render);
+
+// ── Native System Descriptor Factories ────────────────────────────────────────
+
+KE_RENDER_API ke_result ke_render_bgfx_create_mesh_system_desc(uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc* out_desc);
+KE_RENDER_API ke_result ke_render_bgfx_create_light_system_desc(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid, ke_system_desc* out_desc);
+KE_RENDER_API ke_result ke_render_bgfx_create_camera_system_desc(uint32_t camera_cid, uint32_t transform_cid, ke_system_desc* out_desc);
+KE_RENDER_API ke_result ke_render_bgfx_create_shadow_system_desc(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc* out_desc);
+KE_RENDER_API ke_result ke_render_bgfx_create_skybox_system_desc(uint32_t skybox_cid, ke_system_desc* out_desc);
 
 #ifdef __cplusplus
 }

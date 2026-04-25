@@ -2,25 +2,118 @@
 #include <kernel_engine/kernel/world/ecs.h>
 #include <kernel_engine/kernel/world/components.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
 #include <string.h>
 
 #define KE_WORLD_MAX_SYSTEMS 64
+#define KE_WORLD_MAX_WAVES   64
+
+typedef struct ke_system_wave
+{
+    uint32_t system_indices[KE_WORLD_MAX_SYSTEMS];
+    uint32_t system_count;
+    bool     parallel;
+} ke_system_wave;
 
 typedef struct ke_world_impl
 {
     struct ke_ecs_registry *registry;
     struct ke_allocator    *allocator;
+    struct ke_task_scheduler *task_scheduler;
 
     ke_component_id transform_cid;
     ke_component_id hierarchy_cid;
     ke_component_id name_cid;
     ke_component_id script_cid;
 
-    ke_system systems[KE_WORLD_MAX_SYSTEMS];
-    size_t    system_count;
+    ke_system_desc systems[KE_WORLD_MAX_SYSTEMS];
+    size_t         system_count;
+
+    ke_system_wave waves[KE_WORLD_MAX_WAVES];
+    size_t         wave_count;
+    bool           waves_dirty;
 
     ke_world api;
 } ke_world_impl;
+
+// ── Internal: Dependency Analysis ───────────────────────────────────────────
+
+static bool systems_conflict(const ke_system_desc *a, const ke_system_desc *b)
+{
+    for (uint32_t i = 0; i < a->write_count; i++)
+        for (uint32_t j = 0; j < b->write_count; j++)
+            if (a->writes[i] == b->writes[j]) return true;
+
+    for (uint32_t i = 0; i < a->write_count; i++)
+        for (uint32_t j = 0; j < b->read_count; j++)
+            if (a->writes[i] == b->reads[j]) return true;
+
+    for (uint32_t i = 0; i < a->read_count; i++)
+        for (uint32_t j = 0; j < b->write_count; j++)
+            if (a->reads[i] == b->writes[j]) return true;
+
+    return false;
+}
+
+static void rebuild_waves(ke_world_impl *impl)
+{
+    impl->wave_count = 0;
+    if (impl->system_count == 0) return;
+
+    ke_system_wave *current_wave = &impl->waves[impl->wave_count++];
+    current_wave->system_count = 0;
+    current_wave->parallel = true;
+
+    for (uint32_t i = 0; i < (uint32_t)impl->system_count; i++)
+    {
+        const ke_system_desc *sys = &impl->systems[i];
+        bool is_serial_barrier = (sys->read_count == 0 && sys->write_count == 0);
+
+        bool conflict_in_wave = false;
+        if (!is_serial_barrier)
+        {
+            for (uint32_t j = 0; j < current_wave->system_count; j++)
+            {
+                if (systems_conflict(sys, &impl->systems[current_wave->system_indices[j]]))
+                {
+                    conflict_in_wave = true;
+                    break;
+                }
+            }
+        }
+
+        if (is_serial_barrier || conflict_in_wave)
+        {
+            if (current_wave->system_count > 0)
+            {
+                current_wave->parallel = (current_wave->system_count > 1);
+                current_wave = &impl->waves[impl->wave_count++];
+            }
+            
+            current_wave->system_indices[0] = i;
+            current_wave->system_count = 1;
+            
+            if (is_serial_barrier)
+            {
+                current_wave->parallel = false;
+                current_wave = &impl->waves[impl->wave_count++];
+                current_wave->system_count = 0;
+                current_wave->parallel = true;
+            }
+        }
+        else
+        {
+            current_wave->system_indices[current_wave->system_count++] = i;
+        }
+    }
+
+    if (impl->wave_count > 0 && impl->waves[impl->wave_count - 1].system_count == 0)
+        impl->wave_count--;
+    else if (impl->wave_count > 0)
+        impl->waves[impl->wave_count - 1].parallel = (impl->waves[impl->wave_count - 1].system_count > 1);
+
+    impl->waves_dirty = false;
+}
 
 // ── Vtable accessors ──────────────────────────────────────────────────────────
 
@@ -49,15 +142,21 @@ static ke_component_id world_script_id(ke_world *self)
     return ((ke_world_impl *)self->handle)->script_cid;
 }
 
-static ke_result world_add_system(ke_world *self, const ke_system *system)
+static struct ke_task_scheduler* world_get_task_scheduler(ke_world* self)
+{
+    return ((ke_world_impl*)self->handle)->task_scheduler;
+}
+
+static ke_result world_add_system(ke_world *self, const ke_system_desc *desc)
 {
     ke_world_impl *impl = (ke_world_impl *)self->handle;
     if (impl->system_count >= KE_WORLD_MAX_SYSTEMS) return KE_ERROR_OUT_OF_MEMORY;
-    impl->systems[impl->system_count++] = *system;
+    impl->systems[impl->system_count++] = *desc;
+    impl->waves_dirty = true;
     return KE_OK;
 }
 
-// ── Built-in: Script System ───────────────────────────────────────────────────
+// ── Built-in systems ─────────────────────────────────────────────────────────
 
 static void run_script_system(ke_world_impl *impl, float dt)
 {
@@ -78,9 +177,6 @@ static void run_script_system(ke_world_impl *impl, float dt)
         if (s->on_update) s->on_update(entities[i], dt);
     }
 }
-
-// ── Built-in: Transform System ────────────────────────────────────────────────
-// Recursively propagates world matrices top-down through the hierarchy.
 
 static void update_transform_recursive(ke_world_impl *impl, ke_entity entity,
                                        const ke_mat4 *parent_world)
@@ -103,15 +199,14 @@ static void update_transform_recursive(ke_world_impl *impl, ke_entity entity,
     ke_entity child = h->first_child;
     while (child != KE_ENTITY_INVALID)
     {
-        ke_hierarchy_component *ch = (ke_hierarchy_component *)ke_ecs_component_get(
-            impl->registry, child, impl->hierarchy_cid);
         update_transform_recursive(impl, child, &t->world_matrix);
+        // Find next sibling
+        ke_hierarchy_component *ch = (ke_hierarchy_component *)ke_ecs_component_get(impl->registry, child, impl->hierarchy_cid);
         if (!ch) break;
         child = ch->next_sibling;
     }
 }
 
-// Finds all hierarchy roots (parent == INVALID) and recurses from each.
 static void update_transforms(ke_world_impl *impl)
 {
     ke_entity *entities;
@@ -127,6 +222,19 @@ static void update_transforms(ke_world_impl *impl)
     }
 }
 
+// ── Parallel Execution Wrapper ───────────────────────────────────────────────
+
+typedef struct ke_system_task_data {
+    ke_world*       world;
+    ke_system_desc* sys;
+    float           dt;
+} ke_system_task_data;
+
+static void system_task_entry(void* data) {
+    ke_system_task_data* task = (ke_system_task_data*)data;
+    task->sys->update(task->sys->handle, task->world, task->dt, NULL); 
+}
+
 // ── Update ────────────────────────────────────────────────────────────────────
 
 static ke_result world_update(ke_world *self, const struct ke_frame *frame)
@@ -137,10 +245,36 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
     run_script_system(impl, dt);
     update_transforms(impl);
 
-    for (size_t i = 0; i < impl->system_count; i++)
+    if (impl->waves_dirty) rebuild_waves(impl);
+
+    for (size_t w = 0; w < impl->wave_count; w++)
     {
-        ke_system *sys = &impl->systems[i];
-        if (sys->update) sys->update(self, sys->handle, dt);
+        ke_system_wave *wave = &impl->waves[w];
+        if (!wave->parallel || !impl->task_scheduler)
+        {
+            for (uint32_t s = 0; s < wave->system_count; s++)
+            {
+                ke_system_desc *sys = &impl->systems[wave->system_indices[s]];
+                sys->update(sys->handle, self, dt, NULL);
+            }
+        }
+        else
+        {
+            ke_task* tasks[KE_WORLD_MAX_SYSTEMS];
+            ke_system_task_data task_data[KE_WORLD_MAX_SYSTEMS];
+            
+            for (uint32_t s = 0; s < wave->system_count; s++)
+            {
+                ke_system_desc *sys = &impl->systems[wave->system_indices[s]];
+                task_data[s].world  = self;
+                task_data[s].sys    = sys;
+                task_data[s].dt     = dt;
+                tasks[s] = impl->task_scheduler->dispatch(impl->task_scheduler, system_task_entry, &task_data[s]);
+            }
+            
+            for (uint32_t s = 0; s < wave->system_count; s++)
+                impl->task_scheduler->wait(impl->task_scheduler, tasks[s]);
+        }
     }
 
     return KE_OK;
@@ -151,11 +285,6 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
 static void world_destroy(ke_world *self)
 {
     ke_world_impl *impl = (ke_world_impl *)self->handle;
-    for (size_t i = 0; i < impl->system_count; i++)
-    {
-        if (impl->systems[i].destroy)
-            impl->systems[i].destroy(impl->systems[i].handle);
-    }
     ke_ecs_registry_destroy(impl->registry);
     impl->allocator->free(impl->allocator, impl);
 }
@@ -194,6 +323,7 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world)
     impl->api.hierarchy_id = world_hierarchy_id;
     impl->api.name_id      = world_name_id;
     impl->api.script_id    = world_script_id;
+    impl->api.get_task_scheduler = world_get_task_scheduler;
 
     *out_world = &impl->api;
     return KE_OK;

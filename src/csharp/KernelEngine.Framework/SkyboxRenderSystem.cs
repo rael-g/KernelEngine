@@ -1,25 +1,25 @@
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Submits the skybox draw call each frame when a <see cref="SkyboxNode"/> is active.
-/// Must be registered <em>after</em> <see cref="CameraRenderSystem"/> (which sets the view
-/// transform) and <em>before</em> <see cref="MeshRenderSystem"/> (which needs IBL state).
+/// Wrapper for the native Skybox system.
+/// The skybox recording logic runs in C++ at native speed, scheduled by the Kernel.
 /// </summary>
-public sealed class SkyboxRenderSystem : ISystem
+public sealed unsafe class SkyboxRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
+    private readonly ke_system_desc _nativeDesc;
 
-    /// <param name="renderer">The renderer to submit the skybox draw call to.</param>
-    public SkyboxRenderSystem(Renderer renderer) => _renderer = renderer;
+    public SkyboxRenderSystem(ke_system_desc nativeDesc) => _nativeDesc = nativeDesc;
 
-    /// <inheritdoc/>
-    public void Update(World world, float dt, FramePacket? packet = null)
+    public ke_system_desc NativeDescriptor => _nativeDesc;
+
+    public void Update(World world, float dt, FramePacket? packet = null) { }
+
+    public ComponentAccess GetAccess() => new()
     {
-        if (SkyboxNode.ActiveHandle != uint.MaxValue)
-        {
-            packet?.SetSkybox(SkyboxNode.ActiveHandle);
-        }
-    }
+        Reads = [_nativeDesc.reads[0]],
+        Writes = []
+    };
 }

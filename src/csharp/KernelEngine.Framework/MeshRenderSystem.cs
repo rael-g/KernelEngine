@@ -1,31 +1,25 @@
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Iterates all ECS entities with a <see cref="MeshComponent"/> and records
-/// draw commands into the frame packet for asynchronous submission.
+/// A wrapper for the native Mesh Rendering system.
+/// The loop runs in C++ at native speed, scheduled by the Kernel.
 /// </summary>
 public sealed unsafe class MeshRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
+    private readonly ke_system_desc _nativeDesc;
 
-    /// <param name="renderer">The renderer (used for handle lookups if needed).</param>
-    public MeshRenderSystem(Renderer renderer) => _renderer = renderer;
+    public MeshRenderSystem(ke_system_desc nativeDesc) => _nativeDesc = nativeDesc;
 
-    public void Update(World world, float dt, FramePacket? packet = null)
+    public ke_system_desc NativeDescriptor => _nativeDesc;
+
+    public void Update(World world, float dt, FramePacket? packet = null) { }
+
+    public ComponentAccess GetAccess() => new()
     {
-        if (MeshNode.ComponentId == uint.MaxValue || packet == null) return;
-
-        var (entities, data) = world.Registry.Query<MeshComponent>(MeshNode.ComponentId);
-        for (int i = 0; i < entities.Length; i++)
-        {
-            var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
-            if (tc != null)
-            {
-                // Record instead of submitting immediately
-                packet.AddDrawCommand(data[i].MeshHandle, data[i].MaterialHandle, tc->WorldMatrix);
-            }
-        }
-    }
+        Reads = [_nativeDesc.reads[0], _nativeDesc.reads[1]],
+        Writes = []
+    };
 }

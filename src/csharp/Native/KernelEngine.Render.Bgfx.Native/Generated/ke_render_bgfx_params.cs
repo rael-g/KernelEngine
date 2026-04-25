@@ -18,4 +18,7 @@ public unsafe partial struct ke_render_bgfx_params
 
     [NativeTypeName("const char *")]
     public sbyte* shader_path;
+
+    [NativeTypeName("uint32_t")]
+    public uint renderer_type;
 }

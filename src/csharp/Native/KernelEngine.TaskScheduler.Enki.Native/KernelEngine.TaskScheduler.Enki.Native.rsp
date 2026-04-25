@@ -8,7 +8,7 @@ ke_task_scheduler_enki
 ../../../../cpp/task_scheduler/enki/include
 ../../../../c/kernel/include
 --file
-../../../../cpp/task_scheduler/enki/include/kernel_engine/task_scheduler/enki/enki_task_scheduler.h
+../../../../cpp/task_scheduler/enki/include/kernel_engine/task_scheduler/enki/enki_task_scheduler_public.h
 --methodClassName
 NativeMethods
 --prefixStrip
@@ -23,3 +23,5 @@ generate-macro-bindings
 generate-file-scoped-namespaces
 exclude-funcs-with-body
 generate-disable-runtime-marshalling
+--language
+c

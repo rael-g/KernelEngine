@@ -73,14 +73,25 @@ public sealed unsafe class World : IDisposable
 
     // ── Systems ───────────────────────────────────────────────────────────────
 
-    /// <summary>Registers a managed system to be called each frame after the built-in C systems.</summary>
-    public void AddSystem(ISystem system) => _systems.Add(system);
+    private readonly SystemScheduler _scheduler = new();
+    private bool _schedulerDirty = true;
+    private TaskScheduler? _taskScheduler;
 
-    // ── Update ────────────────────────────────────────────────────────────────
+    public void AddSystem(ISystem system)
+    {
+        _systems.Add(system);
+        _schedulerDirty = true;
+    }
+
+    /// <summary>Registers a native system descriptor into the world.</summary>
+    public void AddSystem(ke_system_desc desc)
+    {
+        KernelException.ThrowIfFailed(_native->add_system(_native, &desc), "add_system");
+    }
 
     /// <summary>
     /// Advances the simulation by one frame.
-    /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s.
+    /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s in parallel waves.
     /// </summary>
     public Result Update(FramePacket? packet = null)
     {
@@ -92,8 +103,17 @@ public sealed unsafe class World : IDisposable
         var res = Native->update(Native, &frame);
         if (res != ke_result.KE_OK) return res;
 
-        foreach (var system in _systems)
-            system.Update(this, dt, packet);
+        // Ensure we have a task scheduler for parallelism
+        _taskScheduler ??= new TaskScheduler(_native->get_task_scheduler(_native));
+
+        if (_schedulerDirty)
+        {
+            _scheduler.Build(_systems);
+            _schedulerDirty = false;
+        }
+
+        // Run systems in waves (Sim thread waits for parallel workers to finish wave by wave)
+        _scheduler.RunAsync(this, dt, packet, _taskScheduler).GetAwaiter().GetResult();
 
         return ke_result.KE_OK;
     }

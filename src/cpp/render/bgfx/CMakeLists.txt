@@ -13,6 +13,11 @@ add_library(ke_render_bgfx SHARED
     ../core/src/clustered_forward.cpp
     ../core/src/shader_provider.cpp
     ../core/src/frame_submitter.cpp
+    ../core/src/mesh_system.cpp
+    ../core/src/light_system.cpp
+    ../core/src/camera_system.cpp
+    ../core/src/shadow_system.cpp
+    ../core/src/skybox_system.cpp
     
     # Device Layer (Bgfx Implementation)
     ../bgfx_device/src/bgfx_gpu_device.cpp

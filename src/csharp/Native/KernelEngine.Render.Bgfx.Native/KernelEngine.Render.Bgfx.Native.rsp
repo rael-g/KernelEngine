@@ -9,7 +9,7 @@ ke_render_bgfx
 --include-directory
 ../../../cpp/render/bgfx/include
 --file
-../../../cpp/render/bgfx/include/kernel_engine/render/bgfx/bgfx_render.hh
+../../../cpp/render/bgfx/include/kernel_engine/render/bgfx/bgfx_render.h
 --methodClassName
 NativeMethods
 --prefixStrip

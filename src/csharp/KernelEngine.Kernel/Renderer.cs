@@ -269,6 +269,7 @@ public sealed unsafe class Renderer : IDisposable
     public Result SetBloom(bool enabled, float threshold = 1.0f, float intensity = 0.5f) =>
         _native->set_bloom(_native, (byte)(enabled ? 1 : 0), threshold, intensity);
 
+    /// <inheritdoc/>
     public void Dispose()
     {
         if (_native != null)

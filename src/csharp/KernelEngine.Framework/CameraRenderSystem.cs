@@ -1,45 +1,25 @@
-using System.Numerics;
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Reads the active camera's <see cref="CameraComponent"/> and <see cref="TransformComponent"/>,
-/// computes view and projection matrices, and uploads them to the renderer each frame.
-/// Must run before <see cref="MeshRenderSystem"/>.
+/// Wrapper for the native Camera system.
+/// View/proj computation runs in C++ at native speed, scheduled by the Kernel.
 /// </summary>
 public sealed unsafe class CameraRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
-    private readonly Window _window;
+    private readonly ke_system_desc _nativeDesc;
 
-    public CameraRenderSystem(Renderer renderer, Window window)
+    public CameraRenderSystem(ke_system_desc nativeDesc) => _nativeDesc = nativeDesc;
+
+    public ke_system_desc NativeDescriptor => _nativeDesc;
+
+    public void Update(World world, float dt, FramePacket? packet = null) { }
+
+    public ComponentAccess GetAccess() => new()
     {
-        _renderer = renderer;
-        _window = window;
-    }
-
-    public void Update(World world, float dt, FramePacket? packet = null)
-    {
-        if (world.ActiveCamera == 0 || packet == null) return;
-
-        var tc = world.Registry.GetComponent<TransformComponent>(world.ActiveCamera, world.TransformComponentId);
-        if (tc == null) return;
-
-        if (CameraNode.ComponentId == uint.MaxValue) return;
-        var cc = world.Registry.GetComponent<CameraComponent>(world.ActiveCamera, CameraNode.ComponentId);
-        if (cc == null) return;
-
-        // View matrix = inverse of the camera's world transform
-        Matrix4x4.Invert(tc->WorldMatrix, out var view);
-
-        var (w, h) = _window.GetSize().Value;
-        float aspect = h > 0 ? (float)w / h : 1f;
-
-        Matrix4x4 proj = cc->Orthographic != 0
-            ? Matrix4x4.CreateOrthographic(aspect * 10f, 10f, cc->Near, cc->Far)
-            : Matrix4x4.CreatePerspectiveFieldOfView(cc->Fov * MathF.PI / 180f, aspect, cc->Near, cc->Far);
-
-        packet.SetCamera(view, proj, new Vector3(tc->WorldMatrix.M41, tc->WorldMatrix.M42, tc->WorldMatrix.M43));
-    }
+        Reads = [_nativeDesc.reads[0], _nativeDesc.reads[1]],
+        Writes = []
+    };
 }

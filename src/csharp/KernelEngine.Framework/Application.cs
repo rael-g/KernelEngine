@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
+using KernelEngine.Render.Bgfx;
 
 namespace KernelEngine.Framework;
 
@@ -144,17 +145,35 @@ public class Application : IDisposable
         SpotLightNode.Initialize(ActiveWorld.Registry);
         CameraNode.Initialize(ActiveWorld.Registry);
         MeshNode.Initialize(ActiveWorld.Registry);
-        SkyboxNode.Initialize();
+        SkyboxNode.Initialize(ActiveWorld.Registry);
 
         MeshNode.DefaultMeshHandle     = 0; // unit quad (built-in)
         MeshNode.DefaultMaterialHandle = 0; // white material (built-in)
 
         Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
-        ActiveWorld.AddSystem(new LightRenderSystem(Renderer));
-        ActiveWorld.AddSystem(new CameraRenderSystem(Renderer, Window));
-        ActiveWorld.AddSystem(new SkyboxRenderSystem(Renderer));
-        ActiveWorld.AddSystem(new ShadowRenderSystem(Renderer));
-        ActiveWorld.AddSystem(new MeshRenderSystem(Renderer));
+
+        var xformCid = ActiveWorld.TransformComponentId;
+
+        // Phase 4: Create native system descriptors via bgfx factory (lives in the bgfx plugin layer).
+        var meshSystem   = new MeshRenderSystem(BgfxSystemDescFactory.CreateMeshSystemDesc(MeshNode.ComponentId, xformCid));
+        var lightSystem  = new LightRenderSystem(BgfxSystemDescFactory.CreateLightSystemDesc(LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
+        var cameraSystem = new CameraRenderSystem(BgfxSystemDescFactory.CreateCameraSystemDesc(CameraNode.ComponentId, xformCid));
+        var shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(LightNode.ComponentId, MeshNode.ComponentId, xformCid));
+        var skyboxSystem = new SkyboxRenderSystem(BgfxSystemDescFactory.CreateSkyboxSystemDesc(SkyboxNode.ComponentId));
+
+        // Register Native parts in Kernel for parallel execution
+        ActiveWorld.AddSystem(meshSystem.NativeDescriptor);
+        ActiveWorld.AddSystem(lightSystem.NativeDescriptor);
+        ActiveWorld.AddSystem(cameraSystem.NativeDescriptor);
+        ActiveWorld.AddSystem(shadowSystem.NativeDescriptor);
+        ActiveWorld.AddSystem(skyboxSystem.NativeDescriptor);
+
+        // Register Managed parts (NO-OP wrappers)
+        ActiveWorld.AddSystem(meshSystem);
+        ActiveWorld.AddSystem(lightSystem);
+        ActiveWorld.AddSystem(cameraSystem);
+        ActiveWorld.AddSystem(shadowSystem);
+        ActiveWorld.AddSystem(skyboxSystem);
     }
 
     // ── Service validation ────────────────────────────────────────────────────
