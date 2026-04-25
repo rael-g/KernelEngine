@@ -2,6 +2,7 @@
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/world/system.h>
 #include <core_renderer.hpp>
+#include <gpu_device.hpp>
 #include <native_systems.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <new>
@@ -9,9 +10,13 @@
 extern "C" {
     KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render) {
         if (!out_render || !params || !params->allocator) return KE_ERROR_INVALID_ARGUMENT;
-        void *mem = params->allocator->alloc(params->allocator, sizeof(kernel_engine::render::bgfx::CoreRenderer), alignof(kernel_engine::render::bgfx::CoreRenderer));
-        if (!mem) return KE_ERROR_OUT_OF_MEMORY;
-        
+
+        auto* alloc = params->allocator;
+
+        void* device_mem = alloc->alloc(alloc, sizeof(kernel_engine::render::bgfx::BgfxGpuDevice), alignof(kernel_engine::render::bgfx::BgfxGpuDevice));
+        if (!device_mem) return KE_ERROR_OUT_OF_MEMORY;
+        auto* device = new (device_mem) kernel_engine::render::bgfx::BgfxGpuDevice();
+
         kernel_engine::render::bgfx::GpuRendererParams core_params = {
             params->allocator,
             params->logger,
@@ -19,8 +24,15 @@ extern "C" {
             params->window,
             params->renderer_type
         };
-        
-        auto *renderer = new (mem) kernel_engine::render::bgfx::CoreRenderer(core_params);
+
+        void* renderer_mem = alloc->alloc(alloc, sizeof(kernel_engine::render::bgfx::CoreRenderer), alignof(kernel_engine::render::bgfx::CoreRenderer));
+        if (!renderer_mem) {
+            alloc->free(alloc, device_mem);
+            return KE_ERROR_OUT_OF_MEMORY;
+        }
+        auto* renderer = new (renderer_mem) kernel_engine::render::bgfx::CoreRenderer(core_params);
+        renderer->SetGpuDevice(device);
+
         *out_render = renderer->ToApi();
         return KE_OK;
     }

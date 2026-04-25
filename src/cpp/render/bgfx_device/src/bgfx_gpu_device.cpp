@@ -65,6 +65,11 @@ static ::bgfx::Access::Enum ToBgfx(GpuAccess access)
 
 bool BgfxGpuDevice::Init(const GpuInitConfig& config)
 {
+    // Signal bgfx that this thread is the render thread and it should NOT
+    // create its own internal render thread. This enables single-thread mode,
+    // which is our model: the engine owns ke.render and pins all GPU calls to it.
+    ::bgfx::renderFrame();
+
     ::bgfx::Init init;
     init.type = (::bgfx::RendererType::Enum)config.renderer_type;
     init.platformData.nwh = config.native_window_handle;
