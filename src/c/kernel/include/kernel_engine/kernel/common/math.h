@@ -94,8 +94,9 @@ extern "C"
         memset(out->m, 0, sizeof(float) * 16);
         out->m[0] = f / aspect;
         out->m[5] = f;
-        out->m[10] = far_z / (far_z - near_z);
-        out->m[11] = 1.0f;
+        // Right-handed, Vulkan depth [0,1]: w_clip = -vz, so objects at -Z are in front.
+        out->m[10] = -far_z / (far_z - near_z);
+        out->m[11] = -1.0f;
         out->m[14] = -(far_z * near_z) / (far_z - near_z);
     }
 
