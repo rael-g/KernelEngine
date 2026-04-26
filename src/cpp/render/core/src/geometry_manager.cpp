@@ -31,7 +31,7 @@ ke_result GeometryManager::CreateMesh(RenderContext& ctx, const ke_vertex *verts
                        verts[i].tx, verts[i].ty, verts[i].tz, verts[i].tw};
     
     GpuVertexBufferHandle vb = ctx.gpu->CreateVertexBuffer(
-        ctx.gpu->Copy(expanded.data(), (uint32_t)(sizeof(GpuVert) * vert_count)), 0);
+        ctx.gpu->Copy(expanded.data(), (uint32_t)(sizeof(GpuVert) * vert_count)), kVertexLayoutStandard);
     GpuIndexBufferHandle ib = ctx.gpu->CreateIndexBuffer(
         ctx.gpu->Copy(indices, sizeof(uint16_t) * index_count));
 
