@@ -3,6 +3,7 @@
 #include <kernel_engine/kernel/world/components.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdio.h>
 
 namespace kernel_engine::render::bgfx
 {
@@ -11,6 +12,7 @@ struct CameraSystemContext {
     uint32_t camera_cid;
     uint32_t transform_cid;
     uint32_t reads[2];
+    int dbg_count;
 };
 
 void CameraSystem::Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet)
@@ -43,6 +45,16 @@ void CameraSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
             packet->camera.pos_x = tc->position.x;
             packet->camera.pos_y = tc->position.y;
             packet->camera.pos_z = tc->position.z;
+
+            if (ctx->dbg_count++ < 3)
+            {
+                const float* v = packet->camera.view.m;
+                const float* p = packet->camera.proj.m;
+                fprintf(stderr, "[TRACE-Cam] view[14]=%.3f view[11]=%.3f\n", v[14], v[11]);
+                fprintf(stderr, "[TRACE-Cam] proj[10]=%.4f proj[11]=%.4f proj[14]=%.4f\n", p[10], p[11], p[14]);
+                fprintf(stderr, "[TRACE-Cam] pos=(%.2f,%.2f,%.2f) fov=%.3f near=%.3f far=%.1f\n",
+                    tc->position.x, tc->position.y, tc->position.z, cc->fov, cc->near_z, cc->far_z);
+            }
         }
     }
 }
@@ -54,6 +66,7 @@ ke_system_desc CameraSystem::GetDescription(uint32_t camera_cid, uint32_t transf
     ctx->transform_cid = transform_cid;
     ctx->reads[0]      = camera_cid;
     ctx->reads[1]      = transform_cid;
+    ctx->dbg_count     = 0;
 
     ke_system_desc desc = {};
     desc.name       = "CameraSystem";
