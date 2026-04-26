@@ -79,7 +79,7 @@ public class Application : IDisposable
                 Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
                 renderReady.Set(); // signal ke.sim that the renderer is ready
 
-                while (_running)
+                while (true)
                 {
                     var packet = frameSync.BeginRead();
                     if (!_running) { packet.EndRead(); break; }
@@ -112,9 +112,10 @@ public class Application : IDisposable
 
                 OnReady?.Invoke();
 
-                while (_running)
+                while (true)
                 {
                     var packet = frameSync.BeginWrite();
+                    if (!_running) { packet.EndWrite(); break; } // poison-pill
                     ActiveWorld?.Update(packet: packet);
                     OnUpdate?.Invoke();
                     packet.EndWrite();
@@ -124,10 +125,6 @@ public class Application : IDisposable
             {
                 simException = ex;
                 _running     = false;
-            }
-            finally
-            {
-                // Poison-pill: unblocks ke.render's BeginRead so it can exit cleanly.
                 try { var p = frameSync.BeginWrite(); p.EndWrite(); } catch { }
             }
         });
