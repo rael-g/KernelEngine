@@ -478,6 +478,7 @@ ke_result CoreRenderer::SetupShader()
     ke_texture_handle white_handle;
     if (textures_.CreateTextureRgba(ctx_, 1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
         return KE_ERROR_RENDER;
+    textures_.default_2d_tex = textures_.GetTextureIdx(white_handle);
 
     // Default white material at handle 0
     {
@@ -516,6 +517,7 @@ ke_result CoreRenderer::SetupShader()
     geometry_.skybox_ib = ctx_.gpu->CreateIndexBuffer(ctx_.gpu->Copy(kSkyIdx, sizeof(kSkyIdx)));
 
     textures_.sampler_uniform        = ctx_.gpu->CreateUniform("s_texColor",     GpuUniformType::Sampler, 1);
+    textures_.ssao_blurred_uniform   = ctx_.gpu->CreateUniform("s_ssaoBlurred",  GpuUniformType::Sampler, 1);
     lighting_.env_map_uniform        = ctx_.gpu->CreateUniform("s_envMap",       GpuUniformType::Sampler, 1);
     lighting_.color_uniform          = ctx_.gpu->CreateUniform("u_color",         GpuUniformType::Vec4, 1);
     lighting_.light_dir_uniform      = ctx_.gpu->CreateUniform("u_lightDir",      GpuUniformType::Vec4, 1);

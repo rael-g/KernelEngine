@@ -7,9 +7,13 @@
 #include "gpu_device.hpp"
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
+#include <stdio.h>
+#include <atomic>
 
 namespace kernel_engine::render::bgfx
 {
+
+static std::atomic<int> s_dbg_submit{0};
 
 ke_result FrameSubmitter::Submit(RenderContext& ctx,
                                  const struct ke_frame_packet& packet,
@@ -70,11 +74,21 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     }
 
     // ── 5. Main Scene Pass ───────────────────────────────────────────────────
+    int dbg = s_dbg_submit.fetch_add(1);
+    if (dbg < 5)
+        fprintf(stderr, "[TRACE-Submit] draw_count=%u shadow_map=%u hdr_fb=%u\n",
+            packet.draw_count, packet.shadow.map_handle, 0u);
+
     for (uint32_t i = 0; i < packet.draw_count; ++i)
     {
         const auto& cmd   = packet.draw_commands[i];
         const auto& entry = geometry.GetMeshEntry(static_cast<ke_mesh_handle>(cmd.mesh_handle));
         const auto& mat   = lighting.GetMaterial(static_cast<ke_material_handle>(cmd.material_handle));
+
+        if (dbg < 5)
+            fprintf(stderr, "[TRACE-Draw%u] mesh=%u mat=%u vb_valid=%d mat_valid=%d\n",
+                i, cmd.mesh_handle, cmd.material_handle,
+                (entry.vb != kGpuInvalidHandle) ? 1 : 0, mat.valid ? 1 : 0);
 
         if (entry.vb == kGpuInvalidHandle || !mat.valid) continue;
 
@@ -84,15 +98,20 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         ctx.gpu->SetUniform(lighting.pbr_params_uniform, pbr,   1);
 
         GpuTextureHandle tex = textures.GetTextureIdx(static_cast<ke_texture_handle>(mat.texture_handle));
-        if (tex == kGpuInvalidHandle) tex = textures.default_cube_tex;
-        ctx.gpu->SetTexture(0, textures.sampler_uniform, tex, 0xFFFFFFFF);
+        if (tex == kGpuInvalidHandle) tex = textures.default_2d_tex;
+        GpuTextureHandle shadow_tex = shadows.GetActiveShadowTex();
+        if (shadow_tex == kGpuInvalidHandle) shadow_tex = textures.default_2d_tex;
+        ctx.gpu->SetTexture(0, textures.sampler_uniform,      tex,                        0xFFFFFFFF);
+        ctx.gpu->SetTexture(1, lighting.env_map_uniform,      textures.default_cube_tex,  0xFFFFFFFF);
+        ctx.gpu->SetTexture(2, shadows.shadow_map_uniform,    shadow_tex,                 0xFFFFFFFF);
+        ctx.gpu->SetTexture(3, lighting.normal_map_uniform,   textures.default_2d_tex,    0xFFFFFFFF);
+        ctx.gpu->SetTexture(4, textures.ssao_blurred_uniform, textures.default_2d_tex,    0xFFFFFFFF);
 
         ctx.gpu->SetTransform(cmd.transform.m, 1);
         ctx.gpu->SetVertexBuffer(0, entry.vb);
         ctx.gpu->SetIndexBufferStatic(entry.ib);
-        ctx.gpu->SetState(0x0000000000000001ULL | 0x0000000000000400ULL |
-                          0x0000000000000010ULL | 0x0000000000000020ULL |
-                          0x0000001000000000ULL, 0);
+        // WRITE_RGBA|WRITE_Z|DEPTH_TEST_LESS|MSAA (no culling → two-sided)
+        ctx.gpu->SetState(UINT64_C(0x010000400000001F), 0);
         ctx.gpu->Submit(1 /*SCENE*/, main_program, 0, false);
     }
 
