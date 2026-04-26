@@ -39,7 +39,7 @@ public class CameraNode : Node
         ref var comp = ref AddComponent<CameraComponent>(ComponentId);
         comp = new CameraComponent
         {
-            Fov = Fov,
+            Fov = Fov * MathF.PI / 180f,
             Near = Near,
             Far = Far,
             Orthographic = Orthographic ? (byte)1 : (byte)0,
