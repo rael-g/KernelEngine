@@ -26,9 +26,11 @@ public:
 
     GpuTextureHandle GetTextureIdx(ke_texture_handle handle) const;
 
+    GpuTextureHandle default_2d_tex         = kGpuInvalidHandle;
     GpuTextureHandle default_cube_tex       = kGpuInvalidHandle;
     GpuTextureHandle active_env_tex         = kGpuInvalidHandle;
     GpuUniformHandle sampler_uniform        = kGpuInvalidHandle;
+    GpuUniformHandle ssao_blurred_uniform   = kGpuInvalidHandle;
     GpuUniformHandle skybox_sampler_uniform = kGpuInvalidHandle;
     GpuUniformHandle skybox_tint_uniform    = kGpuInvalidHandle;
     

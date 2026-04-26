@@ -34,6 +34,8 @@ public:
 
     ke_result SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h);
 
+    GpuTextureHandle GetActiveShadowTex() const;
+
     void Shutdown();
 
     ke_shadow_map_handle active_shadow_handle = kInvalidShadowHandle;

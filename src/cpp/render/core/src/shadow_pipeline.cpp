@@ -82,6 +82,13 @@ ke_result ShadowPipeline::SetShadowMap(RenderContext& ctx, ke_shadow_map_handle 
     return KE_OK;
 }
 
+GpuTextureHandle ShadowPipeline::GetActiveShadowTex() const
+{
+    if (active_shadow_handle < (ke_shadow_map_handle)shadow_maps_.size())
+        return shadow_maps_[active_shadow_handle].depth_tex;
+    return kGpuInvalidHandle;
+}
+
 void ShadowPipeline::Shutdown()
 {
     shadow_maps_.clear();
