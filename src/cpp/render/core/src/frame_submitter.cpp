@@ -66,10 +66,22 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     {
         GpuTextureHandle sky = textures.GetTextureIdx(static_cast<ke_texture_handle>(packet.skybox_handle));
         if (sky != kGpuInvalidHandle) env_tex = sky;
+
+        // Rotation-only view: strip translation (column-major indices 12,13,14) so the
+        // skybox always surrounds the camera regardless of camera world position.
+        ke_mat4 sky_view = packet.camera.view;
+        sky_view.m[12] = 0.0f;
+        sky_view.m[13] = 0.0f;
+        sky_view.m[14] = 0.0f;
+        ctx.gpu->SetViewTransform(1 /*SCENE*/, sky_view.m, packet.camera.proj.m);
+
         textures.SubmitSkybox(ctx, static_cast<ke_texture_handle>(packet.skybox_handle),
                               skybox_program,
                               geometry.skybox_vb, geometry.skybox_ib,
                               textures.skybox_sampler_uniform, textures.skybox_tint_uniform);
+
+        // Restore full view transform for the main scene pass.
+        ctx.gpu->SetViewTransform(1 /*SCENE*/, packet.camera.view.m, packet.camera.proj.m);
     }
 
     // ── 5. Main Scene Pass ───────────────────────────────────────────────────
