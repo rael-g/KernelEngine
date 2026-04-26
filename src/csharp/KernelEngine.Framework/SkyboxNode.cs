@@ -12,7 +12,7 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class SkyboxNode : Node
 {
-    internal static uint ComponentId { get; private set; } = uint.MaxValue;
+    public static uint ComponentId { get; private set; } = uint.MaxValue;
 
     internal static void Initialize(EcsRegistry registry)
     {

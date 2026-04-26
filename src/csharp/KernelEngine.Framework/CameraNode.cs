@@ -11,7 +11,7 @@ public class CameraNode : Node
 {
     // ── ECS registration ──────────────────────────────────────────────────────
 
-    internal static uint ComponentId { get; private set; } = uint.MaxValue;
+    public static uint ComponentId { get; private set; } = uint.MaxValue;
 
     internal static void Initialize(EcsRegistry registry)
     {

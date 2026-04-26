@@ -11,7 +11,7 @@ public class MeshNode : Node
 {
     // ── ECS registration (shared across all MeshNode instances) ──────────────
 
-    internal static uint ComponentId { get; private set; } = uint.MaxValue;
+    public static uint ComponentId { get; private set; } = uint.MaxValue;
 
     /// <summary>Handle of the built-in unit quad mesh (handle 0, created by the renderer at init).</summary>
     public static uint DefaultMeshHandle { get; internal set; } = 0;
