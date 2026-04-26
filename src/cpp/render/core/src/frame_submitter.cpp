@@ -61,8 +61,11 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     ctx.gpu->SetViewTransform(1 /*SCENE*/, packet.camera.view.m, packet.camera.proj.m);
 
     // ── 4. Skybox Pass ───────────────────────────────────────────────────────
+    GpuTextureHandle env_tex = textures.default_cube_tex;
     if (packet.has_skybox && skybox_program != kGpuInvalidHandle)
     {
+        GpuTextureHandle sky = textures.GetTextureIdx(static_cast<ke_texture_handle>(packet.skybox_handle));
+        if (sky != kGpuInvalidHandle) env_tex = sky;
         textures.SubmitSkybox(ctx, static_cast<ke_texture_handle>(packet.skybox_handle),
                               skybox_program,
                               geometry.skybox_vb, geometry.skybox_ib,
@@ -92,7 +95,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         if (nmap_tex == kGpuInvalidHandle) nmap_tex = textures.default_2d_tex;
         ctx.gpu->SetUniform(lighting.normal_params_uniform, normal_params, 1);
         ctx.gpu->SetTexture(0, textures.sampler_uniform,      tex,                        0xFFFFFFFF);
-        ctx.gpu->SetTexture(1, lighting.env_map_uniform,      textures.default_cube_tex,  0xFFFFFFFF);
+        ctx.gpu->SetTexture(1, lighting.env_map_uniform,      env_tex,                    0xFFFFFFFF);
         ctx.gpu->SetTexture(2, shadows.shadow_map_uniform,    shadow_tex,                 0xFFFFFFFF);
         ctx.gpu->SetTexture(3, lighting.normal_map_uniform,   nmap_tex,                   0xFFFFFFFF);
         ctx.gpu->SetTexture(4, textures.ssao_blurred_uniform, textures.default_2d_tex,    0xFFFFFFFF);

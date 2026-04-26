@@ -49,8 +49,8 @@ ke_result TextureManager::SubmitSkybox(RenderContext& ctx, ke_texture_handle h, 
     ctx.gpu->SetUniform(tint, white, 1);
     ctx.gpu->SetVertexBuffer(0, vb);
     ctx.gpu->SetIndexBufferStatic(ib);
-    // BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LEQUAL
-    ctx.gpu->SetState(0x0000000000000001ULL | 0x0000000000000002ULL | 0x0000000000000004ULL | 0x0000000000000010ULL, 0);
+    // BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_LEQUAL (0x20, not 0x10=LESS)
+    ctx.gpu->SetState(0x0000000000000001ULL | 0x0000000000000002ULL | 0x0000000000000004ULL | 0x0000000000000020ULL, 0);
     ctx.gpu->Submit(1 /*SCENE*/, prog, 0, false);
     return KE_OK;
 }
