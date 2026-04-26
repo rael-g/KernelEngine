@@ -122,7 +122,7 @@ extern "C"
         len = sqrtf(x.x*x.x + x.y*x.y + x.z*x.z);
         x.x /= len; x.y /= len; x.z /= len;
 
-        ke_vec3 y = {z.y * x.z - z.z * x.y, z.z * x.x - z.x * x.z, z.x * y.y - z.y * x.x}; // Corrected below
+        ke_vec3 y = {z.y * x.z - z.z * x.y, z.z * x.x - z.x * x.z, z.x * x.y - z.y * x.x};
 
         ke_mat4 res;
         ke_mat4_identity(&res);

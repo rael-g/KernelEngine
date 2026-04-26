@@ -11,8 +11,6 @@ namespace kernel_engine::render::bgfx
 {
 
 struct RenderContext;
-class LightingManager;
-class TextureManager;
 
 struct MeshEntry
 {
@@ -31,12 +29,6 @@ public:
                          const uint16_t *indices, uint32_t index_count,
                          ke_mesh_handle *out_handle);
     ke_result DestroyMesh(RenderContext& ctx, ke_mesh_handle handle);
-
-    // Immediate-mode: submit directly to GPU (vtable path)
-    ke_result SubmitMesh(RenderContext& ctx, ke_mesh_handle mesh, ke_material_handle material,
-                         const ke_mat4 *transform, LightingManager& lighting,
-                         TextureManager& textures, GpuProgramHandle program,
-                         GpuProgramHandle depth_program, GpuProgramHandle prepass_program);
 
     // Records a draw command instead of submitting immediately
     ke_result RecordDraw(struct ke_frame_packet& packet,
