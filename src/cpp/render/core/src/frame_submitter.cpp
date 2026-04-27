@@ -41,6 +41,9 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     float camera_pos[4] = {packet.camera.pos_x, packet.camera.pos_y, packet.camera.pos_z, 1.0f};
     ctx.gpu->SetUniform(lighting.camera_pos_uniform, camera_pos, 1);
 
+    float ibl_params[4] = {packet.has_skybox ? 1.0f : 0.0f, 0, 0, 0};
+    ctx.gpu->SetUniform(lighting.ibl_params_uniform, ibl_params, 1);
+
     // ── 2. Shadow Pass ───────────────────────────────────────────────────────
     if (packet.shadow.map_handle != 0xFFFFFFFFu)
     {
@@ -67,21 +70,21 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         GpuTextureHandle sky = textures.GetTextureIdx(static_cast<ke_texture_handle>(packet.skybox_handle));
         if (sky != kGpuInvalidHandle) env_tex = sky;
 
-        // Rotation-only view: strip translation (column-major indices 12,13,14) so the
-        // skybox always surrounds the camera regardless of camera world position.
-        ke_mat4 sky_view = packet.camera.view;
-        sky_view.m[12] = 0.0f;
-        sky_view.m[13] = 0.0f;
-        sky_view.m[14] = 0.0f;
-        ctx.gpu->SetViewTransform(1 /*SCENE*/, sky_view.m, packet.camera.proj.m);
+        // Place the unit cube at the camera world position so that model×view cancels
+        // the translation and only rotation remains — the skybox always surrounds the camera.
+        // SetViewTransform is per-view-per-frame in bgfx, so we set the model instead.
+        float sky_model[16] = {
+            1,0,0,0,
+            0,1,0,0,
+            0,0,1,0,
+            packet.camera.pos_x, packet.camera.pos_y, packet.camera.pos_z, 1
+        };
+        ctx.gpu->SetTransform(sky_model, 1);
 
         textures.SubmitSkybox(ctx, static_cast<ke_texture_handle>(packet.skybox_handle),
                               skybox_program,
                               geometry.skybox_vb, geometry.skybox_ib,
                               textures.skybox_sampler_uniform, textures.skybox_tint_uniform);
-
-        // Restore full view transform for the main scene pass.
-        ctx.gpu->SetViewTransform(1 /*SCENE*/, packet.camera.view.m, packet.camera.proj.m);
     }
 
     // ── 5. Main Scene Pass ───────────────────────────────────────────────────

@@ -11,7 +11,8 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddMessagePipe()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 05 Skybox & IBL")
+    .AddInput()
+    .AddGlfwWindow(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
@@ -67,7 +68,8 @@ app.OnReady = () =>
 
     app.Renderer.SetTonemapping(true, 1.0f, 2.2f);
 
-    var cam = app.ActiveWorld.Scene.AddNode(new OrbitingCameraNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+    var cam = app.ActiveWorld.Scene.AddNode(new FreeLookNode(app.Input!) { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
 };
@@ -92,27 +94,40 @@ app.OnUpdate = () =>
 
 app.Run(services);
 
-// ── Orbiting camera ───────────────────────────────────────────────────────────
+// ── FreeLook camera — arrow keys: look, WASD: move, Shift/Ctrl: fly ──────────
 
-sealed class OrbitingCameraNode : CameraNode
+sealed class FreeLookNode(Input input) : CameraNode
 {
-    private float _angle = 0f;
-    private const float Radius   = 4f;
-    private const float Height   = 1.5f;
-    private const float SpeedDeg = 30f; // degrees per second
+    private float _speed     = 8.0f;
+    private float _rotateDeg = 90.0f;
+    private float _pitch     = 0f;
+    private float _yaw       = 0f;
 
     protected override void OnUpdate(float dt)
     {
-        _angle += SpeedDeg * dt * MathF.PI / 180f;
-        var pos = new Vector3(MathF.Sin(_angle) * Radius, Height, MathF.Cos(_angle) * Radius);
-        var forward = Vector3.Normalize(-pos);
-        var right   = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
-        var up      = Vector3.Cross(right, forward);
-        var rot     = Quaternion.CreateFromRotationMatrix(new Matrix4x4(
-            right.X,   right.Y,   right.Z,   0,
-            up.X,      up.Y,      up.Z,      0,
-           -forward.X,-forward.Y,-forward.Z, 0,
-            0,         0,         0,         1));
-        LocalTransform = LocalTransform with { Position = pos, Rotation = rot };
+        if (input.IsKeyDown(262)) _yaw   -= _rotateDeg * dt; // Right arrow
+        if (input.IsKeyDown(263)) _yaw   += _rotateDeg * dt; // Left arrow
+        if (input.IsKeyDown(265)) _pitch += _rotateDeg * dt; // Up arrow
+        if (input.IsKeyDown(264)) _pitch -= _rotateDeg * dt; // Down arrow
+        _pitch = Math.Clamp(_pitch, -89f, 89f);
+
+        var rot     = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
+        var forward = Vector3.Transform(-Vector3.UnitZ, rot);
+        var right   = Vector3.Transform( Vector3.UnitX, rot);
+
+        var move = Vector3.Zero;
+        if (input.IsKeyDown(87))  move += forward;
+        if (input.IsKeyDown(83))  move -= forward;
+        if (input.IsKeyDown(65))  move -= right;
+        if (input.IsKeyDown(68))  move += right;
+        if (input.IsKeyDown(340)) move += Vector3.UnitY;
+        if (input.IsKeyDown(341)) move -= Vector3.UnitY;
+        if (move != Vector3.Zero) move   = Vector3.Normalize(move);
+
+        LocalTransform = LocalTransform with
+        {
+            Position = LocalTransform.Position + move * _speed * dt,
+            Rotation = rot,
+        };
     }
 }
