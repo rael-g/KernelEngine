@@ -54,6 +54,7 @@ public unsafe class RendererTests
 
         {
             using var renderer = new Renderer(mock);
+            renderer.Initialize();
             Assert.Equal(1, _initializeCalled);
         }
 
