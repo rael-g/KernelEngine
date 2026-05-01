@@ -17,17 +17,17 @@ if GCOVR_PATH not in os.environ["PATH"]:
     os.environ["PATH"] += os.pathsep + GCOVR_PATH
 
 def run_command(cmd, cwd=None, shell=False, env=None, capture=False):
-    if isinstance(cmd, list): cmd = [str(arg) for arg in cmd]
+    if isinstance(cmd, list): cmd = [str(arg) for arg in cmd] 
     cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
     print(f"\n>> Executing: {cmd_str}")
     full_env = os.environ.copy()
     if env: full_env.update(env)
-    
+
     if capture:
         result = subprocess.run(cmd, cwd=cwd, shell=shell, text=True, env=full_env, capture_output=True)
     else:
         result = subprocess.run(cmd, cwd=cwd, shell=shell, text=True, env=full_env)
-    
+
     return result
 
 def to_gcovr_path(p):
@@ -36,7 +36,7 @@ def to_gcovr_path(p):
 def main():
     preset = "win" if platform.system().lower() == "windows" else "linux"
     print("=" * 70)
-    print(f" {PROJECT_NAME} - Professional Structured Coverage v18")
+    print(f" {PROJECT_NAME} - Professional Structured Coverage v30")
     print("=" * 70)
 
     if TEMP_DIR.exists(): shutil.rmtree(TEMP_DIR)
@@ -49,9 +49,9 @@ def main():
     print("\n[1/3] Processing Native Modules...")
     run_command(["cmake", "--preset", preset, "-DKE_COVERAGE=ON"], cwd=BASE_DIR)
     run_command(["cmake", "--build", "--preset", preset], cwd=BASE_DIR)
-    
+
     build_dir = BASE_DIR / "build" / preset
-    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()
+    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()    
     run_command(["ctest", "--preset", preset, "--output-on-failure"], cwd=BASE_DIR)
 
     native_modules = {
@@ -63,12 +63,12 @@ def main():
     }
 
     # Use gcovr to create organized XMLs
-    for module_name, module_path in native_modules.items():
-        xml_output = results_dir / f"{module_name}.xml"
+    for module_name, module_path in native_modules.items():   
+        xml_output = results_dir / f"{module_name}.xml"       
         print(f"  > Capturing {module_name}...")
-        
+
         gcovr_cmd = [
-            "gcovr",
+            "python", "-m", "gcovr",
             "-r", ".",
             to_gcovr_path(build_dir),
             "--gcov-executable", "llvm-cov gcov",
@@ -76,31 +76,30 @@ def main():
             "--filter", module_path,
             "--exclude", ".*tests.*"
         ]
-        
+
         res = run_command(gcovr_cmd, cwd=BASE_DIR, capture=True)
         if res.returncode != 0:
             print(f"    ! gcovr error for {module_name}: {res.stderr[:200]}")
-        elif xml_output.exists() and xml_output.stat().st_size > 500:
-            print(f"    + Captured: {xml_output.stat().st_size} bytes")
-        else:
-            print(f"    - No data for {module_name}")
+        
+        # Clean any gcov files that popped up in BASE_DIR immediately
+        for f in BASE_DIR.glob("*.gcov"): f.unlink()
 
     # 2. Managed C#
     print("\n[2/3] Processing Managed Modules...")
     run_command([
-        "dotnet", "test", BASE_DIR / "KernelEngine.slnx",
+        "dotnet", "test", BASE_DIR / "KernelEngine.slnx",     
         "--collect:XPlat Code Coverage",
         "--results-directory", results_dir,
-        "--nologo", "-v", "m",
+        "--nologo", "-v", "m", 
         "--",
         "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura"
     ], cwd=BASE_DIR)
 
-    # 3. Unified Report
+    # 3. Unified Report        
     print("\n[3/3] Generating Structured Summary...")
-    
+
     report_cmd = [
-        "reportgenerator",
+        "reportgenerator",     
         f"-reports:{results_dir}/**/*.xml",
         f"-targetdir:{report_dir}",
         "-reporttypes:TextSummary;HtmlSummary",
@@ -109,17 +108,20 @@ def main():
         "-filefilters:-*tests*;+*src/c*;+*src/cpp*;+*src/csharp*",
         "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*"
     ]
-    
-    if run_command(report_cmd, cwd=BASE_DIR).returncode == 0:
+
+    if run_command(report_cmd, cwd=BASE_DIR).returncode == 0: 
         summary_txt = report_dir / "Summary.txt"
         if summary_txt.exists():
             print("\n" + "─" * 70)
             print(summary_txt.read_text())
-            print("─" * 70)
+            print("─" * 70)    
             print(f"\nFull Report: {report_dir / 'index.html'}")
-    
-    # Cleanup
-    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()
 
-if __name__ == "__main__":
+    # 4. Cleanup & Environment Restore
+    print("\n[Cleanup] Restoring environment...")
+    run_command(["cmake", "--preset", preset, "-DKE_COVERAGE=OFF"], cwd=BASE_DIR)
+    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()    
+    for f in BASE_DIR.glob("*.gcov"): f.unlink()
+
+if __name__ == "__main__":     
     main()
