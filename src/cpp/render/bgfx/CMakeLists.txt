@@ -41,7 +41,7 @@ else()
     target_compile_definitions(ke_render_bgfx PRIVATE KE_RENDER_EXPORT)
 endif()
 
-# UNIFIED INCLUDE SEARCH PATHS - CRITICAL FOR WINDOWS/NINJA
+# UNIFIED INCLUDE SEARCH PATHS
 target_include_directories(ke_render_bgfx PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
@@ -55,6 +55,8 @@ target_include_directories(ke_render_bgfx PRIVATE
     ../core/src
     ../bgfx_device/src
 )
+
+enable_coverage(ke_render_bgfx)
 
 install(TARGETS ke_render_bgfx
     EXPORT KernelEngineTargets
