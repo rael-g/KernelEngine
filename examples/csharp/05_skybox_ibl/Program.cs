@@ -116,12 +116,12 @@ sealed class FreeLookNode(Input input) : CameraNode
         var right   = Vector3.Transform( Vector3.UnitX, rot);
 
         var move = Vector3.Zero;
-        if (input.IsKeyDown(87))  move += forward;
-        if (input.IsKeyDown(83))  move -= forward;
-        if (input.IsKeyDown(65))  move -= right;
-        if (input.IsKeyDown(68))  move += right;
-        if (input.IsKeyDown(340)) move += Vector3.UnitY;
-        if (input.IsKeyDown(341)) move -= Vector3.UnitY;
+        if (input.IsKeyDown(87))  move += forward;  // W
+        if (input.IsKeyDown(83))  move -= forward;  // S
+        if (input.IsKeyDown(65))  move -= right;    // A
+        if (input.IsKeyDown(68))  move += right;    // D
+        if (input.IsKeyDown(340)) move += Vector3.UnitY; // Left Shift
+        if (input.IsKeyDown(341)) move -= Vector3.UnitY; // Left Ctrl
         if (move != Vector3.Zero) move   = Vector3.Normalize(move);
 
         LocalTransform = LocalTransform with
@@ -131,3 +131,4 @@ sealed class FreeLookNode(Input input) : CameraNode
         };
     }
 }
+
