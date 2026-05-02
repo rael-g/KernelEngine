@@ -21,6 +21,7 @@ extern "C" {
 
         // 3. Assemble: Inject Device into Core
         core->SetDevice(device);
+        core->SetPipe(params->message_pipe);
 
         // 4. Initialize with params
         kernel_engine::window::WindowConfig config = {

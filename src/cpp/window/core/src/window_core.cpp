@@ -1,4 +1,5 @@
 #include <window_core.hpp>
+#include <kernel_engine/kernel/input/input_messages.h>
 #include <cstring>
 
 namespace kernel_engine::window
@@ -59,6 +60,11 @@ void WindowCore::SetDevice(WindowDevice* device)
     own_device_ = false;
 }
 
+void WindowCore::SetPipe(ke_message_pipe* pipe)
+{
+    pipe_ = pipe;
+}
+
 ke_result WindowCore::Initialize(const WindowConfig& config)
 {
     if (!device_) return KE_ERROR_NOT_INITIALIZED;
@@ -108,8 +114,13 @@ ke_window* WindowCore::ToApi() { return &api_struct_; }
 
 void WindowCore::HandleEvent(const WindowEvent& ev)
 {
-    // High-level event routing/dispatching goes here
-    // In the future, this will feed an InputSystem or MessagePipe
+    if (!pipe_) return;
+    if (ev.type == WindowEventType::KeyDown || ev.type == WindowEventType::KeyUp)
+    {
+        int action = (ev.type == WindowEventType::KeyDown) ? 1 : 0;
+        ke_msg_key_event msg = {(int32_t)ev.data.key.key_code, action};
+        pipe_->broadcast(pipe_, KE_MSG_KEY_EVENT, &msg, sizeof(msg));
+    }
 }
 
 } // namespace kernel_engine::window

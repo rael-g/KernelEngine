@@ -9,12 +9,13 @@ extern "C" {
 #endif
 
 typedef struct ke_window_glfw_params {
-    struct ke_allocator* allocator;
-    struct ke_logger*    logger;
-    const char*          title;
-    int32_t              width;
-    int32_t              height;
-    ke_bool              fullscreen;
+    struct ke_allocator*  allocator;
+    struct ke_logger*     logger;
+    struct ke_message_pipe* message_pipe;
+    const char*           title;
+    int32_t               width;
+    int32_t               height;
+    ke_bool               fullscreen;
 } ke_window_glfw_params;
 
 /**
