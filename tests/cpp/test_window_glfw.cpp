@@ -61,7 +61,7 @@ TEST(WindowFactoryTest, Create_NullParams_ReturnsInvalidArgument) {
 
 TEST(WindowFactoryTest, Create_NullAllocator_ReturnsInvalidArgument) {
     ke_window* w = nullptr;
-    ke_window_glfw_params params = { nullptr, nullptr, "Test", 800, 600, 0 };
+    ke_window_glfw_params params = { nullptr, nullptr, nullptr, "Test", 800, 600, 0 };
     ASSERT_EQ(ke_window_glfw_create(&params, &w), KE_ERROR_INVALID_ARGUMENT);
 }
 
