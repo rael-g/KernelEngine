@@ -105,7 +105,9 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         if (tex == kGpuInvalidHandle) tex = textures.default_2d_tex;
         GpuTextureHandle shadow_tex = shadows.GetActiveShadowTex();
         if (shadow_tex == kGpuInvalidHandle) shadow_tex = textures.default_2d_tex;
-        GpuTextureHandle nmap_tex = textures.GetTextureIdx(static_cast<ke_texture_handle>(mat.normal_map_handle));
+        GpuTextureHandle nmap_tex = (mat.normal_map_handle != 0)
+            ? textures.GetTextureIdx(static_cast<ke_texture_handle>(mat.normal_map_handle))
+            : kGpuInvalidHandle;
         float normal_params[4] = {nmap_tex != kGpuInvalidHandle ? 1.0f : 0.0f, 0.f, 0.f, 0.f};
         if (nmap_tex == kGpuInvalidHandle) nmap_tex = textures.default_2d_tex;
         ctx.gpu->SetUniform(lighting.normal_params_uniform, normal_params, 1);
