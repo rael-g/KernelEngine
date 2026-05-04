@@ -1624,6 +1624,208 @@ caching is opt-in via a caller-provided key.
 
 ---
 
+### Track X — Rendering Features Backlog
+
+Items pending from the rendering roadmap. All features listed as Done in `ROADMAP.md` are
+confirmed complete. The three remaining items:
+
+#### X.1 Depth Prepass (Early-Z)
+
+**Goal**: reduce overdraw by running a geometry-only pass before the main scene pass.
+Fragments that would be overdrawn fail the depth test and are discarded before the expensive
+PBR fragment shader runs.
+
+**Design**: always-on pass on view 0 (currently shadow). Shadow pass moves to view 1, scene to
+view 2. Depth buffer from the prepass is shared with the HDR framebuffer using
+`BGFX_TEXTURE_RT_WRITE_ONLY` so the scene pass uses `DEPTH_TEST_EQUAL` instead of
+`DEPTH_TEST_LESS`.
+
+**Validation**: enable overdraw visualization in bgfx debug mode (`BGFX_DEBUG_OVERDRAW`).
+Overdraw count on geometry should visibly drop when prepass is active.
+
+#### X.2 KTX2 / Compressed Textures
+
+**Goal**: GPU-compressed textures (BC7/ASTC) with embedded mipmaps loaded directly without
+CPU decode. Eliminates the current CPU mipmap box-filter path for large textures.
+
+Requires: `ktx` library (via vcpkg), bgfx `createTexture` with `BGFX_TEXTURE_NONE` flags for
+pre-compressed data. The `ke_image_load_file` API (Track U.4) would gain a `ke_image_load_ktx`
+variant.
+
+#### X.3 Offline Asset Pipeline
+
+**Goal**: bake glTF + PNG → engine binary format at build time. Runtime loading reads only
+pre-processed binary — no Assimp, no stb_image at runtime.
+
+This is a prerequisite for shipping a game. Design deferred to Phase Q (Asset System) which
+must define the binary format and `AssetHandle<T>` lifecycle first.
+
+---
+
+### Track Y — Observability
+
+Based on the detailed observability plan in the original ROADMAP.md. Track U.2 covers bgfx
+abort capture; this track covers the full observability picture.
+
+> DB-01 overlaps with Track U.2 — implement them together.
+
+#### Y.1 (DB-01) bgfx Callback — Fatal and Trace
+
+*(See Track U.2 for full design.)*
+
+Implement `KernelBgfxCallbacks : public bgfx::CallbackI`:
+- `fatal()` → log `KE_LOG_LEVEL_ERROR` with bgfx file/line/code, then throw `BgfxFatalException`.
+- `traceVargs()` → format with `vsnprintf`, emit `KE_LOG_LEVEL_DEBUG` tagged `"bgfx"`.
+- Pass to `bgfx::init`. Enable `init.debug = true` in non-Release builds to activate
+  bgfx internal validation and `VK_LAYER_KHRONOS_validation`.
+
+**Acceptance**: the old `setBuffer+submit` crash produces `[ERROR][bgfx] ...` in the log
+before termination, instead of a silent `0x80000003`.
+
+#### Y.2 (DB-02) `LogErr` Helper for C++ `ke_result` Paths
+
+Create a local helper in C++ render code:
+
+```cpp
+static ke_result LogErr(ke_logger* log, ke_result r,
+                         const char* ctx, const char* detail) {
+    ke_log_error(log, "render", "[%s] %s", ctx, detail);
+    return r;
+}
+```
+
+Replace every `return KE_ERROR_*` that has a `logger_` in scope with
+`return LogErr(logger_, KE_ERROR_*, __func__, "detail")`.
+
+#### Y.3 (DB-03) Debug Logging in Initialization
+
+In `BgfxGpuDevice::Init` (or equivalent), add `KE_LOG_LEVEL_DEBUG` lines for:
+- Resolved shader path and whether the file exists on disk.
+- Result of each `load_shader()` call: name + valid/invalid.
+- Result of each `createUniform()`, `createFrameBuffer()`.
+- At the end: GPU vendor name and renderer type from `bgfx::getCaps()`.
+
+**Acceptance**: with `KE_LOG_LEVEL_DEBUG`, a missing shader produces
+`[DEBUG][bgfx] load_shader("fs_basic"): NOT FOUND at shaders/fs_basic.bin`.
+
+#### Y.4 (DB-04) Enrich `KernelException` with Symbolic Result Names
+
+```csharp
+public static class KernelException
+{
+    private static readonly Dictionary<int, string> ResultNames = new()
+    {
+        [(int)ke_result.KE_ERROR_RENDER]            = "KE_ERROR_RENDER",
+        [(int)ke_result.KE_ERROR_INVALID_ARGUMENT]  = "KE_ERROR_INVALID_ARGUMENT",
+        // ...
+    };
+
+    public static void ThrowIfFailed(ke_result r, string context = "")
+    {
+        if (r == ke_result.KE_OK) return;
+        var name = ResultNames.GetValueOrDefault((int)r, $"ke_result({(int)r})");
+        throw new KernelException($"{name}{(context.Length > 0 ? $" in {context}" : "")}");
+    }
+}
+```
+
+#### Y.5 (DB-05) Audit `_ =` Result Discards in Framework
+
+Grep for `_ =` in `KernelEngine.Framework`. For each:
+- If the call can fail: replace with `KernelException.ThrowIfFailed(result, nameof(method))`.
+- If failure is truly expected and harmless: add an explicit comment explaining why.
+
+#### Y.6 (DB-06) Top-Level Exception Handler in `Application.Run()`
+
+Wrap the main loop body in `try/catch(Exception ex)` that logs via logger before rethrowing.
+Guarantees exceptions appear in the log even if the sink doesn't auto-flush on unwind.
+
+#### Y.7 (DB-07) Synchronous Flush in Log Sinks
+
+Verify `ConsoleSink` and any future sinks write synchronously — no internal buffer that
+survives a crash unwritten. If buffering exists, call `Flush()` at the end of each `Log()`.
+
+#### Y.8 (DB-08) Native SEH Crash Handler
+
+Register `SetUnhandledExceptionFilter` via P/Invoke before starting the loop:
+
+```csharp
+[DllImport("kernel32")]
+static extern IntPtr SetUnhandledExceptionFilter(IntPtr handler);
+```
+
+The handler writes directly to `Console.Error` (logger state may be corrupt):
+```
+[FATAL] Native crash SEH 0x80000003 (STATUS_BREAKPOINT — bgfx debug assert)
+```
+
+Common codes to map:
+- `0x80000003` = STATUS_BREAKPOINT (bgfx assert / `debugBreak()`)
+- `0xC0000005` = ACCESS_VIOLATION
+- `0xC00000FD` = STACK_OVERFLOW
+
+Calls `Environment.Exit(1)` to guarantee a non-zero exit code.
+
+**Acceptance**: the original crash (`setBuffer+submit`) produces
+`[FATAL] Native crash SEH 0x80000003 (STATUS_BREAKPOINT — bgfx debug assert)` in stderr
+before terminating.
+
+---
+
+### Track Z — Examples Completion
+
+Examples are the E2E integration tests for the engine. Each one validates a feature slice
+end-to-end from C# Framework to GPU output.
+
+**Log contract** (all examples must comply):
+
+At startup:
+```
+[KernelEngine] Example: <name>
+[KernelEngine] Renderer: bgfx/Vulkan
+[KernelEngine] Features: <comma-separated active features>
+```
+
+Every 5 seconds:
+```
+[KernelEngine] FPS: <value>  Entities: <count>  Lights: <Np Ns Nd>
+```
+
+On any `ke_result != KE_OK`:
+```
+[KernelEngine] ERROR: <function> returned <code>
+```
+
+**Complexity ladder:**
+
+| # | Name | What it tests | Expected visual |
+|---|------|---------------|-----------------|
+| 01 | `01_window_scene` | Window, clear color, main loop, spinning node | Cycling background, rotating orange quad |
+| 02 | `02_textured_quad` | Texture loading (PNG), albedo material, UV | Quad with PNG image |
+| 03 | `03_pbr_directional` | PBR GGX, directional light, camera orbit | Lit sphere with moving specular highlight |
+| 04 | `04_normal_map` | Normal map pipeline, TBN | Flat quad that looks like a brick surface |
+| 05 | `05_skybox_ibl` | Cubemap, skybox, IBL reflections | Reflective sphere inside a skybox |
+| 06 | `06_shadow_map` | Shadow pass, depth bias, shadow receiving | Hard shadow from box onto ground plane |
+| 07 | `07_point_lights` | Clustered Forward — N point lights | Multiple colored lights illuminating scene |
+| 08 | `08_spot_lights` | Spot lights, inner/outer cone falloff | Flashlight-style cone illumination |
+| 09 | `09_many_lights` | Clustered scaling — 256 point lights | Dense light field, stable FPS, no visible cap |
+| 10 | `10_postfx` | HDR tonemapping + bloom | Emissive areas bleeding light |
+| 11 | `11_ssao` | SSAO prepass, hemisphere kernel | Crevices and corners darkened by AO |
+| 12 | `12_asset_loader` | Assimp glTF load, texture dedup | DamagedHelmet (or similar) with PBR materials |
+| 13 | `13_full_scene` | All features combined, FPS ≥ 30 @ 1080p | glTF model, skybox, shadow, 32 lights, SSAO, bloom |
+
+**Current status**: examples 01–05 implemented; 06–13 pending.
+
+**Notes:**
+- Example 01–05 compilation errors from Phase E API migration (handle types, `OnReady`/`OnUpdate`
+  signatures) need to be fixed before any new example is added.
+- Each example should be added to the screenshot regression suite (Track T.2, Layer 1) as its
+  golden image is captured.
+- Example 13 serves as the synthetic benchmark: if FPS drops below 30 at 1080p on reference
+  hardware, it is a regression.
+
+---
+
 ## 9. Decisions Log
 
 | # | Decision | Rationale |
