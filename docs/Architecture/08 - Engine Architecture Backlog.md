@@ -8,6 +8,101 @@
 
 ---
 
+## 0. Engine Goals and Priority Strategy
+
+### Goals
+
+1. **Building blocks for engine construction.** The primary output is a set of well-designed APIs
+   that allow correct and diverse implementations. A good API that supports a mediocre implementation
+   is more valuable than a perfect implementation with a bad API. Implementations improve over time;
+   API mistakes compound.
+
+2. **Demo-driven development.** The engine must evolve fast enough to develop a real game. Time spent
+   perfecting infrastructure is time not spent building the feature set a game needs. We move fast,
+   ship examples, and refactor only when the base is broad enough to justify it.
+
+3. **Godot-like scene/node paradigm in the Framework.** The kernel stays pure ECS — no notion of
+   "scene" or "node" beyond ECS wrappers. The Framework layer builds the Godot-like abstraction on
+   top: `Node`, `Scene`, composable `.scene` files, `.project` config. The editor (future) will
+   manipulate those files; they remain human-editable without an editor.
+
+4. **Debuggability is a prerequisite, not a luxury.** Without fast feedback on what is broken,
+   every new feature risks silently inheriting threading bugs or rendering defects from previous
+   work. Minimum viable observability must be in place before the fast-prototyping phase begins.
+
+### Priority Tiers
+
+Items are assigned to one of four tiers. Work proceeds top-down; lower tiers are not started
+until the tier above is stable.
+
+---
+
+#### Tier 1 — Verify and Stabilize *(do now)*
+
+The engine has implemented many rendering features (shadow maps, clustered lights, SSAO, bloom,
+IBL, normal maps) that have **no runnable example to verify them**. Before adding anything new,
+we need E2E coverage of what already exists and a stable, debuggable baseline.
+
+| Item | What |
+|------|------|
+| Examples 01–05 migration | Migrate to Phase E API (`IResourceFactory`, `ISceneWriter`, `IInputReader`) |
+| Examples 06–13 (Track Z) | Create examples for every implemented feature — these are the E2E tests |
+| Phase F | Structured shutdown — prevents hangs that block iteration |
+| Phase H | Remove `ke_message_pipe` — decided, clean the debt |
+| Track Y.1 + Y.7 + Y.8 | bgfx fatal callback, sync log flush, SEH crash handler — minimum debuggability |
+| Track U.1 | Wire `WindowConfig.vsync` — trivial, removes a papercut |
+
+---
+
+#### Tier 2 — Threading Hardening *(minimum viable)*
+
+Just enough to stop threading bugs from leaking into new features. Not the full audit — only
+the items that cause **silent corruption or guaranteed crashes** during normal gameplay code.
+
+| Item | What |
+|------|------|
+| Phase I | Entity generations — stale refs are currently undetectable |
+| Phase J | Deferred structural mutations — script destroying an entity during update crashes |
+| Phase K | Node registry thread safety — real race condition with enkiTS workers |
+| Phase G | enkiTS CLR thread attachment — managed ISystem on worker threads |
+
+Phases L (read/write enforcement), M (frame arena), N (profiling) are deferred — they improve
+correctness and performance but do not cause crashes or silent corruption in the current usage.
+
+---
+
+#### Tier 3 — Fast Prototyping Base *(build the game foundation)*
+
+With a verified feature set and stable threading, move fast on game-development features.
+
+| Item | What |
+|------|------|
+| Track W.2 | `.scene` / `.project` file format — Framework only, kernel unchanged |
+| Godot-like scene composition | `SceneAsset`, `SceneNode`, composable prefab hierarchy |
+| Examples 06–13 extras | Extend examples to demonstrate scene composition once format exists |
+
+---
+
+#### Tier 4 — Deferred *(after broad game-dev base)*
+
+Revisit only when the engine can drive a complete game and the ROI of hardening is clear.
+
+| Item | What |
+|------|------|
+| Phase L | Read/write set enforcement in debug |
+| Phase M | Frame arena allocator, zero malloc on hot path |
+| Phase N | Profiling, Chrome Trace / Tracy integration |
+| Phase O | ABI versioning strategy |
+| Phase P | Multi-component ECS queries |
+| Phase Q | Full asset system (`AssetHandle<T>`, ref counting, async) |
+| Phase R | Error context (`ke_error_context` thread-local) |
+| Phase S | Real plugin contract (`ke_plugin_register`, runtime discovery) |
+| Track T.2 | Screenshot regression CI |
+| Track W.1 | Codebase audit — orphaned files, wrong-domain code, CMakeLists cleanup |
+| Track X | Rendering: depth prepass, KTX2, offline asset pipeline |
+
+---
+
 ## 1. Problem Catalog
 
 Each defect is classified by severity and type.
