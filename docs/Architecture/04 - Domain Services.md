@@ -12,8 +12,8 @@ The Rendering role is responsible for transforming high-level intent into pixels
 
 ## 3. Interaction (Input)
 The Input role tracks the state of user interaction devices.
-*   **Responsibility**: Decoding hardware events (keyboard, mouse, controllers) into a stable state that the rest of the engine can query.
-*   **Flow**: It typically consumes events from the communication pipe and exposes a polling interface for systems to use during their update cycle.
+*   **Responsibility**: Decoding hardware events (keyboard, mouse, controllers) into an immutable snapshot that the simulation can query safely.
+*   **Flow**: Input state is captured once per OS tick into a `ke_input_snapshot` and handed to the simulation via a lock-free exchange. The simulation reads a frozen, consistent view of input for the entire duration of a frame.
 
 ## 4. Production Pipeline (Shader Compilation)
 This role supports the rendering process by preparing hardware-ready programs.

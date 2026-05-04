@@ -16,8 +16,9 @@ A core architectural invariant is that every operation must have a deterministic
 *   **Failure as a Value**: Error states are returned as first-class values rather than using side-channel mechanisms like exceptions.
 *   **Explicit Handling**: Callers are forced to acknowledge success or failure, leading to more robust and easier-to-debug systems.
 
-## 4. Communication Architecture
-While systems are functional units, they often need to communicate events without introducing direct coupling. The engine facilitates this through an **asynchronous messaging infrastructure**:
-*   **Decoupled Events**: Systems broadcast messages to an abstract pipe.
-*   **Anonymous Consumers**: Interested parties can react to events without any knowledge of the producer.
-*   **Flow Control**: This mechanism ensures that high-frequency events (like input) don't create "wiring hell" between unrelated domains.
+## 4. Cross-Thread Data Flow
+Data that crosses thread boundaries does so through explicit, typed contracts — never through shared mutable state.
+
+*   **Frame Packet** (`ke_frame_packet`): a per-frame snapshot written by the simulation and consumed by the renderer. It is the sole communication channel between those two domains.
+*   **Input Snapshot** (`ke_input_snapshot`): an immutable capture of input state produced once per OS tick and consumed by the simulation at the start of each world update.
+*   **Resource Commands**: GPU resource creation requests are queued by the simulation and drained by the renderer. The kernel provides the queue primitive; the policy (blocking, async) is the framework's choice.

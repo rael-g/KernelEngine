@@ -10,16 +10,24 @@ The kernel is a provider of **primitives and performance**. The high-level frame
 
 ---
 
-## Final thread model
+## Kernel vs Framework responsibility
+
+**The kernel imposes no threading model.** It provides primitives — `ke_thread`, `ke_semaphore`, `ke_frame_sync` — that any implementation can use freely. A headless simulation could run on a single thread; a server could use dozens.
+
+The 3-thread model described below is a **Framework decision** (`Application.cs`), chosen because it fits the use case of a real-time game with a GLFW window and a bgfx renderer. It is not the only valid model and it is not enforced by the kernel.
+
+---
+
+## Framework thread model (KernelEngine.Framework)
 
 ```
-ke.main    — window/OS thread: GLFW PollEvents, Input, MessagePipe pump.
-ke.render  — renderer thread: Initialize → loop(SubmitPacket → Frame) → Shutdown.
-ke.sim     — simulation thread: World.Update → drives the native System Graph.
-Worker Pool (enkiTS) — parallel waves within World.Update.
+ke.main    — window/OS thread: GLFW PollEvents, Input snapshot, shutdown trigger.
+ke.render  — renderer thread: Initialize → loop(ResourceQueue.Drain → SubmitPacket → Frame) → Shutdown.
+ke.sim     — simulation thread: World.Update → drives the native System Graph → OnUpdate.
+Worker Pool (enkiTS) — parallel waves within World.Update, sub-tasks of ke.sim.
 ```
 
-**Key design principle**: the renderer does not manage its own threads. The engine creates `ke.render` and pins all GPU calls to it. This works identically for any backend — OpenGL, DX11, Vulkan, bgfx — whether or not it has internal threading support.
+**Key design principle**: the renderer does not manage its own threads. The Framework creates `ke.render` and pins all GPU calls to it. This works identically for any backend — OpenGL, DX11, Vulkan, bgfx — whether or not it has internal threading support.
 
 **Startup sequence**:
 1. `ke.main` creates the window (GLFW requires main thread).
@@ -28,6 +36,8 @@ Worker Pool (enkiTS) — parallel waves within World.Update.
 4. `ke.main` enters the event loop.
 
 **Shutdown sequence**: `ke.main` sets `_running = false` → poison-pill write unblocks `ke.render` → both worker threads join → `Renderer.Dispose()` called from `ke.render` (same thread as `Initialize`).
+
+> Note: `ke.main` previously also pumped a `MessagePipe`. That bus was removed (Phase H); input now travels via `ke_input_snapshot` through a lock-free exchange buffer.
 
 ---
 
