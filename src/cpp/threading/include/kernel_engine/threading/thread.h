@@ -16,6 +16,12 @@ extern "C"
     /// @brief Sets the name of the calling thread (useful for the main thread).
     KE_THREADING_API void ke_thread_set_current_name(const char *name);
 
+    /// @brief Retrieves the name assigned to the calling thread.
+    KE_THREADING_API const char* ke_thread_get_current_name(void);
+
+    /// @brief Asserts that the calling thread matches the expected name.
+    KE_THREADING_API void ke_thread_assert_current(const char *expected_name);
+
 #ifdef __cplusplus
 }
 #endif

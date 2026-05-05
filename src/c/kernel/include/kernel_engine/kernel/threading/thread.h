@@ -30,6 +30,25 @@ extern "C"
         void (*join)(struct ke_thread *self);
     } ke_thread;
 
+    /**
+     * @brief Assigns a human-readable name to the calling thread.
+     * Stored in TLS and visible in debuggers/profilers.
+     */
+    void ke_thread_set_current_name(const char *name);
+
+    /**
+     * @brief Retrieves the name assigned to the calling thread.
+     * @return Thread name or "unknown" if never set.
+     */
+    const char* ke_thread_get_current_name(void);
+
+    /**
+     * @brief Asserts that the calling thread matches the expected name.
+     * In debug builds, crashes with a diagnostic message if it fails.
+     * No-op in release builds.
+     */
+    void ke_thread_assert_current(const char *expected_name);
+
 #ifdef __cplusplus
 }
 #endif

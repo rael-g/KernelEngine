@@ -65,6 +65,33 @@ public sealed unsafe class KernelThread : IDisposable
         finally { Marshal.FreeHGlobal(nameBytes); }
     }
 
+    /// <summary>Returns the name of the calling thread.</summary>
+    public static string GetCurrentName()
+    {
+        var ptr = NativeMethods.thread_get_current_name();
+        return Marshal.PtrToStringAnsi((IntPtr)ptr) ?? "unknown";
+    }
+
+    /// <summary>
+    /// Asserts that the calling thread matches the expected name.
+    /// Throws an <see cref="InvalidOperationException"/> if the affinity contract is violated.
+    /// </summary>
+    public static void AssertCurrent(string expectedName)
+    {
+#if DEBUG
+        var current = GetCurrentName();
+        if (current != expectedName)
+        {
+            throw new InvalidOperationException(
+                $"Thread affinity violation: Expected '{expectedName}', but current thread is '{current}'.");
+        }
+        // Also call native assertion to be safe and cover native callers.
+        var nameBytes = Marshal.StringToHGlobalAnsi(expectedName);
+        try { NativeMethods.thread_assert_current((sbyte*)nameBytes); }
+        finally { Marshal.FreeHGlobal(nameBytes); }
+#endif
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {

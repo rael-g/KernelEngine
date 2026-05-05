@@ -14,12 +14,19 @@
 #    include <pthread.h>
 #endif
 
+#include <string>
+#include <cstdio>
+#include <cassert>
+
 namespace kernel_engine::threading
 {
+
+static thread_local std::string s_thread_name = "unknown";
 
 static void set_thread_name_platform(const char *name)
 {
     if (!name) return;
+    s_thread_name = name;
 #if defined(_WIN32)
     int len = MultiByteToWideChar(CP_UTF8, 0, name, -1, nullptr, 0);
     if (len > 0)
@@ -37,22 +44,25 @@ static void set_thread_name_platform(const char *name)
 }
 
 KeThread::KeThread(const ke_thread_desc *desc)
-    : thread_([desc_copy = *desc]() {
-          set_thread_name_platform(desc_copy.name);
-          if (desc_copy.affinity_mask != 0)
+    : thread_([name          = std::string(desc->name ? desc->name : ""),
+               affinity_mask = desc->affinity_mask,
+               func          = desc->func,
+               user_data     = desc->user_data]() {
+          set_thread_name_platform(name.c_str());
+          if (affinity_mask != 0)
           {
 #if defined(_WIN32)
-              SetThreadAffinityMask(GetCurrentThread(), (DWORD_PTR)desc_copy.affinity_mask);
+              SetThreadAffinityMask(GetCurrentThread(), (DWORD_PTR)affinity_mask);
 #elif defined(__linux__)
               cpu_set_t cpuset;
               CPU_ZERO(&cpuset);
               for (int i = 0; i < 64; ++i)
-                  if (desc_copy.affinity_mask & (1ULL << i))
+                  if (affinity_mask & (1ULL << i))
                       CPU_SET(i, &cpuset);
               pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 #endif
           }
-          desc_copy.func(desc_copy.user_data);
+          func(user_data);
       })
 {
 }
@@ -112,8 +122,26 @@ extern "C"
         return KE_OK;
     }
 
-    void ke_thread_set_current_name(const char *name)
+    KE_THREADING_API void ke_thread_set_current_name(const char *name)
     {
         kernel_engine::threading::set_thread_name_platform(name);
+    }
+
+    KE_THREADING_API const char* ke_thread_get_current_name(void)
+    {
+        return kernel_engine::threading::s_thread_name.c_str();
+    }
+
+    KE_THREADING_API void ke_thread_assert_current(const char *expected_name)
+    {
+#ifndef NDEBUG
+        if (kernel_engine::threading::s_thread_name != expected_name)
+        {
+            fprintf(stderr, "[FATAL] Thread affinity violation! Expected '%s', but current is '%s'.\n",
+                    expected_name, kernel_engine::threading::s_thread_name.c_str());
+            assert(false);
+            abort();
+        }
+#endif
     }
 }
