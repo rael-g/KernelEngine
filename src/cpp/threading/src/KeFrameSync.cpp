@@ -26,8 +26,8 @@ KeFrameSync::KeFrameSync(ke_allocator *alloc,
     {
         auto &p = packets_[i];
         memset(&p, 0, sizeof(ke_frame_packet));
-        p.skybox_handle = UINT32_MAX;
-        p.shadow.map_handle = UINT32_MAX;
+        p.skybox_handle = KE_TEXTURE_NONE;
+        p.shadow.map_handle = KE_SHADOW_MAP_NONE;
 
         p.draw_commands = static_cast<ke_draw_command *>(
             alloc->alloc(alloc, sizeof(ke_draw_command) * draw_capacity,
@@ -87,8 +87,8 @@ ke_frame_packet *KeFrameSync::BeginWrite()
     p.spot_light_count  = 0;
     p.has_dir_light     = false;
     p.has_skybox        = false;
-    p.skybox_handle     = UINT32_MAX;
-    p.shadow.map_handle = UINT32_MAX;
+    p.skybox_handle     = KE_TEXTURE_NONE;
+    p.shadow.map_handle = KE_SHADOW_MAP_NONE;
     return &p;
 }
 
