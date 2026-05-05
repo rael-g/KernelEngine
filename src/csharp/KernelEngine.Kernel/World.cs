@@ -93,34 +93,43 @@ public sealed unsafe class World : IDisposable
     /// Advances the simulation by one frame.
     /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s in parallel waves.
     /// </summary>
-    public Result Update(FramePacket? packet = null)
+    public Result Update(FramePacket? packet = null, IInputReader? input = null)
     {
-        var now = _stopwatch.Elapsed;
-        var dt = (float)(now - _lastTime).TotalSeconds;
-        _lastTime = now;
-
-        var frame = new ke_frame { delta_time = dt };
-        var res = Native->update(Native, &frame);
-        if (res != ke_result.KE_OK) return res;
-
-        // Lazily wrap the native task scheduler (null if none is configured — RunAsync falls back to sequential).
-        if (_taskScheduler == null)
+        KernelThread.AssertCurrent("ke.sim");
+        Input.SetCurrentReader(input);
+        try
         {
-            var nativeSched = _native->get_task_scheduler(_native);
-            if (nativeSched != null)
-                _taskScheduler = new TaskScheduler(nativeSched);
-        }
+            var now = _stopwatch.Elapsed;
+            var dt = (float)(now - _lastTime).TotalSeconds;
+            _lastTime = now;
 
-        if (_schedulerDirty)
+            var frame = new ke_frame { delta_time = dt };
+            var res = Native->update(Native, &frame);
+            if (res != ke_result.KE_OK) return res;
+
+            // Lazily wrap the native task scheduler (null if none is configured — RunAsync falls back to sequential).
+            if (_taskScheduler == null)
+            {
+                var nativeSched = _native->get_task_scheduler(_native);
+                if (nativeSched != null)
+                    _taskScheduler = new TaskScheduler(nativeSched);
+            }
+
+            if (_schedulerDirty)
+            {
+                _scheduler.Build(_systems);
+                _schedulerDirty = false;
+            }
+
+            // Run systems in waves (Sim thread waits for parallel workers to finish wave by wave)
+            _scheduler.RunAsync(this, dt, packet, _taskScheduler!, input).GetAwaiter().GetResult();
+
+            return ke_result.KE_OK;
+        }
+        finally
         {
-            _scheduler.Build(_systems);
-            _schedulerDirty = false;
+            Input.SetCurrentReader(null);
         }
-
-        // Run systems in waves (Sim thread waits for parallel workers to finish wave by wave)
-        _scheduler.RunAsync(this, dt, packet, _taskScheduler!).GetAwaiter().GetResult();
-
-        return ke_result.KE_OK;
     }
 
     // ── Disposal ──────────────────────────────────────────────────────────────

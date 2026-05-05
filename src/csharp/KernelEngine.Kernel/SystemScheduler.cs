@@ -48,16 +48,24 @@ internal sealed class SystemScheduler
         _waves = [.. waves];
     }
 
-    public async Task RunAsync(World world, float dt, FramePacket? packet, TaskScheduler taskScheduler)
+    public async Task RunAsync(World world, float dt, FramePacket? packet, TaskScheduler taskScheduler, IInputReader? input = null)
     {
         foreach (var wave in _waves)
         {
             if (!wave.Parallel)
             {
                 // Serial execution: run directly on the sim thread
-                foreach (var system in wave.Systems)
+                Input.SetCurrentReader(input);
+                try
                 {
-                    system.Update(world, dt, packet);
+                    foreach (var system in wave.Systems)
+                    {
+                        system.Update(world, dt, packet, input);
+                    }
+                }
+                finally
+                {
+                    Input.SetCurrentReader(null);
                 }
             }
             else if (taskScheduler != null)
@@ -67,7 +75,18 @@ internal sealed class SystemScheduler
                 for (int i = 0; i < wave.Systems.Length; i++)
                 {
                     var sys = wave.Systems[i];
-                    tasks[i] = taskScheduler.Dispatch(() => sys.Update(world, dt, packet));
+                    tasks[i] = taskScheduler.Dispatch(() =>
+                    {
+                        Input.SetCurrentReader(input);
+                        try
+                        {
+                            sys.Update(world, dt, packet, input);
+                        }
+                        finally
+                        {
+                            Input.SetCurrentReader(null);
+                        }
+                    });
                 }
 
                 // Wait for all systems in this wave to finish before starting the next wave
@@ -76,8 +95,16 @@ internal sealed class SystemScheduler
             else
             {
                 // No task scheduler — fall back to sequential
-                foreach (var system in wave.Systems)
-                    system.Update(world, dt, packet);
+                Input.SetCurrentReader(input);
+                try
+                {
+                    foreach (var system in wave.Systems)
+                        system.Update(world, dt, packet, input);
+                }
+                finally
+                {
+                    Input.SetCurrentReader(null);
+                }
             }
         }
     }
