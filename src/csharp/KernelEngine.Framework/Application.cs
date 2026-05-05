@@ -8,7 +8,7 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Application shell: resolves services from DI, owns the frame loop, and coordinates three threads.
 /// <list type="bullet">
-///   <item><b>ke.main</b>   — window/OS thread: GLFW PollEvents, Input, MessagePipe pump.</item>
+///   <item><b>ke.main</b>   — window/OS thread: GLFW PollEvents, Input snapshotting.</item>
 ///   <item><b>ke.render</b> — renderer thread: on_initialize, SubmitPacket, Frame, on_shutdown.
 ///         All renderer API calls are pinned to this thread, making any backend work regardless
 ///         of whether it has internal threading support (OpenGL, DX11, bgfx single-thread, etc.).</item>
@@ -20,7 +20,6 @@ public class Application : IDisposable
     public IServiceProvider Services { get; private set; } = null!;
     public Allocator Allocator { get; private set; } = null!;
     public Logger? Logger { get; private set; }
-    public MessagePipe? MessagePipe { get; private set; }
     public Window Window { get; private set; } = null!;
     public Renderer Renderer { get; private set; } = null!;
     public Input? Input { get; private set; }
@@ -29,12 +28,15 @@ public class Application : IDisposable
     public World ActiveWorld { get; set; } = null!;
 
     /// <summary>Called once on ke.sim after ke.render is initialized and systems are registered.</summary>
-    public Action? OnReady { get; set; }
+    public Action<IResourceFactory>? OnReady { get; set; }
 
     /// <summary>Called every sim frame after <see cref="World.Update"/>.</summary>
-    public Action? OnUpdate { get; set; }
+    public Action<ISceneWriter, IInputReader>? OnUpdate { get; set; }
 
-    private volatile bool _running;
+    private readonly CancellationTokenSource _cts = new();
+    private readonly InputBuffer _inputBuffer = new();
+    private readonly ResourceCommandQueue _resourceQueue = new();
+    private ShadowRenderSystem? _shadowSystem;
 
     public void Run(IServiceCollection serviceCollection)
     {
@@ -44,7 +46,6 @@ public class Application : IDisposable
 
         Allocator   = Services.GetRequiredService<Allocator>();
         Logger      = Services.GetService<Logger>();
-        MessagePipe = Services.GetService<MessagePipe>();
 
         if (Logger != null)
             foreach (var sink in Services.GetServices<ILoggerSink>())
@@ -61,11 +62,10 @@ public class Application : IDisposable
 
         InitializeSystems();
 
-        _running = true;
-
         // ke.sim writes → ke.render reads.
         using var frameSync     = FrameSync.Create(Allocator, bufferCount: 2);
         using var renderReady   = new System.Threading.ManualResetEventSlim(false);
+        using var simReady      = new System.Threading.ManualResetEventSlim(false);
 
         Exception? renderException = null;
         Exception? simException    = null;
@@ -77,12 +77,33 @@ public class Application : IDisposable
             {
                 Renderer.Initialize();
                 Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
+
+                // Create the shadow map on ke.render (GPU creation requires this thread).
+                if (_shadowSystem != null)
+                {
+                    var shadowMap = Renderer.CreateShadowMap(1024, 1024);
+                    if (shadowMap.IsOk)
+                        _shadowSystem.SetShadowMap(shadowMap.Value);
+                }
+
                 renderReady.Set(); // signal ke.sim that the renderer is ready
 
-                while (true)
+                // Drain resource commands produced by ke.sim's OnReady before entering
+                // the frame loop — otherwise BeginRead blocks while ke.sim blocks on
+                // CreateMaterial/CreateMesh (deadlock).
+                while (!simReady.IsSet && !_cts.IsCancellationRequested)
                 {
+                    _resourceQueue.Drain(Renderer);
+                    System.Threading.Thread.SpinWait(100);
+                }
+                _resourceQueue.Drain(Renderer); // final drain after simReady
+
+                while (!_cts.IsCancellationRequested)
+                {
+                    _resourceQueue.Drain(Renderer);
+
                     var packet = frameSync.BeginRead();
-                    if (!_running) { packet.EndRead(); break; }
+                    if (_cts.IsCancellationRequested) { packet.EndRead(); break; }
 
                     Renderer.SubmitPacket(packet);
                     Renderer.Frame();
@@ -93,8 +114,9 @@ public class Application : IDisposable
             catch (Exception ex)
             {
                 renderException = ex;
-                _running        = false;
+                _cts.Cancel();
                 renderReady.Set(); // unblock ke.sim even on failure
+                simReady.Set();    // unblock ke.render's OnReady drain loop
             }
             finally
             {
@@ -108,23 +130,31 @@ public class Application : IDisposable
             try
             {
                 renderReady.Wait(); // wait for ke.render to finish Initialize()
-                if (!_running) return;
+                if (_cts.IsCancellationRequested) return;
 
-                OnReady?.Invoke();
+                var factory = new ResourceCommandFactory(_resourceQueue);
+                OnReady?.Invoke(factory);
+                simReady.Set(); // signal ke.render that OnReady is complete
 
-                while (true)
+                while (!_cts.IsCancellationRequested)
                 {
                     var packet = frameSync.BeginWrite();
-                    if (!_running) { packet.EndWrite(); break; } // poison-pill
-                    ActiveWorld?.Update(packet: packet);
-                    OnUpdate?.Invoke();
+                    if (_cts.IsCancellationRequested) { packet.EndWrite(); break; } // poison-pill
+                    
+                    var input = _inputBuffer.Consume();
+                    var writer = new FramePacketSceneWriter(packet);
+
+                    ActiveWorld?.Update(packet: packet, input: input);
+                    OnUpdate?.Invoke(writer, input);
+                    
                     packet.EndWrite();
                 }
             }
             catch (Exception ex)
             {
                 simException = ex;
-                _running     = false;
+                _cts.Cancel();
+                // Signal ke.render to exit BeginRead if it's waiting
                 try { var p = frameSync.BeginWrite(); p.EndWrite(); } catch { }
             }
         });
@@ -134,23 +164,25 @@ public class Application : IDisposable
         // ke.main: window and OS events only.
         try
         {
-            while (_running)
+            while (!_cts.IsCancellationRequested)
             {
-                Window.PollEvents();
+                // Update clears last frame's pressed/released before events fire.
                 Input?.Update();
-                MessagePipe?.Pump();
+                Window.PollEvents();
+                if (Input != null)
+                    _inputBuffer.Produce(Input.GetSnapshot());
 
                 if (Window.ShouldClose())
-                    _running = false;
+                    _cts.Cancel();
             }
         }
         catch (Exception ex)
         {
             Logger?.Error("Application", $"ke.main exception: {ex}");
-            _running = false;
+            _cts.Cancel();
         }
 
-        _running = false;
+        // Wait for threads to exit
         simThread.Join();
         renderThread.Join();
 
@@ -171,15 +203,16 @@ public class Application : IDisposable
         MeshNode.Initialize(ActiveWorld.Registry);
         SkyboxNode.Initialize(ActiveWorld.Registry);
 
-        MeshNode.DefaultMeshHandle     = 0;
-        MeshNode.DefaultMaterialHandle = 0;
+        MeshNode.DefaultMeshHandle     = new(0);
+        MeshNode.DefaultMaterialHandle = new(0);
 
         var xformCid = ActiveWorld.TransformComponentId;
 
         var meshSystem   = new MeshRenderSystem(BgfxSystemDescFactory.CreateMeshSystemDesc(MeshNode.ComponentId, xformCid));
         var lightSystem  = new LightRenderSystem(BgfxSystemDescFactory.CreateLightSystemDesc(LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
         var cameraSystem = new CameraRenderSystem(BgfxSystemDescFactory.CreateCameraSystemDesc(CameraNode.ComponentId, xformCid));
-        var shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(Renderer.Native, LightNode.ComponentId, MeshNode.ComponentId, xformCid));
+        _shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(Renderer.Native, LightNode.ComponentId, MeshNode.ComponentId, xformCid));
+        var shadowSystem = _shadowSystem;
         var skyboxSystem = new SkyboxRenderSystem(BgfxSystemDescFactory.CreateSkyboxSystemDesc(SkyboxNode.ComponentId));
 
         ActiveWorld.AddSystem(meshSystem);
@@ -237,6 +270,10 @@ public class Application : IDisposable
             int code = System.Runtime.InteropServices.Marshal.ReadInt32(
                 System.Runtime.InteropServices.Marshal.ReadIntPtr(exceptionInfo));
 
+            // 0xE0434352 ('MCR\E0') is the CLR managed-exception SEH code.
+            // Returning 0 (EXCEPTION_CONTINUE_SEARCH) lets the CLR unwind it normally.
+            if (code == unchecked((int)0xE0434352)) return 0;
+
             string name = code switch
             {
                 unchecked((int)0x80000003) => "STATUS_BREAKPOINT (bgfx debug assert)",
@@ -254,6 +291,7 @@ public class Application : IDisposable
 
     public virtual void Dispose()
     {
+        _cts.Dispose();
         ActiveWorld?.Dispose();
         (Services as IDisposable)?.Dispose();
     }
