@@ -24,13 +24,11 @@ public static class ServiceCollectionExtensions
                 unsafe
                 {
                     var logger = sp.GetService<Logger>();
-                    var pipe = sp.GetService<MessagePipe>();
 
                     var @params = new ke_render_bgfx_params
                     {
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
-                        message_pipe = pipe != null ? pipe.Native : null,
                         window = sp.GetRequiredService<KernelEngine.Kernel.Window>().Native,
                         shader_path = (sbyte*)shaderPtr,
                     };

@@ -10,8 +10,8 @@ public unsafe partial struct ke_window_glfw_params
     [NativeTypeName("struct ke_logger *")]
     public ke_logger* logger;
 
-    [NativeTypeName("struct ke_message_pipe *")]
-    public ke_message_pipe* message_pipe;
+    [NativeTypeName("struct ke_input *")]
+    public ke_input* input;
 
     [NativeTypeName("const char *")]
     public sbyte* title;

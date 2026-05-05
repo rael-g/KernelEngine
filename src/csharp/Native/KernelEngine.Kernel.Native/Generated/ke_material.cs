@@ -10,8 +10,8 @@ public struct ke_material
     [NativeTypeName("float")] public float g;
     [NativeTypeName("float")] public float b;
     [NativeTypeName("float")] public float a;
-    [NativeTypeName("ke_texture_handle")] public uint albedo;
+    public ke_texture_handle albedo;
     [NativeTypeName("float")] public float metallic;
     [NativeTypeName("float")] public float roughness;
-    [NativeTypeName("ke_texture_handle")] public uint normal_map;
+    public ke_texture_handle normal_map;
 }

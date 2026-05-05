@@ -9,15 +9,38 @@ namespace KernelEngine.Kernel;
 /// </summary>
 public sealed unsafe class Input : IDisposable
 {
+    // ── Static Access ────────────────────────────────────────────────────────
+
+    [ThreadStatic]
+    private static IInputReader? s_currentReader;
+
+    /// <summary>
+    /// Accesses the input snapshot for the current frame.
+    /// Available during <see cref="ISystem.Update"/> and <see cref="Node.OnUpdate"/>.
+    /// </summary>
+    public static IInputReader Current => s_currentReader ?? throw new InvalidOperationException("Input.Current is only available during the simulation update.");
+
+    internal static void SetCurrentReader(IInputReader? reader) => s_currentReader = reader;
+
+    // ── Instance members ──────────────────────────────────────────────────────
+
     private ke_input* _native;
 
-    public Input(Allocator allocator, Logger? logger, MessagePipe messagePipe)
+    public ke_input* Native
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_native == null, this);
+            return _native;
+        }
+    }
+
+    public Input(Allocator allocator, Logger? logger)
     {
         ke_input* native;
         var res = NativeMethods.input_create(
             allocator.Native,
             logger != null ? logger.Native : null,
-            messagePipe.Native,
             &native);
 
         KernelException.ThrowIfFailed(res, nameof(NativeMethods.input_create));
@@ -25,7 +48,20 @@ public sealed unsafe class Input : IDisposable
     }
 
     /// <summary>Updates internal state by processing pending messages in the pipe.</summary>
-    public Result Update() => _native->update(_native);
+    public Result Update()
+    {
+        KernelThread.AssertCurrent("ke.main");
+        return _native->update(_native);
+    }
+
+    /// <summary>Captures a frozen snapshot of the current input state.</summary>
+    public ke_input_snapshot GetSnapshot()
+    {
+        KernelThread.AssertCurrent("ke.main");
+        ke_input_snapshot snapshot;
+        _native->get_snapshot(_native, &snapshot);
+        return snapshot;
+    }
 
     /// <summary>Returns true if the key was pressed this frame.</summary>
     public bool IsKeyPressed(int key) => _native->is_key_pressed(_native, key) != 0;
