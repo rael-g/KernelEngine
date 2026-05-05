@@ -57,42 +57,90 @@ public sealed unsafe class FramePacket
     }
 
     /// <summary>Appends a draw command to the main scene pass. Ignored when at capacity.</summary>
-    public void AddDrawCommand(uint meshHandle, uint materialHandle, Matrix4x4 transform)
+    public void AddDrawCommand(MeshHandle meshHandle, MaterialHandle materialHandle, Matrix4x4 transform)
     {
         if (_packet->draw_count < _packet->draw_capacity)
         {
             ref var cmd = ref _packet->draw_commands[_packet->draw_count++];
-            cmd.mesh_handle     = meshHandle;
-            cmd.material_handle = materialHandle;
+            cmd.mesh_handle     = new ke_mesh_handle { idx = meshHandle.Value };
+            cmd.material_handle = new ke_material_handle { idx = materialHandle.Value };
             cmd.transform       = ToKeMat4(transform);
         }
     }
 
     /// <summary>Appends a draw command to the shadow depth pass. Ignored when at capacity.</summary>
-    public void AddShadowDrawCommand(uint meshHandle, Matrix4x4 transform)
+    public void AddShadowDrawCommand(MeshHandle meshHandle, Matrix4x4 transform)
     {
         if (_packet->shadow_draw_count < _packet->shadow_draw_capacity)
         {
             ref var cmd = ref _packet->shadow_draw_commands[_packet->shadow_draw_count++];
-            cmd.mesh_handle     = meshHandle;
-            cmd.material_handle = uint.MaxValue; // Not used in depth pass
+            cmd.mesh_handle     = new ke_mesh_handle { idx = meshHandle.Value };
+            cmd.material_handle = new ke_material_handle { idx = uint.MaxValue }; // Not used in depth pass
             cmd.transform       = ToKeMat4(transform);
         }
     }
 
     /// <summary>Sets the skybox cubemap handle for this frame.</summary>
-    public void SetSkybox(uint cubemapHandle)
+    public void SetSkybox(TextureHandle cubemapHandle)
     {
-        _packet->skybox_handle = cubemapHandle;
-        _packet->has_skybox    = (cubemapHandle != uint.MaxValue);
+        _packet->skybox_handle = new ke_texture_handle { idx = cubemapHandle.Value };
+        _packet->has_skybox    = cubemapHandle.IsValid;
     }
 
     /// <summary>Sets the shadow map data for this frame.</summary>
-    public void SetShadow(uint mapHandle, Matrix4x4 lightView, Matrix4x4 lightProj)
+    public void SetShadow(ShadowMapHandle mapHandle, Matrix4x4 lightView, Matrix4x4 lightProj)
     {
-        _packet->shadow.map_handle  = mapHandle;
+        _packet->shadow.map_handle  = new ke_shadow_map_handle { idx = mapHandle.Value };
         _packet->shadow.light_view  = ToKeMat4(lightView);
         _packet->shadow.light_proj  = ToKeMat4(lightProj);
+    }
+
+    /// <summary>Sets the background clear color for this frame.</summary>
+    public void SetClearColor(float r, float g, float b, float a)
+    {
+        _packet->clear_color[0] = r;
+        _packet->clear_color[1] = g;
+        _packet->clear_color[2] = b;
+        _packet->clear_color[3] = a;
+    }
+
+    /// <summary>Sets the ambient light color for this frame.</summary>
+    public void SetAmbientLight(float r, float g, float b)
+    {
+        _packet->ambient_light[0] = r;
+        _packet->ambient_light[1] = g;
+        _packet->ambient_light[2] = b;
+    }
+
+    /// <summary>Overrides the active shadow map for the scene pass.</summary>
+    public void SetActiveShadowMap(ShadowMapHandle handle)
+    {
+        _packet->active_shadow_map = new ke_shadow_map_handle { idx = handle.Value };
+    }
+
+    /// <summary>Sets SSAO parameters for this frame.</summary>
+    public void SetSsao(bool enabled, float radius, float bias, float strength)
+    {
+        _packet->ssao_enabled  = enabled;
+        _packet->ssao_radius   = radius;
+        _packet->ssao_bias     = bias;
+        _packet->ssao_strength = strength;
+    }
+
+    /// <summary>Sets Tonemapping parameters for this frame.</summary>
+    public void SetTonemapping(bool enabled, float exposure, float gamma)
+    {
+        _packet->tonemapping_enabled = enabled;
+        _packet->exposure            = exposure;
+        _packet->gamma               = gamma;
+    }
+
+    /// <summary>Sets Bloom parameters for this frame.</summary>
+    public void SetBloom(bool enabled, float threshold, float intensity)
+    {
+        _packet->bloom_enabled   = enabled;
+        _packet->bloom_threshold = threshold;
+        _packet->bloom_intensity = intensity;
     }
 
     // ── Render-thread read API ────────────────────────────────────────────────
@@ -123,8 +171,8 @@ public sealed unsafe class FramePacket
     public ReadOnlySpan<ke_draw_command> ShadowDrawCommands =>
         new(_packet->shadow_draw_commands, (int)_packet->shadow_draw_count);
 
-    /// <summary>Skybox cubemap handle, or <c>uint.MaxValue</c> when absent.</summary>
-    public uint SkyboxHandle => _packet->skybox_handle;
+    /// <summary>Skybox cubemap handle, or <c>TextureHandle.None</c> when absent.</summary>
+    public TextureHandle SkyboxHandle => new(_packet->skybox_handle.idx);
 
     /// <summary>Whether a skybox was submitted this frame.</summary>
     public bool HasSkybox => _packet->has_skybox;

@@ -17,6 +17,10 @@ public unsafe partial struct ke_frame_packet
     [NativeTypeName("uint32_t")]
     public uint draw_capacity;
 
+    public fixed float clear_color[4];
+    public fixed float ambient_light[3];
+    public ke_shadow_map_handle active_shadow_map;
+
     public ke_frame_shadow shadow;
 
     public ke_draw_command* shadow_draw_commands;
@@ -49,8 +53,20 @@ public unsafe partial struct ke_frame_packet
 
     public ke_frame_camera camera;
 
-    [NativeTypeName("uint32_t")]
-    public uint skybox_handle;
+    public ke_texture_handle skybox_handle;
 
     public bool has_skybox;
+
+    public bool ssao_enabled;
+    public float ssao_radius;
+    public float ssao_bias;
+    public float ssao_strength;
+
+    public bool tonemapping_enabled;
+    public float exposure;
+    public float gamma;
+
+    public bool bloom_enabled;
+    public float bloom_threshold;
+    public float bloom_intensity;
 }

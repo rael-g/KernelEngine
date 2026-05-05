@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_KERNEL_ENGINE_FRAME_PACKET_H_
 
 #include <kernel_engine/kernel/common/math.h>
+#include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/render/light.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -13,9 +14,9 @@ extern "C" {
     // ── Draw Commands ─────────────────────────────────────────────────────────
 
     typedef struct ke_draw_command {
-        uint32_t mesh_handle;
-        uint32_t material_handle;
-        ke_mat4  transform;
+        ke_mesh_handle     mesh_handle;
+        ke_material_handle material_handle;
+        ke_mat4            transform;
     } ke_draw_command;
 
     // ── Camera Snapshot ───────────────────────────────────────────────────────
@@ -29,9 +30,9 @@ extern "C" {
     // ── Shadow Snapshot ───────────────────────────────────────────────────────
 
     typedef struct ke_frame_shadow {
-        uint32_t map_handle;
-        ke_mat4  light_view;
-        ke_mat4  light_proj;
+        ke_shadow_map_handle map_handle;
+        ke_mat4              light_view;
+        ke_mat4              light_proj;
     } ke_frame_shadow;
 
     // ── Frame Packet ──────────────────────────────────────────────────────────
@@ -43,6 +44,11 @@ extern "C" {
         ke_draw_command* draw_commands;
         uint32_t         draw_count;
         uint32_t         draw_capacity;
+
+        // ── Global State ──────────────────────────────────────────────────────
+        float    clear_color[4];
+        float    ambient_light[3];
+        ke_shadow_map_handle active_shadow_map;
 
         // ── Shadow Pass ───────────────────────────────────────────────────────
         ke_frame_shadow  shadow;
@@ -66,8 +72,23 @@ extern "C" {
         ke_frame_camera camera;
 
         // ── Skybox ────────────────────────────────────────────────────────────
-        uint32_t skybox_handle;
-        bool     has_skybox;
+        ke_texture_handle skybox_handle;
+        bool              has_skybox;
+
+        // ── Post-Processing & Pipeline ────────────────────────────────────────
+        bool  ssao_enabled;
+        float ssao_radius;
+        float ssao_bias;
+        float ssao_strength;
+
+        bool  tonemapping_enabled;
+        float exposure;
+        float gamma;
+
+        bool  bloom_enabled;
+        float bloom_threshold;
+        float bloom_intensity;
+
     } ke_frame_packet;
 
 #ifdef __cplusplus
