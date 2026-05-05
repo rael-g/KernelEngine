@@ -1,7 +1,7 @@
 #pragma once
 
 #include <kernel_engine/kernel/window/window.h>
-#include <kernel_engine/kernel/messaging/message_pipe.h>
+#include <kernel_engine/kernel/input/input.h>
 #include <window_device.hpp>
 #include <window_export.h>
 #include <memory>
@@ -32,13 +32,13 @@ public:
 
     // Dependency Injection
     void SetDevice(WindowDevice* device);
-    void SetPipe(ke_message_pipe* pipe);
+    void SetInput(ke_input* input);
 
 private:
     void HandleEvent(const WindowEvent& ev);
 
     WindowDevice*    device_ = nullptr;
-    ke_message_pipe* pipe_   = nullptr;
+    ke_input*        input_  = nullptr;
     bool own_device_ = false;
     bool initialized_ = false;
 

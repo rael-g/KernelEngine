@@ -19,9 +19,9 @@ extern "C" {
         // Note: WindowCore handles its own deletion via api_struct_.destroy
         auto* core = new kernel_engine::window::WindowCore();
 
-        // 3. Assemble: Inject Device into Core
+        // 3. Assemble: Inject Device and Input into Core
         core->SetDevice(device);
-        core->SetPipe(params->message_pipe);
+        core->SetInput(params->input);
 
         // 4. Initialize with params
         kernel_engine::window::WindowConfig config = {
