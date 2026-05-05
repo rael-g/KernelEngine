@@ -19,15 +19,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>Registers a <see cref="MessagePipe"/> singleton backed by the kernel allocator.</summary>
-    public static IServiceCollection AddMessagePipe(this IServiceCollection services)
-    {
-        services.AddSingleton(sp => new MessagePipe(
-            sp.GetRequiredService<Allocator>(),
-            sp.GetService<Logger>()));
-        return services;
-    }
-
     /// <summary>
     /// Registers the built-in <see cref="ConsoleSink"/> that mirrors the native <c>ke_console_sink</c>.
     /// </summary>
@@ -36,13 +27,12 @@ public static class ServiceCollectionExtensions
         ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE) =>
         services.AddSingleton<ILoggerSink>(_ => new ConsoleSink { MinLevel = minLevel });
 
-    /// <summary>Registers an <see cref="Input"/> singleton. Requires <c>AddMessagePipe()</c>.</summary>
+    /// <summary>Registers an <see cref="Input"/> singleton.</summary>
     public static IServiceCollection AddInput(this IServiceCollection services)
     {
         services.AddSingleton(sp => new Input(
             sp.GetRequiredService<Allocator>(),
-            sp.GetService<Logger>(),
-            sp.GetRequiredService<MessagePipe>()));
+            sp.GetService<Logger>()));
         return services;
     }
 }

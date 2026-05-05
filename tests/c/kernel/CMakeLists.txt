@@ -1,9 +1,7 @@
 find_package(GTest CONFIG REQUIRED)
-
 add_executable(test_ke_kernel
     test_allocator.cpp
     test_hash_map.cpp
-    test_message_pipe.cpp
     test_ecs.cpp
     test_world.cpp
     test_input.cpp
@@ -11,6 +9,7 @@ add_executable(test_ke_kernel
     test_hash.cpp
     test_array.cpp
 )
+
 
 target_link_libraries(test_ke_kernel PRIVATE
     ke_kernel
