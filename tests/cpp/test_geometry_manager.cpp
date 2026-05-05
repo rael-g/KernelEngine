@@ -91,7 +91,7 @@ TEST_F(GeometryManagerTest, RecordDraw_IncrementsDrawCount)
     packet.draw_count = 0;
     ke_mat4 transform{};
 
-    manager->RecordDraw(packet, 0, 0, &transform);
+    manager->RecordDraw(packet, {0}, {0}, &transform);
 
     EXPECT_EQ(packet.draw_count, 1);
     free(packet.draw_commands);
@@ -107,7 +107,7 @@ TEST_F(GeometryManagerTest, RecordDraw_CopiesTransform)
     ke_mat4 transform{};
     transform.m[0] = 5.0f;
 
-    manager->RecordDraw(packet, 0, 0, &transform);
+    manager->RecordDraw(packet, {0}, {0}, &transform);
 
     EXPECT_FLOAT_EQ(packet.draw_commands[0].transform.m[0], 5.0f);
     free(packet.draw_commands);
@@ -121,6 +121,6 @@ TEST_F(GeometryManagerTest, RecordDraw_ReturnsError_WhenOutOfMemory)
     packet.draw_count = 1;
     ke_mat4 transform{};
 
-    EXPECT_EQ(manager->RecordDraw(packet, 0, 0, &transform), KE_ERROR_OUT_OF_MEMORY);
+    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, &transform), KE_ERROR_OUT_OF_MEMORY);
     free(packet.draw_commands);
 }

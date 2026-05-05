@@ -63,13 +63,13 @@ TEST_F(LightingManagerTest, CreateMaterial_AssignsIncrementalHandles)
     ke_material_handle h1, h2;
     manager->CreateMaterial(ctx, *textures, &mat, &h1);
     manager->CreateMaterial(ctx, *textures, &mat, &h2);
-    EXPECT_EQ(h1, 0);
-    EXPECT_EQ(h2, 1);
+    EXPECT_EQ(h1.idx, 0);
+    EXPECT_EQ(h2.idx, 1);
 }
 
 TEST_F(LightingManagerTest, GetMaterial_ReturnsInvalidForUnknownHandle)
 {
-    auto& entry = manager->GetMaterial(999);
+    auto& entry = manager->GetMaterial({999});
     EXPECT_FALSE(entry.valid);
 }
 

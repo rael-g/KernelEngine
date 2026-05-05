@@ -8,6 +8,7 @@ namespace kernel_engine::render::bgfx {
 class MockGpuDevice : public GpuDevice
 {
 public:
+    MOCK_METHOD(void, SetLogger, (struct ke_logger* logger), (override));
     MOCK_METHOD(bool, Init, (const GpuInitConfig& config), (override));
     MOCK_METHOD(void, Shutdown, (), (override));
     MOCK_METHOD(uint32_t, Frame, (bool capture), (override));

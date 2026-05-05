@@ -85,8 +85,8 @@ TEST_F(FrameSubmitterTest, Submit_ProcessesDrawCommands)
     packet.draw_capacity = 1;
     packet.draw_count = 1;
     packet.draw_commands = (ke_draw_command*)malloc(sizeof(ke_draw_command));
-    packet.draw_commands[0].mesh_handle = 0;
-    packet.draw_commands[0].material_handle = 0;
+    packet.draw_commands[0].mesh_handle = {0};
+    packet.draw_commands[0].material_handle = {0};
 
     ke_material mat{};
     mat.r = mat.g = mat.b = mat.a = 1.0f;

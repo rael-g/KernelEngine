@@ -67,7 +67,7 @@ TEST_F(NativeSystemsTest, MeshSystem_Update_IncrementsDrawCount) {
     ke_entity ent = ke_ecs_entity_create(registry);
     auto* mc = (ke_mesh_component*)ke_ecs_component_add(registry, ent, mesh_cid);
     ke_ecs_component_add(registry, ent, transform_cid);
-    mc->mesh_handle = 1;
+    mc->mesh_handle = {1};
 
     ke_frame_packet packet{};
     packet.draw_capacity = 10;
