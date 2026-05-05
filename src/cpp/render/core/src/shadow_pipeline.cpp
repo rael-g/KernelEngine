@@ -26,22 +26,22 @@ ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32
     entry.valid = true;
 
     shadow_maps_.push_back(entry);
-    *out = (ke_shadow_map_handle)(shadow_maps_.size() - 1);
+    *out = {(uint32_t)(shadow_maps_.size() - 1)};
     return KE_OK;
 }
 
 ke_result ShadowPipeline::DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
 {
-    if (h >= (ke_shadow_map_handle)shadow_maps_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
-    if (shadow_maps_[h].fb != kGpuInvalidHandle) ctx.gpu->DestroyFrameBuffer(shadow_maps_[h].fb);
-    shadow_maps_[h].valid = false;
+    if (h.idx >= (uint32_t)shadow_maps_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (shadow_maps_[h.idx].fb != kGpuInvalidHandle) ctx.gpu->DestroyFrameBuffer(shadow_maps_[h.idx].fb);
+    shadow_maps_[h.idx].valid = false;
     return KE_OK;
 }
 
 ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p)
 {
-    if (h >= (ke_shadow_map_handle)shadow_maps_.size() || !v || !p || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
-    auto &entry = shadow_maps_[h];
+    if (h.idx >= (uint32_t)shadow_maps_.size() || !v || !p || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    auto &entry = shadow_maps_[h.idx];
     if (!entry.valid) return KE_ERROR_INVALID_ARGUMENT;
 
     active_shadow_handle = h;
@@ -71,21 +71,21 @@ ke_result ShadowPipeline::SubmitMeshShadow(RenderContext& ctx, const GeometryMan
 
 ke_result ShadowPipeline::EndShadowPass(RenderContext& ctx)
 {
-    active_shadow_handle = kInvalidShadowHandle;
+    active_shadow_handle = KE_SHADOW_MAP_NONE;
     return KE_OK;
 }
 
 ke_result ShadowPipeline::SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
 {
-    if (h >= (ke_shadow_map_handle)shadow_maps_.size()) return KE_ERROR_INVALID_ARGUMENT;
+    if (h.idx >= (uint32_t)shadow_maps_.size()) return KE_ERROR_INVALID_ARGUMENT;
     active_shadow_handle = h;
     return KE_OK;
 }
 
 GpuTextureHandle ShadowPipeline::GetActiveShadowTex() const
 {
-    if (active_shadow_handle < (ke_shadow_map_handle)shadow_maps_.size())
-        return shadow_maps_[active_shadow_handle].depth_tex;
+    if (active_shadow_handle.idx < (uint32_t)shadow_maps_.size())
+        return shadow_maps_[active_shadow_handle.idx].depth_tex;
     return kGpuInvalidHandle;
 }
 

@@ -36,14 +36,14 @@ ke_result GeometryManager::CreateMesh(RenderContext& ctx, const ke_vertex *verts
         return KE_ERROR_RENDER;
 
     meshes_.push_back({vb, ib, index_count});
-    *out_handle = (ke_mesh_handle)(meshes_.size() - 1);
+    *out_handle = {(uint32_t)(meshes_.size() - 1)};
     return KE_OK;
 }
 
 ke_result GeometryManager::DestroyMesh(RenderContext& ctx, ke_mesh_handle handle)
 {
-    if (handle >= (ke_mesh_handle)meshes_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
-    auto &entry = meshes_[handle];
+    if (handle.idx >= (uint32_t)meshes_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    auto &entry = meshes_[handle.idx];
     if (entry.ib != kGpuInvalidHandle) ctx.gpu->DestroyIndexBuffer(entry.ib);
     if (entry.vb != kGpuInvalidHandle) ctx.gpu->DestroyVertexBuffer(entry.vb);
     entry.vb = kGpuInvalidHandle;
@@ -70,7 +70,7 @@ ke_result GeometryManager::RecordDraw(struct ke_frame_packet& packet,
 const MeshEntry& GeometryManager::GetMeshEntry(ke_mesh_handle handle) const
 {
     static MeshEntry s_invalid;
-    if (handle < (ke_mesh_handle)meshes_.size()) return meshes_[handle];
+    if (handle.idx < (uint32_t)meshes_.size()) return meshes_[handle.idx];
     return s_invalid;
 }
 

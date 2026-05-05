@@ -225,6 +225,7 @@ void CoreRenderer::SetGpuDevice(GpuDevice* gpu)
     }
     ctx_.gpu = gpu;
     own_gpu_device_ = false;
+    if (ctx_.gpu) ctx_.gpu->SetLogger(ctx_.logger);
 }
 
 ke_result CoreRenderer::OnInitialize()
@@ -247,9 +248,7 @@ ke_result CoreRenderer::OnInitialize()
 #endif
 
     if (!ctx_.gpu->Init(config))
-    {
         return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "gpu->Init failed");
-    }
 
     ctx_.view_w = w;
     ctx_.view_h = h;
@@ -263,13 +262,13 @@ ke_result CoreRenderer::OnInitialize()
 
     ke_result res = SetupShader();
     if (res != KE_OK) return res;
-    
+
     res = post_process_.SetupPostProcess(ctx_, geometry_, bright_pass_program_, blur_program_, tonemap_program_);
     if (res != KE_OK) return res;
-    
+
     res = post_process_.SetupSsao(ctx_, prepass_program_, ssao_program_, ssao_blur_program_);
     if (res != KE_OK) return res;
-    
+
     res = clustered_.SetupClustered(ctx_, depth_program_, cull_program_);
     if (res != KE_OK) return res;
 
@@ -313,7 +312,7 @@ ke_result CoreRenderer::Frame()
     
     textures_.has_skybox       = false;
     textures_.active_env_tex   = kGpuInvalidHandle;
-    shadows_.active_shadow_handle = kInvalidShadowHandle;
+    shadows_.active_shadow_handle = KE_SHADOW_MAP_NONE;
     return KE_OK;
 }
 
@@ -332,7 +331,7 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
     std::memcpy(ctx_.last_proj, packet->camera.proj.m, sizeof(float) * 16);
 
     ke_result res = FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
-                                           program_, shadow_program_, skybox_program_, prepass_program_);
+                                           post_process_, program_, shadow_program_, skybox_program_, prepass_program_);
     if (res != KE_OK) return res;
 
     // Clustered light culling (must run after scene uniforms are set).
@@ -482,7 +481,7 @@ ke_result CoreRenderer::SetupShader()
 
     // Default white material at handle 0
     {
-        ke_material white_mat = {1.f, 1.f, 1.f, 1.f, white_handle, 0.f, 1.f, 0};
+        ke_material white_mat = {1.f, 1.f, 1.f, 1.f, white_handle, 0.f, 1.f, KE_TEXTURE_NONE};
         ke_material_handle mat_handle;
         lighting_.CreateMaterial(ctx_, textures_, &white_mat, &mat_handle);
     }

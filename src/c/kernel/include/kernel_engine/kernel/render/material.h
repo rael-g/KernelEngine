@@ -2,17 +2,13 @@
 #define KERNEL_ENGINE_KERNEL_RENDER_MATERIAL_H_
 
 #include <stdint.h>
+#include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/render/texture.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-    /// @brief Stable opaque handle to a material.
-    typedef uint32_t ke_material_handle;
-
-#define KE_MATERIAL_HANDLE_INVALID ((ke_material_handle)UINT32_MAX)
 
     /// @brief Material properties defining its appearance.
     typedef struct ke_material

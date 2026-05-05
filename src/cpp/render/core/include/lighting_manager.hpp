@@ -15,10 +15,10 @@ class TextureManager;
 struct MaterialEntry
 {
     float r, g, b, a;
-    uint32_t texture_handle;
+    ke_texture_handle texture_handle;
     float metallic;
     float roughness;
-    uint32_t normal_map_handle;
+    ke_texture_handle normal_map_handle;
     bool valid;
 };
 

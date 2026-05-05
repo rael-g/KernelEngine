@@ -16,7 +16,7 @@ ke_result TextureManager::CreateTextureRgba(RenderContext& ctx, uint32_t w, uint
     if (htex == kGpuInvalidHandle) return KE_ERROR_RENDER;
 
     textures_.push_back(htex);
-    *out = (ke_texture_handle)(textures_.size() - 1);
+    *out = {(uint32_t)(textures_.size() - 1)};
     return KE_OK;
 }
 
@@ -26,15 +26,15 @@ ke_result TextureManager::CreateCubemapRgba(RenderContext& ctx, uint32_t s, cons
     GpuTextureHandle h = ctx.gpu->CreateTextureCube((uint16_t)s, false, 1, kTexFmtRGBA8, 0, ctx.gpu->Copy(d, s * s * 4 * 6));
     if (h == kGpuInvalidHandle) return KE_ERROR_RENDER;
     textures_.push_back(h);
-    *out = (ke_texture_handle)(textures_.size() - 1);
+    *out = {(uint32_t)(textures_.size() - 1)};
     return KE_OK;
 }
 
 ke_result TextureManager::DestroyTexture(RenderContext& ctx, ke_texture_handle h)
 {
-    if (h >= (ke_texture_handle)textures_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
-    if (textures_[h] != kGpuInvalidHandle) ctx.gpu->DestroyTexture(textures_[h]);
-    textures_[h] = kGpuInvalidHandle;
+    if (h.idx >= (uint32_t)textures_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (textures_[h.idx] != kGpuInvalidHandle) ctx.gpu->DestroyTexture(textures_[h.idx]);
+    textures_[h.idx] = kGpuInvalidHandle;
     return KE_OK;
 }
 
@@ -57,7 +57,7 @@ ke_result TextureManager::SubmitSkybox(RenderContext& ctx, ke_texture_handle h, 
 
 GpuTextureHandle TextureManager::GetTextureIdx(ke_texture_handle h) const
 {
-    if (h < (ke_texture_handle)textures_.size()) return textures_[h];
+    if (h.idx < (uint32_t)textures_.size()) return textures_[h.idx];
     return kGpuInvalidHandle;
 }
 

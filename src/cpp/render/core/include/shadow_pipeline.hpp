@@ -38,7 +38,7 @@ public:
 
     void Shutdown();
 
-    ke_shadow_map_handle active_shadow_handle = kInvalidShadowHandle;
+    ke_shadow_map_handle active_shadow_handle = KE_SHADOW_MAP_NONE;
 
     // Uniforms used by the renderer
     GpuUniformHandle shadow_map_uniform    = kGpuInvalidHandle;

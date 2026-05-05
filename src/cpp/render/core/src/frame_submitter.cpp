@@ -4,9 +4,11 @@
 #include "../include/lighting_manager.hpp"
 #include "../include/texture_manager.hpp"
 #include "../include/shadow_pipeline.hpp"
+#include "../include/post_process_pipeline.hpp"
 #include "gpu_device.hpp"
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/kernel/threading/thread.h>
 
 namespace kernel_engine::render::bgfx
 {
@@ -17,12 +19,31 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
                                  LightingManager& lighting,
                                  TextureManager& textures,
                                  ShadowPipeline& shadows,
+                                 PostProcessPipeline& post_process,
                                  GpuProgramHandle main_program,
                                  GpuProgramHandle shadow_program,
                                  GpuProgramHandle skybox_program,
                                  GpuProgramHandle /*prepass_program*/)
 {
+    ke_thread_assert_current("ke.render");
     if (!ctx.gpu) return KE_ERROR_RENDER;
+
+    // ── 0. Global State ──────────────────────────────────────────────────────
+    uint32_t clear_color = (uint32_t(packet.clear_color[0] * 255.0F) << 24) |
+                           (uint32_t(packet.clear_color[1] * 255.0F) << 16) |
+                           (uint32_t(packet.clear_color[2] * 255.0F) << 8)  |
+                           (uint32_t(packet.clear_color[3] * 255.0F));
+    ctx.gpu->SetViewClear(1 /*SCENE*/, 0x0001 | 0x0002, clear_color, 1.0f, 0);
+
+    lighting.SetAmbientLight(packet.ambient_light[0], packet.ambient_light[1], packet.ambient_light[2]);
+
+    if (ke_shadow_map_is_valid(packet.active_shadow_map))
+        shadows.SetShadowMap(ctx, packet.active_shadow_map);
+
+    // ── Post-Processing & Pipeline ────────────────────────────────────────
+    post_process.SetSsao(ctx, packet.ssao_enabled, packet.ssao_radius, packet.ssao_bias, packet.ssao_strength);
+    post_process.SetTonemapping(ctx, packet.tonemapping_enabled, packet.exposure, packet.gamma);
+    post_process.SetBloom(ctx, packet.bloom_enabled, packet.bloom_threshold, packet.bloom_intensity);
 
     // ── 1. Apply lighting from packet ────────────────────────────────────────
     if (packet.has_dir_light)
@@ -45,7 +66,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     ctx.gpu->SetUniform(lighting.ibl_params_uniform, ibl_params, 1);
 
     // ── 2. Shadow Pass ───────────────────────────────────────────────────────
-    if (packet.shadow.map_handle != 0xFFFFFFFFu)
+    if (ke_shadow_map_is_valid(packet.shadow.map_handle))
     {
         shadows.BeginShadowPass(ctx, packet.shadow.map_handle,
                                 &packet.shadow.light_view, &packet.shadow.light_proj);
@@ -54,7 +75,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         {
             const auto& cmd = packet.shadow_draw_commands[i];
             shadows.SubmitMeshShadow(ctx, geometry, shadow_program,
-                                     static_cast<ke_mesh_handle>(cmd.mesh_handle), &cmd.transform);
+                                     cmd.mesh_handle, &cmd.transform);
         }
 
         shadows.EndShadowPass(ctx);
@@ -67,7 +88,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     GpuTextureHandle env_tex = textures.default_cube_tex;
     if (packet.has_skybox && skybox_program != kGpuInvalidHandle)
     {
-        GpuTextureHandle sky = textures.GetTextureIdx(static_cast<ke_texture_handle>(packet.skybox_handle));
+        GpuTextureHandle sky = textures.GetTextureIdx(packet.skybox_handle);
         if (sky != kGpuInvalidHandle) env_tex = sky;
 
         // Place the unit cube at the camera world position so that model×view cancels
@@ -81,7 +102,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         };
         ctx.gpu->SetTransform(sky_model, 1);
 
-        textures.SubmitSkybox(ctx, static_cast<ke_texture_handle>(packet.skybox_handle),
+        textures.SubmitSkybox(ctx, packet.skybox_handle,
                               skybox_program,
                               geometry.skybox_vb, geometry.skybox_ib,
                               textures.skybox_sampler_uniform, textures.skybox_tint_uniform);
@@ -91,8 +112,8 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     for (uint32_t i = 0; i < packet.draw_count; ++i)
     {
         const auto& cmd   = packet.draw_commands[i];
-        const auto& entry = geometry.GetMeshEntry(static_cast<ke_mesh_handle>(cmd.mesh_handle));
-        const auto& mat   = lighting.GetMaterial(static_cast<ke_material_handle>(cmd.material_handle));
+        const auto& entry = geometry.GetMeshEntry(cmd.mesh_handle);
+        const auto& mat   = lighting.GetMaterial(cmd.material_handle);
 
         if (entry.vb == kGpuInvalidHandle || !mat.valid) continue;
 
@@ -101,12 +122,12 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         ctx.gpu->SetUniform(lighting.color_uniform,      color, 1);
         ctx.gpu->SetUniform(lighting.pbr_params_uniform, pbr,   1);
 
-        GpuTextureHandle tex = textures.GetTextureIdx(static_cast<ke_texture_handle>(mat.texture_handle));
+        GpuTextureHandle tex = textures.GetTextureIdx(mat.texture_handle);
         if (tex == kGpuInvalidHandle) tex = textures.default_2d_tex;
         GpuTextureHandle shadow_tex = shadows.GetActiveShadowTex();
         if (shadow_tex == kGpuInvalidHandle) shadow_tex = textures.default_2d_tex;
-        GpuTextureHandle nmap_tex = (mat.normal_map_handle != 0)
-            ? textures.GetTextureIdx(static_cast<ke_texture_handle>(mat.normal_map_handle))
+        GpuTextureHandle nmap_tex = ke_texture_is_valid(mat.normal_map_handle)
+            ? textures.GetTextureIdx(mat.normal_map_handle)
             : kGpuInvalidHandle;
         float normal_params[4] = {nmap_tex != kGpuInvalidHandle ? 1.0f : 0.0f, 0.f, 0.f, 0.f};
         if (nmap_tex == kGpuInvalidHandle) nmap_tex = textures.default_2d_tex;

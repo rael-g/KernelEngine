@@ -3,6 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/math.h>
+#include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/render/light.h>
 #include <kernel_engine/kernel/render/material.h>
@@ -16,10 +17,6 @@ extern "C"
 #endif
 
 #define KE_ID_RENDER "ke_render"
-
-    /// @brief Opaque handle to a depth-buffer shadow map and its associated framebuffer.
-    typedef uint32_t ke_shadow_map_handle;
-#define KE_INVALID_SHADOW_MAP_HANDLE UINT32_MAX
 
     /// @brief Configuration for the Clustered Forward Shading grid.
     typedef struct ke_cluster_config

@@ -67,17 +67,17 @@ ke_result LightingManager::RecordSpotLights(struct ke_frame_packet& packet, cons
 ke_result LightingManager::CreateMaterial(RenderContext& ctx, const TextureManager& textures, const ke_material *mat, ke_material_handle *out_handle)
 {
     if (!mat || !out_handle) return KE_ERROR_INVALID_ARGUMENT;
-    uint32_t tex  = mat->albedo;
-    uint32_t nmap = mat->normal_map;
+    ke_texture_handle tex  = mat->albedo;
+    ke_texture_handle nmap = mat->normal_map;
     materials_.push_back({mat->r, mat->g, mat->b, mat->a, tex, mat->metallic, mat->roughness, nmap, true});
-    *out_handle = (ke_material_handle)(materials_.size() - 1);
+    *out_handle = {(uint32_t)(materials_.size() - 1)};
     return KE_OK;
 }
 
 ke_result LightingManager::DestroyMaterial(RenderContext& ctx, ke_material_handle handle)
 {
-    if (handle >= (ke_material_handle)materials_.size()) return KE_ERROR_INVALID_ARGUMENT;
-    materials_[handle].valid = false;
+    if (handle.idx >= (uint32_t)materials_.size()) return KE_ERROR_INVALID_ARGUMENT;
+    materials_[handle.idx].valid = false;
     return KE_OK;
 }
 
@@ -89,7 +89,7 @@ void LightingManager::Shutdown()
 const MaterialEntry& LightingManager::GetMaterial(ke_material_handle handle) const
 {
     static MaterialEntry s_invalid;
-    if (handle < materials_.size()) return materials_[handle];
+    if (handle.idx < (uint32_t)materials_.size()) return materials_[handle.idx];
     return s_invalid;
 }
 

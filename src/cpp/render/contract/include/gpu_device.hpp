@@ -3,6 +3,11 @@
 #include "gpu_types.hpp"
 #include <cstdint>
 
+// Forward declarations for kernel types (outside renderer namespace)
+struct ke_allocator;
+struct ke_logger;
+struct ke_window;
+
 namespace kernel_engine::render::bgfx
 {
 
@@ -27,6 +32,8 @@ class GpuDevice
 {
 public:
     virtual ~GpuDevice() = default;
+
+    virtual void SetLogger(struct ke_logger* logger) = 0;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
     virtual bool Init(const GpuInitConfig& config) = 0;
@@ -102,6 +109,8 @@ public:
 class BgfxGpuDevice : public GpuDevice
 {
 public:
+    void SetLogger(struct ke_logger* logger) override;
+
     bool Init(const GpuInitConfig& config) override;
     void Shutdown() override;
     uint32_t Frame(bool capture) override;

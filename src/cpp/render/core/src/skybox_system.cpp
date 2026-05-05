@@ -24,7 +24,7 @@ void SkyboxSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
     if (count > 0)
     {
         ke_skybox_component* skyboxes = static_cast<ke_skybox_component*>(data);
-        if (skyboxes[0].cubemap_handle != 0xFFFFFFFF)
+        if (ke_texture_is_valid(skyboxes[0].cubemap_handle))
         {
             packet->skybox_handle = skyboxes[0].cubemap_handle;
             packet->has_skybox    = true;

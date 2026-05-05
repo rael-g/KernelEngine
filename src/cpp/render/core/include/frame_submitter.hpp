@@ -13,6 +13,7 @@ class GeometryManager;
 class LightingManager;
 class TextureManager;
 class ShadowPipeline;
+class PostProcessPipeline;
 
 /**
  * @brief Consumes a frame packet and submits draw calls to the HAL.
@@ -27,6 +28,7 @@ public:
                            LightingManager& lighting,
                            TextureManager& textures,
                            ShadowPipeline& shadows,
+                           PostProcessPipeline& post_process,
                            GpuProgramHandle program,
                            GpuProgramHandle shadow_program,
                            GpuProgramHandle skybox_program,

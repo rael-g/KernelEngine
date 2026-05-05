@@ -29,7 +29,7 @@ void MeshSystem::Update(void* handle, ke_world* world, float dt, ke_frame_packet
 
     for (size_t i = 0; i < count; i++)
     {
-        if (meshes[i].mesh_handle == 0xFFFFFFFF) continue;
+        if (!ke_mesh_is_valid(meshes[i].mesh_handle)) continue;
 
         ke_transform_component* tc = static_cast<ke_transform_component*>(
             ke_ecs_component_get(reg, entities[i], ctx->transform_cid));

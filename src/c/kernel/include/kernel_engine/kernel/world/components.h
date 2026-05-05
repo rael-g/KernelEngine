@@ -3,6 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/math.h>
+#include <kernel_engine/kernel/common/handles.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -44,15 +45,15 @@ extern "C"
 
     typedef struct ke_mesh_component
     {
-        uint32_t mesh_handle;
-        uint32_t material_handle;
+        ke_mesh_handle     mesh_handle;
+        ke_material_handle material_handle;
     } ke_mesh_component;
 
     // ── Skybox ──────────────────────────────────────────────────────────────
 
     typedef struct ke_skybox_component
     {
-        uint32_t cubemap_handle;
+        ke_texture_handle cubemap_handle;
     } ke_skybox_component;
 
     // ── Camera ──────────────────────────────────────────────────────────────
