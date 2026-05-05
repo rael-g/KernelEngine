@@ -28,6 +28,9 @@ public unsafe partial struct ke_input
     [NativeTypeName("ke_bool (*)(struct ke_input *, int32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input*, int, byte> is_key_down;
 
+    [NativeTypeName("void (*)(struct ke_input *, ke_input_snapshot *)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, void> get_snapshot;
+
     public partial struct ke_allocator
     {
     }
