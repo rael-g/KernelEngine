@@ -23,12 +23,12 @@ public class SkyboxNode : Node
     /// GPU cubemap handle to use as the skybox. Must be a handle returned by
     /// <see cref="Renderer.CreateCubemap"/>.
     /// </summary>
-    public uint CubemapHandle { get; init; } = uint.MaxValue;
+    public TextureHandle CubemapHandle { get; init; } = TextureHandle.None;
 
     protected override void OnStart()
     {
-        if (ComponentId == uint.MaxValue || CubemapHandle == uint.MaxValue) return;
+        if (ComponentId == uint.MaxValue || !CubemapHandle.IsValid) return;
         ref var comp = ref AddComponent<ke_skybox_component>(ComponentId);
-        comp.cubemap_handle = CubemapHandle;
+        comp.cubemap_handle = new ke_texture_handle { idx = CubemapHandle.Value };
     }
 }

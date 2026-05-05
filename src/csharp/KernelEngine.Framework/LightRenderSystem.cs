@@ -15,7 +15,7 @@ public sealed unsafe class LightRenderSystem : ISystem
 
     public ke_system_desc NativeDescriptor => _nativeDesc;
 
-    public unsafe void Update(World world, float dt, FramePacket? packet = null)
+    public unsafe void Update(World world, float dt, FramePacket? packet = null, IInputReader? input = null)
     {
         if (packet == null) return;
         _nativeDesc.update(_nativeDesc.handle, world.Native, dt, packet.NativePointer);

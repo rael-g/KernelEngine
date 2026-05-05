@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework;
 
@@ -10,8 +11,8 @@ namespace KernelEngine.Framework;
 public struct MeshComponent
 {
     /// <summary>Handle returned by <see cref="Renderer.CreateMesh"/>.</summary>
-    public uint MeshHandle;
+    public MeshHandle MeshHandle;
 
     /// <summary>Handle returned by <see cref="Renderer.CreateMaterial"/>.</summary>
-    public uint MaterialHandle;
+    public MaterialHandle MaterialHandle;
 }
