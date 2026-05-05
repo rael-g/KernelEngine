@@ -10,7 +10,6 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddInput()
     .AddGlfwWindow(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
@@ -19,7 +18,7 @@ using var app = new Application();
 
 int entityCount = 0;
 
-app.OnReady = () =>
+app.OnReady = (resources) =>
 {
     Console.WriteLine("[KernelEngine] Example: 05_skybox_ibl");
     Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
@@ -49,13 +48,13 @@ app.OnReady = () =>
         }
     }
 
-    var cubeHandle = app.Renderer.CreateCubemap(faceSize, cubeData).Value;
+    var cubeHandle = resources.CreateCubemap(faceSize, cubeData);
     Console.WriteLine($"[KernelEngine] Cubemap: handle={cubeHandle} faceSize={faceSize}");
 
     app.ActiveWorld.Scene.AddNode(new SkyboxNode { CubemapHandle = cubeHandle }, "Skybox");
     entityCount++;
 
-    var mirrorMat = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 0.8f, roughness: 0.1f).Value;
+    var mirrorMat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.8f, roughness: 0.1f);
     app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mirrorMat }, "MirrorQuad");
     entityCount++;
 
@@ -66,9 +65,7 @@ app.OnReady = () =>
     }, "Sun");
     entityCount++;
 
-    app.Renderer.SetTonemapping(true, 1.0f, 2.2f);
-
-    var cam = app.ActiveWorld.Scene.AddNode(new FreeLookNode(app.Input!) { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+    var cam = app.ActiveWorld.Scene.AddNode(new FreeLookNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
@@ -77,10 +74,10 @@ app.OnReady = () =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.SetTonemapping(true, 1.0f, 2.2f);
+    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)
@@ -96,7 +93,7 @@ app.Run(services);
 
 // ── FreeLook camera — arrow keys: look, WASD: move, Shift/Ctrl: fly ──────────
 
-sealed class FreeLookNode(Input input) : CameraNode
+sealed class FreeLookNode : CameraNode
 {
     private float _speed     = 8.0f;
     private float _rotateDeg = 90.0f;
@@ -105,6 +102,8 @@ sealed class FreeLookNode(Input input) : CameraNode
 
     protected override void OnUpdate(float dt)
     {
+        var input = Input.Current;
+
         if (input.IsKeyDown(262)) _yaw   -= _rotateDeg * dt; // Right arrow
         if (input.IsKeyDown(263)) _yaw   += _rotateDeg * dt; // Left arrow
         if (input.IsKeyDown(265)) _pitch += _rotateDeg * dt; // Up arrow
@@ -131,4 +130,3 @@ sealed class FreeLookNode(Input input) : CameraNode
         };
     }
 }
-

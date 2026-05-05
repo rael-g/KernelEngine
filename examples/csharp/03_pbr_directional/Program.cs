@@ -10,7 +10,6 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddGlfwWindow(1280, 720, "KernelEngine — 03 PBR Directional")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
@@ -23,7 +22,7 @@ const float metal2 = 0.5f; const float rough2 = 0.5f;
 
 int entityCount = 0;
 
-app.OnReady = () =>
+app.OnReady = (resources) =>
 {
     Console.WriteLine("[KernelEngine] Example: 03_pbr_directional");
     Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
@@ -48,9 +47,9 @@ app.OnReady = () =>
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
 
-    var mat0 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: metal0, roughness: rough0).Value;
-    var mat1 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: metal1, roughness: rough1).Value;
-    var mat2 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: metal2, roughness: rough2).Value;
+    var mat0 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal0, roughness: rough0);
+    var mat1 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal1, roughness: rough1);
+    var mat2 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal2, roughness: rough2);
 
     var n0 = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat0 }, "QuadDielectric");
     n0.LocalTransform = n0.LocalTransform with { Position = new Vector3(-2f, 0f, 0f) };
@@ -67,10 +66,9 @@ app.OnReady = () =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)

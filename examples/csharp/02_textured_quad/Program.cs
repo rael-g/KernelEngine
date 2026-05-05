@@ -10,7 +10,6 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddGlfwWindow(1280, 720, "KernelEngine — 02 Textured Quad")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
@@ -18,7 +17,7 @@ using var app = new Application();
 
 int entityCount = 0;
 
-app.OnReady = () =>
+app.OnReady = (resources) =>
 {
     Console.WriteLine("[KernelEngine] Example: 02_textured_quad");
     Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
@@ -40,14 +39,10 @@ app.OnReady = () =>
         pixels[i + 3] = 255;
     }
 
-    var texRes = app.Renderer.CreateTexture(width, height, pixels);
-    KernelException.ThrowIfFailed(texRes.Code, nameof(app.Renderer.CreateTexture));
-    uint texHandle = texRes.Value;
+    var texHandle = resources.CreateTexture(width, height, pixels);
     Console.WriteLine($"[KernelEngine] Texture: handle={texHandle} width={width} height={height}");
 
-    var matRes = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, textureHandle: texHandle);
-    KernelException.ThrowIfFailed(matRes.Code, nameof(app.Renderer.CreateMaterial));
-    uint matHandle = matRes.Value;
+    var matHandle = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), albedo: texHandle);
 
     app.ActiveWorld.Scene.AddNode(
         new LightNode
@@ -78,10 +73,9 @@ app.OnReady = () =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)

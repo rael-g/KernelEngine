@@ -10,16 +10,13 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddGlfwWindow(1280, 720, "KernelEngine — 01 Window/Scene")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
 
-app.OnReady = () =>
+app.OnReady = (resources) =>
 {
-    app.Renderer.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
-
     // Directional light coming from upper-right-front
     app.ActiveWorld.Scene.AddNode(
         new LightNode
@@ -40,7 +37,7 @@ app.OnReady = () =>
     };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
-    var orangeMat = app.Renderer.CreateMaterial(1f, 0.5f, 0f, 1f).Value;
+    var orangeMat = resources.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
 
     var spinner = app.ActiveWorld.Scene.AddNode(new SpinnerNode(), "Spinner");
     app.ActiveWorld.Scene.AddNode(
@@ -51,10 +48,10 @@ app.OnReady = () =>
 
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    var res = app.Renderer.ClearColor(0.15f, 0.15f, 0.15f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
+    scene.ClearColor(0.15f, 0.15f, 0.15f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)

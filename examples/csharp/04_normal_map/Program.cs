@@ -10,7 +10,6 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddGlfwWindow(1280, 720, "KernelEngine — 04 Normal Map")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
@@ -18,7 +17,7 @@ using var app = new Application();
 
 int entityCount = 0;
 
-app.OnReady = () =>
+app.OnReady = (resources) =>
 {
     Console.WriteLine("[KernelEngine] Example: 04_normal_map");
     Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
@@ -42,13 +41,11 @@ app.OnReady = () =>
         pixels[i + 3] = 255;
     }
 
-    var texRes = app.Renderer.CreateTexture(w, h, pixels);
-    KernelException.ThrowIfFailed(texRes.Code, "CreateTexture/NormalMap");
-    uint nmHandle = texRes.Value;
+    var nmHandle = resources.CreateTexture(w, h, pixels);
     Console.WriteLine($"[KernelEngine] NormalMap: handle={nmHandle} width={w} height={h}");
 
-    var matPlain  = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, roughness: 0.3f).Value;
-    var matNormal = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, roughness: 0.3f, normalMapHandle: nmHandle).Value;
+    var matPlain  = resources.CreateMaterial(Vector4.One, roughness: 0.3f);
+    var matNormal = resources.CreateMaterial(Vector4.One, roughness: 0.3f, normalMap: nmHandle);
 
     var left = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = matPlain  }, "PlainQuad");
     left.LocalTransform = left.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
@@ -72,10 +69,9 @@ app.OnReady = () =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)
