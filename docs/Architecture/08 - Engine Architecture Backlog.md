@@ -318,6 +318,83 @@ write — negligible in release, priceless in debug.
 
 ---
 
+### 1.22 [CRITICAL] `ke_system_desc` carries `ke_render*` — enables GPU calls from ke.sim
+
+The `ShadowSystem` context stores a `ke_render*` pointer passed at construction time.
+Inside `ShadowSystem::Update` (called by ke.sim via `World.Update`), this pointer was used to
+call `ctx->renderer->create_shadow_map` — a bgfx GPU operation that **requires ke.render**.
+
+`ke_thread_assert_current("ke.render")` inside `bgfx_gpu_device.cpp` caught this and called
+`abort()`, producing the thread affinity violation crash.
+
+The architectural problem is that the type system allows it. A `ke_system_desc` with a
+`ke_render*` in its handle is a loaded gun: any system can call GPU functions from ke.sim
+and the only protection is a runtime assertion that fires as a hard crash with no stack trace.
+
+**Fix**: systems must never receive a renderer pointer. The ECS system contract is:
+- Input: `ke_world*` (ECS queries) + `ke_frame_packet*` (write slot)
+- Output: entries written into the frame packet
+- Never: renderer calls, GPU resource creation, threading primitives
+
+Any GPU resource a system needs (shadow map handle, built-in textures, program handles) must be
+pre-created on ke.render and injected into the system context as opaque handle values — not as
+a live renderer pointer.
+
+Remove `ke_render*` from `ShadowSystem::GetDescription` and any future system descriptors.
+Add a `ke_render_bgfx_shadow_system_set_map(desc, handle)` setter pattern as the only approved
+injection point, callable only from ke.render after GPU init.
+
+---
+
+### 1.23 [HIGH] No formal "setup phase" — `ResourceCommandQueue` drain deadlocks during `OnReady`
+
+The three-thread model has an implicit phase between ke.render initialization and the first
+frame that has no architectural support:
+
+```
+ke.render:  Initialize() → [enters BeginRead — blocks waiting for first frame]
+ke.sim:     OnReady() → CreateMaterial() → [blocks waiting for ke.render to drain queue]
+```
+
+This is a deadlock. ke.render is waiting for a frame; ke.sim can't produce a frame until its
+`OnReady` resource creation completes; ke.render can't drain the resource queue because it
+already entered `BeginRead`.
+
+**Workaround in place**: a `simReady` `ManualResetEventSlim` was added. ke.render
+spin-drains the `ResourceCommandQueue` via `Thread.SpinWait(100)` until ke.sim signals
+that `OnReady` is complete, then enters the frame loop. This works but is polling-based.
+
+**Proper fix**: replace the spin-drain with ke.render's main loop calling
+`WaitHandle.WaitAny(new[] { resourceQueueSemaphore, frameAvailableSemaphore })` — ke.render
+sleeps on whichever event fires first. The resource queue semaphore is signaled by `Enqueue`;
+the frame semaphore is signaled by `EndWrite`. This eliminates both the spin-wait and the
+need for the `simReady` event entirely.
+
+This requires `FrameSync.BeginRead` to expose its internal semaphore (or a combined wait
+primitive), and `ResourceCommandQueue.Enqueue` to signal a semaphore.
+
+---
+
+### 1.24 [MEDIUM] `KeThread` captured thread name as pointer — use-after-free on startup
+
+In `KernelThread.Create`, the thread name was allocated with `Marshal.AllocHGlobal`, passed to
+`ke_thread_std_create` via a `ke_thread_desc*`, and freed in the `finally` block — before the
+new thread's body executed `set_thread_name_platform(desc_copy.name)`.
+
+The `KeThread` constructor captured `desc_copy = *desc` (a shallow struct copy), so
+`desc_copy.name` was a dangling pointer by the time the thread body ran. The thread name would
+be set to garbage, making `ke_thread_assert_current` fire false positives.
+
+**Fix applied**: `KeThread.cpp` now captures `name = std::string(desc->name ? desc->name : "")` in
+the lambda — a deep copy that outlives the caller's allocation lifetime.
+
+**Class of bug**: any function in the codebase that passes a `const char*` to a cross-thread
+consumer (thread body, callback, async queue) without ensuring the string outlives the consumer
+is vulnerable to this pattern. Audit: `ke_system_desc::name`, `ke_logger_sink::name`, any
+struct with a `const char*` that is stored for later use.
+
+---
+
 ### 1.16 [LOW] Resource creation is blocking and synchronous with no async alternative
 
 `CreateMesh`, `CreateTexture`, `CreateCubemap` called from `OnReady` block ke.sim until ke.render
@@ -654,6 +731,35 @@ ECS system waves within a single frame. They are not a fourth thread category.
 - Workers must never call ke.render APIs, touch the ResourceCommandQueue as consumers, or access ke.main state.
 - C# `ISystem.Update()` called from a worker thread is supported. Managed code on unmanaged threads requires the CLR to have attached the thread — `KernelThread.Create` must call `Thread.BeginThreadAffinity()` for workers.
 - The System Graph scheduler already enforces read/write dependency rules. No additional synchronization is needed within a wave.
+
+---
+
+### 2.10 Formal Setup Phase
+
+The current `Application.Run()` uses a `simReady` `ManualResetEventSlim` and a spin-drain
+loop (`Thread.SpinWait(100)`) to synchronize `OnReady` resource creation with ke.render.
+This is a workaround, not a design.
+
+**Proper design**: `ResourceCommandQueue.Enqueue` should expose a semaphore that ke.render
+waits on (alongside the `FrameSync` semaphore) in `WaitHandle.WaitAny`. ke.render wakes
+up when *either* a resource command arrives or a frame is available, handles whichever is
+ready, then sleeps again. This makes the setup phase and the frame loop unified — no special
+pre-loop drain, no `simReady` event, no spin-waiting.
+
+```csharp
+// ke.render main loop (target shape):
+while (!_cts.IsCancellationRequested)
+{
+    var idx = WaitHandle.WaitAny(new[] { resourceSemaphore, frameSemaphore, cancelHandle });
+    if (idx == 0) { _resourceQueue.Drain(Renderer); continue; }
+    if (idx == 1) { var p = frameSync.BeginRead(); Renderer.SubmitPacket(p); Renderer.Frame(); p.EndRead(); }
+}
+```
+
+**Prerequisite**: `ResourceCommandQueue` must expose its internal semaphore, and `FrameSync`
+must expose its reader semaphore, so `Application` can compose them with `WaitHandle.WaitAny`.
+
+**Tracked in**: problem 1.23.
 
 ---
 
@@ -1417,6 +1523,17 @@ After all phases are complete, the following properties hold by construction, no
   needs to propagate it through the system graph. The cleanest path may be to add
   `ke_input_snapshot*` to `ke_frame_packet` directly, making it part of the frame boundary.
 
+- **`simReady` spin-drain is a temporary workaround**: the `ManualResetEventSlim` + `SpinWait(100)`
+  pattern in `Application.Run()` eliminates the deadlock but burns CPU during startup and is
+  fragile in the face of future threading changes. The proper fix (section 2.10) requires
+  `ResourceCommandQueue` and `FrameSync` to expose semaphore handles for `WaitHandle.WaitAny`.
+  Until that is implemented, keep the spin-drain but do not extend it to cover new use cases.
+
+- **`ke_system_desc` carries `ke_render*` — enforcement gap**: removing the pointer from
+  `GetDescription` signatures will break all callers. The migration must be done in one commit per
+  system (ShadowSystem first, since it is the worst offender) with a compile-error check: if
+  `ke_render*` appears in any `ke_system_desc` field after the migration, the build fails.
+
 ---
 
 ## 8. Additional Tracks
@@ -1840,6 +1957,25 @@ Guarantees exceptions appear in the log even if the sink doesn't auto-flush on u
 Verify `ConsoleSink` and any future sinks write synchronously — no internal buffer that
 survives a crash unwritten. If buffering exists, call `Flush()` at the end of each `Log()`.
 
+#### Y.9 (DB-09) Startup Lifecycle Logging
+
+Log one line per major initialization milestone so that a silent crash during startup can be
+pinpointed without a debugger:
+
+```
+[INFO][Application] ke.render: initializing renderer
+[INFO][Application] ke.render: shadow map created (1024×1024)
+[INFO][Application] ke.render: renderer ready — signaling ke.sim
+[INFO][Application] ke.sim: OnReady complete — entering frame loop
+[INFO][Application] ke.main: first frame rendered
+```
+
+Each line must be emitted by the thread that owns that milestone and must appear before the
+thread enters its blocking loop. Missing lines identify exactly which phase hung or crashed.
+
+**Acceptance**: killing the process at any point during startup leaves the last printed line
+identifying the last successfully completed phase.
+
 #### Y.8 (DB-08) Native SEH Crash Handler
 
 Register `SetUnhandledExceptionFilter` via P/Invoke before starting the loop:
@@ -1931,3 +2067,6 @@ On any `ke_result != KE_OK`:
 | 4 | TextureLoader moves from C# (ImageSharp) to C++ (stb_image) | Architecture principle: implementations in C/C++; C# is the wrapper layer only |
 | 5 | Nodes belong in Framework, not Kernel | Already completed; Kernel contains only direct native wrappers |
 | 6 | `.rsp` `--exclude` lists are a hack → replace with ClangSharp traversal config | Exclusion lists grow indefinitely; proper solution is scoped traversal |
+| 7 | Shadow map creation is ke.render's responsibility, not the ECS system | GPU resource creation requires thread affinity to ke.render; systems run on ke.sim and must never call GPU APIs directly. `ShadowSystem::Update` previously violated this; fixed by removing GPU creation from `Update` and injecting the handle via `SetShadowMap` before the first frame |
+| 8 | `ke_render*` must be removed from `ke_system_desc` (tracked, not yet done) | Holding a renderer pointer in the system descriptor is an API-level invitation to call GPU functions from ke.sim. Tracked in problem 1.22. Migration is one system at a time, ShadowSystem first |
+| 9 | `simReady` ManualResetEventSlim is a temporary workaround, not a design | The correct fix (section 2.10) requires exposing semaphore handles from `ResourceCommandQueue` and `FrameSync` for `WaitHandle.WaitAny`. Workaround is acceptable until that infrastructure is built, but must not be extended to new use cases |
