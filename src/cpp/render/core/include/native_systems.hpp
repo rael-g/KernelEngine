@@ -47,6 +47,8 @@ class KE_RENDER_API ShadowSystem
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
     static ke_system_desc GetDescription(ke_render* renderer, uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid);
+    /// Sets the shadow map handle from ke.render — must be called before the first frame.
+    static void SetShadowMap(ke_system_desc* desc, ke_shadow_map_handle handle);
 };
 
 /**

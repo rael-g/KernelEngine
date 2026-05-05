@@ -72,4 +72,8 @@ extern "C" {
         *out_desc = kernel_engine::render::bgfx::SkyboxSystem::GetDescription(skybox_cid);
         return KE_OK;
     }
+
+    KE_RENDER_API void ke_render_bgfx_shadow_system_set_map(ke_system_desc *desc, ke_shadow_map_handle handle) {
+        kernel_engine::render::bgfx::ShadowSystem::SetShadowMap(desc, handle);
+    }
 }

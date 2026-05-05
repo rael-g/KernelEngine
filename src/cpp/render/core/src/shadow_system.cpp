@@ -14,7 +14,7 @@ struct ShadowSystemContext {
     uint32_t   mesh_cid;
     uint32_t   transform_cid;
     ke_render* renderer;
-    uint32_t   shadow_map_handle;
+    ke_shadow_map_handle shadow_map_handle;
     uint32_t   reads[3];
 };
 
@@ -30,12 +30,9 @@ void ShadowSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
     ke_ecs_registry_query(reg, ctx->light_cid, &l_entities, &l_data, &l_count);
     if (l_count == 0) return;
 
-    // ── Lazy shadow map creation (once, on first frame with a light) ───────
-    if (ctx->shadow_map_handle == 0xFFFFFFFF)
-    {
-        if (ctx->renderer->create_shadow_map(ctx->renderer, 1024, 1024, &ctx->shadow_map_handle) != KE_OK)
-            return;
-    }
+    // Shadow map must be pre-assigned by ke.render before the first frame.
+    // GPU resource creation from ke.sim is not allowed.
+    if (!ke_shadow_map_is_valid(ctx->shadow_map_handle)) return;
 
     ke_light_component* lights = static_cast<ke_light_component*>(l_data);
 
@@ -56,7 +53,7 @@ void ShadowSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
 
     for (size_t i = 0; i < m_count; i++)
     {
-        if (meshes[i].mesh_handle == 0xFFFFFFFF) continue;
+        if (!ke_mesh_is_valid(meshes[i].mesh_handle)) continue;
 
         ke_transform_component* tc = static_cast<ke_transform_component*>(
             ke_ecs_component_get(reg, m_entities[i], ctx->transform_cid));
@@ -68,7 +65,7 @@ void ShadowSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
             {
                 ke_draw_command* cmd = &packet->shadow_draw_commands[index];
                 cmd->mesh_handle     = meshes[i].mesh_handle;
-                cmd->material_handle = 0;
+                cmd->material_handle = KE_MATERIAL_NONE;
                 cmd->transform       = tc->world_matrix;
             }
         }
@@ -82,7 +79,7 @@ ke_system_desc ShadowSystem::GetDescription(ke_render* renderer, uint32_t light_
     ctx->mesh_cid         = mesh_cid;
     ctx->transform_cid    = transform_cid;
     ctx->renderer         = renderer;
-    ctx->shadow_map_handle= 0xFFFFFFFF;
+    ctx->shadow_map_handle= KE_SHADOW_MAP_NONE;
     ctx->reads[0]         = light_cid;
     ctx->reads[1]         = mesh_cid;
     ctx->reads[2]         = transform_cid;
@@ -94,6 +91,12 @@ ke_system_desc ShadowSystem::GetDescription(ke_render* renderer, uint32_t light_
     desc.reads      = ctx->reads;
     desc.read_count = 3;
     return desc;
+}
+
+void ShadowSystem::SetShadowMap(ke_system_desc* desc, ke_shadow_map_handle handle)
+{
+    if (!desc || !desc->handle) return;
+    static_cast<ShadowSystemContext*>(desc->handle)->shadow_map_handle = handle;
 }
 
 } // namespace kernel_engine::render::bgfx
