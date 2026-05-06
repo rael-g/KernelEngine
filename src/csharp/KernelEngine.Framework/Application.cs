@@ -227,9 +227,12 @@ public class Application : IDisposable
             _cts.Cancel();
         }
 
-        // Wait for threads to exit
-        simThread.Join();
-        renderThread.Join();
+        // Wait for threads to exit with timeout
+        if (!simThread.Join(5000))
+            Logger?.Error("Application", "ke.sim did not stop within 5s — forcing exit");
+        
+        if (!renderThread.Join(3000))
+            Logger?.Error("Application", "ke.render did not stop within 3s — forcing exit");
 
         var ex1 = renderException;
         var ex2 = simException;

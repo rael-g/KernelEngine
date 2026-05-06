@@ -16,6 +16,7 @@ class KeThread
     KeThread &operator=(const KeThread &) = delete;
 
     void Join();
+    bool JoinTimeout(uint32_t timeout_ms);
 
   private:
     std::thread thread_;

@@ -28,6 +28,12 @@ extern "C"
         void *handle;
         void (*destroy)(struct ke_thread *self, ke_allocator *alloc);
         void (*join)(struct ke_thread *self);
+
+        /**
+         * @brief Blocks until the thread finishes or the timeout expires.
+         * @return true if the thread finished, false if it timed out.
+         */
+        ke_bool (*join_timeout)(struct ke_thread *self, uint32_t timeout_ms);
     } ke_thread;
 
     /**
