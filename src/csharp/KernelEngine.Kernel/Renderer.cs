@@ -379,12 +379,10 @@ public sealed unsafe class Renderer : IDisposable
     [RequiresThread("ke.render")]
     public void Dispose()
     {
+        if (_native == null) return; // idempotent — ke.render disposes first; DI container may call again from ke.main
         KernelThread.AssertCurrent("ke.render");
-        if (_native != null)
-        {
-            _native->on_shutdown(_native);
-            _native->destroy(_native);
-            _native = null;
-        }
+        _native->on_shutdown(_native);
+        _native->destroy(_native);
+        _native = null;
     }
 }
