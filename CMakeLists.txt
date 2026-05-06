@@ -14,6 +14,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(src/c/kernel)
+add_subdirectory(src/cpp/dev_platform)
 add_subdirectory(src/cpp/task_scheduler/enki)
 add_subdirectory(src/cpp/threading)
 add_subdirectory(src/cpp/window/contract)

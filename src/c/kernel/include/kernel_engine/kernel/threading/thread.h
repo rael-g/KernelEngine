@@ -3,6 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/dev_platform/dev_platform.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -16,10 +17,10 @@ extern "C"
     /// @brief Construction parameters for a thread factory.
     typedef struct ke_thread_desc
     {
-        const char    *name;          ///< Thread name, visible in profilers. May be NULL.
-        ke_thread_func func;          ///< Entry point. Must not be NULL.
-        void          *user_data;     ///< Forwarded unchanged to func.
-        uint64_t       affinity_mask; ///< CPU affinity bitmask. 0 = no preference.
+        const char       *name;         ///< Thread name. Stored in TLS and forwarded to dev_platform if present. May be NULL.
+        ke_thread_func    func;         ///< Entry point. Must not be NULL.
+        void             *user_data;    ///< Forwarded unchanged to func.
+        ke_dev_platform  *dev_platform; ///< Optional. If set, used to make the thread name visible to debuggers/profilers.
     } ke_thread_desc;
 
     /// @brief OS thread abstraction — vtable style.
