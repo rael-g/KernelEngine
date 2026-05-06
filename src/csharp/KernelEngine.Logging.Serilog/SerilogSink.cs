@@ -39,4 +39,9 @@ public sealed class SerilogSink : ILoggerSink
 
         _logger.ForContext("Tag", tag).Write(serilogLevel, "[{Tag}] {Message}", tag, message);
     }
+
+    public void Flush()
+    {
+        (global::Serilog.Log.Logger as IDisposable)?.Dispose();
+    }
 }

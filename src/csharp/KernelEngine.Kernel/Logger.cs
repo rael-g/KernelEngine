@@ -54,6 +54,13 @@ public sealed unsafe class Logger : IDisposable
     public void Info(string tag, string message)    => Log(ke_log_level.KE_LOG_LEVEL_INFO, tag, message);
     public void Warning(string tag, string message) => Log(ke_log_level.KE_LOG_LEVEL_WARNING, tag, message);
     public void Error(string tag, string message)   => Log(ke_log_level.KE_LOG_LEVEL_ERROR, tag, message);
+    public void Critical(string tag, string message)=> Log(ke_log_level.KE_LOG_LEVEL_CRITICAL, tag, message);
+
+    /// <summary>Flushes all registered sinks.</summary>
+    public void Flush()
+    {
+        _native->flush(_native);
+    }
 
     /// <summary>Registers a managed sink to receive all subsequent log events.</summary>
     /// <param name="sink">The sink implementation.</param>
@@ -68,6 +75,7 @@ public sealed unsafe class Logger : IDisposable
             handle = GCHandle.ToIntPtr(handle).ToPointer(),
             min_level = (int)minLevel,
             log = &LogCallback,
+            flush = &FlushCallback,
             destroy = &SinkDestroy,
         };
 
@@ -81,6 +89,13 @@ public sealed unsafe class Logger : IDisposable
         string tag = Marshal.PtrToStringAnsi((nint)evt->tag) ?? string.Empty;
         string message = Marshal.PtrToStringAnsi((nint)evt->message) ?? string.Empty;
         sink.Log((ke_log_level)evt->level, tag, message);
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void FlushCallback(ke_logger_sink* self)
+    {
+        var sink = (ILoggerSink)GCHandle.FromIntPtr((nint)self->handle).Target!;
+        sink.Flush();
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

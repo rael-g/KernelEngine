@@ -20,13 +20,14 @@ public sealed class KernelException : Exception
         { ke_result.KE_ERROR_IO, "KE_ERROR_IO" },
         { ke_result.KE_ERROR_WINDOW, "KE_ERROR_WINDOW" },
         { ke_result.KE_ERROR_RENDER, "KE_ERROR_RENDER" },
+        { ke_result.KE_ERROR_GPU_FATAL, "KE_ERROR_GPU_FATAL" },
     };
 
     /// <summary>The native result code that caused this exception.</summary>
     public ke_result Result { get; }
 
-    public KernelException(ke_result result, string? context = null)
-        : base(FormatMessage(result, context))
+    public KernelException(ke_result result, string? context = null, string? message = null)
+        : base(message ?? FormatMessage(result, context))
     {
         Result = result;
     }

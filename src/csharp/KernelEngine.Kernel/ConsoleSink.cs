@@ -22,4 +22,6 @@ public sealed class ConsoleSink : ILoggerSink
         Console.Error.WriteLine($"[{label}] {tag}: {message}");
         Console.Error.Flush();
     }
+
+    public void Flush() => Console.Error.Flush();
 }

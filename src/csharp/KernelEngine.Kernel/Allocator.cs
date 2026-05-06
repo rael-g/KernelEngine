@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
@@ -69,4 +70,36 @@ public sealed unsafe class MallocAllocator : Allocator
 public sealed unsafe class ArenaAllocator : Allocator
 {
     public ArenaAllocator(nuint capacity) : base(NativeMethods.allocator_arena_create(capacity)) { }
+}
+
+/// <summary>
+/// Wraps another allocator to track statistics and detect leaks.
+/// </summary>
+public sealed unsafe class ProxyAllocator : Allocator
+{
+    public ProxyAllocator(Allocator inner, string name) 
+        : base(CreateProxy(inner, name)) { }
+
+    private static ke_allocator* CreateProxy(Allocator inner, string name)
+    {
+        var namePtr = Marshal.StringToHGlobalAnsi(name);
+        try
+        {
+            return NativeMethods.allocator_proxy_create(inner.Native, (sbyte*)namePtr);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(namePtr);
+        }
+    }
+
+    /// <summary>Logs a memory usage report to the provided logger.</summary>
+    public void Report(Logger? logger)
+    {
+        ke_logger* nativeLogger = null;
+        try { if (logger != null) nativeLogger = logger.Native; }
+        catch (ObjectDisposedException) { }
+        
+        NativeMethods.allocator_proxy_report(Native, nativeLogger);
+    }
 }

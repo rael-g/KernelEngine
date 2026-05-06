@@ -14,4 +14,6 @@ public interface ILoggerSink
     ke_log_level MinLevel => ke_log_level.KE_LOG_LEVEL_TRACE;
 
     void Log(ke_log_level level, string tag, string message);
+
+    void Flush() {}
 }
