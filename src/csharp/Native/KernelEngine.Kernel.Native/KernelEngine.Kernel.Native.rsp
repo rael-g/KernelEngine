@@ -28,6 +28,7 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/task_scheduler/task_scheduler.h
 ../../../c/kernel/include/kernel_engine/kernel/threading/thread.h
 ../../../c/kernel/include/kernel_engine/kernel/window/window.h
+../../../c/kernel/include/kernel_engine/kernel/dev_platform/dev_platform.h
 --methodClassName
 NativeMethods
 --prefixStrip

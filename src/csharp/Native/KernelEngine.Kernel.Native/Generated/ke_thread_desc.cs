@@ -10,6 +10,5 @@ public unsafe partial struct ke_thread_desc
 
     public void* user_data;
 
-    [NativeTypeName("uint64_t")]
-    public ulong affinity_mask;
+    public ke_dev_platform* dev_platform;
 }

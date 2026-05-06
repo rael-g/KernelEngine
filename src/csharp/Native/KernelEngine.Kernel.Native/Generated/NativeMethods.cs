@@ -114,4 +114,7 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_ID_WINDOW \"ke_window\"")]
     public static ReadOnlySpan<byte> KE_ID_WINDOW => "ke_window"u8;
+
+    [NativeTypeName("#define KE_ID_DEV_PLATFORM \"ke_dev_platform\"")]
+    public static ReadOnlySpan<byte> KE_ID_DEV_PLATFORM => "ke_dev_platform"u8;
 }
