@@ -56,7 +56,8 @@ diagnose-fix loop.
 | Track Y.8 (DB-08) | Native SEH crash handler — convert `0x80000003` to readable error | ✅ Done (499c177) |
 | Track Y.6 (DB-06) | Top-level exception handler in `Application.Run` | ✅ Done (499c177) |
 | Track Y.9 (DB-09) | Startup lifecycle logging — last-printed-line identifies hang phase | ✅ Done (499c177) |
-| Phase F | Structured shutdown — `join_timeout` + cancellation chain | 🔄 In Progress (b556003 — Linux fallback is busy-wait stub) |
+| Phase F | Structured shutdown — `join_timeout` + cancellation chain | ✅ Done (b556003 + 3fb4835 — `condition_variable::wait_for` eliminated the Linux stub) |
+| **Track P (NEW) — Wave 1** | **Platform Abstraction Layer (`IDevPlatform`)** — extract dev-only OS APIs (thread name) into a swappable backend; eliminate all `#ifdef` from KeThread | ✅ Done (b03ab70 → dbad9e7 chain) |
 | **Track Y.10 (NEW)** | **Bindings-drift detection in CI — fail build if `ke_*.h` changed but `Generated/*.cs` didn't** | 🔲 Planned (motivated by bug 1.25) |
 | Track Y.2 (DB-02) | `LogErr` C++ helper — every silent `return KE_ERROR_*` becomes a logged failure | 🔲 Planned |
 | Track Y.3 (DB-03) | Debug logging in bgfx init — shader path, file existence, createUniform results | 🔲 Planned |
@@ -1503,7 +1504,7 @@ After all phases are complete, the following properties hold by construction, no
 | C — Thread Affinity | `ke_thread_assert_current`, debug assertions | ✅ Done |
 | D — Input Snapshot | `IInputReader`, `InputBuffer`, ke.main → ke.sim | ✅ Done |
 | E — ISceneWriter / IResourceFactory | Game dev never touches Renderer | ✅ Done (examples migrated) |
-| F — Structured Shutdown | `CancellationTokenSource`, join timeouts | 🔄 In Progress (Win32 only — Linux fallback is busy-wait stub, needs `pthread_timedjoin_np`) |
+| F — Structured Shutdown | `CancellationTokenSource`, join timeouts | ✅ Done — cv-based `JoinTimeout` is cross-platform; no `#ifdef` |
 | G — enkiTS CLR Safety | CLR thread attachment for workers | 🔲 Planned |
 | H — Remove MessagePipe | Delete `ke_message_pipe` entirely | ✅ Done |
 | I — Entity Generations | `{ id, generation }`, stale ref detection | 🔲 Planned |
@@ -1547,8 +1548,59 @@ After all phases are complete, the following properties hold by construction, no
 | Item | Why deferred | When to address |
 |------|--------------|-----------------|
 | `ke_thread_desc` → `ke_thread_params` rename | All other `_desc` were standardized to `_params`; threading was missed. Cosmetic, no functional impact. | Bundle with next bindings regen pass |
-| `KeThread::JoinTimeout` Linux busy-wait | Win32 path is correct; Linux uses 10ms `sleep_for` polling instead of `pthread_timedjoin_np` | Before any Linux release / CI run |
+| ~~`KeThread::JoinTimeout` Linux busy-wait~~ | ✅ **Resolved** — replaced by `condition_variable::wait_for` (cross-platform). | Done in 3fb4835 |
 | `CameraNode.OnStart` runs every frame | `s->started=true` IS set in C; verified working. False alarm. | N/A |
+| SEH crash handler + minidump still in `Application.cs` | Win32-only code lives inside generic framework. Should move into `IDevPlatform` (Track P, Wave 2). | Track P, Wave 2 |
+| `Allocator.aligned_alloc` if added | Use `std::aligned_alloc` (C++17) directly, NOT `IDevPlatform`. Listed here as reminder of the admission rule. | When the need arises |
+
+---
+
+## Track P — Platform Abstraction Layer
+
+### Admission rule (mandatory before adding anything to `IDevPlatform`)
+
+```
+1. Is the operation actually needed? → if no, drop it.
+2. Does std/C++ already provide it cross-platform? → if yes, use std directly. NEVER add to IDevPlatform.
+3. Can it be implemented on every platform we care about (Windows, iOS, Android, WebGL, consoles)?
+   → if yes: add to IDevPlatform with a no-op fallback for platforms without the capability.
+   → if no: it's dev-only. Implement only for Win/Linux/macOS. Game code MUST tolerate its absence.
+4. If it's impossible on a major shipping target → reconsider whether we want it at all.
+```
+
+This rule was applied retroactively and **dropped several initially-considered items**:
+`set_thread_affinity` (proibido em iOS, restrito em Android), `JoinTimeout` (std::condition_variable
+resolves it), `aligned_alloc` (C++17 std), `query_perf_counter` (std::chrono).
+
+### Wave 1 — Foundation ✅ Done
+
+| Item | Where | Status |
+|------|-------|--------|
+| `IDevPlatform` C ABI | `src/c/kernel/include/.../dev_platform/dev_platform.h` | ✅ |
+| `Win32DevPlatform` (`SetThreadDescription`) | `src/cpp/dev_platform/win32/` | ✅ |
+| `PosixDevPlatform` (`pthread_setname_np`) | `src/cpp/dev_platform/posix/` (Linux + macOS) | ✅ |
+| Eliminate all `#ifdef` from `KeThread.cpp` | std::thread + cv only | ✅ (3fb4835) |
+| Cross-platform `JoinTimeout` | `condition_variable::wait_for` + `atomic<bool>` shared state | ✅ |
+| `DevPlatform` C# wrapper | `src/csharp/KernelEngine.Kernel/DevPlatform.cs` | ✅ |
+| `KernelEngine.DevPlatform.Win32` DI extension | `AddWin32DevPlatform()` | ✅ |
+| `Application` consumes optional `DevPlatform` from DI | `ke.main`, `ke.render`, `ke.sim` get OS-visible names when registered | ✅ |
+
+### Wave 2 — Move Win32-only diagnostics out of generic framework
+
+| Item | Why | Status |
+|------|-----|--------|
+| `IDevPlatform.InstallCrashHandler(callback)` | Today `Application.cs` calls `SetUnhandledExceptionFilter` directly — leaks Win32 into the generic framework | 🔲 Planned |
+| `IDevPlatform.WriteMinidump(path, ctx)` | Today minidump generation is in `Application.cs` — same Win32 leak | 🔲 Planned |
+| Move SEH + minidump code from `Application.cs` to `Win32DevPlatform` | Framework becomes Win32-free | 🔲 Planned |
+| Add `KernelEngine.DevPlatform.Posix` DI extension | Symmetric to Win32, signal-based crash handler | 🔲 Planned |
+
+### Wave 3+ — On demand only (must pass admission rule)
+
+| Candidate | Verdict |
+|-----------|---------|
+| `LoadLibrary` / `dlopen` (hot-reload of plugins) | Dev-only — proibido em iOS/consoles. Add only if hot-reload becomes a real need. |
+| `WatchFile` (asset hot-reload) | Dev-only — sandbox em mobile, n/a em WebGL. Add when asset pipeline justifies. |
+| `set_thread_affinity` | **Rejected by admission rule** — proibido em iOS, restrito em Android. If ever needed, becomes a no-op on those platforms. |
 
 ---
 
