@@ -64,8 +64,7 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out)
 
     if (!scene || !scene->mRootNode || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE))
     {
-        log_error(logger_, importer.GetErrorString());
-        return KE_ERROR_IO;
+        return LogErr(logger_, KE_ERROR_IO, "LoadModel", importer.GetErrorString());
     }
 
     std::string dir = Converter::GetDirectory(path);

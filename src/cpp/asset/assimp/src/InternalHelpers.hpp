@@ -4,6 +4,7 @@
 #include <kernel_engine/kernel/logger/logger.h>
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
 
 namespace kernel_engine::asset::assimp::detail
 {
@@ -37,6 +38,18 @@ inline void log_error(ke_logger *logger, const char *msg)
     if (!logger) return;
     ke_log_event ev = {KE_LOG_LEVEL_ERROR, "asset_loader", msg};
     logger->log(logger, &ev);
+}
+
+inline ke_result LogErr(ke_logger *logger, ke_result r, const char *context, const char *detail)
+{
+    if (logger)
+    {
+        char msg[1024];
+        snprintf(msg, sizeof(msg), "%s: %s (result: %d)", context, detail, r);
+        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "asset_loader", msg};
+        logger->log(logger, &ev);
+    }
+    return r;
 }
 
 /**
