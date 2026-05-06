@@ -43,14 +43,28 @@ The engine has implemented many rendering features (shadow maps, clustered light
 IBL, normal maps) that have **no runnable example to verify them**. Before adding anything new,
 we need E2E coverage of what already exists and a stable, debuggable baseline.
 
-| Item | What |
-|------|------|
-| Examples 01–05 migration | Migrate to Phase E API (`IResourceFactory`, `ISceneWriter`, `IInputReader`) |
-| Examples 06–13 (Track Z) | Create examples for every implemented feature — these are the E2E tests |
-| Phase F | Structured shutdown — prevents hangs that block iteration |
-| Phase H | Remove `ke_message_pipe` — decided, clean the debt |
-| Track Y.1 + Y.7 + Y.8 | bgfx fatal callback, sync log flush, SEH crash handler — minimum debuggability |
-| Track U.1 | Wire `WindowConfig.vsync` — trivial, removes a papercut |
+**Reordered 2026-05-06**: debuggability is now the explicit ordering criterion. Each Tier 1
+item must either remove a class of silent bug, surface a failure mode, or shorten the
+diagnose-fix loop.
+
+| Item | What | Status |
+|------|------|--------|
+| Examples 01–05 migration | Migrate to Phase E API (`IResourceFactory`, `ISceneWriter`, `IInputReader`) | ✅ Done |
+| Phase H | Remove `ke_message_pipe` — decided, clean the debt | ✅ Done |
+| Track Y.1 (DB-01) | bgfx fatal callback — capture native abort with file/line/code | ✅ Done (a409f95) |
+| Track Y.7 (DB-07) | Synchronous log flush — no buffered messages lost on crash | ✅ Done (8197ec1) |
+| Track Y.8 (DB-08) | Native SEH crash handler — convert `0x80000003` to readable error | ✅ Done (499c177) |
+| Track Y.6 (DB-06) | Top-level exception handler in `Application.Run` | ✅ Done (499c177) |
+| Track Y.9 (DB-09) | Startup lifecycle logging — last-printed-line identifies hang phase | ✅ Done (499c177) |
+| Phase F | Structured shutdown — `join_timeout` + cancellation chain | 🔄 In Progress (b556003 — Linux fallback is busy-wait stub) |
+| **Track Y.10 (NEW)** | **Bindings-drift detection in CI — fail build if `ke_*.h` changed but `Generated/*.cs` didn't** | 🔲 Planned (motivated by bug 1.25) |
+| Track Y.2 (DB-02) | `LogErr` C++ helper — every silent `return KE_ERROR_*` becomes a logged failure | 🔲 Planned |
+| Track Y.3 (DB-03) | Debug logging in bgfx init — shader path, file existence, createUniform results | 🔲 Planned |
+| Track Y.4 (DB-04) | Symbolic `ke_result` names in `KernelException` | ⚠️ Partial (e519eda) |
+| Track Y.5 (DB-05) | Audit `_ =` Result discards in Framework | 🔲 Planned |
+| Examples 06–13 (Track Z) | Create examples for every implemented feature — these are the E2E tests | 🔲 Planned |
+| Track U.1 | Wire `WindowConfig.vsync` — trivial, removes a papercut | 🔲 Planned |
+| **Phase L (PROMOTED)** | **Read/write set enforcement — catch silent component-write violations in debug** | 🔲 Planned (was Tier 4) |
 
 ---
 
@@ -65,9 +79,10 @@ the items that cause **silent corruption or guaranteed crashes** during normal g
 | Phase J | Deferred structural mutations — script destroying an entity during update crashes |
 | Phase K | Node registry thread safety — real race condition with enkiTS workers |
 | Phase G | enkiTS CLR thread attachment — managed ISystem on worker threads |
+| **Phase N (PROMOTED)** | **Profiling, Chrome Trace / Tracy — required to debug threading issues without prints** |
 
-Phases L (read/write enforcement), M (frame arena), N (profiling) are deferred — they improve
-correctness and performance but do not cause crashes or silent corruption in the current usage.
+Phases L (read/write enforcement) was promoted to Tier 1.
+Phase M (frame arena) is deferred — performance, no correctness impact.
 
 ---
 
@@ -89,9 +104,9 @@ Revisit only when the engine can drive a complete game and the ROI of hardening 
 
 | Item | What |
 |------|------|
-| Phase L | Read/write set enforcement in debug |
+| ~~Phase L~~ | *Promoted to Tier 1 — debuggability* |
 | Phase M | Frame arena allocator, zero malloc on hot path |
-| Phase N | Profiling, Chrome Trace / Tracy integration |
+| ~~Phase N~~ | *Promoted to Tier 2 — debuggability* |
 | Phase O | ABI versioning strategy |
 | Phase P | Multi-component ECS queries |
 | Phase Q | Full asset system (`AssetHandle<T>`, ref counting, async) |
@@ -1487,10 +1502,10 @@ After all phases are complete, the following properties hold by construction, no
 | B — Dead Code Removal | Delete `GlfwWindow.cpp` and siblings | ✅ Done |
 | C — Thread Affinity | `ke_thread_assert_current`, debug assertions | ✅ Done |
 | D — Input Snapshot | `IInputReader`, `InputBuffer`, ke.main → ke.sim | ✅ Done |
-| E — ISceneWriter / IResourceFactory | Game dev never touches Renderer | ✅ Done (examples pending) |
-| F — Structured Shutdown | `CancellationTokenSource`, join timeouts | 🔲 Planned |
+| E — ISceneWriter / IResourceFactory | Game dev never touches Renderer | ✅ Done (examples migrated) |
+| F — Structured Shutdown | `CancellationTokenSource`, join timeouts | 🔄 In Progress (Win32 only — Linux fallback is busy-wait stub, needs `pthread_timedjoin_np`) |
 | G — enkiTS CLR Safety | CLR thread attachment for workers | 🔲 Planned |
-| H — Remove MessagePipe | Delete `ke_message_pipe` entirely | 🔲 Planned |
+| H — Remove MessagePipe | Delete `ke_message_pipe` entirely | ✅ Done |
 | I — Entity Generations | `{ id, generation }`, stale ref detection | 🔲 Planned |
 | J — Deferred Structural Changes | Mutation buffers, post-wave drain | 🔲 Planned |
 | K — Node Registry Thread Safety | `ConcurrentDictionary`, wave-time write guard | 🔲 Planned |
@@ -1502,6 +1517,38 @@ After all phases are complete, the following properties hold by construction, no
 | Q — Asset System | `AssetHandle<T>`, ref counting, async loading, `AssetRegistry` | 🔲 Planned |
 | R — Error Context | Thread-local `ke_error_context`, `KE_RETURN_ERROR` macro | 🔲 Planned |
 | S — Real Plugin Contract | `ke_plugin_register`, runtime discovery, ABI negotiation | 🔲 Planned |
+
+### Track Y — Observability Status
+
+| Item | Goal | Status | Commit |
+|------|------|--------|--------|
+| Y.1 (DB-01) | bgfx fatal callback — capture file/line/code | ✅ Done | a409f95 |
+| Y.2 (DB-02) | `LogErr` C++ helper — log every silent error path | 🔲 Planned | — |
+| Y.3 (DB-03) | Debug logging in bgfx init | 🔲 Planned | — |
+| Y.4 (DB-04) | Symbolic `ke_result` names in `KernelException` | ⚠️ Partial | e519eda |
+| Y.5 (DB-05) | Audit `_ =` Result discards | 🔲 Planned | — |
+| Y.6 (DB-06) | Top-level exception handler in `Application.Run` | ✅ Done | 499c177 |
+| Y.7 (DB-07) | Synchronous flush in log sinks | ✅ Done | 8197ec1 |
+| Y.8 (DB-08) | Native SEH crash handler | ✅ Done | 499c177 |
+| Y.9 (DB-09) | Startup lifecycle logging | ✅ Done | 499c177 |
+| **Y.10 (NEW)** | **Bindings-drift detection in CI** — fail build if `ke_*.h` mtime > `Generated/*.cs` mtime, motivated by bug 1.25 (30-min lost) | 🔲 Planned | — |
+
+### Bug Catalog Status (post-Phase-E session)
+
+| # | Title | Status | Fixed in |
+|---|-------|--------|----------|
+| 1.22 | `ke_system_desc` carries `ke_render*` | 🔄 ShadowSystem fixed; ABI cleanup pending | 0e84485 |
+| 1.23 | OnReady ResourceCommandQueue deadlock | ✅ Workaround (`simReady` event) | fde78a9 |
+| 1.24 | `KeThread` thread-name use-after-free | ✅ Fixed | 1481ef4 |
+| 1.25 | `ke_input` C# binding out-of-sync with C struct | ✅ Fixed + audit needed for other structs | 3583586 |
+
+### Tech Debt Carry-Over
+
+| Item | Why deferred | When to address |
+|------|--------------|-----------------|
+| `ke_thread_desc` → `ke_thread_params` rename | All other `_desc` were standardized to `_params`; threading was missed. Cosmetic, no functional impact. | Bundle with next bindings regen pass |
+| `KeThread::JoinTimeout` Linux busy-wait | Win32 path is correct; Linux uses 10ms `sleep_for` polling instead of `pthread_timedjoin_np` | Before any Linux release / CI run |
+| `CameraNode.OnStart` runs every frame | `s->started=true` IS set in C; verified working. False alarm. | N/A |
 
 ---
 
