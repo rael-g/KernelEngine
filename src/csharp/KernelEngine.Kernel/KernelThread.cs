@@ -25,7 +25,12 @@ public sealed unsafe class KernelThread : IDisposable
     /// Creates and immediately starts a kernel thread named <paramref name="name"/>.
     /// The thread runs <paramref name="action"/> and terminates when it returns.
     /// </summary>
-    public static KernelThread Create(Allocator alloc, string name, Action action)
+    /// <param name="alloc">Allocator used for the native handle.</param>
+    /// <param name="name">Thread name. Stored in TLS and (if <paramref name="devPlatform"/> is provided)
+    /// also forwarded to the OS for debugger/profiler visibility.</param>
+    /// <param name="action">Thread body.</param>
+    /// <param name="devPlatform">Optional. When provided, the thread name becomes visible to debuggers/profilers.</param>
+    public static KernelThread Create(Allocator alloc, string name, Action action, DevPlatform? devPlatform = null)
     {
         var actionHandle = GCHandle.Alloc(action);
 
@@ -34,10 +39,10 @@ public sealed unsafe class KernelThread : IDisposable
         {
             var desc = new ke_thread_desc
             {
-                name          = (sbyte*)nameBytes,
-                func          = &ThreadEntryPoint,
-                user_data     = (void*)GCHandle.ToIntPtr(actionHandle),
-                affinity_mask = 0,
+                name         = (sbyte*)nameBytes,
+                func         = &ThreadEntryPoint,
+                user_data    = (void*)GCHandle.ToIntPtr(actionHandle),
+                dev_platform = devPlatform != null ? devPlatform.Native : null,
             };
 
             ke_thread* native;
