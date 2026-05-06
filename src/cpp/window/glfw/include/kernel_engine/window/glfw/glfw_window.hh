@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+    struct ke_input;
+
 #ifndef KE_WINDOW_API
     #ifdef KE_WINDOW_STATIC
         #define KE_WINDOW_API
@@ -21,12 +23,13 @@ extern "C" {
 
 /// @brief Parameters for GLFW window creation.
 typedef struct ke_window_glfw_params {
-    struct ke_allocator* allocator;
-    struct ke_logger* logger;
-    struct ke_message_pipe* message_pipe;
-    int width;
-    int height;
-    const char* title;
+    struct ke_allocator*  allocator;
+    struct ke_logger*     logger;
+    struct ke_input*      input;
+    const char*           title;
+    int32_t               width;
+    int32_t               height;
+    ke_bool               fullscreen;
 } ke_window_glfw_params;
 
 /**
