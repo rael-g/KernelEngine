@@ -11,5 +11,8 @@ public unsafe partial struct ke_logger_sink
     public delegate* unmanaged[Cdecl]<ke_logger_sink*, ke_log_event*, void> log;
 
     [NativeTypeName("void (*)(struct ke_logger_sink *)")]
+    public delegate* unmanaged[Cdecl]<ke_logger_sink*, void> flush;
+
+    [NativeTypeName("void (*)(struct ke_logger_sink *)")]
     public delegate* unmanaged[Cdecl]<ke_logger_sink*, void> destroy;
 }

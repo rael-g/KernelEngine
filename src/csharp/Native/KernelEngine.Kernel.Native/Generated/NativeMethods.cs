@@ -27,6 +27,15 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_arena_create", ExactSpelling = true)]
     public static extern ke_allocator* allocator_arena_create([NativeTypeName("size_t")] nuint fixed_capacity);
 
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_create", ExactSpelling = true)]
+    public static extern ke_allocator* allocator_proxy_create(ke_allocator* inner, [NativeTypeName("const char *")] sbyte* name);
+
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_get_stats", ExactSpelling = true)]
+    public static extern ke_result allocator_proxy_get_stats(ke_allocator* proxy, ke_allocator_stats* out_stats);
+
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_report", ExactSpelling = true)]
+    public static extern void allocator_proxy_report(ke_allocator* proxy, [NativeTypeName("struct ke_logger *")] ke_logger* logger);
+
     [NativeTypeName("#define KE_ID_ALLOCATOR_DEFAULT \"ke_alloc_default\"")]
     public static ReadOnlySpan<byte> KE_ID_ALLOCATOR_DEFAULT => "ke_alloc_default"u8;
 
@@ -86,9 +95,6 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_ID_RENDER \"ke_render\"")]
     public static ReadOnlySpan<byte> KE_ID_RENDER => "ke_render"u8;
-
-    [NativeTypeName("#define KE_HANDLE_NONE UINT32_MAX")]
-    public const uint KE_HANDLE_NONE = 0xffffffffU;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_shader_compiler_bgfx_create", ExactSpelling = true)]
     public static extern ke_result shader_compiler_bgfx_create([NativeTypeName("const ke_shader_compiler_bgfx_params *")] ke_shader_compiler_bgfx_params* @params, ke_shader_compiler** out_compiler);

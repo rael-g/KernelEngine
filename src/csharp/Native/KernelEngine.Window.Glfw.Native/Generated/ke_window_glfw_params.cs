@@ -16,8 +16,10 @@ public unsafe partial struct ke_window_glfw_params
     [NativeTypeName("const char *")]
     public sbyte* title;
 
+    [NativeTypeName("int32_t")]
     public int width;
 
+    [NativeTypeName("int32_t")]
     public int height;
 
     [NativeTypeName("ke_bool")]

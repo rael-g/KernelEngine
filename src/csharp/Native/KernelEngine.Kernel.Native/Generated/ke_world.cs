@@ -42,5 +42,4 @@ public unsafe partial struct ke_world
 
     [NativeTypeName("struct ke_task_scheduler *(*)(struct ke_world *)")]
     public delegate* unmanaged[Cdecl]<ke_world*, ke_task_scheduler*> get_task_scheduler;
-
 }

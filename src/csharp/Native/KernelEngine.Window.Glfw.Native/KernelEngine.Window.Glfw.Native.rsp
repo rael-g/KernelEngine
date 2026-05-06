@@ -17,6 +17,7 @@ ke_
 --exclude
 ke_allocator
 ke_logger
+ke_input
 ke_message_pipe
 ke_service
 ke_context_h

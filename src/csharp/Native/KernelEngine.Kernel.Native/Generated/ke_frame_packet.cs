@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace KernelEngine.Kernel.Native;
 
 public partial struct ke_frame_packet
@@ -17,8 +19,12 @@ public unsafe partial struct ke_frame_packet
     [NativeTypeName("uint32_t")]
     public uint draw_capacity;
 
-    public fixed float clear_color[4];
-    public fixed float ambient_light[3];
+    [NativeTypeName("float[4]")]
+    public _clear_color_e__FixedBuffer clear_color;
+
+    [NativeTypeName("float[3]")]
+    public _ambient_light_e__FixedBuffer ambient_light;
+
     public ke_shadow_map_handle active_shadow_map;
 
     public ke_frame_shadow shadow;
@@ -58,15 +64,38 @@ public unsafe partial struct ke_frame_packet
     public bool has_skybox;
 
     public bool ssao_enabled;
+
     public float ssao_radius;
+
     public float ssao_bias;
+
     public float ssao_strength;
 
     public bool tonemapping_enabled;
+
     public float exposure;
+
     public float gamma;
 
     public bool bloom_enabled;
+
     public float bloom_threshold;
+
     public float bloom_intensity;
+
+    [InlineArray(4)]
+    public partial struct _clear_color_e__FixedBuffer
+    {
+        public float e0;
+    }
+
+    [InlineArray(3)]
+    public partial struct _ambient_light_e__FixedBuffer
+    {
+        public float e0;
+    }
+}
+
+public partial struct ke_frame_packet
+{
 }

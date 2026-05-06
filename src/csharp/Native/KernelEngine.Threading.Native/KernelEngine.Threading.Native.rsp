@@ -11,9 +11,6 @@ ke_threading
 ../../../cpp/threading/include/kernel_engine/threading/thread.h
 ../../../cpp/threading/include/kernel_engine/threading/semaphore.h
 ../../../cpp/threading/include/kernel_engine/threading/frame_sync.h
-../../../c/kernel/include/kernel_engine/kernel/threading/thread.h
-../../../c/kernel/include/kernel_engine/kernel/threading/semaphore.h
-../../../c/kernel/include/kernel_engine/kernel/threading/frame_sync.h
 --methodClassName
 NativeMethods
 --prefixStrip

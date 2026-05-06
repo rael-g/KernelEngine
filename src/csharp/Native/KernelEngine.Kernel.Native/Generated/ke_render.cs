@@ -99,5 +99,4 @@ public unsafe partial struct ke_render
 
     [NativeTypeName("ke_result (*)(struct ke_render *, const struct ke_frame_packet *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_frame_packet*, ke_result> submit_packet;
-
 }

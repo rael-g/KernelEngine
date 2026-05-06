@@ -1,5 +1,9 @@
 namespace KernelEngine.Kernel.Native;
 
+public partial struct ke_task_scheduler
+{
+}
+
 public unsafe partial struct ke_task_scheduler
 {
     public void* handle;
