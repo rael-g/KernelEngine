@@ -25,6 +25,7 @@ public class Application : IDisposable
     public Window Window { get; private set; } = null!;
     public Renderer Renderer { get; private set; } = null!;
     public Input? Input { get; private set; }
+    public DevPlatform? DevPlatform { get; private set; }
 
     private ProxyAllocator? _proxyAllocator;
 
@@ -62,6 +63,18 @@ public class Application : IDisposable
         res.ThrowIfFailed();
     }
 
+    /// <summary>
+    /// Asks <see cref="DevPlatform"/> (when available) to publish the current thread's name to the OS,
+    /// making it visible in debuggers and profilers. No-op when DevPlatform is not registered.
+    /// </summary>
+    private unsafe void SetOsThreadName(string name)
+    {
+        if (DevPlatform == null) return;
+        var bytes = Marshal.StringToHGlobalAnsi(name);
+        try { DevPlatform.Native->set_thread_name(DevPlatform.Native, (sbyte*)bytes); }
+        finally { Marshal.FreeHGlobal(bytes); }
+    }
+
     public void Run(IServiceCollection serviceCollection)
     {
         KernelThread.SetCurrentName("ke.main");
@@ -80,9 +93,10 @@ public class Application : IDisposable
 
         // GLFW window must be created on the main thread.
         ValidateRequiredServices();
-        Window   = Services.GetRequiredService<Window>();
-        Input    = Services.GetService<Input>();
-        Renderer = Services.GetRequiredService<Renderer>();
+        Window      = Services.GetRequiredService<Window>();
+        Input       = Services.GetService<Input>();
+        Renderer    = Services.GetRequiredService<Renderer>();
+        DevPlatform = Services.GetService<DevPlatform>(); // optional dev-only diagnostics
 
         if (ActiveWorld == null)
             ActiveWorld = new World(Allocator);
@@ -99,8 +113,11 @@ public class Application : IDisposable
         Exception? renderException = null;
         Exception? simException    = null;
 
+        // OS-visible name for ke.main (TLS name was set at the top via SetCurrentName).
+        SetOsThreadName("ke.main");
+
         // ke.render: owns every renderer API call for the lifetime of the app.
-        using var renderThread = KernelThread.Create(Allocator, "ke.render", () =>
+        using var renderThread = KernelThread.Create(Allocator, "ke.render", devPlatform: DevPlatform, action: () =>
         {
             try
             {
@@ -168,7 +185,7 @@ public class Application : IDisposable
         });
 
         // ke.sim: drives the world and records into FramePackets.
-        using var simThread = KernelThread.Create(Allocator, "ke.sim", () =>
+        using var simThread = KernelThread.Create(Allocator, "ke.sim", devPlatform: DevPlatform, action: () =>
         {
             try
             {
