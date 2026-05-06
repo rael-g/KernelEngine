@@ -2,69 +2,44 @@
 #include <kernel_engine/threading/thread.h>
 #include <kernel_engine/kernel/threading/thread.h>
 
-#include <cstring>
-#include <new>
-
-#if defined(_WIN32)
-#    include <windows.h>
-#    include <processthreadsapi.h>
-#elif defined(__linux__)
-#    include <pthread.h>
-#elif defined(__APPLE__)
-#    include <pthread.h>
-#endif
-
-#include <string>
-#include <cstdio>
 #include <cassert>
+#include <cstdio>
+#include <chrono>
+#include <new>
+#include <string>
 
 namespace kernel_engine::threading
 {
 
+// TLS thread name — used by ke_thread_assert_current. Pure C++, no platform code.
 static thread_local std::string s_thread_name = "unknown";
 
-static void set_thread_name_platform(const char *name)
-{
-    if (!name) return;
-    s_thread_name = name;
-#if defined(_WIN32)
-    int len = MultiByteToWideChar(CP_UTF8, 0, name, -1, nullptr, 0);
-    if (len > 0)
-    {
-        auto *wname = new wchar_t[len];
-        MultiByteToWideChar(CP_UTF8, 0, name, -1, wname, len);
-        SetThreadDescription(GetCurrentThread(), wname);
-        delete[] wname;
-    }
-#elif defined(__linux__)
-    pthread_setname_np(pthread_self(), name);
-#elif defined(__APPLE__)
-    pthread_setname_np(name);
-#endif
-}
-
 KeThread::KeThread(const ke_thread_desc *desc)
-    : thread_([name          = std::string(desc->name ? desc->name : ""),
-               affinity_mask = desc->affinity_mask,
-               func          = desc->func,
-               user_data     = desc->user_data]() {
-          set_thread_name_platform(name.c_str());
-          if (affinity_mask != 0)
-          {
-#if defined(_WIN32)
-              SetThreadAffinityMask(GetCurrentThread(), (DWORD_PTR)affinity_mask);
-#elif defined(__linux__)
-              cpu_set_t cpuset;
-              CPU_ZERO(&cpuset);
-              for (int i = 0; i < 64; ++i)
-                  if (affinity_mask & (1ULL << i))
-                      CPU_SET(i, &cpuset);
-              pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-#endif
-          }
-          func(user_data);
-      })
+    : state_(std::make_shared<JoinState>())
 {
+    thread_ = std::thread(
+        [state         = state_,
+         dev_platform  = desc->dev_platform,
+         name          = std::string(desc->name ? desc->name : ""),
+         func          = desc->func,
+         user_data     = desc->user_data]() {
+            // 1. Set the TLS name for ke_thread_assert_current.
+            s_thread_name = name;
+
+            // 2. Optionally make the name visible to debuggers/profilers.
+            if (dev_platform && dev_platform->set_thread_name)
+                dev_platform->set_thread_name(dev_platform, name.c_str());
+
+            // 3. Run user code.
+            if (func) func(user_data);
+
+            // 4. Signal completion for any waiting JoinTimeout caller.
+            {
+                std::lock_guard<std::mutex> lk(state->mu);
+                state->done = true;
+            }
+            state->cv.notify_all();
+        });
 }
 
 KeThread::~KeThread()
@@ -73,38 +48,25 @@ KeThread::~KeThread()
         thread_.detach();
 }
 
-void KeThread::Join() { if (thread_.joinable()) thread_.join(); }
+void KeThread::Join()
+{
+    if (thread_.joinable()) thread_.join();
+}
 
 bool KeThread::JoinTimeout(uint32_t timeout_ms)
 {
     if (!thread_.joinable()) return true;
 
-#if defined(_WIN32)
-    auto handle = thread_.native_handle();
-    DWORD res = WaitForSingleObject(handle, (DWORD)timeout_ms);
-    if (res == WAIT_OBJECT_0)
     {
-        thread_.join();
-        return true;
-    }
-    return false;
-#else
-    // Fallback for non-Windows if timed join isn't easily portable
-    // In a real implementation we might use a condition variable or pthread_timedjoin_np
-    auto start = std::chrono::steady_clock::now();
-    while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(timeout_ms))
-    {
-        // This is a terrible busy-wait but keeps it simple for now as we are focusing on Win32
-        // Better: use native pthread_timedjoin_np if on Linux
-        if (thread_.joinable()) {
-             // We can't easily check if it's finished without blocking join
-             // So we just return true and let the caller know it might have finished
-             // or use a more advanced approach.
+        std::unique_lock<std::mutex> lk(state_->mu);
+        if (!state_->cv.wait_for(lk, std::chrono::milliseconds(timeout_ms),
+                                  [this] { return state_->done.load(); }))
+        {
+            return false;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    return false;
-#endif
+    thread_.join();
+    return true;
 }
 
 } // namespace kernel_engine::threading
@@ -124,9 +86,9 @@ struct KeThreadHandle
 
 extern "C"
 {
-    ke_result ke_thread_std_create(ke_allocator        *alloc,
-                                    const ke_thread_desc *desc,
-                                    ke_thread           **out)
+    ke_result ke_thread_std_create(ke_allocator         *alloc,
+                                   const ke_thread_desc *desc,
+                                   ke_thread           **out)
     {
         if (!alloc || !desc || !desc->func || !out) return KE_ERROR_INVALID_ARGUMENT;
 
@@ -159,10 +121,10 @@ extern "C"
 
     KE_THREADING_API void ke_thread_set_current_name(const char *name)
     {
-        kernel_engine::threading::set_thread_name_platform(name);
+        if (name) kernel_engine::threading::s_thread_name = name;
     }
 
-    KE_THREADING_API const char* ke_thread_get_current_name(void)
+    KE_THREADING_API const char *ke_thread_get_current_name(void)
     {
         return kernel_engine::threading::s_thread_name.c_str();
     }
@@ -172,7 +134,8 @@ extern "C"
 #ifndef NDEBUG
         if (kernel_engine::threading::s_thread_name != expected_name)
         {
-            fprintf(stderr, "[FATAL] Thread affinity violation! Expected '%s', but current is '%s'.\n",
+            fprintf(stderr,
+                    "[FATAL] Thread affinity violation! Expected '%s', but current is '%s'.\n",
                     expected_name, kernel_engine::threading::s_thread_name.c_str());
             assert(false);
             abort();
