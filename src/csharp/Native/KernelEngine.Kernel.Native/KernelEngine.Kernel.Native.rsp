@@ -26,6 +26,7 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/render/render.h
 ../../../c/kernel/include/kernel_engine/kernel/render/shader_compiler.h
 ../../../c/kernel/include/kernel_engine/kernel/task_scheduler/task_scheduler.h
+../../../c/kernel/include/kernel_engine/kernel/threading/thread.h
 ../../../c/kernel/include/kernel_engine/kernel/window/window.h
 --methodClassName
 NativeMethods

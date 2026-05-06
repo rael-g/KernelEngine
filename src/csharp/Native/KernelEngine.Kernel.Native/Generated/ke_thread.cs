@@ -1,6 +1,4 @@
-using KernelEngine.Kernel.Native;
-
-namespace KernelEngine.Threading.Native;
+namespace KernelEngine.Kernel.Native;
 
 public unsafe partial struct ke_thread
 {
@@ -11,4 +9,7 @@ public unsafe partial struct ke_thread
 
     [NativeTypeName("void (*)(struct ke_thread *)")]
     public delegate* unmanaged[Cdecl]<ke_thread*, void> join;
+
+    [NativeTypeName("ke_bool (*)(struct ke_thread *, uint32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_thread*, uint, byte> join_timeout;
 }

@@ -18,6 +18,8 @@ ke_
 --exclude
 ke_allocator
 ke_result
+ke_thread
+ke_thread_desc
 ke_mat4
 ke_directional_light
 ke_point_light

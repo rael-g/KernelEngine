@@ -1,6 +1,4 @@
-using KernelEngine.Kernel.Native;
-
-namespace KernelEngine.Threading.Native;
+namespace KernelEngine.Kernel.Native;
 
 public unsafe partial struct ke_thread_desc
 {

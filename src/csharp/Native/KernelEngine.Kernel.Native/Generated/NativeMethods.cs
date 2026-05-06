@@ -102,6 +102,16 @@ public static unsafe partial class NativeMethods
     [NativeTypeName("#define KE_ID_SHADER_COMPILER \"ke_shader_compiler\"")]
     public static ReadOnlySpan<byte> KE_ID_SHADER_COMPILER => "ke_shader_compiler"u8;
 
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_thread_set_current_name", ExactSpelling = true)]
+    public static extern void thread_set_current_name([NativeTypeName("const char *")] sbyte* name);
+
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_thread_get_current_name", ExactSpelling = true)]
+    [return: NativeTypeName("const char *")]
+    public static extern sbyte* thread_get_current_name();
+
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_thread_assert_current", ExactSpelling = true)]
+    public static extern void thread_assert_current([NativeTypeName("const char *")] sbyte* expected_name);
+
     [NativeTypeName("#define KE_ID_WINDOW \"ke_window\"")]
     public static ReadOnlySpan<byte> KE_ID_WINDOW => "ke_window"u8;
 }
