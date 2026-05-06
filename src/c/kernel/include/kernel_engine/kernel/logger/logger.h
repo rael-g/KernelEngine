@@ -29,6 +29,7 @@ typedef struct ke_logger ke_logger;
         void *handle;
         int32_t min_level; ///< Events below this level are skipped by the logger before calling log().
         void (*log)(struct ke_logger_sink *self, const ke_log_event *event);
+        void (*flush)(struct ke_logger_sink *self);
         void (*destroy)(struct ke_logger_sink *self);
     } ke_logger_sink;
 
@@ -46,6 +47,11 @@ typedef struct ke_logger ke_logger;
          * @brief Dispatches a log event to all registered sinks.
          */
         void (*log)(struct ke_logger *self, const ke_log_event *event);
+
+        /**
+         * @brief Flushes all registered sinks.
+         */
+        void (*flush)(struct ke_logger *self);
         
         ke_result (*add_sink)(struct ke_logger *self, ke_logger_sink sink);
 

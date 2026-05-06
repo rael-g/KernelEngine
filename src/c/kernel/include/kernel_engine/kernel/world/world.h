@@ -11,6 +11,9 @@
 extern "C" {
 #endif
 
+    struct ke_task_scheduler;
+    struct ke_frame;
+
     typedef struct ke_world_params {
         struct ke_allocator *allocator;
     } ke_world_params;

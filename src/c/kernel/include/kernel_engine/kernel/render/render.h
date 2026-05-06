@@ -16,6 +16,8 @@ extern "C"
 {
 #endif
 
+    struct ke_frame_packet;
+
 #define KE_ID_RENDER "ke_render"
 
     /// @brief Configuration for the Clustered Forward Shading grid.
