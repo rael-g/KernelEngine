@@ -43,6 +43,10 @@ extern "C" {
         return KE_OK;
     }
 
+    KE_RENDER_API const char* ke_render_bgfx_get_last_fatal_error() {
+        return kernel_engine::render::bgfx::GetLastFatalError();
+    }
+
     KE_RENDER_API ke_result ke_render_bgfx_create_mesh_system_desc(uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc *out_desc) {
         if (!out_desc) return KE_ERROR_INVALID_ARGUMENT;
         *out_desc = kernel_engine::render::bgfx::MeshSystem::GetDescription(mesh_cid, transform_cid);

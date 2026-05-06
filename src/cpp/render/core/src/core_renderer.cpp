@@ -230,136 +230,167 @@ void CoreRenderer::SetGpuDevice(GpuDevice* gpu)
 
 ke_result CoreRenderer::OnInitialize()
 {
-    if (!ctx_.gpu) return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "GPU device not set");
-    if (!window_) return KE_ERROR_NOT_INITIALIZED;
-    void *nwh = window_->get_native_handle(window_);
-    if (!nwh) return KE_ERROR_WINDOW;
+    try {
+        if (!ctx_.gpu) return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "GPU device not set");
+        if (!window_) return KE_ERROR_NOT_INITIALIZED;
+        void *nwh = window_->get_native_handle(window_);
+        if (!nwh) return KE_ERROR_WINDOW;
 
-    int32_t w, h;
-    window_->get_size(window_, &w, &h);
+        int32_t w, h;
+        window_->get_size(window_, &w, &h);
 
-    GpuInitConfig config = {};
-    config.native_window_handle = nwh;
-    config.width = (uint32_t)w;
-    config.height = (uint32_t)h;
-    config.renderer_type = renderer_type_;
+        GpuInitConfig config = {};
+        config.native_window_handle = nwh;
+        config.width = (uint32_t)w;
+        config.height = (uint32_t)h;
+        config.renderer_type = renderer_type_;
 #ifndef NDEBUG
-    config.debug = true;
+        config.debug = true;
 #endif
 
-    if (!ctx_.gpu->Init(config))
-        return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "gpu->Init failed");
+        if (!ctx_.gpu->Init(config))
+            return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "gpu->Init failed");
 
-    ctx_.view_w = w;
-    ctx_.view_h = h;
+        if (ctx_.logger) {
+            ke_log_event ev = { KE_LOG_LEVEL_INFO, "core_render", "gpu->Init success" };
+            ctx_.logger->log(ctx_.logger, &ev);
+        }
 
-    ctx_.gpu->SetViewClear(0, 0x0002 /*DEPTH*/, 0, 1.0f, 0);
-    ctx_.gpu->SetViewRect(0, 0, 0, (uint16_t)w, (uint16_t)h);
+        ctx_.view_w = w;
+        ctx_.view_h = h;
 
-    ctx_.gpu->SetViewClear(1 /*SCENE*/, 0x0001 | 0x0002, 0x303030ff, 1.0f, 0);
-    ctx_.gpu->SetViewRect(1, 0, 0, (uint16_t)w, (uint16_t)h);
-    ctx_.gpu->SetViewMode(1, GpuViewMode::Sequential);
+        ctx_.gpu->SetViewClear(0, 0x0002 /*DEPTH*/, 0, 1.0f, 0);
+        ctx_.gpu->SetViewRect(0, 0, 0, (uint16_t)w, (uint16_t)h);
 
-    ke_result res = SetupShader();
-    if (res != KE_OK) return res;
+        ctx_.gpu->SetViewClear(1 /*SCENE*/, 0x0001 | 0x0002, 0x303030ff, 1.0f, 0);
+        ctx_.gpu->SetViewRect(1, 0, 0, (uint16_t)w, (uint16_t)h);
+        ctx_.gpu->SetViewMode(1, GpuViewMode::Sequential);
 
-    res = post_process_.SetupPostProcess(ctx_, geometry_, bright_pass_program_, blur_program_, tonemap_program_);
-    if (res != KE_OK) return res;
+        ke_result res = SetupShader();
+        if (res != KE_OK) return res;
 
-    res = post_process_.SetupSsao(ctx_, prepass_program_, ssao_program_, ssao_blur_program_);
-    if (res != KE_OK) return res;
+        if (ctx_.logger) {
+            ke_log_event ev = { KE_LOG_LEVEL_INFO, "core_render", "SetupShader success" };
+            ctx_.logger->log(ctx_.logger, &ev);
+        }
 
-    res = clustered_.SetupClustered(ctx_, depth_program_, cull_program_);
-    if (res != KE_OK) return res;
+        res = post_process_.SetupPostProcess(ctx_, geometry_, bright_pass_program_, blur_program_, tonemap_program_);
+        if (res != KE_OK) return res;
 
-    initialized_ = true;
-    return KE_OK;
+        res = post_process_.SetupSsao(ctx_, prepass_program_, ssao_program_, ssao_blur_program_);
+        if (res != KE_OK) return res;
+
+        res = clustered_.SetupClustered(ctx_, depth_program_, cull_program_);
+        if (res != KE_OK) return res;
+
+        if (ctx_.logger) {
+            ke_log_event ev = { KE_LOG_LEVEL_INFO, "core_render", "Pipelines setup success" };
+            ctx_.logger->log(ctx_.logger, &ev);
+        }
+
+        initialized_ = true;
+        return KE_OK;
+    } catch (const BgfxFatalException& e) {
+        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "OnInitialize", e.what());
+    }
 }
 
 ke_result CoreRenderer::OnShutdown()
 {
-    textures_.Shutdown();
-    geometry_.Shutdown();
-    lighting_.Shutdown();
-    shadows_.Shutdown();
-    post_process_.Shutdown();
-    clustered_.Shutdown(ctx_);
+    try {
+        textures_.Shutdown();
+        geometry_.Shutdown();
+        lighting_.Shutdown();
+        shadows_.Shutdown();
+        post_process_.Shutdown();
+        clustered_.Shutdown(ctx_);
 
-    if (ctx_.gpu) {
-        if (ssao_blur_program_ != kGpuInvalidHandle)   ctx_.gpu->DestroyProgram(ssao_blur_program_);
-        if (ssao_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(ssao_program_);
-        if (prepass_program_ != kGpuInvalidHandle)     ctx_.gpu->DestroyProgram(prepass_program_);
-        if (tonemap_program_ != kGpuInvalidHandle)     ctx_.gpu->DestroyProgram(tonemap_program_);
-        if (blur_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(blur_program_);
-        if (bright_pass_program_ != kGpuInvalidHandle) ctx_.gpu->DestroyProgram(bright_pass_program_);
-        if (depth_program_ != kGpuInvalidHandle)       ctx_.gpu->DestroyProgram(depth_program_);
-        if (cull_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(cull_program_);
-        if (shadow_program_ != kGpuInvalidHandle)      ctx_.gpu->DestroyProgram(shadow_program_);
-        if (skybox_program_ != kGpuInvalidHandle)      ctx_.gpu->DestroyProgram(skybox_program_);
-        if (program_ != kGpuInvalidHandle)              ctx_.gpu->DestroyProgram(program_);
+        if (ctx_.gpu) {
+            if (ssao_blur_program_ != kGpuInvalidHandle)   ctx_.gpu->DestroyProgram(ssao_blur_program_);
+            if (ssao_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(ssao_program_);
+            if (prepass_program_ != kGpuInvalidHandle)     ctx_.gpu->DestroyProgram(prepass_program_);
+            if (tonemap_program_ != kGpuInvalidHandle)     ctx_.gpu->DestroyProgram(tonemap_program_);
+            if (blur_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(blur_program_);
+            if (bright_pass_program_ != kGpuInvalidHandle) ctx_.gpu->DestroyProgram(bright_pass_program_);
+            if (depth_program_ != kGpuInvalidHandle)       ctx_.gpu->DestroyProgram(depth_program_);
+            if (cull_program_ != kGpuInvalidHandle)        ctx_.gpu->DestroyProgram(cull_program_);
+            if (shadow_program_ != kGpuInvalidHandle)      ctx_.gpu->DestroyProgram(shadow_program_);
+            if (skybox_program_ != kGpuInvalidHandle)      ctx_.gpu->DestroyProgram(skybox_program_);
+            if (program_ != kGpuInvalidHandle)              ctx_.gpu->DestroyProgram(program_);
 
-        ctx_.gpu->Shutdown();
+            ctx_.gpu->Shutdown();
+        }
+        initialized_ = false;
+        return KE_OK;
+    } catch (const BgfxFatalException& e) {
+        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "OnShutdown", e.what());
     }
-    initialized_ = false;
-    return KE_OK;
 }
 
 ke_result CoreRenderer::Frame()
 {
-    if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
-    ctx_.gpu->Touch(1);
-    ctx_.gpu->Frame();
-    
-    textures_.has_skybox       = false;
-    textures_.active_env_tex   = kGpuInvalidHandle;
-    shadows_.active_shadow_handle = KE_SHADOW_MAP_NONE;
-    return KE_OK;
+    try {
+        if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
+        ctx_.gpu->Touch(1);
+        ctx_.gpu->Frame();
+        
+        textures_.has_skybox       = false;
+        textures_.active_env_tex   = kGpuInvalidHandle;
+        shadows_.active_shadow_handle = KE_SHADOW_MAP_NONE;
+        return KE_OK;
+    } catch (const BgfxFatalException& e) {
+        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "Frame", e.what());
+    }
 }
 
 ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
 {
-    if (!initialized_ || !ctx_.gpu || !packet) return KE_ERROR_NOT_INITIALIZED;
+    try {
+        if (!initialized_ || !ctx_.gpu || !packet) return KE_ERROR_NOT_INITIALIZED;
 
-    // Extract near/far from proj matrix so clustered has current values.
-    const float* p = packet->camera.proj.m;
-    if (std::abs(p[10] - p[11]) > 0.0001f) {
-        ctx_.near_z = p[14] / (p[10] + 1.0f);
-        ctx_.far_z  = p[14] / (p[10] - 1.0f);
+        // Extract near/far from proj matrix so clustered has current values.
+        const float* p = packet->camera.proj.m;
+        if (std::abs(p[10] - p[11]) > 0.0001f) {
+            ctx_.near_z = p[14] / (p[10] + 1.0f);
+            ctx_.far_z  = p[14] / (p[10] - 1.0f);
+        }
+        // Store view for clustered bounds.
+        std::memcpy(ctx_.last_view, packet->camera.view.m, sizeof(float) * 16);
+        std::memcpy(ctx_.last_proj, packet->camera.proj.m, sizeof(float) * 16);
+
+        ke_result res = FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
+                                            post_process_, program_, shadow_program_, skybox_program_, prepass_program_);
+        if (res != KE_OK) return res;
+
+        // Clustered light culling (must run after scene uniforms are set).
+        clustered_.UpdateClusterBounds(ctx_);
+        clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
+
+        // SSAO pass.
+        if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
+        {
+            ctx_.gpu->SetViewFrameBuffer(2, post_process_.GetGbufFb());
+            ctx_.gpu->SetViewClear(2, 0x0001 | 0x0002, 0x00000000, 1.0f, 0);
+            ctx_.gpu->SetViewRect(2, 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
+            post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
+        }
+
+        // Post-process / tonemap.
+        if (post_process_.GetHdrFb() != kGpuInvalidHandle)
+        {
+            ctx_.gpu->SetViewFrameBuffer(1, post_process_.GetHdrFb());
+            post_process_.SubmitPostProcess(ctx_, geometry_, textures_,
+                                            bright_pass_program_, blur_program_, tonemap_program_);
+        }
+        else
+        {
+            ctx_.gpu->SetViewFrameBuffer(1, kGpuInvalidHandle);
+        }
+
+        return KE_OK;
+    } catch (const BgfxFatalException& e) {
+        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "SubmitPacket", e.what());
     }
-    // Store view for clustered bounds.
-    std::memcpy(ctx_.last_view, packet->camera.view.m, sizeof(float) * 16);
-    std::memcpy(ctx_.last_proj, packet->camera.proj.m, sizeof(float) * 16);
-
-    ke_result res = FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
-                                           post_process_, program_, shadow_program_, skybox_program_, prepass_program_);
-    if (res != KE_OK) return res;
-
-    // Clustered light culling (must run after scene uniforms are set).
-    clustered_.UpdateClusterBounds(ctx_);
-    clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
-
-    // SSAO pass.
-    if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
-    {
-        ctx_.gpu->SetViewFrameBuffer(2, post_process_.GetGbufFb());
-        ctx_.gpu->SetViewClear(2, 0x0001 | 0x0002, 0x00000000, 1.0f, 0);
-        ctx_.gpu->SetViewRect(2, 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
-        post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
-    }
-
-    // Post-process / tonemap.
-    if (post_process_.GetHdrFb() != kGpuInvalidHandle)
-    {
-        ctx_.gpu->SetViewFrameBuffer(1, post_process_.GetHdrFb());
-        post_process_.SubmitPostProcess(ctx_, geometry_, textures_,
-                                        bright_pass_program_, blur_program_, tonemap_program_);
-    }
-    else
-    {
-        ctx_.gpu->SetViewFrameBuffer(1, kGpuInvalidHandle);
-    }
-
-    return KE_OK;
 }
 
 ke_result CoreRenderer::SetOrthographic(ke_bool enabled) {

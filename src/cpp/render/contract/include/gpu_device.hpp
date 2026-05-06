@@ -2,6 +2,7 @@
 
 #include "gpu_types.hpp"
 #include <cstdint>
+#include <stdexcept>
 
 // Forward declarations for kernel types (outside renderer namespace)
 struct ke_allocator;
@@ -23,6 +24,16 @@ static constexpr uint64_t kTexFlagRT = UINT64_C(0x0000001000000000);
 // Vertex layout type hints passed as layout_handle to CreateVertexBuffer.
 static constexpr uint16_t kVertexLayoutStandard     = 0xFFFF; // Position+Normal+TexCoord0+Tangent
 static constexpr uint16_t kVertexLayoutPositionOnly = 0xFFFE; // Position only (3 floats)
+
+const char* GetLastFatalError();
+
+// ── BgfxFatalException ───────────────────────────────────────────────────
+
+class BgfxFatalException : public std::runtime_error
+{
+public:
+    BgfxFatalException(const char* msg) : std::runtime_error(msg) {}
+};
 
 /**
  * @brief Contract for GPU backend implementations.

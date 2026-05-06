@@ -11,9 +11,24 @@
 #endif
 
 #include <kernel_engine/kernel/logger/logger.h>
+#include <stdexcept>
 
 namespace kernel_engine::render::bgfx
 {
+
+// ── BgfxFatalException ───────────────────────────────────────────────────
+
+static char s_last_fatal_error[1024] = {0};
+
+void SetLastFatalError(const char* msg) {
+    if (msg) {
+        std::strncpy(s_last_fatal_error, msg, sizeof(s_last_fatal_error) - 1);
+    }
+}
+
+const char* GetLastFatalError() {
+    return s_last_fatal_error;
+}
 
 // ── BgfxLogCallback Implementation ────────────────────────────────────────
 
@@ -24,15 +39,19 @@ public:
 
     void fatal(const char *_filePath, uint16_t _line, ::bgfx::Fatal::Enum _code, const char *_str) override
     {
+        char buf[1024];
+        snprintf(buf, sizeof(buf), "[bgfx FATAL] %s:%u code=%d: %s", _filePath, _line, (int)_code, _str);
+        
+        SetLastFatalError(buf);
+
         if (logger_) {
-            char buf[512];
-            snprintf(buf, sizeof(buf), "[bgfx FATAL] %s:%u code=%d: %s", _filePath, _line, (int)_code, _str);
             ke_log_event ev = { KE_LOG_LEVEL_CRITICAL, "bgfx", buf };
             logger_->log(logger_, &ev);
         }
-        fprintf(stderr, "[bgfx FATAL] %s:%u code=%d %s\n", _filePath, _line, (int)_code, _str);
+        fprintf(stderr, "%s\n", buf);
         fflush(stderr);
-        abort(); // bgfx fatal is unrecoverable
+        
+        throw BgfxFatalException(buf);
     }
 
     void traceVargs(const char *_filePath, uint16_t _line, const char *_format, va_list _argList) override
@@ -40,8 +59,8 @@ public:
         if (logger_) {
             char buf[1024];
             vsnprintf(buf, sizeof(buf), _format, _argList);
-            // Trace from bgfx is usually verbose, map to TRACE
-            ke_log_event ev = { KE_LOG_LEVEL_TRACE, "bgfx", buf };
+            // Trace from bgfx is usually verbose, map to DEBUG per backlog Y.1
+            ke_log_event ev = { KE_LOG_LEVEL_DEBUG, "bgfx", buf };
             logger_->log(logger_, &ev);
         } else {
             fprintf(stderr, "[bgfx] %s:%u ", _filePath, _line);

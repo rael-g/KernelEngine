@@ -37,6 +37,11 @@ typedef struct ke_render_bgfx_params
  */
 KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params* params, ke_render** out_render);
 
+/**
+ * @brief Returns the last fatal error message captured by bgfx.
+ */
+KE_RENDER_API const char* ke_render_bgfx_get_last_fatal_error();
+
 // ── Native System Descriptor Factories ────────────────────────────────────────
 
 KE_RENDER_API ke_result ke_render_bgfx_create_mesh_system_desc(uint32_t mesh_cid, uint32_t transform_cid, ke_system_desc* out_desc);
