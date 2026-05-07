@@ -60,6 +60,7 @@ diagnose-fix loop.
 | **Track P (NEW) — Wave 1** | **Platform Abstraction Layer (`IDevPlatform`)** — extract dev-only OS APIs (thread name) into a swappable backend; eliminate all `#ifdef` from KeThread | ✅ Done (b03ab70 → dbad9e7 chain) |
 | **Track Y.10 (NEW)** | **Bindings-drift detection in CI — fail build if `ke_*.h` changed but `Generated/*.cs` didn't** | 🔲 Planned (motivated by bug 1.25) |
 | **Track W.4 (NEW)** | **Layer boundary cleanup — `src/cpp` plugins must expose only `_create()`** | 🔲 Planned (motivated by bug 1.26 — `EntryPointNotFoundException`; rule formalized in CLAUDE.md) |
+| **Track W.5 (NEW)** | **Naming convention cleanup — rename all `_desc` → `_params`** | 🔲 Planned (mechanical sed; Tier 2 priority — not a correctness issue, but blocks confusion about which is "legitimate descriptor") |
 | Track Y.2 (DB-02) | `LogErr` C++ helper — every silent `return KE_ERROR_*` becomes a logged failure | 🔲 Planned |
 | Track Y.3 (DB-03) | Debug logging in bgfx init — shader path, file existence, createUniform results | 🔲 Planned |
 | Track Y.4 (DB-04) | Symbolic `ke_result` names in `KernelException` | ⚠️ Partial (e519eda) |
@@ -1549,7 +1550,7 @@ After all phases are complete, the following properties hold by construction, no
 
 | Item | Why deferred | When to address |
 |------|--------------|-----------------|
-| `ke_thread_desc` → `ke_thread_params` rename | All other `_desc` were standardized to `_params`; threading was missed. Cosmetic, no functional impact. | Bundle with next bindings regen pass |
+| `ke_thread_desc` → `ke_thread_params` rename | All other `_desc` were standardized to `_params`; threading was missed. Cosmetic, no functional impact. | Track W.5 — covers all remaining `_desc` violations |
 | ~~`KeThread::JoinTimeout` Linux busy-wait~~ | ✅ **Resolved** — replaced by `condition_variable::wait_for` (cross-platform). | Done in 3fb4835 |
 | `CameraNode.OnStart` runs every frame | `s->started=true` IS set in C; verified working. False alarm. | N/A |
 | SEH crash handler + minidump still in `Application.cs` | Win32-only code lives inside generic framework. Should move into `IDevPlatform` (Track P, Wave 2). | Track P, Wave 2 |
@@ -1974,6 +1975,55 @@ in a plugin, AND the plugin's public header re-declared the same functions plus 
 - A simple grep can verify: `find src/cpp -path '*/include/*' -name '*.h' | xargs wc -l` —
   each file should be small and obvious.
 - CLAUDE.md rule passes the audit checklist documented in section 2.11.
+
+#### W.5 [MEDIUM] Rename All `_desc` Suffixes to `_params` (Naming Convention Cleanup)
+
+**Background:** the project initially used `_desc` (descriptor) as the suffix for parameter-bag
+structs. Mid-project the convention was changed to `_params` because "descriptor" carries
+specific technical meaning in graphics APIs (Vulkan descriptor sets, D3D descriptor heaps) and
+caused confusion. The rename was applied to most types but **not finished** — `_desc` survives
+in a few places, creating inconsistency. This is purely tech debt, not a design decision.
+
+**Decision:** standardize on `_params` everywhere. Structs that aggregate parameters for
+construction or registration use `_params` — never `_desc`, `_descriptor`, `_info`, `_config`,
+or `_options`. Single name, no exceptions, even when the struct describes "what to register"
+rather than "how to construct" — functionally identical.
+
+**Known violations (audit dated this commit):**
+
+| Current name | Rename to | Files affected |
+|---|---|---|
+| `ke_thread_desc` (struct) | `ke_thread_params` | `src/c/kernel/include/.../threading/thread.h` + all consumers (KeThread.cpp, KernelThread.cs, generated bindings) |
+| `ke_system_desc` (struct) | `ke_system_params` | `src/c/kernel/include/.../world/system.h` + every system factory and registration site |
+| `ke_render_bgfx_create_mesh_system_desc()` | `_create_mesh_system_params()` | `src/cpp/render/bgfx/include/.../bgfx_render.h` + `BgfxSystemDescFactory.cs` |
+| `ke_render_bgfx_create_light_system_desc()` | `_create_light_system_params()` | same |
+| `ke_render_bgfx_create_camera_system_desc()` | `_create_camera_system_params()` | same |
+| `ke_render_bgfx_create_shadow_system_desc()` | `_create_shadow_system_params()` | same |
+| `ke_render_bgfx_create_skybox_system_desc()` | `_create_skybox_system_params()` | same |
+| `BgfxSystemDescFactory` (C# class) | `BgfxSystemParamsFactory` | `src/csharp/KernelEngine.Render.Bgfx/` |
+
+**Steps:**
+1. Headers C: rename type and function names; keep file names unchanged.
+2. Run `grep -rn 'ke_thread_desc\|ke_system_desc' src/` to find every consumer; mechanical sed.
+3. Rebuild C++, install native, regenerate bindings (`python scripts/generate_bindings.py`).
+4. Build C#, fix any namespace/alias issues from regen.
+5. Run all tests + execute example 05 to validate.
+6. Update CLAUDE.md "Coding conventions" section to forbid `_desc` (rule below).
+
+**Codify in CLAUDE.md** under § Coding conventions:
+
+> **Parameter-bag struct naming**: use `_params` suffix everywhere. Forbidden synonyms:
+> `_desc`, `_descriptor`, `_info`, `_config`, `_options`. Even when a struct describes
+> "what to register" rather than "how to construct", use `_params` — functionally identical.
+> Reason: avoid collision with the technical "descriptor" concept from Vulkan/D3D.
+
+**When NOT to use a struct at all:**
+- Function with 1–3 mandatory parameters and no chance of growing → individual params.
+- Internal C++ helper class (lives in `.hpp`) → constructor parameters.
+- C# DI extension method (`AddBgfxRenderer(shaderPath, vsync)`) → named parameters with defaults.
+
+**Risk:** breaks the C ABI for any external consumer. Acceptable today — the engine has no
+external consumers yet. After 1.0, this kind of rename requires a deprecation window.
 
 ---
 
