@@ -70,11 +70,20 @@ Each plugin is a shared library exposing a single C factory function:
 - `src/cpp/render/bgfx/` → `render_bgfx_create()` — bgfx renderer
 - `src/cpp/window/glfw/` → `ke_window_glfw_create()` — GLFW window
 - `src/cpp/render/bgfx_shader_compiler/` — shader compiler wrapper
+- `src/cpp/dev_platform/` — optional dev-only OS facilities (thread naming, future: crash handler, minidump)
 - `src/cpp/asset/assimp/` — Assimp mesh/texture loader
 - `src/cpp/threading/` — `KeFrameSync`, `KeSemaphore`, `KernelThread` (C++ impl of C threading API)
 - `src/cpp/task_scheduler/enki/` — enkiTS parallel task scheduler
 
 The bgfx plugin is internally split into sub-libraries (`render/core/`, `render/bgfx_device/`). `FrameSubmitter` consumes a `ke_frame_packet` and issues all draw calls.
+
+#### **Layer boundary rule (non-negotiable)**
+
+- **`src/c/kernel/include/`** is the **sole** source of public engine API. Every interface, vtable, struct, enum, and function the engine exposes to consumers lives here. C ABI only.
+- Each `src/cpp/<plugin>/` exposes **one and only one** thing publicly: a C-ABI creation entry point (`ke_<plugin>_create()`) declared in a single small public header.
+- **All other headers under `src/cpp/<plugin>/`** (whether under `include/` or `src/`) are **implementation detail** — `.hpp` files with C++ classes, internal helpers, private state. **Consumers must never include them.**
+- If you find yourself wanting to expose a generic utility (thread naming, logging helper, math), it belongs in `src/c/kernel/`, not in a plugin's public header. Implement it in C (use C11 `_Thread_local` etc., not C++).
+- When auditing: any `.h` (not `.hpp`) under `src/cpp/<plugin>/include/` containing more than the create function is a violation. Surface it to the user before propagating the broken pattern.
 
 ### Layer 3 — C# native bindings (`src/csharp/Native/`)
 

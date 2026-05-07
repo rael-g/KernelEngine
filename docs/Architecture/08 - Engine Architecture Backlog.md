@@ -59,6 +59,7 @@ diagnose-fix loop.
 | Phase F | Structured shutdown — `join_timeout` + cancellation chain | ✅ Done (b556003 + 3fb4835 — `condition_variable::wait_for` eliminated the Linux stub) |
 | **Track P (NEW) — Wave 1** | **Platform Abstraction Layer (`IDevPlatform`)** — extract dev-only OS APIs (thread name) into a swappable backend; eliminate all `#ifdef` from KeThread | ✅ Done (b03ab70 → dbad9e7 chain) |
 | **Track Y.10 (NEW)** | **Bindings-drift detection in CI — fail build if `ke_*.h` changed but `Generated/*.cs` didn't** | 🔲 Planned (motivated by bug 1.25) |
+| **Track W.4 (NEW)** | **Layer boundary cleanup — `src/cpp` plugins must expose only `_create()`** | 🔲 Planned (motivated by bug 1.26 — `EntryPointNotFoundException`; rule formalized in CLAUDE.md) |
 | Track Y.2 (DB-02) | `LogErr` C++ helper — every silent `return KE_ERROR_*` becomes a logged failure | 🔲 Planned |
 | Track Y.3 (DB-03) | Debug logging in bgfx init — shader path, file existence, createUniform results | 🔲 Planned |
 | Track Y.4 (DB-04) | Symbolic `ke_result` names in `KernelException` | ⚠️ Partial (e519eda) |
@@ -1542,6 +1543,7 @@ After all phases are complete, the following properties hold by construction, no
 | 1.23 | OnReady ResourceCommandQueue deadlock | ✅ Workaround (`simReady` event) | fde78a9 |
 | 1.24 | `KeThread` thread-name use-after-free | ✅ Fixed | 1481ef4 |
 | 1.25 | `ke_input` C# binding out-of-sync with C struct | ✅ Fixed + audit needed for other structs | 3583586 |
+| 1.26 | `ke_thread_set/get/assert_current` declared in kernel header but implemented in `ke_threading.dll` → ClangSharp generated `DllImport("ke_kernel")` for symbols not in `ke_kernel.dll`, causing `EntryPointNotFoundException` at runtime | 🔄 Symptom patched (route through Threading.Native); proper fix is Track W.4 (move impl to ke_kernel C, restore declarations in kernel header) | (pending) |
 
 ### Tech Debt Carry-Over
 
@@ -1932,6 +1934,46 @@ Key: cache key = normalized file path. For programmatic assets (vertex data pass
 caching is opt-in via a caller-provided key.
 
 *(Detailed implementation in Phase Q.)*
+
+#### W.4 [HIGH] Layer Boundary Cleanup — Plugins Leaking Beyond `_create()`
+
+**Background:** the engine convention (now formalized in `CLAUDE.md` and the layer-boundary
+memory rule) is that **public engine API lives only in `src/c/kernel/include/`**, and each
+`src/cpp/<plugin>/` exposes **exactly one** public symbol: its `ke_<plugin>_create()` entry
+point. Everything else under `src/cpp/` is implementation detail.
+
+This rule was violated in several places — discovered when an `EntryPointNotFoundException`
+crash exposed a binding that pointed to `ke_kernel.dll` for functions actually exported by
+`ke_threading.dll`. Root cause: the kernel header declared functions that were implemented
+in a plugin, AND the plugin's public header re-declared the same functions plus extras.
+
+**Known violations to fix:**
+
+| Location | Violation | Required fix |
+|---|---|---|
+| `src/cpp/threading/include/.../thread.h` | Exposes `ke_thread_set_current_name`, `get_current_name`, `assert_current` (TLS thread-name utilities) — these are NOT plugin-specific factories | Move impl to `src/c/kernel/src/threading/thread.c` using C11 `_Thread_local`; declare in `src/c/kernel/include/.../threading/thread.h`; remove from cpp wrapper. The cpp wrapper keeps only `ke_thread_std_create` |
+| `src/cpp/threading/include/.../semaphore.h` | Currently OK in isolation (only the factory) but inconsistent with the bgfx single-header convention | Consider consolidating threading into a single `kernel_engine/threading/threading.h` exposing all 3 factories (`thread_std_create`, `semaphore_std_create`, `frame_sync_std_create`) |
+| `src/cpp/threading/include/.../frame_sync.h` | Same as above | Consolidate per above |
+| `src/cpp/dev_platform/win32/src/win32_dev_platform_public.h` | Public header lives in `src/`, not `include/` | Move to `src/cpp/dev_platform/win32/include/kernel_engine/dev_platform/win32/dev_platform_win32.h` to match bgfx/glfw convention |
+| **Audit pass** | Any other `.h` (not `.hpp`) under `src/cpp/<plugin>/include/` containing more than the create function | Inventory all and classify: move to kernel / keep as factory-only / make private `.hpp` |
+
+**Why this is HIGH priority (not LOW housekeeping):**
+1. Today's bug — `EntryPointNotFoundException` because the header lied about where the impl
+   lives — is a direct consequence of this violation. Same class of bug will reoccur.
+2. Mixing plugin-specific and generic declarations in the same header makes ClangSharp generate
+   wrong `DllImport` library paths, silently. Hours lost diagnosing.
+3. Without strict separation, adding a new backend (DirectX renderer, Wayland window) requires
+   reading every plugin's headers to understand what's contract vs implementation — friction
+   compounds with each new backend.
+
+**Definition of done:**
+- Every `.h` under `src/cpp/<plugin>/include/` contains nothing more than the plugin's create
+  function and any tightly-related public types it returns.
+- Every TLS/utility/cross-cutting function the engine relies on is implemented in C and lives in
+  `ke_kernel`.
+- A simple grep can verify: `find src/cpp -path '*/include/*' -name '*.h' | xargs wc -l` —
+  each file should be small and obvious.
+- CLAUDE.md rule passes the audit checklist documented in section 2.11.
 
 ---
 
