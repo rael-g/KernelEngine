@@ -186,6 +186,7 @@ app.Run(services);
 - **Formatting**: `BasedOnStyle: Microsoft` (`.clang-format` at root).
 - **Error handling**: return `ke_result`; no exceptions in the C layer. All callers must handle it.
 - **Memory**: every major component receives an explicit `ke_allocator*`. Raw pointers are non-owning unless documented.
+- **Naming (Structs)**: Standardize on `_params` suffix for structs that aggregate construction or registration parameters (parameter bags). NEVER use `_desc`, `_descriptor`, `_info`, or `_config`.
 
 ### C#
 - XML doc comments (`///`) on all `public` and `protected` members.
