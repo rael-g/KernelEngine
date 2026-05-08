@@ -90,6 +90,7 @@ private:
     struct ke_window* window_ = nullptr;
     std::string shader_path_;
     uint32_t renderer_type_ = 0; 
+    bool vsync_ = true;
     bool orthographic_ = true;
 };
 

@@ -94,7 +94,7 @@ void LightSystem::Update(void* handle, ke_world* world, float dt, ke_frame_packe
     }
 }
 
-ke_system_desc LightSystem::GetDescription(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid)
+ke_system_params LightSystem::GetDescription(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid)
 {
     LightSystemContext* ctx = (LightSystemContext*)malloc(sizeof(LightSystemContext));
     ctx->light_cid      = light_cid;
@@ -106,7 +106,7 @@ ke_system_desc LightSystem::GetDescription(uint32_t light_cid, uint32_t point_ci
     ctx->reads[2]       = spot_cid;
     ctx->reads[3]       = transform_cid;
 
-    ke_system_desc desc = {};
+    ke_system_params desc = {};
     desc.name       = "LightSystem";
     desc.update     = LightSystem::Update;
     desc.handle     = ctx;

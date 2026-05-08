@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_DEV_PLATFORM_WIN32_PUBLIC_H_
-#define KERNEL_ENGINE_DEV_PLATFORM_WIN32_PUBLIC_H_
+#ifndef KERNEL_ENGINE_DEV_PLATFORM_WIN32_WIN32_DEV_PLATFORM_H_
+#define KERNEL_ENGINE_DEV_PLATFORM_WIN32_WIN32_DEV_PLATFORM_H_
 
 #include <kernel_engine/kernel/dev_platform/dev_platform.h>
 #include <kernel_engine/kernel/context/allocator.h>
@@ -9,14 +9,16 @@ extern "C"
 {
 #endif
 
-#if defined(_WIN32)
-#  ifdef KE_DEV_PLATFORM_EXPORT
-#    define KE_DEV_PLATFORM_API __declspec(dllexport)
-#  else
-#    define KE_DEV_PLATFORM_API __declspec(dllimport)
-#  endif
-#else
-#  define KE_DEV_PLATFORM_API
+#ifndef KE_DEV_PLATFORM_API
+    #ifdef KE_DEV_PLATFORM_STATIC
+        #define KE_DEV_PLATFORM_API
+    #else
+        #ifdef KE_DEV_PLATFORM_EXPORT
+            #define KE_DEV_PLATFORM_API KE_HELPER_EXPORT
+        #else
+            #define KE_DEV_PLATFORM_API KE_HELPER_IMPORT
+        #endif
+    #endif
 #endif
 
     /**
@@ -31,4 +33,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_DEV_PLATFORM_WIN32_PUBLIC_H_
+#endif // KERNEL_ENGINE_DEV_PLATFORM_WIN32_WIN32_DEV_PLATFORM_H_

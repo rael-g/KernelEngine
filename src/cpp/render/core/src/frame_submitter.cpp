@@ -8,7 +8,7 @@
 #include "gpu_device.hpp"
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
-#include <kernel_engine/kernel/threading/thread.h>
+#include <kernel_engine/threading/thread.h>
 
 namespace kernel_engine::render::bgfx
 {

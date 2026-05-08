@@ -9,11 +9,11 @@ namespace KernelEngine.Framework;
 /// </summary>
 public sealed unsafe class MeshRenderSystem : ISystem
 {
-    private readonly ke_system_desc _nativeDesc;
+    private readonly ke_system_params _nativeDesc;
 
-    public MeshRenderSystem(ke_system_desc nativeDesc) => _nativeDesc = nativeDesc;
+    public MeshRenderSystem(ke_system_params nativeDesc) => _nativeDesc = nativeDesc;
 
-    public ke_system_desc NativeDescriptor => _nativeDesc;
+    public ke_system_params NativeDescriptor => _nativeDesc;
 
     public unsafe void Update(World world, float dt, FramePacket? packet = null, IInputReader? input = null)
     {

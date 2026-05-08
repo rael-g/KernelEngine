@@ -14,7 +14,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddBgfxRenderer(
         this IServiceCollection services,
-        string shaderPath)
+        string shaderPath,
+        bool vsync = true)
     {
         services.AddSingleton<KernelEngine.Kernel.Renderer>(sp =>
         {
@@ -31,6 +32,7 @@ public static class ServiceCollectionExtensions
                         logger = logger != null ? logger.Native : null,
                         window = sp.GetRequiredService<KernelEngine.Kernel.Window>().Native,
                         shader_path = (sbyte*)shaderPtr,
+                        vsync = (byte)(vsync ? 1 : 0),
                     };
 
                     ke_render* native;

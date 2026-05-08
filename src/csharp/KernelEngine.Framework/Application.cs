@@ -283,12 +283,12 @@ public class Application : IDisposable
 
         var xformCid = ActiveWorld.TransformComponentId;
 
-        var meshSystem   = new MeshRenderSystem(BgfxSystemDescFactory.CreateMeshSystemDesc(MeshNode.ComponentId, xformCid));
-        var lightSystem  = new LightRenderSystem(BgfxSystemDescFactory.CreateLightSystemDesc(LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
-        var cameraSystem = new CameraRenderSystem(BgfxSystemDescFactory.CreateCameraSystemDesc(CameraNode.ComponentId, xformCid));
-        _shadowSystem = new ShadowRenderSystem(BgfxSystemDescFactory.CreateShadowSystemDesc(Renderer.Native, LightNode.ComponentId, MeshNode.ComponentId, xformCid));
+        var meshSystem   = new MeshRenderSystem(BgfxSystemParamsFactory.CreateMeshSystemParams(MeshNode.ComponentId, xformCid));
+        var lightSystem  = new LightRenderSystem(BgfxSystemParamsFactory.CreateLightSystemParams(LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
+        var cameraSystem = new CameraRenderSystem(BgfxSystemParamsFactory.CreateCameraSystemParams(CameraNode.ComponentId, xformCid));
+        _shadowSystem = new ShadowRenderSystem(BgfxSystemParamsFactory.CreateShadowSystemParams(LightNode.ComponentId, MeshNode.ComponentId, xformCid));
         var shadowSystem = _shadowSystem;
-        var skyboxSystem = new SkyboxRenderSystem(BgfxSystemDescFactory.CreateSkyboxSystemDesc(SkyboxNode.ComponentId));
+        var skyboxSystem = new SkyboxRenderSystem(BgfxSystemParamsFactory.CreateSkyboxSystemParams(SkyboxNode.ComponentId));
 
         ActiveWorld.AddSystem(meshSystem);
         ActiveWorld.AddSystem(lightSystem);

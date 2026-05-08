@@ -7,6 +7,10 @@ namespace KernelEngine.Kernel.Tests;
 
 public unsafe class RendererTests
 {
+    // Renderer methods assert thread affinity. The xUnit test thread is the de-facto ke.render here
+    // since these are unit tests with mock vtables — name it (per-instance, per-thread) so AssertCurrent passes.
+    public RendererTests() { KernelThread.SetCurrentName("ke.render"); }
+
     private static int _initializeCalled = 0;
     private static int _frameCalled = 0;
     private static int _clearColorCalled = 0;

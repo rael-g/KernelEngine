@@ -18,4 +18,7 @@ public unsafe partial struct ke_render_bgfx_params
 
     [NativeTypeName("uint32_t")]
     public uint renderer_type;
+
+    [NativeTypeName("ke_bool")]
+    public byte vsync;
 }

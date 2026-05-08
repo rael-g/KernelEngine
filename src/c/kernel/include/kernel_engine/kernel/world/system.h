@@ -24,7 +24,7 @@ extern "C" {
      * @brief Description used to register a system in the Kernel.
      * Declarative dependencies allow the scheduler to run non-conflicting systems in parallel.
      */
-    typedef struct ke_system_desc {
+    typedef struct ke_system_params {
         const char*           name;
         ke_system_update_func update;
         void*                 handle;
@@ -34,7 +34,7 @@ extern "C" {
         uint32_t              read_count;
         const uint32_t*       writes;
         uint32_t              write_count;
-    } ke_system_desc;
+    } ke_system_params;
 
 #ifdef __cplusplus
 }

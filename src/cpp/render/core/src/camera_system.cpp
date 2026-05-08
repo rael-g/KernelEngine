@@ -47,7 +47,7 @@ void CameraSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
     }
 }
 
-ke_system_desc CameraSystem::GetDescription(uint32_t camera_cid, uint32_t transform_cid)
+ke_system_params CameraSystem::GetDescription(uint32_t camera_cid, uint32_t transform_cid)
 {
     CameraSystemContext* ctx = (CameraSystemContext*)malloc(sizeof(CameraSystemContext));
     ctx->camera_cid    = camera_cid;
@@ -55,7 +55,7 @@ ke_system_desc CameraSystem::GetDescription(uint32_t camera_cid, uint32_t transf
     ctx->reads[0]      = camera_cid;
     ctx->reads[1]      = transform_cid;
 
-    ke_system_desc desc = {};
+    ke_system_params desc = {};
     desc.name       = "CameraSystem";
     desc.update     = CameraSystem::Update;
     desc.handle     = ctx;

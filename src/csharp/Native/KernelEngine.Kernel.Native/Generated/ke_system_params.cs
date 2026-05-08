@@ -1,6 +1,6 @@
 namespace KernelEngine.Kernel.Native;
 
-public unsafe partial struct ke_system_desc
+public unsafe partial struct ke_system_params
 {
     [NativeTypeName("const char *")]
     public sbyte* name;

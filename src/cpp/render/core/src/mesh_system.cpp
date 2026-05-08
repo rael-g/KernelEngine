@@ -48,7 +48,7 @@ void MeshSystem::Update(void* handle, ke_world* world, float dt, ke_frame_packet
     }
 }
 
-ke_system_desc MeshSystem::GetDescription(uint32_t mesh_cid, uint32_t transform_cid)
+ke_system_params MeshSystem::GetDescription(uint32_t mesh_cid, uint32_t transform_cid)
 {
     MeshSystemContext* ctx = (MeshSystemContext*)malloc(sizeof(MeshSystemContext));
     ctx->mesh_cid       = mesh_cid;
@@ -56,7 +56,7 @@ ke_system_desc MeshSystem::GetDescription(uint32_t mesh_cid, uint32_t transform_
     ctx->reads[0]       = mesh_cid;
     ctx->reads[1]       = transform_cid;
 
-    ke_system_desc desc = {};
+    ke_system_params desc = {};
     desc.name        = "MeshSystem";
     desc.update      = MeshSystem::Update;
     desc.handle      = ctx;

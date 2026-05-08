@@ -17,6 +17,7 @@ find_package(bgfx CONFIG REQUIRED)
 
 target_link_libraries(ke_render_bgfx_device PUBLIC
     ke_render_contract
+    ke_threading
     bgfx::bgfx
 )
 

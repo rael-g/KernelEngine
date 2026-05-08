@@ -1,4 +1,5 @@
 #include "geometry_manager.hpp"
+#include <render_logging.hpp>
 #include "render_context.hpp"
 #include "gpu_device.hpp"
 #include <kernel_engine/kernel/engine/frame_packet.h>
@@ -12,7 +13,8 @@ ke_result GeometryManager::CreateMesh(RenderContext& ctx, const ke_vertex *verts
                                         const uint16_t *indices, uint32_t index_count,
                                         ke_mesh_handle *out_handle)
 {
-    if (!verts || !indices || !out_handle || vert_count == 0 || index_count == 0 || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (!verts || !indices || !out_handle || vert_count == 0 || index_count == 0 || !ctx.gpu)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateMesh", "Invalid arguments or GPU not set");
 
     struct GpuVert {
         float x, y, z;
@@ -33,7 +35,7 @@ ke_result GeometryManager::CreateMesh(RenderContext& ctx, const ke_vertex *verts
         ctx.gpu->Copy(indices, sizeof(uint16_t) * index_count));
 
     if (vb == kGpuInvalidHandle || ib == kGpuInvalidHandle)
-        return KE_ERROR_RENDER;
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateMesh", "GPU resource creation failed");
 
     meshes_.push_back({vb, ib, index_count});
     *out_handle = {(uint32_t)(meshes_.size() - 1)};
@@ -42,7 +44,8 @@ ke_result GeometryManager::CreateMesh(RenderContext& ctx, const ke_vertex *verts
 
 ke_result GeometryManager::DestroyMesh(RenderContext& ctx, ke_mesh_handle handle)
 {
-    if (handle.idx >= (uint32_t)meshes_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (handle.idx >= (uint32_t)meshes_.size() || !ctx.gpu)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "DestroyMesh", "Invalid mesh handle or GPU not set");
     auto &entry = meshes_[handle.idx];
     if (entry.ib != kGpuInvalidHandle) ctx.gpu->DestroyIndexBuffer(entry.ib);
     if (entry.vb != kGpuInvalidHandle) ctx.gpu->DestroyVertexBuffer(entry.vb);

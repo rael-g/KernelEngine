@@ -67,6 +67,7 @@ struct GpuInitConfig
     uint32_t height;
     uint32_t renderer_type;
     bool     debug;
+    bool     vsync;
 };
 
 /**
@@ -79,6 +80,7 @@ struct GpuRendererParams
     const char*     shader_path;
     ::ke_window*    window;
     uint32_t        renderer_type;
+    bool            vsync;
 };
 
 } // namespace kernel_engine::render::bgfx

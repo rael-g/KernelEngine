@@ -29,6 +29,13 @@ extern "C"
 #endif
 #endif
 
+// --- Thread Local Storage ---
+#if defined(_MSC_VER)
+#define KE_THREAD_LOCAL __declspec(thread)
+#else
+#define KE_THREAD_LOCAL _Thread_local
+#endif
+
     /// @brief Boolean type for stable FFI (exactly 1 byte).
     typedef uint8_t ke_bool;
 

@@ -48,7 +48,7 @@ protected:
     ke_ecs_registry* registry = nullptr;
     ke_world mock_world{};
     uint32_t camera_cid, transform_cid, mesh_cid, light_cid, point_cid, spot_cid;
-    ke_system_desc cam_system{}, mesh_system{}, light_system{};
+    ke_system_params cam_system{}, mesh_system{}, light_system{};
 };
 
 TEST_F(NativeSystemsTest, CameraSystem_Update_FillsCameraPositionX) {

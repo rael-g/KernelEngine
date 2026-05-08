@@ -26,6 +26,7 @@ target_include_directories(ke_render_core PRIVATE
 target_link_libraries(ke_render_core PUBLIC
     ke_kernel
     ke_render_contract
+    ke_threading
 )
 
 install(TARGETS ke_render_core

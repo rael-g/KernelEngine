@@ -13,7 +13,6 @@ struct ShadowSystemContext {
     uint32_t   light_cid;
     uint32_t   mesh_cid;
     uint32_t   transform_cid;
-    ke_render* renderer;
     ke_shadow_map_handle shadow_map_handle;
     uint32_t   reads[3];
 };
@@ -72,19 +71,18 @@ void ShadowSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
     }
 }
 
-ke_system_desc ShadowSystem::GetDescription(ke_render* renderer, uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid)
+ke_system_params ShadowSystem::GetDescription(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid)
 {
     ShadowSystemContext* ctx = (ShadowSystemContext*)malloc(sizeof(ShadowSystemContext));
     ctx->light_cid        = light_cid;
     ctx->mesh_cid         = mesh_cid;
     ctx->transform_cid    = transform_cid;
-    ctx->renderer         = renderer;
     ctx->shadow_map_handle= KE_SHADOW_MAP_NONE;
     ctx->reads[0]         = light_cid;
     ctx->reads[1]         = mesh_cid;
     ctx->reads[2]         = transform_cid;
 
-    ke_system_desc desc = {};
+    ke_system_params desc = {};
     desc.name       = "ShadowSystem";
     desc.update     = ShadowSystem::Update;
     desc.handle     = ctx;
@@ -93,7 +91,7 @@ ke_system_desc ShadowSystem::GetDescription(ke_render* renderer, uint32_t light_
     return desc;
 }
 
-void ShadowSystem::SetShadowMap(ke_system_desc* desc, ke_shadow_map_handle handle)
+void ShadowSystem::SetShadowMap(ke_system_params* desc, ke_shadow_map_handle handle)
 {
     if (!desc || !desc->handle) return;
     static_cast<ShadowSystemContext*>(desc->handle)->shadow_map_handle = handle;

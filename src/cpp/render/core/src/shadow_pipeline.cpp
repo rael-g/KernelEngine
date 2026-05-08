@@ -1,4 +1,5 @@
 #include "../include/shadow_pipeline.hpp"
+#include <render_logging.hpp>
 #include "../include/geometry_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
@@ -10,13 +11,16 @@ namespace kernel_engine::render::bgfx
 
 ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out)
 {
-    if (!out || w == 0 || h == 0 || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out || w == 0 || h == 0 || !ctx.gpu)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateShadowMap", "Invalid arguments or GPU not set");
 
     GpuTextureHandle depth_tex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtD16, kTexFlagRT, nullptr);
-    if (depth_tex == kGpuInvalidHandle) return KE_ERROR_RENDER;
+    if (depth_tex == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU texture creation failed");
 
     GpuFrameBufferHandle fb = ctx.gpu->CreateFrameBuffer(1, &depth_tex, true);
-    if (fb == kGpuInvalidHandle) return KE_ERROR_RENDER;
+    if (fb == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU framebuffer creation failed");
 
     ShadowMapEntry entry;
     entry.fb = fb;
@@ -32,7 +36,8 @@ ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32
 
 ke_result ShadowPipeline::DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
 {
-    if (h.idx >= (uint32_t)shadow_maps_.size() || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (h.idx >= (uint32_t)shadow_maps_.size() || !ctx.gpu)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "DestroyShadowMap", "Invalid handle or GPU not set");
     if (shadow_maps_[h.idx].fb != kGpuInvalidHandle) ctx.gpu->DestroyFrameBuffer(shadow_maps_[h.idx].fb);
     shadow_maps_[h.idx].valid = false;
     return KE_OK;
@@ -40,9 +45,11 @@ ke_result ShadowPipeline::DestroyShadowMap(RenderContext& ctx, ke_shadow_map_han
 
 ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p)
 {
-    if (h.idx >= (uint32_t)shadow_maps_.size() || !v || !p || !ctx.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (h.idx >= (uint32_t)shadow_maps_.size() || !v || !p || !ctx.gpu)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "BeginShadowPass", "Invalid arguments or GPU not set");
     auto &entry = shadow_maps_[h.idx];
-    if (!entry.valid) return KE_ERROR_INVALID_ARGUMENT;
+    if (!entry.valid)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "BeginShadowPass", "Shadow map not valid");
 
     active_shadow_handle = h;
     ctx.gpu->SetViewFrameBuffer(3 /*SHADOW*/, entry.fb);
@@ -55,9 +62,11 @@ ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_hand
 
 ke_result ShadowPipeline::SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geom, GpuProgramHandle prog, ke_mesh_handle m, const ke_mat4 *t)
 {
-    if (!ctx.gpu || prog == kGpuInvalidHandle || !t) return KE_ERROR_RENDER;
+    if (!ctx.gpu || prog == kGpuInvalidHandle || !t)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SubmitMeshShadow", "Invalid arguments or program");
     const auto &entry = geom.GetMeshEntry(m);
-    if (entry.vb == kGpuInvalidHandle) return KE_ERROR_INVALID_ARGUMENT;
+    if (entry.vb == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "SubmitMeshShadow", "Invalid mesh entry");
 
     ctx.gpu->SetTransform(t->m, 1);
     ctx.gpu->SetVertexBuffer(0, entry.vb);
@@ -77,7 +86,8 @@ ke_result ShadowPipeline::EndShadowPass(RenderContext& ctx)
 
 ke_result ShadowPipeline::SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
 {
-    if (h.idx >= (uint32_t)shadow_maps_.size()) return KE_ERROR_INVALID_ARGUMENT;
+    if (h.idx >= (uint32_t)shadow_maps_.size())
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "SetShadowMap", "Invalid handle");
     active_shadow_handle = h;
     return KE_OK;
 }

@@ -15,13 +15,13 @@ extern "C"
     typedef void (*ke_thread_func)(void *user_data);
 
     /// @brief Construction parameters for a thread factory.
-    typedef struct ke_thread_desc
+    typedef struct ke_thread_params
     {
         const char       *name;         ///< Thread name. Stored in TLS and forwarded to dev_platform if present. May be NULL.
         ke_thread_func    func;         ///< Entry point. Must not be NULL.
         void             *user_data;    ///< Forwarded unchanged to func.
         ke_dev_platform  *dev_platform; ///< Optional. If set, used to make the thread name visible to debuggers/profilers.
-    } ke_thread_desc;
+    } ke_thread_params;
 
     /// @brief OS thread abstraction — vtable style.
     typedef struct ke_thread
@@ -38,23 +38,23 @@ extern "C"
     } ke_thread;
 
     /**
-     * @brief Assigns a human-readable name to the calling thread.
-     * Stored in TLS and visible in debuggers/profilers.
+     * @brief Sets the name of the calling thread.
+     * Useful for the main thread and identifying workers in profilers.
      */
-    void ke_thread_set_current_name(const char *name);
+    KE_API void ke_thread_set_current_name(const char *name);
 
     /**
      * @brief Retrieves the name assigned to the calling thread.
-     * @return Thread name or "unknown" if never set.
+     * @return The thread name, or "unknown" if never set.
      */
-    const char* ke_thread_get_current_name(void);
+    KE_API const char *ke_thread_get_current_name(void);
 
     /**
      * @brief Asserts that the calling thread matches the expected name.
-     * In debug builds, crashes with a diagnostic message if it fails.
-     * No-op in release builds.
+     * Aborts with a fatal message on mismatch in debug builds.
      */
-    void ke_thread_assert_current(const char *expected_name);
+    KE_API void ke_thread_assert_current(const char *expected_name);
+
 
 #ifdef __cplusplus
 }

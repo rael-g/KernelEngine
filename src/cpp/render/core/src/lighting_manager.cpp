@@ -1,4 +1,5 @@
 #include "../include/lighting_manager.hpp"
+#include <render_logging.hpp>
 #include "../include/texture_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
@@ -66,7 +67,8 @@ ke_result LightingManager::RecordSpotLights(struct ke_frame_packet& packet, cons
 
 ke_result LightingManager::CreateMaterial(RenderContext& ctx, const TextureManager& textures, const ke_material *mat, ke_material_handle *out_handle)
 {
-    if (!mat || !out_handle) return KE_ERROR_INVALID_ARGUMENT;
+    if (!mat || !out_handle)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateMaterial", "Invalid arguments");
     ke_texture_handle tex  = mat->albedo;
     ke_texture_handle nmap = mat->normal_map;
     materials_.push_back({mat->r, mat->g, mat->b, mat->a, tex, mat->metallic, mat->roughness, nmap, true});
@@ -76,7 +78,8 @@ ke_result LightingManager::CreateMaterial(RenderContext& ctx, const TextureManag
 
 ke_result LightingManager::DestroyMaterial(RenderContext& ctx, ke_material_handle handle)
 {
-    if (handle.idx >= (uint32_t)materials_.size()) return KE_ERROR_INVALID_ARGUMENT;
+    if (handle.idx >= (uint32_t)materials_.size())
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "DestroyMaterial", "Invalid material handle");
     materials_[handle.idx].valid = false;
     return KE_OK;
 }

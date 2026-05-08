@@ -11,10 +11,7 @@
 namespace kernel_engine::threading
 {
 
-// TLS thread name — used by ke_thread_assert_current. Pure C++, no platform code.
-static thread_local std::string s_thread_name = "unknown";
-
-KeThread::KeThread(const ke_thread_desc *desc)
+KeThread::KeThread(const ke_thread_params *desc)
     : state_(std::make_shared<JoinState>())
 {
     thread_ = std::thread(
@@ -24,7 +21,7 @@ KeThread::KeThread(const ke_thread_desc *desc)
          func          = desc->func,
          user_data     = desc->user_data]() {
             // 1. Set the TLS name for ke_thread_assert_current.
-            s_thread_name = name;
+            ke_thread_set_current_name(name.c_str());
 
             // 2. Optionally make the name visible to debuggers/profilers.
             if (dev_platform && dev_platform->set_thread_name)
@@ -87,7 +84,7 @@ struct KeThreadHandle
 extern "C"
 {
     ke_result ke_thread_std_create(ke_allocator         *alloc,
-                                   const ke_thread_desc *desc,
+                                   const ke_thread_params *desc,
                                    ke_thread           **out)
     {
         if (!alloc || !desc || !desc->func || !out) return KE_ERROR_INVALID_ARGUMENT;
@@ -117,29 +114,5 @@ extern "C"
         };
         *out = &h->vtable;
         return KE_OK;
-    }
-
-    KE_THREADING_API void ke_thread_set_current_name(const char *name)
-    {
-        if (name) kernel_engine::threading::s_thread_name = name;
-    }
-
-    KE_THREADING_API const char *ke_thread_get_current_name(void)
-    {
-        return kernel_engine::threading::s_thread_name.c_str();
-    }
-
-    KE_THREADING_API void ke_thread_assert_current(const char *expected_name)
-    {
-#ifndef NDEBUG
-        if (kernel_engine::threading::s_thread_name != expected_name)
-        {
-            fprintf(stderr,
-                    "[FATAL] Thread affinity violation! Expected '%s', but current is '%s'.\n",
-                    expected_name, kernel_engine::threading::s_thread_name.c_str());
-            assert(false);
-            abort();
-        }
-#endif
     }
 }

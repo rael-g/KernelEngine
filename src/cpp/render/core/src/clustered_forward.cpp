@@ -1,4 +1,5 @@
 #include "../include/clustered_forward.hpp"
+#include <render_logging.hpp>
 #include "../include/lighting_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
@@ -17,7 +18,8 @@ ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle&
 
 ke_result ClusteredForward::SetClusterConfig(RenderContext& ctx, const ke_cluster_config* config)
 {
-    if (!config) return KE_ERROR_INVALID_ARGUMENT;
+    if (!config)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "SetClusterConfig", "Config is null");
     cluster_config_ = *config;
     bounds_dirty_ = true;
     return KE_OK;

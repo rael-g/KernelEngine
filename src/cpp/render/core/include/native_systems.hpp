@@ -16,7 +16,7 @@ class KE_RENDER_API MeshSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
-    static ke_system_desc GetDescription(uint32_t mesh_cid, uint32_t transform_cid);
+    static ke_system_params GetDescription(uint32_t mesh_cid, uint32_t transform_cid);
 };
 
 /**
@@ -26,7 +26,7 @@ class KE_RENDER_API LightSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
-    static ke_system_desc GetDescription(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid);
+    static ke_system_params GetDescription(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid);
 };
 
 /**
@@ -36,7 +36,7 @@ class KE_RENDER_API CameraSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
-    static ke_system_desc GetDescription(uint32_t camera_cid, uint32_t transform_cid);
+    static ke_system_params GetDescription(uint32_t camera_cid, uint32_t transform_cid);
 };
 
 /**
@@ -46,9 +46,9 @@ class KE_RENDER_API ShadowSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
-    static ke_system_desc GetDescription(ke_render* renderer, uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid);
+    static ke_system_params GetDescription(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid);
     /// Sets the shadow map handle from ke.render — must be called before the first frame.
-    static void SetShadowMap(ke_system_desc* desc, ke_shadow_map_handle handle);
+    static void SetShadowMap(ke_system_params* desc, ke_shadow_map_handle handle);
 };
 
 /**
@@ -58,7 +58,7 @@ class KE_RENDER_API SkyboxSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
-    static ke_system_desc GetDescription(uint32_t skybox_cid);
+    static ke_system_params GetDescription(uint32_t skybox_cid);
 };
 
 } // namespace kernel_engine::render::bgfx

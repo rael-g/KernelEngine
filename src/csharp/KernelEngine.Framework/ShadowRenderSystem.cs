@@ -11,9 +11,9 @@ namespace KernelEngine.Framework;
 /// </summary>
 public sealed unsafe class ShadowRenderSystem : ISystem
 {
-    private ke_system_desc _nativeDesc;
+    private ke_system_params _nativeDesc;
 
-    public ShadowRenderSystem(ke_system_desc nativeDesc) => _nativeDesc = nativeDesc;
+    public ShadowRenderSystem(ke_system_params nativeDesc) => _nativeDesc = nativeDesc;
 
     /// <summary>
     /// Injects the pre-created shadow map handle into the native system context.
@@ -21,11 +21,11 @@ public sealed unsafe class ShadowRenderSystem : ISystem
     /// </summary>
     public void SetShadowMap(ShadowMapHandle handle)
     {
-        fixed (ke_system_desc* desc = &_nativeDesc)
+        fixed (ke_system_params* desc = &_nativeDesc)
             BgfxNative.render_bgfx_shadow_system_set_map(desc, new ke_shadow_map_handle { idx = handle.Value });
     }
 
-    public ke_system_desc NativeDescriptor => _nativeDesc;
+    public ke_system_params NativeDescriptor => _nativeDesc;
 
     public unsafe void Update(World world, float dt, FramePacket? packet = null, IInputReader? input = null)
     {

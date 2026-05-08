@@ -1,5 +1,5 @@
 #include "gpu_device.hpp"
-#include <kernel_engine/kernel/threading/thread.h>
+#include <kernel_engine/threading/thread.h>
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 #include <cstring>
@@ -141,7 +141,7 @@ bool BgfxGpuDevice::Init(const GpuInitConfig& config)
     init.resolution.height = config.height;
     // In Remote Desktop sessions, vsync with Vulkan causes the driver to briefly
     // request exclusive display access, momentarily changing the screen resolution.
-    uint32_t reset_flags = BGFX_RESET_VSYNC;
+    uint32_t reset_flags = config.vsync ? BGFX_RESET_VSYNC : BGFX_RESET_NONE;
 #ifdef _WIN32
     bool is_remote = GetSystemMetrics(SM_REMOTESESSION) != 0;
     fprintf(stderr, "[ke] SM_REMOTESESSION = %d\n", (int)is_remote);

@@ -25,8 +25,8 @@ public unsafe partial struct ke_world
     [NativeTypeName("struct ke_ecs_registry *(*)(struct ke_world *)")]
     public delegate* unmanaged[Cdecl]<ke_world*, ke_ecs_registry*> get_registry;
 
-    [NativeTypeName("ke_result (*)(struct ke_world *, const ke_system_desc *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, ke_system_desc*, ke_result> add_system;
+    [NativeTypeName("ke_result (*)(struct ke_world *, const ke_system_params *)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, ke_system_params*, ke_result> add_system;
 
     [NativeTypeName("uint32_t (*)(struct ke_world *)")]
     public delegate* unmanaged[Cdecl]<ke_world*, uint> transform_id;

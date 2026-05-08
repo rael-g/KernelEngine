@@ -128,7 +128,7 @@ TEST_F(WorldTest, Script_Update_Dt_IsCorrect) {
 // ── System registration tests ──────────────────────────────────────────────────
 
 TEST_F(WorldTest, AddSystem_Success) {
-    ke_system_desc sys{};
+    ke_system_params sys{};
     sys.name = "Test";
     sys.update = [](void*, ke_world*, float, ke_frame_packet*) {};
     ASSERT_EQ(world->add_system(world, &sys), KE_OK);
@@ -136,7 +136,7 @@ TEST_F(WorldTest, AddSystem_Success) {
 
 TEST_F(WorldTest, System_Update_Called) {
     static int s_updates; s_updates = 0;
-    ke_system_desc sys{};
+    ke_system_params sys{};
     sys.name = "TestUpdate";
     sys.update = [](void* h, ke_world* w, float dt, ke_frame_packet* p) { s_updates++; };
 

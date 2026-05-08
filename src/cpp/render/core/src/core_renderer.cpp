@@ -1,4 +1,5 @@
 #include <core_renderer.hpp>
+#include <render_logging.hpp>
 #include <geometry_manager.hpp>
 #include <texture_manager.hpp>
 #include <lighting_manager.hpp>
@@ -19,18 +20,6 @@
 namespace kernel_engine::render::bgfx
 {
 
-static ke_result LogErr(ke_logger *logger, ke_result r, const char *context, const char *detail)
-{
-    if (logger)
-    {
-        char msg[1024];
-        snprintf(msg, sizeof(msg), "%s: %s (result: %d)", context, detail, r);
-        ke_log_event ev = {KE_LOG_LEVEL_ERROR, "core_render", msg};
-        logger->log(logger, &ev);
-    }
-    return r;
-}
-
 // ── CoreRenderer Implementation ───────────────────────────────────────────
 
 CoreRenderer::CoreRenderer(const GpuRendererParams& params)
@@ -38,6 +27,7 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     window_       = params.window;
     shader_path_  = params.shader_path ? params.shader_path : "";
     renderer_type_ = params.renderer_type;
+    vsync_        = params.vsync;
 
     std::memset(&ctx_, 0, sizeof(ctx_));
     std::memset(&render_api_, 0, sizeof(render_api_));
@@ -231,10 +221,10 @@ void CoreRenderer::SetGpuDevice(GpuDevice* gpu)
 ke_result CoreRenderer::OnInitialize()
 {
     try {
-        if (!ctx_.gpu) return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "GPU device not set");
-        if (!window_) return KE_ERROR_NOT_INITIALIZED;
+        if (!ctx_.gpu) return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "GPU device not set");
+        if (!window_) return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_NOT_INITIALIZED, "OnInitialize", "Window is null");
         void *nwh = window_->get_native_handle(window_);
-        if (!nwh) return KE_ERROR_WINDOW;
+        if (!nwh) return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_WINDOW, "OnInitialize", "Native window handle is null");
 
         int32_t w, h;
         window_->get_size(window_, &w, &h);
@@ -244,12 +234,13 @@ ke_result CoreRenderer::OnInitialize()
         config.width = (uint32_t)w;
         config.height = (uint32_t)h;
         config.renderer_type = renderer_type_;
+        config.vsync = vsync_;
 #ifndef NDEBUG
         config.debug = true;
 #endif
 
         if (!ctx_.gpu->Init(config))
-            return LogErr(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "gpu->Init failed");
+            return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_RENDER, "OnInitialize", "gpu->Init failed");
 
         if (ctx_.logger) {
             ke_log_event ev = { KE_LOG_LEVEL_INFO, "core_render", "gpu->Init success" };
@@ -291,7 +282,7 @@ ke_result CoreRenderer::OnInitialize()
         initialized_ = true;
         return KE_OK;
     } catch (const BgfxFatalException& e) {
-        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "OnInitialize", e.what());
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "OnInitialize", e.what());
     }
 }
 
@@ -323,7 +314,7 @@ ke_result CoreRenderer::OnShutdown()
         initialized_ = false;
         return KE_OK;
     } catch (const BgfxFatalException& e) {
-        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "OnShutdown", e.what());
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "OnShutdown", e.what());
     }
 }
 
@@ -339,7 +330,7 @@ ke_result CoreRenderer::Frame()
         shadows_.active_shadow_handle = KE_SHADOW_MAP_NONE;
         return KE_OK;
     } catch (const BgfxFatalException& e) {
-        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "Frame", e.what());
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "Frame", e.what());
     }
 }
 
@@ -389,7 +380,7 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
 
         return KE_OK;
     } catch (const BgfxFatalException& e) {
-        return LogErr(ctx_.logger, KE_ERROR_GPU_FATAL, "SubmitPacket", e.what());
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "SubmitPacket", e.what());
     }
 }
 
@@ -409,7 +400,8 @@ ke_result CoreRenderer::ClearColor(float r, float g, float b, float a)
 
 ke_result CoreRenderer::SetViewTransform(const ke_mat4 *view, const ke_mat4 *proj)
 {
-    if (!view || !proj || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (!view || !proj || !ctx_.gpu) 
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_INVALID_ARGUMENT, "SetViewTransform", "Invalid arguments or GPU not set");
     std::memcpy(ctx_.last_view, view->m, sizeof(float) * 16);
     std::memcpy(ctx_.last_proj, proj->m, sizeof(float) * 16);
 
@@ -439,7 +431,9 @@ ke_result CoreRenderer::SetCameraPos(float x, float y, float z)
 }
 
 ke_result CoreRenderer::SetDirectionalLight(const ke_directional_light *light) {
-    return lighting_.SetDirectionalLight(light);
+    ke_result res = lighting_.SetDirectionalLight(light);
+    if (res != KE_OK) return KE_RENDER_LOG_ERR(ctx_.logger, res, "SetDirectionalLight", "Failed");
+    return KE_OK;
 }
 
 ke_result CoreRenderer::SetAmbientLight(float r, float g, float b) {
@@ -455,7 +449,7 @@ ke_result CoreRenderer::SetSpotLights(const ke_spot_light *lights, uint32_t coun
 }
 
 ke_result CoreRenderer::SetClusterConfig(const ke_cluster_config *config) {
-    if (!initialized_) return KE_ERROR_NOT_INITIALIZED;
+    if (!initialized_) return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_NOT_INITIALIZED, "SetClusterConfig", "Not initialized");
     return clustered_.SetClusterConfig(ctx_, config);
 }
 
@@ -475,13 +469,16 @@ GpuShaderHandle CoreRenderer::LoadShader(const char *name)
 {
     if (!ctx_.shader_provider || !ctx_.gpu) return kGpuInvalidHandle;
     const GpuMemoryBuffer* mem = ctx_.shader_provider->LoadShaderBinary(ctx_, name);
-    if (!mem) return kGpuInvalidHandle;
+    if (!mem) {
+        KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_IO, "LoadShader", name);
+        return kGpuInvalidHandle;
+    }
     return ctx_.gpu->CreateShader(mem);
 }
 
 ke_result CoreRenderer::SetupShader()
 {
-    if (!ctx_.gpu) return KE_ERROR_RENDER;
+    if (!ctx_.gpu) return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_RENDER, "SetupShader", "GPU device not set");
 
     // Default quad mesh at handle 0
     {
@@ -498,16 +495,18 @@ ke_result CoreRenderer::SetupShader()
 
     GpuShaderHandle vs = LoadShader("vs_basic");
     GpuShaderHandle fs = LoadShader("fs_basic");
-    if (vs == kGpuInvalidHandle || fs == kGpuInvalidHandle) return KE_ERROR_RENDER;
+    if (vs == kGpuInvalidHandle || fs == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_RENDER, "SetupShader", "Failed to load basic shaders");
     
     GpuProgramHandle prog = ctx_.gpu->CreateProgram(vs, fs, true);
-    if (prog == kGpuInvalidHandle) return KE_ERROR_RENDER;
+    if (prog == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_RENDER, "SetupShader", "Failed to create basic program");
     program_ = prog;
 
     uint32_t white = 0xffffffff;
     ke_texture_handle white_handle;
     if (textures_.CreateTextureRgba(ctx_, 1, 1, reinterpret_cast<const uint8_t *>(&white), &white_handle) != KE_OK)
-        return KE_ERROR_RENDER;
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_RENDER, "SetupShader", "Failed to create white texture");
     textures_.default_2d_tex = textures_.GetTextureIdx(white_handle);
 
     // Default white material at handle 0

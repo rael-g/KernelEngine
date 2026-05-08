@@ -4,6 +4,7 @@ add_library(ke_dev_platform_win32 SHARED
 
 target_include_directories(ke_dev_platform_win32 PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+    include
     src
 )
 

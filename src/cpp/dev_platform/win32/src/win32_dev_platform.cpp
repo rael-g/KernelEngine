@@ -1,7 +1,7 @@
 // Win32 implementation of ke_dev_platform.
 // Currently exposes: SetThreadName via SetThreadDescription (debugger/profiler visibility).
 
-#include "win32_dev_platform_public.h"
+#include <kernel_engine/dev_platform/win32/win32_dev_platform.h>
 
 #include <windows.h>
 #include <processthreadsapi.h>

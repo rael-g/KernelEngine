@@ -32,13 +32,13 @@ void SkyboxSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
     }
 }
 
-ke_system_desc SkyboxSystem::GetDescription(uint32_t skybox_cid)
+ke_system_params SkyboxSystem::GetDescription(uint32_t skybox_cid)
 {
     SkyboxSystemContext* ctx = (SkyboxSystemContext*)malloc(sizeof(SkyboxSystemContext));
     ctx->skybox_cid = skybox_cid;
     ctx->reads[0]   = skybox_cid;
 
-    ke_system_desc desc = {};
+    ke_system_params desc = {};
     desc.name       = "SkyboxSystem";
     desc.update     = SkyboxSystem::Update;
     desc.handle     = ctx;

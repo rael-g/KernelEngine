@@ -6,8 +6,10 @@ KernelEngine.DevPlatform.Win32.Native
 ke_dev_platform_win32
 --include-directory
 ../../../c/kernel/include
+--include-directory
+../../../cpp/dev_platform/win32/include
 --file
-../../../cpp/dev_platform/win32/src/win32_dev_platform_public.h
+../../../cpp/dev_platform/win32/include/kernel_engine/dev_platform/win32/win32_dev_platform.h
 --methodClassName
 NativeMethods
 --prefixStrip

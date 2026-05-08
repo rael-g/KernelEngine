@@ -32,7 +32,7 @@ extern "C" {
         struct ke_ecs_registry *(*get_registry)(struct ke_world *self);
 
         // System Management (Phase 4)
-        ke_result (*add_system)(struct ke_world *self, const ke_system_desc *desc);
+        ke_result (*add_system)(struct ke_world *self, const ke_system_params *params);
 
         // Core Components
         uint32_t (*transform_id)(struct ke_world *self);

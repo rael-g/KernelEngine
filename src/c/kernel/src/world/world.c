@@ -26,7 +26,7 @@ typedef struct ke_world_impl
     ke_component_id name_cid;
     ke_component_id script_cid;
 
-    ke_system_desc systems[KE_WORLD_MAX_SYSTEMS];
+    ke_system_params systems[KE_WORLD_MAX_SYSTEMS];
     size_t         system_count;
 
     ke_system_wave waves[KE_WORLD_MAX_WAVES];
@@ -38,7 +38,7 @@ typedef struct ke_world_impl
 
 // ── Internal: Dependency Analysis ───────────────────────────────────────────
 
-static bool systems_conflict(const ke_system_desc *a, const ke_system_desc *b)
+static bool systems_conflict(const ke_system_params *a, const ke_system_params *b)
 {
     for (uint32_t i = 0; i < a->write_count; i++)
         for (uint32_t j = 0; j < b->write_count; j++)
@@ -66,7 +66,7 @@ static void rebuild_waves(ke_world_impl *impl)
 
     for (uint32_t i = 0; i < (uint32_t)impl->system_count; i++)
     {
-        const ke_system_desc *sys = &impl->systems[i];
+        const ke_system_params *sys = &impl->systems[i];
         bool is_serial_barrier = (sys->read_count == 0 && sys->write_count == 0);
 
         bool conflict_in_wave = false;
@@ -147,7 +147,7 @@ static struct ke_task_scheduler* world_get_task_scheduler(ke_world* self)
     return ((ke_world_impl*)self->handle)->task_scheduler;
 }
 
-static ke_result world_add_system(ke_world *self, const ke_system_desc *desc)
+static ke_result world_add_system(ke_world *self, const ke_system_params *desc)
 {
     ke_world_impl *impl = (ke_world_impl *)self->handle;
     if (impl->system_count >= KE_WORLD_MAX_SYSTEMS) return KE_ERROR_OUT_OF_MEMORY;
@@ -226,7 +226,7 @@ static void update_transforms(ke_world_impl *impl)
 
 typedef struct ke_system_task_data {
     ke_world*       world;
-    ke_system_desc* sys;
+    ke_system_params* sys;
     float           dt;
 } ke_system_task_data;
 
@@ -254,7 +254,7 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
         {
             for (uint32_t s = 0; s < wave->system_count; s++)
             {
-                ke_system_desc *sys = &impl->systems[wave->system_indices[s]];
+                ke_system_params *sys = &impl->systems[wave->system_indices[s]];
                 sys->update(sys->handle, self, dt, NULL);
             }
         }
@@ -265,7 +265,7 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
             
             for (uint32_t s = 0; s < wave->system_count; s++)
             {
-                ke_system_desc *sys = &impl->systems[wave->system_indices[s]];
+                ke_system_params *sys = &impl->systems[wave->system_indices[s]];
                 task_data[s].world  = self;
                 task_data[s].sys    = sys;
                 task_data[s].dt     = dt;

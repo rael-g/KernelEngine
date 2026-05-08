@@ -84,7 +84,7 @@ public sealed unsafe class World : IDisposable
     }
 
     /// <summary>Registers a native system descriptor into the world.</summary>
-    public void AddSystem(ke_system_desc desc)
+    public void AddSystem(ke_system_params desc)
     {
         KernelException.ThrowIfFailed(_native->add_system(_native, &desc), "add_system");
     }

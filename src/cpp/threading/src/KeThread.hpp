@@ -21,7 +21,7 @@ namespace kernel_engine::threading
 class KeThread
 {
   public:
-    explicit KeThread(const ke_thread_desc *desc);
+    explicit KeThread(const ke_thread_params *desc);
     ~KeThread();
 
     KeThread(const KeThread &)            = delete;

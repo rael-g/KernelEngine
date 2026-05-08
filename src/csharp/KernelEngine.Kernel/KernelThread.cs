@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
-using KernelNative   = KernelEngine.Kernel.Native.NativeMethods;
 using ThreadingNative = KernelEngine.Threading.Native.NativeMethods;
 
 namespace KernelEngine.Kernel;
@@ -37,7 +36,7 @@ public sealed unsafe class KernelThread : IDisposable
         var nameBytes = Marshal.StringToHGlobalAnsi(name);
         try
         {
-            var desc = new ke_thread_desc
+            var desc = new ke_thread_params
             {
                 name         = (sbyte*)nameBytes,
                 func         = &ThreadEntryPoint,
@@ -79,14 +78,14 @@ public sealed unsafe class KernelThread : IDisposable
     public static void SetCurrentName(string name)
     {
         var nameBytes = Marshal.StringToHGlobalAnsi(name);
-        try   { KernelNative.thread_set_current_name((sbyte*)nameBytes); }
+        try   { NativeMethods.thread_set_current_name((sbyte*)nameBytes); }
         finally { Marshal.FreeHGlobal(nameBytes); }
     }
 
     /// <summary>Returns the name of the calling thread.</summary>
     public static string GetCurrentName()
     {
-        var ptr = KernelNative.thread_get_current_name();
+        var ptr = NativeMethods.thread_get_current_name();
         return Marshal.PtrToStringAnsi((IntPtr)ptr) ?? "unknown";
     }
 
@@ -105,7 +104,7 @@ public sealed unsafe class KernelThread : IDisposable
         }
         // Also call native assertion to be safe and cover native callers.
         var nameBytes = Marshal.StringToHGlobalAnsi(expectedName);
-        try { KernelNative.thread_assert_current((sbyte*)nameBytes); }
+        try { NativeMethods.thread_assert_current((sbyte*)nameBytes); }
         finally { Marshal.FreeHGlobal(nameBytes); }
 #endif
     }

@@ -1,4 +1,5 @@
 #include "../include/post_process_pipeline.hpp"
+#include <render_logging.hpp>
 #include "render_context.hpp"
 #include "../include/geometry_manager.hpp"
 #include "../include/texture_manager.hpp"
@@ -13,7 +14,8 @@ namespace kernel_engine::render::bgfx
 
 ke_result PostProcessPipeline::SetTonemapping(RenderContext& ctx, ke_bool enabled, float exposure, float gamma)
 {
-    if (enabled && hdr_fb_ == kGpuInvalidHandle) return KE_ERROR_NOT_INITIALIZED;
+    if (enabled && hdr_fb_ == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_NOT_INITIALIZED, "SetTonemapping", "HDR framebuffer not initialized");
     pp_enabled_ = (enabled != 0);
     exposure_   = exposure;
     gamma_      = gamma;
@@ -22,7 +24,8 @@ ke_result PostProcessPipeline::SetTonemapping(RenderContext& ctx, ke_bool enable
 
 ke_result PostProcessPipeline::SetBloom(RenderContext& ctx, ke_bool enabled, float threshold, float intensity)
 {
-    if (enabled && bright_fb_ == kGpuInvalidHandle) return KE_ERROR_NOT_INITIALIZED;
+    if (enabled && bright_fb_ == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_NOT_INITIALIZED, "SetBloom", "Bright framebuffer not initialized");
     bloom_enabled_   = (enabled != 0);
     bloom_threshold_ = threshold;
     bloom_intensity_ = intensity;
@@ -44,7 +47,8 @@ ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
                                                 GpuProgramHandle& out_blur_prog, 
                                                 GpuProgramHandle& out_tonemap_prog)
 {
-    if (!ctx.gpu || !ctx.shader_provider) return KE_ERROR_RENDER;
+    if (!ctx.gpu || !ctx.shader_provider)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SetupPostProcess", "GPU or ShaderProvider not set");
 
     auto load_shader = [&](const char* name) -> GpuShaderHandle {
         const GpuMemoryBuffer* mem = ctx.shader_provider->LoadShaderBinary(ctx, name);
@@ -59,7 +63,7 @@ ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
 
     if (vs_screen == kGpuInvalidHandle || fs_bright == kGpuInvalidHandle ||
         fs_blur == kGpuInvalidHandle || fs_tone == kGpuInvalidHandle)
-        return KE_ERROR_RENDER;
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SetupPostProcess", "Shader loading failed");
 
     // vs_screen is shared; don't destroy it until the last program is created.
     out_bright_prog  = ctx.gpu->CreateProgram(vs_screen, fs_bright, false);
