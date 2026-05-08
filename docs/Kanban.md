@@ -4,6 +4,22 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 ---
 
+## ⚠️ Architectural Principles (read before adding cards)
+
+1. **Public API lives ONLY in `src/c/kernel/include/`.** C++ plugins under `src/cpp/<plugin>/` expose exactly one public C function: `ke_<plugin>_create()`. All other headers in `<plugin>/include/` are for cross-target sharing within the plugin. Anything internal to one target goes in `src/`. *(Codified in CLAUDE.md.)*
+
+2. **Kernel = building blocks, NEVER built blocks.** The kernel C provides primitives: ECS, vtable interfaces (`ke_render`, `ke_window`), allocator contract, logger contract. **It does not provide concrete systems, components, or implementations** — those grow infinitely with use cases and would bloat the kernel forever. Concrete systems live in higher-layer plugins (C++ or C#). The kernel cannot grow with every new feature.
+
+3. **Universal-or-nothing for cross-cutting features.** When considering a new capability for the kernel: if it can be implemented on every shipping target (Windows, Linux, macOS, iOS, Android, WebGL, consoles), it can go in the kernel. If it is fundamentally platform-specific (SEH, minidump, OS thread name), it goes in a dev-only plugin (`KernelEngine.DevPlatform.*`). If it cannot be implemented somewhere we ship, we probably don't want it.
+
+4. **No `malloc` directly.** Every component that allocates memory accepts an `ke_allocator*` via params. The user picks the allocator (malloc, arena, pool) per call site. There is no implicit global allocator.
+
+5. **No "factory" naming for non-polymorphic functions.** A factory `_create()` returns a polymorphic object with vtable + lifecycle. A function that just fills a struct is NOT a factory — name it `_init`, `_describe`, `_register`, etc.
+
+---
+
+---
+
 ## 📋 Todo
 
 ### Tier 1 — Verify & Stabilize (Current Focus)
@@ -16,6 +32,154 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
     1. Identify internal header for render system factories in `src/cpp/render/core`.
     2. Move factory declarations and implementations.
     3. Update C# bindings and Framework calls.
+
+#### [W.6] Move Internal-Only render/core Headers from `include/` to `src/`
+- **Tags**: `refactor`
+- **Why**: 8 of 10 `.hpp` files in `src/cpp/render/core/include/` are consumed only inside the same target (`ke_render_core`). Per project rule, headers internal to a single target belong in `src/`. Having them in `include/` wrongly suggests they are public plugin API and confuses tooling/install paths.
+- **What**: Move internal `.hpp` files from `include/` to `src/`. Two headers stay in `include/` because they're consumed cross-target by `bgfx_render_factory.cpp`: `core_renderer.hpp`, `native_systems.hpp`.
+- **Acceptance**: `find src/cpp/render/core/include -name '*.hpp'` lists only `core_renderer.hpp` and `native_systems.hpp`. Build passes; no external consumer breaks.
+- **Steps**:
+    1. Move 8 files: `clustered_forward.hpp`, `frame_submitter.hpp`, `geometry_manager.hpp`, `lighting_manager.hpp`, `post_process_pipeline.hpp`, `shader_provider.hpp`, `shadow_pipeline.hpp`, `texture_manager.hpp` → `src/cpp/render/core/src/`
+    2. **Caveat**: `core_renderer.hpp` (which stays in `include/`) currently includes 6 of these. Refactor to use forward declarations + PIMPL idiom OR `unique_ptr<Impl>` so the public class header doesn't need to see the internal types.
+    3. Update `#include` paths in all `.cpp` files (relative paths now).
+    4. Build + run example 05 to verify.
+
+#### [W.7] Move `get_last_fatal_error` from bgfx Plugin to `ke_render` Vtable
+- **Tags**: `refactor`, `bug` (Bug 1.27)
+- **Why**: `bgfx_render.h` exposes `ke_render_bgfx_get_last_fatal_error()` — a non-`_create` C function in a plugin's public header. Direct violation of the "plugin exposes only `_create`" rule. Application.cs calls this directly, coupling the generic Framework to bgfx. The capability (retrieving last error message) is universal — every backend has it (Vulkan, D3D, Metal, etc.). Belongs in the `ke_render` vtable, not in a backend-specific header.
+- **What**: Add `const char* (*get_last_fatal_error)(struct ke_render*)` to `ke_render` vtable. Each backend implements it. Remove `ke_render_bgfx_get_last_fatal_error` from `bgfx_render.h`. Update `Renderer.cs` wrapper. Update `Application.cs` to call via wrapper instead of via `Bgfx.Native`.
+- **Acceptance**: `bgfx_render.h` only exports `ke_render_bgfx_create`. `Application.cs` has zero references to `KernelEngine.Render.Bgfx.Native`.
+- **Steps**:
+    1. Add `get_last_fatal_error` to `ke_render` struct in `src/c/kernel/include/.../render/render.h`.
+    2. Implement in `core_renderer.cpp` (delegating to existing `GetLastFatalError()`).
+    3. Wrap in `Renderer.cs` as `Renderer.GetLastFatalError() : string?`.
+    4. Update `Application.GetGpuFatalError()` to use `Renderer.GetLastFatalError()`.
+    5. Remove function from `bgfx_render.h` + `bgfx_render_factory.cpp`.
+    6. Regenerate bindings; build + test.
+
+#### [W.8] Rename Namespace `kernel_engine::render::bgfx` → `kernel_engine::render::core` for `render/core/` Files
+- **Tags**: `refactor`, `bug` (Bug 1.30)
+- **Why**: All 10 `.hpp`/`.cpp` files under `src/cpp/render/core/` use namespace `kernel_engine::render::bgfx`. This is a leftover from the early days when `core` and `bgfx` were the same library. These classes (`MeshSystem`, `LightSystem`, `CameraSystem`, `ShadowSystem`, `SkyboxSystem`, `ClusteredForward`, `CoreRenderer`, `FrameSubmitter`, `PostProcessPipeline`, `ShadowPipeline`, `ShaderProvider`, `GeometryManager`, `LightingManager`, `TextureManager`) are conceptually universal — they only call `ke_render*` vtable methods, never bgfx-specific code. The namespace is misleading and tells future readers "this is bgfx code" when it isn't.
+- **What**: Replace `namespace kernel_engine::render::bgfx` with `namespace kernel_engine::render::core` in every file under `src/cpp/render/core/`. Update `using namespace` and qualified references in `bgfx_render_factory.cpp` accordingly.
+- **Acceptance**: `grep -rln 'kernel_engine::render::bgfx' src/cpp/render/core/` returns nothing. Build passes; example 05 runs.
+- **Steps**:
+    1. Mechanical sed across `src/cpp/render/core/` files.
+    2. Update `bgfx_render_factory.cpp` (which uses `kernel_engine::render::bgfx::CoreRenderer` etc.) to use the new namespace.
+    3. Same for any other consumer (verify with grep).
+    4. Build + test.
+
+*Note*: Files truly bgfx-specific (`BgfxGpuDevice` in `src/cpp/render/bgfx_device/`) keep `kernel_engine::render::bgfx` — that's correct.
+
+#### [W.9] Promote `render/core` to Standalone Agnostic Plugin — Eliminate "system factory" Pattern
+- **Tags**: `refactor`, `bug` (Bug 1.28, 1.29)
+- **Why**: `bgfx_system_factory.h` exports 5 functions called "factories" — they are NOT polymorphic factories like the legitimate `ke_<plugin>_create()`. They just fill a `ke_system_params` struct with function pointers. Misleading naming; violates "plugin exposes only `_create`"; names them `ke_render_bgfx_*` when underlying classes are universal.
+- **Architectural principle (locked 2026-05-08)**: **Kernel C = building blocks, never built blocks.** Components and systems can grow infinitely; the kernel cannot grow with them. Therefore systems do NOT belong in the kernel — they belong in a higher layer (C++ above kernel, or C#). The kernel exposes only the ECS + vtable interfaces (`ke_world`, `ke_render`); backends implement the vtable; systems live above and consume the vtable.
+- **What**: Promote `src/cpp/render/core/` from "static sublib of bgfx plugin" to a standalone shared-lib plugin (`KernelEngine.Render.Core`). It exports a single `_create`-style entry point that bundles default render systems registered into a world. The bgfx plugin becomes purely a `ke_render` vtable implementation. Framework C# uses `KernelEngine.Render.Core` for system registration, never `Bgfx.Native`.
+- **Acceptance**: `bgfx_system_factory.h` deleted. Zero "factory" functions for non-polymorphic things. `render/core` exports one C entry point that takes a `world*` + `ke_render*` and registers the default systems. Adding a new backend = implement `ke_render` vtable + reuse `render/core` unchanged.
+- **Steps**:
+    1. Convert `ke_render_core` from STATIC to SHARED library; expose a single public header in `src/cpp/render/core/include/kernel_engine/render/core/render_core.h` with one C function: `ke_render_core_register_default_systems(ke_world* world, ke_render* renderer, /* dependencies struct */)`.
+    2. Move all classes from namespace `kernel_engine::render::bgfx` to `kernel_engine::render::core` (W.8 already plans this).
+    3. Move internal-only `.hpp` files from `core/include/` to `core/src/` (W.6 already plans this).
+    4. Delete `bgfx_system_factory.h` from bgfx plugin.
+    5. Delete `BgfxSystemParamsFactory.cs`; create thin C# wrapper for the new `_register_default_systems` function.
+    6. Update `Application.cs` to call `Renderer.RegisterDefaultSystems(world, ...)` or equivalent.
+    7. Validate with example 05.
+- **Effort**: L (3–5 days). Subsumes W.6 + W.8 partially.
+- **Side benefit**: Eliminates A.1, A.2, A.4, A.5; cleans namespace; removes coupling Framework→Bgfx.Native.
+
+*Decision rationale (locked 2026-05-08)*:
+- ~~Option A: Rename + expose from internal lib~~ — keeps misleading "factory" naming.
+- ~~Option B: C wrapper functions in kernel pointing to C++ classes~~ — partial fix; kernel still grows.
+- ~~Option 3a: Move systems to pure C in kernel~~ — **rejected**: violates "kernel = building blocks". Kernel cannot host every possible system.
+- ✅ **Option 3b (chosen)**: Promote `render/core` to standalone agnostic plugin. Kernel stays minimal; systems live in their own plugin layer; bgfx becomes pure device. Aligned with engine philosophy.
+
+#### [W.10] Audit `bgfx_shader_compiler` Plugin (Class in Public Header + Wrong Extensions)
+- **Tags**: `refactor`, `bug` (Bug 1.31, partial 1.33)
+- **Why**: `bgfx_shader_compiler.hh` exposes the entire `BgfxShaderCompiler` C++ class in the public header — a class that is only used internally by `bgfx_shader_compiler.cc`. Plus extensions are `.hh`/`.cc` instead of `.hpp`/`.cpp` (violates documented convention). Plus uses generic `KE_API` macro instead of plugin-specific `KE_SHADER_COMPILER_API`.
+- **What**: Move `BgfxShaderCompiler` class declaration to a private `.hpp` next to the `.cpp`. Public header keeps only `ke_shader_compiler_bgfx_create`. Rename `.hh` → `.hpp`, `.cc` → `.cpp`. Define proper plugin-specific export macro.
+- **Acceptance**: `bgfx_shader_compiler.h` (note `.h` for the C ABI public file) contains only `_create` declaration + `_params` struct. `BgfxShaderCompiler` class lives in `src/`.
+- **Steps**:
+    1. Rename files: `.hh` → `.h` (public, C ABI), `.cc` → `.cpp`.
+    2. Extract `BgfxShaderCompiler` class to `src/cpp/render/bgfx_shader_compiler/src/bgfx_shader_compiler.hpp`.
+    3. Define `KE_SHADER_COMPILER_API` export macro (own export header).
+    4. Update CMakeLists `target_sources` for new file names.
+    5. Build + test.
+
+#### [W.11] Fix File Extensions (`.hh` → `.hpp`, `.cc` → `.cpp`)
+- **Tags**: `chore`
+- **Why**: `ProjectGuidelines.md` mandates `.hpp`/`.cpp` for C++ and `.h`/`.c` for C. Three files violate: `bgfx_shader_compiler.hh`, `bgfx_shader_compiler.cc`, `glfw_window.hh` (this last one is C ABI public — should be `.h`).
+- **What**: Rename the 3 files; update CMakeLists, includes, and any other reference.
+- **Acceptance**: `find src -name '*.hh' -o -name '*.cc'` returns nothing.
+- **Steps**:
+    1. `git mv` the 3 files to correct extensions.
+    2. Search-and-replace `#include` references.
+    3. Update `target_sources` in affected CMakeLists.
+    4. Update `.rsp` files for bindings.
+    5. Build + test.
+
+*Note*: Items 1–4 of this card may already be subsumed by W.10 (shader_compiler) — keep this card focused on `glfw_window.hh` if W.10 lands first.
+
+#### [W.12] Rename PascalCase Filenames to snake_case (16 files)
+- **Tags**: `chore`
+- **Why**: `ProjectGuidelines.md` says "Files MUST use snake_case". 16 files violate, all created early in the project before convention was enforced.
+- **What**: Rename to snake_case. Examples: `KeThread.cpp` → `ke_thread.cpp`, `AssimpLoader.hpp` → `assimp_loader.hpp`, `EnkiTaskScheduler.cpp` → `enki_task_scheduler.cpp`.
+- **Acceptance**: `find src/cpp src/c -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) | grep -E '/[A-Z]'` returns nothing.
+- **Steps**:
+    1. Files in threading: `KeFrameSync.{cpp,hpp}`, `KeSemaphore.{cpp,hpp}`, `KeThread.{cpp,hpp}` (6 files).
+    2. Files in assimp: `AssimpConverter.{cpp,hpp}`, `AssimpLoader.{cpp,hpp}`, `InternalHelpers.hpp`, `TextureDecoder.{cpp,hpp}` (7 files).
+    3. Files in enki: `EnkiTaskScheduler.{cpp,hpp}` (2 files).
+    4. Use `git mv` to preserve history. Update CMakeLists. Update `#include`.
+    5. Build + test.
+
+#### [W.13] Remove `using namespace` Violations (4 files)
+- **Tags**: `refactor`
+- **Why**: `ProjectGuidelines.md` says `using namespace` is "strictly FORBIDDEN". 4 files violate the rule, polluting global scope and risking name collisions.
+- **What**: Replace `using namespace X` with explicit `using X::specific_type` declarations OR fully qualify the usage.
+- **Acceptance**: `grep -rn '^using namespace ' src/cpp src/c --include='*.cpp' --include='*.hpp' --include='*.h'` returns nothing.
+- **Steps**:
+    1. `bgfx_render_factory.cpp:13` — replace `using namespace kernel_engine::render::bgfx` with explicit `using` decls.
+    2. `AssimpConverter.cpp:11`, `AssimpLoader.cpp:17`, `TextureDecoder.cpp:13` — same for `using namespace detail`.
+    3. Build + test (no behavior change expected).
+
+#### [W.15] Eliminate `src/csharp/Native/` Folder — Single Project per Plugin
+- **Tags**: `refactor`
+- **Why**: Today every plugin has 2 C# projects: `KernelEngine.<X>.Native` (bindings) + `KernelEngine.<X>` (managed wrapper + DI extension). Original intent was to keep auto-generated bindings isolated, expecting the wrapper layer to grow significantly. In practice, most wrapper projects contain only `ServiceCollectionExtensions.cs` (one method). The 2-project split is overengineering and adds boilerplate (.csproj, references, namespaces) for no benefit.
+- **What**: Consolidate into single project per plugin. Move auto-generated bindings from `src/csharp/Native/KernelEngine.<X>.Native/Generated/` to `src/csharp/KernelEngine.<X>/Native/`. Delete the `src/csharp/Native/` folder. Update `.rsp`, `.csproj`, `.slnx`, and any references.
+- **Acceptance**: `src/csharp/Native/` does not exist. Each plugin lives in `src/csharp/KernelEngine.<X>/` with `Native/` subfolder for auto-generated bindings. Build + tests + example 05 pass.
+- **Steps**:
+    1. For each `KernelEngine.<X>.Native` project: merge its content into `KernelEngine.<X>/Native/`.
+    2. Update `.rsp` `--output` path.
+    3. Update `csproj` removing the Native project reference (now the bindings are in the same project).
+    4. Update `.slnx` to remove old Native projects.
+    5. Adjust namespaces if needed (likely change `KernelEngine.<X>.Native` → `KernelEngine.<X>.Native` stays, just lives in same project).
+    6. Update `scripts/generate_bindings.py` if it depends on old paths.
+    7. Build + test.
+- **Effort**: M (1 day). Mechanical but touches every plugin.
+
+#### [W.16] Move `ke_console_sink_create` Out of the Kernel
+- **Tags**: `refactor`, `bug` (Bug 1.38)
+- **Why**: `ke_console_sink_create` is implemented in `src/c/kernel/src/logger/console_sink.c` and declared in the kernel's public API. **It is an implementation detail** (printf to stderr) — not a kernel building block. By the principle "kernel = building blocks, not built blocks", a concrete sink implementation does not belong in the kernel.
+- **What**: Decide between:
+    - **Option A**: Move to a new C++ plugin `KernelEngine.Logging.Console` (parallel to `KernelEngine.Logging.Serilog`). Exposes `ke_logger_sink ke_console_sink_create(...)` via standard plugin pattern.
+    - **Option B**: Implement in C# directly inside `KernelEngine.Kernel.ConsoleSink` (already exists as a managed sink wrapper). Drop the C implementation entirely.
+- **Recommendation**: Option B. The C# `ConsoleSink` exists already (`src/csharp/KernelEngine.Kernel/ConsoleSink.cs`). Verify it covers the C variant's use cases; if yes, delete the C version. Saves a header, a .c file, a binding, and a layer.
+- **Acceptance**: `src/c/kernel/include/kernel_engine/kernel/logger/console_sink.h` deleted. `src/c/kernel/src/logger/console_sink.c` deleted. C consumers of `ke_console_sink_create` either rewritten or accept that console sinks are a C# concern.
+- **Steps**:
+    1. Audit C/C++ callers of `ke_console_sink_create` (likely just C examples).
+    2. If callers exist in C examples and we want to keep C-only logging support, go with Option A. Otherwise Option B.
+    3. Execute the chosen option. Delete the kernel files.
+    4. Build + test.
+
+#### [W.14] Misc Naming/Structure Cleanups
+- **Tags**: `chore`
+- **Why**: Several inconsistencies that don't fit existing cards but should be tracked.
+- **What** (each is a small independent fix):
+    1. Rename `KeTask.cs` → `KernelTask.cs` (consistency with `KernelThread`, `KernelException`, `KernelSemaphore`).
+    2. Rename `enki_task_scheduler_public.h` → `enki_task_scheduler.h` (suffix `_public` is redundant; everything in `include/` is public by definition).
+    3. Decide: consolidate threading into single `threading.h` exposing 3 factories (vs current 3 separate headers) — for consistency with bgfx/glfw/assimp/enki plugins which have 1 header.
+    4. Standardize `_export.h` location: either always at root of `include/` or always inside namespace path. Currently inconsistent (`asset_export.h`, `render_export.h`, `window_export.h` at root vs `threading_export.h` nested).
+- **Acceptance**: Each sub-item is verified individually.
+- **Steps**: Each sub-item is its own PR-sized change. Group or split as convenient.
 
 #### [Y.10] Bindings-drift Detection in CI
 - **Why**: Prevent runtime crashes caused by P/Invoke signatures being out-of-sync with C headers (Bug 1.25).
@@ -269,3 +433,17 @@ This table ensures all defects from the original Problem Catalog (1.1–1.26) ar
 | **1.24** | Thread Name Use-after-free | **[W.4] Microkernel Hardening** | ✅ Done |
 | **1.25** | Binding Sync Out-of-date | **[Y.10] Bindings-drift CI** | 📋 Todo |
 | **1.26** | EntryPointNotFound | **[W.4] Layer Boundary cleanup** | 🚧 In Progress |
+| **1.27** | Plugin header exports non-`_create` C function (`get_last_fatal_error`) | **[W.7] get_last_fatal_error → ke_render vtable** | 📋 Todo |
+| **1.28** | Plugin exports system factories as non-`_create` C functions (`bgfx_system_factory.h`) | **[W.9] Decide bgfx_system_factory fate** | 📋 Todo |
+| **1.29** | Framework C# directly couples to `Bgfx.Native` bindings | **[W.7] + [W.9]** (resolves naturally) | 📋 Todo |
+| **1.30** | Universal classes wrong namespace (`render::bgfx` for core/) | **[W.8] namespace rename** | 📋 Todo |
+| **1.31** | Internal-only `.hpp` in `include/` (8 files in render/core) + class in shader_compiler public header | **[W.6] + [W.10]** | 📋 Todo |
+| **1.32** | File extensions `.hh`/`.cc` violate convention (3 files) | **[W.10] + [W.11]** | 📋 Todo |
+| **1.33** | PascalCase filenames violate snake_case rule (16 files) | **[W.12] snake_case rename** | 📋 Todo |
+| **1.34** | `using namespace` (forbidden) — 4 violations | **[W.13] remove using namespace** | 📋 Todo |
+| **1.35** | Naming/structure inconsistencies (KeTask, _public suffix, threading split, _export.h locations, KE_API misuse) | **[W.14] misc cleanups** | 📋 Todo |
+| **1.36** | `KE_ID_*` macros declared but never used (cargo cult) | **[W.14] misc cleanups** (sub-item) | 📋 Todo |
+| **1.37** | Vtables expose internal pointers (allocator, logger) as public fields | **(no card yet)** — needs separate audit | 📋 Todo |
+| **1.38** | `ke_console_sink_create` doesn't belong in kernel | **[W.16] Move console_sink out of kernel** | 📋 Todo |
+| **1.39** | Two-project plugin architecture is overengineering | **[W.15] Eliminate Native/ folder** | 📋 Todo |
+| **1.40** | Hardcoded backend names in Framework error messages | **[W.14] misc cleanups** (sub-item) | 📋 Todo |
