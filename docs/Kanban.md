@@ -16,6 +16,8 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 5. **No "factory" naming for non-polymorphic functions.** A factory `_create()` returns a polymorphic object with vtable + lifecycle. A function that just fills a struct is NOT a factory — name it `_init`, `_describe`, `_register`, etc.
 
+6. **Engine owns the contract; external libraries do the heavy lifting.** Every feature category has a universal vtable in the kernel and one or more backend plugins wrapping mature external libraries (bgfx for rendering, Jolt/Box2D for physics, miniaudio/FMOD for audio, ozz for animation, ENet/GNS for networking, ImGui/RmlUi for UI). Engineering effort goes into API design and integration — not into reinventing wheels. Exception: trivially small domains (e.g., `ConsoleSink`) where a wrapper is heavier than the impl. *(See `docs/EngineRoadmap.md` for per-domain library recommendations.)*
+
 ---
 
 ---
@@ -217,14 +219,7 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
     2. Replace with `KernelException.ThrowIfFailed`.
     3. Add comments for intentional discards.
 
-#### [Z] Examples 06–13 Completion
-- **Why**: E2E verification of implemented rendering features (Shadows, Clustered Lights, PostFX).
-- **What**: Create runnable C# examples for every feature slice.
-- **Acceptance**: All examples 01–13 run and show expected visuals.
-- **Steps**:
-    1. Implement 06 (Shadows).
-    2. Implement 07–09 (Lights).
-    3. Implement 10–13 (PostFX, SSAO, Assets).
+*Note: Examples 06–13 (E2E verification) and Track X (depth prepass, KTX2, etc.) are tracked in [`EngineRoadmap.md`](EngineRoadmap.md) under M1 since they are product-level milestones, not bug/refactor work.*
 
 #### [U.1] VSync Configuration
 - **Why**: Allow performance benchmarking by uncapping framerate.

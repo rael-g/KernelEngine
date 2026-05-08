@@ -201,5 +201,7 @@ app.Run(services);
 
 ## Key docs
 
-- `docs/Architecture/08 - Engine Architecture Backlog.md` — comprehensive backlog: threading hardening (phases A–S), testing, tooling, rendering, observability, examples plan.
-- `docs/Development/ProjectGuidelines.md` — strict coding standards.
+- `docs/EngineRoadmap.md` — **product roadmap (M1–M5)**. What the engine does at each milestone + recommended external libraries per feature category. Read first to understand the strategic direction.
+- `docs/Kanban.md` — **active and pending work**. Architectural principles at top; cards with Why/What/Acceptance/Steps; bug-to-card mapping at bottom.
+- `docs/Architecture/08 - Engine Architecture Backlog.md` — **design rationale + bug catalog**. Detailed defect descriptions, target architecture, decisions log. NOT a status board.
+- `docs/Development/ProjectGuidelines.md` — **conventions and anti-patterns**. Plugin architecture, naming, header discipline, C# layer rules. The reference for code review.

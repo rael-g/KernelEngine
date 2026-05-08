@@ -66,6 +66,30 @@ A **factory** (`_create()`) returns a polymorphic object with vtable + lifecycle
 
 A function that just **fills a struct** with function pointers is NOT a factory — even if it looks similar. Name it `_init`, `_describe`, `_register`, etc. Don't use the same word for two different patterns; readers stop trusting the term.
 
+### 1.6. Engine owns the contract; external libraries do the heavy lifting
+
+For every feature category (rendering, physics, audio, animation, networking, UI, ...) the engine defines a **universal vtable in the kernel** and ships **backend plugins that wrap mature external libraries**. Engineering effort goes into API design and integration, NOT into reinventing wheels.
+
+Examples (some shipped, some planned):
+
+| Domain | Kernel vtable | External libs |
+|---|---|---|
+| Rendering | `ke_render` | bgfx (Vulkan/D3D/Metal/GL) |
+| Window | `ke_window` | GLFW |
+| Asset loading | `ke_asset_loader` | Assimp |
+| Task scheduler | `ke_task_scheduler` | enkiTS |
+| Logging | `ke_logger_sink` | Serilog (C#) |
+| Physics 3D (planned) | `ke_physics` | Jolt |
+| Physics 2D (planned) | `ke_physics_2d` | Box2D |
+| Audio (planned) | `ke_audio` | miniaudio, FMOD |
+| Animation (planned) | `ke_animation` | ozz-animation |
+| Networking (planned) | `ke_network` | GameNetworkingSockets, ENet |
+| UI (planned) | `ke_ui` | Dear ImGui, RmlUi |
+
+**Exceptions** to "use external lib": (a) no library covers the use case adequately; (b) all options have license incompatibility; (c) the domain is so trivial that a wrapper is heavier than the impl (e.g., `ConsoleSink` — a `printf` wrapper).
+
+See `docs/EngineRoadmap.md` for the full list of feature categories and recommended libraries per milestone.
+
 ---
 
 ## 2. Plugin architecture
