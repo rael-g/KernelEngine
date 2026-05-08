@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
+using System.Runtime.InteropServices;
 
 namespace KernelEngine.TaskScheduler.Enki.Native;
 

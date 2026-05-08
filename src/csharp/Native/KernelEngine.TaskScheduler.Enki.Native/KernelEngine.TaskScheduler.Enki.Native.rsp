@@ -5,11 +5,11 @@ KernelEngine.TaskScheduler.Enki.Native
 --libraryPath
 ke_task_scheduler_enki
 --include-directory
-../../../../cpp/task_scheduler/enki/include
-../../../../c/kernel/include
-../../../../..
+../../../c/kernel/include
+--include-directory
+../../../cpp/task_scheduler/enki/include
 --file
-../../../../cpp/task_scheduler/enki/include/kernel_engine/task_scheduler/enki/enki_task_scheduler_public.h
+../../../cpp/task_scheduler/enki/include/kernel_engine/task_scheduler/enki/enki_task_scheduler_public.h
 --methodClassName
 NativeMethods
 --prefixStrip
