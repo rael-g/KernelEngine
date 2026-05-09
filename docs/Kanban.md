@@ -24,7 +24,118 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 ## 📋 Todo
 
-### Tier 1 — Verify & Stabilize (Current Focus)
+### Tier 1 — Stabilization First (Current Focus)
+
+> **Stabilization plan, locked 2026-05-08.** Coverage at 30.8% lines / 25.2% branches; render pipeline & threading at 0%; 94-commit branch never merged. Before alternating refactor/feature/bug/test work, we run **5 sequential blocks** to make the engine safe to evolve. Cards inside the same block can be parallelized; blocks must complete in order.
+>
+> Status will be tracked per block. Completing all 5 blocks is the gate to start M2/M3 features.
+
+#### 🔧 BLOCK 1 — Close the long-lived branch (1–2 days)
+
+##### [W.9] Eliminate `bgfx_system_factory.h` (unblock the branch)
+*(Already detailed below. Pre-requisite for the rest of cleanup.)*
+
+##### [B1.1] Final validation pass + merge `feat/multithread-architecture` to main
+- **Tags**: `chore`
+- **Why**: 94 commits, never merged. Main has not diverged (verified). Every new commit on the branch increases blast radius of eventual merge.
+- **What**: Run full validation (build + ctests + dotnet test + example 05). On green, merge with `git merge --no-ff feat/multithread-architecture` from main.
+- **Acceptance**: `main` HEAD includes the branch's 94 commits via a single merge commit. Branch can be deleted safely.
+- **Steps**:
+    1. Verify W.9 done; no pending bgfx_system_factory.h work.
+    2. Run `cmake --build`, `ctest`, `dotnet test`, `dotnet run --project examples/csharp/05_skybox_ibl` — all must pass.
+    3. `git checkout main && git merge --no-ff feat/multithread-architecture -m "Merge branch 'feat/multithread-architecture' (94 commits — multithread hardening, Phases A–F, Tracks Y/P, layer-boundary cleanup)"`
+    4. Delete the branch locally and remote.
+- **Effort**: S (half day if W.9 done).
+
+---
+
+#### 🧪 BLOCK 2 — Test coverage where it hurts (3–5 days)
+
+> Goal: lift coverage from 30.8% to **≥ 60%** in critical paths. Currently render/threading/Application = 0%. Any change to these is currently unsafe.
+
+##### [B2.1] Unit tests for threading primitives (`KeThread`, `KeFrameSync`, `KeSemaphore`)
+- **Tags**: `test`
+- **Why**: 0% coverage today. Bug 1.24 (thread name use-after-free) shipped because no test guarded it.
+- **What**: xUnit/gtest tests for thread create/join/timeout, semaphore signal/wait, frame_sync producer/consumer.
+- **Acceptance**: ≥ 80% line coverage on `src/cpp/threading/src/`. Race-condition test harness for cross-thread scenarios.
+- **Effort**: M (1–2 days).
+
+##### [B2.2] Unit tests for `Application.cs` 3-thread orchestration
+- **Tags**: `test`
+- **Why**: Application is 5% covered. It's the most complex C# class (3 threads + DI + lifecycle). Bug 1.23 (deadlock) and Bug 1.26 (entry point) both ripple through it.
+- **What**: Mock-based tests for thread startup ordering, simReady deadlock prevention, shutdown sequence, exception propagation.
+- **Acceptance**: ≥ 60% line coverage on `Application.cs`. Tests prevent regression of Bugs 1.23 and 1.26.
+- **Effort**: M (1–2 days).
+
+##### [B2.3] Unit tests for cross-thread C# primitives (`SystemScheduler`, `ResourceCommandQueue`, `FrameSync`, `FramePacket`)
+- **Tags**: `test`
+- **Why**: All at 0–2% today. These are the data exchange spine between ke.sim/ke.render.
+- **Acceptance**: ≥ 70% line coverage on each.
+- **Effort**: M (1–2 days).
+
+---
+
+#### 🎨 BLOCK 3 — E2E examples 06–13 (3–5 days)
+
+> Examples ARE the integration tests for render features. Without them, shadows/clustered lights/postFX could regress and we'd never know.
+
+##### [B3.1] Example 06 — Shadow map verification
+- **Tags**: `feat`, `test` (E2E)
+- **Why**: Shadow map pipeline is implemented but unverified end-to-end. Last shadow regression took ~30min to diagnose.
+- **What**: Scene with directional light + box + ground plane. Box casts shadow on ground.
+- **Acceptance**: Visual: shadow visible, edges sharp, no z-fighting. Programmatic: golden-screenshot diff (Track T.2).
+- **Effort**: S (half day).
+
+##### [B3.2] Example 07–09 — Lights (point, spot, many)
+- **Tags**: `feat`, `test` (E2E)
+- **Acceptance**: Each runs at 60 FPS; correct illumination visible.
+- **Effort**: M (1 day).
+
+##### [B3.3] Example 10–11 — Post-FX (HDR/bloom, SSAO)
+- **Tags**: `feat`, `test` (E2E)
+- **Effort**: S (half day).
+
+##### [B3.4] Example 12–13 — Asset loading + full scene
+- **Tags**: `feat`, `test` (E2E)
+- **Effort**: M (1 day).
+
+---
+
+#### 🔬 BLOCK 4 — Profiler installed (1–2 days)
+
+##### [B4.1] Phase N — Tracy profiler integration
+- **Tags**: `feat` (observability)
+- **Why**: Without a profiler, debugging frame spikes / threading issues / wave imbalance still requires `printf`. Bug 1.23 took ~2 hours partly because there was no thread timeline view.
+- **What**: Embed Tracy client in C/C++ + C#. Mark zones around frame, wave, system, draw call.
+- **Acceptance**: Tracy connects to a running example, shows 3-thread timeline, system names visible per wave.
+- **Effort**: M (1–2 days). Tracy is mature, integration is mostly include + zone macros.
+
+---
+
+#### 🧹 BLOCK 5 — Architectural cleanup (2–3 days)
+
+> All the W.X cards already in this Kanban: W.6, W.7, W.8, W.10, W.11, W.12, W.13, W.14, W.15, W.16. Plus the remaining observability gaps Y.2, Y.3, Y.5.
+>
+> By doing these LAST in stabilization, we avoid mixing convention cleanup into critical bug-fixing periods.
+
+*Cards listed individually below — execute in any order within the block.*
+
+---
+
+#### 🚦 Gate to leave Tier 1
+
+After all 5 blocks complete:
+- Coverage ≥ 60% in render/threading/Application
+- All examples 01–13 pass
+- Profiler operational
+- All W.X cleanup done
+- Branch merged to main
+
+→ Then alternate `feat / refactor / bug / test` per the user's preferred cadence.
+
+---
+
+### Tier 1 — Cleanup cards (executed in BLOCK 5)
 
 #### [W.4] Layer Boundary Cleanup (Phase 2)
 - **Why**: Prevent `EntryPointNotFoundException` and binding confusion. Enforce strict microkernel architecture where plugins only expose a factory.
@@ -284,7 +395,33 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
     2. Add instrumentation to key engine milestones.
     3. Implement JSON exporter.
 
-### Tier 3 — Fast Prototyping Base
+### Tier 3 — Fast Prototyping Base (M2 — Godot-like Framework)
+
+> **All Tier 3 cards are blocked by Tier 1 stabilization (5 blocks).** They aim at Roadmap Milestone M2: framework usable like Godot.
+
+#### [M2.1] Signals (Node-to-Node Events)
+- **Tags**: `feat`
+- **Why**: Godot's signals are the standard for decoupled node communication. Without them, nodes either hard-couple or use a global event bus (anti-pattern).
+- **What**: Define a generic signal mechanism on `Node`: `node.Connect("damaged", target, "OnDamaged")` or C# events with managed dispatch. Decide between strongly-typed (C# events) vs string-keyed (Godot-style) — both have trade-offs.
+- **Acceptance**: Two nodes communicate via signal in an example; no direct reference required.
+- **Effort**: M (1–2 days). External lib option: not applicable; native C# events / pub-sub is sufficient.
+- **Roadmap milestone**: M2.
+
+#### [M2.2] Groups (Named Node Collections)
+- **Tags**: `feat`
+- **Why**: Godot pattern. `node.AddToGroup("enemies")` + `world.GetNodesInGroup("enemies")`. Used everywhere in Godot games.
+- **What**: ECS tag component (zero-size) + query API.
+- **Acceptance**: `Scene.AddNodeToGroup(node, "enemies")` works; query returns all members.
+- **Effort**: S (half day).
+- **Roadmap milestone**: M2.
+
+#### [M2.3] Autoload Singletons
+- **Tags**: `feat`
+- **Why**: Godot pattern. `GameManager` always available without lookup. Common need for global services in gameplay code.
+- **What**: Framework-level registry of "singleton nodes" instantiated at startup, accessible via `Autoload.Get<T>()`.
+- **Acceptance**: An "Autoload" registered in DI is injected/accessible from any scene without explicit lookup.
+- **Effort**: S.
+- **Roadmap milestone**: M2.
 
 #### [W.2] Composable Scene Format (.kscene)
 - **Why**: Move away from hardcoded C# setups. Allow data-driven scene composition.
@@ -303,7 +440,105 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
     1. Implement recursive instantiation logic.
     2. Handle property overrides on prefab instances.
 
-### Tier 4 — Deferred / Optimization
+### Tier 4 — Roadmap Features (M3–M5) and Optimization
+
+> **All Tier 4 cards are blocked by Tiers 1, 2, and 3.** Roadmap milestones M3 (gameplay categories — physics/audio/UI/animation), M4 (visual editor), M5 (networking & advanced). Each card here targets one external library wrapped in a kernel vtable, per architectural principle #6.
+
+#### 🎮 M3 — Gameplay Categories
+
+##### [M3.1] Physics 3D — `ke_physics` vtable + Jolt backend
+- **Tags**: `feat`
+- **Why**: M3 milestone gate. Most game genres need rigid body physics, collision, raycast.
+- **What**: Define `ke_physics` vtable (rigid body, collider shapes, world step, raycast). Backend plugin `KernelEngine.Physics.Jolt` wrapping JoltPhysics (modern, MIT, used by Horizon Zero Dawn).
+- **Acceptance**: Example with falling cubes onto a plane, raycast hit detection.
+- **Effort**: L (1–2 weeks).
+- **Roadmap milestone**: M3.
+
+##### [M3.2] Physics 2D — `ke_physics_2d` + Box2D backend
+- **Tags**: `feat`
+- **What**: 2D-specialized vtable. Box2D wrapper (mature, MIT).
+- **Effort**: M (3–5 days).
+- **Roadmap milestone**: M3. *Optional if 3D suffices for initial scope.*
+
+##### [M3.3] Audio — `ke_audio` vtable + miniaudio backend
+- **Tags**: `feat`
+- **What**: vtable for play/stop/volume/3D positional. Backend: miniaudio (single-header, public domain).
+- **Acceptance**: Example with positional audio (sound source moves with node).
+- **Effort**: M (3–5 days).
+- **Roadmap milestone**: M3.
+
+##### [M3.4] Animation — `ke_animation` vtable + ozz-animation backend
+- **Tags**: `feat`
+- **What**: Skeletal animation, blend trees, AnimationPlayer node. Backend: ozz-animation (MIT, industrial).
+- **Acceptance**: Example with rigged character playing walk + run blended.
+- **Effort**: L (1–2 weeks).
+- **Roadmap milestone**: M3.
+
+##### [M3.5] UI — `ke_ui` vtable + Dear ImGui (dev) + RmlUi (game) backends
+- **Tags**: `feat`
+- **What**: ImGui for dev/debug overlays; RmlUi (HTML/CSS-like, MIT) for retained game UI.
+- **Effort**: L (1–2 weeks for both backends).
+- **Roadmap milestone**: M3.
+
+##### [M3.6] Input action mapping
+- **Tags**: `feat`
+- **What**: Abstraction over raw key codes — actions like "jump", "fire" mapped to keyboard/gamepad/touch.
+- **Effort**: M.
+- **Roadmap milestone**: M3.
+
+##### [M3.7] Save/load system
+- **Tags**: `feat`
+- **What**: Serialize world state, components, with versioning.
+- **Effort**: M.
+- **Roadmap milestone**: M3.
+
+##### [M3.8] Particle system
+- **Tags**: `feat`
+- **What**: GPU compute via bgfx. Likely custom (no clear external lib for embedded engine).
+- **Effort**: L. Research first.
+- **Roadmap milestone**: M3.
+
+##### [M3.9] Tween / AnimationPlayer (framework-only)
+- **Tags**: `feat`
+- **What**: Procedural animation of properties over time. Pure C# implementation.
+- **Effort**: S–M.
+- **Roadmap milestone**: M3.
+
+#### 🎨 M4 — Visual Editor (entirely future)
+
+##### [M4.1] Editor app shell
+- **Tags**: `feat`
+- **What**: Separate solution `KernelEngine.Editor/` consuming engine as library. Tech decision pending: Avalonia / WinUI / browser-based.
+- **Effort**: XL.
+- **Roadmap milestone**: M4. **Decide tech before estimating sub-cards.**
+
+##### [M4.2] Scene inspector + property editor
+- **Roadmap milestone**: M4.
+
+##### [M4.3] Asset browser
+- **Roadmap milestone**: M4.
+
+##### [M4.4] Live preview (run game inside editor)
+- **Roadmap milestone**: M4.
+
+#### 🌐 M5 — Networking & Advanced
+
+##### [M5.1] Networking transport — `ke_network` + GameNetworkingSockets (Valve, BSD) or ENet
+- **Roadmap milestone**: M5.
+
+##### [M5.2] Replication framework
+- **Roadmap milestone**: M5. Built on top of `ke_network`.
+
+##### [M5.3] GPU-driven rendering (indirect draw, GPU culling)
+- **Roadmap milestone**: M5. Extends `ke_render`.
+
+##### [M5.4] Real-time GI (DDGI / lumen-likes)
+- **Roadmap milestone**: M5. Long-term R&D.
+
+##### [M5.5] Ray tracing
+- **Roadmap milestone**: M5. **Architectural decision needed**: bgfx doesn't expose RT — would need DX12/Vulkan direct backends.
+
+#### ⚙️ Tier 4 — Optimization (existing)
 
 #### [M] Frame Arena & Allocator Semantics
 - **Why**: Eliminate heap allocations on the hot path (Bug 1.14).
