@@ -1,10 +1,9 @@
+using KernelEngine.Asset.Assimp;
 using KernelEngine.Kernel;
-using KernelEngine.Framework;
-using System.Numerics;
 
-namespace KernelEngine.Asset.Assimp;
+namespace KernelEngine.Framework;
 
-public static class ModelHelper
+public static class AssimpModelExtensions
 {
     /// <summary>
     /// Uploads model data to the GPU and adds it to the scene.

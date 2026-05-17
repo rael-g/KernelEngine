@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="../KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <ProjectReference Include="../KernelEngine.Render.Core/KernelEngine.Render.Core.csproj" />
+    <ProjectReference Include="../KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
   </ItemGroup>
 
 </Project>

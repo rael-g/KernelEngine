@@ -12,7 +12,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
-    <ProjectReference Include="..\KernelEngine.Framework\KernelEngine.Framework.csproj" />
   </ItemGroup>
 
   <ItemGroup>
