@@ -9,7 +9,7 @@
 > - Making an architectural decision? Append to § 6 (Decisions Log).
 
 Section index:
-- § 1 — Problem Catalog (numbered bugs 1.1 to 1.52, with rationale and code references)
+- § 1 — Problem Catalog (numbered bugs 1.1 to 1.53, with rationale and code references)
 - § 2 — Target Architecture (design of where we want to be)
 - § 3 — API Migration Summary (breaking-change guide for consumers)
 - § 4 — Invariants (rules the architecture enforces by construction)
@@ -715,21 +715,16 @@ Public-API rules violated:
 
 **Status of `bgfx_render.h` half**: fixed in commit `9a87a37` (dead duplicates removed).
 
-**Status of `render_core.h` half**: partial fix in commit `2ffbc3a` — the dead
-`ke_render_core_register_default_systems` function (no callers) and its orphan
-`ke_render_core_systems_params` struct were deleted.
+**Status of `render_core.h` half**: fully fixed in commits `2ffbc3a` + `f98edc1`. After the
+intermediate compromise of keeping `*_describe` factories as an "extended ABI", the entire
+`render_core.h` was deleted along with the 5 C++ render systems (camera_system.cpp,
+light_system.cpp, mesh_system.cpp, shadow_system.cpp, skybox_system.cpp). The systems were
+ported to pure-managed C# in `KernelEngine.Framework`, eliminating the need for any public
+plugin ABI on render/core. The C++ library `ke_render_core` survives only as an internal
+pipeline support lib (CoreRenderer, GeometryManager, etc.) consumed by bgfx via C++ headers;
+it has zero public C entry points now.
 
-**Resolution for remaining 6 entry points**: the 5 `*_describe` factories + `shadow_system_set_map`
-are kept as the **extended public ABI** of the render_core plugin. Rationale: the C# wrapper
-assembly (`KernelEngine.Render.Core`) consumes them to materialize managed wrappers
-(`MeshRenderSystem`, etc.) that mirror the native systems. This isn't a "many factories like
-W.9 cleaned up" smell — it's a coherent system-descriptor surface where each function returns
-the same shape (`ke_system_params`) for one of N built-in render systems. The "one entry point
-per plugin" rule is intended to prevent unrelated factories piling up, not to forbid a tight
-group of mirror functions that share a single purpose.
-
-**No further action** on this bug; rename or further consolidation would force a heavier
-managed-side refactor with no clear win.
+See Bug 1.53 for the architectural shift that motivated this final cleanup.
 
 ---
 
@@ -821,6 +816,46 @@ be `public`. The queue is an implementation detail of the async-handle dispatch.
 `ResourceCommandFactory`; extensions use it without touching `.Queue`. Make `Queue` private.
 
 **Tracked in**: Kanban B5.5.
+
+---
+
+### 1.53 [ARCHITECTURE] Render systems migrated from C++ to pure-managed C# (RESOLVED)
+
+W.9 (2026-05-08) had chosen "Option 3b — promote render/core to a standalone plugin" as
+the location for the engine's built-in render systems (Mesh, Light, Camera, Shadow, Skybox).
+After implementation that option produced bad shape: a "plugin" with 6 public C entry points
+serving only one consumer (the `KernelEngine.Render.Core` C# wrapper assembly), plus duplicated
+component struct definitions across C kernel (`ke_*_component`) and C# (`*Component`) that had
+to be kept ABI-compatible by hand.
+
+**Architectural shift (2026-05-17)** — chose **Option 3c — pure-managed C# render systems**:
+
+- The 5 systems live in `KernelEngine.Framework` as `sealed class ... : ISystem` with the same
+  semantics as the C++ versions. Math uses helpers in `KernelEngine.Framework.Internal.Mat4`
+  that mirror `ke_mat4_*` (column-major, RH, Vulkan depth) for byte-identical output.
+- Domain components (Light, Mesh, Camera, Skybox, PointLight, SpotLight) live in C# Framework
+  as `[StructLayout(LayoutKind.Sequential)] struct`. Their `sizeof(T)` is what the C ECS
+  storage sees via `EcsRegistry.RegisterComponent<T>(name)`. No C duplicate.
+- C kernel `world/components.h` keeps only the **universal** components (`ke_transform_component`,
+  `ke_hierarchy_component`, `ke_name_component`, `ke_script_component`) — the ones read or
+  written by native systems (TransformSystem, ScriptSystem).
+- `ke_render_core` C++ library survives only as an internal pipeline support lib (CoreRenderer,
+  GeometryManager, etc.) consumed by render backend plugins via C++ headers in `src/`.
+- `KernelEngine.Render.Core` C# assembly deleted entirely.
+
+**Why this fits the engine philosophy better**:
+
+- "Kernel = building blocks, never built blocks" → render-specific components/systems are built
+  blocks, so they no longer pollute the kernel.
+- "Plugin exposes only `_create()`" → `render_core` no longer pretends to be a plugin; it's
+  now correctly framed as an internal C++ utility lib for backend implementers.
+- "Engine owns contract, libs do work" → contract (ke_render vtable, ke_system_params) stays
+  in C kernel; the work (ECS-query + populate frame packet) is plain code in C#, easy to
+  evolve, debug, and test without crossing language boundaries.
+- The Framework gains the freedom to add new domain systems/components without ever asking
+  the kernel to grow.
+
+**Migration commits**: `79990a1`, `49b8f1c`, `3febc79`, `4e7d841`, `c3fbe66`, `f98edc1`.
 
 ---
 

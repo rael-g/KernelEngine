@@ -171,7 +171,7 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 ##### [B5.2] Eliminate dup entry points in `render_core.h` (Bug 1.44) — RESOLVED
 - **Tags**: `refactor`, `bug` (Bug 1.44)
-- **Resolution** (commit `2ffbc3a`): deleted the dead `ke_render_core_register_default_systems` and its orphan `ke_render_core_systems_params` struct (no callers). The remaining 5 `*_describe` factories + `shadow_system_set_map` are kept as the **extended public ABI** of the render_core plugin — they're consumed by the C# `Render.Core` wrapper assembly to materialize managed mirror systems and represent a coherent system-descriptor surface, not the W.9-style miscellaneous-factories smell. See Backlog 1.44 for full rationale.
+- **Resolution** (commits `2ffbc3a`, `f98edc1`): the entire `render_core.h` public header was deleted along with the rest of the C++ render-systems infrastructure. The render systems were ported to pure-managed C# in `KernelEngine.Framework`, and the now-redundant `KernelEngine.Render.Core` C# wrapper assembly was deleted. `ke_render_core` C++ library survives only as an internal pipeline support lib (CoreRenderer, GeometryManager, etc.) consumed by bgfx via C++ headers; it has no public C ABI anymore.
 
 ##### [B5.3] Split `gpu_device.hpp` — separate abstract contract from bgfx concrete (Bug 1.50)
 - **Tags**: `refactor`, `bug` (Bug 1.50)
@@ -277,11 +277,13 @@ After all 5 blocks complete:
 - **Effort**: L (3–5 days). Subsumes W.6 + W.8 partially.
 - **Side benefit**: Eliminates A.1, A.2, A.4, A.5; cleans namespace; removes coupling Framework→Bgfx.Native.
 
-*Decision rationale (locked 2026-05-08)*:
+*Decision rationale*:
 - ~~Option A: Rename + expose from internal lib~~ — keeps misleading "factory" naming.
 - ~~Option B: C wrapper functions in kernel pointing to C++ classes~~ — partial fix; kernel still grows.
 - ~~Option 3a: Move systems to pure C in kernel~~ — **rejected**: violates "kernel = building blocks". Kernel cannot host every possible system.
-- ✅ **Option 3b (chosen)**: Promote `render/core` to standalone agnostic plugin. Kernel stays minimal; systems live in their own plugin layer; bgfx becomes pure device. Aligned with engine philosophy.
+- ~~Option 3b (locked 2026-05-08)~~: Promote `render/core` to standalone agnostic plugin. **Superseded** — the resulting plugin still leaked a public C ABI (6 entry points) and required a redundant C# wrapper assembly.
+- ✅ **Option 3c (locked 2026-05-17)**: Move the 5 render systems to **pure C# in `KernelEngine.Framework`**. The C++ `render/core` library survives only as an internal pipeline support lib (CoreRenderer, GeometryManager, etc.) consumed by bgfx; it no longer has any public ABI. `KernelEngine.Render.Core` C# assembly deleted entirely. Render-specific component structs (`ke_light_component`, `ke_mesh_component`, etc.) deleted from kernel C — they live in C# only.
+- **Migration commits**: `79990a1` (Camera), `49b8f1c` (Light), `3febc79` (Mesh), `4e7d841` (Skybox), `c3fbe66` (Shadow + Mat4 helper), `f98edc1` (delete dead C++/C/assembly).
 
 #### [W.10] Audit `bgfx_shader_compiler` Plugin (Class in Public Header + Wrong Extensions)
 - **Tags**: `refactor`, `bug` (Bug 1.31, partial 1.33)
