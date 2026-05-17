@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
-using KernelEngine.Render.Core;
 
 namespace KernelEngine.Framework;
 
@@ -282,21 +281,15 @@ public class Application : IDisposable
 
         var xformCid = ActiveWorld.TransformComponentId;
 
-        var systems = RenderCore.RegisterDefaultSystems(
-            ActiveWorld,
-            Renderer,
-            MeshNode.ComponentId,
-            xformCid,
-            LightNode.ComponentId);
-
-        // Pure-managed render systems (migration from C++ render/core in progress)
+        // All render systems are pure-managed now — render/core C++ is no longer in the pipeline.
         ActiveWorld.AddSystem(new CameraRenderSystem(CameraNode.ComponentId, xformCid));
         ActiveWorld.AddSystem(new LightRenderSystem(
             LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
         ActiveWorld.AddSystem(new MeshRenderSystem(MeshNode.ComponentId, xformCid));
         ActiveWorld.AddSystem(new SkyboxRenderSystem(SkyboxNode.ComponentId));
 
-        _shadowSystem = systems.Shadow;
+        _shadowSystem = new ShadowRenderSystem(LightNode.ComponentId, MeshNode.ComponentId, xformCid);
+        ActiveWorld.AddSystem(_shadowSystem);
     }
 
     // ── Service validation ────────────────────────────────────────────────────
