@@ -1,4 +1,4 @@
-#include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.hpp>
+#include "bgfx_shader_compiler_impl.hpp"
 #include <cstdio>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <new>
@@ -113,7 +113,7 @@ ke_result BgfxShaderCompiler::CompileShader(const char *file_path, const char *v
 extern "C"
 {
 
-    ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_params *params, ke_shader_compiler **out_compiler)
+    KE_SHADER_COMPILER_BGFX_API ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_params *params, ke_shader_compiler **out_compiler)
     {
         if (out_compiler == nullptr)
         {

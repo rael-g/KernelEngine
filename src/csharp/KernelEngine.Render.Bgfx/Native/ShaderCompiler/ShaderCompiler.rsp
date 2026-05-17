@@ -7,11 +7,12 @@ ke_shader_compiler_bgfx
 --include-directory
 ../../../../c/kernel/include
 --include-directory
-../../../cpp/render/bgfx_shader_compiler/include
+../../../../cpp/render/bgfx_shader_compiler/include
 --file
 ../../../../c/kernel/include/kernel_engine/kernel/common/error.h
 ../../../../c/kernel/include/kernel_engine/kernel/context/types.h
 ../../../../c/kernel/include/kernel_engine/kernel/render/shader_compiler.h
+../../../../cpp/render/bgfx_shader_compiler/include/kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.h
 --methodClassName
 NativeMethods
 --prefixStrip

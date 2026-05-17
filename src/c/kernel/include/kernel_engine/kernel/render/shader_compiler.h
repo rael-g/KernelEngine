@@ -12,6 +12,8 @@ extern "C"
 #define KE_ID_SHADER_COMPILER "ke_shader_compiler"
 
     /// @brief Service for compiling shader source files into engine-ready binaries.
+    ///        Vtable contract — concrete implementations live in plugins
+    ///        (e.g. `KernelEngine.Render.Bgfx`'s shader compiler).
     typedef struct ke_shader_compiler
     {
         void *handle;
@@ -24,30 +26,6 @@ extern "C"
                                     const char *varying_def_path, const char *type, const char *platform,
                                     const char *profile, const char **include_paths, size_t include_count);
     } ke_shader_compiler;
-
-    /// @brief Configuration for the BGFX shader compiler system.
-    typedef struct ke_shader_compiler_bgfx_params
-    {
-        struct ke_allocator *allocator;
-        struct ke_logger *logger;
-        const char *shaderc_path;
-    } ke_shader_compiler_bgfx_params;
-
-#ifndef KE_SHADER_COMPILER_API
-#ifdef KE_SHADER_COMPILER_STATIC
-#define KE_SHADER_COMPILER_API
-#else
-#ifdef KE_SHADER_COMPILER_EXPORT
-#define KE_SHADER_COMPILER_API KE_HELPER_EXPORT
-#else
-#define KE_SHADER_COMPILER_API KE_HELPER_IMPORT
-#endif
-#endif
-#endif
-
-    /// @brief Creates a BGFX shader compiler system instance.
-    KE_SHADER_COMPILER_API ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_params *params,
-                                                                    ke_shader_compiler **out_compiler);
 
 #ifdef __cplusplus
 }
