@@ -1,20 +1,11 @@
 #include <kernel_engine/render/bgfx/bgfx_render.h>
 #include <kernel_engine/kernel/render/render.h>
-#include <kernel_engine/kernel/world/system.h>
 #include <core_renderer.hpp>
 #include <gpu_device.hpp>
-#include <native_systems.hpp>
 #include <render_logging.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <bgfx/bgfx.h>
 #include <new>
-
-using kernel_engine::render::core::CoreRenderer;
-using kernel_engine::render::core::MeshSystem;
-using kernel_engine::render::core::LightSystem;
-using kernel_engine::render::core::CameraSystem;
-using kernel_engine::render::core::ShadowSystem;
-using kernel_engine::render::core::SkyboxSystem;
 
 extern "C" {
     KE_RENDER_BGFX_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render) {
@@ -50,43 +41,5 @@ extern "C" {
 
         *out_render = renderer->ToApi();
         return KE_OK;
-    }
-
-    KE_RENDER_BGFX_API const char* ke_render_bgfx_get_last_fatal_error() {
-        return kernel_engine::render::GetLastFatalError();
-    }
-
-    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_mesh_system_params(uint32_t mesh_cid, uint32_t transform_cid, ke_system_params *out_params) {
-        if (!out_params) return KE_ERROR_INVALID_ARGUMENT;
-        *out_params = kernel_engine::render::core::MeshSystem::GetDescription(mesh_cid, transform_cid);
-        return KE_OK;
-    }
-
-    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_light_system_params(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid, ke_system_params *out_params) {
-        if (!out_params) return KE_ERROR_INVALID_ARGUMENT;
-        *out_params = kernel_engine::render::core::LightSystem::GetDescription(light_cid, point_cid, spot_cid, transform_cid);
-        return KE_OK;
-    }
-
-    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_camera_system_params(uint32_t camera_cid, uint32_t transform_cid, ke_system_params *out_params) {
-        if (!out_params) return KE_ERROR_INVALID_ARGUMENT;
-        *out_params = kernel_engine::render::core::CameraSystem::GetDescription(camera_cid, transform_cid);
-        return KE_OK;
-    }
-
-    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_shadow_system_params(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_params *out_params) {
-        if (!out_params) return KE_ERROR_INVALID_ARGUMENT;
-        *out_params = kernel_engine::render::core::ShadowSystem::GetDescription(light_cid, mesh_cid, transform_cid);
-        return KE_OK;
-    }
-
-    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_skybox_system_params(uint32_t skybox_cid, ke_system_params *out_params) {
-        if (!out_params) return KE_ERROR_INVALID_ARGUMENT;
-        *out_params = kernel_engine::render::core::SkyboxSystem::GetDescription(skybox_cid);
-        return KE_OK;
-    }
-
-    KE_RENDER_BGFX_API void ke_render_bgfx_shadow_system_set_map(ke_system_params *params, ke_shadow_map_handle handle) {
-        kernel_engine::render::core::ShadowSystem::SetShadowMap(params, handle);
     }
 }
