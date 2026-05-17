@@ -9,11 +9,6 @@ extern "C"
 {
 #endif
 
-    /// @brief Handle 0 is always the built-in 1×1 white texture created at renderer init.
-/*
-#define KE_TEXTURE_HANDLE_WHITE ((ke_texture_handle){1})
-*/
-
 #ifdef __cplusplus
 }
 #endif
