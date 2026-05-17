@@ -294,6 +294,7 @@ public class Application : IDisposable
         ActiveWorld.AddSystem(new CameraRenderSystem(CameraNode.ComponentId, xformCid));
         ActiveWorld.AddSystem(new LightRenderSystem(
             LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
+        ActiveWorld.AddSystem(new MeshRenderSystem(MeshNode.ComponentId, xformCid));
 
         _shadowSystem = systems.Shadow;
     }
