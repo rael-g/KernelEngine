@@ -3,8 +3,8 @@
 #include <assimp/material.h>
 #include <assimp/texture.h>
 #include <assimp/scene.h>
-#include "AssimpConverter.hpp"
-#include "TextureDecoder.hpp"
+#include "assimp_converter.hpp"
+#include "texture_decoder.hpp"
 #include <kernel_engine/kernel/context/allocator.h>
 #include <cstdlib>
 #include <cstring>

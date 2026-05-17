@@ -1,4 +1,4 @@
-#include "KeThread.hpp"
+#include "ke_thread.hpp"
 #include <kernel_engine/threading/thread.h>
 #include <kernel_engine/kernel/threading/thread.h>
 

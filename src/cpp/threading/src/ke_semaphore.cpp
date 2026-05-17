@@ -1,4 +1,4 @@
-#include "KeSemaphore.hpp"
+#include "ke_semaphore.hpp"
 #include <kernel_engine/threading/semaphore.h>
 #include <kernel_engine/kernel/threading/semaphore.h>
 

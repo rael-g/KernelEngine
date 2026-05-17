@@ -1,7 +1,7 @@
 find_package(enkiTS CONFIG REQUIRED)
 
 add_library(ke_task_scheduler_enki
-    src/EnkiTaskScheduler.cpp
+    src/enki_task_scheduler.cpp
 )
 
 get_target_property(target_type ke_task_scheduler_enki TYPE)

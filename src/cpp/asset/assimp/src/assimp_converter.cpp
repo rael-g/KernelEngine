@@ -1,5 +1,5 @@
-#include "AssimpConverter.hpp"
-#include "InternalHelpers.hpp"
+#include "assimp_converter.hpp"
+#include "internal_helpers.hpp"
 #include <assimp/mesh.h>
 #include <assimp/material.h>
 #include <assimp/scene.h>

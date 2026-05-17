@@ -71,8 +71,8 @@ target_link_libraries(test_threading PRIVATE
 # 3. Asset Logic Tests
 add_executable(test_asset_logic
     test_asset_logic.cpp
-    ../../src/cpp/asset/assimp/src/AssimpConverter.cpp
-    ../../src/cpp/asset/assimp/src/TextureDecoder.cpp
+    ../../src/cpp/asset/assimp/src/assimp_converter.cpp
+    ../../src/cpp/asset/assimp/src/texture_decoder.cpp
 )
 
 target_include_directories(test_asset_logic PRIVATE 

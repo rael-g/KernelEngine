@@ -1,7 +1,7 @@
-#include "AssimpLoader.hpp"
-#include "AssimpConverter.hpp"
-#include "TextureDecoder.hpp"
-#include "InternalHelpers.hpp"
+#include "assimp_loader.hpp"
+#include "assimp_converter.hpp"
+#include "texture_decoder.hpp"
+#include "internal_helpers.hpp"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>

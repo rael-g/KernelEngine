@@ -1,8 +1,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#include "TextureDecoder.hpp"
-#include "InternalHelpers.hpp"
+#include "texture_decoder.hpp"
+#include "internal_helpers.hpp"
 #include <assimp/texture.h>
 #include <cstring>
 #include <cstdlib>
