@@ -12,7 +12,6 @@
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Render.Bgfx\KernelEngine.Render.Bgfx.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Render.Core\KernelEngine.Render.Core.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Asset.Assimp\KernelEngine.Asset.Assimp.csproj" />
   </ItemGroup>

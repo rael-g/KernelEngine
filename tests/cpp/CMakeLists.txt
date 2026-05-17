@@ -31,9 +31,7 @@ target_link_libraries(test_cpp_services PRIVATE
 )
 
 # 2. Logic Unit Tests (Sources based for 100% coverage reliability)
-# Only including systems that are proven to build and run stable
 add_executable(test_renderer_logic
-    test_native_systems.cpp
     test_geometry_manager.cpp
 )
 

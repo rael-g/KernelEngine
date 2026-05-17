@@ -3,7 +3,6 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/math.h>
-#include <kernel_engine/kernel/common/handles.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -13,6 +12,12 @@ extern "C"
 #endif
 
     typedef uint64_t ke_entity;
+
+    // ── Universal components (consumed by built-in native systems) ─────────
+    // Domain-specific components (lighting, mesh, camera, skybox) live in the
+    // language layer that owns the system that consumes them. The kernel only
+    // declares components whose layout it relies on at the C level — i.e.,
+    // components read or written by native systems (TransformSystem, ScriptSystem).
 
     // ── Transform ───────────────────────────────────────────────────────────
 
@@ -40,54 +45,6 @@ extern "C"
     {
         char name[64];
     } ke_name_component;
-
-    // ── Mesh ────────────────────────────────────────────────────────────────
-
-    typedef struct ke_mesh_component
-    {
-        ke_mesh_handle     mesh_handle;
-        ke_material_handle material_handle;
-    } ke_mesh_component;
-
-    // ── Skybox ──────────────────────────────────────────────────────────────
-
-    typedef struct ke_skybox_component
-    {
-        ke_texture_handle cubemap_handle;
-    } ke_skybox_component;
-
-    // ── Camera ──────────────────────────────────────────────────────────────
-
-    typedef struct ke_camera_component
-    {
-        float fov;
-        float near_z;
-        float far_z;
-        bool  orthographic;
-    } ke_camera_component;
-
-    // ── Lighting ────────────────────────────────────────────────────────────
-
-    typedef struct ke_light_component
-    {
-        float dir_x, dir_y, dir_z;
-        float r, g, b, intensity;
-    } ke_light_component;
-
-    typedef struct ke_point_light_component
-    {
-        float radius;
-        float r, g, b, intensity;
-    } ke_point_light_component;
-
-    typedef struct ke_spot_light_component
-    {
-        float range;
-        float dir_x, dir_y, dir_z;
-        float inner_angle;
-        float outer_angle;
-        float r, g, b, intensity;
-    } ke_spot_light_component;
 
     // ── Scripting ───────────────────────────────────────────────────────────
 

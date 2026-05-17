@@ -3,6 +3,7 @@ using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
+
 /// <summary>
 /// Pure-managed render system that publishes the active skybox cubemap into the frame packet.
 /// Replaces the legacy C++ SkyboxSystem.
@@ -21,14 +22,14 @@ public sealed unsafe class SkyboxRenderSystem : ISystem
         if (packet == null) return;
 
         var registry = world.Registry;
-        var skyboxes = registry.Query<ke_skybox_component>(_skyboxCid);
+        var skyboxes = registry.Query<SkyboxComponent>(_skyboxCid);
         if (skyboxes.Length == 0) return;
 
         var sky = skyboxes.Data[0];
-        if (sky.cubemap_handle.idx == uint.MaxValue) return;
+        if (!sky.CubemapHandle.IsValid) return;
 
         var raw = packet.NativePointer;
-        raw->skybox_handle = sky.cubemap_handle;
+        raw->skybox_handle = new ke_texture_handle { idx = sky.CubemapHandle.Value };
         raw->has_skybox = true;
     }
 

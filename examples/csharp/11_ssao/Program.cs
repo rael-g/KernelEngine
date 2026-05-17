@@ -2,7 +2,6 @@ using System.Numerics;
 using System.Diagnostics;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Render.Core;
 using KernelEngine.Framework;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;

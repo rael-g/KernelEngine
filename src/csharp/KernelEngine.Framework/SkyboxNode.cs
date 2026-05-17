@@ -1,5 +1,4 @@
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
@@ -16,7 +15,7 @@ public class SkyboxNode : Node
 
     internal static void Initialize(EcsRegistry registry)
     {
-        ComponentId = registry.RegisterComponent<ke_skybox_component>("ke_skybox");
+        ComponentId = registry.RegisterComponent<SkyboxComponent>("Skybox");
     }
 
     /// <summary>
@@ -28,7 +27,7 @@ public class SkyboxNode : Node
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue || !CubemapHandle.IsValid) return;
-        ref var comp = ref AddComponent<ke_skybox_component>(ComponentId);
-        comp.cubemap_handle = new ke_texture_handle { idx = CubemapHandle.Value };
+        ref var comp = ref AddComponent<SkyboxComponent>(ComponentId);
+        comp.CubemapHandle = CubemapHandle;
     }
 }

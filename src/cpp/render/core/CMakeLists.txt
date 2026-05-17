@@ -8,13 +8,12 @@ add_library(ke_render_core SHARED
     src/clustered_forward.cpp
     src/shader_provider.cpp
     src/frame_submitter.cpp
-    src/render_core.cpp
-    src/mesh_system.cpp
-    src/light_system.cpp
-    src/camera_system.cpp
-    src/shadow_system.cpp
-    src/skybox_system.cpp
 )
+
+# render/core is a backend support library used by render plugins (bgfx, future Vulkan/DX12, ...).
+# It exposes no public C ABI of its own — callers include the C++ headers from include/ + src/
+# directly. The previous public surface (the 5 *_describe factories) was deleted along with the
+# C++ render systems, which were ported to pure-managed C# in KernelEngine.Framework.
 
 target_compile_definitions(ke_render_core PRIVATE KE_RENDER_CORE_EXPORT)
 
@@ -40,5 +39,3 @@ install(TARGETS ke_render_core
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
-
-install(DIRECTORY include/ DESTINATION include)

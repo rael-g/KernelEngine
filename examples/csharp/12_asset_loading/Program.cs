@@ -1,7 +1,6 @@
 using System.Numerics;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Render.Core;
 using KernelEngine.Framework;
 using KernelEngine.Window.Glfw;
 using KernelEngine.Asset.Assimp;
