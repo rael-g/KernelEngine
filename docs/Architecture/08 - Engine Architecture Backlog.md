@@ -9,7 +9,7 @@
 > - Making an architectural decision? Append to § 6 (Decisions Log).
 
 Section index:
-- § 1 — Problem Catalog (numbered bugs 1.1 to 1.40, with rationale and code references)
+- § 1 — Problem Catalog (numbered bugs 1.1 to 1.52, with rationale and code references)
 - § 2 — Target Architecture (design of where we want to be)
 - § 3 — API Migration Summary (breaking-change guide for consumers)
 - § 4 — Invariants (rules the architecture enforces by construction)
@@ -592,6 +592,226 @@ provide error message via the registration hook (each `AddXxxRenderer` registers
 string).
 
 **Tracked in**: Kanban W.14 (sub-item).
+
+---
+
+### 1.41 [HIGH] Render pipeline uses magic numbers extensively — bug-prone and unreadable
+
+The render pipeline is filled with literal hex bitmasks and integer view IDs with no symbolic
+names:
+
+```cpp
+ctx.gpu->SetState(0x0000000000000001ULL | 0x0000000000000008ULL, 0);  // WRITE_R | WRITE_A
+ctx.gpu->Submit(1 /*SCENE*/, prog, 0, false);                         // view 1
+ctx.gpu->SetViewClear(3, 0x0002, 0, 1.0f, 0);                         // view 3, DEPTH
+```
+
+This is unreadable, untypecheckable, and has caused at least one production-time bug:
+
+**Concrete incident (2026-05-16)**: the tonemap fullscreen pass used `SetState(WRITE_R | WRITE_A)`
+instead of `SetState(WRITE_RGBA)`. The G and B channels were dropped silently. Result: skybox
+rendered only red components, mirror quad appeared black, ~1 hour of debug to triangulate via
+shader-of-debug + state inspection. With named constants the bug would have been visible on
+first read.
+
+View IDs (0=shadow, 1=scene, 2=ssao, 3=brightpass, 4=blurH, 5=blurV, 6=tonemap) are spread
+across `core_renderer.cpp`, `frame_submitter.cpp`, `texture_manager.cpp`, `shadow_pipeline.cpp`,
+`post_process_pipeline.cpp` with no central enum. Renumbering or adding a view requires hunting
+every magic literal across the codebase.
+
+**Fix**: define `kStateWrite*`, `kStateDepthTest*`, `kStateBlend*`, `kStateCull*` constants and
+a `View` enum in `src/cpp/render/contract/include/gpu_state.hpp` (or extend `gpu_types.hpp`).
+Replace every magic number call site.
+
+**Tracked in**: Kanban B4.2.
+
+---
+
+### 1.42 [MEDIUM] `dotnet run --no-build` silently uses stale native DLLs after `cmake --build`
+
+After running `cmake --build --preset win` to recompile native code, `dotnet run --project ... --no-build`
+does NOT re-deploy the freshly-built native DLLs to the example's `bin/Debug/net10.0/` folder.
+The example launches with the *previous* `ke_render_core.dll` (or other native target). Symptoms
+are subtle: code changes that should change runtime behavior appear to have no effect, leading
+to wrong conclusions ("my fix didn't work, let me try another approach") when the fix actually
+works but was never deployed.
+
+**Concrete instances**:
+- During tonemap debug (2026-05-16), DIAG fprintf statements added to `core_renderer.cpp` produced
+  no output despite the file being recompiled. Cost: ~10 minutes investigating "why isn't my log
+  appearing" before noticing deployed-DLL mtime was older than build-DLL mtime.
+- The bug 1.25 follow-up rebuild had a similar incident.
+
+**Fix**: either
+- (a) drop `--no-build` from the standard workflow (force `dotnet build` every run, which propagates
+  native DLLs via the existing `NativeDependencies.targets` mechanism); cost is ~3s extra per
+  example launch
+- (b) add a `scripts/run_example.py` (or PowerShell) helper that compares mtimes of
+  `build/native/bin/ke_*.dll` against `examples/csharp/<X>/bin/Debug/net10.0/ke_*.dll` and copies
+  the newer ones (with a warning) before launching
+- (c) add a CI check that the deployed DLLs in each example bin folder are not older than the
+  corresponding native lib
+
+**Tracked in**: Kanban B1.5.
+
+---
+
+### 1.43 [HIGH] Managed wrappers and interfaces expose raw `ke_X*` pointers publicly
+
+`KernelEngine.Kernel/` wrappers (`Renderer`, `Window`, `World`, `Allocator`, `Logger`, `Input`,
+`DevPlatform`, `TaskScheduler`, `FramePacket`) all declare `public ke_X* Native { get; }` properties.
+Two public interfaces, `IRenderer` and `IWindow`, even put the raw pointer in the contract:
+`ke_render* Native { get; }`. This was justified as "needed for plugin DI extensions"
+(see MEMORY.md / project notes), but the consequence is that:
+
+- The framework layer (`KernelEngine.Framework/`) — and worse, **any consumer of the framework**
+  (game/editor code) — can dereference unmanaged pointers, defeating the layered architecture.
+- An interface like `IRenderer` is fundamentally a public contract; embedding `ke_render*` in it
+  binds every alternate implementation (mocks, in-process tests, future backends) to the C ABI
+  surface, which is the opposite of what an interface is supposed to abstract.
+- Even legitimate cross-plugin wiring (e.g., `AddBgfxRenderer` needs the underlying `ke_render*`
+  to fill the vtable) should happen via `internal` + `[InternalsVisibleTo("KernelEngine.Render.Bgfx")]`,
+  not via `public`.
+
+**Fix** (strong form — no leakage at all, not even `internal`):
+- Make every `Native` pointer field **`private`** inside the wrapper class. Not `public`, not
+  `internal`. The raw `ke_X*` must never escape the type that owns it.
+- Remove `ke_X*` members from every public interface (`IRenderer`, `IWindow`, etc.).
+- Every operation a *consumer* (framework, plugin, or game) needs to perform on the underlying
+  native object becomes a method on the wrapper itself. Examples:
+    - `KernelEngine.Render.Bgfx` no longer reads `renderer.Native` to wire its vtable; instead
+      `Renderer` exposes a method like `AttachBackend(BgfxBackendParams params)` (or the bgfx
+      plugin's `ke_render_bgfx_create` is called via a factory the wrapper itself owns).
+    - `World.AddSystem(ke_system_params)` already takes a value type — no pointer needed.
+    - Anything currently doing `world.Native->add_component(...)` becomes a method on `World`.
+- `InternalsVisibleTo` between Kernel and plugin assemblies is also forbidden by this fix: if
+  a plugin needs cross-assembly access, redesign the API so the wrapper itself exposes a typed
+  managed method.
+- Audit `KernelEngine.Framework`, plugin extensions, and `examples/csharp/**`: nothing should
+  contain `unsafe` blocks or `ke_X*` dereferences except inside the owning wrapper.
+
+**Acceptance**:
+- `grep -rn "public.*ke_.*\\*\\s+Native" src/csharp/` → no matches.
+- `grep -rn "internal.*ke_.*\\*\\s+Native" src/csharp/` → no matches.
+- `grep -rn "unsafe" examples/csharp/` and `src/csharp/KernelEngine.Framework/` → no matches
+  (or only inside well-justified, reviewed exceptions).
+- A game written purely against `KernelEngine.Framework` cannot obtain or dereference a `ke_X*`.
+
+**Tracked in**: Kanban B5.1 (Block 5 — API surface lockdown).
+
+---
+
+### 1.44 [HIGH] Plugin `render_core.h` exposes 6 public entry points (W.9 not eliminated, just moved)
+
+The new `src/cpp/render/core/include/kernel_engine/render/core/render_core.h` declares six C entry
+points: `register_default_systems` + 5 `*_describe` factories + `shadow_system_set_map`. W.9 was
+supposed to **eliminate** the equivalent pattern (`bgfx_system_factory.h`); instead it was duplicated
+into render_core, and `bgfx_render.h` retained the same 7 duplicates until cleaned up.
+
+Public-API rules violated:
+- Plugin should expose **one** create entry point only; system params factories are internals.
+- Public C API for the engine lives in `src/c/kernel/include/`. Render.Core is a plugin, so its
+  public header should be a single small file with the create entry point and nothing else.
+
+**Status of `bgfx_render.h` half**: fixed in commit `9a87a37` (dead duplicates removed).
+
+**Fix for `render_core.h`**: keep `ke_render_core_register_default_systems` as the only public
+entry point. Move the 5 `*_describe` factories and `shadow_system_set_map` to an internal header
+inside `src/cpp/render/core/src/`. `RenderCore.cs` switches to calling `register_default_systems`
+directly without unpacking individual `*_describe` calls.
+
+**Tracked in**: Kanban B5.2.
+
+---
+
+### 1.45 [HIGH] `KernelEngine.Framework` had direct dependency on `KernelEngine.Render.Bgfx` (FIXED)
+
+`Application.cs` called `KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_get_last_fatal_error()`
+directly, and `Framework.csproj` had a `ProjectReference` to `Render.Bgfx`. Framework must be
+backend-agnostic.
+
+**Status**: Fixed in commit `a97d9a8` — Framework now calls `IRenderer.GetLastFatalError()`
+through the vtable; `Framework.csproj` no longer references `Render.Bgfx`.
+
+---
+
+### 1.46 [MEDIUM] `Asset.Assimp` plugin had reverse dependency on `Framework` (FIXED, with caveat)
+
+`Asset.Assimp.csproj` referenced `Framework`, and `ModelHelper.cs` (inside Assimp) used Framework
+types. A plugin must not know the Framework exists.
+
+**Status**: Fixed in commit `37b95dd` — `ModelHelper.cs` moved to
+`Framework/AssimpModelExtensions.cs`; `Asset.Assimp` no longer references Framework.
+
+**Caveat / follow-up**: Framework now references `Asset.Assimp` directly. Correct direction, but
+binds Framework to one asset loader. When a second loader appears, extract the helper into a bridge
+assembly (`KernelEngine.Framework.Assimp` or similar) so consumers opt in.
+
+---
+
+### 1.47 [LOW] Examples 07–13 created without authorization, orphaned from solution (PARTIAL)
+
+Junior agent created `examples/csharp/07_point_lights` through `13_full_scene` (7 projects) without
+prior discussion or validation. None were in `KernelEngine.slnx`, so they never compiled in CI and
+were never visually validated.
+
+**Status**: Added to `KernelEngine.slnx` and confirmed compile (commit `2131aa2`). Visual validation
+still pending — part of Kanban Block 3.
+
+---
+
+### 1.48 [LOW] `refactor_namespace.py` one-off script left in repo root (FIXED)
+
+30-line search-and-replace used during the contract namespace migration; not deleted after use.
+
+**Status**: Deleted in commit `2131aa2`.
+
+---
+
+### 1.49 [LOW] `*.csproj.lscache` files versioned (FIXED)
+
+VS Code C# Dev Kit puts per-project language-service cache in the project folder when
+`dotnet.projectsystem.cacheInProjectFolder: true`. Several files were committed by mistake.
+
+**Status**: Fixed in commit `2131aa2` — `*.csproj.lscache` added to `.gitignore`; existing files
+removed from index. Developers can also disable the source setting in their personal VS Code config.
+
+---
+
+### 1.50 [LOW] `gpu_device.hpp` mixes abstract contract and bgfx concrete implementation
+
+`src/cpp/render/contract/include/gpu_device.hpp` declares both abstract `GpuDevice` (in
+`kernel_engine::render`) and concrete `BgfxGpuDevice` (in `kernel_engine::render::bgfx`). Anyone
+including the abstract contract drags the bgfx-specific header dependency.
+
+**Fix**: split into `gpu_device.hpp` (abstract only) under contract, and `bgfx_gpu_device.hpp`
+(concrete) under `src/cpp/render/bgfx_device/`.
+
+**Tracked in**: Kanban B5.3.
+
+---
+
+### 1.51 [LOW] `ke_render_core` CMake target declares `cpp/render/contract/include` as PUBLIC include
+
+`src/cpp/render/core/CMakeLists.txt` adds the contract include directory as PUBLIC, so any consumer
+linking `ke_render_core` sees `gpu_device.hpp`, `gpu_types.hpp`, `render_logging.hpp` — internal
+headers that aren't part of the public ABI.
+
+**Fix**: change the include to `PRIVATE`.
+
+**Tracked in**: Kanban B5.4.
+
+---
+
+### 1.52 [LOW] `ResourceFactoryExtensions` reaches into `ResourceCommandFactory.Queue` publicly
+
+`ResourceFactoryExtensions.CreateMeshAsync` calls `rcf.Queue.Enqueue(...)`, requiring `.Queue` to
+be `public`. The queue is an implementation detail of the async-handle dispatch.
+
+**Fix**: add a `Task<uint> EnqueueAsync(ResourceCommandType, object)` method on
+`ResourceCommandFactory`; extensions use it without touching `.Queue`. Make `Queue` private.
+
+**Tracked in**: Kanban B5.5.
 
 ---
 

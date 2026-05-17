@@ -47,6 +47,13 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
     4. Delete the branch locally and remote.
 - **Effort**: S (half day if W.9 done).
 
+##### [B1.5] Eliminate the `dotnet --no-build` stale-DLL trap
+- **Tags**: `chore`, `bug` (Bug 1.42)
+- **Why**: Running `dotnet run --no-build` after a native C++ rebuild silently uses the previously-deployed `.dll` in `bin/Debug/net10.0/` — the rebuild does NOT propagate. Symptoms: edited C++ code but example shows old behavior. Multiple agents (and the senior reviewer) have wasted debug cycles on this exactly.
+- **What**: Either (a) drop `--no-build` from the standard run workflow (force `dotnet build` to copy fresh native DLLs), or (b) add a pre-run helper script that compares `build/native/bin/ke_*.dll` mtimes against the deployed copies in `examples/csharp/*/bin/Debug/net10.0/` and warns/copies on mismatch.
+- **Acceptance**: Running the example after a `cmake --build` always picks up the latest native code without manual `dotnet build`. CI catches stale-deploy as an error.
+- **Effort**: S (1–2 hours).
+
 ---
 
 #### 🧪 BLOCK 2 — Test coverage where it hurts (3–5 days)
@@ -101,7 +108,7 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 ---
 
-#### 🔬 BLOCK 4 — Profiler installed (1–2 days)
+#### 🔬 BLOCK 4 — Profiler + render observability (3–5 days)
 
 ##### [B4.1] Phase N — Tracy profiler integration
 - **Tags**: `feat` (observability)
@@ -110,15 +117,87 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 - **Acceptance**: Tracy connects to a running example, shows 3-thread timeline, system names visible per wave.
 - **Effort**: M (1–2 days). Tracy is mature, integration is mostly include + zone macros.
 
+##### [B4.2] Named constants for bgfx state bits + view IDs (replace magic numbers)
+- **Tags**: `refactor`, `bug` (Bug 1.41)
+- **Why**: Render code is full of `SetState(0x0000000000000001ULL | 0x0000000000000008ULL, 0)` and `Submit(1 /*SCENE*/, ...)`. Magic numbers are unreadable and silently wrong-by-typo. The visible-faces-only-red regression today was *literally* `WRITE_R | WRITE_A` instead of `WRITE_RGBA` — would have jumped off the page if it read `kStateWriteRA` vs `kStateWriteRGBA`. View IDs (0, 1, 2, 3, 6) are spread across `core_renderer.cpp`, `frame_submitter.cpp`, `texture_manager.cpp`, `shadow_pipeline.cpp`, `post_process_pipeline.cpp` with no central definition.
+- **What**: Add named constants in `src/cpp/render/contract/include/gpu_types.hpp` (or new `gpu_state.hpp`):
+    - `kStateWriteR`, `kStateWriteG`, `kStateWriteB`, `kStateWriteA`, `kStateWriteRGB`, `kStateWriteRGBA`
+    - `kStateDepthTestLess`, `kStateDepthTestLEqual`, `kStateDepthWrite`
+    - `kStateCullCw`, `kStateCullCcw`, `kStateMsaa`
+    - `kStateBlendAlpha`, `kStateBlendAdditive`
+    - View ID enum: `kViewShadow=0`, `kViewScene=1`, `kViewSsao=2`, `kViewBrightPass=3`, `kViewBlurH=4`, `kViewBlurV=5`, `kViewTonemap=6`
+    - Replace every magic-number call site (sed-able, ~30 sites).
+- **Acceptance**: `grep -nE 'SetState\(0x|Submit\(\s*[0-9]+\s*[,/]' src/cpp/render` returns nothing.
+- **Effort**: S–M (half-day to a day, mechanical).
+
+##### [B4.3] GPU framebuffer screenshot dump (debug-only)
+- **Tags**: `feat` (observability)
+- **Why**: When the rendered scene looks wrong, there's no way to see what each intermediate framebuffer contains (HDR FB, shadow map, bloom passes, SSAO buffer). Today's debug required substituting the tonemap shader with a fixed-color output to infer that "the tonemap quad never reached the screen". A 1-frame dump of all framebuffers as PNG would have shown immediately whether the HDR FB had the scene or not.
+- **What**: Add `Renderer.DumpFramebuffer(handle, path)` to managed wrapper + bgfx `requestScreenShot` integration. Plus an `Application` debug hotkey (F12?) that dumps every named framebuffer (`hdr_fb`, `shadow_map_<id>`, `bright_fb`, `blur_a_fb`, `blur_b_fb`, `ssao_fb`) to `screenshots/` for the next frame.
+- **Acceptance**: pressing F12 in any example produces a folder of PNGs, one per framebuffer, with descriptive names.
+- **Effort**: S (half day). bgfx already supports screenshot capture; we just need to wire it.
+
+##### [B4.4] Visual smoke test — golden-screenshot diff per example
+- **Tags**: `test`, `feat`
+- **Why**: "Tela branca", "tudo vermelho", "shadow disappeared", "post-process broke" — all classes of bug that take a human looking at the window to notice. Each one is a screenshot diff that CI can run. Without this, render regressions ship.
+- **What**: For each `examples/csharp/0X_*/`, capture a reference frame (after a known-good run) → `examples/csharp/0X_*/golden.png`. In CI (or `python scripts/run_tests.py`), run each example headless for N seconds, capture frame, compare against golden with pixel-tolerance threshold. Fail if diff > 2%.
+- **Acceptance**: CI fails when example 05 renders "all red and black" or "blank screen". Updating an intentional visual change requires regenerating the golden and committing it.
+- **Effort**: M (1–2 days). Need: headless capture path (bgfx supports), image diff lib (`SixLabors.ImageSharp` already in deps), CI step.
+- **Dependencies**: B4.3 (framebuffer dump) provides the capture mechanism.
+
 ---
 
 #### 🧹 BLOCK 5 — Architectural cleanup (2–3 days)
 
-> All the W.X cards already in this Kanban: W.6, W.7, W.8, W.10, W.11, W.12, W.13, W.14, W.15, W.16. Plus the remaining observability gaps Y.2, Y.3, Y.5.
+> All the W.X cards already in this Kanban: W.6, W.7, W.8, W.10, W.11, W.12, W.13, W.14, W.15, W.16. Plus the remaining observability gaps Y.2, Y.3, Y.5. Plus B5.1 below.
 >
 > By doing these LAST in stabilization, we avoid mixing convention cleanup into critical bug-fixing periods.
 
-*Cards listed individually below — execute in any order within the block.*
+##### [B5.1] Fully encapsulate native pointers inside wrappers — no `public`, no `internal` leakage (Bug 1.43)
+- **Tags**: `refactor`, `bug` (Bug 1.43)
+- **Why**: `KernelEngine.Kernel` wrappers (`Renderer`, `Window`, `World`, `Allocator`, `Logger`, `Input`, `DevPlatform`, `TaskScheduler`, `FramePacket`) expose `public ke_X* Native { get; }`. Worse, public interfaces (`IRenderer`, `IWindow`) embed raw pointers in their contract. This defeats the layered architecture — the framework and (worse) the framework's users can dereference unmanaged memory. An interface that contains a `ke_render*` is binding all alternate implementations to the C ABI, which is the opposite of what an interface should do. **`internal` is not enough**: cross-assembly trust via `InternalsVisibleTo` still leaks the unmanaged surface across the layer line. The wrapper must own the pointer fully and expose only managed methods.
+- **What**:
+    1. Make every `Native` pointer field **`private`** inside the wrapper class. No `public`, no `internal`.
+    2. Remove every `ke_X* Native` member from public interfaces.
+    3. Every operation a consumer (framework, plugin, game) needs to perform on the underlying native object becomes a method on the wrapper. Plugin extensions like `AddBgfxRenderer` should call wrapper-owned factory methods, not reach in for the pointer.
+    4. Forbid `[InternalsVisibleTo]` for native-pointer access between Kernel and plugins — if a plugin needs cross-assembly access, redesign so the wrapper exposes a typed managed method.
+    5. Audit `KernelEngine.Framework`, plugin extension assemblies, and `examples/csharp/**`: no `unsafe` blocks or `ke_X*` dereferences should remain except inside the owning wrapper.
+- **Acceptance**:
+    - `grep -rn "public.*ke_.*\\*\\s+Native" src/csharp/` → no matches.
+    - `grep -rn "internal.*ke_.*\\*\\s+Native" src/csharp/` → no matches.
+    - `grep -rn "unsafe" examples/csharp/` and `src/csharp/KernelEngine.Framework/` → no matches (or only well-justified, reviewed exceptions).
+    - A game written purely against `KernelEngine.Framework` cannot obtain or dereference a `ke_X*`.
+- **Effort**: L (2–3 days). Interface changes ripple through plugin assemblies; some currently-public APIs will need redesign to remove pointer leaks.
+
+##### [B5.2] Eliminate dup entry points in `render_core.h` (Bug 1.44)
+- **Tags**: `refactor`, `bug` (Bug 1.44)
+- **Why**: Plugin public header exposes 6 entry points. Plugin rule = one create entry point only.
+- **What**: Keep `ke_render_core_register_default_systems` public; move 5 `*_describe` + `shadow_system_set_map` to an internal header inside `src/cpp/render/core/src/`. Update `RenderCore.cs` to call `register_default_systems` directly without unpacking individual `*_describe`.
+- **Acceptance**: `render_core.h` declares exactly one entry point. C# build green. Examples 01–05 still render.
+- **Effort**: S (half day).
+
+##### [B5.3] Split `gpu_device.hpp` — separate abstract contract from bgfx concrete (Bug 1.50)
+- **Tags**: `refactor`, `bug` (Bug 1.50)
+- **Why**: Anyone including the abstract `GpuDevice` contract drags the concrete `BgfxGpuDevice` declaration via the same header.
+- **What**: Keep `gpu_device.hpp` with the abstract class only. Move `BgfxGpuDevice` declaration into `bgfx_gpu_device.hpp` under `src/cpp/render/bgfx_device/`. Update includes in `bgfx_render_factory.cpp` and the device source.
+- **Acceptance**: `gpu_device.hpp` has no `bgfx` mentions. `grep "BgfxGpuDevice" -r src/cpp/render/contract/` → no matches.
+- **Effort**: S.
+
+##### [B5.4] Make `ke_render_core` contract include PRIVATE (Bug 1.51)
+- **Tags**: `chore`, `bug` (Bug 1.51)
+- **Why**: PUBLIC include of `cpp/render/contract/include` leaks engine-internal headers to consumers.
+- **What**: Change `target_include_directories(ke_render_core PUBLIC ...)` so the contract path is `PRIVATE`. Verify consumers (bgfx_device) still compile via their own contract include.
+- **Acceptance**: A test consumer linking `ke_render_core` cannot `#include <gpu_device.hpp>` without explicit additional include path.
+- **Effort**: XS.
+
+##### [B5.5] Hide `ResourceCommandFactory.Queue`; expose `EnqueueAsync` instead (Bug 1.52)
+- **Tags**: `refactor`, `bug` (Bug 1.52)
+- **Why**: Extension method `ResourceFactoryExtensions.CreateMeshAsync` requires `Queue` public, leaking the dispatch mechanism.
+- **What**: Add `internal Task<uint> EnqueueAsync(ResourceCommandType type, object data)` on `ResourceCommandFactory`. Update extensions to use it. Make `Queue` private.
+- **Acceptance**: `grep "rcf.Queue" -r src/csharp/` → no matches. Extensions still functional.
+- **Effort**: XS.
+
+*Other cards listed individually below — execute in any order within the block.*
 
 ---
 
@@ -184,6 +263,7 @@ After all 5 blocks complete:
 *Note*: Files truly bgfx-specific (`BgfxGpuDevice` in `src/cpp/render/bgfx_device/`) keep `kernel_engine::render::bgfx` — that's correct.
 
 #### [W.9] Promote `render/core` to Standalone Agnostic Plugin — Eliminate "system factory" Pattern
+- **Status**: ✅ Done
 - **Tags**: `refactor`, `bug` (Bug 1.28, 1.29)
 - **Why**: `bgfx_system_factory.h` exports 5 functions called "factories" — they are NOT polymorphic factories like the legitimate `ke_<plugin>_create()`. They just fill a `ke_system_params` struct with function pointers. Misleading naming; violates "plugin exposes only `_create`"; names them `ke_render_bgfx_*` when underlying classes are universal.
 - **Architectural principle (locked 2026-05-08)**: **Kernel C = building blocks, never built blocks.** Components and systems can grow infinitely; the kernel cannot grow with them. Therefore systems do NOT belong in the kernel — they belong in a higher layer (C++ above kernel, or C#). The kernel exposes only the ECS + vtable interfaces (`ke_world`, `ke_render`); backends implement the vtable; systems live above and consume the vtable.
@@ -255,6 +335,7 @@ After all 5 blocks complete:
     3. Build + test (no behavior change expected).
 
 #### [W.15] Eliminate `src/csharp/Native/` Folder — Single Project per Plugin
+- **Status**: ✅ Done
 - **Tags**: `refactor`
 - **Why**: Today every plugin has 2 C# projects: `KernelEngine.<X>.Native` (bindings) + `KernelEngine.<X>` (managed wrapper + DI extension). Original intent was to keep auto-generated bindings isolated, expecting the wrapper layer to grow significantly. In practice, most wrapper projects contain only `ServiceCollectionExtensions.cs` (one method). The 2-project split is overengineering and adds boilerplate (.csproj, references, namespaces) for no benefit.
 - **What**: Consolidate into single project per plugin. Move auto-generated bindings from `src/csharp/Native/KernelEngine.<X>.Native/Generated/` to `src/csharp/KernelEngine.<X>/Native/`. Delete the `src/csharp/Native/` folder. Update `.rsp`, `.csproj`, `.slnx`, and any references.
@@ -624,6 +705,7 @@ After all 5 blocks complete:
 ---
 
 ## 📋 Tech Debt & Carry-Over
+- [ ] **Shadow projection bring-up** (example 06): shadow pipeline executes end-to-end (`Application` creates 1024² shadow map, `ShadowSystem` populates `packet.shadow.*`, `BeginShadowPass` runs, `u_lightVP`/`u_shadowParams` are now uploaded), but no shadow appears projected on the floor. Suspected: matrix convention mismatch between `ke_mat4_mul(p, v)` (row-major CPU) and `mul(u_lightVP, worldPos)` in `vs_basic.sc` (column-major GLSL), causing `v_shadowCoord` out of [0,1] so `ComputeShadow` always returns 1.0. Needs RenderDoc capture to confirm. Files: `src/cpp/render/core/src/shadow_pipeline.cpp`, `src/cpp/render/bgfx/shaders/vs_basic.sc`, `fs_basic.sc::ComputeShadow`.
 - [ ] Move SEH/Minidump code from `Application.cs` to `Win32DevPlatform` (Track P Wave 2).
 - [ ] `EntryPointNotFoundException` (Bug 1.26): Symptom patched; verified via W.4 movement.
 - [ ] **Bug 1.23**: Replace `simReady` spin-wait with `WaitHandle.WaitAny` on semaphores.
@@ -677,3 +759,5 @@ This table ensures all defects from the original Problem Catalog (1.1–1.26) ar
 | **1.38** | `ke_console_sink_create` doesn't belong in kernel | **[W.16] Move console_sink out of kernel** | 📋 Todo |
 | **1.39** | Two-project plugin architecture is overengineering | **[W.15] Eliminate Native/ folder** | 📋 Todo |
 | **1.40** | Hardcoded backend names in Framework error messages | **[W.14] misc cleanups** (sub-item) | 📋 Todo |
+| **1.41** | Render pipeline uses magic numbers extensively (state bits, view IDs, format codes) — bug-prone, unreadable. Concrete instance: `WRITE_R\|WRITE_A` typo caused "tudo vermelho ou preto" bug in tonemap on 2026-05-16 | **[B4.2] Named constants** | 📋 Todo |
+| **1.42** | `dotnet run --no-build` silently uses stale native DLL after `cmake --build` — multiple debug cycles wasted on "code rebuilt but no change" | **[B1.5] eliminate the stale-DLL trap** | 📋 Todo |
