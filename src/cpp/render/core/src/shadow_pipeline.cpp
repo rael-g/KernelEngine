@@ -1,12 +1,13 @@
-#include "../include/shadow_pipeline.hpp"
+#include "shadow_pipeline.hpp"
 #include <render_logging.hpp>
-#include "../include/geometry_manager.hpp"
+#include "geometry_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
 #include <cstring>
 #include <algorithm>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out)
@@ -57,6 +58,18 @@ ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_hand
     ctx.gpu->SetViewClear(3, 0x0002 /*DEPTH*/, 0, 1.0f, 0);
     ctx.gpu->SetViewTransform(3, v->m, p->m);
 
+    // Propagate light VP + shadow-enabled flag to the main scene shader uniforms.
+    // Without this, vs_basic computes v_shadowCoord = mul(0, worldPos) = 0 and the
+    // main pass either ignores shadow or returns NaN coordinates → tudo na sombra.
+    ke_mat4 light_vp;
+    ke_mat4_mul(&light_vp, p, v);
+    if (light_vp_uniform != kGpuInvalidHandle)
+        ctx.gpu->SetUniform(light_vp_uniform, light_vp.m, 1);
+    if (shadow_params_uniform != kGpuInvalidHandle) {
+        float sp[4] = { 1.0f, 0.0f, 0.0f, 0.0f }; // x = shadow-enabled
+        ctx.gpu->SetUniform(shadow_params_uniform, sp, 1);
+    }
+
     return KE_OK;
 }
 
@@ -104,4 +117,4 @@ void ShadowPipeline::Shutdown()
     shadow_maps_.clear();
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core
