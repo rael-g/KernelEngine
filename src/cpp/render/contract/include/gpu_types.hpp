@@ -8,7 +8,7 @@ struct ke_allocator;
 struct ke_logger;
 struct ke_window;
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render
 {
 
 // ── Abstract Handles (Opaque IDs) ───────────────────────────────────────────
@@ -83,4 +83,4 @@ struct GpuRendererParams
     bool            vsync;
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render

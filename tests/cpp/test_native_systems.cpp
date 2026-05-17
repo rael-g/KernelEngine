@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include "mocks.hpp"
 
-using namespace kernel_engine::render::bgfx;
+using namespace kernel_engine::render::core;
 
 class NativeSystemsTest : public ::testing::Test {
 protected:

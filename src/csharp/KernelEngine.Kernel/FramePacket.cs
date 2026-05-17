@@ -1,6 +1,5 @@
 using System.Numerics;
 using KernelEngine.Kernel.Native;
-using KernelEngine.Threading.Native;
 
 namespace KernelEngine.Kernel;
 

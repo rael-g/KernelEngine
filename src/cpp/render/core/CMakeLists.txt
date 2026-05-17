@@ -1,4 +1,4 @@
-add_library(ke_render_core STATIC
+add_library(ke_render_core SHARED
     src/core_renderer.cpp
     src/geometry_manager.cpp
     src/texture_manager.cpp
@@ -8,10 +8,15 @@ add_library(ke_render_core STATIC
     src/clustered_forward.cpp
     src/shader_provider.cpp
     src/frame_submitter.cpp
+    src/render_core.cpp
+    src/mesh_system.cpp
+    src/light_system.cpp
+    src/camera_system.cpp
+    src/shadow_system.cpp
+    src/skybox_system.cpp
 )
 
-# No need for KE_RENDER_EXPORT if it's static
-target_compile_definitions(ke_render_core PUBLIC KE_RENDER_STATIC)
+target_compile_definitions(ke_render_core PRIVATE KE_RENDER_CORE_EXPORT)
 
 target_include_directories(ke_render_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

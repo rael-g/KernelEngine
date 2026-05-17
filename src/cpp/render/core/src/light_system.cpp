@@ -4,7 +4,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 struct LightSystemContext {
@@ -115,4 +116,4 @@ ke_system_params LightSystem::GetDescription(uint32_t light_cid, uint32_t point_
     return desc;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

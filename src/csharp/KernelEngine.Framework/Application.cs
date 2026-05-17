@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Core;
 
 namespace KernelEngine.Framework;
 
@@ -22,8 +23,8 @@ public class Application : IDisposable
     public IServiceProvider Services { get; private set; } = null!;
     public Allocator Allocator { get; private set; } = null!;
     public Logger? Logger { get; private set; }
-    public Window Window { get; private set; } = null!;
-    public Renderer Renderer { get; private set; } = null!;
+    public IWindow Window { get; private set; } = null!;
+    public IRenderer Renderer { get; private set; } = null!;
     public Input? Input { get; private set; }
     public DevPlatform? DevPlatform { get; private set; }
 
@@ -93,9 +94,9 @@ public class Application : IDisposable
 
         // GLFW window must be created on the main thread.
         ValidateRequiredServices();
-        Window      = Services.GetRequiredService<Window>();
+        Window      = Services.GetRequiredService<IWindow>();
         Input       = Services.GetService<Input>();
-        Renderer    = Services.GetRequiredService<Renderer>();
+        Renderer    = Services.GetRequiredService<IRenderer>();
         DevPlatform = Services.GetService<DevPlatform>(); // optional dev-only diagnostics
 
         if (ActiveWorld == null)
@@ -283,18 +284,18 @@ public class Application : IDisposable
 
         var xformCid = ActiveWorld.TransformComponentId;
 
-        var meshSystem   = new MeshRenderSystem(BgfxSystemParamsFactory.CreateMeshSystemParams(MeshNode.ComponentId, xformCid));
-        var lightSystem  = new LightRenderSystem(BgfxSystemParamsFactory.CreateLightSystemParams(LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
-        var cameraSystem = new CameraRenderSystem(BgfxSystemParamsFactory.CreateCameraSystemParams(CameraNode.ComponentId, xformCid));
-        _shadowSystem = new ShadowRenderSystem(BgfxSystemParamsFactory.CreateShadowSystemParams(LightNode.ComponentId, MeshNode.ComponentId, xformCid));
-        var shadowSystem = _shadowSystem;
-        var skyboxSystem = new SkyboxRenderSystem(BgfxSystemParamsFactory.CreateSkyboxSystemParams(SkyboxNode.ComponentId));
+        var systems = RenderCore.RegisterDefaultSystems(
+            ActiveWorld, 
+            Renderer,
+            MeshNode.ComponentId, 
+            xformCid,
+            LightNode.ComponentId, 
+            PointLightNode.ComponentId, 
+            SpotLightNode.ComponentId, 
+            CameraNode.ComponentId, 
+            SkyboxNode.ComponentId);
 
-        ActiveWorld.AddSystem(meshSystem);
-        ActiveWorld.AddSystem(lightSystem);
-        ActiveWorld.AddSystem(cameraSystem);
-        ActiveWorld.AddSystem(shadowSystem);
-        ActiveWorld.AddSystem(skyboxSystem);
+        _shadowSystem = systems.Shadow;
     }
 
     // ── Service validation ────────────────────────────────────────────────────
@@ -303,8 +304,8 @@ public class Application : IDisposable
     {
         var missing = new List<(Type type, string hint)>
         {
-            (typeof(Window),   "AddGlfwWindow(width, height, title)"),
-            (typeof(Renderer), "AddBgfxRenderer(shaderPath)"),
+            (typeof(IWindow),   "AddGlfwWindow() or equivalent"),
+            (typeof(IRenderer), "AddBgfxRenderer() or equivalent"),
         };
 
         var errors = missing.Where(e => Services.GetService(e.type) == null).ToList();

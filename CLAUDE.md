@@ -181,7 +181,7 @@ app.Run(services);
 ### C / C++
 - **File extensions**: `.hpp`/`.cpp` for C++, `.h`/`.c` for C.
 - **Naming**: C++ — `PascalCase` types (Google C++ Style); C — `snake_case` with `ke_` prefix everywhere.
-- **Namespaces**: `kernel_engine::domain::subdomain`. `using namespace` is forbidden.
+- **Namespaces**: `kernel_engine::domain::subdomain`. Standard: `kernel_engine::render` for HAL contracts, `kernel_engine::render::core` for agnostic core, `kernel_engine::render::bgfx` for bgfx implementation. `using namespace` is forbidden in headers.
 - **Headers**: `#pragma once` always. Public API in `include/`; private impl headers next to `.cpp` files, never included externally.
 - **Formatting**: `BasedOnStyle: Microsoft` (`.clang-format` at root).
 - **Error handling**: return `ke_result`; no exceptions in the C layer. All callers must handle it.

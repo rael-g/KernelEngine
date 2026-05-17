@@ -16,7 +16,7 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         int width, int height, string title)
     {
-        services.AddSingleton<KernelEngine.Kernel.Window>(sp =>
+        services.AddSingleton<IWindow>(sp =>
         {
             var titlePtr = Marshal.StringToHGlobalAnsi(title);
             try

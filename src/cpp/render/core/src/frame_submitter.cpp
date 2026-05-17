@@ -1,16 +1,17 @@
-#include "../include/frame_submitter.hpp"
+#include "frame_submitter.hpp"
 #include "render_context.hpp"
-#include "../include/geometry_manager.hpp"
-#include "../include/lighting_manager.hpp"
-#include "../include/texture_manager.hpp"
-#include "../include/shadow_pipeline.hpp"
-#include "../include/post_process_pipeline.hpp"
+#include "geometry_manager.hpp"
+#include "lighting_manager.hpp"
+#include "texture_manager.hpp"
+#include "shadow_pipeline.hpp"
+#include "post_process_pipeline.hpp"
 #include "gpu_device.hpp"
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
 #include <kernel_engine/threading/thread.h>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 ke_result FrameSubmitter::Submit(RenderContext& ctx,
@@ -149,4 +150,4 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     return KE_OK;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

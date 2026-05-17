@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 struct CameraSystemContext {
@@ -64,4 +65,4 @@ ke_system_params CameraSystem::GetDescription(uint32_t camera_cid, uint32_t tran
     return desc;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

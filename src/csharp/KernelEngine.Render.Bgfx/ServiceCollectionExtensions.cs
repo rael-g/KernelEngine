@@ -17,7 +17,7 @@ public static class ServiceCollectionExtensions
         string shaderPath,
         bool vsync = true)
     {
-        services.AddSingleton<KernelEngine.Kernel.Renderer>(sp =>
+        services.AddSingleton<IRenderer>(sp =>
         {
             var shaderPtr = Marshal.StringToHGlobalAnsi(shaderPath);
             try
@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
                     {
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
-                        window = sp.GetRequiredService<KernelEngine.Kernel.Window>().Native,
+                        window = sp.GetRequiredService<IWindow>().Native,
                         shader_path = (sbyte*)shaderPtr,
                         vsync = (byte)(vsync ? 1 : 0),
                     };

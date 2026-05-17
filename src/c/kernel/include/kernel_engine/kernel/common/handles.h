@@ -36,11 +36,13 @@ extern "C"
         uint32_t idx;
     } ke_shadow_map_handle;
 
-#define KE_MESH_NONE ((ke_mesh_handle){KE_HANDLE_NONE})
-#define KE_TEXTURE_NONE ((ke_texture_handle){KE_HANDLE_NONE})
-#define KE_MATERIAL_NONE ((ke_material_handle){KE_HANDLE_NONE})
-#define KE_CUBEMAP_NONE ((ke_cubemap_handle){KE_HANDLE_NONE})
-#define KE_SHADOW_MAP_NONE ((ke_shadow_map_handle){KE_HANDLE_NONE})
+#ifndef CLANGSHARP
+#define KE_MESH_NONE       ((ke_mesh_handle){ KE_HANDLE_NONE })
+#define KE_TEXTURE_NONE    ((ke_texture_handle){ KE_HANDLE_NONE })
+#define KE_MATERIAL_NONE   ((ke_material_handle){ KE_HANDLE_NONE })
+#define KE_CUBEMAP_NONE    ((ke_cubemap_handle){ KE_HANDLE_NONE })
+#define KE_SHADOW_MAP_NONE ((ke_shadow_map_handle){ KE_HANDLE_NONE })
+#endif
 
     static inline bool ke_mesh_is_valid(ke_mesh_handle h)
     {

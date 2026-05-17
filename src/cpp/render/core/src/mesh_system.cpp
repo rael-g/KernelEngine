@@ -4,7 +4,8 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 struct MeshSystemContext {
@@ -67,4 +68,4 @@ ke_system_params MeshSystem::GetDescription(uint32_t mesh_cid, uint32_t transfor
     return desc;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

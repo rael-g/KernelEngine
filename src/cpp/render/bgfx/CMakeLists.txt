@@ -2,45 +2,20 @@
 add_library(ke_render_bgfx SHARED
     # Assembly
     src/bgfx_render_factory.cpp
-    
-    # Core Layer (Agnostic Logic)
-    ../core/src/core_renderer.cpp
-    ../core/src/geometry_manager.cpp
-    ../core/src/texture_manager.cpp
-    ../core/src/lighting_manager.cpp
-    ../core/src/shadow_pipeline.cpp
-    ../core/src/post_process_pipeline.cpp
-    ../core/src/clustered_forward.cpp
-    ../core/src/shader_provider.cpp
-    ../core/src/frame_submitter.cpp
-    ../core/src/mesh_system.cpp
-    ../core/src/light_system.cpp
-    ../core/src/camera_system.cpp
-    ../core/src/shadow_system.cpp
-    ../core/src/skybox_system.cpp
-    
-    # Device Layer (Bgfx Implementation)
-    ../bgfx_device/src/bgfx_gpu_device.cpp
 )
 
 find_package(bgfx CONFIG REQUIRED)
 
-target_link_libraries(ke_render_bgfx PUBLIC
+target_link_libraries(ke_render_bgfx PRIVATE
     ke_kernel
+    ke_render_core
+    ke_render_bgfx_device
     ke_threading
     bgfx::bgfx
-)
-
-target_link_libraries(ke_render_bgfx PRIVATE
     bgfx::bx
 )
 
-get_target_property(target_type ke_render_bgfx TYPE)
-if (target_type STREQUAL "STATIC_LIBRARY")
-    target_compile_definitions(ke_render_bgfx PUBLIC KE_RENDER_STATIC)
-else()
-    target_compile_definitions(ke_render_bgfx PRIVATE KE_RENDER_EXPORT)
-endif()
+target_compile_definitions(ke_render_bgfx PRIVATE KE_RENDER_BGFX_EXPORT)
 
 # UNIFIED INCLUDE SEARCH PATHS
 target_include_directories(ke_render_bgfx PUBLIC
@@ -53,8 +28,6 @@ target_include_directories(ke_render_bgfx PRIVATE
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
-    ../core/src
-    ../bgfx_device/src
 )
 
 if(KE_COVERAGE)

@@ -33,7 +33,7 @@ public sealed class ResourceCommandQueue
         _queue.Enqueue(command);
     }
 
-    public void Drain(Renderer renderer)
+    public void Drain(IRenderer renderer)
     {
         KernelThread.AssertCurrent("ke.render");
 

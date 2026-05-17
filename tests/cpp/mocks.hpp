@@ -2,8 +2,9 @@
 #include <gmock/gmock.h>
 #include <gpu_device.hpp>
 #include <shader_provider.hpp>
+#include <render_context.hpp>
 
-namespace kernel_engine::render::bgfx {
+namespace kernel_engine::render {
 
 class MockGpuDevice : public GpuDevice
 {
@@ -54,12 +55,16 @@ public:
     MOCK_METHOD(void, Dispatch, (uint16_t id, GpuProgramHandle program, uint32_t x, uint32_t y, uint32_t z), (override));
     MOCK_METHOD(void, SetPaletteColor, (uint8_t index, float r, float g, float b, float a), (override));
     MOCK_METHOD(uint16_t, CreateVertexLayout, (const void* bgfx_layout_ptr), (override));
+    MOCK_METHOD(const char*, GetLastFatalError, (), (override));
 };
+
+namespace core {
 
 class MockShaderProvider : public ShaderProviderInterface
 {
 public:
-    MOCK_METHOD(const GpuMemoryBuffer*, LoadShaderBinary, (struct RenderContext& ctx, const std::string& name), (override));
+    MOCK_METHOD(const GpuMemoryBuffer*, LoadShaderBinary, (core::RenderContext& ctx, const std::string& name), (override));
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace core
+} // namespace kernel_engine::render

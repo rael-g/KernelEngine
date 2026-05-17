@@ -1,4 +1,4 @@
-#include "../include/texture_manager.hpp"
+#include "texture_manager.hpp"
 #include <render_logging.hpp>
 #include "render_context.hpp"
 #include "gpu_device.hpp"
@@ -6,7 +6,8 @@
 #include <cstring>
 #include <algorithm>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 ke_result TextureManager::CreateTextureRgba(RenderContext& ctx, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out)
@@ -73,4 +74,4 @@ void TextureManager::Shutdown()
     textures_.clear();
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

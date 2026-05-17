@@ -1,0 +1,45 @@
+#pragma once
+
+#include <kernel_engine/kernel/render/render.h>
+#include "internal_types.hpp"
+#include "gpu_types.hpp"
+#include <vector>
+
+#include <kernel_engine/render/core/render_core_export.h>
+
+namespace kernel_engine::render::core
+{
+
+struct RenderContext;
+
+/**
+ * @brief Manages GPU texture resources using the HAL.
+ */
+class KE_RENDER_CORE_API TextureManager
+{
+public:
+    ke_result CreateTextureRgba(RenderContext& ctx, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out);
+    ke_result CreateCubemapRgba(RenderContext& ctx, uint32_t s, const uint8_t *d, ke_texture_handle *out);
+    ke_result DestroyTexture(RenderContext& ctx, ke_texture_handle handle);
+
+    ke_result SubmitSkybox(RenderContext& ctx, ke_texture_handle handle, render::GpuProgramHandle prog, render::GpuVertexBufferHandle vb, render::GpuIndexBufferHandle ib, render::GpuUniformHandle sampler, render::GpuUniformHandle tint);
+
+    void Shutdown();
+
+    render::GpuTextureHandle GetTextureIdx(ke_texture_handle handle) const;
+
+    render::GpuTextureHandle default_2d_tex         = render::kGpuInvalidHandle;
+    render::GpuTextureHandle default_cube_tex       = render::kGpuInvalidHandle;
+    render::GpuTextureHandle active_env_tex         = render::kGpuInvalidHandle;
+    render::GpuUniformHandle sampler_uniform        = render::kGpuInvalidHandle;
+    render::GpuUniformHandle ssao_blurred_uniform   = render::kGpuInvalidHandle;
+    render::GpuUniformHandle skybox_sampler_uniform = render::kGpuInvalidHandle;
+    render::GpuUniformHandle skybox_tint_uniform    = render::kGpuInvalidHandle;
+    
+    bool has_skybox = false;
+
+private:
+    std::vector<render::GpuTextureHandle> textures_;
+};
+
+} // namespace kernel_engine::render::core

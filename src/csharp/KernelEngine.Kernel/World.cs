@@ -77,6 +77,21 @@ public sealed unsafe class World : IDisposable
     private bool _schedulerDirty = true;
     private TaskScheduler? _taskScheduler;
 
+    /// <summary>The task scheduler used by this world for parallel execution.</summary>
+    public TaskScheduler? Scheduler
+    {
+        get
+        {
+            if (_taskScheduler == null && _native != null)
+            {
+                var nativeSched = _native->get_task_scheduler(_native);
+                if (nativeSched != null)
+                    _taskScheduler = new TaskScheduler(nativeSched);
+            }
+            return _taskScheduler;
+        }
+    }
+
     public void AddSystem(ISystem system)
     {
         _systems.Add(system);

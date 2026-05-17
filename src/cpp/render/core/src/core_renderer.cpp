@@ -17,7 +17,8 @@
 #include <stdarg.h>
 #include <algorithm>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 // ── CoreRenderer Implementation ───────────────────────────────────────────
@@ -181,6 +182,17 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->clustered_.SetClusterConfig(renderer_impl->ctx_, cfg);
     };
+    render_api_.get_last_fatal_error = [](ke_render *self) {
+        if (!self || !self->handle) return "Invalid renderer handle";
+        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
+        return renderer_impl->GetLastFatalError();
+    };
+}
+
+const char* CoreRenderer::GetLastFatalError()
+{
+    if (ctx_.gpu) return ctx_.gpu->GetLastFatalError();
+    return "No GPU device initialized";
 }
 
 CoreRenderer::~CoreRenderer()
@@ -339,6 +351,7 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
     try {
         if (!initialized_ || !ctx_.gpu || !packet) return KE_ERROR_NOT_INITIALIZED;
 
+
         // Extract near/far from proj matrix so clustered has current values.
         const float* p = packet->camera.proj.m;
         if (std::abs(p[10] - p[11]) > 0.0001f) {
@@ -366,8 +379,11 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
             post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
         }
 
-        // Post-process / tonemap.
-        if (post_process_.GetHdrFb() != kGpuInvalidHandle)
+        // Post-process / tonemap: only redirect view 1 to the HDR FB when tonemap is
+        // actually enabled. Otherwise view 1 must go straight to the backbuffer — if we
+        // redirect to HDR FB without running the tonemap composite, the backbuffer never
+        // receives the scene and the user sees garbage from previous frame state.
+        if (post_process_.IsTonemapEnabled() && post_process_.GetHdrFb() != kGpuInvalidHandle)
         {
             ctx_.gpu->SetViewFrameBuffer(1, post_process_.GetHdrFb());
             post_process_.SubmitPostProcess(ctx_, geometry_, textures_,
@@ -545,6 +561,14 @@ ke_result CoreRenderer::SetupShader()
     geometry_.skybox_vb = ctx_.gpu->CreateVertexBuffer(ctx_.gpu->Copy(kSkyVerts, sizeof(kSkyVerts)), kVertexLayoutPositionOnly);
     geometry_.skybox_ib = ctx_.gpu->CreateIndexBuffer(ctx_.gpu->Copy(kSkyIdx, sizeof(kSkyIdx)));
 
+    // Fullscreen quad (NDC) — used by post-process passes (tonemap, bloom, ssao).
+    // 2 triangles covering [-1,-1]–[1,1]. Position-only; fragment shader derives UV.
+    struct FsVert { float x, y, z; };
+    static const FsVert kFsVerts[4] = {{-1,-1,0}, {1,-1,0}, {1,1,0}, {-1,1,0}};
+    static const uint16_t kFsIdx[6] = {0, 1, 2, 0, 2, 3};
+    geometry_.fullscreen_vb = ctx_.gpu->CreateVertexBuffer(ctx_.gpu->Copy(kFsVerts, sizeof(kFsVerts)), kVertexLayoutPositionOnly);
+    geometry_.fullscreen_ib = ctx_.gpu->CreateIndexBuffer(ctx_.gpu->Copy(kFsIdx, sizeof(kFsIdx)));
+
     textures_.sampler_uniform        = ctx_.gpu->CreateUniform("s_texColor",     GpuUniformType::Sampler, 1);
     textures_.ssao_blurred_uniform   = ctx_.gpu->CreateUniform("s_ssaoBlurred",  GpuUniformType::Sampler, 1);
     lighting_.env_map_uniform        = ctx_.gpu->CreateUniform("s_envMap",       GpuUniformType::Sampler, 1);
@@ -571,4 +595,4 @@ ke_result CoreRenderer::SetupShader()
 
 ke_render *CoreRenderer::ToApi() { return &render_api_; }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

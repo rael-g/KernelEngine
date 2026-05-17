@@ -9,7 +9,7 @@ struct ke_allocator;
 struct ke_logger;
 struct ke_window;
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render
 {
 
 // Common texture format constants (match bgfx::TextureFormat::Enum values).
@@ -112,7 +112,14 @@ public:
 
     // ── Helper ───────────────────────────────────────────────────────────────
     virtual uint16_t CreateVertexLayout(const void* bgfx_layout_ptr) = 0;
+
+    virtual const char* GetLastFatalError() = 0;
 };
+
+} // namespace kernel_engine::render
+
+namespace kernel_engine::render::bgfx
+{
 
 /**
  * @brief BGFX implementation of the GpuDevice contract.
@@ -178,6 +185,8 @@ public:
     void SetPaletteColor(uint8_t index, float r, float g, float b, float a) override;
     
     uint16_t CreateVertexLayout(const void* bgfx_layout_ptr) override;
+
+    const char* GetLastFatalError() override;
 };
 
 } // namespace kernel_engine::render::bgfx

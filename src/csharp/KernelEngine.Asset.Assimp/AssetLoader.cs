@@ -2,7 +2,6 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
-using KernelEngine.Asset.Assimp.Native;
 
 namespace KernelEngine.Kernel;
 
@@ -40,7 +39,9 @@ public sealed unsafe class MeshData
         VertexCount   = native->vertex_count;
         IndexCount    = native->index_count;
         MaterialIndex = native->material_index;
-        Name          = Marshal.PtrToStringAnsi((nint)native->name) ?? string.Empty;
+        
+        // InlineArray address taking in unsafe context
+        Name = Marshal.PtrToStringAnsi((nint)Unsafe.AsPointer(ref native->name.e0)) ?? string.Empty;
     }
 }
 
@@ -75,7 +76,8 @@ public sealed class MaterialData
         Roughness             = native->roughness;
         AlbedoTextureIndex    = native->albedo_texture_index;
         NormalMapTextureIndex = native->normal_map_texture_index;
-        Name                  = Marshal.PtrToStringAnsi((nint)native->name) ?? string.Empty;
+
+        Name = Marshal.PtrToStringAnsi((nint)Unsafe.AsPointer(ref native->name.e0)) ?? string.Empty;
     }
 }
 
@@ -104,7 +106,8 @@ public sealed unsafe class TextureData
         _pixels = native->pixels;
         Width   = native->width;
         Height  = native->height;
-        Path    = Marshal.PtrToStringAnsi((nint)native->path) ?? string.Empty;
+
+        Path = Marshal.PtrToStringAnsi((nint)Unsafe.AsPointer(ref native->path.e0)) ?? string.Empty;
     }
 }
 
@@ -114,8 +117,8 @@ public sealed unsafe class TextureData
 /// </summary>
 public sealed unsafe class ModelData : IDisposable
 {
-    private KernelEngine.Asset.Assimp.Native.ke_asset_loader* _loader;
-    private KernelEngine.Asset.Assimp.Native.ke_model_data*   _native;
+    private ke_asset_loader* _loader;
+    private ke_model_data*   _native;
 
     /// <summary>All meshes in the model.</summary>
     public MeshData[] Meshes { get; }
@@ -126,8 +129,8 @@ public sealed unsafe class ModelData : IDisposable
     /// <summary>All decoded textures in the model.</summary>
     public TextureData[] Textures { get; }
 
-    internal ModelData(KernelEngine.Asset.Assimp.Native.ke_asset_loader* loader,
-                       KernelEngine.Asset.Assimp.Native.ke_model_data*   native)
+    internal ModelData(ke_asset_loader* loader,
+                       ke_model_data*   native)
     {
         _loader = loader;
         _native = native;
@@ -162,10 +165,10 @@ public sealed unsafe class ModelData : IDisposable
 /// </summary>
 public sealed unsafe class AssetLoader : IDisposable
 {
-    private KernelEngine.Asset.Assimp.Native.ke_asset_loader* _native;
+    private ke_asset_loader* _native;
 
     /// <summary>Creates an <see cref="AssetLoader"/> that takes ownership of the given native pointer.</summary>
-    public AssetLoader(KernelEngine.Asset.Assimp.Native.ke_asset_loader* native) => _native = native;
+    public AssetLoader(ke_asset_loader* native) => _native = native;
 
     /// <summary>Loads a 3D model from <paramref name="path"/>. Caller must dispose the returned <see cref="ModelData"/>.</summary>
     public ModelData LoadModel(string path)
@@ -174,7 +177,7 @@ public sealed unsafe class AssetLoader : IDisposable
         var pathPtr = Marshal.StringToHGlobalAnsi(path);
         try
         {
-            KernelEngine.Asset.Assimp.Native.ke_model_data* data;
+            ke_model_data* data;
             KernelException.ThrowIfFailed(
                 _native->load_model(_native, (sbyte*)pathPtr, &data));
             return new ModelData(_native, data);
@@ -214,7 +217,7 @@ public sealed unsafe class AssetLoader : IDisposable
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void NativeLoadCompleteCallback(
         ke_result result,
-        KernelEngine.Asset.Assimp.Native.ke_model_data* data,
+        ke_model_data* data,
         void* userData)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)userData);
@@ -223,7 +226,7 @@ public sealed unsafe class AssetLoader : IDisposable
 
         if (result == ke_result.KE_OK)
             tcs.TrySetResult(new ModelData(
-                (KernelEngine.Asset.Assimp.Native.ke_asset_loader*)loaderPtr, data));
+                (ke_asset_loader*)loaderPtr, data));
         else
             tcs.TrySetException(new KernelException(result));
     }

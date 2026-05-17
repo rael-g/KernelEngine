@@ -127,6 +127,10 @@ extern "C"
         ///        Must be called on the bgfx API thread, before @c frame().
         ke_result (*submit_packet)(struct ke_render *self, const struct ke_frame_packet *packet);
 
+        /// @brief Retrieves implementation-specific fatal error details (e.g., GPU crash reason).
+        ///        Returns a pointer to a string that is valid until the next renderer call.
+        const char *(*get_last_fatal_error)(struct ke_render *self);
+
     } ke_render;
 
 #ifdef __cplusplus

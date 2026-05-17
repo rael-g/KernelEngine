@@ -1,6 +1,6 @@
-#include "../include/lighting_manager.hpp"
+#include "lighting_manager.hpp"
 #include <render_logging.hpp>
-#include "../include/texture_manager.hpp"
+#include "texture_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
 #include <vector>
@@ -8,7 +8,8 @@
 #include <cmath>
 #include <algorithm>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 ke_result LightingManager::SetDirectionalLight(const ke_directional_light *light)
@@ -96,4 +97,4 @@ const MaterialEntry& LightingManager::GetMaterial(ke_material_handle handle) con
     return s_invalid;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

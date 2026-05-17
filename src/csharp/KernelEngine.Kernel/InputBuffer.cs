@@ -18,8 +18,7 @@ internal sealed unsafe class InputSnapshotReader : IInputReader
         if (keyCode < 0 || keyCode >= 512) return false;
         int wordIdx = keyCode / 64;
         int bitIdx  = keyCode % 64;
-        fixed (ulong* p = _data.keys_down)
-            return (p[wordIdx] & (1UL << bitIdx)) != 0;
+        return (_data.keys_down[wordIdx] & (1UL << bitIdx)) != 0;
     }
 
     public bool IsKeyPressed(int keyCode)
@@ -27,8 +26,7 @@ internal sealed unsafe class InputSnapshotReader : IInputReader
         if (keyCode < 0 || keyCode >= 512) return false;
         int wordIdx = keyCode / 64;
         int bitIdx  = keyCode % 64;
-        fixed (ulong* p = _data.keys_pressed)
-            return (p[wordIdx] & (1UL << bitIdx)) != 0;
+        return (_data.keys_pressed[wordIdx] & (1UL << bitIdx)) != 0;
     }
 
     public bool IsKeyReleased(int keyCode)
@@ -36,8 +34,7 @@ internal sealed unsafe class InputSnapshotReader : IInputReader
         if (keyCode < 0 || keyCode >= 512) return false;
         int wordIdx = keyCode / 64;
         int bitIdx  = keyCode % 64;
-        fixed (ulong* p = _data.keys_released)
-            return (p[wordIdx] & (1UL << bitIdx)) != 0;
+        return (_data.keys_released[wordIdx] & (1UL << bitIdx)) != 0;
     }
 
     public Vector2 MousePosition => new(_data.mouse_x, _data.mouse_y);

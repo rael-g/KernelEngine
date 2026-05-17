@@ -4,9 +4,9 @@
 #include "gpu_device.hpp"
 #include <kernel_engine/kernel/engine/frame_packet.h>
 #include <vector>
-#include <cstring>
+#include <new>
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render::core
 {
 
 ke_result GeometryManager::CreateMesh(RenderContext& ctx, const ke_vertex *verts, uint32_t vert_count,
@@ -82,4 +82,4 @@ void GeometryManager::Shutdown()
     meshes_.clear();
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

@@ -1,10 +1,11 @@
-#include "../include/shader_provider.hpp"
+#include "shader_provider.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
 #include <fstream>
 #include <vector>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 FileShaderProvider::FileShaderProvider(const std::string& base_path)
@@ -29,4 +30,4 @@ const GpuMemoryBuffer* FileShaderProvider::LoadShaderBinary(RenderContext& ctx, 
     return mem;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

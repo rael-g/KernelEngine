@@ -29,6 +29,13 @@ extern "C"
         float m[16];
     } ke_mat4;
 
+    typedef struct ke_transform
+    {
+        ke_vec3 position;
+        ke_quat rotation;
+        ke_vec3 scale;
+    } ke_transform;
+
     static inline void ke_mat4_identity(ke_mat4 *out)
     {
         memset(out->m, 0, sizeof(float) * 16);

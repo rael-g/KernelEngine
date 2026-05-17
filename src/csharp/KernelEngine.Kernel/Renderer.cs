@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
@@ -8,7 +9,7 @@ namespace KernelEngine.Kernel;
 /// Hardware-accelerated renderer. Takes ownership of a <c>ke_render*</c> created by a service factory,
 /// calls <c>on_initialize</c> on construction, and <c>on_shutdown</c>/<c>destroy</c> on disposal.
 /// </summary>
-public sealed unsafe class Renderer : IDisposable
+public sealed unsafe class Renderer : IRenderer
 {
     private ke_render* _native;
 
@@ -373,6 +374,14 @@ public sealed unsafe class Renderer : IDisposable
     {
         KernelThread.AssertCurrent("ke.render");
         return _native->set_bloom(_native, (byte)(enabled ? 1 : 0), threshold, intensity);
+    }
+
+    /// <inheritdoc/>
+    public string? GetLastFatalError()
+    {
+        KernelThread.AssertCurrent("ke.render");
+        var ptr = _native->get_last_fatal_error(_native);
+        return ptr != null ? Marshal.PtrToStringAnsi((nint)ptr) : null;
     }
 
     /// <inheritdoc/>

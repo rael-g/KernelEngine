@@ -1,4 +1,4 @@
-using KernelEngine.Threading.Native;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 

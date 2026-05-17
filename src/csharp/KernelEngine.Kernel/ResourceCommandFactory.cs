@@ -7,6 +7,8 @@ public sealed class ResourceCommandFactory : IResourceFactory
 {
     private readonly ResourceCommandQueue _queue;
 
+    internal ResourceCommandQueue Queue => _queue;
+
     public ResourceCommandFactory(ResourceCommandQueue queue)
     {
         _queue = queue;

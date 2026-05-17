@@ -6,7 +6,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 struct ShadowSystemContext {
@@ -35,8 +36,11 @@ void ShadowSystem::Update(void* handle, ke_world* world, float dt, ke_frame_pack
 
     ke_light_component* lights = static_cast<ke_light_component*>(l_data);
 
+    // LightComponent.dir is the vector pointing FROM the surface TOWARD the light source
+    // (matches LightNode.Direction convention used by fs_basic). To position the shadow
+    // camera at the light, walk along +dir from the scene origin.
     ke_vec3 dir    = { lights[0].dir_x, lights[0].dir_y, lights[0].dir_z };
-    ke_vec3 pos    = { -dir.x * 25.0f, -dir.y * 25.0f, -dir.z * 25.0f };
+    ke_vec3 pos    = { dir.x * 25.0f, dir.y * 25.0f, dir.z * 25.0f };
     ke_vec3 target = { 0.0f, 0.0f, 0.0f };
     ke_vec3 up     = { 0.0f, 1.0f, 0.0f };
 
@@ -97,4 +101,4 @@ void ShadowSystem::SetShadowMap(ke_system_params* desc, ke_shadow_map_handle han
     static_cast<ShadowSystemContext*>(desc->handle)->shadow_map_handle = handle;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

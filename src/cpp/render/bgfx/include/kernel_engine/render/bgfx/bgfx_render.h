@@ -9,14 +9,14 @@
 extern "C" {
 #endif
 
-#ifndef KE_RENDER_API
+#ifndef KE_RENDER_BGFX_API
     #ifdef KE_RENDER_STATIC
-        #define KE_RENDER_API
+        #define KE_RENDER_BGFX_API
     #else
-        #ifdef KE_RENDER_EXPORT
-            #define KE_RENDER_API KE_HELPER_EXPORT
+        #ifdef KE_RENDER_BGFX_EXPORT
+            #define KE_RENDER_BGFX_API KE_HELPER_EXPORT
         #else
-            #define KE_RENDER_API KE_HELPER_IMPORT
+            #define KE_RENDER_BGFX_API KE_HELPER_IMPORT
         #endif
     #endif
 #endif
@@ -36,22 +36,22 @@ typedef struct ke_render_bgfx_params
 /**
  * @brief Creates the BGFX render system implementation.
  */
-KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params* params, ke_render** out_render);
+KE_RENDER_BGFX_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params* params, ke_render** out_render);
 
 /**
  * @brief Returns the last fatal error message captured by bgfx.
  */
-KE_RENDER_API const char* ke_render_bgfx_get_last_fatal_error();
+KE_RENDER_BGFX_API const char* ke_render_bgfx_get_last_fatal_error();
 
 // ── Native System Descriptor Factories ────────────────────────────────────────
 
-KE_RENDER_API ke_result ke_render_bgfx_create_mesh_system_params(uint32_t mesh_cid, uint32_t transform_cid, ke_system_params* out_params);
-KE_RENDER_API ke_result ke_render_bgfx_create_light_system_params(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid, ke_system_params* out_params);
-KE_RENDER_API ke_result ke_render_bgfx_create_camera_system_params(uint32_t camera_cid, uint32_t transform_cid, ke_system_params* out_params);
-KE_RENDER_API ke_result ke_render_bgfx_create_shadow_system_params(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_params* out_params);
-KE_RENDER_API ke_result ke_render_bgfx_create_skybox_system_params(uint32_t skybox_cid, ke_system_params* out_params);
+KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_mesh_system_params(uint32_t mesh_cid, uint32_t transform_cid, ke_system_params* out_params);
+KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_light_system_params(uint32_t light_cid, uint32_t point_cid, uint32_t spot_cid, uint32_t transform_cid, ke_system_params* out_params);
+KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_camera_system_params(uint32_t camera_cid, uint32_t transform_cid, ke_system_params* out_params);
+KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_shadow_system_params(uint32_t light_cid, uint32_t mesh_cid, uint32_t transform_cid, ke_system_params* out_params);
+KE_RENDER_BGFX_API ke_result ke_render_bgfx_create_skybox_system_params(uint32_t skybox_cid, ke_system_params* out_params);
 /// Sets the shadow map handle on a shadow system descriptor. Must be called from ke.render after GPU init.
-KE_RENDER_API void ke_render_bgfx_shadow_system_set_map(ke_system_params* params, ke_shadow_map_handle handle);
+KE_RENDER_BGFX_API void ke_render_bgfx_shadow_system_set_map(ke_system_params* params, ke_shadow_map_handle handle);
 
 #ifdef __cplusplus
 }

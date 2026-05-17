@@ -4,15 +4,15 @@
 #include <kernel_engine/kernel/engine/frame_packet.h>
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/world/world.h>
-#include "render_export.h"
+#include <kernel_engine/render/core/render_core_export.h>
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render::core
 {
 
 /**
  * @brief Native implementation of the Mesh Rendering logic.
  */
-class KE_RENDER_API MeshSystem
+class KE_RENDER_CORE_API MeshSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
@@ -22,7 +22,7 @@ public:
 /**
  * @brief Native implementation of the Light Rendering logic (Dir, Point, Spot).
  */
-class KE_RENDER_API LightSystem
+class KE_RENDER_CORE_API LightSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
@@ -32,7 +32,7 @@ public:
 /**
  * @brief Native implementation of the Camera logic.
  */
-class KE_RENDER_API CameraSystem
+class KE_RENDER_CORE_API CameraSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
@@ -42,7 +42,7 @@ public:
 /**
  * @brief Native implementation of the Shadow Pass logic.
  */
-class KE_RENDER_API ShadowSystem
+class KE_RENDER_CORE_API ShadowSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
@@ -54,11 +54,11 @@ public:
 /**
  * @brief Native implementation of the Skybox recording logic.
  */
-class KE_RENDER_API SkyboxSystem
+class KE_RENDER_CORE_API SkyboxSystem
 {
 public:
     static void Update(void* handle, ke_world* world, float dt, ke_frame_packet* packet);
     static ke_system_params GetDescription(uint32_t skybox_cid);
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

@@ -3,7 +3,8 @@
 #include <kernel_engine/kernel/world/components.h>
 #include <stdlib.h>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 struct SkyboxSystemContext {
@@ -47,4 +48,4 @@ ke_system_params SkyboxSystem::GetDescription(uint32_t skybox_cid)
     return desc;
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

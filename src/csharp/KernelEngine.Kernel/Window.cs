@@ -6,7 +6,7 @@ namespace KernelEngine.Kernel;
 /// Manages the OS window. Takes ownership of a <c>ke_window*</c> created by a service factory,
 /// calls <c>on_initialize</c> on construction, and <c>on_shutdown</c>/<c>destroy</c> on disposal.
 /// </summary>
-public sealed unsafe class Window : IDisposable
+public sealed unsafe class Window : IWindow
 {
     private ke_window* _native;
 

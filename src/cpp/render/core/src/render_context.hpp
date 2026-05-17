@@ -4,11 +4,15 @@
 #include <kernel_engine/kernel/logger/logger.h>
 #include <cstdint>
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render
+{
+class GpuDevice;
+}
+
+namespace kernel_engine::render::core
 {
 
 class ShaderProviderInterface;
-class GpuDevice;
 
 /**
  * @brief Shared state between modular render components.
@@ -19,7 +23,7 @@ struct RenderContext
     ke_allocator* allocator = nullptr;
     ke_logger*    logger    = nullptr;
     ShaderProviderInterface* shader_provider = nullptr;
-    GpuDevice*               gpu = nullptr;
+    render::GpuDevice*       gpu = nullptr;
 
     int32_t view_w = 0;
     int32_t view_h = 0;
@@ -31,4 +35,4 @@ struct RenderContext
     float camera_pos[4]{0,0,0,0};
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

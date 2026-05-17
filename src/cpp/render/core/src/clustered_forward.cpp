@@ -1,13 +1,14 @@
-#include "../include/clustered_forward.hpp"
+#include "clustered_forward.hpp"
 #include <render_logging.hpp>
-#include "../include/lighting_manager.hpp"
+#include "lighting_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
 #include <cstring>
 #include <cmath>
 #include <algorithm>
 
-namespace kernel_engine::render::bgfx
+
+namespace kernel_engine::render::core
 {
 
 ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle& out_depth_prog, GpuProgramHandle& out_cull_prog)
@@ -45,4 +46,4 @@ void ClusteredForward::Shutdown(RenderContext& ctx)
 {
 }
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

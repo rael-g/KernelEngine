@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
-using ThreadingNative = KernelEngine.Threading.Native.NativeMethods;
 
 namespace KernelEngine.Kernel;
 
@@ -46,7 +45,7 @@ public sealed unsafe class KernelThread : IDisposable
 
             ke_thread* native;
             KernelException.ThrowIfFailed(
-                ThreadingNative.thread_std_create(alloc.Native, &desc, &native));
+                NativeMethods.thread_std_create(alloc.Native, &desc, &native));
 
             return new KernelThread(native, alloc);
         }

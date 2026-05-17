@@ -13,10 +13,10 @@
 #include <kernel_engine/kernel/logger/logger.h>
 #include <stdexcept>
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render
 {
 
-// ── BgfxFatalException ───────────────────────────────────────────────────
+// ── Fatal Error Handling ─────────────────────────────────────────────────
 
 static char s_last_fatal_error[1024] = {0};
 
@@ -29,6 +29,11 @@ void SetLastFatalError(const char* msg) {
 const char* GetLastFatalError() {
     return s_last_fatal_error;
 }
+
+} // namespace kernel_engine::render
+
+namespace kernel_engine::render::bgfx
+{
 
 // ── BgfxLogCallback Implementation ────────────────────────────────────────
 
@@ -447,6 +452,11 @@ uint16_t BgfxGpuDevice::CreateVertexLayout(const void* bgfx_layout_ptr)
 {
     ke_thread_assert_current("ke.render");
     return ::bgfx::createVertexLayout(*(const ::bgfx::VertexLayout*)bgfx_layout_ptr).idx;
+}
+
+const char* BgfxGpuDevice::GetLastFatalError()
+{
+    return kernel_engine::render::GetLastFatalError();
 }
 
 } // namespace kernel_engine::render::bgfx

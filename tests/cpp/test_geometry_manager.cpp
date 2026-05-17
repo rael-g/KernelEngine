@@ -7,7 +7,8 @@
 #include <kernel_engine/kernel/engine/frame_packet.h>
 #include "mocks.hpp"
 
-using namespace kernel_engine::render::bgfx;
+using namespace kernel_engine::render;
+using namespace kernel_engine::render::core;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::NiceMock;
