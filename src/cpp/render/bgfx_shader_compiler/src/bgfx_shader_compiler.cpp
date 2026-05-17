@@ -1,4 +1,4 @@
-#include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.hh>
+#include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.hpp>
 #include <cstdio>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <new>

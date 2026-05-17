@@ -1,5 +1,5 @@
 add_library(ke_shader_compiler_bgfx
-    src/bgfx_shader_compiler.cc
+    src/bgfx_shader_compiler.cpp
 )
 
 get_target_property(target_type ke_shader_compiler_bgfx TYPE)

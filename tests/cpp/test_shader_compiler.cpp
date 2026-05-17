@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.hh>
+#include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 
 class ShaderCompilerTest : public ::testing::Test {
