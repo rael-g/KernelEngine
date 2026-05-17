@@ -283,15 +283,17 @@ public class Application : IDisposable
         var xformCid = ActiveWorld.TransformComponentId;
 
         var systems = RenderCore.RegisterDefaultSystems(
-            ActiveWorld, 
+            ActiveWorld,
             Renderer,
-            MeshNode.ComponentId, 
+            MeshNode.ComponentId,
             xformCid,
-            LightNode.ComponentId, 
-            PointLightNode.ComponentId, 
-            SpotLightNode.ComponentId, 
-            CameraNode.ComponentId, 
+            LightNode.ComponentId,
+            PointLightNode.ComponentId,
+            SpotLightNode.ComponentId,
             SkyboxNode.ComponentId);
+
+        // Pure-managed render systems (migration from C++ render/core in progress)
+        ActiveWorld.AddSystem(new CameraRenderSystem(CameraNode.ComponentId, xformCid));
 
         _shadowSystem = systems.Shadow;
     }
