@@ -287,14 +287,14 @@ public class Application : IDisposable
             Renderer,
             MeshNode.ComponentId,
             xformCid,
-            LightNode.ComponentId,
-            SkyboxNode.ComponentId);
+            LightNode.ComponentId);
 
         // Pure-managed render systems (migration from C++ render/core in progress)
         ActiveWorld.AddSystem(new CameraRenderSystem(CameraNode.ComponentId, xformCid));
         ActiveWorld.AddSystem(new LightRenderSystem(
             LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
         ActiveWorld.AddSystem(new MeshRenderSystem(MeshNode.ComponentId, xformCid));
+        ActiveWorld.AddSystem(new SkyboxRenderSystem(SkyboxNode.ComponentId));
 
         _shadowSystem = systems.Shadow;
     }

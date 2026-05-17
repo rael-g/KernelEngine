@@ -6,12 +6,10 @@ namespace KernelEngine.Render.Core;
 
 /// <summary>
 /// Render systems registered by <see cref="RenderCore.RegisterDefaultSystems"/>.
-/// Camera, Light, and Mesh were ported to pure-managed C# implementations in
-/// <c>KernelEngine.Framework</c>. The rest will follow.
+/// Camera, Light, Mesh, and Skybox were ported to pure-managed C# implementations in
+/// <c>KernelEngine.Framework</c>. Shadow is the last C++ system pending migration.
 /// </summary>
-public record DefaultRenderSystems(
-    ShadowRenderSystem Shadow,
-    SkyboxRenderSystem Skybox);
+public record DefaultRenderSystems(ShadowRenderSystem Shadow);
 
 public static unsafe class RenderCore
 {
@@ -23,21 +21,14 @@ public static unsafe class RenderCore
         IRenderer renderer,
         uint meshCid,
         uint transformCid,
-        uint lightCid,
-        uint skyboxCid)
+        uint lightCid)
     {
         ke_system_params shadowParams;
         RenderCoreNative.render_core_shadow_system_describe(lightCid, meshCid, transformCid, &shadowParams);
 
-        ke_system_params skyboxParams;
-        RenderCoreNative.render_core_skybox_system_describe(skyboxCid, &skyboxParams);
-
         var shadow = new ShadowRenderSystem(shadowParams);
-        var skybox = new SkyboxRenderSystem(skyboxParams);
-
         world.AddSystem(shadow);
-        world.AddSystem(skybox);
 
-        return new DefaultRenderSystems(shadow, skybox);
+        return new DefaultRenderSystems(shadow);
     }
 }
