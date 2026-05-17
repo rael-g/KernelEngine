@@ -7,21 +7,22 @@ public sealed class ResourceCommandFactory : IResourceFactory
 {
     private readonly ResourceCommandQueue _queue;
 
-    internal ResourceCommandQueue Queue => _queue;
-
     public ResourceCommandFactory(ResourceCommandQueue queue)
     {
         _queue = queue;
     }
 
-    private T SendCommand<T>(ResourceCommandType type, object? data, Func<uint, T> resultMapper)
+    internal Task<T> EnqueueAsync<T>(ResourceCommandType type, object? data, Func<uint, T> resultMapper)
     {
         var tcs = new TaskCompletionSource<uint>();
         _queue.Enqueue(new ResourceCommand { Type = type, Data = data, CompletionSource = tcs });
-        // Blocking wait since the factory API is synchronous (as requested by the plan's context of decoupling)
-        // Note: In a production engine, this might be async, but here we block ke.sim until ke.render processes it.
-        uint result = tcs.Task.GetAwaiter().GetResult();
-        return resultMapper(result);
+        return tcs.Task.ContinueWith(t => resultMapper(t.Result), TaskContinuationOptions.ExecuteSynchronously);
+    }
+
+    private T SendCommand<T>(ResourceCommandType type, object? data, Func<uint, T> resultMapper)
+    {
+        // Blocking wait since the synchronous IResourceFactory API requires it; ke.sim blocks until ke.render processes.
+        return EnqueueAsync(type, data, resultMapper).GetAwaiter().GetResult();
     }
 
     public MeshHandle CreateMesh(ke_vertex[] vertices, ushort[] indices) =>
