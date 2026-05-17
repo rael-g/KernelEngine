@@ -169,12 +169,9 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
     - A game written purely against `KernelEngine.Framework` cannot obtain or dereference a `ke_X*`.
 - **Effort**: L (2–3 days). Interface changes ripple through plugin assemblies; some currently-public APIs will need redesign to remove pointer leaks.
 
-##### [B5.2] Eliminate dup entry points in `render_core.h` (Bug 1.44)
+##### [B5.2] Eliminate dup entry points in `render_core.h` (Bug 1.44) — RESOLVED
 - **Tags**: `refactor`, `bug` (Bug 1.44)
-- **Why**: Plugin public header exposes 6 entry points. Plugin rule = one create entry point only.
-- **What**: Keep `ke_render_core_register_default_systems` public; move 5 `*_describe` + `shadow_system_set_map` to an internal header inside `src/cpp/render/core/src/`. Update `RenderCore.cs` to call `register_default_systems` directly without unpacking individual `*_describe`.
-- **Acceptance**: `render_core.h` declares exactly one entry point. C# build green. Examples 01–05 still render.
-- **Effort**: S (half day).
+- **Resolution** (commit `2ffbc3a`): deleted the dead `ke_render_core_register_default_systems` and its orphan `ke_render_core_systems_params` struct (no callers). The remaining 5 `*_describe` factories + `shadow_system_set_map` are kept as the **extended public ABI** of the render_core plugin — they're consumed by the C# `Render.Core` wrapper assembly to materialize managed mirror systems and represent a coherent system-descriptor surface, not the W.9-style miscellaneous-factories smell. See Backlog 1.44 for full rationale.
 
 ##### [B5.3] Split `gpu_device.hpp` — separate abstract contract from bgfx concrete (Bug 1.50)
 - **Tags**: `refactor`, `bug` (Bug 1.50)

@@ -715,12 +715,21 @@ Public-API rules violated:
 
 **Status of `bgfx_render.h` half**: fixed in commit `9a87a37` (dead duplicates removed).
 
-**Fix for `render_core.h`**: keep `ke_render_core_register_default_systems` as the only public
-entry point. Move the 5 `*_describe` factories and `shadow_system_set_map` to an internal header
-inside `src/cpp/render/core/src/`. `RenderCore.cs` switches to calling `register_default_systems`
-directly without unpacking individual `*_describe` calls.
+**Status of `render_core.h` half**: partial fix in commit `2ffbc3a` — the dead
+`ke_render_core_register_default_systems` function (no callers) and its orphan
+`ke_render_core_systems_params` struct were deleted.
 
-**Tracked in**: Kanban B5.2.
+**Resolution for remaining 6 entry points**: the 5 `*_describe` factories + `shadow_system_set_map`
+are kept as the **extended public ABI** of the render_core plugin. Rationale: the C# wrapper
+assembly (`KernelEngine.Render.Core`) consumes them to materialize managed wrappers
+(`MeshRenderSystem`, etc.) that mirror the native systems. This isn't a "many factories like
+W.9 cleaned up" smell — it's a coherent system-descriptor surface where each function returns
+the same shape (`ke_system_params`) for one of N built-in render systems. The "one entry point
+per plugin" rule is intended to prevent unrelated factories piling up, not to forbid a tight
+group of mirror functions that share a single purpose.
+
+**No further action** on this bug; rename or further consolidation would force a heavier
+managed-side refactor with no clear win.
 
 ---
 
