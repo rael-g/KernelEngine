@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
-using KernelEngine.Render.Bgfx;
 using KernelEngine.Render.Core;
 
 namespace KernelEngine.Framework;
@@ -44,12 +43,11 @@ public class Application : IDisposable
     private readonly ResourceCommandQueue _resourceQueue = new();
     private ShadowRenderSystem? _shadowSystem;
 
-    private unsafe string GetGpuFatalError()
+    private string GetGpuFatalError()
     {
         try
         {
-            sbyte* ptr = KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_get_last_fatal_error();
-            return ptr != null ? Marshal.PtrToStringAnsi((IntPtr)ptr) ?? "Unknown GPU fatal error" : "Unknown GPU fatal error";
+            return Renderer.GetLastFatalError() ?? "Unknown GPU fatal error";
         }
         catch
         {
