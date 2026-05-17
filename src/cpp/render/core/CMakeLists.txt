@@ -21,11 +21,11 @@ target_compile_definitions(ke_render_core PRIVATE KE_RENDER_CORE_EXPORT)
 target_include_directories(ke_render_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
 )
 
 target_include_directories(ke_render_core PRIVATE
     src
+    ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
 )
 
 target_link_libraries(ke_render_core PUBLIC
