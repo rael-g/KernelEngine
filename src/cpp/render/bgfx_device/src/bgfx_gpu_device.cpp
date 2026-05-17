@@ -1,4 +1,4 @@
-#include "gpu_device.hpp"
+#include "bgfx_gpu_device.hpp"
 #include <kernel_engine/threading/thread.h>
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>

@@ -1,7 +1,7 @@
 #include <kernel_engine/render/bgfx/bgfx_render.h>
 #include <kernel_engine/kernel/render/render.h>
 #include <core_renderer.hpp>
-#include <gpu_device.hpp>
+#include <bgfx_gpu_device.hpp>
 #include <render_logging.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <bgfx/bgfx.h>
