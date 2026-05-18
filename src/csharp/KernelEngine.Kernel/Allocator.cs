@@ -10,7 +10,7 @@ public abstract unsafe class Allocator : IDisposable
 {
     private ke_allocator* _native;
 
-    public ke_allocator* Native
+    internal ke_allocator* Native
     {
         get
         {

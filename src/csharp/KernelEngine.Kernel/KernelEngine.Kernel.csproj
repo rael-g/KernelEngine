@@ -20,6 +20,17 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
+    <!-- Phase 1 of Bug 1.43: plugin assemblies still need raw pointer access to wire their factories.
+         Phase 2 will replace each leak with a managed method on the owning wrapper and revoke these. -->
+    <InternalsVisibleTo Include="KernelEngine.Framework" />
+    <InternalsVisibleTo Include="KernelEngine.Asset.Assimp" />
+    <InternalsVisibleTo Include="KernelEngine.DevPlatform.Win32" />
+    <InternalsVisibleTo Include="KernelEngine.Logging.Serilog" />
+    <InternalsVisibleTo Include="KernelEngine.Render.Bgfx" />
+    <InternalsVisibleTo Include="KernelEngine.TaskScheduler.Enki" />
+    <InternalsVisibleTo Include="KernelEngine.Window.Glfw" />
+    <InternalsVisibleTo Include="KernelEngine.Framework.Tests" />
+    <InternalsVisibleTo Include="KernelEngine.Logging.Serilog.Tests" />
   </ItemGroup>
 
   <ItemGroup>

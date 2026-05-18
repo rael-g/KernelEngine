@@ -13,7 +13,7 @@ public sealed unsafe class TaskScheduler : IDisposable
     private ke_task_scheduler* _native;
 
     /// <summary>Gets the underlying native pointer.</summary>
-    public ke_task_scheduler* Native
+    internal ke_task_scheduler* Native
     {
         get
         {

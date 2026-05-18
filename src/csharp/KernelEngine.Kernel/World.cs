@@ -13,7 +13,7 @@ public sealed unsafe class World : IDisposable
     private EcsRegistry? _registry;
     private readonly List<ISystem> _systems = [];
 
-    public ke_world* Native
+    internal ke_world* Native
     {
         get
         {

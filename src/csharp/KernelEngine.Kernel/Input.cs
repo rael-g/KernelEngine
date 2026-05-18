@@ -26,7 +26,7 @@ public sealed unsafe class Input : IDisposable
 
     private ke_input* _native;
 
-    public ke_input* Native
+    internal ke_input* Native
     {
         get
         {

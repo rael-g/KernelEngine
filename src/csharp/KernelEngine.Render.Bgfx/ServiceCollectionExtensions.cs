@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
                     {
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
-                        window = sp.GetRequiredService<IWindow>().Native,
+                        window = ((Window)sp.GetRequiredService<IWindow>()).Native,
                         shader_path = (sbyte*)shaderPtr,
                         vsync = (byte)(vsync ? 1 : 0),
                     };

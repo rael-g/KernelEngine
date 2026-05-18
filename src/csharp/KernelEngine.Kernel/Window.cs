@@ -10,7 +10,7 @@ public sealed unsafe class Window : IWindow
 {
     private ke_window* _native;
 
-    public ke_window* Native
+    internal ke_window* Native
     {
         get
         {

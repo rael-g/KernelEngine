@@ -5,8 +5,6 @@ namespace KernelEngine.Kernel;
 
 public unsafe interface IRenderer : IDisposable
 {
-    ke_render* Native { get; }
-    
     void Initialize();
     Result Frame();
     Result SubmitPacket(FramePacket packet);
