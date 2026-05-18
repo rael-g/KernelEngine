@@ -53,14 +53,14 @@ public class ResultTests
         Result<int> err = KernelResult.NotFound;
         
         Assert.Contains("Ok(42)", ok.ToString());
-        Assert.Contains("Error(KE_ERROR_NOT_FOUND)", err.ToString());
+        Assert.Contains("Error(NotFound)", err.ToString());
     }
 
     [Fact]
     public void Result_ToString_Works()
     {
         Result r = KernelResult.Ok;
-        Assert.Equal("KE_OK", r.ToString());
+        Assert.Equal("Ok", r.ToString());
     }
 
     [Fact]

@@ -24,7 +24,7 @@ public class KernelExceptionTests
     public void Constructor_SetsMessageWithContext()
     {
         var ex = new KernelException(KernelResult.OutOfMemory, "TestContext");
-        Assert.Contains("KE_ERROR_OUT_OF_MEMORY", ex.Message);
+        Assert.Contains("OutOfMemory", ex.Message);
         Assert.Contains("TestContext", ex.Message);
     }
 
