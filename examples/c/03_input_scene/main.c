@@ -1,7 +1,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/world.h>
-#include <kernel_engine/kernel/logger/console_sink.h>
+#include "../common/example_console_sink.h"
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/window/window.h>
 #include <kernel_engine/kernel/input/input.h>
@@ -37,7 +37,7 @@ int main(void)
     ke_logger *logger = NULL;
     ke_logger_create(alloc, &logger);
 
-    logger->add_sink(logger, ke_console_sink_create(KE_LOG_LEVEL_TRACE));
+    logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE));
 
     ke_input *input = NULL;
     ke_input_create(alloc, logger, &input);

@@ -3,7 +3,6 @@ set(KERNEL_SOURCES
     src/common/hash_map.c
     src/common/hash.c
     src/logger/logger.c
-    src/logger/console_sink.c
     src/input/input.c
     src/world/world.c
     src/world/ecs.c

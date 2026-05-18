@@ -1,6 +1,6 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/logger/console_sink.h>
+#include "../common/example_console_sink.h"
 #include <kernel_engine/kernel/render/shader_compiler.h>
 #include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@ int main(void)
     ke_logger *logger = NULL;
     ke_logger_create(alloc, &logger);
 
-    logger->add_sink(logger, ke_console_sink_create(KE_LOG_LEVEL_TRACE));
+    logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE));
 
     ke_shader_compiler_bgfx_params compiler_params = {
         .allocator = alloc, .logger = logger, .shaderc_path = "vcpkg_installed/x64-windows-static-md/tools/bgfx/shaderc.exe"};
