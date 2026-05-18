@@ -154,6 +154,11 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 > By doing these LAST in stabilization, we avoid mixing convention cleanup into critical bug-fixing periods.
 
 ##### [B5.1] Fully encapsulate native pointers inside wrappers — no `public`, no `internal` leakage (Bug 1.43)
+- **Phase 1 status**: ✅ Done (commit `e1dde51`). All `Native` properties in `KernelEngine.Kernel` are now `internal`; `Native` removed from `IRenderer` and `IWindow` public interfaces; plugin assemblies access via `InternalsVisibleTo`. Still violates user's strong form (no internal either) — phase 2 below replaces each leak case-by-case.
+- **Phase 2 (TBD)**: identify each external `.Native` access among `KernelEngine.{Asset.Assimp,DevPlatform.Win32,Framework,Logging.Serilog,Render.Bgfx,TaskScheduler.Enki,Window.Glfw}` ServiceCollectionExtensions + Framework `Application.cs`, redesign each as a managed method on the owning wrapper. Revoke `InternalsVisibleTo` for native pointer access once done.
+
+(original card text below for reference)
+
 - **Tags**: `refactor`, `bug` (Bug 1.43)
 - **Why**: `KernelEngine.Kernel` wrappers (`Renderer`, `Window`, `World`, `Allocator`, `Logger`, `Input`, `DevPlatform`, `TaskScheduler`, `FramePacket`) expose `public ke_X* Native { get; }`. Worse, public interfaces (`IRenderer`, `IWindow`) embed raw pointers in their contract. This defeats the layered architecture — the framework and (worse) the framework's users can dereference unmanaged memory. An interface that contains a `ke_render*` is binding all alternate implementations to the C ABI, which is the opposite of what an interface should do. **`internal` is not enough**: cross-assembly trust via `InternalsVisibleTo` still leaks the unmanaged surface across the layer line. The wrapper must own the pointer fully and expose only managed methods.
 - **What**:
@@ -349,7 +354,7 @@ After all 5 blocks complete:
     7. Build + test.
 - **Effort**: M (1 day). Mechanical but touches every plugin.
 
-#### [W.16] Move `ke_console_sink_create` Out of the Kernel
+#### [W.16] Move `ke_console_sink_create` Out of the Kernel — ✅ Done (commit `ecbad90`, Option B)
 - **Tags**: `refactor`, `bug` (Bug 1.38)
 - **Why**: `ke_console_sink_create` is implemented in `src/c/kernel/src/logger/console_sink.c` and declared in the kernel's public API. **It is an implementation detail** (printf to stderr) — not a kernel building block. By the principle "kernel = building blocks, not built blocks", a concrete sink implementation does not belong in the kernel.
 - **What**: Decide between:
@@ -363,13 +368,13 @@ After all 5 blocks complete:
     3. Execute the chosen option. Delete the kernel files.
     4. Build + test.
 
-#### [W.14] Misc Naming/Structure Cleanups
+#### [W.14] Misc Naming/Structure Cleanups — ✅ Done
 - **Tags**: `chore`
 - **What** (each is a small independent fix):
-    1. ✅ Rename `KeTask.cs` → `KernelTask.cs` + class + `DispatchKeTask` → `DispatchKernelTask`.
-    2. ✅ Rename `enki_task_scheduler_public.h` → `enki_task_scheduler.h`.
-    3. Decide: consolidate threading into single `threading.h` exposing 3 factories (vs current 3 separate headers) — for consistency with bgfx/glfw/assimp/enki plugins which have 1 header. *Pending architecture call.*
-    4. Standardize `_export.h` location: either always at root of `include/` or always inside namespace path. Currently inconsistent (`asset_export.h`, `render_export.h`, `window_export.h` at root vs `threading_export.h` nested). *Pending architecture call.*
+    1. ✅ Rename `KeTask.cs` → `KernelTask.cs` + class + `DispatchKeTask` → `DispatchKernelTask` (commit `2b6f9f4`).
+    2. ✅ Rename `enki_task_scheduler_public.h` → `enki_task_scheduler.h` (commit `2b6f9f4`).
+    3. ✅ Consolidated plugin threading headers into single `threading.h` (commit `a462d75`).
+    4. ✅ Standardized `_export.h` location: all live under `include/kernel_engine/<domain>/` (Padrão B) (commit `36551ce`).
 
 #### [Y.10] Bindings-drift Detection in CI
 - **Why**: Prevent runtime crashes caused by P/Invoke signatures being out-of-sync with C headers (Bug 1.25).
