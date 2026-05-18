@@ -18,6 +18,7 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
+    <Project Path="src/csharp/KernelEngine.Contracts/KernelEngine.Contracts.csproj" />
     <Project Path="src/csharp/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
     <Project Path="src/csharp/KernelEngine.DevPlatform.Win32/KernelEngine.DevPlatform.Win32.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
