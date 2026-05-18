@@ -13,7 +13,7 @@ public sealed class SerilogSink : ILoggerSink
     private readonly ILogger _logger;
 
     /// <inheritdoc/>
-    public ke_log_level MinLevel { get; init; } = ke_log_level.KE_LOG_LEVEL_TRACE;
+    public LogLevel MinLevel { get; init; } = LogLevel.Trace;
 
     /// <param name="logger">
     /// The Serilog logger to write to. Defaults to <see cref="global::Serilog.Log.Logger"/>.
@@ -24,16 +24,16 @@ public sealed class SerilogSink : ILoggerSink
     }
 
     /// <inheritdoc/>
-    public void Log(ke_log_level level, string tag, string message)
+    public void Log(LogLevel level, string tag, string message)
     {
         var serilogLevel = level switch
         {
-            ke_log_level.KE_LOG_LEVEL_TRACE    => LogEventLevel.Verbose,
-            ke_log_level.KE_LOG_LEVEL_DEBUG    => LogEventLevel.Debug,
-            ke_log_level.KE_LOG_LEVEL_INFO     => LogEventLevel.Information,
-            ke_log_level.KE_LOG_LEVEL_WARNING  => LogEventLevel.Warning,
-            ke_log_level.KE_LOG_LEVEL_ERROR    => LogEventLevel.Error,
-            ke_log_level.KE_LOG_LEVEL_CRITICAL => LogEventLevel.Fatal,
+            LogLevel.Trace    => LogEventLevel.Verbose,
+            LogLevel.Debug    => LogEventLevel.Debug,
+            LogLevel.Info     => LogEventLevel.Information,
+            LogLevel.Warning  => LogEventLevel.Warning,
+            LogLevel.Error    => LogEventLevel.Error,
+            LogLevel.Critical => LogEventLevel.Fatal,
             _                                  => LogEventLevel.Information,
         };
 

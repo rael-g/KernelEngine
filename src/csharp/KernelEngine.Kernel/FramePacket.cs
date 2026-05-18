@@ -7,7 +7,7 @@ namespace KernelEngine.Kernel;
 /// Managed view over a <c>ke_frame_packet*</c> owned by a <see cref="FrameSync"/> ring buffer.
 /// Instances are short-lived: call <see cref="EndWrite"/> or <see cref="EndRead"/> to release the slot.
 /// </summary>
-public sealed unsafe class FramePacket
+public sealed unsafe class FramePacket : IFramePacket
 {
     private ke_frame_packet* _packet;
     private ke_frame_sync*   _sync;

@@ -25,7 +25,7 @@ public sealed class ResourceCommandFactory : IResourceFactory
         return EnqueueAsync(type, data, resultMapper).GetAwaiter().GetResult();
     }
 
-    public MeshHandle CreateMesh(ke_vertex[] vertices, ushort[] indices) =>
+    public MeshHandle CreateMesh(Vertex[] vertices, ushort[] indices) =>
         SendCommand(ResourceCommandType.CreateMesh, (vertices, indices), val => new MeshHandle(val));
 
     public void DestroyMesh(MeshHandle handle) =>

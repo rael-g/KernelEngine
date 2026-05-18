@@ -21,4 +21,7 @@ public interface ILoggerSink
     LogLevel MinLevel { get; }
 
     void Log(LogLevel level, string tag, string message);
+
+    /// <summary>Flushes any buffered output. Default implementation is a no-op.</summary>
+    void Flush() { }
 }

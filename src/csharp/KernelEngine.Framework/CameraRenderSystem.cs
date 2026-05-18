@@ -23,9 +23,11 @@ public sealed unsafe class CameraRenderSystem : ISystem
         _transformCid = transformCid;
     }
 
-    public void Update(World world, float dt, FramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld iworld, float dt, IFramePacket? ipacket = null, IInputReader? input = null)
     {
-        if (packet == null) return;
+        if (ipacket == null) return;
+        var world = (World)iworld;
+        var packet = (FramePacket)ipacket;
 
         var registry = world.Registry;
         var cameras = registry.Query<CameraComponent>(_cameraCid);

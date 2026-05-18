@@ -44,7 +44,7 @@ public sealed class ResourceCommandQueue
                 switch (cmd.Type)
                 {
                     case ResourceCommandType.CreateMesh:
-                        var (verts, indices) = ((ke_vertex[], ushort[]))cmd.Data!;
+                        var (verts, indices) = ((Vertex[], ushort[]))cmd.Data!;
                         var meshRes = renderer.CreateMesh(verts, indices);
                         cmd.CompletionSource?.SetResult(meshRes.Value.Value);
                         break;

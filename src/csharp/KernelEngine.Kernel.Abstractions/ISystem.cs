@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace KernelEngine.Kernel;
 
 /// <summary>
@@ -10,7 +8,7 @@ public readonly struct ComponentAccess
 {
     /// <summary>IDs of components this system only reads.</summary>
     public IReadOnlyList<uint> Reads { get; init; }
-    
+
     /// <summary>IDs of components this system might modify.</summary>
     public IReadOnlyList<uint> Writes { get; init; }
 
@@ -19,7 +17,7 @@ public readonly struct ComponentAccess
 }
 
 /// <summary>
-/// A managed simulation system registered with <see cref="World.AddSystem"/>.
+/// A managed simulation system registered with <see cref="IWorld.AddSystem"/>.
 /// Called once per frame after the built-in C systems (Script + Transform).
 /// </summary>
 public interface ISystem
@@ -29,7 +27,7 @@ public interface ISystem
     /// <param name="dt">Delta time since last frame.</param>
     /// <param name="packet">Optional frame packet for recording render commands.</param>
     /// <param name="input">Immutable snapshot of input state for this frame.</param>
-    void Update(World world, float dt, FramePacket? packet = null, IInputReader? input = null);
+    void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null);
 
     /// <summary>
     /// Returns the component access pattern for this system.

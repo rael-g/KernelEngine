@@ -55,11 +55,11 @@ public sealed unsafe class Renderer : IRenderer
     /// Runs strictly on the render thread.
     /// </summary>
     [RequiresThread("ke.render")]
-    public Result SubmitPacket(FramePacket packet)
+    public Result SubmitPacket(IFramePacket packet)
     {
         KernelThread.AssertCurrent("ke.render");
         // Get the internal raw pointer from the FramePacket (needs internal access or helper)
-        return _native->submit_packet(_native, packet.NativePointer).Wrap();
+        return _native->submit_packet(_native, ((FramePacket)packet).NativePointer).Wrap();
     }
 
     /// <summary>Sets the background clear color for the next frame.</summary>
@@ -98,14 +98,15 @@ public sealed unsafe class Renderer : IRenderer
 
     /// <summary>Uploads geometry to the GPU and returns a stable mesh handle.</summary>
     [RequiresThread("ke.render")]
-    public Result<MeshHandle> CreateMesh(ke_vertex[] vertices, ushort[] indices)
+    public Result<MeshHandle> CreateMesh(Vertex[] vertices, ushort[] indices)
     {
         KernelThread.AssertCurrent("ke.render");
         ke_mesh_handle handle;
-        fixed (ke_vertex* vp = vertices)
+        // Vertex layout matches ke_vertex exactly (validated by tests); reinterpret-cast the buffer.
+        fixed (Vertex* vp = vertices)
         fixed (ushort* ip = indices)
         {
-            var res = _native->create_mesh(_native, vp, (uint)vertices.Length, ip, (uint)indices.Length, &handle);
+            var res = _native->create_mesh(_native, (ke_vertex*)vp, (uint)vertices.Length, ip, (uint)indices.Length, &handle);
             return res.Wrap(new MeshHandle(handle.idx));
         }
     }

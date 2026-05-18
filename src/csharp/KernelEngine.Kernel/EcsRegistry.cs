@@ -8,8 +8,12 @@ namespace KernelEngine.Kernel;
 /// Managed wrapper for <c>ke_ecs_registry</c>. Provides typed component registration,
 /// add/get/remove, and cache-friendly iteration via <see cref="Query{T}"/>.
 /// </summary>
-public sealed unsafe class EcsRegistry
+public sealed unsafe class EcsRegistry : IEcsRegistry
 {
+    /// <inheritdoc/>
+    public bool HasComponent(ulong entity, uint cid) =>
+        NativeMethods.ecs_component_get(_native, entity, cid) != null;
+
     private readonly ke_ecs_registry* _native;
 
     internal ke_ecs_registry* Native => _native;

@@ -7,16 +7,16 @@ using KernelEngine.Framework;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-static (ke_vertex[] verts, ushort[] idx) BuildCube()
+static (Vertex[] verts, ushort[] idx) BuildCube()
 {
     // 24 vértices (4 por face × 6 faces) com normal própria por face
-    var v = new System.Collections.Generic.List<ke_vertex>(24);
+    var v = new System.Collections.Generic.List<Vertex>(24);
     void AddFace(Vector3 n, Vector3 t, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
     {
-        v.Add(new ke_vertex { x=p0.X,y=p0.Y,z=p0.Z, nx=n.X,ny=n.Y,nz=n.Z, u=0,v=0, tx=t.X,ty=t.Y,tz=t.Z,tw=1 });
-        v.Add(new ke_vertex { x=p1.X,y=p1.Y,z=p1.Z, nx=n.X,ny=n.Y,nz=n.Z, u=1,v=0, tx=t.X,ty=t.Y,tz=t.Z,tw=1 });
-        v.Add(new ke_vertex { x=p2.X,y=p2.Y,z=p2.Z, nx=n.X,ny=n.Y,nz=n.Z, u=1,v=1, tx=t.X,ty=t.Y,tz=t.Z,tw=1 });
-        v.Add(new ke_vertex { x=p3.X,y=p3.Y,z=p3.Z, nx=n.X,ny=n.Y,nz=n.Z, u=0,v=1, tx=t.X,ty=t.Y,tz=t.Z,tw=1 });
+        v.Add(new Vertex { X=p0.X,Y=p0.Y,Z=p0.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=0,V=0, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
+        v.Add(new Vertex { X=p1.X,Y=p1.Y,Z=p1.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=1,V=0, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
+        v.Add(new Vertex { X=p2.X,Y=p2.Y,Z=p2.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=1,V=1, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
+        v.Add(new Vertex { X=p3.X,Y=p3.Y,Z=p3.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=0,V=1, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
     }
     // +X
     AddFace(new(1,0,0),  new(0,0,-1), new(0.5f,-0.5f,0.5f), new(0.5f,-0.5f,-0.5f), new(0.5f,0.5f,-0.5f), new(0.5f,0.5f,0.5f));

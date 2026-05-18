@@ -1,15 +1,14 @@
 using System.Numerics;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 
 /// <summary>
-/// Mediates creation and destruction of GPU resources.
-/// May block the simulation thread if the command queue is full.
+/// Mediates creation and destruction of GPU resources from the simulation thread.
+/// Calls block the simulation thread until the render thread processes them.
 /// </summary>
 public interface IResourceFactory
 {
-    MeshHandle CreateMesh(ke_vertex[] vertices, ushort[] indices);
+    MeshHandle CreateMesh(Vertex[] vertices, ushort[] indices);
     void DestroyMesh(MeshHandle handle);
 
     TextureHandle CreateTexture(uint width, uint height, byte[] pixels);

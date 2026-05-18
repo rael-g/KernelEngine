@@ -16,7 +16,7 @@ public class SerilogSinkTests
         mockLogger.Setup(x => x.ForContext(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<bool>())).Returns(mockLogger.Object);
         var sink = new SerilogSink(mockLogger.Object);
         
-        sink.Log(ke_log_level.KE_LOG_LEVEL_INFO, "TEST", "Message");
+        sink.Log(LogLevel.Info, "TEST", "Message");
         
         mockLogger.Verify(x => x.Write(LogEventLevel.Information, It.IsAny<string>(), "TEST", "Message"), Times.Once);
     }
@@ -28,7 +28,7 @@ public class SerilogSinkTests
         mockLogger.Setup(x => x.ForContext(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<bool>())).Returns(mockLogger.Object);
         var sink = new SerilogSink(mockLogger.Object);
         
-        sink.Log(ke_log_level.KE_LOG_LEVEL_ERROR, "TEST", "Message");
+        sink.Log(LogLevel.Error, "TEST", "Message");
         
         mockLogger.Verify(x => x.Write(LogEventLevel.Error, It.IsAny<string>(), "TEST", "Message"), Times.Once);
     }
@@ -40,7 +40,7 @@ public class SerilogSinkTests
         mockLogger.Setup(x => x.ForContext(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<bool>())).Returns(mockLogger.Object);
         var sink = new SerilogSink(mockLogger.Object);
         
-        sink.Log(ke_log_level.KE_LOG_LEVEL_CRITICAL, "TEST", "Message");
+        sink.Log(LogLevel.Critical, "TEST", "Message");
         
         mockLogger.Verify(x => x.Write(LogEventLevel.Fatal, It.IsAny<string>(), "TEST", "Message"), Times.Once);
     }
@@ -52,7 +52,7 @@ public class SerilogSinkTests
         mockLogger.Setup(x => x.ForContext(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<bool>())).Returns(mockLogger.Object);
         var sink = new SerilogSink(mockLogger.Object);
         
-        sink.Log(ke_log_level.KE_LOG_LEVEL_DEBUG, "TEST", "Message");
+        sink.Log(LogLevel.Debug, "TEST", "Message");
         
         mockLogger.Verify(x => x.Write(LogEventLevel.Debug, It.IsAny<string>(), "TEST", "Message"), Times.Once);
     }
@@ -64,7 +64,7 @@ public class SerilogSinkTests
         mockLogger.Setup(x => x.ForContext(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<bool>())).Returns(mockLogger.Object);
         var sink = new SerilogSink(mockLogger.Object);
         
-        sink.Log(ke_log_level.KE_LOG_LEVEL_WARNING, "TEST", "Message");
+        sink.Log(LogLevel.Warning, "TEST", "Message");
         
         mockLogger.Verify(x => x.Write(LogEventLevel.Warning, It.IsAny<string>(), "TEST", "Message"), Times.Once);
     }
@@ -76,7 +76,7 @@ public class SerilogSinkTests
         mockLogger.Setup(x => x.ForContext(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<bool>())).Returns(mockLogger.Object);
         var sink = new SerilogSink(mockLogger.Object);
         
-        sink.Log(ke_log_level.KE_LOG_LEVEL_TRACE, "TEST", "Message");
+        sink.Log(LogLevel.Trace, "TEST", "Message");
         
         mockLogger.Verify(x => x.Write(LogEventLevel.Verbose, It.IsAny<string>(), "TEST", "Message"), Times.Once);
     }
@@ -88,7 +88,7 @@ public class SerilogSinkTests
         mockLogger.Setup(x => x.ForContext(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<bool>())).Returns(mockLogger.Object);
         var sink = new SerilogSink(mockLogger.Object);
         
-        sink.Log((ke_log_level)999, "TEST", "Message");
+        sink.Log((LogLevel)999, "TEST", "Message");
         
         mockLogger.Verify(x => x.Write(LogEventLevel.Information, It.IsAny<string>(), "TEST", "Message"), Times.Once);
     }

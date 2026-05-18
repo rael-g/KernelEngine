@@ -48,7 +48,7 @@ internal sealed class SystemScheduler
         _waves = [.. waves];
     }
 
-    public async Task RunAsync(World world, float dt, FramePacket? packet, TaskScheduler taskScheduler, IInputReader? input = null)
+    public async Task RunAsync(IWorld world, float dt, IFramePacket? packet, TaskScheduler taskScheduler, IInputReader? input = null)
     {
         foreach (var wave in _waves)
         {

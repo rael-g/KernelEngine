@@ -2,7 +2,7 @@ namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Severity level for log events. Mirrors the kernel's native enum
-/// (`ke_log_level`) but is pure managed — Contracts never reference
+/// (<c>ke_log_level</c>) but is pure managed — Abstractions never reference
 /// auto-generated native types.
 /// </summary>
 public enum LogLevel

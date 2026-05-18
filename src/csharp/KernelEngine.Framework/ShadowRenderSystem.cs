@@ -33,9 +33,11 @@ public sealed unsafe class ShadowRenderSystem : ISystem
     /// <summary>Assigns the GPU shadow map to render into. Must be called from ke.render after GPU init.</summary>
     public void SetShadowMap(ShadowMapHandle handle) => _shadowMap = handle;
 
-    public void Update(World world, float dt, FramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld iworld, float dt, IFramePacket? ipacket = null, IInputReader? input = null)
     {
-        if (packet == null) return;
+        if (ipacket == null) return;
+        var world = (World)iworld;
+        var packet = (FramePacket)ipacket;
         if (_shadowMap == ShadowMapHandle.None) return;
 
         var registry = world.Registry;

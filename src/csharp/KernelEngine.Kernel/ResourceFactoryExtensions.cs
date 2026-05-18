@@ -1,11 +1,10 @@
 using System.Numerics;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 
 public static class ResourceFactoryExtensions
 {
-    public static Task<MeshHandle> CreateMeshAsync(this IResourceFactory factory, ke_vertex[] vertices, ushort[] indices)
+    public static Task<MeshHandle> CreateMeshAsync(this IResourceFactory factory, Vertex[] vertices, ushort[] indices)
     {
         if (factory is ResourceCommandFactory rcf)
             return rcf.EnqueueAsync(ResourceCommandType.CreateMesh, (vertices, indices), val => new MeshHandle(val));

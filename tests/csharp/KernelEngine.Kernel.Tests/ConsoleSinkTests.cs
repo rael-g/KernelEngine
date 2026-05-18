@@ -15,7 +15,7 @@ public class ConsoleSinkTests
         
         try
         {
-            sink.Log(ke_log_level.KE_LOG_LEVEL_INFO, "TestTag", "TestMessage");
+            sink.Log(LogLevel.Info, "TestTag", "TestMessage");
             var output = sw.ToString();
             Assert.Contains("[INFO] TestTag: TestMessage", output);
         }
@@ -35,7 +35,7 @@ public class ConsoleSinkTests
         
         try
         {
-            sink.Log((ke_log_level)99, "Tag", "Msg");
+            sink.Log((LogLevel)99, "Tag", "Msg");
             var output = sw.ToString();
             Assert.Contains("[?] Tag: Msg", output);
         }

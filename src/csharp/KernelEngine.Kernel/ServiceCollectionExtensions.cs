@@ -1,4 +1,3 @@
-using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Kernel;
@@ -24,7 +23,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddConsoleSink(
         this IServiceCollection services,
-        ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE) =>
+        LogLevel minLevel = LogLevel.Trace) =>
         services.AddSingleton<ILoggerSink>(_ => new ConsoleSink { MinLevel = minLevel });
 
     /// <summary>Registers an <see cref="Input"/> singleton.</summary>

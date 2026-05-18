@@ -16,6 +16,6 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSerilogSink(
         this IServiceCollection services,
         ILogger? logger = null,
-        ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE) =>
+        LogLevel minLevel = LogLevel.Trace) =>
         services.AddSingleton<ILoggerSink>(_ => new SerilogSink(logger) { MinLevel = minLevel });
 }

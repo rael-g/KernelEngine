@@ -1,5 +1,6 @@
 using KernelEngine.Asset.Assimp;
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
@@ -40,7 +41,9 @@ public static class AssimpModelExtensions
         for (int i = 0; i < model.Meshes.Length; i++)
         {
             var meshData = model.Meshes[i];
-            var gpuMesh = await resources.CreateMeshAsync(meshData.Vertices.ToArray(), meshData.Indices.ToArray());
+            var gpuMesh = await resources.CreateMeshAsync(
+                System.Runtime.InteropServices.MemoryMarshal.Cast<ke_vertex, Vertex>(meshData.Vertices).ToArray(),
+                meshData.Indices.ToArray());
             
             var material = meshData.MaterialIndex >= 0 ? gpuMaterials[meshData.MaterialIndex] : default;
 

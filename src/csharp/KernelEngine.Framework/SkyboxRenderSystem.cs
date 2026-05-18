@@ -17,9 +17,11 @@ public sealed unsafe class SkyboxRenderSystem : ISystem
         _skyboxCid = skyboxCid;
     }
 
-    public void Update(World world, float dt, FramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld iworld, float dt, IFramePacket? ipacket = null, IInputReader? input = null)
     {
-        if (packet == null) return;
+        if (ipacket == null) return;
+        var world = (World)iworld;
+        var packet = (FramePacket)ipacket;
 
         var registry = world.Registry;
         var skyboxes = registry.Query<SkyboxComponent>(_skyboxCid);

@@ -7,7 +7,7 @@ namespace KernelEngine.Kernel;
 /// The ECS simulation world — owns the registry, drives built-in systems (ScriptSystem,
 /// TransformSystem), and exposes the built-in component IDs.
 /// </summary>
-public sealed unsafe class World : IDisposable
+public sealed unsafe class World : IWorld
 {
     private ke_world* _native;
     private EcsRegistry? _registry;
@@ -63,6 +63,9 @@ public sealed unsafe class World : IDisposable
     /// <summary>The ECS registry for this world.</summary>
     public EcsRegistry Registry => _registry ??= new EcsRegistry(_native->get_registry(_native));
 
+    /// <summary>Interface view of the registry (Framework/user code path).</summary>
+    IEcsRegistry IWorld.Registry => Registry;
+
     private Scene? _scene;
 
     /// <summary>The scene graph facade for this world.</summary>
@@ -108,7 +111,7 @@ public sealed unsafe class World : IDisposable
     /// Advances the simulation by one frame.
     /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s in parallel waves.
     /// </summary>
-    public Result Update(FramePacket? packet = null, IInputReader? input = null)
+    public Result Update(IFramePacket? packet = null, IInputReader? input = null)
     {
         KernelThread.AssertCurrent("ke.sim");
         Input.SetCurrentReader(input);
