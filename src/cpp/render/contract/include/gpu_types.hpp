@@ -1,6 +1,6 @@
 #pragma once
 
-#include "render_export.h"
+#include <kernel_engine/render/contract/render_export.h>
 #include <cstdint>
 
 // Forward declarations for kernel types (outside renderer namespace)

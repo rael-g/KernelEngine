@@ -1,6 +1,6 @@
 #pragma once
 
-#include "window_export.h"
+#include <kernel_engine/window/contract/window_export.h>
 #include <cstdint>
 
 namespace kernel_engine::window

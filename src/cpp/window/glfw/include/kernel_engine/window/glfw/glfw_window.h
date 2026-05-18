@@ -2,7 +2,7 @@
 
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/window/window.h>
-#include <window_export.h>
+#include <kernel_engine/window/contract/window_export.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <kernel_engine/kernel/asset/asset_loader.h>
-#include <asset_export.h>
+#include <kernel_engine/asset/assimp/asset_export.h>
 
 #ifdef __cplusplus
 extern "C" {
