@@ -9,7 +9,7 @@ ke_task_scheduler_enki
 --include-directory
 ../../../cpp/task_scheduler/enki/include
 --file
-../../../cpp/task_scheduler/enki/include/kernel_engine/task_scheduler/enki/enki_task_scheduler_public.h
+../../../cpp/task_scheduler/enki/include/kernel_engine/task_scheduler/enki/enki_task_scheduler.h
 --methodClassName
 NativeMethods
 --prefixStrip

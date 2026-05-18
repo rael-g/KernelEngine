@@ -192,7 +192,7 @@ public sealed unsafe class AssetLoader : IDisposable
     /// Asynchronously loads a 3D model from <paramref name="path"/> using <paramref name="scheduler"/>.
     /// Completes on the scheduler thread; caller must dispose the returned <see cref="ModelData"/>.
     /// </summary>
-    public KeTask<ModelData> LoadModelAsync(string path, TaskScheduler scheduler)
+    public KernelTask<ModelData> LoadModelAsync(string path, TaskScheduler scheduler)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
 
@@ -211,7 +211,7 @@ public sealed unsafe class AssetLoader : IDisposable
             (void*)GCHandle.ToIntPtr(stateHandle));
         Marshal.FreeHGlobal(pathPtr);
 
-        return KeTask<ModelData>.FromTask(tcs.Task);
+        return KernelTask<ModelData>.FromTask(tcs.Task);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

@@ -6,11 +6,11 @@ namespace KernelEngine.Kernel;
 /// A fire-and-forget task dispatched to the native thread pool.
 /// Supports <c>await</c> identically to <see cref="Task"/>.
 /// </summary>
-public sealed class KeTask
+public sealed class KernelTask
 {
     private readonly Task _inner;
 
-    internal KeTask(Task inner) => _inner = inner;
+    internal KernelTask(Task inner) => _inner = inner;
 
     /// <summary>Whether the task has finished executing.</summary>
     public bool IsCompleted => _inner.IsCompleted;
@@ -27,14 +27,14 @@ public sealed class KeTask
 /// Supports <c>await</c> identically to <see cref="Task{T}"/>.
 /// </summary>
 /// <typeparam name="T">The type of the result value.</typeparam>
-public sealed class KeTask<T>
+public sealed class KernelTask<T>
 {
     private readonly Task<T> _inner;
 
-    internal KeTask(Task<T> inner) => _inner = inner;
+    internal KernelTask(Task<T> inner) => _inner = inner;
 
-    /// <summary>Wraps an existing <see cref="Task{T}"/> as a <see cref="KeTask{T}"/>.</summary>
-    public static KeTask<T> FromTask(Task<T> task) => new(task);
+    /// <summary>Wraps an existing <see cref="Task{T}"/> as a <see cref="KernelTask{T}"/>.</summary>
+    public static KernelTask<T> FromTask(Task<T> task) => new(task);
 
     /// <summary>Whether the task has finished executing.</summary>
     public bool IsCompleted => _inner.IsCompleted;
