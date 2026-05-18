@@ -36,8 +36,7 @@ public static class ServiceCollectionExtensions
                     };
 
                     ke_render* native;
-                    KernelException.ThrowIfFailed(
-                        KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native));
+                    KernelException.ThrowIfFailed(KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native).ToManaged());
                     return new KernelEngine.Kernel.Renderer(native);
                 }
             }

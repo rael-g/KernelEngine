@@ -29,7 +29,7 @@ public sealed unsafe class Logger : IDisposable
     public Logger(Allocator allocator)
     {
         ke_logger* logger;
-        KernelException.ThrowIfFailed(NativeMethods.logger_create(allocator.Native, &logger));
+        KernelException.ThrowIfFailed(NativeMethods.logger_create(allocator.Native, &logger).ToManaged());
         _native = logger;
     }
 

@@ -25,7 +25,7 @@ public static class ServiceCollectionExtensions
                 var alloc = sp.GetRequiredService<Allocator>();
                 ke_dev_platform* native;
                 var res = Win32Native.dev_platform_create_win32(alloc.Native, &native);
-                KernelException.ThrowIfFailed(res, nameof(Win32Native.dev_platform_create_win32));
+                KernelException.ThrowIfFailed(res.ToManaged(), nameof(Win32Native.dev_platform_create_win32));
                 return new DevPlatformWrapper(native);
             }
         });

@@ -39,7 +39,7 @@ public sealed unsafe class Renderer : IRenderer
     public void Initialize()
     {
         KernelThread.AssertCurrent("ke.render");
-        KernelException.ThrowIfFailed(_native->on_initialize(_native));
+        KernelException.ThrowIfFailed(_native->on_initialize(_native).ToManaged());
     }
 
     /// <summary>Advances to the next frame and presents the current one. Call once per loop iteration.</summary>
@@ -47,7 +47,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result Frame()
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->frame(_native);
+        return _native->frame(_native).Wrap();
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         // Get the internal raw pointer from the FramePacket (needs internal access or helper)
-        return _native->submit_packet(_native, packet.NativePointer);
+        return _native->submit_packet(_native, packet.NativePointer).Wrap();
     }
 
     /// <summary>Sets the background clear color for the next frame.</summary>
@@ -67,7 +67,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result ClearColor(float r, float g, float b, float a)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->clear_color(_native, r, g, b, a);
+        return _native->clear_color(_native, r, g, b, a).Wrap();
     }
 
     /// <summary>Sets the background clear color for the next frame.</summary>
@@ -83,7 +83,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetOrthographic(bool enabled)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_orthographic(_native, (byte)(enabled ? 1 : 0));
+        return _native->set_orthographic(_native, (byte)(enabled ? 1 : 0)).Wrap();
     }
 
     /// <summary>Sets the view and projection matrices for the active view. Call once per frame before draw calls.</summary>
@@ -93,7 +93,7 @@ public sealed unsafe class Renderer : IRenderer
         KernelThread.AssertCurrent("ke.render");
         var v = Unsafe.As<Matrix4x4, ke_mat4>(ref view);
         var p = Unsafe.As<Matrix4x4, ke_mat4>(ref proj);
-        return _native->set_view_transform(_native, &v, &p);
+        return _native->set_view_transform(_native, &v, &p).Wrap();
     }
 
     /// <summary>Uploads geometry to the GPU and returns a stable mesh handle.</summary>
@@ -106,7 +106,7 @@ public sealed unsafe class Renderer : IRenderer
         fixed (ushort* ip = indices)
         {
             var res = _native->create_mesh(_native, vp, (uint)vertices.Length, ip, (uint)indices.Length, &handle);
-            return new Result<MeshHandle>(res, new MeshHandle(handle.idx));
+            return res.Wrap(new MeshHandle(handle.idx));
         }
     }
 
@@ -116,7 +116,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         if (!handle.IsValid) throw new ArgumentException("Invalid mesh handle", nameof(handle));
-        return _native->destroy_mesh(_native, new ke_mesh_handle { idx = handle.Value });
+        return _native->destroy_mesh(_native, new ke_mesh_handle { idx = handle.Value }).Wrap();
     }
 
     /// <summary>Uploads raw RGBA8 pixel data to the GPU and returns a stable texture handle.</summary>
@@ -128,7 +128,7 @@ public sealed unsafe class Renderer : IRenderer
         fixed (byte* px = pixels)
         {
             var res = _native->create_texture_rgba(_native, width, height, px, &handle);
-            return new Result<TextureHandle>(res, new TextureHandle(handle.idx));
+            return res.Wrap(new TextureHandle(handle.idx));
         }
     }
 
@@ -138,7 +138,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         if (!handle.IsValid) throw new ArgumentException("Invalid texture handle", nameof(handle));
-        return _native->destroy_texture(_native, new ke_texture_handle { idx = handle.Value });
+        return _native->destroy_texture(_native, new ke_texture_handle { idx = handle.Value }).Wrap();
     }
 
     /// <summary>Creates a material from properties, returning a stable handle.</summary>
@@ -156,7 +156,7 @@ public sealed unsafe class Renderer : IRenderer
                                     metallic = metallic, roughness = roughness,
                                     normal_map = new ke_texture_handle { idx = normalMapHandle.Value } };
         var res = _native->create_material(_native, &mat, &handle);
-        return new Result<MaterialHandle>(res, new MaterialHandle(handle.idx));
+        return res.Wrap(new MaterialHandle(handle.idx));
     }
 
     /// <inheritdoc cref="CreateMaterial(float,float,float,float,TextureHandle,float,float,TextureHandle)"/>
@@ -174,7 +174,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         if (!handle.IsValid) throw new ArgumentException("Invalid material handle", nameof(handle));
-        return _native->destroy_material(_native, new ke_material_handle { idx = handle.Value });
+        return _native->destroy_material(_native, new ke_material_handle { idx = handle.Value }).Wrap();
     }
 
     /// <summary>Sets the active directional light for the current frame.</summary>
@@ -188,7 +188,7 @@ public sealed unsafe class Renderer : IRenderer
             dir_x = dirX, dir_y = dirY, dir_z = dirZ,
             r = r, g = g, b = b, intensity = intensity,
         };
-        return _native->set_directional_light(_native, &light);
+        return _native->set_directional_light(_native, &light).Wrap();
     }
 
     /// <summary>Sets the ambient light color for the current frame.</summary>
@@ -196,7 +196,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetAmbientLight(float r, float g, float b)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_ambient_light(_native, r, g, b);
+        return _native->set_ambient_light(_native, r, g, b).Wrap();
     }
 
     /// <summary>Sets the camera world-space position used for PBR specular calculations. Call once per frame.</summary>
@@ -204,7 +204,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetCameraPos(float x, float y, float z)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_camera_pos(_native, x, y, z);
+        return _native->set_camera_pos(_native, x, y, z).Wrap();
     }
 
     /// <summary>Uploads up to 8 point lights for the current frame. Replaces any previously set point lights.</summary>
@@ -213,7 +213,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         fixed (ke_point_light* p = lights)
-            return _native->set_point_lights(_native, p, (uint)lights.Length);
+            return _native->set_point_lights(_native, p, (uint)lights.Length).Wrap();
     }
 
     /// <summary>Uploads up to 8 spot lights for the current frame. Replaces any previously set spot lights.</summary>
@@ -222,7 +222,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         fixed (ke_spot_light* p = lights)
-            return _native->set_spot_lights(_native, p, (uint)lights.Length);
+            return _native->set_spot_lights(_native, p, (uint)lights.Length).Wrap();
     }
 
     /// <summary>
@@ -238,7 +238,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetSsao(bool enabled, float radius = 0.5f, float bias = 0.025f, float strength = 1.0f)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_ssao(_native, (byte)(enabled ? 1 : 0), radius, bias, strength);
+        return _native->set_ssao(_native, (byte)(enabled ? 1 : 0), radius, bias, strength).Wrap();
     }
 
     /// <summary>
@@ -258,7 +258,7 @@ public sealed unsafe class Renderer : IRenderer
             max_lights_per_cluster = maxLightsPerCluster,
             max_total_lights = maxTotalLights,
         };
-        return _native->set_cluster_config(_native, &config);
+        return _native->set_cluster_config(_native, &config).Wrap();
     }
 
     /// <summary>
@@ -274,7 +274,7 @@ public sealed unsafe class Renderer : IRenderer
         fixed (byte* px = data)
         {
             var res = _native->create_cubemap_rgba(_native, faceSize, px, &handle);
-            return new Result<TextureHandle>(res, new TextureHandle(handle.idx));
+            return res.Wrap(new TextureHandle(handle.idx));
         }
     }
 
@@ -286,7 +286,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SubmitSkybox(TextureHandle cubemapHandle)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->submit_skybox(_native, new ke_texture_handle { idx = cubemapHandle.Value });
+        return _native->submit_skybox(_native, new ke_texture_handle { idx = cubemapHandle.Value }).Wrap();
     }
 
     /// <summary>Submits a draw call for a mesh using a material and world transform.</summary>
@@ -295,7 +295,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         var mat = Unsafe.As<Matrix4x4, ke_mat4>(ref transform);
-        return _native->submit_mesh(_native, new ke_mesh_handle { idx = meshHandle.Value }, new ke_material_handle { idx = materialHandle.Value }, &mat);
+        return _native->submit_mesh(_native, new ke_mesh_handle { idx = meshHandle.Value }, new ke_material_handle { idx = materialHandle.Value }, &mat).Wrap();
     }
 
     /// <summary>Allocates a GPU shadow map of the given dimensions. Returns a stable handle.</summary>
@@ -305,7 +305,7 @@ public sealed unsafe class Renderer : IRenderer
         KernelThread.AssertCurrent("ke.render");
         ke_shadow_map_handle handle;
         var res = _native->create_shadow_map(_native, width, height, &handle);
-        return new Result<ShadowMapHandle>(res, new ShadowMapHandle(handle.idx));
+        return res.Wrap(new ShadowMapHandle(handle.idx));
     }
 
     /// <summary>Releases a shadow map and its GPU resources.</summary>
@@ -313,7 +313,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result DestroyShadowMap(ShadowMapHandle handle)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->destroy_shadow_map(_native, new ke_shadow_map_handle { idx = handle.Value });
+        return _native->destroy_shadow_map(_native, new ke_shadow_map_handle { idx = handle.Value }).Wrap();
     }
 
     /// <summary>
@@ -326,7 +326,7 @@ public sealed unsafe class Renderer : IRenderer
         KernelThread.AssertCurrent("ke.render");
         var v = Unsafe.As<Matrix4x4, ke_mat4>(ref lightView);
         var p = Unsafe.As<Matrix4x4, ke_mat4>(ref lightProj);
-        return _native->begin_shadow_pass(_native, new ke_shadow_map_handle { idx = shadowMapHandle.Value }, &v, &p);
+        return _native->begin_shadow_pass(_native, new ke_shadow_map_handle { idx = shadowMapHandle.Value }, &v, &p).Wrap();
     }
 
     /// <summary>Submits a mesh to the shadow depth pass. Call between Begin/EndShadowPass.</summary>
@@ -335,7 +335,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         var mat = Unsafe.As<Matrix4x4, ke_mat4>(ref transform);
-        return _native->submit_mesh_shadow(_native, new ke_mesh_handle { idx = meshHandle.Value }, &mat);
+        return _native->submit_mesh_shadow(_native, new ke_mesh_handle { idx = meshHandle.Value }, &mat).Wrap();
     }
 
     /// <summary>Ends the shadow depth pass. The shadow map is now available for scene rendering.</summary>
@@ -343,7 +343,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result EndShadowPass()
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->end_shadow_pass(_native);
+        return _native->end_shadow_pass(_native).Wrap();
     }
 
     /// <summary>Overrides which shadow map is bound during the current frame's scene pass.</summary>
@@ -351,7 +351,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetShadowMap(ShadowMapHandle shadowMapHandle)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_shadow_map(_native, new ke_shadow_map_handle { idx = shadowMapHandle.Value });
+        return _native->set_shadow_map(_native, new ke_shadow_map_handle { idx = shadowMapHandle.Value }).Wrap();
     }
 
     /// <summary>
@@ -362,7 +362,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetTonemapping(bool enabled, float exposure = 1.0f, float gamma = 2.2f)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_tonemapping(_native, (byte)(enabled ? 1 : 0), exposure, gamma);
+        return _native->set_tonemapping(_native, (byte)(enabled ? 1 : 0), exposure, gamma).Wrap();
     }
 
     /// <summary>
@@ -373,7 +373,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetBloom(bool enabled, float threshold = 1.0f, float intensity = 0.5f)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_bloom(_native, (byte)(enabled ? 1 : 0), threshold, intensity);
+        return _native->set_bloom(_native, (byte)(enabled ? 1 : 0), threshold, intensity).Wrap();
     }
 
     /// <inheritdoc/>

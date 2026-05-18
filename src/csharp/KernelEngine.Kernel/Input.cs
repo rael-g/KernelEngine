@@ -43,7 +43,7 @@ public sealed unsafe class Input : IDisposable
             logger != null ? logger.Native : null,
             &native);
 
-        KernelException.ThrowIfFailed(res, nameof(NativeMethods.input_create));
+        KernelException.ThrowIfFailed(res.ToManaged(), nameof(NativeMethods.input_create));
         _native = native;
     }
 
@@ -51,7 +51,7 @@ public sealed unsafe class Input : IDisposable
     public Result Update()
     {
         KernelThread.AssertCurrent("ke.main");
-        return _native->update(_native);
+        return _native->update(_native).Wrap();
     }
 
     /// <summary>Captures a frozen snapshot of the current input state.</summary>

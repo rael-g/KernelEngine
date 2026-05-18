@@ -44,8 +44,7 @@ public sealed unsafe class KernelThread : IDisposable
             };
 
             ke_thread* native;
-            KernelException.ThrowIfFailed(
-                NativeMethods.thread_std_create(alloc.Native, &desc, &native));
+            KernelException.ThrowIfFailed(NativeMethods.thread_std_create(alloc.Native, &desc, &native).ToManaged());
 
             return new KernelThread(native, alloc);
         }

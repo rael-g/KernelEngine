@@ -38,8 +38,7 @@ public static class ServiceCollectionExtensions
                     };
 
                     ke_window* native;
-                    KernelException.ThrowIfFailed(
-                        KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &native));
+                    KernelException.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &native).ToManaged());
                     return new KernelEngine.Kernel.Window(native);
                 }
             }

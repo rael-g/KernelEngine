@@ -50,7 +50,7 @@ public class ConcurrencyTests
         };
         
         // Mock Renderer.CreateShadowMap to return success
-        mockRenderer.CreateShadowMap(1024, 1024).Returns(new Result<ShadowMapHandle>(ke_result.KE_OK, new ShadowMapHandle(5)));
+        mockRenderer.CreateShadowMap(1024, 1024).Returns(new Result<ShadowMapHandle>(KernelResult.Ok, new ShadowMapHandle(5)));
 
         queue.Enqueue(cmd);
         

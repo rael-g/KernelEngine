@@ -49,7 +49,7 @@ public sealed unsafe class World : IDisposable
             allocator = allocator.Native,
         };
         ke_world* world;
-        KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world));
+        KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world).ToManaged());
         _native = world;
 
         TransformComponentId = _native->transform_id(_native);
@@ -101,7 +101,7 @@ public sealed unsafe class World : IDisposable
     /// <summary>Registers a native system descriptor into the world.</summary>
     public void AddSystem(ke_system_params desc)
     {
-        KernelException.ThrowIfFailed(_native->add_system(_native, &desc), "add_system");
+        KernelException.ThrowIfFailed(_native->add_system(_native, &desc).ToManaged(), "add_system");
     }
 
     /// <summary>
@@ -119,8 +119,8 @@ public sealed unsafe class World : IDisposable
             _lastTime = now;
 
             var frame = new ke_frame { delta_time = dt };
-            var res = Native->update(Native, &frame);
-            if (res != ke_result.KE_OK) return res;
+            var res = Native->update(Native, &frame).ToManaged();
+            if (res != KernelResult.Ok) return res;
 
             // Lazily wrap the native task scheduler (null if none is configured — RunAsync falls back to sequential).
             if (_taskScheduler == null)
@@ -139,7 +139,7 @@ public sealed unsafe class World : IDisposable
             // Run systems in waves (Sim thread waits for parallel workers to finish wave by wave)
             _scheduler.RunAsync(this, dt, packet, _taskScheduler!, input).GetAwaiter().GetResult();
 
-            return ke_result.KE_OK;
+            return KernelResult.Ok;
         }
         finally
         {

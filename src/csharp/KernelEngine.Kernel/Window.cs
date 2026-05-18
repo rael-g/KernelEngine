@@ -26,21 +26,21 @@ public sealed unsafe class Window : IWindow
     {
         _native = native;
         // In constructor we still throw because if initialization fails, the object is unusable.
-        KernelException.ThrowIfFailed(_native->on_initialize(_native));
+        KernelException.ThrowIfFailed(_native->on_initialize(_native).ToManaged());
     }
 
     /// <summary>Returns <see langword="true"/> when the user has requested the window to close.</summary>
     public bool ShouldClose() => _native->should_close(_native) != 0;
 
     /// <summary>Processes pending OS events. Call once per frame.</summary>
-    public Result PollEvents() => _native->poll_events(_native);
+    public Result PollEvents() => _native->poll_events(_native).Wrap();
 
     /// <summary>Returns the current client area size in pixels.</summary>
     public Result<(int Width, int Height)> GetSize()
     {
         int w, h;
         var res = _native->get_size(_native, &w, &h);
-        return new Result<(int, int)>(res, (w, h));
+        return res.Wrap((w, h));
     }
 
     /// <summary>Returns the platform-specific native window handle (HWND, X11 Window, etc.).</summary>

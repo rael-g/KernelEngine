@@ -179,7 +179,7 @@ public sealed unsafe class AssetLoader : IDisposable
         {
             ke_model_data* data;
             KernelException.ThrowIfFailed(
-                _native->load_model(_native, (sbyte*)pathPtr, &data));
+                _native->load_model(_native, (sbyte*)pathPtr, &data).ToManaged());
             return new ModelData(_native, data);
         }
         finally
@@ -228,7 +228,7 @@ public sealed unsafe class AssetLoader : IDisposable
             tcs.TrySetResult(new ModelData(
                 (ke_asset_loader*)loaderPtr, data));
         else
-            tcs.TrySetException(new KernelException(result));
+            tcs.TrySetException(new KernelException(result.ToManaged()));
     }
 
     /// <inheritdoc/>

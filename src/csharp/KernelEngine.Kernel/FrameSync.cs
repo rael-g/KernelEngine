@@ -33,11 +33,10 @@ public sealed unsafe class FrameSync : IDisposable
                                    uint      spotLightCapacity  = 64)
     {
         ke_frame_sync* native;
-        KernelException.ThrowIfFailed(
-            NativeMethods.frame_sync_std_create(
+        KernelException.ThrowIfFailed(NativeMethods.frame_sync_std_create(
                 alloc.Native, bufferCount,
                 drawCapacity, pointLightCapacity, spotLightCapacity,
-                &native));
+                &native).ToManaged());
         return new FrameSync(native, alloc);
     }
 

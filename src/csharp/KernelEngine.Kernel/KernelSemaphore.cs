@@ -20,8 +20,7 @@ public sealed unsafe class KernelSemaphore : IDisposable
     public static KernelSemaphore Create(Allocator alloc, uint initial = 0)
     {
         ke_semaphore* native;
-        KernelException.ThrowIfFailed(
-            NativeMethods.semaphore_std_create(alloc.Native, initial, &native));
+        KernelException.ThrowIfFailed(NativeMethods.semaphore_std_create(alloc.Native, initial, &native).ToManaged());
         return new KernelSemaphore(native, alloc);
     }
 

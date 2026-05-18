@@ -56,7 +56,7 @@ public class Application : IDisposable
 
     private void CheckResult(Result res, string context)
     {
-        if (res == ke_result.KE_ERROR_GPU_FATAL)
+        if (res == KernelResult.GpuFatal)
             throw new KernelException(res, context, GetGpuFatalError());
         res.ThrowIfFailed();
     }
