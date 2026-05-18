@@ -8,9 +8,7 @@ ke_threading
 ../../../cpp/threading/include
 ../../../c/kernel/include
 --file
-../../../cpp/threading/include/kernel_engine/threading/thread.h
-../../../cpp/threading/include/kernel_engine/threading/semaphore.h
-../../../cpp/threading/include/kernel_engine/threading/frame_sync.h
+../../../cpp/threading/include/kernel_engine/threading/threading.h
 --methodClassName
 NativeMethods
 --prefixStrip

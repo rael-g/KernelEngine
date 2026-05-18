@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/threading/thread.h>
+#include <kernel_engine/threading/threading.h>
 
 #include <atomic>
 #include <condition_variable>

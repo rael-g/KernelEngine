@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/threading/semaphore.h>
+#include <kernel_engine/threading/threading.h>
 #include <mutex>
 #include <condition_variable>
 #include <cstdint>

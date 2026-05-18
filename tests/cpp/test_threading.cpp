@@ -1,7 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/threading/thread.h>
-#include <kernel_engine/threading/semaphore.h>
-#include <kernel_engine/threading/frame_sync.h>
+#include <kernel_engine/threading/threading.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <cstdlib>
 #include <cstring>
