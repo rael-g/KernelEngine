@@ -40,6 +40,28 @@ extern "C"
 
     } ke_dev_platform;
 
+    // ── Thread-name TLS helpers ──────────────────────────────────────────────
+    // Each thread carries a string label in TLS (default "unknown"). The label is set
+    // by `ke_thread_create` for spawned threads and by the application for the OS-given
+    // main thread, and is consumed by `ke_thread_assert_current` for thread-affinity
+    // checks. These functions live alongside `ke_dev_platform` because they exist
+    // primarily for development/observability, not for shipping-build behavior.
+
+    /**
+     * @brief Sets the kernel-side TLS name of the calling thread.
+     * Independent from `set_thread_name` on the vtable (which talks to the OS).
+     */
+    KE_API void ke_thread_set_current_name(const char *name);
+
+    /// @brief Retrieves the TLS name of the calling thread, or "unknown" if never set.
+    KE_API const char *ke_thread_get_current_name(void);
+
+    /**
+     * @brief Asserts that the calling thread's TLS name matches @p expected_name.
+     * Aborts with a fatal message in debug builds; no-op in release.
+     */
+    KE_API void ke_thread_assert_current(const char *expected_name);
+
 #ifdef __cplusplus
 }
 #endif

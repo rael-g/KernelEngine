@@ -37,24 +37,10 @@ extern "C"
         ke_bool (*join_timeout)(struct ke_thread *self, uint32_t timeout_ms);
     } ke_thread;
 
-    /**
-     * @brief Sets the name of the calling thread.
-     * Useful for the main thread and identifying workers in profilers.
-     */
-    KE_API void ke_thread_set_current_name(const char *name);
-
-    /**
-     * @brief Retrieves the name assigned to the calling thread.
-     * @return The thread name, or "unknown" if never set.
-     */
-    KE_API const char *ke_thread_get_current_name(void);
-
-    /**
-     * @brief Asserts that the calling thread matches the expected name.
-     * Aborts with a fatal message on mismatch in debug builds.
-     */
-    KE_API void ke_thread_assert_current(const char *expected_name);
-
+    // Thread-name TLS helpers (`ke_thread_set_current_name`, `ke_thread_get_current_name`,
+    // `ke_thread_assert_current`) live in `<kernel_engine/kernel/dev_platform/dev_platform.h>`
+    // — they are dev-time facilities, not core threading primitives. This header transitively
+    // pulls them in so existing consumers continue to compile without extra includes.
 
 #ifdef __cplusplus
 }
