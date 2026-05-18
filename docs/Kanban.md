@@ -154,8 +154,22 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 > By doing these LAST in stabilization, we avoid mixing convention cleanup into critical bug-fixing periods.
 
 ##### [B5.1] Fully encapsulate native pointers inside wrappers — no `public`, no `internal` leakage (Bug 1.43)
-- **Phase 1 status**: ✅ Done (commit `e1dde51`). All `Native` properties in `KernelEngine.Kernel` are now `internal`; `Native` removed from `IRenderer` and `IWindow` public interfaces; plugin assemblies access via `InternalsVisibleTo`. Still violates user's strong form (no internal either) — phase 2 below replaces each leak case-by-case.
-- **Phase 2 (TBD)**: identify each external `.Native` access among `KernelEngine.{Asset.Assimp,DevPlatform.Win32,Framework,Logging.Serilog,Render.Bgfx,TaskScheduler.Enki,Window.Glfw}` ServiceCollectionExtensions + Framework `Application.cs`, redesign each as a managed method on the owning wrapper. Revoke `InternalsVisibleTo` for native pointer access once done.
+- **Phase 1 status**: ✅ Done (commit `e1dde51`). All `Native` properties in `KernelEngine.Kernel` are now `internal`; `Native` removed from `IRenderer` and `IWindow` public interfaces; plugin assemblies access via `InternalsVisibleTo`.
+- **Phase 2 plan** (locked 2026-05-18, Hexagonal/Ports-and-Adapters approach — user-approved):
+  1. **Create `KernelEngine.Contracts` assembly** (new). Pure interfaces, ZERO `unsafe`, ZERO `Native` exposure: `IAllocator`, `ILogger`, `IWindow`, `IRenderer`, `IDevPlatform`, `IInput`, `ITaskScheduler`, `IFramePacket`, `IEcsRegistry`, `IWorld`, `ISystem`, `IFrameSync`, `IInputReader`, `ISceneWriter`, `IResourceFactory`, `ILoggerSink`. Plus the marker `IComponent`. Plus `Component<T>` wrapper struct.
+  2. **Reverse phase 1**: re-expose `public Native` on Kernel wrappers; remove `InternalsVisibleTo` from `KernelEngine.Kernel.csproj` (keep only Tests).
+  3. **`KernelEngine.Framework`** stops referencing `KernelEngine.Kernel`. References only `KernelEngine.Contracts`. All usages of concrete types (`Allocator`, `Logger`, etc.) become interface types. This breaks compilation of every `.Native` access in Framework — that's the point.
+  4. **Plugin assemblies** (`Render.Bgfx`, `Window.Glfw`, `Asset.Assimp`, `TaskScheduler.Enki`, `DevPlatform.Win32`, `Logging.Serilog`) reference `KernelEngine.Kernel` directly (engine-internal). Their `Add*` extensions get concrete wrappers from DI (cast or `GetRequiredService<Window>()` not `<IWindow>()`) and access `.Native` freely. Return interfaces to DI.
+  5. **Caso 1** (`Application.SetOsThreadName`): add `IDevPlatform.SetOsThreadName(string)` managed method. Concrete `DevPlatform` does the unsafe vtable call internally.
+  6. **Caso 3** (FramePacket managed API): add methods to `IFramePacket` for all per-frame writes (`SetCamera`, `SetDirectionalLight`, `AddPointLight`, `RecordDraw`, etc.). Rewrite 5 render systems in Framework without `unsafe`. `Mat4` helper stays internal-to-Framework `unsafe` (acceptable — low-level math, doesn't leak).
+  7. **Caso 8** (`AssetLoader`): inject `ITaskScheduler` via constructor; remove `.Native` access in `LoadModelAsync`.
+  8. **Caso 2** (`Component<T>` wrapper for `Node.GetComponent`): **DEFERRED** — user-defined components/systems are deferred to the workflow layer; scriptable nodes will cover most cases.
+- **Acceptance gate**:
+    - `grep -rn "KernelEngine\\.Kernel" src/csharp/KernelEngine.Framework/*.csproj` → no matches.
+    - `grep -rn "\\bunsafe\\b" src/csharp/KernelEngine.Framework/ examples/csharp/` → only `Framework/Internal/Mat4.cs`.
+    - `grep -rn "InternalsVisibleTo" src/csharp/` → only `*.Tests` and the engine-internal `KernelEngine.Asset.Assimp` (if needed for ModelHelper).
+    - All examples build green; ctest 179/179; dotnet test 80/80.
+- **Effort**: L (touches a large fraction of C# but mechanical once Contracts assembly exists).
 
 (original card text below for reference)
 
