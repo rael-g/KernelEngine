@@ -13,7 +13,7 @@ public class CameraNode : Node
 
     public static uint ComponentId { get; private set; } = uint.MaxValue;
 
-    internal static void Initialize(EcsRegistry registry)
+    internal static void Initialize(IEcsRegistry registry)
     {
         if (ComponentId == uint.MaxValue)
             ComponentId = registry.RegisterComponent<CameraComponent>("CameraComponent");
@@ -36,8 +36,8 @@ public class CameraNode : Node
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<CameraComponent>(ComponentId);
-        comp = new CameraComponent
+        var comp = AddComponent<CameraComponent>(ComponentId);
+        comp[0] = new CameraComponent
         {
             Fov = Fov * MathF.PI / 180f,
             Near = Near,

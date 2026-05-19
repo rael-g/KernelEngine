@@ -10,12 +10,12 @@ namespace KernelEngine.Framework;
 /// Node/scene are framework-level concepts; the ECS world itself knows only
 /// entities, components, and systems.
 /// </summary>
-public sealed unsafe class Scene
+public sealed class Scene
 {
-    private readonly World _world;
-    private readonly Node  _root;
+    private readonly IWorld _world;
+    private readonly Node   _root;
 
-    internal Scene(World world)
+    public Scene(IWorld world)
     {
         _world = world;
         var rootEntity = CreateEntityWithHierarchy("Root", KE_ENTITY_INVALID);
@@ -78,36 +78,36 @@ public sealed unsafe class Scene
         var entity = reg.CreateEntity();
 
         // Transform — default: origin, identity rotation, unit scale
-        ref var t = ref *reg.AddComponentRaw<TransformComponent>(entity, _world.TransformComponentId);
-        t = new TransformComponent
+        var t = reg.AddComponent<TransformComponent>(entity, _world.TransformComponentId);
+        t[0] = new TransformComponent
         {
             Position    = Vector3.Zero,
             Rotation    = Quaternion.Identity,
             Scale       = Vector3.One,
-            WorldMatrix = System.Numerics.Matrix4x4.Identity,
+            WorldMatrix = Matrix4x4.Identity,
         };
 
         // Hierarchy — link to parent, no children yet
-        ref var h = ref *reg.AddComponentRaw<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        h = new HierarchyComponent { Parent = parent };
+        var h = reg.AddComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
+        h[0] = new HierarchyComponent { Parent = parent };
 
         // Name
-        ref var n = ref *reg.AddComponentRaw<NameComponent>(entity, _world.NameComponentId);
-        SetName(ref n, name);
+        var n = reg.AddComponent<NameComponent>(entity, _world.NameComponentId);
+        SetName(ref n[0], name);
 
         // Prepend entity into parent's child list (O(1) doubly-linked prepend)
         if (parent != KE_ENTITY_INVALID)
         {
-            var ph = reg.GetComponentRaw<HierarchyComponent>(parent, _world.HierarchyComponentId);
-            if (ph != null)
+            var ph = reg.GetComponent<HierarchyComponent>(parent, _world.HierarchyComponentId);
+            if (!ph.IsEmpty)
             {
-                h.NextSibling = ph->FirstChild;
-                if (ph->FirstChild != KE_ENTITY_INVALID)
+                h[0].NextSibling = ph[0].FirstChild;
+                if (ph[0].FirstChild != KE_ENTITY_INVALID)
                 {
-                    var sib = reg.GetComponentRaw<HierarchyComponent>(ph->FirstChild, _world.HierarchyComponentId);
-                    if (sib != null) sib->PrevSibling = entity;
+                    var sib = reg.GetComponent<HierarchyComponent>(ph[0].FirstChild, _world.HierarchyComponentId);
+                    if (!sib.IsEmpty) sib[0].PrevSibling = entity;
                 }
-                ph->FirstChild = entity;
+                ph[0].FirstChild = entity;
             }
         }
 
@@ -118,52 +118,47 @@ public sealed unsafe class Scene
     private void DestroyEntityRecursive(ulong entity)
     {
         var reg = _world.Registry;
-        var h   = reg.GetComponentRaw<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        if (h == null) return;
+        var h   = reg.GetComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
+        if (h.IsEmpty) return;
 
         // Destroy children first (depth-first)
-        var child = h->FirstChild;
+        var child = h[0].FirstChild;
         while (child != KE_ENTITY_INVALID)
         {
-            var ch   = reg.GetComponentRaw<HierarchyComponent>(child, _world.HierarchyComponentId);
-            var next = ch != null ? ch->NextSibling : KE_ENTITY_INVALID;
+            var ch   = reg.GetComponent<HierarchyComponent>(child, _world.HierarchyComponentId);
+            var next = !ch.IsEmpty ? ch[0].NextSibling : KE_ENTITY_INVALID;
             DestroyEntityRecursive(child);
             child = next;
         }
 
         // Unlink from parent's child list
-        if (h->Parent != KE_ENTITY_INVALID)
+        if (h[0].Parent != KE_ENTITY_INVALID)
         {
-            var ph = reg.GetComponentRaw<HierarchyComponent>(h->Parent, _world.HierarchyComponentId);
-            if (ph != null && ph->FirstChild == entity)
-                ph->FirstChild = h->NextSibling;
+            var ph = reg.GetComponent<HierarchyComponent>(h[0].Parent, _world.HierarchyComponentId);
+            if (!ph.IsEmpty && ph[0].FirstChild == entity)
+                ph[0].FirstChild = h[0].NextSibling;
 
-            if (h->PrevSibling != KE_ENTITY_INVALID)
+            if (h[0].PrevSibling != KE_ENTITY_INVALID)
             {
-                var ps = reg.GetComponentRaw<HierarchyComponent>(h->PrevSibling, _world.HierarchyComponentId);
-                if (ps != null) ps->NextSibling = h->NextSibling;
+                var ps = reg.GetComponent<HierarchyComponent>(h[0].PrevSibling, _world.HierarchyComponentId);
+                if (!ps.IsEmpty) ps[0].NextSibling = h[0].NextSibling;
             }
-            if (h->NextSibling != KE_ENTITY_INVALID)
+            if (h[0].NextSibling != KE_ENTITY_INVALID)
             {
-                var ns = reg.GetComponentRaw<HierarchyComponent>(h->NextSibling, _world.HierarchyComponentId);
-                if (ns != null) ns->PrevSibling = h->PrevSibling;
+                var ns = reg.GetComponent<HierarchyComponent>(h[0].NextSibling, _world.HierarchyComponentId);
+                if (!ns.IsEmpty) ns[0].PrevSibling = h[0].PrevSibling;
             }
         }
 
         reg.DestroyEntity(entity);
     }
 
-    private static void SetName(ref NameComponent n, string name)
+    private static void SetName(ref NameComponent comp, string name)
     {
         if (string.IsNullOrEmpty(name)) return;
         var bytes = System.Text.Encoding.UTF8.GetBytes(name);
-        fixed (byte* src = bytes)
-        fixed (NameComponent* ptr = &n)
-        {
-            var dst = (byte*)ptr;
-            int len = Math.Min(bytes.Length, 63);
-            Buffer.MemoryCopy(src, dst, 64, len);
-            dst[len] = 0;
-        }
+        int len = Math.Min(bytes.Length, 63);
+        for (int i = 0; i < len; i++) comp.Name[i] = bytes[i];
+        comp.Name[len] = 0;
     }
 }

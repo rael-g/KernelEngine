@@ -9,7 +9,7 @@ public static class AssimpModelExtensions
     /// <summary>
     /// Uploads model data to the GPU and adds it to the scene.
     /// </summary>
-    public static async Task<Node> AddToSceneAsync(this ModelData model, World world, IResourceFactory resources, string name = "Model")
+    public static async Task<Node> AddToSceneAsync(this ModelData model, IWorld world, IResourceFactory resources, string name = "Model")
     {
         var scene = new Scene(world);
         var root = scene.AddNode(name);

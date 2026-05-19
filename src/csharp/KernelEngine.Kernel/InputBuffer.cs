@@ -46,17 +46,15 @@ internal sealed unsafe class InputSnapshotReader : IInputReader
     public bool IsMouseButtonReleased(int button) => (_data.mouse_buttons_released & (1u << button)) != 0;
 }
 
-public sealed class InputBuffer
+/// <summary>
+/// Lock-free single-slot exchange of <see cref="IInputReader"/> between ke.main (producer)
+/// and ke.sim (consumer).
+/// </summary>
+public sealed class InputBuffer : IInputBuffer
 {
-    private InputSnapshotReader _latest = new(default);
+    private static readonly IInputReader Empty = new InputSnapshotReader(default);
+    private IInputReader _latest = Empty;
 
-    public void Produce(ke_input_snapshot snapshot)
-    {
-        Volatile.Write(ref _latest, new InputSnapshotReader(snapshot));
-    }
-
-    public IInputReader Consume()
-    {
-        return Volatile.Read(ref _latest);
-    }
+    public void Produce(IInputReader snapshot) => Volatile.Write(ref _latest, snapshot);
+    public IInputReader Consume() => Volatile.Read(ref _latest);
 }

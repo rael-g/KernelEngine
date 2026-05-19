@@ -95,8 +95,8 @@ sealed class OrbitingLightNode : Node
     {
         if (LightNode.ComponentId == uint.MaxValue) return;
         var dir = CurrentDir();
-        ref var comp = ref AddComponent<LightComponent>(LightNode.ComponentId);
-        comp = new LightComponent { DirX = dir.X, DirY = dir.Y, DirZ = dir.Z,
+        var comp = AddComponent<LightComponent>(LightNode.ComponentId);
+        comp[0] = new LightComponent { DirX = dir.X, DirY = dir.Y, DirZ = dir.Z,
                                     R = Color.X, G = Color.Y, B = Color.Z,
                                     Intensity = Intensity };
     }
@@ -106,9 +106,9 @@ sealed class OrbitingLightNode : Node
         _angle += 60f * dt * MathF.PI / 180f;
         var dir = CurrentDir();
         var comp = GetComponent<LightComponent>(LightNode.ComponentId);
-        comp->DirX = dir.X;
-        comp->DirY = dir.Y;
-        comp->DirZ = dir.Z;
+        comp[0].DirX = dir.X;
+        comp[0].DirY = dir.Y;
+        comp[0].DirZ = dir.Z;
     }
 
     private Vector3 CurrentDir() =>

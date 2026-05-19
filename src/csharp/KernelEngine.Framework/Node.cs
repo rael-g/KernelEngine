@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
 using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework;
@@ -19,14 +18,14 @@ public unsafe class Node
     private static readonly Dictionary<ulong, Node> s_registry = [];
 
     private ulong _entity;
-    private World? _world;
+    private IWorld? _world;
     private string _name = "";
 
     /// <summary>Parameterless constructor for user subclasses.</summary>
     protected Node() { }
 
     /// <summary>Internal constructor for wrapping an existing entity (e.g. root).</summary>
-    internal Node(ulong entity, World world, string name)
+    internal Node(ulong entity, IWorld world, string name)
     {
         _entity = entity;
         _world = world;
@@ -35,7 +34,7 @@ public unsafe class Node
     }
 
     /// <summary>Called by <see cref="Scene.AddNode{T}"/> to bind this instance to an entity.</summary>
-    internal void Initialize(ulong entity, World world, string name)
+    internal void Initialize(ulong entity, IWorld world, string name)
     {
         _entity = entity;
         _world = world;
@@ -76,17 +75,19 @@ public unsafe class Node
     {
         get
         {
-            var c = TransformPtr;
-            if (c == null) return Transform.Identity;
-            return new Transform { Position = c->Position, Rotation = c->Rotation, Scale = c->Scale };
+            var slot = TransformSlot;
+            if (slot.IsEmpty) return Transform.Identity;
+            ref var c = ref slot[0];
+            return new Transform { Position = c.Position, Rotation = c.Rotation, Scale = c.Scale };
         }
         set
         {
-            var c = TransformPtr;
-            if (c == null) return;
-            c->Position = value.Position;
-            c->Rotation = value.Rotation;
-            c->Scale = value.Scale;
+            var slot = TransformSlot;
+            if (slot.IsEmpty) return;
+            ref var c = ref slot[0];
+            c.Position = value.Position;
+            c.Rotation = value.Rotation;
+            c.Scale = value.Scale;
         }
     }
 
@@ -95,19 +96,15 @@ public unsafe class Node
     {
         get
         {
-            var c = TransformPtr;
-            return c != null ? c->WorldMatrix : Matrix4x4.Identity;
+            var slot = TransformSlot;
+            return slot.IsEmpty ? Matrix4x4.Identity : slot[0].WorldMatrix;
         }
     }
 
-    private TransformComponent* TransformPtr
-    {
-        get
-        {
-            if (_world == null) return null;
-            return _world.Registry.GetComponentRaw<TransformComponent>(_entity, _world.TransformComponentId);
-        }
-    }
+    private Span<TransformComponent> TransformSlot =>
+        _world == null
+            ? Span<TransformComponent>.Empty
+            : _world.Registry.GetComponent<TransformComponent>(_entity, _world.TransformComponentId);
 
     // ── Hierarchy ─────────────────────────────────────────────────────────────
 
@@ -116,8 +113,9 @@ public unsafe class Node
     {
         get
         {
-            var h = HierarchyPtr;
-            return h != null && h->Parent != 0 ? s_registry.GetValueOrDefault(h->Parent) : null;
+            var h = HierarchySlot;
+            if (h.IsEmpty || h[0].Parent == 0) return null;
+            return s_registry.GetValueOrDefault(h[0].Parent);
         }
     }
 
@@ -126,8 +124,9 @@ public unsafe class Node
     {
         get
         {
-            var h = HierarchyPtr;
-            return h != null && h->FirstChild != 0 ? s_registry.GetValueOrDefault(h->FirstChild) : null;
+            var h = HierarchySlot;
+            if (h.IsEmpty || h[0].FirstChild == 0) return null;
+            return s_registry.GetValueOrDefault(h[0].FirstChild);
         }
     }
 
@@ -136,29 +135,26 @@ public unsafe class Node
     {
         get
         {
-            var h = HierarchyPtr;
-            return h != null && h->NextSibling != 0 ? s_registry.GetValueOrDefault(h->NextSibling) : null;
+            var h = HierarchySlot;
+            if (h.IsEmpty || h[0].NextSibling == 0) return null;
+            return s_registry.GetValueOrDefault(h[0].NextSibling);
         }
     }
 
-    private HierarchyComponent* HierarchyPtr
-    {
-        get
-        {
-            if (_world == null) return null;
-            return _world.Registry.GetComponentRaw<HierarchyComponent>(_entity, _world.HierarchyComponentId);
-        }
-    }
+    private Span<HierarchyComponent> HierarchySlot =>
+        _world == null
+            ? Span<HierarchyComponent>.Empty
+            : _world.Registry.GetComponent<HierarchyComponent>(_entity, _world.HierarchyComponentId);
 
     // ── ECS helpers for subclasses ────────────────────────────────────────────
 
-    /// <summary>Adds a component to this node's entity and returns a reference to it.</summary>
-    protected ref T AddComponent<T>(uint componentId) where T : unmanaged =>
-        ref *_world!.Registry.AddComponentRaw<T>(_entity, componentId);
+    /// <summary>Adds a component to this node's entity and returns a length-1 span.</summary>
+    protected Span<T> AddComponent<T>(uint componentId) where T : unmanaged =>
+        _world!.Registry.AddComponent<T>(_entity, componentId);
 
-    /// <summary>Returns a pointer to the component, or <c>null</c> if not present.</summary>
-    protected T* GetComponent<T>(uint componentId) where T : unmanaged =>
-        _world!.Registry.GetComponentRaw<T>(_entity, componentId);
+    /// <summary>Returns a length-1 span over the component, or empty when absent.</summary>
+    protected Span<T> GetComponent<T>(uint componentId) where T : unmanaged =>
+        _world!.Registry.GetComponent<T>(_entity, componentId);
 
     /// <summary>Removes a component from this node's entity.</summary>
     protected void RemoveComponent(uint componentId) =>

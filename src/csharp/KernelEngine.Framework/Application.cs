@@ -2,15 +2,14 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
 /// Application shell: resolves services from DI, owns the frame loop, and coordinates three threads.
 /// <list type="bullet">
-///   <item><b>ke.main</b>   — window/OS thread: GLFW PollEvents, Input snapshotting.</item>
-///   <item><b>ke.render</b> — renderer thread: on_initialize, SubmitPacket, Frame, on_shutdown.
+///   <item><b>ke.main</b>   — window/OS thread: window PollEvents, Input snapshotting.</item>
+///   <item><b>ke.render</b> — renderer thread: Initialize, SubmitPacket, Frame, Dispose.
 ///         All renderer API calls are pinned to this thread, making any backend work regardless
 ///         of whether it has internal threading support (OpenGL, DX11, bgfx single-thread, etc.).</item>
 ///   <item><b>ke.sim</b>    — simulation thread: World.Update, FrameSync producer.</item>
@@ -19,17 +18,18 @@ namespace KernelEngine.Framework;
 public class Application : IDisposable
 {
     public IServiceProvider Services { get; private set; } = null!;
-    public Allocator Allocator { get; private set; } = null!;
-    public Logger? Logger { get; private set; }
+    public IAllocator Allocator { get; private set; } = null!;
+    public ILogger? Logger { get; private set; }
     public IWindow Window { get; private set; } = null!;
     public IRenderer Renderer { get; private set; } = null!;
-    public Input? Input { get; private set; }
-    public DevPlatform? DevPlatform { get; private set; }
+    public IInput? Input { get; private set; }
+    public IDevPlatform? DevPlatform { get; private set; }
 
-    private ProxyAllocator? _proxyAllocator;
+    private IEngineHost _host = null!;
+    private IProxyAllocator? _proxyAllocator;
 
     /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
-    public World ActiveWorld { get; set; } = null!;
+    public IWorld ActiveWorld { get; set; } = null!;
 
     private Scene? _scene;
 
@@ -39,12 +39,12 @@ public class Application : IDisposable
     /// <summary>Called once on ke.sim after ke.render is initialized and systems are registered.</summary>
     public Action<IResourceFactory>? OnReady { get; set; }
 
-    /// <summary>Called every sim frame after <see cref="World.Update"/>.</summary>
+    /// <summary>Called every sim frame after <c>IWorld.Update</c>.</summary>
     public Action<ISceneWriter, IInputReader>? OnUpdate { get; set; }
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly InputBuffer _inputBuffer = new();
-    private readonly ResourceCommandQueue _resourceQueue = new();
+    private IInputBuffer _inputBuffer = null!;
+    private IResourceCommandQueue _resourceQueue = null!;
     private ShadowRenderSystem? _shadowSystem;
 
     private string GetGpuFatalError()
@@ -74,15 +74,16 @@ public class Application : IDisposable
 
     public void Run(IServiceCollection serviceCollection)
     {
-        KernelThread.SetCurrentName("ke.main");
-
         Services = serviceCollection.BuildServiceProvider();
 
-        var baseAllocator = Services.GetRequiredService<Allocator>();
-        _proxyAllocator = new ProxyAllocator(baseAllocator, "ApplicationRoot");
+        _host = Services.GetRequiredService<IEngineHost>();
+        _host.SetCurrentThreadName("ke.main");
+
+        var baseAllocator = Services.GetRequiredService<IAllocator>();
+        _proxyAllocator = _host.CreateProxyAllocator(baseAllocator, "ApplicationRoot");
         Allocator = _proxyAllocator;
 
-        Logger      = Services.GetService<Logger>();
+        Logger = Services.GetService<ILogger>();
 
         if (Logger != null)
             foreach (var sink in Services.GetServices<ILoggerSink>())
@@ -91,17 +92,19 @@ public class Application : IDisposable
         // GLFW window must be created on the main thread.
         ValidateRequiredServices();
         Window      = Services.GetRequiredService<IWindow>();
-        Input       = Services.GetService<Input>();
+        Input       = Services.GetService<IInput>();
         Renderer    = Services.GetRequiredService<IRenderer>();
-        DevPlatform = Services.GetService<DevPlatform>(); // optional dev-only diagnostics
+        DevPlatform = Services.GetService<IDevPlatform>(); // optional dev-only diagnostics
 
-        if (ActiveWorld == null)
-            ActiveWorld = new World(Allocator);
+        ActiveWorld ??= _host.CreateWorld(Allocator);
+
+        _inputBuffer   = _host.CreateInputBuffer();
+        _resourceQueue = _host.CreateResourceCommandQueue();
 
         InitializeSystems();
 
         // ke.sim writes → ke.render reads.
-        using var frameSync     = FrameSync.Create(Allocator, bufferCount: 2);
+        using var frameSync     = _host.CreateFrameSync(Allocator, bufferCount: 2);
         using var renderReady   = new System.Threading.ManualResetEventSlim(false);
         using var simReady      = new System.Threading.ManualResetEventSlim(false);
 
@@ -114,7 +117,7 @@ public class Application : IDisposable
         SetOsThreadName("ke.main");
 
         // ke.render: owns every renderer API call for the lifetime of the app.
-        using var renderThread = KernelThread.Create(Allocator, "ke.render", devPlatform: DevPlatform, action: () =>
+        using var renderThread = _host.CreateThread(Allocator, "ke.render", DevPlatform, () =>
         {
             try
             {
@@ -182,14 +185,14 @@ public class Application : IDisposable
         });
 
         // ke.sim: drives the world and records into FramePackets.
-        using var simThread = KernelThread.Create(Allocator, "ke.sim", devPlatform: DevPlatform, action: () =>
+        using var simThread = _host.CreateThread(Allocator, "ke.sim", DevPlatform, () =>
         {
             try
             {
                 renderReady.Wait(); // wait for ke.render to finish Initialize()
                 if (_cts.IsCancellationRequested) return;
 
-                var factory = new ResourceCommandFactory(_resourceQueue);
+                var factory = _resourceQueue.CreateFactory();
                 OnReady?.Invoke(factory);
                 Logger?.Info("Application", "ke.sim: OnReady complete — entering frame loop");
                 simReady.Set(); // signal ke.render that OnReady is complete
@@ -198,13 +201,13 @@ public class Application : IDisposable
                 {
                     var packet = frameSync.BeginWrite();
                     if (_cts.IsCancellationRequested) { packet.EndWrite(); break; } // poison-pill
-                    
+
                     var input = _inputBuffer.Consume();
-                    var writer = new FramePacketSceneWriter(packet);
+                    var writer = _host.CreateSceneWriter(packet);
 
                     ActiveWorld?.Update(packet: packet, input: input);
                     OnUpdate?.Invoke(writer, input);
-                    
+
                     packet.EndWrite();
                 }
             }
@@ -229,7 +232,7 @@ public class Application : IDisposable
                 Input?.Update();
                 Window.PollEvents();
                 if (Input != null)
-                    _inputBuffer.Produce(Input.GetSnapshot());
+                    _inputBuffer.Produce(Input.CaptureSnapshot());
 
                 if (Window.ShouldClose())
                     _cts.Cancel();
@@ -244,7 +247,7 @@ public class Application : IDisposable
         // Wait for threads to exit with timeout
         if (!simThread.Join(5000))
             Logger?.Error("Application", "ke.sim did not stop within 5s — forcing exit");
-        
+
         if (!renderThread.Join(3000))
             Logger?.Error("Application", "ke.render did not stop within 3s — forcing exit");
 
@@ -266,7 +269,7 @@ public class Application : IDisposable
 
     // ── Systems setup ─────────────────────────────────────────────────────────
 
-    private unsafe void InitializeSystems()
+    private void InitializeSystems()
     {
         LightNode.Initialize(ActiveWorld.Registry);
         PointLightNode.Initialize(ActiveWorld.Registry);
@@ -346,9 +349,9 @@ public class Application : IDisposable
         private delegate int UnhandledExceptionFilter(IntPtr exceptionInfo);
 
         private static UnhandledExceptionFilter? _filter;
-        private static Logger? _staticLogger;
+        private static ILogger? _staticLogger;
 
-        public static void Register(Logger? logger)
+        public static void Register(ILogger? logger)
         {
             _staticLogger = logger;
             _filter = Filter;
@@ -377,7 +380,7 @@ public class Application : IDisposable
             try
             {
                 using var fs = new FileStream(dumpPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                
+
                 // MINI_DUMP_TYPE flags:
                 // 0x00000000 = MiniDumpNormal
                 // 0x00000004 = MiniDumpWithHandleData
@@ -443,7 +446,7 @@ public class Application : IDisposable
         ActiveWorld?.Dispose();
 
         _proxyAllocator?.Report(Logger);
-        
+
         (Services as IDisposable)?.Dispose();
         _proxyAllocator?.Dispose();
     }

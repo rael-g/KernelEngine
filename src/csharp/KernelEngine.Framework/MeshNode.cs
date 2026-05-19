@@ -23,7 +23,7 @@ public class MeshNode : Node
     /// Registers the MeshComponent with the ECS registry and stores the component ID.
     /// Must be called once per world, before any MeshNode is added to the scene.
     /// </summary>
-    internal static void Initialize(EcsRegistry registry)
+    internal static void Initialize(IEcsRegistry registry)
     {
         ComponentId = registry.RegisterComponent<MeshComponent>("ke_mesh_renderer");
     }
@@ -45,8 +45,8 @@ public class MeshNode : Node
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<MeshComponent>(ComponentId);
-        comp = new MeshComponent
+        var comp = AddComponent<MeshComponent>(ComponentId);
+        comp[0] = new MeshComponent
         {
             MeshHandle     = MeshHandle.IsValid     ? MeshHandle     : DefaultMeshHandle,
             MaterialHandle = MaterialHandle.IsValid ? MaterialHandle : DefaultMaterialHandle,

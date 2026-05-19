@@ -96,8 +96,8 @@ sealed class RotatingSpotLightNode : Node
     protected override void OnStart()
     {
         if (SpotLightNode.ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<SpotLightComponent>(SpotLightNode.ComponentId);
-        comp = new SpotLightComponent { 
+        var comp = AddComponent<SpotLightComponent>(SpotLightNode.ComponentId);
+        comp[0] = new SpotLightComponent { 
             R = Color.X, G = Color.Y, B = Color.Z,
             Intensity = Intensity,
             Range = 20.0f,
@@ -118,8 +118,8 @@ sealed class RotatingSpotLightNode : Node
         var lookDir = Vector3.Normalize(new Vector3(0, 0, 0) - LocalTransform.Position);
         
         var comp = GetComponent<SpotLightComponent>(SpotLightNode.ComponentId);
-        comp->DirX = lookDir.X;
-        comp->DirY = lookDir.Y;
-        comp->DirZ = lookDir.Z;
+        comp[0].DirX = lookDir.X;
+        comp[0].DirY = lookDir.Y;
+        comp[0].DirZ = lookDir.Z;
     }
 }

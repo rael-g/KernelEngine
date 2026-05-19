@@ -32,4 +32,13 @@ public sealed class EngineHost : IEngineHost
 
     /// <inheritdoc/>
     public void SetCurrentInputReader(IInputReader? reader) => Input.SetCurrentReader(reader);
+
+    /// <inheritdoc/>
+    public IInputBuffer CreateInputBuffer() => new InputBuffer();
+
+    /// <inheritdoc/>
+    public IResourceCommandQueue CreateResourceCommandQueue() => new ResourceCommandQueue();
+
+    /// <inheritdoc/>
+    public ISceneWriter CreateSceneWriter(IFramePacket packet) => new FramePacketSceneWriter((FramePacket)packet);
 }

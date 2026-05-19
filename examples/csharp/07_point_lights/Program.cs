@@ -75,8 +75,8 @@ sealed class MovingLightNode : Node
     protected override void OnStart()
     {
         if (PointLightNode.ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<PointLightComponent>(PointLightNode.ComponentId);
-        comp = new PointLightComponent { 
+        var comp = AddComponent<PointLightComponent>(PointLightNode.ComponentId);
+        comp[0] = new PointLightComponent { 
             R = Color.X, G = Color.Y, B = Color.Z,
             Intensity = Intensity,
             Radius = 10.0f

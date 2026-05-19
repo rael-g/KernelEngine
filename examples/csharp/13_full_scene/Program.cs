@@ -90,8 +90,8 @@ sealed class OrbitingLight : Node
 
     protected override void OnStart()
     {
-        ref var comp = ref AddComponent<PointLightComponent>(PointLightNode.ComponentId);
-        comp = new PointLightComponent { R = Color.X, G = Color.Y, B = Color.Z, Intensity = 10f, Radius = 10f };
+        var comp = AddComponent<PointLightComponent>(PointLightNode.ComponentId);
+        comp[0] = new PointLightComponent { R = Color.X, G = Color.Y, B = Color.Z, Intensity = 10f, Radius = 10f };
     }
 
     protected override void OnUpdate(float dt)

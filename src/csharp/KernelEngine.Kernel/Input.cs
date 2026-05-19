@@ -54,7 +54,7 @@ public sealed unsafe class Input : IInput
         return _native->update(_native).Wrap();
     }
 
-    /// <summary>Captures a frozen snapshot of the current input state.</summary>
+    /// <summary>Captures a frozen snapshot of the current input state (native form).</summary>
     public ke_input_snapshot GetSnapshot()
     {
         KernelThread.AssertCurrent("ke.main");
@@ -62,6 +62,9 @@ public sealed unsafe class Input : IInput
         _native->get_snapshot(_native, &snapshot);
         return snapshot;
     }
+
+    /// <inheritdoc/>
+    public IInputReader CaptureSnapshot() => new InputSnapshotReader(GetSnapshot());
 
     /// <summary>Returns true if the key was pressed this frame.</summary>
     public bool IsKeyPressed(int key) => _native->is_key_pressed(_native, key) != 0;

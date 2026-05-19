@@ -23,6 +23,8 @@ public class ApplicationTests
         var allocator = new MallocAllocator();
         
         services.AddSingleton<Allocator>(allocator);
+        services.AddSingleton<IAllocator>(allocator);
+        services.AddSingleton<IEngineHost, EngineHost>();
         services.AddSingleton<IWindow>(mockWindow);
         services.AddSingleton<IRenderer>(mockRenderer);
         

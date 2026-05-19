@@ -24,7 +24,7 @@ public struct ResourceCommand
     public TaskCompletionSource<uint>? CompletionSource;
 }
 
-public sealed class ResourceCommandQueue
+public sealed class ResourceCommandQueue : IResourceCommandQueue
 {
     private readonly ConcurrentQueue<ResourceCommand> _queue = new();
 
@@ -32,6 +32,9 @@ public sealed class ResourceCommandQueue
     {
         _queue.Enqueue(command);
     }
+
+    /// <inheritdoc/>
+    public IResourceFactory CreateFactory() => new ResourceCommandFactory(this);
 
     public void Drain(IRenderer renderer)
     {

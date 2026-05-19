@@ -13,7 +13,7 @@ public class SkyboxNode : Node
 {
     public static uint ComponentId { get; private set; } = uint.MaxValue;
 
-    internal static void Initialize(EcsRegistry registry)
+    internal static void Initialize(IEcsRegistry registry)
     {
         ComponentId = registry.RegisterComponent<SkyboxComponent>("Skybox");
     }
@@ -27,7 +27,7 @@ public class SkyboxNode : Node
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue || !CubemapHandle.IsValid) return;
-        ref var comp = ref AddComponent<SkyboxComponent>(ComponentId);
-        comp.CubemapHandle = CubemapHandle;
+        var comp = AddComponent<SkyboxComponent>(ComponentId);
+        comp[0].CubemapHandle = CubemapHandle;
     }
 }

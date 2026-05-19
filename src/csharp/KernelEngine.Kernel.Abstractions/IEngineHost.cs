@@ -36,4 +36,15 @@ public interface IEngineHost
 
     /// <summary>Sets a per-frame input snapshot reader visible to <c>ke.sim</c> systems via TLS.</summary>
     void SetCurrentInputReader(IInputReader? reader);
+
+    // ── Cross-thread plumbing ──────────────────────────────────────────────
+
+    /// <summary>Creates a single-slot input snapshot exchange between ke.main and ke.sim.</summary>
+    IInputBuffer CreateInputBuffer();
+
+    /// <summary>Creates the resource command queue drained by ke.render.</summary>
+    IResourceCommandQueue CreateResourceCommandQueue();
+
+    /// <summary>Wraps a frame packet with a sim-thread scene writer (per-frame ergonomic API).</summary>
+    ISceneWriter CreateSceneWriter(IFramePacket packet);
 }

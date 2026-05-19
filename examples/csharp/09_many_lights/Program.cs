@@ -95,8 +95,8 @@ sealed class RandomMovingLightNode : Node
         _seed = new Vector3((float)rand.NextDouble() * 100f, (float)rand.NextDouble() * 100f, (float)rand.NextDouble() * 100f);
         
         if (PointLightNode.ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<PointLightComponent>(PointLightNode.ComponentId);
-        comp = new PointLightComponent { 
+        var comp = AddComponent<PointLightComponent>(PointLightNode.ComponentId);
+        comp[0] = new PointLightComponent { 
             R = Color.X, G = Color.Y, B = Color.Z,
             Intensity = Intensity,
             Radius = Radius

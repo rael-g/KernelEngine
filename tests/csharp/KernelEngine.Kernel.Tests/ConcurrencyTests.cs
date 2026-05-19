@@ -14,11 +14,11 @@ public class ConcurrencyTests
     public void InputBuffer_ProduceAndConsume_ReturnsLatest()
     {
         var buffer = new InputBuffer();
-        var snapshot = new ke_input_snapshot { mouse_x = 100, mouse_y = 200 };
-        
-        buffer.Produce(snapshot);
+        var reader1 = new InputSnapshotReader(new ke_input_snapshot { mouse_x = 100, mouse_y = 200 });
+
+        buffer.Produce(reader1);
         var reader = buffer.Consume();
-        
+
         Assert.Equal(new Vector2(100, 200), reader.MousePosition);
     }
 
@@ -26,10 +26,10 @@ public class ConcurrencyTests
     public void InputBuffer_MultipleProduce_ReturnsOnlyLatest()
     {
         var buffer = new InputBuffer();
-        
-        buffer.Produce(new ke_input_snapshot { mouse_x = 10 });
-        buffer.Produce(new ke_input_snapshot { mouse_x = 20 });
-        
+
+        buffer.Produce(new InputSnapshotReader(new ke_input_snapshot { mouse_x = 10 }));
+        buffer.Produce(new InputSnapshotReader(new ke_input_snapshot { mouse_x = 20 }));
+
         var reader = buffer.Consume();
         Assert.Equal(20, reader.MousePosition.X);
     }
