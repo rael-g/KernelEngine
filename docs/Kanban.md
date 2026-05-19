@@ -154,8 +154,18 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 > By doing these LAST in stabilization, we avoid mixing convention cleanup into critical bug-fixing periods.
 
 ##### [B5.1] Fully encapsulate native pointers inside wrappers — no `public`, no `internal` leakage (Bug 1.43)
-- **Phase 1 status**: ✅ Done (commit `e1dde51`). All `Native` properties in `KernelEngine.Kernel` are now `internal`; `Native` removed from `IRenderer` and `IWindow` public interfaces; plugin assemblies access via `InternalsVisibleTo`.
-- **Phase 2 plan** (locked 2026-05-18, Hexagonal/Ports-and-Adapters approach — user-approved):
+- **Phase 1 status**: ✅ Done (commit `e1dde51`).
+- **Phase 2 progress** (10 commits, 2026-05-18 session — Hexagonal/Ports-and-Adapters approach):
+  - ✅ Step 1: `KernelEngine.Kernel.Abstractions` assembly created with **22 types** (interfaces + managed records: LogLevel, Vertex, Lights, Handles, Transform, KernelResult, Result/KernelException, ComponentAccess, IAllocator/IArenaAllocator/IProxyAllocator/IMallocAllocator, ILogger, ILoggerSink, IDevPlatform, ITaskScheduler, IFrameSync, IFramePacket, IRenderer, IWindow, IInputReader, ISceneWriter, IResourceFactory, ISystem, IEcsRegistry, IWorld).
+  - ✅ Step 2: `internal Native` → `public Native` on all wrappers; `InternalsVisibleTo` for plugin assemblies revoked (only Tests retained). Commit `fd0c65c`.
+  - ✅ Step 5/Caso 1: `IDevPlatform.SetOsThreadName` managed method. Commit `d7d2256`.
+  - ✅ Step 7/Caso 8: `AssetLoader` injects `TaskScheduler` via ctor; `LoadModelAsync` no longer takes scheduler param. Commit `877f1ba`.
+  - ✅ Side: Node + Scene moved from Kernel to Framework. Commit `6c228de`.
+  - ⏳ Step 3: Framework.csproj decouple from Kernel — **DEFERRED**. Requires expanded `IEcsRegistry` surface and Caso 2 (Component<T>) which is also deferred.
+  - ⏳ Step 6/Caso 3: `IFramePacket` rich managed API + rewrite 5 systems without `unsafe` — **DEFERRED**. Largest remaining work (~6h).
+  - ⏳ Step 8/Caso 2: `Component<T>` wrapper — **DEFERRED** to workflow layer (scriptable nodes).
+
+- **Original plan reference** (for context):
   1. **Create `KernelEngine.Contracts` assembly** (new). Pure interfaces, ZERO `unsafe`, ZERO `Native` exposure: `IAllocator`, `ILogger`, `IWindow`, `IRenderer`, `IDevPlatform`, `IInput`, `ITaskScheduler`, `IFramePacket`, `IEcsRegistry`, `IWorld`, `ISystem`, `IFrameSync`, `IInputReader`, `ISceneWriter`, `IResourceFactory`, `ILoggerSink`. Plus the marker `IComponent`. Plus `Component<T>` wrapper struct.
   2. **Reverse phase 1**: re-expose `public Native` on Kernel wrappers; remove `InternalsVisibleTo` from `KernelEngine.Kernel.csproj` (keep only Tests).
   3. **`KernelEngine.Framework`** stops referencing `KernelEngine.Kernel`. References only `KernelEngine.Contracts`. All usages of concrete types (`Allocator`, `Logger`, etc.) become interface types. This breaks compilation of every `.Native` access in Framework — that's the point.
