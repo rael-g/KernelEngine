@@ -18,7 +18,7 @@ using var app = new Application();
 app.OnReady = (resources) =>
 {
     // Directional light coming from upper-right-front
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new LightNode
         {
             Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
@@ -28,7 +28,7 @@ app.OnReady = (resources) =>
         "Sun");
 
     // Camera positioned 5 units back, looking forward along -Z
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -39,8 +39,8 @@ app.OnReady = (resources) =>
 
     var orangeMat = resources.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
 
-    var spinner = app.ActiveWorld.Scene.AddNode(new SpinnerNode(), "Spinner");
-    app.ActiveWorld.Scene.AddNode(
+    var spinner = app.Scene.AddNode(new SpinnerNode(), "Spinner");
+    app.Scene.AddNode(
         new MeshNode { MaterialHandle = orangeMat },
         "Quad",
         parent: spinner);

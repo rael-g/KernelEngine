@@ -22,21 +22,21 @@ app.OnReady = async (resources) =>
     Console.WriteLine("[KernelEngine] Features: all_stabilized_systems, shadows, hdr, bloom, ssao, many_lights, assimp");
 
     // Camera
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "MainCamera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(8f, 8f, 15f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Static directional light
-    var sun = app.ActiveWorld.Scene.AddNode(
+    var sun = app.Scene.AddNode(
         new LightNode { Color = new Vector3(1f, 0.95f, 0.8f), Intensity = 4.0f },
         "Sun");
     sun.LocalTransform = sun.LocalTransform with { Position = new Vector3(10f, 20f, 10f) };
 
     // Ground plane
     var floorMat = await resources.CreateMaterialAsync(new Vector4(0.2f, 0.2f, 0.2f, 1f), metallic: 0.0f, roughness: 0.9f);
-    var floor = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 0.1f, 50f) };
 
     // Load Model
@@ -54,7 +54,7 @@ app.OnReady = async (resources) =>
     // Dynamic point lights
     for (int i = 0; i < 8; i++)
     {
-        app.ActiveWorld.Scene.AddNode(
+        app.Scene.AddNode(
             new OrbitingLight { 
                 Color = i % 2 == 0 ? Vector3.UnitX : Vector3.UnitZ, 
                 Radius = 8f,

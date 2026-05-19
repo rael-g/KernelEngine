@@ -66,11 +66,6 @@ public sealed unsafe class World : IWorld
     /// <summary>Interface view of the registry (Framework/user code path).</summary>
     IEcsRegistry IWorld.Registry => Registry;
 
-    private Scene? _scene;
-
-    /// <summary>The scene graph facade for this world.</summary>
-    public Scene Scene => _scene ??= new Scene(this);
-
     /// <summary>Entity ID of the active camera. <see cref="CameraRenderSystem"/> reads this each frame.</summary>
     public ulong ActiveCamera { get; set; }
 

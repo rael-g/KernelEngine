@@ -1,6 +1,7 @@
+using KernelEngine.Kernel;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace KernelEngine.Framework.Tests;
 
 [Collection("KernelRegistry")]
 public class SceneTests
@@ -47,6 +48,7 @@ public class SceneTests
     [Fact]
     public void DestroyNode_Works()
     {
+        Node.ClearRegistry();
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var scene = new Scene(world);

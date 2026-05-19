@@ -21,7 +21,7 @@ app.OnReady = (resources) =>
     Console.WriteLine("[KernelEngine] Features: hdr_rendering, bloom, tonemapping");
 
     // Camera
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 10f) };
@@ -31,11 +31,11 @@ app.OnReady = (resources) =>
     var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
 
     // Glowing cube
-    var glowingCube = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat }, "GlowCube");
+    var glowingCube = app.Scene.AddNode(new MeshNode { MaterialHandle = mat }, "GlowCube");
     glowingCube.LocalTransform = glowingCube.LocalTransform with { Scale = new Vector3(2f, 2f, 2f) };
 
     // Very intense light to trigger bloom
-    var light = app.ActiveWorld.Scene.AddNode(
+    var light = app.Scene.AddNode(
         new LightNode { Color = new Vector3(1f, 0.5f, 0.2f), Intensity = 50.0f },
         "BrightSun");
     light.LocalTransform = light.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };

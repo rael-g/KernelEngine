@@ -21,7 +21,7 @@ app.OnReady = (resources) =>
     Console.WriteLine("[KernelEngine] Features: ssao, gbuffer_prepass");
 
     // Camera
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(5f, 5f, 5f) };
@@ -31,7 +31,7 @@ app.OnReady = (resources) =>
     var mat = resources.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), metallic: 0.0f, roughness: 0.5f);
 
     // Floor
-    var floor = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = mat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(10f, 0.1f, 10f) };
 
     // Wall of cubes to see occlusion
@@ -39,7 +39,7 @@ app.OnReady = (resources) =>
     {
         for (int y = 1; y <= 4; y += 1)
         {
-            var n = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat }, $"Cube_{x}_{y}");
+            var n = app.Scene.AddNode(new MeshNode { MaterialHandle = mat }, $"Cube_{x}_{y}");
             n.LocalTransform = n.LocalTransform with { 
                 Position = new Vector3(x, y, 0f),
                 Scale = new Vector3(0.9f, 0.9f, 0.9f)

@@ -21,7 +21,7 @@ app.OnReady = (resources) =>
     Console.WriteLine("[KernelEngine] Features: spot_lights, clustered_lighting");
 
     // Camera
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
@@ -32,7 +32,7 @@ app.OnReady = (resources) =>
     var cubeMat = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
     // Floor
-    var floor = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with 
     { 
         Scale = new Vector3(20f, 0.1f, 20f),
@@ -44,13 +44,13 @@ app.OnReady = (resources) =>
     {
         for (int z = -4; z <= 4; z += 4)
         {
-            var n = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
+            var n = app.Scene.AddNode(new MeshNode { MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, 1f, z) };
         }
     }
 
     // Spot lights
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new RotatingSpotLightNode { 
             Color = new Vector3(1, 0, 0), 
             Intensity = 10.0f,
@@ -58,7 +58,7 @@ app.OnReady = (resources) =>
         },
         "Spot_Red");
 
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new RotatingSpotLightNode { 
             Color = new Vector3(0, 1, 0), 
             Intensity = 10.0f,
@@ -66,7 +66,7 @@ app.OnReady = (resources) =>
         },
         "Spot_Green");
 
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new RotatingSpotLightNode { 
             Color = new Vector3(0, 0, 1), 
             Intensity = 10.0f,

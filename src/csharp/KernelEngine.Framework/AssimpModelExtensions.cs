@@ -11,7 +11,8 @@ public static class AssimpModelExtensions
     /// </summary>
     public static async Task<Node> AddToSceneAsync(this ModelData model, World world, IResourceFactory resources, string name = "Model")
     {
-        var root = world.Scene.AddNode(name);
+        var scene = new Scene(world);
+        var root = scene.AddNode(name);
 
         // 1. Create GPU textures
         var gpuTextures = new TextureHandle[model.Textures.Length];
@@ -47,7 +48,7 @@ public static class AssimpModelExtensions
             
             var material = meshData.MaterialIndex >= 0 ? gpuMaterials[meshData.MaterialIndex] : default;
 
-            var meshNode = world.Scene.AddNode(
+            var meshNode = scene.AddNode(
                 new MeshNode { MeshHandle = gpuMesh, MaterialHandle = material },
                 meshData.Name,
                 parent: root);

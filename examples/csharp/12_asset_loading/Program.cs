@@ -22,14 +22,14 @@ app.OnReady = async (resources) =>
     Console.WriteLine("[KernelEngine] Features: assimp_loader, model_to_scene");
 
     // Camera
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 5f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Lights
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new LightNode { Color = Vector3.One, Intensity = 3.0f },
         "Sun").LocalTransform = new Transform { Position = new Vector3(5f, 10f, 5f) };
 

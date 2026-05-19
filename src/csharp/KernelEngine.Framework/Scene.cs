@@ -1,7 +1,8 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Scene graph facade built on top of the ECS world.

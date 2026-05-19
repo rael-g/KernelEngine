@@ -21,7 +21,7 @@ app.OnReady = (resources) =>
     Console.WriteLine("[KernelEngine] Features: point_lights, clustered_lighting");
 
     // Camera
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
@@ -35,7 +35,7 @@ app.OnReady = (resources) =>
     {
         for (int y = -5; y <= 5; y += 2)
         {
-            var n = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat }, $"Sphere_{x}_{y}");
+            var n = app.Scene.AddNode(new MeshNode { MaterialHandle = mat }, $"Sphere_{x}_{y}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, y, 0f) };
         }
     }
@@ -44,7 +44,7 @@ app.OnReady = (resources) =>
     var colors = new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, new Vector3(1, 1, 0) };
     for (int i = 0; i < 4; i++)
     {
-        var light = app.ActiveWorld.Scene.AddNode(
+        var light = app.Scene.AddNode(
             new MovingLightNode { 
                 Color = colors[i], 
                 Intensity = 5.0f,

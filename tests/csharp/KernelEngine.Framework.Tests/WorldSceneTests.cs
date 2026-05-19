@@ -2,17 +2,17 @@ using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace KernelEngine.Framework.Tests;
 
 [Collection("KernelRegistry")]
-public class WorldTests
+public class WorldSceneTests
 {
     [Fact]
     public void World_CanBeCreatedAndDestroyed()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
-        Assert.NotNull(world.Scene.Root);
+        Assert.NotNull(new Scene(world).Root);
     }
 
     [Fact]
@@ -21,7 +21,7 @@ public class WorldTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = world.Scene.AddNode("TestNode");
+        var node = new Scene(world).AddNode("TestNode");
         Assert.NotNull(node);
         Assert.Equal("TestNode", node.Name);
         Assert.NotEqual(0UL, node.Entity);
@@ -34,8 +34,8 @@ public class WorldTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var parent = world.Scene.AddNode("Parent");
-        var child = world.Scene.AddNode("Child", parent);
+        var parent = new Scene(world).AddNode("Parent");
+        var child = new Scene(world).AddNode("Child", parent);
         
         Assert.Equal(parent.Entity, child.Parent?.Entity);
         Assert.Equal(child.Entity, parent.FirstChild?.Entity);

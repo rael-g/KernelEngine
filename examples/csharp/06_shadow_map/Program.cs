@@ -59,7 +59,7 @@ app.OnReady = (resources) =>
 
     // Directional light (Sun). Per LightNode docs, Direction is the vector pointing
     // FROM the lit surface TOWARD the light source. Sun in upper-right-back → (+x, +y, +z).
-    var light = app.ActiveWorld.Scene.AddNode(
+    var light = app.Scene.AddNode(
         new LightNode
         {
             Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
@@ -70,7 +70,7 @@ app.OnReady = (resources) =>
     entityCount++;
 
     // Camera
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -85,7 +85,7 @@ app.OnReady = (resources) =>
     var cubeMat = resources.CreateMaterial(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
 
     // Floor
-    var floor = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with 
     { 
         Scale = new Vector3(10f, 0.1f, 10f),
@@ -96,7 +96,7 @@ app.OnReady = (resources) =>
     // Cube (Casting shadow)
     var (cubeVerts, cubeIdx) = BuildCube();
     var cubeMesh = resources.CreateMesh(cubeVerts, cubeIdx);
-    var cube = app.ActiveWorld.Scene.AddNode(new MeshNode { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, "Caster");
+    var cube = app.Scene.AddNode(new MeshNode { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, "Caster");
     cube.LocalTransform = cube.LocalTransform with { Position = new Vector3(0f, 1f, 0f) };
     entityCount++;
 };

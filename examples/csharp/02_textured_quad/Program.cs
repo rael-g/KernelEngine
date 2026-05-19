@@ -44,7 +44,7 @@ app.OnReady = (resources) =>
 
     var matHandle = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), albedo: texHandle);
 
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new LightNode
         {
             Direction = Vector3.Normalize(new(0.2f, 1f, 0.5f)),
@@ -54,7 +54,7 @@ app.OnReady = (resources) =>
         "Sun");
     entityCount++;
 
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -64,7 +64,7 @@ app.OnReady = (resources) =>
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
 
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new MeshNode { MaterialHandle = matHandle },
         "Quad");
     entityCount++;

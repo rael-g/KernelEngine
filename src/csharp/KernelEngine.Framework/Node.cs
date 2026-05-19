@@ -2,8 +2,9 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// A scene node backed by an ECS entity. Represents a spatial object with optional behavior.

@@ -32,12 +32,12 @@ app.OnReady = (resources) =>
         $"metal(m={metal1:F1} r={rough1:F1})  " +
         $"mixed(m={metal2:F1} r={rough2:F1})");
 
-    var light = app.ActiveWorld.Scene.AddNode(
+    var light = app.Scene.AddNode(
         new OrbitingLightNode { Color = Vector3.One, Intensity = 3.0f },
         "Sun");
     entityCount++;
 
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -51,14 +51,14 @@ app.OnReady = (resources) =>
     var mat1 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal1, roughness: rough1);
     var mat2 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal2, roughness: rough2);
 
-    var n0 = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat0 }, "QuadDielectric");
+    var n0 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat0 }, "QuadDielectric");
     n0.LocalTransform = n0.LocalTransform with { Position = new Vector3(-2f, 0f, 0f) };
     entityCount++;
 
-    var n1 = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat1 }, "QuadMetal");
+    var n1 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat1 }, "QuadMetal");
     entityCount++;
 
-    var n2 = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mat2 }, "QuadMixed");
+    var n2 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat2 }, "QuadMixed");
     n2.LocalTransform = n2.LocalTransform with { Position = new Vector3(2f, 0f, 0f) };
     entityCount++;
 };

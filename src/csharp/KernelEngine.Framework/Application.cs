@@ -31,6 +31,11 @@ public class Application : IDisposable
     /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
     public World ActiveWorld { get; set; } = null!;
 
+    private Scene? _scene;
+
+    /// <summary>The scene graph facade for <see cref="ActiveWorld"/>.</summary>
+    public Scene Scene => _scene ??= new Scene(ActiveWorld);
+
     /// <summary>Called once on ke.sim after ke.render is initialized and systems are registered.</summary>
     public Action<IResourceFactory>? OnReady { get; set; }
 

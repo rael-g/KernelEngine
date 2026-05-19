@@ -58,21 +58,21 @@ app.OnReady = (resources) =>
     var cubeHandle = resources.CreateCubemap(faceSize, cubeData);
     Console.WriteLine($"[KernelEngine] Cubemap: handle={cubeHandle} faceSize={faceSize}");
 
-    app.ActiveWorld.Scene.AddNode(new SkyboxNode { CubemapHandle = cubeHandle }, "Skybox");
+    app.Scene.AddNode(new SkyboxNode { CubemapHandle = cubeHandle }, "Skybox");
     entityCount++;
 
     var mirrorMat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.8f, roughness: 0.1f);
-    app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = mirrorMat }, "MirrorQuad");
+    app.Scene.AddNode(new MeshNode { MaterialHandle = mirrorMat }, "MirrorQuad");
     entityCount++;
 
-    app.ActiveWorld.Scene.AddNode(new LightNode
+    app.Scene.AddNode(new LightNode
     {
         Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
         Intensity = 1.5f,
     }, "Sun");
     entityCount++;
 
-    var cam = app.ActiveWorld.Scene.AddNode(new FreeLookNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+    var cam = app.Scene.AddNode(new FreeLookNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
