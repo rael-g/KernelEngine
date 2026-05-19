@@ -78,7 +78,7 @@ public sealed unsafe class Scene
         var entity = reg.CreateEntity();
 
         // Transform — default: origin, identity rotation, unit scale
-        ref var t = ref reg.AddComponent<TransformComponent>(entity, _world.TransformComponentId);
+        ref var t = ref *reg.AddComponentRaw<TransformComponent>(entity, _world.TransformComponentId);
         t = new TransformComponent
         {
             Position    = Vector3.Zero,
@@ -88,23 +88,23 @@ public sealed unsafe class Scene
         };
 
         // Hierarchy — link to parent, no children yet
-        ref var h = ref reg.AddComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
+        ref var h = ref *reg.AddComponentRaw<HierarchyComponent>(entity, _world.HierarchyComponentId);
         h = new HierarchyComponent { Parent = parent };
 
         // Name
-        ref var n = ref reg.AddComponent<NameComponent>(entity, _world.NameComponentId);
+        ref var n = ref *reg.AddComponentRaw<NameComponent>(entity, _world.NameComponentId);
         SetName(ref n, name);
 
         // Prepend entity into parent's child list (O(1) doubly-linked prepend)
         if (parent != KE_ENTITY_INVALID)
         {
-            var ph = reg.GetComponent<HierarchyComponent>(parent, _world.HierarchyComponentId);
+            var ph = reg.GetComponentRaw<HierarchyComponent>(parent, _world.HierarchyComponentId);
             if (ph != null)
             {
                 h.NextSibling = ph->FirstChild;
                 if (ph->FirstChild != KE_ENTITY_INVALID)
                 {
-                    var sib = reg.GetComponent<HierarchyComponent>(ph->FirstChild, _world.HierarchyComponentId);
+                    var sib = reg.GetComponentRaw<HierarchyComponent>(ph->FirstChild, _world.HierarchyComponentId);
                     if (sib != null) sib->PrevSibling = entity;
                 }
                 ph->FirstChild = entity;
@@ -118,14 +118,14 @@ public sealed unsafe class Scene
     private void DestroyEntityRecursive(ulong entity)
     {
         var reg = _world.Registry;
-        var h   = reg.GetComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
+        var h   = reg.GetComponentRaw<HierarchyComponent>(entity, _world.HierarchyComponentId);
         if (h == null) return;
 
         // Destroy children first (depth-first)
         var child = h->FirstChild;
         while (child != KE_ENTITY_INVALID)
         {
-            var ch   = reg.GetComponent<HierarchyComponent>(child, _world.HierarchyComponentId);
+            var ch   = reg.GetComponentRaw<HierarchyComponent>(child, _world.HierarchyComponentId);
             var next = ch != null ? ch->NextSibling : KE_ENTITY_INVALID;
             DestroyEntityRecursive(child);
             child = next;
@@ -134,18 +134,18 @@ public sealed unsafe class Scene
         // Unlink from parent's child list
         if (h->Parent != KE_ENTITY_INVALID)
         {
-            var ph = reg.GetComponent<HierarchyComponent>(h->Parent, _world.HierarchyComponentId);
+            var ph = reg.GetComponentRaw<HierarchyComponent>(h->Parent, _world.HierarchyComponentId);
             if (ph != null && ph->FirstChild == entity)
                 ph->FirstChild = h->NextSibling;
 
             if (h->PrevSibling != KE_ENTITY_INVALID)
             {
-                var ps = reg.GetComponent<HierarchyComponent>(h->PrevSibling, _world.HierarchyComponentId);
+                var ps = reg.GetComponentRaw<HierarchyComponent>(h->PrevSibling, _world.HierarchyComponentId);
                 if (ps != null) ps->NextSibling = h->NextSibling;
             }
             if (h->NextSibling != KE_ENTITY_INVALID)
             {
-                var ns = reg.GetComponent<HierarchyComponent>(h->NextSibling, _world.HierarchyComponentId);
+                var ns = reg.GetComponentRaw<HierarchyComponent>(h->NextSibling, _world.HierarchyComponentId);
                 if (ns != null) ns->PrevSibling = h->PrevSibling;
             }
         }

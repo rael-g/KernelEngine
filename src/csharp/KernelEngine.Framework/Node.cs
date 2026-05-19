@@ -52,8 +52,8 @@ public unsafe class Node
         if (_world == null) return;
         s_registry[_entity] = this;
 
-        ref var script = ref _world.Registry.AddComponent<ScriptComponent>(_entity, _world.ScriptComponentId);
-        script = new ScriptComponent
+        var script = _world.Registry.AddComponent<ScriptComponent>(_entity, _world.ScriptComponentId);
+        script[0] = new ScriptComponent
         {
             Started = 0,
             OnStart = &NativeOnStart,
@@ -105,7 +105,7 @@ public unsafe class Node
         get
         {
             if (_world == null) return null;
-            return _world.Registry.GetComponent<TransformComponent>(_entity, _world.TransformComponentId);
+            return _world.Registry.GetComponentRaw<TransformComponent>(_entity, _world.TransformComponentId);
         }
     }
 
@@ -146,7 +146,7 @@ public unsafe class Node
         get
         {
             if (_world == null) return null;
-            return _world.Registry.GetComponent<HierarchyComponent>(_entity, _world.HierarchyComponentId);
+            return _world.Registry.GetComponentRaw<HierarchyComponent>(_entity, _world.HierarchyComponentId);
         }
     }
 
@@ -154,11 +154,11 @@ public unsafe class Node
 
     /// <summary>Adds a component to this node's entity and returns a reference to it.</summary>
     protected ref T AddComponent<T>(uint componentId) where T : unmanaged =>
-        ref _world!.Registry.AddComponent<T>(_entity, componentId);
+        ref *_world!.Registry.AddComponentRaw<T>(_entity, componentId);
 
     /// <summary>Returns a pointer to the component, or <c>null</c> if not present.</summary>
     protected T* GetComponent<T>(uint componentId) where T : unmanaged =>
-        _world!.Registry.GetComponent<T>(_entity, componentId);
+        _world!.Registry.GetComponentRaw<T>(_entity, componentId);
 
     /// <summary>Removes a component from this node's entity.</summary>
     protected void RemoveComponent(uint componentId) =>

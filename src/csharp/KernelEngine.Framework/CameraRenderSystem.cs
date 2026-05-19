@@ -34,7 +34,7 @@ public sealed class CameraRenderSystem : ISystem
         TransformComponent transform;
         unsafe
         {
-            var p = registry.GetComponent<TransformComponent>(cameras.Entities[0], _transformCid);
+            var p = registry.GetComponentRaw<TransformComponent>(cameras.Entities[0], _transformCid);
             if (p == null) return;
             transform = *p;
         }

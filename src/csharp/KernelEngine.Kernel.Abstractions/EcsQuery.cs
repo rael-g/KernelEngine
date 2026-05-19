@@ -10,7 +10,7 @@ public ref struct EcsQuery<T> where T : unmanaged
     public Span<T> Data { get; }
     public int Length => Entities.Length;
 
-    internal EcsQuery(ReadOnlySpan<ulong> entities, Span<T> data)
+    public EcsQuery(ReadOnlySpan<ulong> entities, Span<T> data)
     {
         Entities = entities;
         Data = data;

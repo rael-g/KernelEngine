@@ -79,7 +79,7 @@ public sealed class LightRenderSystem : ISystem
     {
         unsafe
         {
-            var tc = registry.GetComponent<TransformComponent>(entity, _transformCid);
+            var tc = registry.GetComponentRaw<TransformComponent>(entity, _transformCid);
             return tc != null ? tc->Position : Vector3.Zero;
         }
     }

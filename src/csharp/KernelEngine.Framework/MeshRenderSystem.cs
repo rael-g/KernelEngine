@@ -32,7 +32,7 @@ public sealed class MeshRenderSystem : ISystem
             System.Numerics.Matrix4x4 worldMatrix;
             unsafe
             {
-                var tc = registry.GetComponent<TransformComponent>(meshes.Entities[i], _transformCid);
+                var tc = registry.GetComponentRaw<TransformComponent>(meshes.Entities[i], _transformCid);
                 if (tc == null) continue;
                 worldMatrix = tc->WorldMatrix;
             }
