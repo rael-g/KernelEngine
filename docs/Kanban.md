@@ -161,7 +161,7 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
   - ✅ Step 5/Caso 1: `IDevPlatform.SetOsThreadName` managed method. Commit `d7d2256`.
   - ✅ Step 7/Caso 8: `AssetLoader` injects `TaskScheduler` via ctor; `LoadModelAsync` no longer takes scheduler param. Commit `877f1ba`.
   - ✅ Side: Node + Scene moved from Kernel to Framework. Commit `6c228de`.
-  - ⏳ Step 3: Framework.csproj decouple from Kernel — **DEFERRED**. Requires expanded `IEcsRegistry` surface and Caso 2 (Component<T>) which is also deferred.
+  - ⏳ Step 3: Framework.csproj decouple from Kernel — **PARTIAL**. `IEcsRegistry` now exposes safe `Span<T>`-based component accessors (commit `b823d01`); concrete `EcsRegistry.{Add,Get}ComponentRaw<T>` (pointer overloads) stay as `internal` hot-path helpers visible to Framework via `InternalsVisibleTo`. Full csproj decoupling still pending — `Application.cs`, `Node`, and `Scene` instantiate/typecheck against concrete `World`/`Allocator`/`ProxyAllocator`/`KernelThread`/`FrameSync`/`NativeExceptionFilter`. Removing the project reference requires either factoring those out behind interfaces or splitting Framework into "framework-core" (interface-only) and "framework-runtime" (uses concretes).
   - ✅ Step 6/Caso 3: `IFramePacket` rich managed API (SetCamera, SetDirectionalLight, AddPointLight, AddSpotLight, AddDrawCommand, AddShadowDrawCommand, SetSkybox, SetShadow, ...). 5 systems rewritten to use it; `unsafe` in Framework now contained to: `Mat4` helper, 4 minimal ECS-read blocks in systems, `Node`/`Scene` (ECS pointer storage), and `Application.InitializeSystems`. Examples folder: **zero `unsafe`**. Commit `3b57f11`.
   - ⏳ Step 8/Caso 2: `Component<T>` wrapper — **DEFERRED** to workflow layer (scriptable nodes).
 
