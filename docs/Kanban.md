@@ -162,16 +162,23 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
   - ✅ Step 7/Caso 8: `AssetLoader` injects `TaskScheduler` via ctor; `LoadModelAsync` no longer takes scheduler param. Commit `877f1ba`.
   - ✅ Side: Node + Scene moved from Kernel to Framework. Commit `6c228de`.
   - 🟡 Step 3: Framework.csproj decouple from Kernel — **DESIGN DECISION: accepted as is**.
-    `IEcsRegistry` now exposes safe `Span<T>`-based component accessors (commit `b823d01`); concrete
-    `EcsRegistry.{Add,Get}ComponentRaw<T>` (pointer overloads) stay as `internal` hot-path helpers
-    visible to Framework via `InternalsVisibleTo`. Physical removal of the Framework→Kernel
-    project reference would require: (a) wrapping `KernelThread`/`FrameSync`/`ProxyAllocator`/
-    `NativeExceptionFilter` behind factory interfaces; (b) routing every concrete instantiation in
-    `Application.cs` through DI. Cost-benefit not justified — Framework is the **engine's runtime
-    composition root**, not user-facing code. The user-facing seam is already enforced: user code
-    references `KernelEngine.Framework` + plugin assemblies, never `KernelEngine.Kernel` directly,
-    and `examples/csharp/**` contain **zero `unsafe`**. The remaining Kernel coupling lives inside
-    `Application.cs` / `Node.cs` / `Scene.cs`, which are themselves engine-internal.
+    `IEcsRegistry` now exposes safe `Span<T>`-based component accessors (commit `b823d01`).
+    Added `IEngineHost` factory interface (commit `1ed7c70`) covering `CreateProxyAllocator`,
+    `CreateWorld`, `CreateFrameSync`, `CreateThread`, `SetCurrentThreadName`,
+    `AssertCurrentThread`, `SetCurrentInputReader`. Added `IKernelThread`, `IInput`.
+    `Allocator`/`MallocAllocator`/`ArenaAllocator`/`ProxyAllocator` implement
+    `IAllocator`/`IMallocAllocator`/`IArenaAllocator`/`IProxyAllocator`. `FrameSync`
+    implements `IFrameSync` (explicit interface for covariant `BeginRead`/`BeginWrite`).
+    `Logger`/`Input`/`DevPlatform` already do. `AddKernel()` registers `IEngineHost`,
+    `IAllocator`, `ILogger`, `IInput`, `IDevPlatform` aliases. `ScriptComponent` moved
+    to Framework (uses `KernelResult` instead of `ke_result`).
+    **Remaining coupling** (forced by engine-internal plumbing): `Application.cs` still
+    constructs `InputBuffer`, `ResourceCommandQueue`, `ResourceCommandFactory`,
+    `FramePacketSceneWriter` directly, and consumes `Input.GetSnapshot()` returning the
+    native `ke_input_snapshot` struct. Removing the Framework→Kernel project reference
+    requires adding `IInputBuffer`/`IResourceCommandQueue` to Abstractions and exposing
+    snapshot capture via `IInput.CaptureSnapshot() -> IInputReader`. Mechanical work,
+    deferred to a focused future session.
   - ✅ Step 6/Caso 3: `IFramePacket` rich managed API (SetCamera, SetDirectionalLight, AddPointLight, AddSpotLight, AddDrawCommand, AddShadowDrawCommand, SetSkybox, SetShadow, ...). 5 systems rewritten to use it; `unsafe` in Framework now contained to: `Mat4` helper, 4 minimal ECS-read blocks in systems, `Node`/`Scene` (ECS pointer storage), and `Application.InitializeSystems`. Examples folder: **zero `unsafe`**. Commit `3b57f11`.
   - ⏳ Step 8/Caso 2: `Component<T>` wrapper — **DEFERRED** to workflow layer (scriptable nodes).
 
