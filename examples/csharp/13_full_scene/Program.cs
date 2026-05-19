@@ -43,7 +43,7 @@ app.OnReady = async (resources) =>
     var loader = app.Services.GetRequiredService<AssetLoader>();
     try {
         string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../assets/Box.gltf");
-        using var modelData = await loader.LoadModelAsync(modelPath, app.ActiveWorld.Scheduler!);
+        using var modelData = await loader.LoadModelAsync(modelPath);
         var modelRoot = await modelData.AddToSceneAsync(app.ActiveWorld, resources, "CenterBox");
         modelRoot.LocalTransform = modelRoot.LocalTransform with { 
             Position = new Vector3(0f, 2f, 0f),

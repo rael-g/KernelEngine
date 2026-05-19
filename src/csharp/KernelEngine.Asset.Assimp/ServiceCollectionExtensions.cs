@@ -24,7 +24,7 @@ public static class ServiceCollectionExtensions
                 };
                 ke_asset_loader* native;
                 KernelException.ThrowIfFailed(KernelEngine.Asset.Assimp.Native.NativeMethods.asset_loader_assimp_create(&@params, &native).ToManaged());
-                return new AssetLoader(native);
+                return new AssetLoader(native, sp.GetRequiredService<KernelEngine.Kernel.TaskScheduler>());
             }
         });
 

@@ -166,9 +166,14 @@ public sealed unsafe class ModelData : IDisposable
 public sealed unsafe class AssetLoader : IDisposable
 {
     private ke_asset_loader* _native;
+    private readonly KernelEngine.Kernel.TaskScheduler _scheduler;
 
     /// <summary>Creates an <see cref="AssetLoader"/> that takes ownership of the given native pointer.</summary>
-    public AssetLoader(ke_asset_loader* native) => _native = native;
+    public AssetLoader(ke_asset_loader* native, KernelEngine.Kernel.TaskScheduler scheduler)
+    {
+        _native = native;
+        _scheduler = scheduler;
+    }
 
     /// <summary>Loads a 3D model from <paramref name="path"/>. Caller must dispose the returned <see cref="ModelData"/>.</summary>
     public ModelData LoadModel(string path)
@@ -189,10 +194,10 @@ public sealed unsafe class AssetLoader : IDisposable
     }
 
     /// <summary>
-    /// Asynchronously loads a 3D model from <paramref name="path"/> using <paramref name="scheduler"/>.
+    /// Asynchronously loads a 3D model from <paramref name="path"/> using the injected task scheduler.
     /// Completes on the scheduler thread; caller must dispose the returned <see cref="ModelData"/>.
     /// </summary>
-    public KernelTask<ModelData> LoadModelAsync(string path, TaskScheduler scheduler)
+    public KernelTask<ModelData> LoadModelAsync(string path)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
 
@@ -205,7 +210,7 @@ public sealed unsafe class AssetLoader : IDisposable
         var pathPtr = Marshal.StringToHGlobalAnsi(path);
         _native->load_model_async(
             _native,
-            scheduler.Native,
+            _scheduler.Native,
             (sbyte*)pathPtr,
             &NativeLoadCompleteCallback,
             (void*)GCHandle.ToIntPtr(stateHandle));

@@ -40,7 +40,7 @@ app.OnReady = async (resources) =>
         string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../assets/Box.gltf");
         Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
         
-        using var modelData = await loader.LoadModelAsync(modelPath, app.ActiveWorld.Scheduler!);
+        using var modelData = await loader.LoadModelAsync(modelPath);
         Console.WriteLine($"[KernelEngine] Model loaded: {modelData.Meshes.Length} meshes, {modelData.Materials.Length} materials");
 
         var modelRoot = await modelData.AddToSceneAsync(app.ActiveWorld, resources, "Box");
