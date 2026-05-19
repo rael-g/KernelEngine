@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
@@ -14,7 +15,7 @@ namespace KernelEngine.Kernel;
 /// engine behavior — appropriate for shipped builds on platforms without dev tooling
 /// support (consoles, restricted mobile, WebGL).
 /// </summary>
-public sealed unsafe class DevPlatform : IDisposable
+public sealed unsafe class DevPlatform : IDevPlatform
 {
     private ke_dev_platform* _native;
 
@@ -30,6 +31,15 @@ public sealed unsafe class DevPlatform : IDisposable
 
     /// <summary>Wraps an already-created <c>ke_dev_platform*</c>. Takes ownership.</summary>
     public DevPlatform(ke_dev_platform* native) => _native = native;
+
+    /// <inheritdoc/>
+    public void SetOsThreadName(string name)
+    {
+        if (_native == null || _native->set_thread_name == null) return;
+        var bytes = Marshal.StringToHGlobalAnsi(name);
+        try { _native->set_thread_name(_native, (sbyte*)bytes); }
+        finally { Marshal.FreeHGlobal(bytes); }
+    }
 
     /// <inheritdoc/>
     public void Dispose()

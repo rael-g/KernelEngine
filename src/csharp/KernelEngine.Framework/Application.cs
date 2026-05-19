@@ -70,13 +70,7 @@ public class Application : IDisposable
     /// Asks <see cref="DevPlatform"/> (when available) to publish the current thread's name to the OS,
     /// making it visible in debuggers and profilers. No-op when DevPlatform is not registered.
     /// </summary>
-    private unsafe void SetOsThreadName(string name)
-    {
-        if (DevPlatform == null) return;
-        var bytes = Marshal.StringToHGlobalAnsi(name);
-        try { DevPlatform.Native->set_thread_name(DevPlatform.Native, (sbyte*)bytes); }
-        finally { Marshal.FreeHGlobal(bytes); }
-    }
+    private void SetOsThreadName(string name) => DevPlatform?.SetOsThreadName(name);
 
     public void Run(IServiceCollection serviceCollection)
     {
