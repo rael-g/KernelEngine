@@ -8,15 +8,19 @@ namespace KernelEngine.Kernel;
 /// Managed wrapper for a native kernel thread (<c>ke_thread</c>).
 /// The thread starts immediately on construction and must be joined before disposal.
 /// </summary>
-public sealed unsafe class KernelThread : IDisposable
+public sealed unsafe class KernelThread : IKernelThread
 {
     private ke_thread*  _native;
     private Allocator   _alloc;
 
-    private KernelThread(ke_thread* native, Allocator alloc)
+    /// <inheritdoc/>
+    public string Name { get; }
+
+    private KernelThread(ke_thread* native, Allocator alloc, string name)
     {
         _native = native;
         _alloc  = alloc;
+        Name    = name;
     }
 
     /// <summary>
@@ -46,7 +50,7 @@ public sealed unsafe class KernelThread : IDisposable
             ke_thread* native;
             KernelException.ThrowIfFailed(NativeMethods.thread_std_create(alloc.Native, &desc, &native).ToManaged());
 
-            return new KernelThread(native, alloc);
+            return new KernelThread(native, alloc, name);
         }
         finally
         {

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// ECS component holding the managed script callbacks for a node.
@@ -12,6 +12,6 @@ namespace KernelEngine.Kernel;
 public unsafe struct ScriptComponent
 {
     [FieldOffset(0)] public byte Started;
-    [FieldOffset(8)]  public delegate* unmanaged[Cdecl]<ulong, ke_result> OnStart;
-    [FieldOffset(16)] public delegate* unmanaged[Cdecl]<ulong, float, ke_result> OnUpdate;
+    [FieldOffset(8)]  public delegate* unmanaged[Cdecl]<ulong, KernelResult> OnStart;
+    [FieldOffset(16)] public delegate* unmanaged[Cdecl]<ulong, float, KernelResult> OnUpdate;
 }

@@ -7,7 +7,7 @@ namespace KernelEngine.Kernel;
 /// <summary>
 /// Tracks keyboard and mouse state. Reads messages from the <see cref="MessagePipe"/>.
 /// </summary>
-public sealed unsafe class Input : IDisposable
+public sealed unsafe class Input : IInput
 {
     // ── Static Access ────────────────────────────────────────────────────────
 

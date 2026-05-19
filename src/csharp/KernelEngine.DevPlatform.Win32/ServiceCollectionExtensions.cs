@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
                 return new DevPlatformWrapper(native);
             }
         });
+        services.AddSingleton<IDevPlatform>(sp => sp.GetRequiredService<DevPlatformWrapper>());
         return services;
     }
 }

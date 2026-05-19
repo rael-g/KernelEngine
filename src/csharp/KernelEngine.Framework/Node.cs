@@ -183,18 +183,18 @@ public unsafe class Node
     // ── Unmanaged callbacks (called by the C ScriptSystem) ────────────────────
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    internal static ke_result NativeOnStart(ulong entity)
+    internal static KernelResult NativeOnStart(ulong entity)
     {
         if (s_registry.TryGetValue(entity, out var node))
             node.OnStart();
-        return ke_result.KE_OK;
+        return KernelResult.Ok;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    internal static ke_result NativeOnUpdate(ulong entity, float dt)
+    internal static KernelResult NativeOnUpdate(ulong entity, float dt)
     {
         if (s_registry.TryGetValue(entity, out var node))
             node.OnUpdate(dt);
-        return ke_result.KE_OK;
+        return KernelResult.Ok;
     }
 }

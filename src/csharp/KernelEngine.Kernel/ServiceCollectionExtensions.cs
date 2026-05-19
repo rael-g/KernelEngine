@@ -8,6 +8,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddKernel(this IServiceCollection services)
     {
         services.AddSingleton<Allocator, MallocAllocator>();
+        services.AddSingleton<IAllocator>(sp => sp.GetRequiredService<Allocator>());
+        services.AddSingleton<IEngineHost, EngineHost>();
         return services;
     }
 
@@ -15,6 +17,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {
         services.AddSingleton(sp => new Logger(sp.GetRequiredService<Allocator>()));
+        services.AddSingleton<ILogger>(sp => sp.GetRequiredService<Logger>());
         return services;
     }
 
@@ -32,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new Input(
             sp.GetRequiredService<Allocator>(),
             sp.GetService<Logger>()));
+        services.AddSingleton<IInput>(sp => sp.GetRequiredService<Input>());
         return services;
     }
 }

@@ -7,7 +7,7 @@ namespace KernelEngine.Kernel;
 /// Coordinates double/triple-buffered frame data handoff between the sim thread (writer)
 /// and the render thread (reader).
 /// </summary>
-public sealed unsafe class FrameSync : IDisposable
+public sealed unsafe class FrameSync : IFrameSync
 {
     private ke_frame_sync* _native;
     private Allocator      _alloc;
@@ -61,6 +61,9 @@ public sealed unsafe class FrameSync : IDisposable
         var ptr = _native->begin_read(_native);
         return new FramePacket(ptr, _native, isWriter: false);
     }
+
+    IFramePacket IFrameSync.BeginWrite() => BeginWrite();
+    IFramePacket IFrameSync.BeginRead() => BeginRead();
 
     /// <inheritdoc/>
     public void Dispose()
