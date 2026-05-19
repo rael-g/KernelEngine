@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace KernelEngine.Framework.Internal;
 
 /// <summary>
@@ -5,8 +7,68 @@ namespace KernelEngine.Framework.Internal;
 /// (right-handed, Vulkan depth [0,1]). Internal — exposed only to other Framework
 /// render systems that build matrices for the frame packet.
 /// </summary>
+/// <remarks>
+/// The <see cref="Matrix4x4"/>-returning overloads write column-major values into the field
+/// slots: <c>M11</c>..<c>M44</c> are treated as a flat 16-float array where index
+/// <c>i*4+j</c> matches the corresponding <c>ke_mat4.m[i*4+j]</c> slot. The concrete
+/// <c>FramePacket.ToKeMat4</c> blits these bytes verbatim, so the result lands in
+/// ke_mat4 layout with no transpose.
+/// </remarks>
 internal static unsafe class Mat4
 {
+    public static Matrix4x4 Perspective(float fov, float aspect, float near, float far)
+    {
+        var f = 1f / MathF.Tan(fov * 0.5f);
+        return new Matrix4x4
+        {
+            M11 = f / aspect,
+            M22 = f,
+            M33 = -far / (far - near),
+            M34 = -1f,
+            M43 = -(far * near) / (far - near),
+        };
+    }
+
+    public static Matrix4x4 Ortho(float left, float right, float bottom, float top, float near, float far) =>
+        new()
+        {
+            M11 = 2f / (right - left),
+            M22 = 2f / (top - bottom),
+            M33 = 1f / (far - near),
+            M41 = -(right + left) / (right - left),
+            M42 = -(top + bottom) / (top - bottom),
+            M43 = -near / (far - near),
+            M44 = 1f,
+        };
+
+    /// <summary>
+    /// Inverse of a TRS (translation + rotation + scale) matrix in column-major layout.
+    /// Reads <paramref name="world"/> as already-column-major (the C TransformSystem writes it that way).
+    /// </summary>
+    public static Matrix4x4 InvertTrs(Matrix4x4 world)
+    {
+        Matrix4x4 result = default;
+        unsafe
+        {
+            InvertTrs((float*)&world, (float*)&result);
+        }
+        return result;
+    }
+
+    /// <summary>Right-handed look-at view matrix in column-major layout.</summary>
+    public static Matrix4x4 LookAt(Vector3 eye, Vector3 at, Vector3 up)
+    {
+        Matrix4x4 result = default;
+        unsafe
+        {
+            LookAt((float*)&result,
+                eye.X, eye.Y, eye.Z,
+                at.X, at.Y, at.Z,
+                up.X, up.Y, up.Z);
+        }
+        return result;
+    }
+
     /// <summary>Inverse of a TRS (translation + rotation + scale) matrix. Assumes orthonormal rotation.</summary>
     public static void InvertTrs(float* m, float* o)
     {

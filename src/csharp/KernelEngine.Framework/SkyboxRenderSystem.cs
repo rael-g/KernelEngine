@@ -1,14 +1,12 @@
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
-
 /// <summary>
-/// Pure-managed render system that publishes the active skybox cubemap into the frame packet.
-/// Replaces the legacy C++ SkyboxSystem.
+/// Pure-managed render system that publishes the active skybox cubemap into the frame packet
+/// via the safe <see cref="IFramePacket.SetSkybox"/> API.
 /// </summary>
-public sealed unsafe class SkyboxRenderSystem : ISystem
+public sealed class SkyboxRenderSystem : ISystem
 {
     private readonly uint _skyboxCid;
 
@@ -17,22 +15,19 @@ public sealed unsafe class SkyboxRenderSystem : ISystem
         _skyboxCid = skyboxCid;
     }
 
-    public void Update(IWorld iworld, float dt, IFramePacket? ipacket = null, IInputReader? input = null)
+    public void Update(IWorld iworld, float dt, IFramePacket? packet = null, IInputReader? input = null)
     {
-        if (ipacket == null) return;
+        if (packet == null) return;
         var world = (World)iworld;
-        var packet = (FramePacket)ipacket;
-
         var registry = world.Registry;
+
         var skyboxes = registry.Query<SkyboxComponent>(_skyboxCid);
         if (skyboxes.Length == 0) return;
 
         var sky = skyboxes.Data[0];
         if (!sky.CubemapHandle.IsValid) return;
 
-        var raw = packet.NativePointer;
-        raw->skybox_handle = new ke_texture_handle { idx = sky.CubemapHandle.Value };
-        raw->has_skybox = true;
+        packet.SetSkybox(sky.CubemapHandle);
     }
 
     public ComponentAccess GetAccess() => new()

@@ -33,12 +33,12 @@ public sealed unsafe class FramePacketSceneWriter : ISceneWriter
     public void SetDirectionalLight(Vector3 direction, Vector3 color, float intensity)
     {
         KernelThread.AssertCurrent("ke.sim");
-        var light = new ke_directional_light
+        _packet.SetDirectionalLight(new DirectionalLight
         {
-            dir_x = direction.X, dir_y = direction.Y, dir_z = direction.Z,
-            r = color.X, g = color.Y, b = color.Z, intensity = intensity
-        };
-        _packet.SetDirectionalLight(light);
+            Direction = direction,
+            Color = color,
+            Intensity = intensity,
+        });
     }
 
     public void AddDrawCommand(MeshHandle mesh, MaterialHandle material, Matrix4x4 transform)

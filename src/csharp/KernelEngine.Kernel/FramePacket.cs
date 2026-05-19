@@ -35,24 +35,40 @@ public sealed unsafe class FramePacket : IFramePacket
     }
 
     /// <summary>Sets the directional light for this frame.</summary>
-    public void SetDirectionalLight(ke_directional_light light)
+    public void SetDirectionalLight(DirectionalLight light)
     {
-        _packet->dir_light     = light;
+        _packet->dir_light = new ke_directional_light {
+            dir_x = light.Direction.X, dir_y = light.Direction.Y, dir_z = light.Direction.Z,
+            r = light.Color.X, g = light.Color.Y, b = light.Color.Z,
+            intensity = light.Intensity,
+        };
         _packet->has_dir_light = true;
     }
 
     /// <summary>Appends a point light. Ignored when at capacity.</summary>
-    public void AddPointLight(ke_point_light light)
+    public void AddPointLight(PointLight light)
     {
         if (_packet->point_light_count < _packet->point_light_capacity)
-            _packet->point_lights[_packet->point_light_count++] = light;
+            _packet->point_lights[_packet->point_light_count++] = new ke_point_light {
+                pos_x = light.Position.X, pos_y = light.Position.Y, pos_z = light.Position.Z,
+                radius = light.Radius,
+                r = light.Color.X, g = light.Color.Y, b = light.Color.Z,
+                intensity = light.Intensity,
+            };
     }
 
     /// <summary>Appends a spot light. Ignored when at capacity.</summary>
-    public void AddSpotLight(ke_spot_light light)
+    public void AddSpotLight(SpotLight light)
     {
         if (_packet->spot_light_count < _packet->spot_light_capacity)
-            _packet->spot_lights[_packet->spot_light_count++] = light;
+            _packet->spot_lights[_packet->spot_light_count++] = new ke_spot_light {
+                pos_x = light.Position.X, pos_y = light.Position.Y, pos_z = light.Position.Z,
+                range = light.Range,
+                dir_x = light.Direction.X, dir_y = light.Direction.Y, dir_z = light.Direction.Z,
+                inner_angle = light.InnerAngle, outer_angle = light.OuterAngle,
+                r = light.Color.X, g = light.Color.Y, b = light.Color.Z,
+                intensity = light.Intensity,
+            };
     }
 
     /// <summary>Appends a draw command to the main scene pass. Ignored when at capacity.</summary>
