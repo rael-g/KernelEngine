@@ -161,24 +161,20 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
   - ✅ Step 5/Caso 1: `IDevPlatform.SetOsThreadName` managed method. Commit `d7d2256`.
   - ✅ Step 7/Caso 8: `AssetLoader` injects `TaskScheduler` via ctor; `LoadModelAsync` no longer takes scheduler param. Commit `877f1ba`.
   - ✅ Side: Node + Scene moved from Kernel to Framework. Commit `6c228de`.
-  - 🟡 Step 3: Framework.csproj decouple from Kernel — **DESIGN DECISION: accepted as is**.
-    `IEcsRegistry` now exposes safe `Span<T>`-based component accessors (commit `b823d01`).
-    Added `IEngineHost` factory interface (commit `1ed7c70`) covering `CreateProxyAllocator`,
-    `CreateWorld`, `CreateFrameSync`, `CreateThread`, `SetCurrentThreadName`,
-    `AssertCurrentThread`, `SetCurrentInputReader`. Added `IKernelThread`, `IInput`.
-    `Allocator`/`MallocAllocator`/`ArenaAllocator`/`ProxyAllocator` implement
-    `IAllocator`/`IMallocAllocator`/`IArenaAllocator`/`IProxyAllocator`. `FrameSync`
-    implements `IFrameSync` (explicit interface for covariant `BeginRead`/`BeginWrite`).
-    `Logger`/`Input`/`DevPlatform` already do. `AddKernel()` registers `IEngineHost`,
-    `IAllocator`, `ILogger`, `IInput`, `IDevPlatform` aliases. `ScriptComponent` moved
-    to Framework (uses `KernelResult` instead of `ke_result`).
-    **Remaining coupling** (forced by engine-internal plumbing): `Application.cs` still
-    constructs `InputBuffer`, `ResourceCommandQueue`, `ResourceCommandFactory`,
-    `FramePacketSceneWriter` directly, and consumes `Input.GetSnapshot()` returning the
-    native `ke_input_snapshot` struct. Removing the Framework→Kernel project reference
-    requires adding `IInputBuffer`/`IResourceCommandQueue` to Abstractions and exposing
-    snapshot capture via `IInput.CaptureSnapshot() -> IInputReader`. Mechanical work,
-    deferred to a focused future session.
+  - ✅ Step 3: Framework.csproj decouple from Kernel — **DONE** (commit `1f8ee00`).
+    Framework.csproj now references only `KernelEngine.Kernel.Abstractions` +
+    `KernelEngine.Asset.Assimp`. Final pieces added: `IInputBuffer`, `IResourceCommandQueue` in
+    Abstractions; `IEngineHost` extended with `CreateInputBuffer` / `CreateResourceCommandQueue`
+    / `CreateSceneWriter` factories; `IInput.CaptureSnapshot() -> IInputReader`. `InputBuffer`,
+    `ResourceCommandQueue`, `FramePacketSceneWriter` concretes implement their interfaces.
+    `Application.cs` / `Node.cs` / `Scene.cs` use only Abstractions types. Builtin nodes use
+    `AddComponent<T>` returning `Span<T>` instead of `ref T` / `T*`. Build green; 80 tests pass.
+    Earlier in session (commit `b823d01`) `IEcsRegistry` got safe `Span<T>` accessors; commit
+    `1ed7c70` added `IEngineHost`/`IKernelThread`/`IInput` + interface implementations on
+    allocator/frame-sync/logger.
+    Residual transitive Kernel exposure via `KernelEngine.Asset.Assimp` ref — `AssimpModelExtensions`
+    uses `KernelEngine.Kernel.Native.ke_vertex` indirectly. Low priority follow-up: add
+    `<PrivateAssets>all</PrivateAssets>` on Asset.Assimp → Kernel ref if total isolation is wanted.
   - ✅ Step 6/Caso 3: `IFramePacket` rich managed API (SetCamera, SetDirectionalLight, AddPointLight, AddSpotLight, AddDrawCommand, AddShadowDrawCommand, SetSkybox, SetShadow, ...). 5 systems rewritten to use it; `unsafe` in Framework now contained to: `Mat4` helper, 4 minimal ECS-read blocks in systems, `Node`/`Scene` (ECS pointer storage), and `Application.InitializeSystems`. Examples folder: **zero `unsafe`**. Commit `3b57f11`.
   - ⏳ Step 8/Caso 2: `Component<T>` wrapper — **DEFERRED** to workflow layer (scriptable nodes).
 
