@@ -20,7 +20,7 @@ public sealed unsafe class DevPlatform : IDevPlatform
     private ke_dev_platform* _native;
 
     /// <summary>The underlying native pointer. Can be passed directly to APIs that accept it.</summary>
-    internal ke_dev_platform* Native
+    public ke_dev_platform* Native
     {
         get
         {

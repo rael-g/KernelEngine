@@ -16,7 +16,7 @@ public sealed unsafe class EcsRegistry : IEcsRegistry
 
     private readonly ke_ecs_registry* _native;
 
-    internal ke_ecs_registry* Native => _native;
+    public ke_ecs_registry* Native => _native;
 
     internal EcsRegistry(ke_ecs_registry* native) => _native = native;
 

@@ -14,7 +14,7 @@ public sealed unsafe class Logger : ILogger, IDisposable
     // GCHandles keep managed sinks alive while native code holds function pointers to them.
     private readonly List<GCHandle> _sinkHandles = [];
 
-    internal ke_logger* Native
+    public ke_logger* Native
     {
         get
         {

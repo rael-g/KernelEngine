@@ -13,7 +13,7 @@ public sealed unsafe class Renderer : IRenderer
 {
     private ke_render* _native;
 
-    internal ke_render* Native
+    public ke_render* Native
     {
         get
         {

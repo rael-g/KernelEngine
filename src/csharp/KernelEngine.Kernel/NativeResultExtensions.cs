@@ -7,7 +7,7 @@ namespace KernelEngine.Kernel;
 /// it's auto-generated) to the managed <see cref="Result"/> / <see cref="KernelResult"/> types
 /// at every Kernel-internal call site. Numeric values match exactly so the cast is a no-op.
 /// </summary>
-internal static class NativeResultExtensions
+public static class NativeResultExtensions
 {
     public static Result Wrap(this ke_result r) => (KernelResult)(int)r;
 
