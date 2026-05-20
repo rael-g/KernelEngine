@@ -3,7 +3,7 @@
 Strategic milestones for KernelEngine **as a product**. Defines what the engine *is* at each stage and the path to get there.
 
 > **What this is**: product-level milestones (M1 → M5+) and feature categories per milestone.
-> **What this is NOT**: bug catalog (see `Architecture/08 - Engine Architecture Backlog.md` § 1) or task tracking (see `Kanban.md`).
+> **What this is NOT**: bug catalog (see `Reference/12 - Architecture Backlog & Decisions.md` § 1) or task tracking (see `Kanban.md`).
 
 ---
 
@@ -141,17 +141,17 @@ When proposing a new feature category:
 1. Identify if it's a kernel-level capability (universal contract) or framework-level (depends on user code).
 2. If kernel-level: define the vtable shape in `src/c/kernel/include/`. Identify ≥1 external library that can implement it.
 3. Pick the milestone (M1–M5) that matches the gap it fills. Add a row to the appropriate table.
-4. If the feature requires significant architectural decisions (e.g., "physics on a separate thread?"), open an entry in `Architecture/08 - Engine Architecture Backlog.md` § 5 (Risks & Open Questions).
+4. If the feature requires significant architectural decisions (e.g., "physics on a separate thread?"), open an entry in `Reference/12 - Architecture Backlog & Decisions.md` § 5 (Risks & Open Questions).
 5. When work begins on the feature, create Kanban cards.
 
 ---
 
 ## What this roadmap is NOT for
 
-- Bug fixes → `Kanban.md` + `Architecture/08 - Engine Architecture Backlog.md` § 1
+- Bug fixes → `Kanban.md` + `Reference/12 - Architecture Backlog & Decisions.md` § 1
 - Architectural refactors → `Kanban.md` (Track W cards)
 - Code conventions → `Development/ProjectGuidelines.md`
 - Per-task status → `Kanban.md`
-- Architectural rationale → `Architecture/08 - Engine Architecture Backlog.md` §§ 2, 4, 5, 6
+- Architectural rationale → `Reference/12 - Architecture Backlog & Decisions.md` §§ 2, 4, 5, 6
 
 This document answers: *"What can the engine DO at each milestone, and what library powers each capability?"*

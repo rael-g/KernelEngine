@@ -366,4 +366,4 @@ public static IServiceCollection AddBgfxRenderer(
 * Before adding a new convention here, propose it in a PR with rationale.
 * Before deviating from a convention, propose the change here first. Do not write inconsistent code.
 * When auditing junior agent output (or your own code from yesterday), apply the rules in this document strictly. Build passing ≠ correct.
-* The Kanban (`docs/Kanban.md`) tracks active and pending work. The Backlog (`docs/Architecture/08 - Engine Architecture Backlog.md`) preserves design rationale and the bug catalog. This document (`ProjectGuidelines.md`) is the rule reference.
+* The Kanban (`docs/Kanban.md`) tracks active and pending work. The Backlog (`docs/Reference/12 - Architecture Backlog & Decisions.md`) preserves design rationale and the bug catalog. This document (`ProjectGuidelines.md`) is the rule reference. The full engine reference lives in `docs/Reference/`.

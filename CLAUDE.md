@@ -201,7 +201,8 @@ app.Run(services);
 
 ## Key docs
 
+- `docs/Reference/` — **consolidated engine reference** (12 chapters, arc42-style): what the engine is + will be, by domain (philosophy, layers, kernel, plugins, C# layers, framework, graphics, multithreading, assets, build, roadmap). Start at `docs/Reference/00 - Overview.md`. Supersedes the former `docs/Architecture/` vision docs.
 - `docs/EngineRoadmap.md` — **product roadmap (M1–M5)**. What the engine does at each milestone + recommended external libraries per feature category. Read first to understand the strategic direction.
 - `docs/Kanban.md` — **active and pending work**. Architectural principles at top; cards with Why/What/Acceptance/Steps; bug-to-card mapping at bottom.
-- `docs/Architecture/08 - Engine Architecture Backlog.md` — **design rationale + bug catalog**. Detailed defect descriptions, target architecture, decisions log. NOT a status board.
+- `docs/Reference/12 - Architecture Backlog & Decisions.md` — **design rationale + bug catalog**. Detailed defect descriptions, target architecture, decisions log. NOT a status board.
 - `docs/Development/ProjectGuidelines.md` — **conventions and anti-patterns**. Plugin architecture, naming, header discipline, C# layer rules. The reference for code review.
