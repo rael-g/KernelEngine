@@ -162,19 +162,22 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
   - ✅ Step 7/Caso 8: `AssetLoader` injects `TaskScheduler` via ctor; `LoadModelAsync` no longer takes scheduler param. Commit `877f1ba`.
   - ✅ Side: Node + Scene moved from Kernel to Framework. Commit `6c228de`.
   - ✅ Step 3: Framework.csproj decouple from Kernel — **DONE** (commit `1f8ee00`).
-    Framework.csproj now references only `KernelEngine.Kernel.Abstractions` +
-    `KernelEngine.Asset.Assimp`. Final pieces added: `IInputBuffer`, `IResourceCommandQueue` in
-    Abstractions; `IEngineHost` extended with `CreateInputBuffer` / `CreateResourceCommandQueue`
-    / `CreateSceneWriter` factories; `IInput.CaptureSnapshot() -> IInputReader`. `InputBuffer`,
-    `ResourceCommandQueue`, `FramePacketSceneWriter` concretes implement their interfaces.
-    `Application.cs` / `Node.cs` / `Scene.cs` use only Abstractions types. Builtin nodes use
-    `AddComponent<T>` returning `Span<T>` instead of `ref T` / `T*`. Build green; 80 tests pass.
-    Earlier in session (commit `b823d01`) `IEcsRegistry` got safe `Span<T>` accessors; commit
-    `1ed7c70` added `IEngineHost`/`IKernelThread`/`IInput` + interface implementations on
-    allocator/frame-sync/logger.
-    Residual transitive Kernel exposure via `KernelEngine.Asset.Assimp` ref — `AssimpModelExtensions`
-    uses `KernelEngine.Kernel.Native.ke_vertex` indirectly. Low priority follow-up: add
-    `<PrivateAssets>all</PrivateAssets>` on Asset.Assimp → Kernel ref if total isolation is wanted.
+    Framework.csproj now references **only** `KernelEngine.Kernel.Abstractions`. Final pieces
+    added: `IInputBuffer`, `IResourceCommandQueue` in Abstractions; `IEngineHost` extended with
+    `CreateInputBuffer` / `CreateResourceCommandQueue` / `CreateSceneWriter` factories;
+    `IInput.CaptureSnapshot() -> IInputReader`. `InputBuffer`, `ResourceCommandQueue`,
+    `FramePacketSceneWriter` concretes implement their interfaces. `Application.cs` /
+    `Node.cs` / `Scene.cs` use only Abstractions types. Builtin nodes use `AddComponent<T>`
+    returning `Span<T>` instead of `ref T` / `T*`. Build green; 80 tests pass. Earlier in
+    session (commit `b823d01`) `IEcsRegistry` got safe `Span<T>` accessors; commit `1ed7c70`
+    added `IEngineHost`/`IKernelThread`/`IInput` + interface implementations on allocator /
+    frame-sync / logger.
+    Asset.Assimp dependency removed: `AssimpModelExtensions` was example-sugar disguised as
+    engine utility (lossy flat scene, hid GPU uploads, forced a bridge assembly). Deleted from
+    Framework; logic inlined into examples 12 & 13 with educational comments. Brief
+    `KernelEngine.Framework.Assimp` bridge attempt also deleted (not committed). The residual
+    `ke_vertex` leak (Asset.Assimp surfacing native `ke_vertex` via `ModelData.MeshData.Vertices`)
+    is the catalyst for B5.6 below.
   - ✅ Step 6/Caso 3: `IFramePacket` rich managed API (SetCamera, SetDirectionalLight, AddPointLight, AddSpotLight, AddDrawCommand, AddShadowDrawCommand, SetSkybox, SetShadow, ...). 5 systems rewritten to use it; `unsafe` in Framework now contained to: `Mat4` helper, 4 minimal ECS-read blocks in systems, `Node`/`Scene` (ECS pointer storage), and `Application.InitializeSystems`. Examples folder: **zero `unsafe`**. Commit `3b57f11`.
   - ⏳ Step 8/Caso 2: `Component<T>` wrapper — **DEFERRED** to workflow layer (scriptable nodes).
 
@@ -232,9 +235,61 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 ##### [B5.5] Hide `ResourceCommandFactory.Queue`; expose `EnqueueAsync` instead (Bug 1.52)
 - **Tags**: `refactor`, `bug` (Bug 1.52)
 - **Why**: Extension method `ResourceFactoryExtensions.CreateMeshAsync` requires `Queue` public, leaking the dispatch mechanism.
+
+##### [B5.6] Asset pipeline assembly — `IAssetLoader` + `IModel` abstractions
+- **Tags**: `refactor`, `feat` (architecture)
+- **Why**: `KernelEngine.Asset.Assimp` is a half-finished plugin: no kernel C vtable, no Abstractions interface, no dispatcher. Game code reaches a concrete `AssetLoader.LoadModelAsync` directly. Any "load a model" convenience method has nowhere to live (already tried a bridge assembly — rejected). Future loaders (KTX2, baked formats) will repeat the anti-pattern unless the contract is established first.
+- **Progress (2026-05-20)**: the loader contract now exists. `IAssetLoader` + `IModel` / `IModelMesh` / `IModelMaterial` / `IModelTexture` live in `KernelEngine.Kernel.Abstractions`. Asset.Assimp's `AssetLoader` / `ModelData` / `MeshData` / `MaterialData` / `TextureData` were made **`internal`** and implement those interfaces; `AddAssimpAssetLoader()` registers `IAssetLoader` (not the concrete). `ke_vertex` leak gone — `IModelMesh.Vertices` returns `ReadOnlySpan<Vertex>` after an internal cast. Examples 12/13 resolve `IAssetLoader` via DI and touch zero plugin concretes / zero `KernelEngine.Kernel.Native`. Build green; 80 tests pass.
+  - **Still pending below**: the `KernelEngine.AssetPipeline` coordinator assembly (dispatcher by extension + cache + baking), additional format loaders (KTX2, baked), `IModelNode` hierarchy preservation, and the `IModel.AddToSceneAsync(IScene, IResourceFactory, AssetHierarchyStrategy)` convenience in Framework.
+- **What**: Introduce abstractions + a pipeline coordinator assembly. Per-format loaders become plugins that implement the contract. Framework consumes `IModel` only.
+- **Pre-design** (subject to refinement when implemented):
+    - **In `KernelEngine.Kernel.Abstractions`** (zero `unsafe`, zero native leak):
+        - `IAssetLoader` — `KernelTask<IModel> LoadModelAsync(string path)`.
+        - `IModel : IDisposable` — collections of `IModelMesh`, `IModelMaterial`, `IModelTexture`, plus optional `IModelNode Root` (Assimp/glTF hierarchy tree, preserved).
+        - `IModelMesh` — `ReadOnlySpan<Vertex> Vertices`, `ReadOnlySpan<ushort> Indices`, `int MaterialIndex`, `string Name`.
+        - `IModelMaterial` — PBR factors + texture indices + name.
+        - `IModelTexture` — `Width`, `Height`, `ReadOnlySpan<byte> Pixels`, `Path`.
+        - `IModelNode` — `string Name`, `Matrix4x4 LocalTransform`, `int[] MeshIndices`, `IReadOnlyList<IModelNode> Children`.
+    - **New assembly `KernelEngine.AssetPipeline`** (depends on Abstractions only):
+        - `IAssetPipeline` — dispatcher: `RegisterLoader(string extension, IAssetLoader)` + `LoadModelAsync(path)` routes to the right loader by extension.
+        - `AssetCache` — `path → WeakReference<IModel>` with manual eviction (hot reload hook later).
+        - Future (deferred): `BakingProcess` (raw → optimized binary), `IAssetWatcher` (filesystem watch + reload).
+    - **Existing format plugins implement the contract**:
+        - `KernelEngine.Asset.Assimp` — `AssimpAssetLoader : IAssetLoader` for fbx/gltf/obj. `ModelData` becomes internal; public surface is `IModel`. `ke_vertex` no longer leaks (`IModelMesh.Vertices` returns `ReadOnlySpan<Vertex>` after internal cast).
+        - Future: `KernelEngine.Asset.Ktx2` for compressed textures, `KernelEngine.Asset.Bake` for engine-baked format.
+    - **In `KernelEngine.Framework`** (still Abstractions-only):
+        - Extension methods on `IModel`: e.g. `AddToSceneAsync(IModel, IScene, IResourceFactory, AssetHierarchyStrategy)`. Strategies: `Flat` (current example behavior), `PreserveHierarchy` (respects model node tree).
+        - Convenience moves from examples back into the engine *only after* the abstraction is honest (no leaks, no half-baked types).
+- **Acceptance**:
+    - `grep -rn "ke_vertex" examples/csharp/` → no matches.
+    - `grep -rn "KernelEngine.Kernel.Native" src/csharp/KernelEngine.Framework/ src/csharp/KernelEngine.AssetPipeline/` → no matches.
+    - Adding a new loader requires only implementing `IAssetLoader`; no Framework or kernel change.
+    - Examples 12/13 collapse back to `await pipeline.LoadModelAsync(path).AddToSceneAsync(scene, resources)`.
+- **Effort**: M (1–2 days). Touches Asset.Assimp internals; risk is low because contract is small.
+- **Depends on**: B5.1 phase 2 complete (✅).
 - **What**: Add `internal Task<uint> EnqueueAsync(ResourceCommandType type, object data)` on `ResourceCommandFactory`. Update extensions to use it. Make `Queue` private.
 - **Acceptance**: `grep "rcf.Queue" -r src/csharp/` → no matches. Extensions still functional.
 - **Effort**: XS.
+
+##### [B5.7] Make `Kernel.Abstractions` a cohesive managed mirror of the C kernel — relocate framework-policy contracts to Framework; delete `IEngineHost` (RATIFIED 2026-05-20)
+- **Tags**: `refactor` (architecture)
+- **Why**: `KernelEngine.Kernel.Abstractions` should be a cohesive **~0.9:1 managed mirror of the C kernel API** (span-reshaped for C# safety; see `docs/Reference/05 - C# Layers.md`). Two things break that cohesion: (a) `ISceneWriter` / `IResourceFactory` / `IResourceCommandQueue` / `IInputBuffer` encode the **Framework's 3-thread policy** — a framework decision leaking into the abstraction layer; an alternate framework (1 or N threads) should reuse Abstractions without inheriting our policy. (b) `IEngineHost` is a **service-locator / god-factory anti-pattern**; the project's pattern is DI.
+- **What**:
+    1. **Move policy contracts to Framework**: interfaces `ISceneWriter`, `IResourceFactory`, `IResourceCommandQueue`, `IInputBuffer` (from Abstractions) **and** concretes `FramePacketSceneWriter`, `ResourceCommandFactory`, `ResourceCommandQueue`, `InputBuffer` (from `KernelEngine.Kernel`) → into `KernelEngine.Framework`. Safe because these concretes depend only on **mirror interfaces** (`IFramePacket`/`IRenderer`/`IInputReader`), so no `Kernel→Framework` dependency and no cycle. No new `Framework.Abstractions` assembly — they live directly in Framework.
+    2. **Delete `IEngineHost` + `EngineHost`**, replace with DI:
+        - No-runtime-param factories (`CreateWorld`, `CreateFrameSync`) → register `IWorld`/`IFrameSync` in `AddKernel()` via factory lambdas; Framework resolves them.
+        - Runtime-param factories (`CreateThread(name, fn)`, `CreateProxyAllocator(wrapped)`) → small typed factories registered in DI (`IThreadFactory.Create(name, fn)`, etc.) — DI + factory, not service location.
+        - Policy factories (`CreateInputBuffer`/`CreateResourceCommandQueue`/`CreateSceneWriter`) → gone; Framework `new`s the concretes (now local).
+    3. Rewire `Application.cs` to take resolved services / typed factories via DI instead of `IEngineHost`.
+    4. Move `InputBuffer` / `ResourceCommandQueue` tests from `KernelEngine.Kernel.Tests` (`ConcurrencyTests`) → `KernelEngine.Framework.Tests`.
+    5. (Optional) add `IShaderCompiler` to Abstractions to complete the mirror (~0.95:1).
+- **Acceptance**:
+    - `Kernel.Abstractions` contains only kernel-mirror contracts + POCOs; grep there finds no `ISceneWriter`/`IResourceFactory`/`IResourceCommandQueue`/`IInputBuffer`/`IEngineHost`.
+    - `grep -rn "IEngineHost" src/csharp/` → no matches.
+    - `Framework` references only `Abstractions`; `Kernel`/plugins do **not** reference `Framework`; no dependency cycle.
+    - Build green; all tests pass (relocated tests included).
+- **Effort**: M.
+- **Depends on**: B5.1 phase 2 (✅).
 
 *Other cards listed individually below — execute in any order within the block.*
 
@@ -250,6 +305,150 @@ After all 5 blocks complete:
 - Branch merged to main
 
 → Then alternate `feat / refactor / bug / test` per the user's preferred cadence.
+
+---
+
+## 🎮 Tier 2 — Framework High-Level API (hide building blocks from game code)
+
+> **Initiative locked 2026-05-20.** Architectural premise: `KernelEngine.Kernel.Abstractions` is the **building-blocks API** (renderer, GPU resources, ECS, raw input, frame packet) — for engine/plugin authors. **Game developers must never import it.** `KernelEngine.Framework` is the high-level façade they use. Framework already covers `Application`, `Scene`/`Node`, camera/light/mesh nodes, and the render systems — but game code still leaks into 5 blocks (measured in examples 06/12/13). This initiative closes those leaks.
+>
+> **Leaks today**: `IResourceFactory` + raw handles + `Vertex[]` (in `OnReady`); `ISceneWriter` post-fx/ambient/clear (per-frame in `OnUpdate`); `IInputReader.IsKeyDown(87)` magic keycodes; `IWorld.ActiveCamera = node.Entity` (raw entity IDs); manual GPU-upload loop after `IAssetLoader`. Math types (`Vector*`, `Quaternion`, `Matrix4x4`, `Transform`) are universal and stay.
+>
+> **Order**: A → B → C → D (largest leak first; Tier A alone removes ~80% of `OnReady`, Tier B clears `OnUpdate`). Then G/H (Godot-inspired scene graph + events). E/F per roadmap. Each card's acceptance gate: the target leak no longer appears in `examples/csharp/`.
+
+##### [F.0] Foundational decision — Node is an OOP view over the ECS (RATIFIED 2026-05-20)
+- **Decision**: Game devs author with typed Nodes only; the sparse-set ECS is an **invisible execution backend**. (User confirmed this was always the intent.)
+- **Consequences**:
+    - `*Component` structs (Transform/Mesh/Light/…) and `uint componentId` **leave the public Framework API** — they become internal, touched only by render/transform systems.
+    - Node properties read/write ECS data internally (`meshRenderer.Mesh = …` writes `MeshComponent` behind the scenes).
+- **Why this is not slower than an OOP engine (e.g. Godot)**: Godot itself uses thin nodes over data-oriented "servers"; we use thin nodes over ECS. The hot paths (render, transform) iterate packed ECS arrays for cache efficiency. **Accepted trade**: per-node script callbacks (`OnUpdate`) keep virtual-dispatch cost (same as Godot); ECS-pure engines (Bevy/DOTS) avoid it but lose OOP ergonomics. Deliberate choice: ergonomics for gameplay code, ECS for system iteration. Good for typical games (hundreds–low thousands of active entities); not aimed at 10k+ scripted-node simulations.
+- **Naming policy**: use **.NET / Unity-like** terms, NOT Godot's — *but only when sufficiently descriptive*. `Tag` (not Group), node events via C# `event`/delegates (not "signals"), `FixedUpdate` (not `_physics_process`), `SceneManager` (not SceneTree). **Reuse unit is NOT called "Prefab"** — see F.0a.
+
+##### [F.0a] Composition model — node tree, behaviors are nodes (RATIFIED 2026-05-20)
+- **Decision**: gameplay is composed by **nesting child nodes** (Godot-style), not by an attached-behavior list. A `Player` node has child nodes for `MeshRenderer`, `RigidBody`, and even behavior like `Health`. The dev MAY consolidate everything into the `Player` subclass if they prefer — it's their choice, not forced.
+- **Gameplay state lives as plain managed fields on nodes** — NOT ECS components. A `Health` node is one class with a `Current` field + `OnUpdate`; no `HealthComponent`, no `HealthSystem`. As cohesive as Godot. The only thing that reaches the ECS is the internal `ScriptComponent` (invisible).
+- **Rejected**: the earlier "create a Component + System for every custom node" model — incohesive for gameplay (scatters one concept across three files). The user explicitly disliked it.
+- **Rejected**: "Prefab" as the reuse-unit name — *everything is a Scene*, so a separate "Prefab" concept is a weak Unity-ism. A reusable subtree is just a `Scene` you `Instantiate()` (see F.G2).
+
+##### [F.0b] Escape-hatch principle — logic/data vs capability (RATIFIED 2026-05-20)
+- **When a user hits a wall, ask: is the missing thing LOGIC/DATA or a CAPABILITY?**
+    - **Logic/data** (custom AI, mass simulation of entities with custom behavior) → solvable in **user-land**: nodes, node-behaviors, or (advanced opt-in) a custom ECS component+system in the Framework layer. The ability to run logic and iterate data already exists.
+    - **Capability** (GPU instancing, a new shading model, a new collider type) → **NOT** solvable in user-land no matter how well data is organized, because the feature lives below the ECS layer (renderer/physics contract). The engine must extend the contract.
+- **Worked example — rendering a million grass blades**: node-per-blade is catastrophic; a custom component+system does NOT fix it because `IFramePacket.AddDrawCommand` issues one draw per transform — the bottleneck is a missing **GPU-instancing capability**, not data layout. Correct answer is NOT engine-specific grass code, NOR the user hand-extending the bgfx plugin — it is the engine exposing GPU instancing as a **building-block primitive** (renderer contract) + a high-level `MultiMeshRenderer` node. Then grass/crowds/particles become *content the user authors*, and nobody writes grass-specific engine code. (Consistent with "kernel = building blocks, never built blocks".) → tracked as [F.RC1].
+
+##### [F.RC1] GPU instancing primitive + `MultiMeshRenderer` node (render capability)
+- **Tags**: `feat` (rendering), roadmap M2/M3
+- **Why**: No way today to draw many instances of one mesh in few draw calls. Blocks grass, foliage, crowds, particles, debris, asteroid fields. Surfaced by the F.0b grass analysis.
+- **What**: (1) **Primitive in the renderer contract** — instanced draw: one mesh + material + a per-instance buffer (transform + optional per-instance data), issued as one/few draw calls. Implemented in the bgfx plugin. (2) **High-level `MultiMeshRenderer` node** in Framework (à la Godot `MultiMeshInstance3D`) — game dev sets a mesh + a list/buffer of instance transforms; never touches the renderer.
+- **Acceptance**: an example renders 100k+ instances of one mesh at interactive framerate via a single high-level node; zero plugin code written by the game dev.
+- **Effort**: M–L (touches kernel frame-packet contract + bgfx + a Framework node).
+
+#### Tier A — Resources & assets (largest leak)
+
+> Reframe `Material` / `Mesh` / `Texture` / model as a **shared, ref-counted asset family** (Unity-like `Asset` / .NET resource semantics): loadable by path, cached, ownership-tracked. F.A4 (`Assets`/`AssetManager`) is the loader/cache façade for the family.
+
+##### [F.A1] High-level `Material` type
+- **Why**: Game code juggles raw `MaterialHandle` from `IResourceFactory.CreateMaterial`.
+- **What**: Managed `Material` with presets — `Material.Pbr(baseColor, metallic, roughness)`, `Material.Unlit(color)`, `.WithAlbedo(Texture)`, `.WithNormalMap(Texture)`. Encapsulates the handle + lifecycle. `MeshNode { Material = mat }` instead of `MaterialHandle`.
+- **Acceptance**: no `MaterialHandle` / `CreateMaterial` in `examples/csharp/`.
+
+##### [F.A2] High-level `Mesh` + primitive factory
+- **Why**: Example 06 hand-builds a cube in ~40 lines; game code touches `Vertex[]` + `CreateMesh` + `MeshHandle`.
+- **What**: `Mesh.Cube()`, `Mesh.Sphere(segments)`, `Mesh.Plane()`, `Mesh.Quad()`, `Mesh.FromVertices(...)`. Hides `Vertex[]` and the handle.
+- **Acceptance**: no `Vertex[]` / `MeshHandle` / `CreateMesh` in `examples/csharp/`.
+
+##### [F.A3] High-level `Texture` type
+- **Why**: `TextureLoader` exists but returns a raw `TextureHandle`.
+- **What**: `Texture.Load(path)`, `Texture.Cubemap(paths)`, `Texture.White`. Hides `TextureHandle` / `CreateTexture` / `CreateCubemap`.
+- **Acceptance**: no `TextureHandle` in game code.
+
+##### [F.A4] `Assets` / `AssetManager` service
+- **Why**: Single entry point for loading + caching.
+- **What**: `assets.LoadModel(path)`, `assets.LoadTexture(path)` with cache + ref-count + (future) hot-reload. Hides `IAssetLoader` and `IResourceFactory` behind one façade.
+- **Acceptance**: game code resolves `Assets`, never `IAssetLoader` / `IResourceFactory`.
+
+##### [F.A5] `scene.Add(model)` / `model.Instantiate(scene)`
+- **Why**: This is the home for the `AddToScene` helper deleted from examples (see [B5.6]).
+- **What**: Operates on `IModel`; strategies `Flat` / `PreserveHierarchy`. Replaces the manual texture→material→mesh upload loop in examples 12/13.
+- **Acceptance**: examples 12/13 collapse to `scene.Add(assets.LoadModel("box.gltf"))`.
+- **Depends on**: B5.6 (`IModelNode` for `PreserveHierarchy`).
+
+#### Tier B — Environment & render config (move out of `OnUpdate`)
+
+##### [F.B1] `Scene.Environment`
+- **What**: Persistent properties set once: `AmbientLight`, `ClearColor`, `Skybox`, (future) `Fog`. Render systems consume them.
+- **Acceptance**: no `ClearColor` / `SetAmbientLight` calls in `OnUpdate`.
+
+##### [F.B2] `Scene.PostProcessing`
+- **What**: Config object with toggles/props: `.Bloom = new BloomSettings { Threshold, Intensity }`, `.Ssao = ...`, `.Tonemapping = ...`.
+- **Acceptance**: `ISceneWriter` post-fx calls gone from game code; `ISceneWriter` becomes an internal detail consumed only by render systems.
+
+#### Tier C — High-level input
+
+##### [F.C1] `Key` / `MouseButton` enums
+- **What**: `Input.IsKeyDown(Key.W)` instead of `87`.
+- **Acceptance**: no integer keycodes in `examples/csharp/`.
+
+##### [F.C2] Input action/axis mapping
+- **What**: `input.Bind("MoveForward", Key.W, Key.Up)`, then `input.GetAxis("Move")` / `input.IsActionPressed("Jump")`. Decouples gameplay from physical keys (enables gamepad later).
+
+##### [F.C3] Framework `Input` façade
+- **What**: Wraps `IInputReader`, exposed via the typed update callback. Game code never sees `IInputReader`.
+
+#### Tier D — Scene / camera / entity ergonomics (hide IDs)
+
+##### [F.D1] `scene.MainCamera = cameraNode`
+- **What**: Kills `ActiveWorld.ActiveCamera = node.Entity`. No `Entity` (ulong) in game code.
+- **Acceptance**: no `.Entity` access in `examples/csharp/`.
+
+##### [F.D2] Reusable camera controllers
+- **What**: `OrbitCameraController`, `FlyCameraController`, `FpsCameraController` — ready-made behaviors (otherwise hand-written with raw input).
+
+##### [F.D3] Typed component access without component IDs
+- **What**: Node subclasses use `AddComponent<T>(SomeNode.ComponentId)` today. Hide the `uint componentId` — `node.Add<PointLightComponent>(...)` resolving the ID internally.
+
+##### [F.D4] Node query/find + tags + paths
+- **What**: `scene.Find(name)`, `node.Find("Player/Sprite")` (relative path), `scene.OfType<MeshRenderer>()`. **Tags** (Unity-like, == Godot groups): `node.AddTag("enemy")`, `scene.FindWithTag("enemy")`.
+
+##### [F.D5] Node-type rename to Unity/.NET convention
+- **What**: Rename built-in nodes to clear single-responsibility names: `MeshNode` → `MeshRenderer`, `CameraNode` → `Camera`, `LightNode`/`PointLightNode`/`SpotLightNode` → `DirectionalLight`/`PointLight`/`SpotLight`. The node type IS the "component" (no Unity-style component list); composition is by nesting child nodes.
+- **Acceptance**: examples use `new MeshRenderer { Mesh = …, Material = … }`, no `*Node`/`*Component` suffixes leaking intent.
+
+#### Tier G — Scene composition & reuse (Godot-inspired, .NET naming)
+
+##### [F.G1] Hierarchy ergonomics
+- **What**: `parent.AddChild(child)` (replaces `scene.AddNode(child, parent:)`), `node.GetParent()`, `node.GetChild(i)`, child iteration. Add `node.GlobalTransform` (setter converts into parent space) alongside the existing local `WorldMatrix`.
+
+##### [F.G2] Scene as the universal reuse unit (code-first; serialization later)
+- **Model**: **everything is a `Scene`** — a node subtree with a single root. The running world AND any reusable piece are both Scenes. There is **no separate "Prefab" type** (rejected in F.0a). Reuse = `scene.Instantiate()` → a deep-copied detached root you plug in via `parent.AddChild(...)` / `scene.Add(...)`.
+- **Phase 1 (now): code-based** — a Scene factory (class/method) builds and returns a root node + children; instantiate as many as you want.
+- **Phase 2 (deferred): `SceneAsset`** — the serialized on-disk form, part of the Tier A asset family. `assets.LoadScene("enemy.kescene")` → returns a `Scene` you `.Instantiate()`. Name is descriptive in .NET terms ("the asset that becomes a Scene"); drops both `Prefab` and Godot's `PackedScene`. Ties into the offline asset pipeline on the roadmap.
+
+##### [F.G3] `SceneManager` (scene switching)
+- **What**: Global manager: active scene, `LoadScene` / `ChangeScene`, global pause, tag propagation. Ties into F.G2 (a scene loads as an instantiated `Scene` root) and F.A4 (asset loading).
+
+#### Tier H — Events & lifecycle
+
+##### [F.H1] Node events (Godot signals → C# events)
+- **What**: Decoupled events on nodes via idiomatic C# `event`/delegates: declare, subscribe, raise. Fills the "Observer planned later" gap left when MessagePipe was removed (see [[project_messagepipe_removed]]).
+
+##### [F.H2] Richer lifecycle callbacks
+- **What**: Add `OnFixedUpdate(dt)` (fixed timestep, Unity-like — for physics/determinism), `OnEnable`/`OnDisable`/`OnDestroy`, `OnEnterTree`/`OnExitTree`. Today only `OnStart`/`OnUpdate` exist.
+
+##### [F.H3] Event-based input
+- **What**: Push input events (key down/up, mouse, scroll) to nodes via `OnInput(InputEvent)` in addition to the polled `Input` façade (F.C3). Lets gameplay react without polling every frame.
+
+#### Tier E — Gameplay plumbing
+
+##### [F.E1] `Time` service
+- **What**: `Time.DeltaTime`, `Time.TotalTime`, `Time.FrameCount`. (Today only the `dt` parameter.)
+
+##### [F.E2] Richer behaviors (evaluate — may be premature)
+- **What**: Timers, `Invoke(delay)`, coroutines, scene events beyond `OnStart`/`OnUpdate`.
+
+#### Tier F — Future domains (M2–M5) — principle, not a card yet
+
+> When audio / physics / UI / animation / networking land: **each gets a Framework façade**, never raw plugin access. Same rule as the asset loader (Tier A) — plugin implements a contract in Abstractions, Framework exposes the high-level type, game dev never touches the concrete. This is a standing architectural principle for every new domain.
 
 ---
 
@@ -551,13 +750,15 @@ After all 5 blocks complete:
     2. Implement `SceneAsset` loader.
     3. Update Examples to use files.
 
-#### [SceneNode] Composable Prefabs
-- **Why**: Allow nodes to reference other scene files as children, enabling complex hierarchies.
-- **What**: `SceneNode` type that instantiates a sub-hierarchy from an asset.
-- **Acceptance**: A "Player" node can be composed of "Body" and "Weapon" prefabs.
+#### [SceneNode] Composable scenes (terminology realigned 2026-05-20)
+- ⚠️ **Realigned to the F.0a / F.G2 model**: there is **no `Prefab` and no separate `SceneNode` type**. Everything is a `Scene` (a node subtree); reuse = `scene.Instantiate()` added as a child. This card now == [F.G2] phase 2 (file-backed `SceneAsset`).
+- **Why**: Allow a scene to reference other scene assets as children, enabling complex hierarchies.
+- **What**: A child node whose subtree is produced by `assets.LoadScene(path).Instantiate()`.
+- **Acceptance**: A "Player" scene composed of "Body" and "Weapon" scenes via instantiation.
 - **Steps**:
-    1. Implement recursive instantiation logic.
-    2. Handle property overrides on prefab instances.
+    1. Recursive instantiation of a loaded `Scene`.
+    2. Per-instance property overrides.
+- **Overlap note**: see [F.G2]/[F.G3]. This + W.2 (.kscene) + M2.1 (Signals) + M2.2 (Groups) duplicate new Tier 2 cards F.G2, F.H1, F.D4 — **needs a reconciliation pass** (decide which numbering wins) before either is scheduled.
 
 ### Tier 4 — Roadmap Features (M3–M5) and Optimization
 
