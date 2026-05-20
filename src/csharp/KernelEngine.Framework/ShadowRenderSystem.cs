@@ -31,12 +31,10 @@ public sealed class ShadowRenderSystem : ISystem
     /// <summary>Assigns the GPU shadow map to render into. Must be called from ke.render after GPU init.</summary>
     public void SetShadowMap(ShadowMapHandle handle) => _shadowMap = handle;
 
-    public void Update(IWorld iworld, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
     {
         if (packet == null) return;
         if (_shadowMap == ShadowMapHandle.None) return;
-
-        var world = (World)iworld;
         var registry = world.Registry;
 
         // ── Directional light → shadow camera ──────────────────────────────────
@@ -57,12 +55,7 @@ public sealed class ShadowRenderSystem : ISystem
             if (mesh.MeshHandle == MeshHandle.None) continue;
 
             Matrix4x4 worldMatrix;
-            unsafe
-            {
-                var tc = registry.GetComponentRaw<TransformComponent>(meshes.Entities[i], _transformCid);
-                if (tc == null) continue;
-                worldMatrix = tc->WorldMatrix;
-            }
+            { var slot = registry.GetComponent<TransformComponent>(meshes.Entities[i], _transformCid); if (slot.IsEmpty) continue; worldMatrix = slot[0].WorldMatrix; }
 
             packet.AddShadowDrawCommand(mesh.MeshHandle, worldMatrix);
         }

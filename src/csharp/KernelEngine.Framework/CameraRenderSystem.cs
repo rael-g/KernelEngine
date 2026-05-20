@@ -21,10 +21,9 @@ public sealed class CameraRenderSystem : ISystem
         _transformCid = transformCid;
     }
 
-    public void Update(IWorld iworld, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
     {
         if (packet == null) return;
-        var world = (World)iworld;
         var registry = world.Registry;
 
         var cameras = registry.Query<CameraComponent>(_cameraCid);
@@ -32,12 +31,7 @@ public sealed class CameraRenderSystem : ISystem
 
         // ECS storage read requires a pointer; keep the unsafe scope minimal.
         TransformComponent transform;
-        unsafe
-        {
-            var p = registry.GetComponentRaw<TransformComponent>(cameras.Entities[0], _transformCid);
-            if (p == null) return;
-            transform = *p;
-        }
+        { var slot = registry.GetComponent<TransformComponent>(cameras.Entities[0], _transformCid); if (slot.IsEmpty) return; transform = slot[0]; }
 
         var cam = cameras.Data[0];
         var view = Mat4.InvertTrs(transform.WorldMatrix);

@@ -17,10 +17,9 @@ public sealed class MeshRenderSystem : ISystem
         _transformCid = transformCid;
     }
 
-    public void Update(IWorld iworld, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
     {
         if (packet == null) return;
-        var world = (World)iworld;
         var registry = world.Registry;
         var meshes = registry.Query<MeshComponent>(_meshCid);
 
@@ -30,12 +29,7 @@ public sealed class MeshRenderSystem : ISystem
             if (mesh.MeshHandle == MeshHandle.None) continue;
 
             System.Numerics.Matrix4x4 worldMatrix;
-            unsafe
-            {
-                var tc = registry.GetComponentRaw<TransformComponent>(meshes.Entities[i], _transformCid);
-                if (tc == null) continue;
-                worldMatrix = tc->WorldMatrix;
-            }
+            { var slot = registry.GetComponent<TransformComponent>(meshes.Entities[i], _transformCid); if (slot.IsEmpty) continue; worldMatrix = slot[0].WorldMatrix; }
 
             packet.AddDrawCommand(mesh.MeshHandle, mesh.MaterialHandle, worldMatrix);
         }

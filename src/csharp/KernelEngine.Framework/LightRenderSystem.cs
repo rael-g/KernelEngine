@@ -22,10 +22,9 @@ public sealed class LightRenderSystem : ISystem
         _transformCid = transformCid;
     }
 
-    public void Update(IWorld iworld, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
     {
         if (packet == null) return;
-        var world = (World)iworld;
         var registry = world.Registry;
 
         // ── Directional ────────────────────────────────────────────────────────
@@ -75,13 +74,10 @@ public sealed class LightRenderSystem : ISystem
         }
     }
 
-    private Vector3 ReadPosition(EcsRegistry registry, ulong entity)
+    private Vector3 ReadPosition(IEcsRegistry registry, ulong entity)
     {
-        unsafe
-        {
-            var tc = registry.GetComponentRaw<TransformComponent>(entity, _transformCid);
-            return tc != null ? tc->Position : Vector3.Zero;
-        }
+        var slot = registry.GetComponent<TransformComponent>(entity, _transformCid);
+        return slot.IsEmpty ? Vector3.Zero : slot[0].Position;
     }
 
     public ComponentAccess GetAccess() => new()

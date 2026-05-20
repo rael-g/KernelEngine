@@ -15,10 +15,9 @@ public sealed class SkyboxRenderSystem : ISystem
         _skyboxCid = skyboxCid;
     }
 
-    public void Update(IWorld iworld, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
     {
         if (packet == null) return;
-        var world = (World)iworld;
         var registry = world.Registry;
 
         var skyboxes = registry.Query<SkyboxComponent>(_skyboxCid);
