@@ -271,7 +271,8 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 - **Acceptance**: `grep "rcf.Queue" -r src/csharp/` → no matches. Extensions still functional.
 - **Effort**: XS.
 
-##### [B5.7] Make `Kernel.Abstractions` a cohesive managed mirror of the C kernel — relocate framework-policy contracts to Framework; delete `IEngineHost` (RATIFIED 2026-05-20)
+##### [B5.7] Make `Kernel.Abstractions` a cohesive managed mirror of the C kernel — relocate framework-policy contracts to Framework; delete `IEngineHost` — ✅ DONE
+- **Status**: ✅ Done (commit `348c5c0`, 2026-05-20). `IEngineHost`/`EngineHost` deleted; replaced by focused `IKernelFactory` (one factory, zero policy in `AddKernel`). `ISceneWriter`/`IResourceFactory`/`IResourceCommandQueue`/`IInputBuffer` + concretes moved to `KernelEngine.Framework`; `InputSnapshotReader` stayed in Kernel. Thread affinity routed through `IKernelFactory.AssertCurrentThread` (no managed-TLS hack). `InternalsVisibleTo KernelEngine.Framework` removed (vestigial). `ConcurrencyTests` relocated to `Framework.Tests`. Build 0/0; 80 tests green. Deferred: optional `IShaderCompiler` to complete the mirror (~0.95:1).
 - **Tags**: `refactor` (architecture)
 - **Why**: `KernelEngine.Kernel.Abstractions` should be a cohesive **~0.9:1 managed mirror of the C kernel API** (span-reshaped for C# safety; see `docs/Reference/05 - C# Layers.md`). Two things break that cohesion: (a) `ISceneWriter` / `IResourceFactory` / `IResourceCommandQueue` / `IInputBuffer` encode the **Framework's 3-thread policy** — a framework decision leaking into the abstraction layer; an alternate framework (1 or N threads) should reuse Abstractions without inheriting our policy. (b) `IEngineHost` is a **service-locator / god-factory anti-pattern**; the project's pattern is DI.
 - **What**:

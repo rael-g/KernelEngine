@@ -28,23 +28,23 @@ ClangSharp-generated P/Invoke over the C ABI. Generated from `.rsp` files via `s
 
 `KernelEngine.Kernel.Abstractions` is the **building-blocks API**: the contracts a renderer/window/world satisfy, plus the pure value types they exchange. **No `unsafe`, no native pointer ever appears in a public interface.**
 
-Contracts (interfaces): `IAllocator` (+ arena/proxy/malloc variants), `ILogger`, `ILoggerSink`, `IWindow`, `IRenderer`, `IDevPlatform`, `IInput`, `IInputReader`, `IInputBuffer`, `ITaskScheduler`, `IFrameSync`, `IFramePacket`, `IEcsRegistry`, `IWorld`, `ISystem`, `ISceneWriter`, `IResourceFactory`, `IResourceCommandQueue`, `IKernelThread`, `IEngineHost`, `IAssetLoader` / `IModel` / `IModelMesh` / `IModelMaterial` / `IModelTexture`.
+Contracts (interfaces): `IAllocator` (+ arena/proxy/malloc variants), `ILogger`, `ILoggerSink`, `IWindow`, `IRenderer`, `IDevPlatform`, `IInput`, `IInputReader`, `ITaskScheduler`, `IFrameSync`, `IFramePacket`, `IEcsRegistry`, `IWorld`, `ISystem`, `IKernelThread`, `IKernelFactory`, `IAssetLoader` / `IModel` / `IModelMesh` / `IModelMaterial` / `IModelTexture`.
 
 Value types / POCOs: `Vertex`, `Transform`, `TransformComponent`, `HierarchyComponent`, `NameComponent`, light records, typed handles (`MeshHandle`, `TextureHandle`, `MaterialHandle`, `ShadowMapHandle` — all using `uint.MaxValue` as the `None` sentinel; handle `0` is the built-in white texture), `Result` / `KernelResult` / `KernelException`, `LogLevel`, `ComponentAccess`, `RequiresThreadAttribute`.
 
-> 📋 **Decided (Kanban [B5.7])**: Abstractions should be a cohesive ~0.9:1 managed mirror of the C kernel. The contracts that encode the **Framework's 3-thread policy** — `ISceneWriter`, `IResourceFactory`, `IResourceCommandQueue`, `IInputBuffer` — will **move out of Abstractions into `KernelEngine.Framework`** (along with their concretes). A framework with a different threading model should reuse Abstractions without inheriting this policy. The mirror stays span-reshaped for C# safety; an `IShaderCompiler` may be added to complete it.
+Abstractions is a cohesive **~0.9:1 managed mirror of the C kernel** (span-reshaped for C# safety). It deliberately holds **no** framework-policy contracts: the 3-thread plumbing (`ISceneWriter`, `IResourceFactory`, `IResourceCommandQueue`, `IInputBuffer`) lives in `KernelEngine.Framework`, so a framework with a different threading model can reuse Abstractions without inheriting that policy (Kanban [B5.7], done). An `IShaderCompiler` may later be added to complete the mirror (~0.95:1).
 
 ### `IEcsRegistry` — safe ECS access
 The registry interface exposes component storage as `Span<T>` / `ReadOnlySpan<T>` rather than raw pointers, so consumers manipulate ECS data safely without `unsafe`. Queries return packed spans.
 
-### `IEngineHost` — factory façade 🚧 (being removed)
-Because the framework cannot reference concrete types, it currently obtains them through `IEngineHost`: `CreateWorld(...)`, `CreateFrameSync(...)`, `CreateProxyAllocator(...)`, `CreateThread(...)`, `SetCurrentThreadName(...)`, `CreateInputBuffer()`, `CreateResourceCommandQueue()`, `CreateSceneWriter(packet)`. The concrete `EngineHost` (in `KernelEngine.Kernel`) returns concrete implementations typed as their interfaces.
+### `IKernelFactory` — construction of kernel primitives
+Because the framework references only Abstractions (not the concrete `KernelEngine.Kernel`), it constructs kernel primitives through `IKernelFactory`: `CreateProxyAllocator(...)`, `CreateWorld(...)`, `CreateFrameSync(...)`, `CreateThread(...)`, plus thread-affinity helpers `SetCurrentThreadName(...)` / `AssertCurrentThread(...)`. It mirrors the C kernel's create functions (`ke_world_create`, `ke_frame_sync_create`, `ke_thread_create`); the caller supplies all parameters, so **no policy lives in the kernel** — `AddKernel()` just registers the impl. The concrete `KernelFactory` lives in `KernelEngine.Kernel`.
 
-> 📋 **Decided (Kanban [B5.7])**: `IEngineHost` is a service-locator / god-factory anti-pattern and will be **removed** in favour of DI. No-param creations become DI registrations (`AddKernel()` registers `IWorld`/`IFrameSync`); runtime-parameterized ones become small typed factories (e.g. `IThreadFactory`); the policy creations disappear because their concretes move to the Framework (next note).
+> This replaced the former `IEngineHost`, a service-locator / god-factory that bundled construction, ambient statics, and framework-policy factories. `IEngineHost` was removed in Kanban [B5.7]: the policy factories' concretes moved to the Framework, dead members were dropped, and the genuine kernel-construction surface became this focused factory.
 
 ## Layer 4a — Kernel wrappers
 
-`KernelEngine.Kernel` holds the concrete wrappers (`Allocator`, `Logger`, `Renderer`, `Window`, `World`, `Input`, `TaskScheduler`, `FramePacket`, `FrameSync`, `InputBuffer`, `ResourceCommandQueue`, `EngineHost`, …). Each:
+`KernelEngine.Kernel` holds the concrete wrappers (`Allocator`, `Logger`, `Renderer`, `Window`, `World`, `Input`, `TaskScheduler`, `FramePacket`, `FrameSync`, `KernelThread`, `KernelFactory`, `InputSnapshotReader`, …). Each:
 
 - Owns its native pointer **`private`** — no `public`, no `internal` leakage of `ke_X*`.
 - Implements the corresponding Abstractions interface.
