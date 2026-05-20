@@ -17,7 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
-    <ProjectReference Include="../KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
   </ItemGroup>
 
 </Project>

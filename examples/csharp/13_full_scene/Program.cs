@@ -39,15 +39,46 @@ app.OnReady = async (resources) =>
     var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 0.1f, 50f) };
 
-    // Load Model
-    var loader = app.Services.GetRequiredService<AssetLoader>();
+    // Load model: same raw 3-step pattern as example 12 (no engine helper — see Kanban [B5.6]).
+    var loader = app.Services.GetRequiredService<IAssetLoader>();
     try {
         string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../assets/Box.gltf");
         using var modelData = await loader.LoadModelAsync(modelPath);
-        var modelRoot = await modelData.AddToSceneAsync(app.ActiveWorld, resources, "CenterBox");
-        modelRoot.LocalTransform = modelRoot.LocalTransform with { 
+
+        var gpuTextures = new TextureHandle[modelData.Textures.Count];
+        for (int i = 0; i < modelData.Textures.Count; i++)
+        {
+            var tex = modelData.Textures[i];
+            gpuTextures[i] = await resources.CreateTextureAsync(tex.Width, tex.Height, tex.Pixels.ToArray());
+        }
+
+        var gpuMaterials = new MaterialHandle[modelData.Materials.Count];
+        for (int i = 0; i < modelData.Materials.Count; i++)
+        {
+            var mat = modelData.Materials[i];
+            var albedo = mat.AlbedoTextureIndex >= 0 ? gpuTextures[mat.AlbedoTextureIndex] : default;
+            var normal = mat.NormalMapTextureIndex >= 0 ? gpuTextures[mat.NormalMapTextureIndex] : default;
+            gpuMaterials[i] = await resources.CreateMaterialAsync(
+                mat.BaseColor, textureHandle: albedo,
+                metallic: mat.Metallic, roughness: mat.Roughness,
+                normalMapHandle: normal);
+        }
+
+        var modelRoot = app.Scene.AddNode("CenterBox");
+        for (int i = 0; i < modelData.Meshes.Count; i++)
+        {
+            var meshData = modelData.Meshes[i];
+            var gpuMesh = await resources.CreateMeshAsync(
+                meshData.Vertices.ToArray(),
+                meshData.Indices.ToArray());
+            var material = meshData.MaterialIndex >= 0 ? gpuMaterials[meshData.MaterialIndex] : default;
+            app.Scene.AddNode(
+                new MeshNode { MeshHandle = gpuMesh, MaterialHandle = material },
+                meshData.Name, parent: modelRoot);
+        }
+        modelRoot.LocalTransform = modelRoot.LocalTransform with {
             Position = new Vector3(0f, 2f, 0f),
-            Scale = new Vector3(2.0f) 
+            Scale = new Vector3(2.0f)
         };
     } catch { /* ignore */ }
 

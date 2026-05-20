@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Diagnostics;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
 using KernelEngine.Window.Glfw;
