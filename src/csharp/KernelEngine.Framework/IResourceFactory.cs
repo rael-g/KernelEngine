@@ -1,6 +1,7 @@
 using System.Numerics;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Mediates creation and destruction of GPU resources from the simulation thread.

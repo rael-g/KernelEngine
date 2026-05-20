@@ -1,4 +1,6 @@
-namespace KernelEngine.Kernel;
+using KernelEngine.Kernel;
+
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Lock-free single-slot exchange of input snapshots between <c>ke.main</c> (producer)

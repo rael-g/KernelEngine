@@ -1,6 +1,7 @@
 using System.Numerics;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Mediates per-frame scene commands. These commands are recorded into a frame packet

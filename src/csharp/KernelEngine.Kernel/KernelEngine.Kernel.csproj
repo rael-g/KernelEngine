@@ -19,12 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- B5.1 phase 2: native pointers are now public on wrappers; plugin assemblies don't need
-         internal access. Framework keeps it because Node/Scene access engine-internal hot-path
-         helpers (EcsRegistry.{Add,Get}ComponentRaw returning T*) that aren't part of the public
-         IEcsRegistry contract (which exposes Span<T>). Tests keep it for white-box assertions. -->
+    <!-- Native pointers are public on wrappers; plugin assemblies don't need internal access.
+         Framework references only Abstractions (not Kernel), so it gets no InternalsVisibleTo.
+         Tests keep it for white-box assertions. -->
     <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
-    <InternalsVisibleTo Include="KernelEngine.Framework" />
     <InternalsVisibleTo Include="KernelEngine.Framework.Tests" />
     <InternalsVisibleTo Include="KernelEngine.Logging.Serilog.Tests" />
   </ItemGroup>

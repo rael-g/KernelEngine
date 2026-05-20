@@ -9,7 +9,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<Allocator, MallocAllocator>();
         services.AddSingleton<IAllocator>(sp => sp.GetRequiredService<Allocator>());
-        services.AddSingleton<IEngineHost, EngineHost>();
+        services.AddSingleton<IKernelFactory, KernelFactory>();
         return services;
     }
 

@@ -24,7 +24,7 @@ public class ApplicationTests
         
         services.AddSingleton<Allocator>(allocator);
         services.AddSingleton<IAllocator>(allocator);
-        services.AddSingleton<IEngineHost, EngineHost>();
+        services.AddSingleton<IKernelFactory, KernelFactory>();
         services.AddSingleton<IWindow>(mockWindow);
         services.AddSingleton<IRenderer>(mockRenderer);
         

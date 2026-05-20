@@ -1,10 +1,10 @@
 using System.Numerics;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Framework;
 using NSubstitute;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace KernelEngine.Framework.Tests;
 
 public class ConcurrencyTests
 {
@@ -14,7 +14,8 @@ public class ConcurrencyTests
     public void InputBuffer_ProduceAndConsume_ReturnsLatest()
     {
         var buffer = new InputBuffer();
-        var reader1 = new InputSnapshotReader(new ke_input_snapshot { mouse_x = 100, mouse_y = 200 });
+        var reader1 = Substitute.For<IInputReader>();
+        reader1.MousePosition.Returns(new Vector2(100, 200));
 
         buffer.Produce(reader1);
         var reader = buffer.Consume();
@@ -27,8 +28,13 @@ public class ConcurrencyTests
     {
         var buffer = new InputBuffer();
 
-        buffer.Produce(new InputSnapshotReader(new ke_input_snapshot { mouse_x = 10 }));
-        buffer.Produce(new InputSnapshotReader(new ke_input_snapshot { mouse_x = 20 }));
+        var first = Substitute.For<IInputReader>();
+        first.MousePosition.Returns(new Vector2(10, 0));
+        var second = Substitute.For<IInputReader>();
+        second.MousePosition.Returns(new Vector2(20, 0));
+
+        buffer.Produce(first);
+        buffer.Produce(second);
 
         var reader = buffer.Consume();
         Assert.Equal(20, reader.MousePosition.X);
@@ -39,28 +45,22 @@ public class ConcurrencyTests
     [Fact]
     public async Task ResourceCommandQueue_EnqueueAndDrain_CallsRenderer()
     {
-        var queue = new ResourceCommandQueue();
+        var threads = Substitute.For<IKernelFactory>();
+        var queue = new ResourceCommandQueue(threads);
         var mockRenderer = Substitute.For<IRenderer>();
-        
+
         var tcs = new TaskCompletionSource<uint>();
-        var cmd = new ResourceCommand { 
-            Type = ResourceCommandType.CreateShadowMap, 
+        var cmd = new ResourceCommand {
+            Type = ResourceCommandType.CreateShadowMap,
             Data = (1024u, 1024u),
             CompletionSource = tcs
         };
-        
+
         // Mock Renderer.CreateShadowMap to return success
         mockRenderer.CreateShadowMap(1024, 1024).Returns(new Result<ShadowMapHandle>(KernelResult.Ok, new ShadowMapHandle(5)));
 
         queue.Enqueue(cmd);
-        
-        // ResourceCommandQueue.Drain asserts we are on ke.render thread
-        KernelThread.SetCurrentName("ke.render");
-        try {
-            queue.Drain(mockRenderer);
-        } finally {
-            KernelThread.SetCurrentName("");
-        }
+        queue.Drain(mockRenderer); // IKernelFactory.AssertCurrentThread is a no-op substitute
 
         mockRenderer.Received().CreateShadowMap(1024, 1024);
         Assert.True(tcs.Task.IsCompleted);
@@ -70,26 +70,21 @@ public class ConcurrencyTests
     [Fact]
     public async Task ResourceCommandQueue_Drain_HandlesErrors()
     {
-        var queue = new ResourceCommandQueue();
+        var threads = Substitute.For<IKernelFactory>();
+        var queue = new ResourceCommandQueue(threads);
         var mockRenderer = Substitute.For<IRenderer>();
-        
+
         var tcs = new TaskCompletionSource<uint>();
-        var cmd = new ResourceCommand { 
-            Type = ResourceCommandType.CreateShadowMap, 
+        var cmd = new ResourceCommand {
+            Type = ResourceCommandType.CreateShadowMap,
             Data = (1024u, 1024u),
             CompletionSource = tcs
         };
-        
+
         mockRenderer.CreateShadowMap(1024, 1024).Returns(_ => throw new InvalidOperationException("GPU Full"));
 
         queue.Enqueue(cmd);
-        
-        KernelThread.SetCurrentName("ke.render");
-        try {
-            queue.Drain(mockRenderer);
-        } finally {
-            KernelThread.SetCurrentName("");
-        }
+        queue.Drain(mockRenderer);
 
         Assert.True(tcs.Task.IsFaulted);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await tcs.Task);

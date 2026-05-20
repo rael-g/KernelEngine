@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Numerics;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 public enum ResourceCommandType
 {
@@ -27,6 +27,12 @@ public struct ResourceCommand
 public sealed class ResourceCommandQueue : IResourceCommandQueue
 {
     private readonly ConcurrentQueue<ResourceCommand> _queue = new();
+    private readonly IKernelFactory _threads;
+
+    public ResourceCommandQueue(IKernelFactory threads)
+    {
+        _threads = threads;
+    }
 
     public void Enqueue(ResourceCommand command)
     {
@@ -38,7 +44,7 @@ public sealed class ResourceCommandQueue : IResourceCommandQueue
 
     public void Drain(IRenderer renderer)
     {
-        KernelThread.AssertCurrent("ke.render");
+        _threads.AssertCurrentThread("ke.render");
 
         while (_queue.TryDequeue(out var cmd))
         {

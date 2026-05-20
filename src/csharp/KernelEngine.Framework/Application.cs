@@ -25,7 +25,7 @@ public class Application : IDisposable
     public IInput? Input { get; private set; }
     public IDevPlatform? DevPlatform { get; private set; }
 
-    private IEngineHost _host = null!;
+    private IKernelFactory _kernelFactory = null!;
     private IProxyAllocator? _proxyAllocator;
 
     /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
@@ -76,11 +76,11 @@ public class Application : IDisposable
     {
         Services = serviceCollection.BuildServiceProvider();
 
-        _host = Services.GetRequiredService<IEngineHost>();
-        _host.SetCurrentThreadName("ke.main");
+        _kernelFactory = Services.GetRequiredService<IKernelFactory>();
+        _kernelFactory.SetCurrentThreadName("ke.main");
 
         var baseAllocator = Services.GetRequiredService<IAllocator>();
-        _proxyAllocator = _host.CreateProxyAllocator(baseAllocator, "ApplicationRoot");
+        _proxyAllocator = _kernelFactory.CreateProxyAllocator(baseAllocator, "ApplicationRoot");
         Allocator = _proxyAllocator;
 
         Logger = Services.GetService<ILogger>();
@@ -96,15 +96,15 @@ public class Application : IDisposable
         Renderer    = Services.GetRequiredService<IRenderer>();
         DevPlatform = Services.GetService<IDevPlatform>(); // optional dev-only diagnostics
 
-        ActiveWorld ??= _host.CreateWorld(Allocator);
+        ActiveWorld ??= _kernelFactory.CreateWorld(Allocator);
 
-        _inputBuffer   = _host.CreateInputBuffer();
-        _resourceQueue = _host.CreateResourceCommandQueue();
+        _inputBuffer   = new InputBuffer();
+        _resourceQueue = new ResourceCommandQueue(_kernelFactory);
 
         InitializeSystems();
 
         // ke.sim writes → ke.render reads.
-        using var frameSync     = _host.CreateFrameSync(Allocator, bufferCount: 2);
+        using var frameSync     = _kernelFactory.CreateFrameSync(Allocator, bufferCount: 2);
         using var renderReady   = new System.Threading.ManualResetEventSlim(false);
         using var simReady      = new System.Threading.ManualResetEventSlim(false);
 
@@ -117,7 +117,7 @@ public class Application : IDisposable
         SetOsThreadName("ke.main");
 
         // ke.render: owns every renderer API call for the lifetime of the app.
-        using var renderThread = _host.CreateThread(Allocator, "ke.render", DevPlatform, () =>
+        using var renderThread = _kernelFactory.CreateThread(Allocator, "ke.render", DevPlatform, () =>
         {
             try
             {
@@ -185,7 +185,7 @@ public class Application : IDisposable
         });
 
         // ke.sim: drives the world and records into FramePackets.
-        using var simThread = _host.CreateThread(Allocator, "ke.sim", DevPlatform, () =>
+        using var simThread = _kernelFactory.CreateThread(Allocator, "ke.sim", DevPlatform, () =>
         {
             try
             {
@@ -203,7 +203,7 @@ public class Application : IDisposable
                     if (_cts.IsCancellationRequested) { packet.EndWrite(); break; } // poison-pill
 
                     var input = _inputBuffer.Consume();
-                    var writer = _host.CreateSceneWriter(packet);
+                    var writer = new FramePacketSceneWriter(packet, _kernelFactory);
 
                     ActiveWorld?.Update(packet: packet, input: input);
                     OnUpdate?.Invoke(writer, input);

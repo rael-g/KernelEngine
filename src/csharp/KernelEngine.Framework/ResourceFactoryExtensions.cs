@@ -1,6 +1,7 @@
 using System.Numerics;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 public static class ResourceFactoryExtensions
 {

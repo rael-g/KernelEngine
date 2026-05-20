@@ -1,4 +1,6 @@
-namespace KernelEngine.Kernel;
+using KernelEngine.Kernel;
+
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Cross-thread queue for GPU resource commands. <c>ke.sim</c> enqueues create/destroy

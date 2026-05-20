@@ -1,7 +1,7 @@
 using System.Numerics;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Kernel;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 public sealed class ResourceCommandFactory : IResourceFactory
 {
