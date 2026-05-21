@@ -484,7 +484,8 @@ After all 5 blocks complete:
 ##### [OBS.4] Examples 10/11 post-processing pipelines broken (BUG, deferred — complex)
 - **Tags**: `bug`
 - **Symptoms (2026-05-21 visual)**: **10 hdr_bloom** → entirely black screen (HDR FB → tonemap composite path not reaching backbuffer, or nothing lit). **11 ssao** → dark-blue background with several black quads clustered in the lower-left corner (geometry projecting to wrong screen region — gbuffer-prepass/SSAO viewport or fullscreen-quad UV issue).
-- **Status**: deferred — post-FX pipeline bugs (HDR composite, SSAO gbuffer prepass) are complex and "prototyped, never validated". Note for a focused render-pipeline session. Likely related to view setup / fullscreen-pass UVs / FB redirection in `post_process_pipeline` + `core_renderer` SubmitPacket.
+- **Status**: deferred — post-FX pipeline bugs (HDR composite, SSAO gbuffer prepass) are complex and "prototyped, never validated". Needs a focused iterative-visual session (like the shadow bring-up).
+- **Diagnosis (2026-05-21)**: the SubmitPacket/SubmitPostProcess **orchestration looks structurally correct** — scene→HDR FB (view 1), bloom bright/blur (views 3/4/5), tonemap composite (view 6 → backbuffer/`kGpuInvalidHandle`), state `WRITE_RGBA`, fullscreen quad bound, view IDs ordered. So 10's black screen is NOT an obvious orchestration bug; it's deeper — likely in `fs_tonemap` (UV/sampling of the HDR texture), the fullscreen-quad NDC geometry, or the HDR texture format/sampling. 11's corner-quads point at the SSAO gbuffer-prepass fullscreen/viewport or `vs_prepass`/`vs_fullscreen` UVs. Both need shader-level visual iteration. All examples build + run (no crash) with the new lighting shader.
 - **Note**: 12 (asset+directional) renders correctly; 13's box+Sun render, only its floor had the quad-orientation bug (fixed) and its orbiting point lights are dark (OBS.2).
 
 ---
