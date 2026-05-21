@@ -40,6 +40,52 @@ ke_result LightingManager::StoreSpotLights(const ke_spot_light *lights, uint32_t
     return KE_OK;
 }
 
+void LightingManager::UploadLights(RenderContext& ctx)
+{
+    if (!ctx.gpu) return;
+
+    uint32_t pc = (uint32_t)point_lights_.size();
+    if (pc > kMaxPointLights) pc = kMaxPointLights;
+    uint32_t sc = (uint32_t)spot_lights_.size();
+    if (sc > kMaxSpotLights) sc = kMaxSpotLights;
+
+    // Point lights: 2 vec4 each — [pos.xyz, radius] | [color.rgb, intensity].
+    if (pc > 0 && point_lights_uniform != kGpuInvalidHandle)
+    {
+        float buf[kMaxPointLights * 8];
+        for (uint32_t i = 0; i < pc; ++i)
+        {
+            const ke_point_light& l = point_lights_[i];
+            float* v = &buf[i * 8];
+            v[0] = l.pos_x; v[1] = l.pos_y; v[2] = l.pos_z; v[3] = l.radius;
+            v[4] = l.r;     v[5] = l.g;     v[6] = l.b;     v[7] = l.intensity;
+        }
+        ctx.gpu->SetUniform(point_lights_uniform, buf, (uint16_t)(pc * 2));
+    }
+
+    // Spot lights: 4 vec4 each — [pos.xyz, range] | [dir.xyz, cos(inner)] | [color.rgb, intensity] | [cos(outer),0,0,0].
+    if (sc > 0 && spot_lights_uniform != kGpuInvalidHandle)
+    {
+        float buf[kMaxSpotLights * 16];
+        for (uint32_t i = 0; i < sc; ++i)
+        {
+            const ke_spot_light& l = spot_lights_[i];
+            float* v = &buf[i * 16];
+            v[0]  = l.pos_x; v[1]  = l.pos_y; v[2]  = l.pos_z; v[3]  = l.range;
+            v[4]  = l.dir_x; v[5]  = l.dir_y; v[6]  = l.dir_z; v[7]  = std::cos(l.inner_angle);
+            v[8]  = l.r;     v[9]  = l.g;     v[10] = l.b;     v[11] = l.intensity;
+            v[12] = std::cos(l.outer_angle); v[13] = 0.f; v[14] = 0.f; v[15] = 0.f;
+        }
+        ctx.gpu->SetUniform(spot_lights_uniform, buf, (uint16_t)(sc * 4));
+    }
+
+    if (light_counts_uniform != kGpuInvalidHandle)
+    {
+        float counts[4] = { (float)pc, (float)sc, 0.f, 0.f };
+        ctx.gpu->SetUniform(light_counts_uniform, counts, 1);
+    }
+}
+
 ke_result LightingManager::RecordLights(struct ke_frame_packet& packet, const ke_point_light *lights, uint32_t count)
 {
     if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;

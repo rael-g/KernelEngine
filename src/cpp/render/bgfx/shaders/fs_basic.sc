@@ -19,6 +19,7 @@ uniform vec4 u_shadowParams;
 uniform vec4 u_normalParams;
 uniform vec4 u_ssaoState;
 uniform vec4 u_clusterParams2;
+uniform vec4 u_lightCounts; // x = point light count, y = spot light count
 
 uniform vec4 u_pointLights[128];
 uniform vec4 u_spotLights[192];
@@ -45,6 +46,18 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
+}
+
+// Cook-Torrance PBR contribution of a single light with the given incoming radiance.
+vec3 PbrDirect(vec3 N, vec3 V, vec3 L, vec3 albedo, vec3 F0, float metallic, float roughness, vec3 radiance) {
+    float NdotL = max(dot(N, L), 0.0);
+    if (NdotL <= 0.0) return vec3_splat(0.0);
+    vec3 H = normalize(V + L);
+    vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    vec3 spec = (DistributionGGX(N, H, roughness) * GeometrySmith(N, V, L, roughness) * F)
+              / (4.0 * max(dot(N, V), 0.0) * NdotL + 0.0001);
+    vec3 diff = (vec3_splat(1.0) - F) * (1.0 - metallic) * albedo / PI;
+    return (diff + spec) * radiance * NdotL;
 }
 
 float ComputeShadow(vec4 shadowCoord) {
@@ -99,5 +112,36 @@ void main() {
     if (u_ssaoState.x > 0.5) ambient *= texture2D(s_ssaoBlurred, gl_FragCoord.xy * u_ssaoState.yz).r;
     if (u_shadowParams.x > 0.5) direct *= ComputeShadow(v_shadowCoord);
 
-    gl_FragColor = vec4(ambient + direct, albedo.w);
+    // ── Point + spot lights (forward, unshadowed) ──
+    vec3 dynamicLight = vec3_splat(0.0);
+
+    int pointCount = int(u_lightCounts.x);
+    for (int pi = 0; pi < pointCount; pi++) {
+        vec4 pa = u_pointLights[pi * 2 + 0];   // pos.xyz, radius
+        vec4 pb = u_pointLights[pi * 2 + 1];   // color.rgb, intensity
+        vec3 toL = pa.xyz - v_worldPos;
+        float dist = length(toL);
+        vec3 Lp = toL / max(dist, 0.0001);
+        float att = clamp(1.0 - dist / max(pa.w, 0.0001), 0.0, 1.0);
+        att *= att;
+        dynamicLight += PbrDirect(N, V, Lp, albedo.xyz, F0, metallic, roughness, pb.xyz * pb.w * att);
+    }
+
+    int spotCount = int(u_lightCounts.y);
+    for (int si = 0; si < spotCount; si++) {
+        vec4 sa = u_spotLights[si * 4 + 0];    // pos.xyz, range
+        vec4 sb = u_spotLights[si * 4 + 1];    // dir.xyz, cos(inner)
+        vec4 sc = u_spotLights[si * 4 + 2];    // color.rgb, intensity
+        float cosOuter = u_spotLights[si * 4 + 3].x;
+        vec3 toL = sa.xyz - v_worldPos;
+        float dist = length(toL);
+        vec3 Ls = toL / max(dist, 0.0001);
+        float datt = clamp(1.0 - dist / max(sa.w, 0.0001), 0.0, 1.0);
+        datt *= datt;
+        float cosA = dot(-Ls, normalize(sb.xyz));            // fragment vs cone axis
+        float catt = clamp((cosA - cosOuter) / max(sb.w - cosOuter, 0.0001), 0.0, 1.0);
+        dynamicLight += PbrDirect(N, V, Ls, albedo.xyz, F0, metallic, roughness, sc.xyz * sc.w * datt * catt);
+    }
+
+    gl_FragColor = vec4(ambient + direct + dynamicLight, albedo.w);
 }
