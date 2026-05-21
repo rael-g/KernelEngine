@@ -15,17 +15,26 @@ ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32
     if (!out || w == 0 || h == 0 || !ctx.gpu)
         return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateShadowMap", "Invalid arguments or GPU not set");
 
+    // The shadow map is SAMPLED as an R32F color target: fs_shadow writes gl_FragCoord.z into it,
+    // and the scene shader samples that value. A D16 depth attachment backs the depth test. A
+    // depth-only FB does not work here because fs_shadow outputs color (which would have no target)
+    // and sampling a raw D16 depth texture is not portable across backends.
+    GpuTextureHandle color_tex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtR32F, kTexFlagRT, nullptr);
+    if (color_tex == kGpuInvalidHandle)
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU color texture creation failed");
+
     GpuTextureHandle depth_tex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtD16, kTexFlagRT, nullptr);
     if (depth_tex == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU texture creation failed");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU depth texture creation failed");
 
-    GpuFrameBufferHandle fb = ctx.gpu->CreateFrameBuffer(1, &depth_tex, true);
+    GpuTextureHandle attachments[2] = { color_tex, depth_tex };
+    GpuFrameBufferHandle fb = ctx.gpu->CreateFrameBuffer(2, attachments, true);
     if (fb == kGpuInvalidHandle)
         return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU framebuffer creation failed");
 
     ShadowMapEntry entry;
     entry.fb = fb;
-    entry.depth_tex = depth_tex;
+    entry.depth_tex = color_tex; // scene samples the R32F color target (where fs_shadow stored depth)
     entry.w = w;
     entry.h = h;
     entry.valid = true;
@@ -53,16 +62,24 @@ ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_hand
         return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "BeginShadowPass", "Shadow map not valid");
 
     active_shadow_handle = h;
-    ctx.gpu->SetViewFrameBuffer(3 /*SHADOW*/, entry.fb);
-    ctx.gpu->SetViewRect(3, 0, 0, (uint16_t)entry.w, (uint16_t)entry.h);
-    ctx.gpu->SetViewClear(3, 0x0002 /*DEPTH*/, 0, 1.0f, 0);
-    ctx.gpu->SetViewTransform(3, v->m, p->m);
+    // View 0 (SHADOW): MUST be lower than the scene view (1) so bgfx renders the shadow depth
+    // BEFORE the scene samples it in the same frame. On view 3 the scene (view 1) ran first and
+    // read the cleared (1.0) depth → ComputeShadow never found occlusion → no shadow. View 0 is
+    // otherwise unused (the depth prepass is not implemented).
+    ctx.gpu->SetViewFrameBuffer(0 /*SHADOW*/, entry.fb);
+    ctx.gpu->SetViewRect(0, 0, 0, (uint16_t)entry.w, (uint16_t)entry.h);
+    // Clear COLOR to 1.0 (far) — the R32F target stores depth — and clear DEPTH for the test.
+    ctx.gpu->SetViewClear(0, 0x0001 | 0x0002 /*COLOR|DEPTH*/, 0xFFFFFFFF, 1.0f, 0);
+    ctx.gpu->SetViewTransform(0, v->m, p->m);
 
     // Propagate light VP + shadow-enabled flag to the main scene shader uniforms.
     // Without this, vs_basic computes v_shadowCoord = mul(0, worldPos) = 0 and the
     // main pass either ignores shadow or returns NaN coordinates → tudo na sombra.
+    // NOTE: ke_mat4_mul(out, a, b) computes out = b*a (verified: translation*rotation yields
+    // translate-then-rotate). The scene shader does mul(u_lightVP, worldPos) = u_lightVP*worldPos
+    // (M*v), so u_lightVP must be proj*view. To get proj*view we therefore pass (v, p).
     ke_mat4 light_vp;
-    ke_mat4_mul(&light_vp, p, v);
+    ke_mat4_mul(&light_vp, v, p);
     if (light_vp_uniform != kGpuInvalidHandle)
         ctx.gpu->SetUniform(light_vp_uniform, light_vp.m, 1);
     if (shadow_params_uniform != kGpuInvalidHandle) {
@@ -84,16 +101,23 @@ ke_result ShadowPipeline::SubmitMeshShadow(RenderContext& ctx, const GeometryMan
     ctx.gpu->SetTransform(t->m, 1);
     ctx.gpu->SetVertexBuffer(0, entry.vb);
     ctx.gpu->SetIndexBufferStatic(entry.ib);
-    // BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS
-    ctx.gpu->SetState(0x0000001000000000ULL | 0x0000000000000010ULL, 0);
-    ctx.gpu->Submit(3 /*SHADOW*/, prog, 0, false);
+    // BGFX_STATE_WRITE_RGBA (0x0F) | BGFX_STATE_DEPTH_TEST_LESS (0x10) | BGFX_STATE_WRITE_Z (0x40<<32).
+    // WRITE_R carries fs_shadow's gl_FragCoord.z into the R32F target; WRITE_Z populates the depth
+    // attachment for the test. The previous value (0x10<<32) was neither a real WRITE_Z nor a color
+    // write, so the shadow map was never written and stayed at its clear value (no shadow ever).
+    ctx.gpu->SetState(UINT64_C(0x000000400000001F), 0);
+    ctx.gpu->Submit(0 /*SHADOW*/, prog, 0, false);
 
     return KE_OK;
 }
 
 ke_result ShadowPipeline::EndShadowPass(RenderContext& ctx)
 {
-    active_shadow_handle = KE_SHADOW_MAP_NONE;
+    // Intentionally a no-op: active_shadow_handle MUST remain set so the main scene pass (which runs
+    // after this in FrameSubmitter) can bind the shadow depth texture via GetActiveShadowTex().
+    // Resetting it here left s_shadowMap on the white fallback → ComputeShadow always returned 1.0
+    // (no shadow ever). The handle is re-set every frame by BeginShadowPass.
+    (void)ctx;
     return KE_OK;
 }
 
