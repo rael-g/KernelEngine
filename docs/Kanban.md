@@ -453,6 +453,41 @@ After all 5 blocks complete:
 
 ---
 
+## 🔎 Example-Verification Observations (running tech-debt log)
+
+> Captured while visually verifying examples 06–13 (2026-05-21 session). Defects, hardcoded values, magic numbers, and anti-patterns to refactor later. **Principle (user, 2026-05-21)**: hardcoded render/scene params belong in the *example* (game-dev choice), not buried in the engine/framework. Later they become Framework presets (ties into Tier 2 / F.B Scene.Environment + PostProcessing).
+
+##### [OBS.1] Hardcoded render params buried in framework — surface to examples / presets
+- **Tags**: `refactor`, tech-debt
+- **Findings**:
+    - Shadow **resolution `1024×1024`** hardcoded in `Application.cs` (`Renderer.CreateShadowMap(1024,1024)`). Game dev can't change it.
+    - Shadow **frustum/near/far/distance** hardcoded in `ShadowRenderSystem.cs` (`Mat4.Ortho(-20,20,-20,20, 0.1, 50)`, `eye = lightDir*25`).
+    - (accumulating — add ambient defaults, light angles, cluster counts, etc. as found.)
+- **Should be**: example-level props/settings now (e.g. `ShadowSettings { Resolution, FrustumSize, Near, Far }`), Framework presets later (F.B).
+- **Effort**: M.
+
+##### [OBS.2] Examples 07/08/09 render dark — fragment shader never accumulates point/spot lights (BUG)
+- **Tags**: `bug`
+- **Symptom**: 07 (point), 08 (spot), 09 (many) render as **dark screens, zero illumination**. Directional lighting (06) works.
+- **Root cause (confirmed 2026-05-21)**: `src/cpp/render/bgfx/shaders/fs_basic.sc` **declares** `u_pointLights[128]`, `u_spotLights[192]`, `u_clusterParams2` but its `main()` only accumulates the **directional** light + ambient/IBL. There is **no point/spot light loop at all** (neither brute-force nor clustered). Lights DO reach the frame packet and the uniforms (verified via temp log: `point=4 spot=0 has_dir=0 draw=36` for 07) — the shader simply ignores them. The "clustered forward shading" was never wired into the fragment shader (or the loop was lost).
+- **NOT a regression** of the C# refactor — the C# `LightRenderSystem` records the lights correctly.
+- **Secondary**: bgfx `Failed to find memory that supports flags 0x00000003` (device-local+host-visible) at init — likely the cluster-cull compute buffers; their result isn't consumed by `fs_basic` anyway. Investigate separately.
+- **Fix**: implement point/spot accumulation in `fs_basic.sc`. Either (a) brute-force loop over the uniform arrays (works for ≤128 point / ≤? spot, simplest), or (b) full clustered loop reading the cull buffer (matches the "unlimited lights" intent; 09 has 200 → exceeds 128, so clustered is needed for it). Decide approach before implementing.
+- **Status**: diagnosed; fix deferred (substantial — shader feature).
+
+##### [OBS.3] Examples 12/13 asset loading — "prototyped, never ran" bugs (FIXED inline) + brittle asset path
+- **Tags**: `bug` (fixed), tech-debt
+- **Fixed inline (2026-05-21)**: (1) `AssetLoader` needs `KernelEngine.Kernel.TaskScheduler` but 12/13 never registered it → added `.AddEnkiTaskScheduler()` + the `KernelEngine.TaskScheduler.Enki` ProjectReference. (2) model path used 5 `..` levels (resolved to `examples/assets/`, nonexistent) → corrected to 6 (`assets/` is at repo root). Model now loads (`1 mesh, 2 materials`).
+- **Tech-debt (anti-pattern, defer)**: locating assets via `Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/...")` is brittle (breaks if output depth changes). Should copy assets to output (csproj `<Content>`) or resolve via a robust asset-root lookup. Ties into the future asset pipeline (B5.6).
+
+##### [OBS.4] Examples 10/11 post-processing pipelines broken (BUG, deferred — complex)
+- **Tags**: `bug`
+- **Symptoms (2026-05-21 visual)**: **10 hdr_bloom** → entirely black screen (HDR FB → tonemap composite path not reaching backbuffer, or nothing lit). **11 ssao** → dark-blue background with several black quads clustered in the lower-left corner (geometry projecting to wrong screen region — gbuffer-prepass/SSAO viewport or fullscreen-quad UV issue).
+- **Status**: deferred — post-FX pipeline bugs (HDR composite, SSAO gbuffer prepass) are complex and "prototyped, never validated". Note for a focused render-pipeline session. Likely related to view setup / fullscreen-pass UVs / FB redirection in `post_process_pipeline` + `core_renderer` SubmitPacket.
+- **Note**: 12 (asset+directional) renders correctly; 13's box+Sun render, only its floor had the quad-orientation bug (fixed) and its orbiting point lights are dark (OBS.2).
+
+---
+
 ### Tier 1 — Cleanup cards (executed in BLOCK 5)
 
 #### [W.4] Layer Boundary Cleanup (Phase 2) — ✅ Done (commit `9a87a37`)
