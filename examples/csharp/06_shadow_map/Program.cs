@@ -59,7 +59,7 @@ app.OnReady = (resources) =>
     // Directional light (Sun). Per LightNode docs, Direction is the vector pointing
     // FROM the lit surface TOWARD the light source. Sun in upper-right-back → (+x, +y, +z).
     var light = app.Scene.AddNode(
-        new LightNode
+        new AnimatedSun
         {
             Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
             Color = Vector3.One,
@@ -122,3 +122,27 @@ app.OnUpdate = (scene, input) =>
 };
 
 app.Run(services);
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Directional light that sweeps its azimuth back and forth over time, so the cube's shadow
+/// slides across the floor — a visual check that the shadow projection tracks the light.
+/// </summary>
+sealed class AnimatedSun : LightNode
+{
+    private float _t;
+
+    protected override void OnUpdate(float dt)
+    {
+        _t += dt;
+        float a = MathF.Sin(_t * 0.8f);                       // -1..1 sweep
+        var dir = Vector3.Normalize(new Vector3(a * 0.8f, 1.0f, 0.5f));
+
+        var comp = GetComponent<LightComponent>(ComponentId);
+        if (comp.IsEmpty) return;
+        comp[0].DirX = dir.X;
+        comp[0].DirY = dir.Y;
+        comp[0].DirZ = dir.Z;
+    }
+}
