@@ -43,7 +43,7 @@ static (Vertex[] verts, ushort[] idx) BuildCube()
 var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
-    .AddConsoleSink()
+    .AddConsoleSink(LogLevel.Info)
     .AddGlfwWindow(1280, 720, "KernelEngine — 06 Shadow Map Verification")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
@@ -83,12 +83,15 @@ app.OnReady = (resources) =>
     var floorMat = resources.CreateMaterial(new Vector4(0.5f, 0.5f, 0.5f, 1f), metallic: 0.0f, roughness: 0.8f);
     var cubeMat = resources.CreateMaterial(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
 
-    // Floor
+    // Floor. The default mesh (handle 0) is a quad in the XY plane (normal +Z), i.e. it stands up
+    // facing the camera. Rotate -90° about X to lay it flat as a ground plane (normal +Y); local Y
+    // then becomes world depth, so scale BOTH X and Y for the floor size (Z is flat, irrelevant).
     var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
-    floor.LocalTransform = floor.LocalTransform with 
-    { 
-        Scale = new Vector3(10f, 0.1f, 10f),
-        Position = new Vector3(0f, -0.05f, 0f) 
+    floor.LocalTransform = floor.LocalTransform with
+    {
+        Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
+        Scale = new Vector3(10f, 10f, 1f),
+        Position = new Vector3(0f, 0f, 0f)
     };
     entityCount++;
 
