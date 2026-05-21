@@ -35,7 +35,8 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 ##### [W.9] Eliminate `bgfx_system_factory.h` (unblock the branch)
 *(Already detailed below. Pre-requisite for the rest of cleanup.)*
 
-##### [B1.1] Final validation pass + merge `feat/multithread-architecture` to main
+##### [B1.1] Final validation pass + merge `feat/multithread-architecture` to main — ✅ DONE (2026-05-21, merge commit `de97b24`)
+- **Resolution**: W.9 verified done; build clean; ctest 179/179; dotnet test 80/80; example 05 confirmed. Merged with `--no-ff` (159 commits — main had not diverged). Branch kept locally as a safety net (not yet deleted).
 - **Tags**: `chore`
 - **Why**: 94 commits, never merged. Main has not diverged (verified). Every new commit on the branch increases blast radius of eventual merge.
 - **What**: Run full validation (build + ctests + dotnet test + example 05). On green, merge with `git merge --no-ff feat/multithread-architecture` from main.
