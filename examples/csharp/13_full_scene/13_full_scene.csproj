@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Render.Bgfx\KernelEngine.Render.Bgfx.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Asset.Assimp\KernelEngine.Asset.Assimp.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.TaskScheduler.Enki\KernelEngine.TaskScheduler.Enki.csproj" />
   </ItemGroup>
 
 </Project>

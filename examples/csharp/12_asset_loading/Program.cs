@@ -4,6 +4,7 @@ using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
 using KernelEngine.Window.Glfw;
 using KernelEngine.Asset.Assimp;
+using KernelEngine.TaskScheduler.Enki;
 using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
@@ -12,6 +13,7 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .AddGlfwWindow(1280, 720, "KernelEngine — 12 Asset Loading")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"))
+    .AddEnkiTaskScheduler()
     .AddAssimpAssetLoader();
 
 using var app = new Application();
@@ -39,7 +41,7 @@ app.OnReady = async (resources) =>
     var loader = app.Services.GetRequiredService<IAssetLoader>();
 
     try {
-        string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../assets/Box.gltf");
+        string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf");
         Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
 
         using var modelData = await loader.LoadModelAsync(modelPath);

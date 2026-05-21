@@ -4,6 +4,7 @@ using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
 using KernelEngine.Window.Glfw;
 using KernelEngine.Asset.Assimp;
+using KernelEngine.TaskScheduler.Enki;
 using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
@@ -12,6 +13,7 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .AddGlfwWindow(1280, 720, "KernelEngine — 13 Full Scene Demo")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"))
+    .AddEnkiTaskScheduler()
     .AddAssimpAssetLoader();
 
 using var app = new Application();
@@ -37,12 +39,18 @@ app.OnReady = async (resources) =>
     // Ground plane
     var floorMat = await resources.CreateMaterialAsync(new Vector4(0.2f, 0.2f, 0.2f, 1f), metallic: 0.0f, roughness: 0.9f);
     var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
-    floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 0.1f, 50f) };
+    // Default mesh (handle 0) is a quad in the XY plane (normal +Z). Rotate -90° about X to lay it
+    // flat as a ground plane (normal +Y); local Y becomes world depth, so scale X and Y for size.
+    floor.LocalTransform = floor.LocalTransform with
+    {
+        Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
+        Scale = new Vector3(50f, 50f, 1f)
+    };
 
     // Load model: same raw 3-step pattern as example 12 (no engine helper — see Kanban [B5.6]).
     var loader = app.Services.GetRequiredService<IAssetLoader>();
     try {
-        string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../assets/Box.gltf");
+        string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf");
         using var modelData = await loader.LoadModelAsync(modelPath);
 
         var gpuTextures = new TextureHandle[modelData.Textures.Count];
