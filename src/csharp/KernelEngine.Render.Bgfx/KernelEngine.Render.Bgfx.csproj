@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <!-- ke_render_bgfx links the ke_render_core shared lib; this carries ke_render_core.dll. -->
+    <ProjectReference Include="..\KernelEngine.Render.Core\KernelEngine.Render.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
