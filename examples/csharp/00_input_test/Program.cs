@@ -12,7 +12,6 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddInput()
     .AddGlfwWindow(640, 120, "KernelEngine — 00 Input Test (press keys, watch console)")
     .AddBgfxRenderer(System.IO.Path.Combine(AppContext.BaseDirectory, "shaders"));
@@ -27,9 +26,9 @@ var watchKeys = new (string Name, int Code)[]
     ("Space",   32),  ("Shift", 340),  ("Ctrl", 341),  ("Escape",  256),
 };
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    app.Renderer.ClearColor(0.1f, 0.1f, 0.1f, 1f);
+    scene.ClearColor(0.1f, 0.1f, 0.1f, 1f);
 
     var pressed  = new System.Text.StringBuilder();
     var released = new System.Text.StringBuilder();
@@ -37,9 +36,9 @@ app.OnUpdate = () =>
 
     foreach (var (name, code) in watchKeys)
     {
-        if (app.Input!.IsKeyPressed(code))  pressed.Append($" [{name}]");
-        if (app.Input!.IsKeyReleased(code)) released.Append($" [{name}]");
-        if (app.Input!.IsKeyDown(code))     held.Append($" {name}");
+        if (input.IsKeyPressed(code))  pressed.Append($" [{name}]");
+        if (input.IsKeyReleased(code)) released.Append($" [{name}]");
+        if (input.IsKeyDown(code))     held.Append($" {name}");
     }
 
     if (pressed.Length  > 0) Console.WriteLine($"PRESSED: {pressed}");

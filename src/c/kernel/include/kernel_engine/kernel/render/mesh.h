@@ -2,16 +2,12 @@
 #define KERNEL_ENGINE_KERNEL_RENDER_MESH_H_
 
 #include <stdint.h>
+#include <kernel_engine/kernel/common/handles.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-    /// @brief Stable opaque handle to a GPU mesh. Returned by ke_render::create_mesh.
-    typedef uint32_t ke_mesh_handle;
-
-#define KE_MESH_HANDLE_INVALID ((ke_mesh_handle)UINT32_MAX)
 
     /// @brief Per-vertex data expected by ke_render::create_mesh.
     typedef struct ke_vertex

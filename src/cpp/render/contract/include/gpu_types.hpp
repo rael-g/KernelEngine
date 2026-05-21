@@ -1,6 +1,6 @@
 #pragma once
 
-#include "render_export.h"
+#include <kernel_engine/render/contract/render_export.h>
 #include <cstdint>
 
 // Forward declarations for kernel types (outside renderer namespace)
@@ -8,7 +8,7 @@ struct ke_allocator;
 struct ke_logger;
 struct ke_window;
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render
 {
 
 // ── Abstract Handles (Opaque IDs) ───────────────────────────────────────────
@@ -67,6 +67,7 @@ struct GpuInitConfig
     uint32_t height;
     uint32_t renderer_type;
     bool     debug;
+    bool     vsync;
 };
 
 /**
@@ -79,6 +80,7 @@ struct GpuRendererParams
     const char*     shader_path;
     ::ke_window*    window;
     uint32_t        renderer_type;
+    bool            vsync;
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render

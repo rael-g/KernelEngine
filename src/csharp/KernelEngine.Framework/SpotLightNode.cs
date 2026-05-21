@@ -13,9 +13,9 @@ public class SpotLightNode : Node
 {
     // ── ECS registration ──────────────────────────────────────────────────────
 
-    internal static uint ComponentId { get; private set; } = uint.MaxValue;
+    public static uint ComponentId { get; private set; } = uint.MaxValue;
 
-    internal static void Initialize(EcsRegistry registry)
+    internal static void Initialize(IEcsRegistry registry)
     {
         if (ComponentId == uint.MaxValue)
             ComponentId = registry.RegisterComponent<SpotLightComponent>("SpotLightComponent");
@@ -44,8 +44,8 @@ public class SpotLightNode : Node
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<SpotLightComponent>(ComponentId);
-        comp = new SpotLightComponent
+        var comp = AddComponent<SpotLightComponent>(ComponentId);
+        comp[0] = new SpotLightComponent
         {
             DirX = Direction.X, DirY = Direction.Y, DirZ = Direction.Z,
             InnerAngle = InnerAngleDegrees * MathF.PI / 180f,

@@ -20,9 +20,12 @@ def generate():
     print(f"Restoring .NET tools in {csharp_dir}...")
     subprocess.run(["dotnet", "tool", "restore"], cwd=csharp_dir)
 
-    native_dir = os.path.join(csharp_dir, "Native")
     rsp_files = []
-    for root, dirs, files in os.walk(native_dir):
+    for root, dirs, files in os.walk(csharp_dir):
+        # Skip 'bin' and 'obj' folders
+        if 'bin' in dirs: dirs.remove('bin')
+        if 'obj' in dirs: dirs.remove('obj')
+        
         for file in files:
             if file.endswith(".rsp"):
                 rsp_files.append(os.path.join(root, file))

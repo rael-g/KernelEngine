@@ -26,7 +26,7 @@ public class EcsRegistryTests
     }
 
     [Fact]
-    public void AddComponent_ReturnsValidReference()
+    public unsafe void AddComponent_ReturnsValidReference()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
@@ -34,7 +34,7 @@ public class EcsRegistryTests
         var entity = reg.CreateEntity();
         var id = reg.RegisterComponent<int>("TestComp");
         
-        ref int val = ref reg.AddComponent<int>(entity, id);
+        ref int val = ref *reg.AddComponentRaw<int>(entity, id);
         val = 42;
         
         Assert.Equal(42, val);
@@ -48,9 +48,9 @@ public class EcsRegistryTests
         var reg = world.Registry;
         var entity = reg.CreateEntity();
         var id = reg.RegisterComponent<int>("TestComp");
-        reg.AddComponent<int>(entity, id) = 123;
+        *reg.AddComponentRaw<int>(entity, id) = 123;
         
-        int* ptr = reg.GetComponent<int>(entity, id);
+        int* ptr = reg.GetComponentRaw<int>(entity, id);
         Assert.True(ptr != null);
     }
 
@@ -62,9 +62,9 @@ public class EcsRegistryTests
         var reg = world.Registry;
         var entity = reg.CreateEntity();
         var id = reg.RegisterComponent<int>("TestComp");
-        reg.AddComponent<int>(entity, id) = 123;
+        *reg.AddComponentRaw<int>(entity, id) = 123;
         
-        int* ptr = reg.GetComponent<int>(entity, id);
+        int* ptr = reg.GetComponentRaw<int>(entity, id);
         Assert.Equal(123, *ptr);
     }
 
@@ -77,7 +77,7 @@ public class EcsRegistryTests
         var entity = reg.CreateEntity();
         var id = reg.RegisterComponent<int>("TestComp");
         
-        int* ptr = reg.GetComponent<int>(entity, id);
+        int* ptr = reg.GetComponentRaw<int>(entity, id);
         Assert.True(ptr == null);
     }
 
@@ -89,15 +89,15 @@ public class EcsRegistryTests
         var reg = world.Registry;
         var entity = reg.CreateEntity();
         var id = reg.RegisterComponent<int>("TestComp");
-        reg.AddComponent<int>(entity, id) = 1;
+        *reg.AddComponentRaw<int>(entity, id) = 1;
         
         reg.RemoveComponent(entity, id);
         
-        Assert.True(reg.GetComponent<int>(entity, id) == null);
+        Assert.True(reg.GetComponentRaw<int>(entity, id) == null);
     }
 
     [Fact]
-    public void Query_ReturnsCorrectCount()
+    public unsafe void Query_ReturnsCorrectCount()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
@@ -106,22 +106,22 @@ public class EcsRegistryTests
         
         var e1 = reg.CreateEntity();
         var e2 = reg.CreateEntity();
-        reg.AddComponent<int>(e1, id) = 10;
-        reg.AddComponent<int>(e2, id) = 20;
+        *reg.AddComponentRaw<int>(e1, id) = 10;
+        *reg.AddComponentRaw<int>(e2, id) = 20;
         
         var query = reg.Query<int>(id);
         Assert.Equal(2, query.Length);
     }
 
     [Fact]
-    public void Query_ReturnsCorrectData()
+    public unsafe void Query_ReturnsCorrectData()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
         var id = reg.RegisterComponent<int>("TestComp");
         var e = reg.CreateEntity();
-        reg.AddComponent<int>(e, id) = 99;
+        *reg.AddComponentRaw<int>(e, id) = 99;
         
         var query = reg.Query<int>(id);
         Assert.Equal(99, query.Data[0]);

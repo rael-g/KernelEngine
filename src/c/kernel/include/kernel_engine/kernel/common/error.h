@@ -26,6 +26,7 @@ extern "C"
         KE_ERROR_IO = 100,
         KE_ERROR_WINDOW = 200,
         KE_ERROR_RENDER = 300,
+        KE_ERROR_GPU_FATAL = 301,
 
     } ke_result;
 

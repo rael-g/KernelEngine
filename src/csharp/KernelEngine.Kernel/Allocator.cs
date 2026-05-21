@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
@@ -5,7 +6,7 @@ namespace KernelEngine.Kernel;
 /// <summary>
 /// Base class for native memory allocators.
 /// </summary>
-public abstract unsafe class Allocator : IDisposable
+public abstract unsafe class Allocator : IAllocator
 {
     private ke_allocator* _native;
 
@@ -58,7 +59,7 @@ public abstract unsafe class Allocator : IDisposable
 /// <summary>
 /// General-purpose allocator backed by the system heap (malloc/free).
 /// </summary>
-public sealed unsafe class MallocAllocator : Allocator
+public sealed unsafe class MallocAllocator : Allocator, IMallocAllocator
 {
     public MallocAllocator() : base(NativeMethods.allocator_malloc_create()) { }
 }
@@ -66,7 +67,39 @@ public sealed unsafe class MallocAllocator : Allocator
 /// <summary>
 /// Fixed-capacity bump allocator. Very fast; reset all at once with <see cref="Allocator.Reset"/>.
 /// </summary>
-public sealed unsafe class ArenaAllocator : Allocator
+public sealed unsafe class ArenaAllocator : Allocator, IArenaAllocator
 {
     public ArenaAllocator(nuint capacity) : base(NativeMethods.allocator_arena_create(capacity)) { }
+}
+
+/// <summary>
+/// Wraps another allocator to track statistics and detect leaks.
+/// </summary>
+public sealed unsafe class ProxyAllocator : Allocator, IProxyAllocator
+{
+    public ProxyAllocator(Allocator inner, string name)
+        : base(CreateProxy(inner, name)) { }
+
+    private static ke_allocator* CreateProxy(Allocator inner, string name)
+    {
+        var namePtr = Marshal.StringToHGlobalAnsi(name);
+        try
+        {
+            return NativeMethods.allocator_proxy_create(inner.Native, (sbyte*)namePtr);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(namePtr);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Report(ILogger? logger)
+    {
+        ke_logger* nativeLogger = null;
+        try { if (logger is Logger l) nativeLogger = l.Native; }
+        catch (ObjectDisposedException) { }
+
+        NativeMethods.allocator_proxy_report(Native, nativeLogger);
+    }
 }

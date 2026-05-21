@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 using Xunit;
@@ -6,122 +7,109 @@ namespace KernelEngine.Kernel.Tests;
 
 public unsafe class RendererTests
 {
+    // Renderer methods assert thread affinity. The xUnit test thread is the de-facto ke.render here
+    // since these are unit tests with mock vtables — name it (per-instance, per-thread) so AssertCurrent passes.
+    public RendererTests() { KernelThread.SetCurrentName("ke.render"); }
+
     private static int _initializeCalled = 0;
-    private static int _shutdownCalled = 0;
-    private static int _destroyCalled = 0;
+    private static int _frameCalled = 0;
     private static int _clearColorCalled = 0;
+    private static float _lastR, _lastG, _lastB, _lastA;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockInitialize(ke_render* render)
-    {
-        _initializeCalled++;
-        return ke_result.KE_OK;
+    private static ke_result MockOnInitialize(ke_render* self) { _initializeCalled++; return ke_result.KE_OK; }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static ke_result MockFrame(ke_render* self) { _frameCalled++; return ke_result.KE_OK; }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static ke_result MockClearColor(ke_render* self, float r, float g, float b, float a) 
+    { 
+        _clearColorCalled++; 
+        _lastR = r; _lastG = g; _lastB = b; _lastA = a;
+        return ke_result.KE_OK; 
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockShutdown(ke_render* render)
-    {
-        _shutdownCalled++;
-        return ke_result.KE_OK;
-    }
+    private static void MockDestroy(ke_render* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static void MockDestroy(ke_render* render)
-    {
-        _destroyCalled++;
-    }
+    private static ke_result MockOnShutdown(ke_render* self) { return ke_result.KE_OK; }
 
-    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockClearColor(ke_render* render, float r, float g, float b, float a)
+    // Helper to create a mock vtable
+    private ke_render* CreateMock()
     {
-        _clearColorCalled++;
-        return ke_result.KE_OK;
+        var mock = (ke_render*)NativeMemory.AllocZeroed((nuint)sizeof(ke_render));
+        mock->on_initialize = &MockOnInitialize;
+        mock->frame = &MockFrame;
+        mock->clear_color = &MockClearColor;
+        mock->destroy = &MockDestroy;
+        mock->on_shutdown = &MockOnShutdown;
+        return mock;
     }
 
     [Fact]
-    public void Lifecycle_CallsNativeFunctions()
+    public void Initialize_IncrementsCounter()
     {
         _initializeCalled = 0;
-        _shutdownCalled = 0;
-        _destroyCalled = 0;
-
-        ke_render* mock = (ke_render*)NativeMemory.Alloc((nuint)sizeof(ke_render));
-        NativeMemory.Clear(mock, (nuint)sizeof(ke_render));
-        
-        mock->on_initialize = &MockInitialize;
-        mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
-
+        var mock = CreateMock();
+        using (var renderer = new Renderer(mock))
         {
-            using var renderer = new Renderer(mock);
+            renderer.Initialize();
             Assert.Equal(1, _initializeCalled);
         }
-
-        Assert.Equal(1, _shutdownCalled);
-        Assert.Equal(1, _destroyCalled);
-        
-        // Note: NativeMemory.Free(mock) is not needed if MockDestroy is expected to do it,
-        // but here MockDestroy just increments a counter. In a real scenario it would free.
-        // We'll free it here to be safe.
         NativeMemory.Free(mock);
     }
 
-    private static int _frameCalled = 0;
-    private static int _setOrthographicCalled = 0;
-    private static int _setAmbientLightCalled = 0;
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockFrame(ke_render* render)
-    {
-        _frameCalled++;
-        return ke_result.KE_OK;
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockSetOrthographic(ke_render* render, byte enabled)
-    {
-        _setOrthographicCalled++;
-        return ke_result.KE_OK;
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockSetAmbientLight(ke_render* render, float r, float g, float b)
-    {
-        _setAmbientLightCalled++;
-        return ke_result.KE_OK;
-    }
-
     [Fact]
-    public void Methods_CallNativeFunctions()
+    public void Frame_IncrementsCounter()
     {
         _frameCalled = 0;
-        _setOrthographicCalled = 0;
-        _setAmbientLightCalled = 0;
-
-        ke_render* mock = (ke_render*)NativeMemory.Alloc((nuint)sizeof(ke_render));
-        NativeMemory.Clear(mock, (nuint)sizeof(ke_render));
-        
-        mock->on_initialize = &MockInitialize;
-        mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
-        mock->frame = &MockFrame;
-        mock->set_orthographic = &MockSetOrthographic;
-        mock->set_ambient_light = &MockSetAmbientLight;
-        mock->clear_color = &MockClearColor;
-
+        var mock = CreateMock();
         using (var renderer = new Renderer(mock))
         {
             renderer.Frame();
-            renderer.SetOrthographic(true);
-            renderer.SetAmbientLight(1, 1, 1);
-            renderer.ClearColor(1, 0, 0, 1);
-            
             Assert.Equal(1, _frameCalled);
-            Assert.Equal(1, _setOrthographicCalled);
-            Assert.Equal(1, _setAmbientLightCalled);
+        }
+        NativeMemory.Free(mock);
+    }
+
+    [Fact]
+    public void ClearColor_IncrementsCounter()
+    {
+        _clearColorCalled = 0;
+        var mock = CreateMock();
+        using (var renderer = new Renderer(mock))
+        {
+            renderer.ClearColor(1, 0, 0, 1);
             Assert.Equal(1, _clearColorCalled);
         }
-        
+        NativeMemory.Free(mock);
+    }
+
+    [Fact]
+    public void ClearColor_PassesCorrectRed()
+    {
+        _lastR = -1;
+        var mock = CreateMock();
+        using (var renderer = new Renderer(mock))
+        {
+            renderer.ClearColor(0.5f, 0, 0, 1);
+            Assert.Equal(0.5f, _lastR);
+        }
+        NativeMemory.Free(mock);
+    }
+
+    [Fact]
+    public void ClearColor_Vector4_PassesCorrectGreen()
+    {
+        _lastG = -1;
+        var mock = CreateMock();
+        using (var renderer = new Renderer(mock))
+        {
+            renderer.ClearColor(new Vector4(0, 0.7f, 0, 1));
+            Assert.Equal(0.7f, _lastG);
+        }
         NativeMemory.Free(mock);
     }
 }

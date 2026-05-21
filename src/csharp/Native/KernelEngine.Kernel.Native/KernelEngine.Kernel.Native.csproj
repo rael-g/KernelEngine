@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <NativeTarget>ke_kernel</NativeTarget>
-  </PropertyGroup>
-
-  <Import Project="../NativeDependencies.targets" />
-
-</Project>

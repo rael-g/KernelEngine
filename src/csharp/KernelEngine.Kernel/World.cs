@@ -7,13 +7,13 @@ namespace KernelEngine.Kernel;
 /// The ECS simulation world — owns the registry, drives built-in systems (ScriptSystem,
 /// TransformSystem), and exposes the built-in component IDs.
 /// </summary>
-public sealed unsafe class World : IDisposable
+public sealed unsafe class World : IWorld
 {
     private ke_world* _native;
     private EcsRegistry? _registry;
     private readonly List<ISystem> _systems = [];
 
-    internal ke_world* Native
+    public ke_world* Native
     {
         get
         {
@@ -49,7 +49,7 @@ public sealed unsafe class World : IDisposable
             allocator = allocator.Native,
         };
         ke_world* world;
-        KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world));
+        KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world).ToManaged());
         _native = world;
 
         TransformComponentId = _native->transform_id(_native);
@@ -63,39 +63,86 @@ public sealed unsafe class World : IDisposable
     /// <summary>The ECS registry for this world.</summary>
     public EcsRegistry Registry => _registry ??= new EcsRegistry(_native->get_registry(_native));
 
-    private Scene? _scene;
-
-    /// <summary>The scene graph facade for this world.</summary>
-    public Scene Scene => _scene ??= new Scene(this);
+    /// <summary>Interface view of the registry (Framework/user code path).</summary>
+    IEcsRegistry IWorld.Registry => Registry;
 
     /// <summary>Entity ID of the active camera. <see cref="CameraRenderSystem"/> reads this each frame.</summary>
     public ulong ActiveCamera { get; set; }
 
     // ── Systems ───────────────────────────────────────────────────────────────
 
-    /// <summary>Registers a managed system to be called each frame after the built-in C systems.</summary>
-    public void AddSystem(ISystem system) => _systems.Add(system);
+    private readonly SystemScheduler _scheduler = new();
+    private bool _schedulerDirty = true;
+    private TaskScheduler? _taskScheduler;
 
-    // ── Update ────────────────────────────────────────────────────────────────
+    /// <summary>The task scheduler used by this world for parallel execution.</summary>
+    public TaskScheduler? Scheduler
+    {
+        get
+        {
+            if (_taskScheduler == null && _native != null)
+            {
+                var nativeSched = _native->get_task_scheduler(_native);
+                if (nativeSched != null)
+                    _taskScheduler = new TaskScheduler(nativeSched);
+            }
+            return _taskScheduler;
+        }
+    }
+
+    public void AddSystem(ISystem system)
+    {
+        _systems.Add(system);
+        _schedulerDirty = true;
+    }
+
+    /// <summary>Registers a native system descriptor into the world.</summary>
+    public void AddSystem(ke_system_params desc)
+    {
+        KernelException.ThrowIfFailed(_native->add_system(_native, &desc).ToManaged(), "add_system");
+    }
 
     /// <summary>
     /// Advances the simulation by one frame.
-    /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s.
+    /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s in parallel waves.
     /// </summary>
-    public Result Update()
+    public Result Update(IFramePacket? packet = null, IInputReader? input = null)
     {
-        var now = _stopwatch.Elapsed;
-        var dt = (float)(now - _lastTime).TotalSeconds;
-        _lastTime = now;
+        KernelThread.AssertCurrent("ke.sim");
+        Input.SetCurrentReader(input);
+        try
+        {
+            var now = _stopwatch.Elapsed;
+            var dt = (float)(now - _lastTime).TotalSeconds;
+            _lastTime = now;
 
-        var frame = new ke_frame { delta_time = dt };
-        var res = Native->update(Native, &frame);
-        if (res != ke_result.KE_OK) return res;
+            var frame = new ke_frame { delta_time = dt };
+            var res = Native->update(Native, &frame).ToManaged();
+            if (res != KernelResult.Ok) return res;
 
-        foreach (var system in _systems)
-            system.Update(this, dt);
+            // Lazily wrap the native task scheduler (null if none is configured — RunAsync falls back to sequential).
+            if (_taskScheduler == null)
+            {
+                var nativeSched = _native->get_task_scheduler(_native);
+                if (nativeSched != null)
+                    _taskScheduler = new TaskScheduler(nativeSched);
+            }
 
-        return ke_result.KE_OK;
+            if (_schedulerDirty)
+            {
+                _scheduler.Build(_systems);
+                _schedulerDirty = false;
+            }
+
+            // Run systems in waves (Sim thread waits for parallel workers to finish wave by wave)
+            _scheduler.RunAsync(this, dt, packet, _taskScheduler!, input).GetAwaiter().GetResult();
+
+            return KernelResult.Ok;
+        }
+        finally
+        {
+            Input.SetCurrentReader(null);
+        }
     }
 
     // ── Disposal ──────────────────────────────────────────────────────────────

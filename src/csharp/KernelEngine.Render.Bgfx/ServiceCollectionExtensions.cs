@@ -14,9 +14,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddBgfxRenderer(
         this IServiceCollection services,
-        string shaderPath)
+        string shaderPath,
+        bool vsync = true)
     {
-        services.AddSingleton<KernelEngine.Kernel.Renderer>(sp =>
+        services.AddSingleton<IRenderer>(sp =>
         {
             var shaderPtr = Marshal.StringToHGlobalAnsi(shaderPath);
             try
@@ -24,20 +25,18 @@ public static class ServiceCollectionExtensions
                 unsafe
                 {
                     var logger = sp.GetService<Logger>();
-                    var pipe = sp.GetService<MessagePipe>();
 
                     var @params = new ke_render_bgfx_params
                     {
                         allocator = sp.GetRequiredService<Allocator>().Native,
                         logger = logger != null ? logger.Native : null,
-                        message_pipe = pipe != null ? pipe.Native : null,
-                        window = sp.GetRequiredService<KernelEngine.Kernel.Window>().Native,
+                        window = ((Window)sp.GetRequiredService<IWindow>()).Native,
                         shader_path = (sbyte*)shaderPtr,
+                        vsync = (byte)(vsync ? 1 : 0),
                     };
 
                     ke_render* native;
-                    KernelException.ThrowIfFailed(
-                        KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native));
+                    KernelException.ThrowIfFailed(KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native).ToManaged());
                     return new KernelEngine.Kernel.Renderer(native);
                 }
             }

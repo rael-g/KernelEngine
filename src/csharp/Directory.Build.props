@@ -17,4 +17,9 @@
     <!-- Set to true to use PackageReference instead of ProjectReference for dependencies -->
     <UsePackageReferences Condition="'$(UsePackageReferences)' == ''">false</UsePackageReferences>
   </PropertyGroup>
+
+  <!-- Exclude automatically generated Native bindings from code coverage -->
+  <ItemGroup Condition="$(MSBuildProjectName.Contains('.Native'))">
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+  </ItemGroup>
 </Project>

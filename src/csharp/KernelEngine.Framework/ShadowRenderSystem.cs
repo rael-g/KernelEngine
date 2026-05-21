@@ -1,81 +1,69 @@
 using System.Numerics;
+using KernelEngine.Framework.Internal;
 using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Renders a directional shadow map each frame using the first active <see cref="LightComponent"/>.
-/// Must run before <see cref="MeshRenderSystem"/> so the depth texture is ready for scene sampling.
+/// Pure-managed shadow render system. Reads the first directional light, positions an
+/// orthographic shadow camera, and enqueues every valid mesh as a shadow caster via the
+/// safe <see cref="IFramePacket"/> API.
 /// </summary>
-public sealed unsafe class ShadowRenderSystem : ISystem
+/// <remarks>
+/// The shadow map handle is injected by ke.render after GPU initialization via
+/// <see cref="SetShadowMap"/>. Until set, the system silently skips its work
+/// (no shadow casters submitted), so the renderer falls back to unshadowed lighting.
+/// </remarks>
+public sealed class ShadowRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
-    private uint _shadowMapHandle = uint.MaxValue;
+    private readonly uint _lightCid;
+    private readonly uint _meshCid;
+    private readonly uint _transformCid;
+    private ShadowMapHandle _shadowMap = ShadowMapHandle.None;
 
-    /// <summary>Shadow map resolution in texels (width and height).</summary>
-    public uint Resolution { get; }
-
-    /// <summary>Half-size of the orthographic light frustum in world units.</summary>
-    public float FrustumSize { get; }
-
-    /// <summary>Far plane distance of the light frustum in world units.</summary>
-    public float FarPlane { get; }
-
-    public ShadowRenderSystem(Renderer renderer, uint resolution = 1024,
-                               float frustumSize = 20f, float farPlane = 50f)
+    public ShadowRenderSystem(uint lightCid, uint meshCid, uint transformCid)
     {
-        _renderer   = renderer;
-        Resolution  = resolution;
-        FrustumSize = frustumSize;
-        FarPlane    = farPlane;
+        _lightCid = lightCid;
+        _meshCid = meshCid;
+        _transformCid = transformCid;
     }
 
-    public void Update(World world, float dt)
-    {
-        if (LightNode.ComponentId == uint.MaxValue) return;
+    /// <summary>Assigns the GPU shadow map to render into. Must be called from ke.render after GPU init.</summary>
+    public void SetShadowMap(ShadowMapHandle handle) => _shadowMap = handle;
 
-        var (_, lights) = world.Registry.Query<LightComponent>(LightNode.ComponentId);
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    {
+        if (packet == null) return;
+        if (_shadowMap == ShadowMapHandle.None) return;
+        var registry = world.Registry;
+
+        // ── Directional light → shadow camera ──────────────────────────────────
+        var lights = registry.Query<LightComponent>(_lightCid);
         if (lights.Length == 0) return;
 
-        // Lazy-create shadow map on first use.
-        if (_shadowMapHandle == uint.MaxValue)
+        var l = lights.Data[0];
+        var eye = new Vector3(l.DirX * 25f, l.DirY * 25f, l.DirZ * 25f);
+        var view = Mat4.LookAt(eye, Vector3.Zero, Vector3.UnitY);
+        var proj = Mat4.Ortho(-20f, 20f, -20f, 20f, 0.1f, 50f);
+        packet.SetShadow(_shadowMap, view, proj);
+
+        // ── Shadow casters ─────────────────────────────────────────────────────
+        var meshes = registry.Query<MeshComponent>(_meshCid);
+        for (int i = 0; i < meshes.Length; i++)
         {
-            var createRes = _renderer.CreateShadowMap(Resolution, Resolution);
-            _shadowMapHandle = createRes.Value;
-            KernelException.ThrowIfFailed(createRes.Code, nameof(_renderer.CreateShadowMap));
+            var mesh = meshes.Data[i];
+            if (mesh.MeshHandle == MeshHandle.None) continue;
+
+            Matrix4x4 worldMatrix;
+            { var slot = registry.GetComponent<TransformComponent>(meshes.Entities[i], _transformCid); if (slot.IsEmpty) continue; worldMatrix = slot[0].WorldMatrix; }
+
+            packet.AddShadowDrawCommand(mesh.MeshHandle, worldMatrix);
         }
-
-        ref readonly var light = ref lights[0];
-        var lightDir = Vector3.Normalize(new Vector3(light.DirX, light.DirY, light.DirZ));
-
-        // Position the light camera far back along its direction.
-        var lightPos  = -lightDir * (FarPlane * 0.5f);
-        var up        = MathF.Abs(Vector3.Dot(lightDir, Vector3.UnitY)) > 0.99f
-                        ? Vector3.UnitX
-                        : Vector3.UnitY;
-        var lightView = Matrix4x4.CreateLookAt(lightPos, Vector3.Zero, up);
-        var lightProj = Matrix4x4.CreateOrthographic(FrustumSize, FrustumSize, 0.1f, FarPlane);
-
-        var beginRes = _renderer.BeginShadowPass(_shadowMapHandle, lightView, lightProj);
-        KernelException.ThrowIfFailed(beginRes, nameof(_renderer.BeginShadowPass));
-
-        if (MeshNode.ComponentId != uint.MaxValue)
-        {
-            var (entities, meshComps) = world.Registry.Query<MeshComponent>(MeshNode.ComponentId);
-            for (int i = 0; i < entities.Length; i++)
-            {
-                if (meshComps[i].MeshHandle == uint.MaxValue) continue;
-                var tc = world.Registry.GetComponent<TransformComponent>(
-                    entities[i], world.TransformComponentId);
-                if (tc != null)
-                {
-                    var subRes = _renderer.SubmitMeshShadow(meshComps[i].MeshHandle, tc->WorldMatrix);
-                    KernelException.ThrowIfFailed(subRes, nameof(_renderer.SubmitMeshShadow));
-                }
-            }
-        }
-
-        var endRes = _renderer.EndShadowPass();
-        KernelException.ThrowIfFailed(endRes, nameof(_renderer.EndShadowPass));
     }
+
+    public ComponentAccess GetAccess() => new()
+    {
+        Reads = [_lightCid, _meshCid, _transformCid],
+        Writes = []
+    };
 }

@@ -7,24 +7,27 @@
     <Project Path="examples/csharp/03_pbr_directional/03_pbr_directional.csproj" />
     <Project Path="examples/csharp/04_normal_map/04_normal_map.csproj" />
     <Project Path="examples/csharp/05_skybox_ibl/05_skybox_ibl.csproj" />
+    <Project Path="examples/csharp/06_shadow_map/06_shadow_map.csproj" />
+    <Project Path="examples/csharp/07_point_lights/07_point_lights.csproj" />
+    <Project Path="examples/csharp/08_spot_lights/08_spot_lights.csproj" />
+    <Project Path="examples/csharp/09_many_lights/09_many_lights.csproj" />
+    <Project Path="examples/csharp/10_hdr_bloom/10_hdr_bloom.csproj" />
+    <Project Path="examples/csharp/11_ssao/11_ssao.csproj" />
+    <Project Path="examples/csharp/12_asset_loading/12_asset_loading.csproj" />
+    <Project Path="examples/csharp/13_full_scene/13_full_scene.csproj" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
+    <Project Path="src/csharp/KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
     <Project Path="src/csharp/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
+    <Project Path="src/csharp/KernelEngine.DevPlatform.Win32/KernelEngine.DevPlatform.Win32.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/KernelEngine.Logging.Serilog/KernelEngine.Logging.Serilog.csproj" />
     <Project Path="src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
+    <Project Path="src/csharp/KernelEngine.Render.Core/KernelEngine.Render.Core.csproj" />
     <Project Path="src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
     <Project Path="src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
-  </Folder>
-  <Folder Name="/src/csharp/Native/">
-    <Project Path="src/csharp/Native/KernelEngine.Asset.Assimp.Native/KernelEngine.Asset.Assimp.Native.csproj" />
-    <Project Path="src/csharp/Native/KernelEngine.Render.Bgfx.Native/KernelEngine.Render.Bgfx.Native.csproj" />
-    <Project Path="src/csharp/Native/KernelEngine.Window.Glfw.Native/KernelEngine.Window.Glfw.Native.csproj" />
-    <Project Path="src/csharp/Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
-    <Project Path="src/csharp/Native/KernelEngine.ShaderCompiler.Native/KernelEngine.ShaderCompiler.Native.csproj" />
-    <Project Path="src/csharp/Native/KernelEngine.TaskScheduler.Enki.Native/KernelEngine.TaskScheduler.Enki.Native.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />

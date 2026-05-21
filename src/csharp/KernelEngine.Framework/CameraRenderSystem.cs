@@ -1,50 +1,50 @@
-using System.Numerics;
+using KernelEngine.Framework.Internal;
 using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Reads the active camera's <see cref="CameraComponent"/> and <see cref="TransformComponent"/>,
-/// computes view and projection matrices, and uploads them to the renderer each frame.
-/// Must run before <see cref="MeshRenderSystem"/>.
+/// Pure-managed render system that extracts camera state from the ECS and publishes it into the
+/// frame packet via the safe <see cref="IFramePacket.SetCamera"/> API. Math is column-major
+/// (matches <c>ke_mat4</c>, right-handed, Vulkan depth [0,1]).
 /// </summary>
-public sealed unsafe class CameraRenderSystem : ISystem
+public sealed class CameraRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
-    private readonly Window _window;
+    private const float Aspect = 1.77f; // 16:9 — TODO: query from window once exposed
 
-    public CameraRenderSystem(Renderer renderer, Window window)
+    private readonly uint _cameraCid;
+    private readonly uint _transformCid;
+
+    public CameraRenderSystem(uint cameraCid, uint transformCid)
     {
-        _renderer = renderer;
-        _window = window;
+        _cameraCid = cameraCid;
+        _transformCid = transformCid;
     }
 
-    public void Update(World world, float dt)
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
     {
-        if (world.ActiveCamera == 0) return;
+        if (packet == null) return;
+        var registry = world.Registry;
 
-        var tc = world.Registry.GetComponent<TransformComponent>(world.ActiveCamera, world.TransformComponentId);
-        if (tc == null) return;
+        var cameras = registry.Query<CameraComponent>(_cameraCid);
+        if (cameras.Length == 0) return;
 
-        if (CameraNode.ComponentId == uint.MaxValue) return;
-        var cc = world.Registry.GetComponent<CameraComponent>(world.ActiveCamera, CameraNode.ComponentId);
-        if (cc == null) return;
+        // ECS storage read requires a pointer; keep the unsafe scope minimal.
+        TransformComponent transform;
+        { var slot = registry.GetComponent<TransformComponent>(cameras.Entities[0], _transformCid); if (slot.IsEmpty) return; transform = slot[0]; }
 
-        // View matrix = inverse of the camera's world transform
-        Matrix4x4.Invert(tc->WorldMatrix, out var view);
+        var cam = cameras.Data[0];
+        var view = Mat4.InvertTrs(transform.WorldMatrix);
+        var proj = cam.Orthographic != 0
+            ? Mat4.Ortho(-Aspect * 10f, Aspect * 10f, -10f, 10f, cam.Near, cam.Far)
+            : Mat4.Perspective(cam.Fov, Aspect, cam.Near, cam.Far);
 
-        var (w, h) = _window.GetSize().Value;
-        float aspect = h > 0 ? (float)w / h : 1f;
-
-        Matrix4x4 proj = cc->Orthographic != 0
-            ? Matrix4x4.CreateOrthographic(aspect * 10f, 10f, cc->Near, cc->Far)
-            : Matrix4x4.CreatePerspectiveFieldOfView(cc->Fov * MathF.PI / 180f, aspect, cc->Near, cc->Far);
-
-        var res = _renderer.SetViewTransform(view, proj);
-        KernelException.ThrowIfFailed(res, nameof(_renderer.SetViewTransform));
-
-        // Upload camera world position for PBR specular
-        res = _renderer.SetCameraPos(tc->WorldMatrix.M41, tc->WorldMatrix.M42, tc->WorldMatrix.M43);
-        KernelException.ThrowIfFailed(res, nameof(_renderer.SetCameraPos));
+        packet.SetCamera(view, proj, transform.Position);
     }
+
+    public ComponentAccess GetAccess() => new()
+    {
+        Reads = [_cameraCid, _transformCid],
+        Writes = []
+    };
 }

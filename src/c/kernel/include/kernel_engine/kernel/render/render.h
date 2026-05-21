@@ -3,6 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/math.h>
+#include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/render/light.h>
 #include <kernel_engine/kernel/render/material.h>
@@ -15,11 +16,9 @@ extern "C"
 {
 #endif
 
-#define KE_ID_RENDER "ke_render"
+    struct ke_frame_packet;
 
-    /// @brief Opaque handle to a depth-buffer shadow map and its associated framebuffer.
-    typedef uint32_t ke_shadow_map_handle;
-#define KE_INVALID_SHADOW_MAP_HANDLE UINT32_MAX
+#define KE_ID_RENDER "ke_render"
 
     /// @brief Configuration for the Clustered Forward Shading grid.
     typedef struct ke_cluster_config
@@ -123,6 +122,14 @@ extern "C"
 
         /// @brief Configures the cluster grid dimensions and light density limits.
         ke_result (*set_cluster_config)(struct ke_render *self, const ke_cluster_config *config);
+
+        /// @brief Consumes a pre-recorded frame packet and submits all draw calls to the GPU.
+        ///        Must be called on the bgfx API thread, before @c frame().
+        ke_result (*submit_packet)(struct ke_render *self, const struct ke_frame_packet *packet);
+
+        /// @brief Retrieves implementation-specific fatal error details (e.g., GPU crash reason).
+        ///        Returns a pointer to a string that is valid until the next renderer call.
+        const char *(*get_last_fatal_error)(struct ke_render *self);
 
     } ke_render;
 

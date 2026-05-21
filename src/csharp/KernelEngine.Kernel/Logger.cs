@@ -7,7 +7,7 @@ namespace KernelEngine.Kernel;
 /// <summary>
 /// Structured logger. Dispatches events to registered sinks.
 /// </summary>
-public sealed unsafe class Logger : IDisposable
+public sealed unsafe class Logger : ILogger, IDisposable
 {
     private ke_logger* _native;
 
@@ -29,12 +29,12 @@ public sealed unsafe class Logger : IDisposable
     public Logger(Allocator allocator)
     {
         ke_logger* logger;
-        KernelException.ThrowIfFailed(NativeMethods.logger_create(allocator.Native, &logger));
+        KernelException.ThrowIfFailed(NativeMethods.logger_create(allocator.Native, &logger).ToManaged());
         _native = logger;
     }
 
     /// <summary>Dispatches a log event to all registered sinks.</summary>
-    public void Log(ke_log_level level, string tag, string message)
+    public void Log(LogLevel level, string tag, string message)
     {
         var tagBytes = System.Text.Encoding.ASCII.GetBytes(tag + '\0');
         var msgBytes = System.Text.Encoding.ASCII.GetBytes(message + '\0');
@@ -50,15 +50,23 @@ public sealed unsafe class Logger : IDisposable
         }
     }
 
-    public void Debug(string tag, string message)   => Log(ke_log_level.KE_LOG_LEVEL_DEBUG, tag, message);
-    public void Info(string tag, string message)    => Log(ke_log_level.KE_LOG_LEVEL_INFO, tag, message);
-    public void Warning(string tag, string message) => Log(ke_log_level.KE_LOG_LEVEL_WARNING, tag, message);
-    public void Error(string tag, string message)   => Log(ke_log_level.KE_LOG_LEVEL_ERROR, tag, message);
+    public void Trace(string tag, string message)    => Log(LogLevel.Trace, tag, message);
+    public void Debug(string tag, string message)    => Log(LogLevel.Debug, tag, message);
+    public void Info(string tag, string message)     => Log(LogLevel.Info, tag, message);
+    public void Warning(string tag, string message)  => Log(LogLevel.Warning, tag, message);
+    public void Error(string tag, string message)    => Log(LogLevel.Error, tag, message);
+    public void Critical(string tag, string message) => Log(LogLevel.Critical, tag, message);
+
+    /// <summary>Flushes all registered sinks.</summary>
+    public void Flush()
+    {
+        _native->flush(_native);
+    }
 
     /// <summary>Registers a managed sink to receive all subsequent log events.</summary>
     /// <param name="sink">The sink implementation.</param>
-    /// <param name="minLevel">Minimum level forwarded to this sink. Defaults to <see cref="ke_log_level.KE_LOG_LEVEL_TRACE"/>.</param>
-    public void AddSink(ILoggerSink sink, ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE)
+    /// <param name="minLevel">Minimum level forwarded to this sink. Defaults to <see cref="LogLevel.Trace"/>.</param>
+    public void AddSink(ILoggerSink sink, LogLevel minLevel = LogLevel.Trace)
     {
         var handle = GCHandle.Alloc(sink);
         _sinkHandles.Add(handle);
@@ -68,6 +76,7 @@ public sealed unsafe class Logger : IDisposable
             handle = GCHandle.ToIntPtr(handle).ToPointer(),
             min_level = (int)minLevel,
             log = &LogCallback,
+            flush = &FlushCallback,
             destroy = &SinkDestroy,
         };
 
@@ -80,7 +89,14 @@ public sealed unsafe class Logger : IDisposable
         var sink = (ILoggerSink)GCHandle.FromIntPtr((nint)self->handle).Target!;
         string tag = Marshal.PtrToStringAnsi((nint)evt->tag) ?? string.Empty;
         string message = Marshal.PtrToStringAnsi((nint)evt->message) ?? string.Empty;
-        sink.Log((ke_log_level)evt->level, tag, message);
+        sink.Log((LogLevel)evt->level, tag, message);
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void FlushCallback(ke_logger_sink* self)
+    {
+        var sink = (ILoggerSink)GCHandle.FromIntPtr((nint)self->handle).Target!;
+        sink.Flush();
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

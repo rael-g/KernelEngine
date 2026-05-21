@@ -1,0 +1,76 @@
+<Project>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <NativeOS>linux</NativeOS>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <NativeOS>osx</NativeOS>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+      <NativeOS>win</NativeOS>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration) == 'Debug'">
+    <NativeConfig>debug</NativeConfig>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration) == 'Release'">
+    <NativeConfig>release</NativeConfig>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <NativeArch>x64</NativeArch>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)' == 'arm64'">
+    <NativeArch>arm64</NativeArch>
+  </PropertyGroup>
+
+  <!-- Construct the RID for the NuGet package -->
+  <PropertyGroup>
+    <NativeRID>$(NativeOS)-$(NativeArch)</NativeRID>
+    <NativePreset>$(NativeRID)-$(NativeConfig)</NativePreset>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <NativeExt>so</NativeExt>
+    <NativePre>lib</NativePre>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <NativeExt>dylib</NativeExt>
+    <NativePre>lib</NativePre>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <NativeExt>dll</NativeExt>
+    <NativePre></NativePre>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <NativeTypeDir>bin</NativeTypeDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <NativeTypeDir>lib</NativeTypeDir>
+  </PropertyGroup>
+
+
+  <PropertyGroup>
+    <!-- Relative to NativeDependencies.targets (src/csharp/) -->
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</RepoRoot>
+    <NativeFinalDir>$(RepoRoot)\build\$(NativeOS)\$(NativeTypeDir)</NativeFinalDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(NativeTarget)' != ''">
+    <None Include="$(NativeFinalDir)\$(NativePre)$(NativeTarget).$(NativeExt)" Condition="Exists('$(NativeFinalDir)\$(NativePre)$(NativeTarget).$(NativeExt)')">
+      <Link>$(NativePre)$(NativeTarget).$(NativeExt)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+      <Pack>true</Pack>
+      <PackagePath>runtimes/$(NativeRID)/native</PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,5 +1,3 @@
-using KernelEngine.Kernel.Native;
-
 namespace KernelEngine.Kernel;
 
 /// <summary>
@@ -12,14 +10,16 @@ public sealed class ConsoleSink : ILoggerSink
     private static readonly string[] s_levels = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "CRIT"];
 
     /// <inheritdoc/>
-    public ke_log_level MinLevel { get; init; } = ke_log_level.KE_LOG_LEVEL_TRACE;
+    public LogLevel MinLevel { get; init; } = LogLevel.Trace;
 
     /// <inheritdoc/>
-    public void Log(ke_log_level level, string tag, string message)
+    public void Log(LogLevel level, string tag, string message)
     {
         int idx = (int)level;
         string label = (idx >= 0 && idx < s_levels.Length) ? s_levels[idx] : "?";
         Console.Error.WriteLine($"[{label}] {tag}: {message}");
         Console.Error.Flush();
     }
+
+    public void Flush() => Console.Error.Flush();
 }

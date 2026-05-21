@@ -25,6 +25,21 @@ static void logger_log(ke_logger *self, const ke_log_event *event)
     }
 }
 
+static void logger_flush(ke_logger *self)
+{
+    if (!self) return;
+    ke_logger_internal *impl = (ke_logger_internal *)self->handle;
+
+    for (size_t i = 0; i < impl->sinks.size; ++i)
+    {
+        ke_logger_sink *sink = (ke_logger_sink *)impl->sinks.data[i];
+        if (sink && sink->flush)
+        {
+            sink->flush(sink);
+        }
+    }
+}
+
 static ke_result logger_add_sink(ke_logger *self, ke_logger_sink sink)
 {
     if (!self) return KE_ERROR_INVALID_ARGUMENT;
@@ -82,6 +97,7 @@ ke_result ke_logger_create(struct ke_allocator *allocator, ke_logger **out_logge
     api->allocator = allocator;
 
     api->log = logger_log;
+    api->flush = logger_flush;
     api->add_sink = logger_add_sink;
     api->destroy = logger_destroy;
 

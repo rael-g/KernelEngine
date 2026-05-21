@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!-- Tests projects should not be included in the coverage report of the production code -->
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+  </ItemGroup>
+</Project>

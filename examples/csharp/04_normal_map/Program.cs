@@ -10,85 +10,74 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddGlfwWindow(1280, 720, "KernelEngine — 04 Normal Map")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
 
-app.OnReady = () =>
+int entityCount = 0;
+
+app.OnReady = (resources) =>
 {
-    // ── Generate Procedural Normal Map (128x128) ────────────────────────────
-    uint width = 128;
-    uint height = 128;
-    byte[] pixels = new byte[width * height * 4];
-    for (int y = 0; y < height; y++)
+    Console.WriteLine("[KernelEngine] Example: 04_normal_map");
+    Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+    Console.WriteLine("[KernelEngine] Features: normal_map, tbn, tangent_space, pbr_ggx");
+
+    // Procedural ripple normal map (128x128)
+    const uint w = 128, h = 128;
+    byte[] pixels = new byte[w * h * 4];
+    for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++)
     {
-        for (int x = 0; x < width; x++)
-        {
-            // Calculate normals based on sine waves to create "ripples"
-            float nx = MathF.Sin(x / 8.0f * 2.0f * MathF.PI);
-            float ny = MathF.Cos(y / 8.0f * 2.0f * MathF.PI);
-            float nz = 1.0f;
-
-            // Normalize
-            float invLen = 1.0f / MathF.Sqrt(nx * nx + ny * ny + nz * nz);
-            nx *= invLen;
-            ny *= invLen;
-            nz *= invLen;
-
-            // Map from [-1, 1] to [0, 255]
-            int idx = (y * (int)width + x) * 4;
-            pixels[idx + 0] = (byte)((nx * 0.5f + 0.5f) * 255);
-            pixels[idx + 1] = (byte)((ny * 0.5f + 0.5f) * 255);
-            pixels[idx + 2] = (byte)((nz * 0.5f + 0.5f) * 255);
-            pixels[idx + 3] = 255;
-        }
+        float nx = MathF.Sin(x / 8.0f * 2f * MathF.PI);
+        float ny = MathF.Cos(y / 8.0f * 2f * MathF.PI);
+        float nz = 1.0f;
+        float inv = 1f / MathF.Sqrt(nx*nx + ny*ny + nz*nz);
+        nx *= inv; ny *= inv; nz *= inv;
+        int i = (y * (int)w + x) * 4;
+        pixels[i]     = (byte)((nx * 0.5f + 0.5f) * 255);
+        pixels[i + 1] = (byte)((ny * 0.5f + 0.5f) * 255);
+        pixels[i + 2] = (byte)((nz * 0.5f + 0.5f) * 255);
+        pixels[i + 3] = 255;
     }
 
-    var texRes = app.Renderer.CreateTexture(width, height, pixels);
-    KernelException.ThrowIfFailed(texRes.Code, "Create Normal Map");
-    uint normalMapHandle = texRes.Value;
+    var nmHandle = resources.CreateTexture(w, h, pixels);
+    Console.WriteLine($"[KernelEngine] NormalMap: handle={nmHandle} width={w} height={h}");
 
-    Console.WriteLine($"[Example] 04_normal_map — normal map handle: {normalMapHandle}, size: 128x128");
+    var matPlain  = resources.CreateMaterial(Vector4.One, roughness: 0.3f);
+    var matNormal = resources.CreateMaterial(Vector4.One, roughness: 0.3f, normalMap: nmHandle);
 
-    // ── Materials ───────────────────────────────────────────────────────────
-    // Left: Plain white
-    var matPlain = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, roughness: 0.3f).Value;
-    // Right: White with ripples
-    var matNormal = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, roughness: 0.3f, normalMapHandle: normalMapHandle).Value;
+    var left = app.Scene.AddNode(new MeshNode { MaterialHandle = matPlain  }, "PlainQuad");
+    left.LocalTransform = left.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
+    entityCount++;
 
-    // ── Scene (handle 0 = built-in unit quad) ───────────────────────────────
-    var leftNode = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = matPlain }, "PlainQuad");
-    leftNode.LocalTransform = leftNode.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
+    var right = app.Scene.AddNode(new MeshNode { MaterialHandle = matNormal }, "NormalQuad");
+    right.LocalTransform = right.LocalTransform with { Position = new Vector3(1.2f, 0f, 0f) };
+    entityCount++;
 
-    var rightNode = app.ActiveWorld.Scene.AddNode(new MeshNode { MaterialHandle = matNormal }, "NormalQuad");
-    rightNode.LocalTransform = rightNode.LocalTransform with { Position = new Vector3(1.2f, 0f, 0f) };
+    app.Scene.AddNode(
+        new LightNode { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },
+        "Sun");
+    entityCount++;
 
-    // ── Environment ─────────────────────────────────────────────────────────
-    app.ActiveWorld.Scene.AddNode(new LightNode { 
-        Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), 
-        Intensity = 1.5f 
-    }, "Sun");
-
-    var cam = app.ActiveWorld.Scene.AddNode(new CameraNode { Fov = 60f }, "Camera");
+    var cam = app.Scene.AddNode(new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
+    entityCount++;
 };
 
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)
     {
         double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[Example] FPS: {fps:F2}");
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Entities: {entityCount}  Lights: 0p 0s 1d");
         frameCount = 0;
         sw.Restart();
     }

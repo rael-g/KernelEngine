@@ -5,7 +5,9 @@
 #include "gpu_types.hpp"
 #include <vector>
 
-namespace kernel_engine::render::bgfx
+#include <kernel_engine/render/core/render_core_export.h>
+
+namespace kernel_engine::render::core
 {
 
 struct RenderContext;
@@ -13,39 +15,40 @@ class GeometryManager;
 
 struct ShadowMapEntry
 {
-    GpuTextureHandle     color_tex = kGpuInvalidHandle;
-    GpuTextureHandle     depth_tex = kGpuInvalidHandle;
-    GpuFrameBufferHandle fb        = kGpuInvalidHandle;
-    uint32_t             width     = 0;
-    uint32_t             height    = 0;
-    bool                 valid     = false;
+    render::GpuFrameBufferHandle fb = render::kGpuInvalidHandle;
+    render::GpuTextureHandle     depth_tex = render::kGpuInvalidHandle;
+    uint32_t w, h;
+    bool valid = false;
 };
 
 /**
- * @brief Manages shadow map resources and shadow passes using the HAL.
+ * @brief Manages shadow mapping passes and GPU resources.
  */
-class KE_RENDER_API ShadowPipeline
+class KE_RENDER_CORE_API ShadowPipeline
 {
 public:
-    ke_result CreateShadowMap(RenderContext& ctx, uint32_t width, uint32_t height, ke_shadow_map_handle *out_handle);
+    ke_result CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out);
     ke_result DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle handle);
-    ke_result BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle handle, const ke_mat4 *light_view, const ke_mat4 *light_proj);
-    ke_result SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geometry, GpuProgramHandle shadow_program, ke_mesh_handle mesh, const ke_mat4 *transform);
+
+    ke_result BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p);
+    ke_result SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geom, render::GpuProgramHandle prog, ke_mesh_handle m, const ke_mat4 *t);
     ke_result EndShadowPass(RenderContext& ctx);
-    ke_result SetShadowMap(RenderContext& ctx, ke_shadow_map_handle handle);
+
+    ke_result SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h);
+
+    render::GpuTextureHandle GetActiveShadowTex() const;
 
     void Shutdown();
 
-    GpuTextureHandle GetActiveShadowMapTex() const;
+    ke_shadow_map_handle active_shadow_handle = KE_SHADOW_MAP_NONE;
 
-    GpuUniformHandle shadow_map_uniform    = kGpuInvalidHandle;
-    GpuUniformHandle light_vp_uniform      = kGpuInvalidHandle;
-    GpuUniformHandle shadow_params_uniform = kGpuInvalidHandle;
-    uint32_t         active_shadow_handle  = kInvalidShadowHandle;
-    float            active_light_vp[16]{};
+    // Uniforms used by the renderer
+    render::GpuUniformHandle shadow_map_uniform    = render::kGpuInvalidHandle;
+    render::GpuUniformHandle light_vp_uniform      = render::kGpuInvalidHandle;
+    render::GpuUniformHandle shadow_params_uniform = render::kGpuInvalidHandle;
 
 private:
     std::vector<ShadowMapEntry> shadow_maps_;
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

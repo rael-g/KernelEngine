@@ -1,28 +1,30 @@
 #pragma once
 
 #include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/render/contract/render_export.h>
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
 
-namespace kernel_engine::render::bgfx
+#include <kernel_engine/render/core/render_core_export.h>
+
+namespace kernel_engine::render::core
 {
 
 struct RenderContext;
-class LightingManager;
-class TextureManager;
 
 struct MeshEntry
 {
-    GpuVertexBufferHandle vb = kGpuInvalidHandle;
-    GpuIndexBufferHandle ib  = kGpuInvalidHandle;
+    render::GpuVertexBufferHandle vb = render::kGpuInvalidHandle;
+    render::GpuIndexBufferHandle ib  = render::kGpuInvalidHandle;
     uint32_t index_count     = 0;
 };
 
 /**
  * @brief Manages GPU geometry resources using the HAL.
  */
-class KE_RENDER_API GeometryManager
+class KE_RENDER_CORE_API GeometryManager
 {
 public:
     ke_result CreateMesh(RenderContext& ctx, const ke_vertex *verts, uint32_t vert_count,
@@ -30,27 +32,23 @@ public:
                          ke_mesh_handle *out_handle);
     ke_result DestroyMesh(RenderContext& ctx, ke_mesh_handle handle);
 
-    ke_result SubmitMesh(RenderContext& ctx, 
-                         ke_mesh_handle mesh, 
-                         ke_material_handle material, 
-                         const ke_mat4 *transform,
-                         const LightingManager& lighting,
-                         const TextureManager& textures,
-                         GpuProgramHandle main_program,
-                         GpuProgramHandle depth_program,
-                         GpuProgramHandle prepass_program);
+    // Records a draw command instead of submitting immediately
+    ke_result RecordDraw(struct ke_frame_packet& packet,
+                         ke_mesh_handle mesh,
+                         ke_material_handle material,
+                         const ke_mat4 *transform);
 
     void Shutdown();
 
     const MeshEntry& GetMeshEntry(ke_mesh_handle handle) const;
 
-    GpuVertexBufferHandle skybox_vb      = kGpuInvalidHandle;
-    GpuIndexBufferHandle  skybox_ib      = kGpuInvalidHandle;
-    GpuVertexBufferHandle fullscreen_vb  = kGpuInvalidHandle;
-    GpuIndexBufferHandle  fullscreen_ib  = kGpuInvalidHandle;
+    render::GpuVertexBufferHandle skybox_vb      = render::kGpuInvalidHandle;
+    render::GpuIndexBufferHandle  skybox_ib      = render::kGpuInvalidHandle;
+    render::GpuVertexBufferHandle fullscreen_vb  = render::kGpuInvalidHandle;
+    render::GpuIndexBufferHandle  fullscreen_ib  = render::kGpuInvalidHandle;
 
 private:
     std::vector<MeshEntry> meshes_;
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

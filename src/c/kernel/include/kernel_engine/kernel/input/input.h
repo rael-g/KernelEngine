@@ -3,6 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
+#include <kernel_engine/kernel/input/snapshot.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -19,12 +20,12 @@ extern "C"
 
         struct ke_allocator *allocator;
         struct ke_logger *logger;
-        struct ke_message_pipe *message_pipe;
 
         void (*destroy)(struct ke_input *self);
 
         /**
-         * @brief Updates input state by reading all pending messages from the pipe.
+         * @brief Updates internal state (e.g. resets pressed/released flags).
+         * Call once per main thread tick.
          */
         ke_result (*update)(struct ke_input *self);
 
@@ -32,10 +33,22 @@ extern "C"
         ke_bool (*is_key_released)(struct ke_input *self, int32_t key);
         ke_bool (*is_key_down)(struct ke_input *self, int32_t key);
 
+        /**
+         * @brief Captures a frozen snapshot of the current input state.
+         */
+        void (*get_snapshot)(struct ke_input *self, ke_input_snapshot *out_snapshot);
+
+        // ── Event Sinks (Main Thread Only) ────────────────────────────────────
+
+        void (*on_key)(struct ke_input *self, int32_t key, int32_t action);
+        void (*on_mouse_move)(struct ke_input *self, float x, float y);
+        void (*on_mouse_button)(struct ke_input *self, int32_t button, int32_t action);
+        void (*on_mouse_scroll)(struct ke_input *self, float dx, float dy);
+
     } ke_input;
 
     /// @brief Creates an input system.
-    KE_API ke_result ke_input_create(struct ke_allocator *allocator, struct ke_logger *logger, struct ke_message_pipe *pipe, ke_input **out_input);
+    KE_API ke_result ke_input_create(struct ke_allocator *allocator, struct ke_logger *logger, ke_input **out_input);
 
 #ifdef __cplusplus
 }

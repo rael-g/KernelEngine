@@ -2,8 +2,6 @@ add_library(ke_render_bgfx_device STATIC
     src/bgfx_gpu_device.cpp
 )
 
-target_compile_definitions(ke_render_bgfx_device PUBLIC KE_RENDER_STATIC)
-
 target_include_directories(ke_render_bgfx_device PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
@@ -17,6 +15,7 @@ find_package(bgfx CONFIG REQUIRED)
 
 target_link_libraries(ke_render_bgfx_device PUBLIC
     ke_render_contract
+    ke_threading
     bgfx::bgfx
 )
 

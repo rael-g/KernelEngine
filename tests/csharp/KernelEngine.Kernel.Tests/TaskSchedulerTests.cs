@@ -6,7 +6,7 @@ using Xunit;
 namespace KernelEngine.Kernel.Tests;
 
 /// <summary>
-/// Tests for <see cref="TaskScheduler"/>, <see cref="KeTask"/>, and <see cref="KeTask{T}"/>.
+/// Tests for <see cref="TaskScheduler"/>, <see cref="KernelTask"/>, and <see cref="KernelTask{T}"/>.
 ///
 /// The native scheduler is mocked via a synthetic <c>ke_task_scheduler</c> struct
 /// whose function pointers execute work synchronously on the calling thread.
@@ -107,83 +107,83 @@ public sealed class TaskSchedulerTests
             () => mock.Scheduler.Dispatch<int>(() => throw new InvalidOperationException("boom")));
     }
 
-    // ── KeTask (new DispatchKeTask API) ───────────────────────────────────────
+    // ── KernelTask (new DispatchKernelTask API) ───────────────────────────────────────
 
     [Fact]
-    public async Task DispatchKeTask_Action_IsAwaitable()
+    public async Task DispatchKernelTask_Action_IsAwaitable()
     {
         using var mock = new MockSchedulerHandle();
         bool ran = false;
-        KeTask task = mock.Scheduler.DispatchKeTask(() => { ran = true; });
+        KernelTask task = mock.Scheduler.DispatchKernelTask(() => { ran = true; });
         await task;
         Assert.True(ran);
     }
 
     [Fact]
-    public async Task DispatchKeTask_Action_IsCompletedAfterAwait()
+    public async Task DispatchKernelTask_Action_IsCompletedAfterAwait()
     {
         using var mock = new MockSchedulerHandle();
-        KeTask task = mock.Scheduler.DispatchKeTask(() => { });
+        KernelTask task = mock.Scheduler.DispatchKernelTask(() => { });
         await task;
         Assert.True(task.IsCompleted);
     }
 
     [Fact]
-    public void DispatchKeTask_Action_WaitBlocks()
+    public void DispatchKernelTask_Action_WaitBlocks()
     {
         using var mock = new MockSchedulerHandle();
         bool ran = false;
-        KeTask task = mock.Scheduler.DispatchKeTask(() => { ran = true; });
+        KernelTask task = mock.Scheduler.DispatchKernelTask(() => { ran = true; });
         task.Wait();
         Assert.True(ran);
     }
 
     [Fact]
-    public async Task DispatchKeTask_Func_ReturnsResult()
+    public async Task DispatchKernelTask_Func_ReturnsResult()
     {
         using var mock = new MockSchedulerHandle();
-        KeTask<int> task = mock.Scheduler.DispatchKeTask(() => 99);
+        KernelTask<int> task = mock.Scheduler.DispatchKernelTask(() => 99);
         int result = await task;
         Assert.Equal(99, result);
     }
 
     [Fact]
-    public async Task DispatchKeTask_Func_IsCompletedAfterAwait()
+    public async Task DispatchKernelTask_Func_IsCompletedAfterAwait()
     {
         using var mock = new MockSchedulerHandle();
-        KeTask<string> task = mock.Scheduler.DispatchKeTask(() => "hello");
+        KernelTask<string> task = mock.Scheduler.DispatchKernelTask(() => "hello");
         await task;
         Assert.True(task.IsCompleted);
     }
 
     [Fact]
-    public void DispatchKeTask_Func_ResultBlocks()
+    public void DispatchKernelTask_Func_ResultBlocks()
     {
         using var mock = new MockSchedulerHandle();
-        KeTask<float> task = mock.Scheduler.DispatchKeTask(() => 3.14f);
+        KernelTask<float> task = mock.Scheduler.DispatchKernelTask(() => 3.14f);
         Assert.Equal(3.14f, task.Result);
     }
 
     [Fact]
-    public async Task DispatchKeTask_Func_PropagatesException()
+    public async Task DispatchKernelTask_Func_PropagatesException()
     {
         using var mock = new MockSchedulerHandle();
-        KeTask<int> task = mock.Scheduler.DispatchKeTask<int>(
+        KernelTask<int> task = mock.Scheduler.DispatchKernelTask<int>(
             () => throw new ArgumentException("fail"));
         await Assert.ThrowsAsync<ArgumentException>(async () => await task);
     }
 
     [Fact]
-    public async Task DispatchKeTask_ComposesLikeTask()
+    public async Task DispatchKernelTask_ComposesLikeTask()
     {
-        // KeTask<T> composes with async/await identically to Task<T>
+        // KernelTask<T> composes with async/await identically to Task<T>
         using var mock = new MockSchedulerHandle();
         var s = mock.Scheduler;
 
         static async Task<int> ComputeAsync(TaskScheduler s)
         {
-            int a = await s.DispatchKeTask(() => 10);
-            int b = await s.DispatchKeTask(() => 32);
+            int a = await s.DispatchKernelTask(() => 10);
+            int b = await s.DispatchKernelTask(() => 32);
             return a + b;
         }
 
@@ -191,11 +191,11 @@ public sealed class TaskSchedulerTests
     }
 
     [Fact]
-    public async Task DispatchKeTask_CompatibleWithWhenAll()
+    public async Task DispatchKernelTask_CompatibleWithWhenAll()
     {
         using var mock = new MockSchedulerHandle();
         var tasks = Enumerable.Range(1, 5)
-            .Select(i => mock.Scheduler.DispatchKeTask(() => i * i))
+            .Select(i => mock.Scheduler.DispatchKernelTask(() => i * i))
             .ToList();
 
         int[] results = await Task.WhenAll(tasks.Select(async t => await t));

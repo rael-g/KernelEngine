@@ -4,6 +4,7 @@ using Xunit;
 
 namespace KernelEngine.Framework.Tests;
 
+[Collection("KernelRegistry")]
 public class NodeFrameworkTests
 {
     [Fact]
@@ -12,7 +13,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = world.Scene.AddNode(new MeshNode(), "Mesh");
+        var scene = new Scene(world); var node = scene.AddNode(new MeshNode(), "Mesh");
         Assert.NotNull(node);
     }
 
@@ -22,7 +23,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = world.Scene.AddNode(new CameraNode(), "Camera");
+        var scene = new Scene(world); var node = scene.AddNode(new CameraNode(), "Camera");
         Assert.NotNull(node);
     }
 
@@ -32,7 +33,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = world.Scene.AddNode(new LightNode(), "Light");
+        var scene = new Scene(world); var node = scene.AddNode(new LightNode(), "Light");
         Assert.NotNull(node);
     }
 
@@ -42,7 +43,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = world.Scene.AddNode(new PointLightNode(), "PointLight");
+        var scene = new Scene(world); var node = scene.AddNode(new PointLightNode(), "PointLight");
         Assert.NotNull(node);
     }
 
@@ -52,7 +53,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = world.Scene.AddNode(new SpotLightNode(), "SpotLight");
+        var scene = new Scene(world); var node = scene.AddNode(new SpotLightNode(), "SpotLight");
         Assert.NotNull(node);
     }
 
@@ -62,7 +63,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = world.Scene.AddNode(new SkyboxNode(), "Skybox");
+        var scene = new Scene(world); var node = scene.AddNode(new SkyboxNode(), "Skybox");
         Assert.NotNull(node);
     }
 }

@@ -11,19 +11,19 @@ public class MeshNode : Node
 {
     // ── ECS registration (shared across all MeshNode instances) ──────────────
 
-    internal static uint ComponentId { get; private set; } = uint.MaxValue;
+    public static uint ComponentId { get; private set; } = uint.MaxValue;
 
     /// <summary>Handle of the built-in unit quad mesh (handle 0, created by the renderer at init).</summary>
-    public static uint DefaultMeshHandle { get; internal set; } = 0;
+    public static MeshHandle DefaultMeshHandle { get; internal set; } = new(0);
 
     /// <summary>Handle of the built-in white material (handle 0, created by the renderer at init).</summary>
-    public static uint DefaultMaterialHandle { get; internal set; } = 0;
+    public static MaterialHandle DefaultMaterialHandle { get; internal set; } = new(0);
 
     /// <summary>
     /// Registers the MeshComponent with the ECS registry and stores the component ID.
     /// Must be called once per world, before any MeshNode is added to the scene.
     /// </summary>
-    internal static void Initialize(EcsRegistry registry)
+    internal static void Initialize(IEcsRegistry registry)
     {
         ComponentId = registry.RegisterComponent<MeshComponent>("ke_mesh_renderer");
     }
@@ -34,22 +34,22 @@ public class MeshNode : Node
     /// GPU mesh handle to render. Defaults to <see cref="DefaultMeshHandle"/> (built-in unit quad).
     /// Set this to a handle returned by <see cref="Renderer.CreateMesh"/> for custom geometry.
     /// </summary>
-    public uint MeshHandle { get; init; } = uint.MaxValue;
+    public MeshHandle MeshHandle { get; init; } = MeshHandle.None;
 
     /// <summary>
     /// Material handle to use for rendering. Defaults to <see cref="DefaultMaterialHandle"/> (built-in white).
     /// Set this to a handle returned by <see cref="Renderer.CreateMaterial"/> for custom materials.
     /// </summary>
-    public uint MaterialHandle { get; init; } = uint.MaxValue;
+    public MaterialHandle MaterialHandle { get; init; } = MaterialHandle.None;
 
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<MeshComponent>(ComponentId);
-        comp = new MeshComponent
+        var comp = AddComponent<MeshComponent>(ComponentId);
+        comp[0] = new MeshComponent
         {
-            MeshHandle     = MeshHandle     != uint.MaxValue ? MeshHandle     : DefaultMeshHandle,
-            MaterialHandle = MaterialHandle != uint.MaxValue ? MaterialHandle : DefaultMaterialHandle,
+            MeshHandle     = MeshHandle.IsValid     ? MeshHandle     : DefaultMeshHandle,
+            MaterialHandle = MaterialHandle.IsValid ? MaterialHandle : DefaultMaterialHandle,
         };
     }
 }

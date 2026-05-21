@@ -3,24 +3,35 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Submits the skybox draw call each frame when a <see cref="SkyboxNode"/> is active.
-/// Must be registered <em>after</em> <see cref="CameraRenderSystem"/> (which sets the view
-/// transform) and <em>before</em> <see cref="MeshRenderSystem"/> (which needs IBL state).
+/// Pure-managed render system that publishes the active skybox cubemap into the frame packet
+/// via the safe <see cref="IFramePacket.SetSkybox"/> API.
 /// </summary>
 public sealed class SkyboxRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
+    private readonly uint _skyboxCid;
 
-    /// <param name="renderer">The renderer to submit the skybox draw call to.</param>
-    public SkyboxRenderSystem(Renderer renderer) => _renderer = renderer;
-
-    /// <inheritdoc/>
-    public void Update(World world, float dt)
+    public SkyboxRenderSystem(uint skyboxCid)
     {
-        if (SkyboxNode.ActiveHandle != uint.MaxValue)
-        {
-            var res = _renderer.SubmitSkybox(SkyboxNode.ActiveHandle);
-            KernelException.ThrowIfFailed(res, nameof(_renderer.SubmitSkybox));
-        }
+        _skyboxCid = skyboxCid;
     }
+
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    {
+        if (packet == null) return;
+        var registry = world.Registry;
+
+        var skyboxes = registry.Query<SkyboxComponent>(_skyboxCid);
+        if (skyboxes.Length == 0) return;
+
+        var sky = skyboxes.Data[0];
+        if (!sky.CubemapHandle.IsValid) return;
+
+        packet.SetSkybox(sky.CubemapHandle);
+    }
+
+    public ComponentAccess GetAccess() => new()
+    {
+        Reads = [_skyboxCid],
+        Writes = []
+    };
 }

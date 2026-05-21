@@ -3,29 +3,41 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Iterates all ECS entities with a <see cref="MeshComponent"/> and submits
-/// colored quad draw calls using their TransformComponent world matrix.
+/// Pure-managed render system that collects mesh draw commands into the frame packet via the
+/// safe <see cref="IFramePacket.AddDrawCommand"/> API.
 /// </summary>
-public sealed unsafe class MeshRenderSystem : ISystem
+public sealed class MeshRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
+    private readonly uint _meshCid;
+    private readonly uint _transformCid;
 
-    /// <param name="renderer">The renderer to submit draw calls to.</param>
-    public MeshRenderSystem(Renderer renderer) => _renderer = renderer;
-
-    public void Update(World world, float dt)
+    public MeshRenderSystem(uint meshCid, uint transformCid)
     {
-        if (MeshNode.ComponentId == uint.MaxValue) return;
+        _meshCid = meshCid;
+        _transformCid = transformCid;
+    }
 
-        var (entities, data) = world.Registry.Query<MeshComponent>(MeshNode.ComponentId);
-        for (int i = 0; i < entities.Length; i++)
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    {
+        if (packet == null) return;
+        var registry = world.Registry;
+        var meshes = registry.Query<MeshComponent>(_meshCid);
+
+        for (int i = 0; i < meshes.Length; i++)
         {
-            var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
-            if (tc != null)
-            {
-                var res = _renderer.SubmitMesh(data[i].MeshHandle, data[i].MaterialHandle, tc->WorldMatrix);
-                KernelException.ThrowIfFailed(res, nameof(_renderer.SubmitMesh));
-            }
+            var mesh = meshes.Data[i];
+            if (mesh.MeshHandle == MeshHandle.None) continue;
+
+            System.Numerics.Matrix4x4 worldMatrix;
+            { var slot = registry.GetComponent<TransformComponent>(meshes.Entities[i], _transformCid); if (slot.IsEmpty) continue; worldMatrix = slot[0].WorldMatrix; }
+
+            packet.AddDrawCommand(mesh.MeshHandle, mesh.MaterialHandle, worldMatrix);
         }
     }
+
+    public ComponentAccess GetAccess() => new()
+    {
+        Reads = [_meshCid, _transformCid],
+        Writes = []
+    };
 }

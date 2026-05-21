@@ -1,4 +1,3 @@
-using KernelEngine.Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Kernel;
@@ -9,6 +8,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddKernel(this IServiceCollection services)
     {
         services.AddSingleton<Allocator, MallocAllocator>();
+        services.AddSingleton<IAllocator>(sp => sp.GetRequiredService<Allocator>());
+        services.AddSingleton<IKernelFactory, KernelFactory>();
         return services;
     }
 
@@ -16,15 +17,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {
         services.AddSingleton(sp => new Logger(sp.GetRequiredService<Allocator>()));
-        return services;
-    }
-
-    /// <summary>Registers a <see cref="MessagePipe"/> singleton backed by the kernel allocator.</summary>
-    public static IServiceCollection AddMessagePipe(this IServiceCollection services)
-    {
-        services.AddSingleton(sp => new MessagePipe(
-            sp.GetRequiredService<Allocator>(),
-            sp.GetService<Logger>()));
+        services.AddSingleton<ILogger>(sp => sp.GetRequiredService<Logger>());
         return services;
     }
 
@@ -33,16 +26,16 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddConsoleSink(
         this IServiceCollection services,
-        ke_log_level minLevel = ke_log_level.KE_LOG_LEVEL_TRACE) =>
+        LogLevel minLevel = LogLevel.Trace) =>
         services.AddSingleton<ILoggerSink>(_ => new ConsoleSink { MinLevel = minLevel });
 
-    /// <summary>Registers an <see cref="Input"/> singleton. Requires <c>AddMessagePipe()</c>.</summary>
+    /// <summary>Registers an <see cref="Input"/> singleton.</summary>
     public static IServiceCollection AddInput(this IServiceCollection services)
     {
         services.AddSingleton(sp => new Input(
             sp.GetRequiredService<Allocator>(),
-            sp.GetService<Logger>(),
-            sp.GetRequiredService<MessagePipe>()));
+            sp.GetService<Logger>()));
+        services.AddSingleton<IInput>(sp => sp.GetRequiredService<Input>());
         return services;
     }
 }

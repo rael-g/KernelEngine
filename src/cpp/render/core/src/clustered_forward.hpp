@@ -3,49 +3,35 @@
 #include <kernel_engine/kernel/render/render.h>
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
-#include <cstdint>
+#include <kernel_engine/render/core/render_core_export.h>
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render::core
 {
 
 struct RenderContext;
 class LightingManager;
 
 /**
- * @brief Manages Clustered Forward shading logic using the HAL.
+ * @brief Implements Clustered Forward Rendering data structures and GPU passes.
  */
-class KE_RENDER_API ClusteredForward
+class KE_RENDER_CORE_API ClusteredForward
 {
 public:
+    ke_result SetupClustered(RenderContext& ctx, render::GpuProgramHandle& out_depth_prog, render::GpuProgramHandle& out_cull_prog);
     ke_result SetClusterConfig(RenderContext& ctx, const ke_cluster_config *config);
 
-    ke_result SetupClustered(RenderContext& ctx, 
-                             GpuProgramHandle& out_depth_prog, 
-                             GpuProgramHandle& out_cull_prog);
-    
-    void RebuildClusterBuffers(RenderContext& ctx);
     void UpdateClusterBounds(RenderContext& ctx);
-    void DispatchLightCull(RenderContext& ctx, 
-                           const LightingManager& lighting,
-                           GpuProgramHandle cull_program);
-
+    void DispatchLightCull(RenderContext& ctx, const LightingManager& lighting, render::GpuProgramHandle cull_prog);
+    void RebuildClusterBuffers(RenderContext& ctx);
+    
     void Shutdown(RenderContext& ctx);
 
-    GpuUniformHandle            cluster_params_u   = kGpuInvalidHandle;
-    GpuUniformHandle            cluster_params2_u  = kGpuInvalidHandle;
-    GpuDynamicIndexBufferHandle b_point_lights     = kGpuInvalidHandle;
-    GpuDynamicIndexBufferHandle b_spot_lights      = kGpuInvalidHandle;
+    // GPU resources for clustering
+    render::GpuUniformHandle cluster_params_uniform = render::kGpuInvalidHandle;
 
 private:
-    ke_cluster_config cluster_config_{16, 8, 24, 64, 4096};
+    ke_cluster_config cluster_config_{};
     bool bounds_dirty_ = true;
-
-    GpuUniformHandle            compute_view_u_    = kGpuInvalidHandle;
-    GpuDynamicIndexBufferHandle b_cluster_bounds_  = kGpuInvalidHandle;
-    GpuDynamicIndexBufferHandle b_p_light_indices_ = kGpuInvalidHandle;
-    GpuDynamicIndexBufferHandle b_p_light_count_   = kGpuInvalidHandle;
-    GpuDynamicIndexBufferHandle b_s_light_indices_ = kGpuInvalidHandle;
-    GpuDynamicIndexBufferHandle b_s_light_count_   = kGpuInvalidHandle;
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

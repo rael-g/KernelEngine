@@ -1,43 +1,31 @@
 #pragma once
 
+#include <kernel_engine/kernel/render/render.h>
+#include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <string>
-#include <vector>
+#include <kernel_engine/render/core/render_core_export.h>
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render::core
 {
 
 struct RenderContext;
 
-/**
- * @brief Interface for providing shader binary data.
- * Isolates the renderer from the file system.
- */
-class ShaderProviderInterface
+class KE_RENDER_CORE_API ShaderProviderInterface
 {
 public:
     virtual ~ShaderProviderInterface() = default;
-
-    /**
-     * @brief Loads a shader binary by name.
-     * @param ctx The current render context.
-     * @param name The name of the shader (without extension).
-     * @return A GPU memory pointer containing the shader data, or nullptr on failure.
-     */
-    virtual const GpuMemoryBuffer* LoadShaderBinary(RenderContext& ctx, const std::string& name) = 0;
+    virtual const render::GpuMemoryBuffer* LoadShaderBinary(RenderContext& ctx, const std::string& name) = 0;
 };
 
-/**
- * @brief Implementation that loads shaders from the local file system.
- */
-class FileShaderProvider : public ShaderProviderInterface
+class KE_RENDER_CORE_API FileShaderProvider : public ShaderProviderInterface
 {
 public:
     explicit FileShaderProvider(const std::string& base_path);
-    const GpuMemoryBuffer* LoadShaderBinary(RenderContext& ctx, const std::string& name) override;
+    const render::GpuMemoryBuffer* LoadShaderBinary(RenderContext& ctx, const std::string& name) override;
 
 private:
     std::string base_path_;
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

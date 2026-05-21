@@ -13,9 +13,9 @@ public class PointLightNode : Node
 {
     // ── ECS registration ──────────────────────────────────────────────────────
 
-    internal static uint ComponentId { get; private set; } = uint.MaxValue;
+    public static uint ComponentId { get; private set; } = uint.MaxValue;
 
-    internal static void Initialize(EcsRegistry registry)
+    internal static void Initialize(IEcsRegistry registry)
     {
         if (ComponentId == uint.MaxValue)
             ComponentId = registry.RegisterComponent<PointLightComponent>("PointLightComponent");
@@ -35,8 +35,8 @@ public class PointLightNode : Node
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue) return;
-        ref var comp = ref AddComponent<PointLightComponent>(ComponentId);
-        comp = new PointLightComponent
+        var comp = AddComponent<PointLightComponent>(ComponentId);
+        comp[0] = new PointLightComponent
         {
             Radius = Radius,
             R = Color.X, G = Color.Y, B = Color.Z,

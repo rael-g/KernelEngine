@@ -19,7 +19,7 @@ public class LoggerTests
     {
         using var allocator = new MallocAllocator();
         var logger = new Logger(allocator);
-        var sink = new ConsoleSink { MinLevel = Kernel.Native.ke_log_level.KE_LOG_LEVEL_TRACE };
+        var sink = new ConsoleSink { MinLevel = LogLevel.Trace };
         logger.AddSink(sink);
         
         logger.Info("Testing C# logger interop", "TEST");

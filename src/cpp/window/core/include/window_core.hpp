@@ -1,8 +1,9 @@
 #pragma once
 
 #include <kernel_engine/kernel/window/window.h>
+#include <kernel_engine/kernel/input/input.h>
 #include <window_device.hpp>
-#include <window_export.h>
+#include <kernel_engine/window/contract/window_export.h>
 #include <memory>
 
 namespace kernel_engine::window
@@ -31,11 +32,13 @@ public:
 
     // Dependency Injection
     void SetDevice(WindowDevice* device);
+    void SetInput(ke_input* input);
 
 private:
     void HandleEvent(const WindowEvent& ev);
 
-    WindowDevice* device_ = nullptr;
+    WindowDevice*    device_ = nullptr;
+    ke_input*        input_  = nullptr;
     bool own_device_ = false;
     bool initialized_ = false;
 

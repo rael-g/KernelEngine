@@ -5,52 +5,41 @@
 #include "gpu_types.hpp"
 #include <vector>
 
-namespace kernel_engine::render::bgfx
+#include <kernel_engine/render/core/render_core_export.h>
+
+namespace kernel_engine::render::core
 {
 
 struct RenderContext;
 
-struct TextureEntry
-{
-    GpuTextureHandle idx = kGpuInvalidHandle;
-    bool valid = false;
-};
-
 /**
- * @brief Manages GPU textures and cubemaps using the HAL.
+ * @brief Manages GPU texture resources using the HAL.
  */
-class KE_RENDER_API TextureManager
+class KE_RENDER_CORE_API TextureManager
 {
 public:
-    ke_result CreateTextureRgba(RenderContext& ctx, uint32_t width, uint32_t height, const uint8_t *pixels,
-                                ke_texture_handle *out_handle);
+    ke_result CreateTextureRgba(RenderContext& ctx, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out);
+    ke_result CreateCubemapRgba(RenderContext& ctx, uint32_t s, const uint8_t *d, ke_texture_handle *out);
     ke_result DestroyTexture(RenderContext& ctx, ke_texture_handle handle);
-    ke_result CreateCubemapRgba(RenderContext& ctx, uint32_t size, const uint8_t *data, ke_texture_handle *out_handle);
-    
-    ke_result SubmitSkybox(RenderContext& ctx, 
-                           ke_texture_handle cubemap_handle,
-                           GpuProgramHandle skybox_program,
-                           GpuVertexBufferHandle skybox_vb,
-                           GpuIndexBufferHandle skybox_ib,
-                           GpuUniformHandle skybox_sampler,
-                           GpuUniformHandle skybox_tint);
+
+    ke_result SubmitSkybox(RenderContext& ctx, ke_texture_handle handle, render::GpuProgramHandle prog, render::GpuVertexBufferHandle vb, render::GpuIndexBufferHandle ib, render::GpuUniformHandle sampler, render::GpuUniformHandle tint);
 
     void Shutdown();
 
-    GpuTextureHandle GetTextureIdx(uint32_t handle) const;
+    render::GpuTextureHandle GetTextureIdx(ke_texture_handle handle) const;
 
-    GpuUniformHandle sampler_uniform        = kGpuInvalidHandle;
-    GpuUniformHandle skybox_sampler_uniform = kGpuInvalidHandle;
-    GpuUniformHandle skybox_tint_uniform    = kGpuInvalidHandle;
-    GpuTextureHandle default_cube_tex       = kGpuInvalidHandle;
-    GpuTextureHandle active_env_tex         = kGpuInvalidHandle;
-    bool             has_skybox             = false;
-
-    static std::vector<uint8_t> GenerateMips(uint32_t width, uint32_t height,
-                                       const uint8_t *pixels, uint8_t *out_num_mips);
+    render::GpuTextureHandle default_2d_tex         = render::kGpuInvalidHandle;
+    render::GpuTextureHandle default_cube_tex       = render::kGpuInvalidHandle;
+    render::GpuTextureHandle active_env_tex         = render::kGpuInvalidHandle;
+    render::GpuUniformHandle sampler_uniform        = render::kGpuInvalidHandle;
+    render::GpuUniformHandle ssao_blurred_uniform   = render::kGpuInvalidHandle;
+    render::GpuUniformHandle skybox_sampler_uniform = render::kGpuInvalidHandle;
+    render::GpuUniformHandle skybox_tint_uniform    = render::kGpuInvalidHandle;
+    
+    bool has_skybox = false;
 
 private:
-    std::vector<TextureEntry> textures_;
+    std::vector<render::GpuTextureHandle> textures_;
 };
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

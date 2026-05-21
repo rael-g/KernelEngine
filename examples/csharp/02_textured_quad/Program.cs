@@ -10,45 +10,41 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddGlfwWindow(1280, 720, "KernelEngine — 02 Textured Quad")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
 
-app.OnReady = () =>
-{
-    app.Renderer.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
+int entityCount = 0;
 
-    // Generate checkerboard texture (128x128, 16px squares)
-    uint width = 128;
-    uint height = 128;
+app.OnReady = (resources) =>
+{
+    Console.WriteLine("[KernelEngine] Example: 02_textured_quad");
+    Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+    Console.WriteLine("[KernelEngine] Features: procedural_texture, albedo_material, uv_mapping");
+
+    // Generate checkerboard texture (128x128, 16 px squares)
+    const uint width  = 128;
+    const uint height = 128;
     byte[] pixels = new byte[width * height * 4];
     for (int y = 0; y < height; y++)
+    for (int x = 0; x < width;  x++)
     {
-        for (int x = 0; x < width; x++)
-        {
-            bool white = ((x / 16) + (y / 16)) % 2 == 0;
-            byte val = (byte)(white ? 255 : 0);
-            int idx = (y * (int)width + x) * 4;
-            pixels[idx + 0] = val; // R
-            pixels[idx + 1] = val; // G
-            pixels[idx + 2] = val; // B
-            pixels[idx + 3] = 255; // A
-        }
+        bool white = ((x / 16) + (y / 16)) % 2 == 0;
+        byte v = (byte)(white ? 255 : 64);
+        int  i = (y * (int)width + x) * 4;
+        pixels[i]     = v;
+        pixels[i + 1] = v;
+        pixels[i + 2] = v;
+        pixels[i + 3] = 255;
     }
 
-    var texRes = app.Renderer.CreateTexture(width, height, pixels);
-    KernelException.ThrowIfFailed(texRes.Code, nameof(app.Renderer.CreateTexture));
-    uint texHandle = texRes.Value;
+    var texHandle = resources.CreateTexture(width, height, pixels);
+    Console.WriteLine($"[KernelEngine] Texture: handle={texHandle} width={width} height={height}");
 
-    // Create material with checkerboard texture
-    var matRes = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, textureHandle: texHandle);
-    KernelException.ThrowIfFailed(matRes.Code, nameof(app.Renderer.CreateMaterial));
-    uint matHandle = matRes.Value;
+    var matHandle = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), albedo: texHandle);
 
-    // Directional light from top-front
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new LightNode
         {
             Direction = Vector3.Normalize(new(0.2f, 1f, 0.5f)),
@@ -56,9 +52,9 @@ app.OnReady = () =>
             Intensity = 1f,
         },
         "Sun");
+    entityCount++;
 
-    // Camera at Z=3, looking at origin
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -66,27 +62,26 @@ app.OnReady = () =>
         Position = new Vector3(0f, 0f, 3f),
     };
     app.ActiveWorld.ActiveCamera = cam.Entity;
+    entityCount++;
 
-    // Rendered quad
-    app.ActiveWorld.Scene.AddNode(
+    app.Scene.AddNode(
         new MeshNode { MaterialHandle = matHandle },
         "Quad");
+    entityCount++;
 };
 
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    // Background padrão (0.05, 0.05, 0.05, 1.0)
-    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)
     {
         double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[Example 02] FPS: {fps:F2}");
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Entities: {entityCount}  Lights: 0p 0s 1d");
         frameCount = 0;
         sw.Restart();
     }

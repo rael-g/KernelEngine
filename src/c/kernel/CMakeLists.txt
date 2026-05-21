@@ -2,12 +2,11 @@ set(KERNEL_SOURCES
     src/context/allocator.c
     src/common/hash_map.c
     src/common/hash.c
-    src/messaging/message_pipe.c
     src/logger/logger.c
-    src/logger/console_sink.c
     src/input/input.c
     src/world/world.c
     src/world/ecs.c
+    src/dev_platform/dev_platform.c
 )
 
 add_library(ke_kernel ${KERNEL_SOURCES})

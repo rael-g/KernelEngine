@@ -1,8 +1,27 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/logger/console_sink.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <stdio.h>
 #include <string.h>
+
+namespace {
+// Inline console sink for tests (the kernel no longer ships one; see W.16).
+void test_console_sink_log(ke_logger_sink *, const ke_log_event *event)
+{
+    fprintf(stderr, "[%s] %s: %s\n",
+            ke_log_level_to_string(event->level),
+            event->tag     ? event->tag     : "",
+            event->message ? event->message : "");
+    fflush(stderr);
+}
+ke_logger_sink test_console_sink(ke_log_level min_level)
+{
+    ke_logger_sink s{};
+    s.min_level = (int32_t)min_level;
+    s.log       = test_console_sink_log;
+    return s;
+}
+} // namespace
 
 class LoggerTest : public ::testing::Test {
 protected:
@@ -55,7 +74,7 @@ TEST_F(LoggerTest, Destroy_NullLogger_DoesNotCrash) {
 }
 
 TEST_F(LoggerTest, Destroy_WithSinks_Works) {
-    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_INFO);
+    ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
     logger->add_sink(logger, sink);
     logger->destroy(logger);
     logger = nullptr;
@@ -77,13 +96,13 @@ TEST_F(LoggerTest, Log_NullEvent_DoesNotCrash) {
 }
 
 TEST_F(LoggerTest, AddSink_NullSelf_ReturnsInvalidArgument) {
-    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_INFO);
+    ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
     auto add_sink_fn = logger->add_sink;
     ASSERT_EQ(add_sink_fn(nullptr, sink), KE_ERROR_INVALID_ARGUMENT);
 }
 
 TEST_F(LoggerTest, AddSink_AllocationFailure_ReturnsOutOfMemory) {
-    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_INFO);
+    ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
     // Force OOM by swapping allocator temporarily
     ke_allocator fa;
     fa.alloc = fail_alloc;
@@ -147,7 +166,7 @@ TEST_F(LoggerTest, Log_SkipsSink_WhenLogFnIsNull) {
 }
 
 TEST_F(LoggerTest, ConsoleSink_NullTagAndMessage_DoesNotCrash) {
-    ke_logger_sink sink = ke_console_sink_create(KE_LOG_LEVEL_TRACE);
+    ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_TRACE);
     logger->add_sink(logger, sink);
     
     ke_log_event ev = { KE_LOG_LEVEL_INFO, nullptr, nullptr };

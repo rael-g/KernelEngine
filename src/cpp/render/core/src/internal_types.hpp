@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace kernel_engine::render::bgfx
+namespace kernel_engine::render::core
 {
 
 // ── Constants and Limits ──────────────────────────────────────────────────
@@ -24,4 +24,4 @@ static constexpr uint8_t kBlurHView     = 9; // bloom blur horizontal
 static constexpr uint8_t kBlurVView     = 10; // bloom blur vertical
 static constexpr uint8_t kTonemapView   = 11; // tonemap → backbuffer
 
-} // namespace kernel_engine::render::bgfx
+} // namespace kernel_engine::render::core

@@ -11,21 +11,23 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class SkyboxNode : Node
 {
-    /// <summary>Cubemap handle that is currently active for the world. Reset by <see cref="Initialize"/>.</summary>
-    internal static uint ActiveHandle { get; private set; } = uint.MaxValue;
+    public static uint ComponentId { get; private set; } = uint.MaxValue;
 
-    /// <summary>Resets the active skybox handle. Called by <see cref="Application"/> at world creation.</summary>
-    internal static void Initialize() => ActiveHandle = uint.MaxValue;
+    internal static void Initialize(IEcsRegistry registry)
+    {
+        ComponentId = registry.RegisterComponent<SkyboxComponent>("Skybox");
+    }
 
     /// <summary>
     /// GPU cubemap handle to use as the skybox. Must be a handle returned by
     /// <see cref="Renderer.CreateCubemap"/>.
     /// </summary>
-    public uint CubemapHandle { get; init; } = uint.MaxValue;
+    public TextureHandle CubemapHandle { get; init; } = TextureHandle.None;
 
     protected override void OnStart()
     {
-        if (CubemapHandle != uint.MaxValue)
-            ActiveHandle = CubemapHandle;
+        if (ComponentId == uint.MaxValue || !CubemapHandle.IsValid) return;
+        var comp = AddComponent<SkyboxComponent>(ComponentId);
+        comp[0].CubemapHandle = CubemapHandle;
     }
 }

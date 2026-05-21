@@ -9,7 +9,7 @@ public class ResultTests
     [Fact]
     public void SuccessResult_IsOk()
     {
-        var result = new Result(ke_result.KE_OK);
+        var result = new Result(KernelResult.Ok);
         Assert.True(result.IsOk);
         Assert.False(result.IsError);
     }
@@ -17,16 +17,16 @@ public class ResultTests
     [Fact]
     public void FailureResult_IsError()
     {
-        var result = new Result(ke_result.KE_ERROR_INVALID_ARGUMENT);
+        var result = new Result(KernelResult.InvalidArgument);
         Assert.False(result.IsOk);
         Assert.True(result.IsError);
-        Assert.Equal(ke_result.KE_ERROR_INVALID_ARGUMENT, result.Code);
+        Assert.Equal(KernelResult.InvalidArgument, result.Code);
     }
 
     [Fact]
     public void SuccessResultWithValue_HasValue()
     {
-        var result = new Result<int>(ke_result.KE_OK, 42);
+        var result = new Result<int>(KernelResult.Ok, 42);
         Assert.True(result.IsOk);
         Assert.Equal(42, result.Value);
     }
@@ -34,42 +34,42 @@ public class ResultTests
     [Fact]
     public void FailureResult_ThrowsOnValueAccess()
     {
-        var result = new Result<int>(ke_result.KE_ERROR_OUT_OF_MEMORY);
+        var result = new Result<int>(KernelResult.OutOfMemory);
         Assert.Throws<KernelException>(() => result.Value);
     }
 
     [Fact]
     public void ResultT_ImplicitConversionToResult_Works()
     {
-        Result<int> rt = ke_result.KE_ERROR_IO;
+        Result<int> rt = KernelResult.Io;
         Result r = rt;
-        Assert.Equal(ke_result.KE_ERROR_IO, r.Code);
+        Assert.Equal(KernelResult.Io, r.Code);
     }
 
     [Fact]
     public void ResultT_ToString_Works()
     {
-        Result<int> ok = new(ke_result.KE_OK, 42);
-        Result<int> err = ke_result.KE_ERROR_NOT_FOUND;
+        Result<int> ok = new(KernelResult.Ok, 42);
+        Result<int> err = KernelResult.NotFound;
         
         Assert.Contains("Ok(42)", ok.ToString());
-        Assert.Contains("Error(KE_ERROR_NOT_FOUND)", err.ToString());
+        Assert.Contains("Error(NotFound)", err.ToString());
     }
 
     [Fact]
     public void Result_ToString_Works()
     {
-        Result r = ke_result.KE_OK;
-        Assert.Equal("KE_OK", r.ToString());
+        Result r = KernelResult.Ok;
+        Assert.Equal("Ok", r.ToString());
     }
 
     [Fact]
     public void Result_ThrowIfFailed_Works()
     {
-        Result ok = ke_result.KE_OK;
+        Result ok = KernelResult.Ok;
         ok.ThrowIfFailed(); // Should not throw
 
-        Result err = ke_result.KE_ERROR;
+        Result err = KernelResult.Error;
         Assert.Throws<KernelException>(() => err.ThrowIfFailed());
     }
 }

@@ -2,16 +2,33 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NativeTarget>ke_kernel</NativeTarget>
   </PropertyGroup>
 
+  <Import Project="../NativeDependencies.targets" />
+
   <ItemGroup>
-    <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
+    <None Include="$(NativeFinalDir)\ke_threading.$(NativeExt)" Condition="Exists('$(NativeFinalDir)\ke_threading.$(NativeExt)')">
+      <Link>ke_threading.$(NativeExt)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Native/KernelEngine.Kernel.Native/KernelEngine.Kernel.Native.csproj" />
+    <!-- Native pointers are public on wrappers; plugin assemblies don't need internal access.
+         Framework references only Abstractions (not Kernel), so it gets no InternalsVisibleTo.
+         Tests keep it for white-box assertions. -->
+    <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
+    <InternalsVisibleTo Include="KernelEngine.Framework.Tests" />
+    <InternalsVisibleTo Include="KernelEngine.Logging.Serilog.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

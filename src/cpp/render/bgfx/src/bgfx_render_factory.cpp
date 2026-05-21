@@ -1,41 +1,44 @@
 #include <kernel_engine/render/bgfx/bgfx_render.h>
+#include <kernel_engine/kernel/render/render.h>
 #include <core_renderer.hpp>
-#include <gpu_device.hpp>
+#include <bgfx_gpu_device.hpp>
+#include <render_logging.hpp>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <bgfx/bgfx.h>
 #include <new>
 
 extern "C" {
-    KE_RENDER_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render) {
+    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render) {
         if (!out_render || !params || !params->allocator) return KE_ERROR_INVALID_ARGUMENT;
 
         auto* alloc = params->allocator;
 
-        // 1. Create the Hardware Implementation (Músculo)
         void* device_mem = alloc->alloc(alloc, sizeof(kernel_engine::render::bgfx::BgfxGpuDevice), alignof(kernel_engine::render::bgfx::BgfxGpuDevice));
-        if (!device_mem) return KE_ERROR_OUT_OF_MEMORY;
+        if (!device_mem) return KE_RENDER_LOG_ERR(params->logger, KE_ERROR_OUT_OF_MEMORY, "ke_render_bgfx_create", "Failed to allocate BgfxGpuDevice");
         auto* device = new (device_mem) kernel_engine::render::bgfx::BgfxGpuDevice();
 
-        // 2. Map C-API params to Agnostic HAL params
-        kernel_engine::render::bgfx::GpuRendererParams core_params = {
+        // renderer_type == 0 means "use engine default" → Vulkan
+        uint32_t renderer_type = params->renderer_type == 0
+            ? (uint32_t)::bgfx::RendererType::Vulkan
+            : params->renderer_type;
+
+        kernel_engine::render::GpuRendererParams core_params = {
             params->allocator,
             params->logger,
             params->shader_path,
             params->window,
-            params->renderer_type
+            renderer_type,
+            params->vsync != 0
         };
 
-        // 3. Create the Agnostic Core (Cérebro)
-        void* renderer_mem = alloc->alloc(alloc, sizeof(kernel_engine::render::bgfx::CoreRenderer), alignof(kernel_engine::render::bgfx::CoreRenderer));
+        void* renderer_mem = alloc->alloc(alloc, sizeof(kernel_engine::render::core::CoreRenderer), alignof(kernel_engine::render::core::CoreRenderer));
         if (!renderer_mem) {
             alloc->free(alloc, device_mem);
-            return KE_ERROR_OUT_OF_MEMORY;
+            return KE_RENDER_LOG_ERR(params->logger, KE_ERROR_OUT_OF_MEMORY, "ke_render_bgfx_create", "Failed to allocate CoreRenderer");
         }
-        auto* renderer = new (renderer_mem) kernel_engine::render::bgfx::CoreRenderer(core_params);
-
-        // 4. Assemble: Inject Device into Core
+        auto* renderer = new (renderer_mem) kernel_engine::render::core::CoreRenderer(core_params);
         renderer->SetGpuDevice(device);
 
-        // 5. Return the C-API interface
         *out_render = renderer->ToApi();
         return KE_OK;
     }

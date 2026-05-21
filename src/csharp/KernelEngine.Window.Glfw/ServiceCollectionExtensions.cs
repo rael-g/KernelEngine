@@ -16,7 +16,7 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         int width, int height, string title)
     {
-        services.AddSingleton<KernelEngine.Kernel.Window>(sp =>
+        services.AddSingleton<IWindow>(sp =>
         {
             var titlePtr = Marshal.StringToHGlobalAnsi(title);
             try
@@ -24,21 +24,21 @@ public static class ServiceCollectionExtensions
                 unsafe
                 {
                     var logger = sp.GetService<Logger>();
-                    var pipe = sp.GetService<MessagePipe>();
+                    var input  = sp.GetService<Input>();
 
                     var @params = new ke_window_glfw_params
                     {
-                        allocator = sp.GetRequiredService<Allocator>().Native,
-                        logger = logger != null ? logger.Native : null,
-                        message_pipe = pipe != null ? pipe.Native : null,
+                        allocator    = sp.GetRequiredService<Allocator>().Native,
+                        logger       = logger != null ? logger.Native : null,
+                        input        = input != null ? input.Native : null,
+                        title        = (sbyte*)titlePtr,
                         width = width,
                         height = height,
-                        title = (sbyte*)titlePtr,
+                        fullscreen = 0,
                     };
 
                     ke_window* native;
-                    KernelException.ThrowIfFailed(
-                        KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &native));
+                    KernelException.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &native).ToManaged());
                     return new KernelEngine.Kernel.Window(native);
                 }
             }

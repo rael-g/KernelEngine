@@ -1,91 +1,88 @@
+using System.Numerics;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Reads all active light components each frame and uploads them to the renderer.
-/// Handles directional, point, and spot lights. Must run before <see cref="MeshRenderSystem"/>.
+/// Pure-managed render system that reads directional/point/spot light components from the ECS
+/// and publishes them into the frame packet via the safe <see cref="IFramePacket"/> API.
 /// </summary>
-public sealed unsafe class LightRenderSystem : ISystem
+public sealed class LightRenderSystem : ISystem
 {
-    private readonly Renderer _renderer;
+    private readonly uint _lightCid;
+    private readonly uint _pointCid;
+    private readonly uint _spotCid;
+    private readonly uint _transformCid;
 
-    // Reusable upload buffers (avoids allocation per frame)
-    private ke_point_light[] _pointBuf = new ke_point_light[64];
-    private ke_spot_light[]  _spotBuf  = new ke_spot_light[64];
-
-    public LightRenderSystem(Renderer renderer) => _renderer = renderer;
-
-    public void Update(World world, float dt)
+    public LightRenderSystem(uint lightCid, uint pointCid, uint spotCid, uint transformCid)
     {
-        // ── Directional light ──────────────────────────────────────────────────
-        if (LightNode.ComponentId != uint.MaxValue)
+        _lightCid = lightCid;
+        _pointCid = pointCid;
+        _spotCid = spotCid;
+        _transformCid = transformCid;
+    }
+
+    public void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null)
+    {
+        if (packet == null) return;
+        var registry = world.Registry;
+
+        // ── Directional ────────────────────────────────────────────────────────
+        var dirLights = registry.Query<LightComponent>(_lightCid);
+        if (dirLights.Length > 0)
         {
-            var (_, lights) = world.Registry.Query<LightComponent>(LightNode.ComponentId);
-            if (lights.Length > 0)
+            var l = dirLights.Data[0];
+            packet.SetDirectionalLight(new DirectionalLight
             {
-                ref readonly var light = ref lights[0];
-                var res = _renderer.SetDirectionalLight(
-                    light.DirX, light.DirY, light.DirZ,
-                    light.R, light.G, light.B, light.Intensity);
-                KernelException.ThrowIfFailed(res, nameof(_renderer.SetDirectionalLight));
-            }
+                Direction = new Vector3(l.DirX, l.DirY, l.DirZ),
+                Color = new Vector3(l.R, l.G, l.B),
+                Intensity = l.Intensity,
+            });
         }
 
-        // ── Point lights ───────────────────────────────────────────────────────
-        if (PointLightNode.ComponentId != uint.MaxValue)
+        // ── Point ──────────────────────────────────────────────────────────────
+        var pointLights = registry.Query<PointLightComponent>(_pointCid);
+        for (int i = 0; i < pointLights.Length; i++)
         {
-            var (entities, comps) = world.Registry.Query<PointLightComponent>(PointLightNode.ComponentId);
-            int count = Math.Min(entities.Length, _pointBuf.Length);
-            for (int i = 0; i < count; i++)
+            var c = pointLights.Data[i];
+            var pos = ReadPosition(registry, pointLights.Entities[i]);
+            packet.AddPointLight(new PointLight
             {
-                var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
-                ref readonly var c = ref comps[i];
-                _pointBuf[i] = new ke_point_light
-                {
-                    pos_x = tc != null ? tc->WorldMatrix.M41 : 0f,
-                    pos_y = tc != null ? tc->WorldMatrix.M42 : 0f,
-                    pos_z = tc != null ? tc->WorldMatrix.M43 : 0f,
-                    radius    = c.Radius,
-                    r         = c.R,
-                    g         = c.G,
-                    b         = c.B,
-                    intensity = c.Intensity,
-                };
-            }
-            var res = _renderer.SetPointLights(_pointBuf.AsSpan(0, count));
-            KernelException.ThrowIfFailed(res, nameof(_renderer.SetPointLights));
+                Position = pos,
+                Radius = c.Radius,
+                Color = new Vector3(c.R, c.G, c.B),
+                Intensity = c.Intensity,
+            });
         }
 
-        // ── Spot lights ────────────────────────────────────────────────────────
-        if (SpotLightNode.ComponentId != uint.MaxValue)
+        // ── Spot ───────────────────────────────────────────────────────────────
+        var spotLights = registry.Query<SpotLightComponent>(_spotCid);
+        for (int i = 0; i < spotLights.Length; i++)
         {
-            var (entities, comps) = world.Registry.Query<SpotLightComponent>(SpotLightNode.ComponentId);
-            int count = Math.Min(entities.Length, _spotBuf.Length);
-            for (int i = 0; i < count; i++)
+            var c = spotLights.Data[i];
+            var pos = ReadPosition(registry, spotLights.Entities[i]);
+            packet.AddSpotLight(new SpotLight
             {
-                var tc = world.Registry.GetComponent<TransformComponent>(entities[i], world.TransformComponentId);
-                ref readonly var c = ref comps[i];
-                _spotBuf[i] = new ke_spot_light
-                {
-                    pos_x       = tc != null ? tc->WorldMatrix.M41 : 0f,
-                    pos_y       = tc != null ? tc->WorldMatrix.M42 : 0f,
-                    pos_z       = tc != null ? tc->WorldMatrix.M43 : 0f,
-                    range       = c.Range,
-                    dir_x       = c.DirX,
-                    dir_y       = c.DirY,
-                    dir_z       = c.DirZ,
-                    inner_angle = c.InnerAngle,
-                    r           = c.R,
-                    g           = c.G,
-                    b           = c.B,
-                    intensity   = c.Intensity,
-                    outer_angle = c.OuterAngle,
-                };
-            }
-            var res = _renderer.SetSpotLights(_spotBuf.AsSpan(0, count));
-            KernelException.ThrowIfFailed(res, nameof(_renderer.SetSpotLights));
+                Position = pos,
+                Range = c.Range,
+                Direction = new Vector3(c.DirX, c.DirY, c.DirZ),
+                InnerAngle = c.InnerAngle,
+                OuterAngle = c.OuterAngle,
+                Color = new Vector3(c.R, c.G, c.B),
+                Intensity = c.Intensity,
+            });
         }
     }
+
+    private Vector3 ReadPosition(IEcsRegistry registry, ulong entity)
+    {
+        var slot = registry.GetComponent<TransformComponent>(entity, _transformCid);
+        return slot.IsEmpty ? Vector3.Zero : slot[0].Position;
+    }
+
+    public ComponentAccess GetAccess() => new()
+    {
+        Reads = [_lightCid, _pointCid, _spotCid, _transformCid],
+        Writes = []
+    };
 }

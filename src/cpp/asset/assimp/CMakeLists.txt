@@ -1,7 +1,7 @@
 add_library(ke_asset_assimp
-    src/AssimpLoader.cpp
-    src/AssimpConverter.cpp
-    src/TextureDecoder.cpp
+    src/assimp_loader.cpp
+    src/assimp_converter.cpp
+    src/texture_decoder.cpp
 )
 
 get_target_property(target_type ke_asset_assimp TYPE)

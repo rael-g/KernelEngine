@@ -10,28 +10,34 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddMessagePipe()
     .AddGlfwWindow(1280, 720, "KernelEngine — 03 PBR Directional")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
 
-app.OnReady = () =>
+// PBR params logged at startup
+const float metal0 = 0.0f; const float rough0 = 0.8f;
+const float metal1 = 1.0f; const float rough1 = 0.1f;
+const float metal2 = 0.5f; const float rough2 = 0.5f;
+
+int entityCount = 0;
+
+app.OnReady = (resources) =>
 {
-    app.Renderer.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
+    Console.WriteLine("[KernelEngine] Example: 03_pbr_directional");
+    Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+    Console.WriteLine("[KernelEngine] Features: pbr_ggx, directional_light, orbiting_light");
+    Console.WriteLine($"[KernelEngine] PBR materials: " +
+        $"dielectric(m={metal0:F1} r={rough0:F1})  " +
+        $"metal(m={metal1:F1} r={rough1:F1})  " +
+        $"mixed(m={metal2:F1} r={rough2:F1})");
 
-    // ── Lights ──────────────────────────────────────────────────────────────
-    app.ActiveWorld.Scene.AddNode(
-        new LightNode
-        {
-            Direction = Vector3.Normalize(new Vector3(0.5f, 1.0f, 0.3f)),
-            Color     = Vector3.One,
-            Intensity = 2.0f,
-        },
+    var light = app.Scene.AddNode(
+        new OrbitingLightNode { Color = Vector3.One, Intensity = 3.0f },
         "Sun");
+    entityCount++;
 
-    // ── Camera ──────────────────────────────────────────────────────────────
-    var cam = app.ActiveWorld.Scene.AddNode(
+    var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -39,46 +45,72 @@ app.OnReady = () =>
         Position = new Vector3(0f, 1.0f, 5.0f),
     };
     app.ActiveWorld.ActiveCamera = cam.Entity;
+    entityCount++;
 
-    // ── Materials ───────────────────────────────────────────────────────────
-    var mat1 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 0.0f, roughness: 0.8f).Value;
-    var mat2 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 1.0f, roughness: 0.1f).Value;
-    var mat3 = app.Renderer.CreateMaterial(1f, 1f, 1f, 1f, metallic: 0.5f, roughness: 0.5f).Value;
+    var mat0 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal0, roughness: rough0);
+    var mat1 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal1, roughness: rough1);
+    var mat2 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal2, roughness: rough2);
 
-    // ── Meshes (handle 0 = built-in unit quad) ──────────────────────────────
-    var node1 = app.ActiveWorld.Scene.AddNode(
-        new MeshNode { MaterialHandle = mat1 },
-        "QuadDielectric");
-    node1.LocalTransform = node1.LocalTransform with { Position = new Vector3(-2.0f, 0f, 0f) };
+    var n0 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat0 }, "QuadDielectric");
+    n0.LocalTransform = n0.LocalTransform with { Position = new Vector3(-2f, 0f, 0f) };
+    entityCount++;
 
-    var node2 = app.ActiveWorld.Scene.AddNode(
-        new MeshNode { MaterialHandle = mat2 },
-        "QuadMetal");
-    node2.LocalTransform = node2.LocalTransform with { Position = new Vector3(0f, 0f, 0f) };
+    var n1 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat1 }, "QuadMetal");
+    entityCount++;
 
-    var node3 = app.ActiveWorld.Scene.AddNode(
-        new MeshNode { MaterialHandle = mat3 },
-        "QuadMixed");
-    node3.LocalTransform = node3.LocalTransform with { Position = new Vector3(2.0f, 0f, 0f) };
+    var n2 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat2 }, "QuadMixed");
+    n2.LocalTransform = n2.LocalTransform with { Position = new Vector3(2f, 0f, 0f) };
+    entityCount++;
 };
 
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = () =>
+app.OnUpdate = (scene, input) =>
 {
-    // Background padrão (0.05, 0.05, 0.05, 1.0)
-    var res = app.Renderer.ClearColor(0.05f, 0.05f, 0.05f, 1f);
-    KernelException.ThrowIfFailed(res, nameof(app.Renderer.ClearColor));
+    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)
     {
         double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[Example 03] FPS: {fps:F2}");
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Entities: {entityCount}  Lights: 0p 0s 1d");
         frameCount = 0;
         sw.Restart();
     }
 };
 
 app.Run(services);
+
+// ── Orbiting directional light ────────────────────────────────────────────────
+
+sealed class OrbitingLightNode : Node
+{
+    public Vector3 Color     { get; init; } = Vector3.One;
+    public float   Intensity { get; init; } = 3f;
+
+    private float _angle;
+
+    protected override void OnStart()
+    {
+        if (LightNode.ComponentId == uint.MaxValue) return;
+        var dir = CurrentDir();
+        var comp = AddComponent<LightComponent>(LightNode.ComponentId);
+        comp[0] = new LightComponent { DirX = dir.X, DirY = dir.Y, DirZ = dir.Z,
+                                    R = Color.X, G = Color.Y, B = Color.Z,
+                                    Intensity = Intensity };
+    }
+
+    protected override unsafe void OnUpdate(float dt)
+    {
+        _angle += 60f * dt * MathF.PI / 180f;
+        var dir = CurrentDir();
+        var comp = GetComponent<LightComponent>(LightNode.ComponentId);
+        comp[0].DirX = dir.X;
+        comp[0].DirY = dir.Y;
+        comp[0].DirZ = dir.Z;
+    }
+
+    private Vector3 CurrentDir() =>
+        Vector3.Normalize(new Vector3(MathF.Sin(_angle), 1f, MathF.Cos(_angle)));
+}
