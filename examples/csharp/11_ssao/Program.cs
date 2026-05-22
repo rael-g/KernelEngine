@@ -46,7 +46,12 @@ app.OnReady = (resources) =>
     var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
-    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(5f, 5f, 5f) };
+    // The camera looks down its local -Z (no CameraNode.LookAt helper yet — framework gap).
+    // Orient it manually toward the cube wall for a 3/4 angle that frames wall + floor + SSAO.
+    var eye = new Vector3(6f, 5f, 9f);
+    var lookRot = Quaternion.CreateFromRotationMatrix(
+        Matrix4x4.CreateWorld(eye, Vector3.Normalize(new Vector3(0f, 2f, 0f) - eye), Vector3.UnitY));
+    cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Materials
@@ -87,9 +92,10 @@ app.OnReady = (resources) =>
 app.OnUpdate = (scene, input) =>
 {
     scene.ClearColor(0.2f, 0.2f, 0.2f, 1f);
-    scene.SetAmbientLight(0.05f, 0.05f, 0.05f);
-    
-    // Enable Post-FX
+    scene.SetAmbientLight(0.3f, 0.3f, 0.3f);
+    // NOTE: SSAO is currently a NO-OP — PostProcessPipeline::SetupSsao is an unimplemented stub,
+    // so no ambient-occlusion is produced. Until it's implemented, the contact darkening visible
+    // here is the directional SHADOW MAP, not SSAO. (Tracked: Kanban OBS.4.)
     scene.SetSsao(true, radius: 0.5f, bias: 0.025f, strength: 2.0f);
 };
 
