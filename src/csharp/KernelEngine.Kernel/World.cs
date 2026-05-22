@@ -96,6 +96,13 @@ public sealed unsafe class World : IWorld
         _schedulerDirty = true;
     }
 
+    /// <inheritdoc/>
+    public void RegisterScript(ulong entity, Action onStart, Action<float> onUpdate) =>
+        ScriptBridge.Register(Registry, ScriptComponentId, entity, onStart, onUpdate);
+
+    /// <inheritdoc/>
+    public void UnregisterScript(ulong entity) => ScriptBridge.Unregister(entity);
+
     /// <summary>Registers a native system descriptor into the world.</summary>
     public void AddSystem(ke_system_params desc)
     {

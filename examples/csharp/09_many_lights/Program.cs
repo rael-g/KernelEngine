@@ -103,7 +103,7 @@ sealed class RandomMovingLightNode : Node
         };
     }
 
-    protected override unsafe void OnUpdate(float dt)
+    protected override void OnUpdate(float dt)
     {
         _time += dt * Speed;
         

@@ -29,7 +29,6 @@ public sealed class CameraRenderSystem : ISystem
         var cameras = registry.Query<CameraComponent>(_cameraCid);
         if (cameras.Length == 0) return;
 
-        // ECS storage read requires a pointer; keep the unsafe scope minimal.
         TransformComponent transform;
         { var slot = registry.GetComponent<TransformComponent>(cameras.Entities[0], _transformCid); if (slot.IsEmpty) return; transform = slot[0]; }
 

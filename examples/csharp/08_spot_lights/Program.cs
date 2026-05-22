@@ -106,7 +106,7 @@ sealed class RotatingSpotLightNode : Node
         };
     }
 
-    protected override unsafe void OnUpdate(float dt)
+    protected override void OnUpdate(float dt)
     {
         _time += dt;
         float x = MathF.Cos(_time + Offset) * 8.0f;

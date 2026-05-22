@@ -19,6 +19,17 @@ public interface IWorld : IDisposable
     /// <summary>Registers a managed system. Systems run once per frame after the built-in C systems.</summary>
     void AddSystem(ISystem system);
 
+    /// <summary>
+    /// Registers managed per-frame callbacks for an entity, driven by the built-in C ScriptSystem.
+    /// <paramref name="onStart"/> runs once before the first update; <paramref name="onUpdate"/> runs
+    /// each frame with the delta time. The function-pointer plumbing is handled internally — callers
+    /// pass plain delegates and stay free of <c>unsafe</c>.
+    /// </summary>
+    void RegisterScript(ulong entity, Action onStart, Action<float> onUpdate);
+
+    /// <summary>Removes previously-registered script callbacks for an entity (call on destruction).</summary>
+    void UnregisterScript(ulong entity);
+
     /// <summary>Advances the simulation by one frame.</summary>
     Result Update(IFramePacket? packet = null, IInputReader? input = null);
 }

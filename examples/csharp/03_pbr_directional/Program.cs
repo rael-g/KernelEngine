@@ -101,7 +101,7 @@ sealed class OrbitingLightNode : Node
                                     Intensity = Intensity };
     }
 
-    protected override unsafe void OnUpdate(float dt)
+    protected override void OnUpdate(float dt)
     {
         _angle += 60f * dt * MathF.PI / 180f;
         var dir = CurrentDir();

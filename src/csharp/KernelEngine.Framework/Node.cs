@@ -1,6 +1,4 @@
 using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework;
@@ -12,9 +10,9 @@ namespace KernelEngine.Framework;
 /// The entity is created by the world; transform and hierarchy live in ECS components.
 /// </para>
 /// </summary>
-public unsafe class Node
+public class Node
 {
-    // Entity → managed Node, used by the [UnmanagedCallersOnly] script callbacks.
+    // Entity → managed Node, used for hierarchy navigation (Parent/FirstChild/NextSibling).
     private static readonly Dictionary<ulong, Node> s_registry = [];
 
     private ulong _entity;
@@ -43,21 +41,15 @@ public unsafe class Node
     }
 
     /// <summary>
-    /// Adds a <see cref="ScriptComponent"/> to the ECS entity so the C ScriptSystem
-    /// will call <see cref="OnStart"/> and <see cref="OnUpdate"/> each frame.
+    /// Wires this node's <see cref="OnStart"/>/<see cref="OnUpdate"/> into the built-in C ScriptSystem
+    /// via the world's managed registration API. No <c>unsafe</c> here — the function-pointer plumbing
+    /// lives in the kernel concrete (<c>ScriptBridge</c>).
     /// </summary>
     internal void RegisterScript()
     {
         if (_world == null) return;
         s_registry[_entity] = this;
-
-        var script = _world.Registry.AddComponent<ScriptComponent>(_entity, _world.ScriptComponentId);
-        script[0] = new ScriptComponent
-        {
-            Started = 0,
-            OnStart = &NativeOnStart,
-            OnUpdate = &NativeOnUpdate,
-        };
+        _world.RegisterScript(_entity, OnStart, OnUpdate);
     }
 
     // ── Identity ──────────────────────────────────────────────────────────────
@@ -175,22 +167,4 @@ public unsafe class Node
     internal static void Unregister(ulong entity) => s_registry.Remove(entity);
 
     internal static void ClearRegistry() => s_registry.Clear();
-
-    // ── Unmanaged callbacks (called by the C ScriptSystem) ────────────────────
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    internal static KernelResult NativeOnStart(ulong entity)
-    {
-        if (s_registry.TryGetValue(entity, out var node))
-            node.OnStart();
-        return KernelResult.Ok;
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    internal static KernelResult NativeOnUpdate(ulong entity, float dt)
-    {
-        if (s_registry.TryGetValue(entity, out var node))
-            node.OnUpdate(dt);
-        return KernelResult.Ok;
-    }
 }

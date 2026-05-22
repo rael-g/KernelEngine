@@ -62,6 +62,7 @@ public sealed class Scene
     /// </summary>
     public void DestroyNode(Node node)
     {
+        _world.UnregisterScript(node.Entity);
         Node.Unregister(node.Entity);
         DestroyEntityRecursive(node.Entity);
     }
