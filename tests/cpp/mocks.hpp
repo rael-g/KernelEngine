@@ -14,6 +14,7 @@ public:
     MOCK_METHOD(void, Shutdown, (), (override));
     MOCK_METHOD(uint32_t, Frame, (bool capture), (override));
     MOCK_METHOD(const char*, GetShaderSubdir, (), (const, override));
+    MOCK_METHOD(GpuNdcConvention, GetNdcConvention, (), (const, override));
     MOCK_METHOD(const GpuMemoryBuffer*, Alloc, (uint32_t size), (override));
     MOCK_METHOD(const GpuMemoryBuffer*, Copy, (const void* data, uint32_t size), (override));
     MOCK_METHOD(const GpuMemoryBuffer*, MakeRef, (const void* data, uint32_t size), (override));

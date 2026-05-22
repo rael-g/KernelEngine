@@ -96,6 +96,15 @@ public sealed unsafe class Renderer : IRenderer
         return _native->set_view_transform(_native, &v, &p).Wrap();
     }
 
+    /// <inheritdoc/>
+    [RequiresThread("ke.render")]
+    public NdcConvention GetNdcConvention()
+    {
+        KernelThread.AssertCurrent("ke.render");
+        var c = _native->get_ndc_convention(_native);
+        return new NdcConvention(c.z_zero_to_one != 0, c.y_flip != 0, c.left_handed != 0);
+    }
+
     /// <summary>Uploads geometry to the GPU and returns a stable mesh handle.</summary>
     [RequiresThread("ke.render")]
     public Result<MeshHandle> CreateMesh(Vertex[] vertices, ushort[] indices)

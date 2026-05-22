@@ -58,6 +58,15 @@ enum class GpuAccess : uint8_t
     ReadWrite
 };
 
+// ── Clip-space (NDC) convention the backend expects matrices in ──────────────
+
+struct GpuNdcConvention
+{
+    bool z_zero_to_one; // true = clip z in [0,1] (Vulkan/D3D), false = [-1,1] (OpenGL)
+    bool y_flip;        // true = projection must flip Y for this backend's framebuffer origin
+    bool left_handed;   // true = left-handed clip space
+};
+
 // ── Render state / clear flags (backend-agnostic, semantic) ──────────────────
 // These are NOT bgfx bit values. The active backend translates them to its own
 // encoding (e.g. BGFX_STATE_*/BGFX_CLEAR_*), so render-core stays backend-neutral.

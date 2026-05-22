@@ -55,6 +55,9 @@ public:
     /// Valid only after Init() succeeds.
     virtual const char* GetShaderSubdir() const = 0;
 
+    /// Returns the clip-space (NDC) convention this backend expects matrices in. Valid after Init().
+    virtual GpuNdcConvention GetNdcConvention() const = 0;
+
     // ── Memory Management ────────────────────────────────────────────────────
     virtual const GpuMemoryBuffer* Alloc(uint32_t size) = 0;
     virtual const GpuMemoryBuffer* Copy(const void* data, uint32_t size) = 0;

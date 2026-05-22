@@ -17,6 +17,7 @@ public:
     void Shutdown() override;
     uint32_t Frame(bool capture) override;
     const char* GetShaderSubdir() const override;
+    GpuNdcConvention GetNdcConvention() const override;
 
     const GpuMemoryBuffer* Alloc(uint32_t size) override;
     const GpuMemoryBuffer* Copy(const void* data, uint32_t size) override;

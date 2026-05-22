@@ -43,8 +43,12 @@ public sealed class ShadowRenderSystem : ISystem
 
         var l = lights.Data[0];
         var eye = new Vector3(l.DirX * 25f, l.DirY * 25f, l.DirZ * 25f);
-        var view = Mat4.LookAt(eye, Vector3.Zero, Vector3.UnitY);
-        var proj = Mat4.Ortho(-20f, 20f, -20f, 20f, 0.1f, 50f);
+        // Engine view convention: forward = +(target - eye). System.Numerics' CreateLookAt uses the
+        // opposite (zaxis = eye - target), which misaligns with the camera view (inverse of the
+        // kernel world matrix) and breaks the shadow — so the basis is built explicitly. Written
+        // straight into column-major ke_mat4 slots; the packet blits verbatim.
+        var view = ViewProjection.LookAt(eye, Vector3.Zero, Vector3.UnitY);
+        var proj = ViewProjection.Ortho(-20f, 20f, -20f, 20f, 0.1f, 50f);
         packet.SetShadow(_shadowMap, view, proj);
 
         // ── Shadow casters ─────────────────────────────────────────────────────

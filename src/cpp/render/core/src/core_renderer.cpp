@@ -83,6 +83,16 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->SetViewTransform(view, proj);
     };
+    render_api_.get_ndc_convention = [](ke_render *self) -> ke_ndc_convention {
+        ke_ndc_convention out{ 1, 0, 0 }; // safe default: Vulkan-style [0,1], RH, no Y-flip
+        if (!self || !self->handle) return out;
+        auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
+        GpuNdcConvention c = renderer_impl->ctx_.gpu->GetNdcConvention();
+        out.z_zero_to_one = c.z_zero_to_one ? 1 : 0;
+        out.y_flip        = c.y_flip ? 1 : 0;
+        out.left_handed   = c.left_handed ? 1 : 0;
+        return out;
+    };
     render_api_.create_texture_rgba = [](ke_render *self, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);

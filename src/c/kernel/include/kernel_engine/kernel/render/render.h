@@ -20,6 +20,16 @@ extern "C"
 
 #define KE_ID_RENDER "ke_render"
 
+    /// @brief Clip-space (NDC) convention the active render backend expects matrices in.
+    /// The engine's matrix builders query this and build accordingly, so the same game code
+    /// produces correct projections across backends (Vulkan/D3D vs OpenGL, etc.).
+    typedef struct ke_ndc_convention
+    {
+        ke_bool z_zero_to_one; ///< 1 = clip z in [0,1] (Vulkan/D3D), 0 = [-1,1] (OpenGL).
+        ke_bool y_flip;        ///< 1 = framebuffer origin top-left needs Y flip in projection.
+        ke_bool left_handed;   ///< 1 = left-handed clip space, 0 = right-handed.
+    } ke_ndc_convention;
+
     /// @brief Configuration for the Clustered Forward Shading grid.
     typedef struct ke_cluster_config
     {
@@ -44,6 +54,10 @@ extern "C"
 
         ke_result (*frame)(struct ke_render *self);
         ke_result (*set_view_transform)(struct ke_render *self, const ke_mat4 *view, const ke_mat4 *proj);
+
+        /// @brief Returns the clip-space convention this backend expects matrices in.
+        /// Valid after on_initialize. The engine's matrix builders use it so projections are correct per backend.
+        ke_ndc_convention (*get_ndc_convention)(struct ke_render *self);
 
         ke_result (*create_mesh)(struct ke_render *self,
                                  const ke_vertex *vertices, uint32_t vertex_count,

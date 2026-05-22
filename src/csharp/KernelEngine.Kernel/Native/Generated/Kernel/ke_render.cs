@@ -25,6 +25,9 @@ public unsafe partial struct ke_render
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_mat4 *, const ke_mat4 *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_mat4*, ke_mat4*, ke_result> set_view_transform;
 
+    [NativeTypeName("ke_ndc_convention (*)(struct ke_render *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_ndc_convention> get_ndc_convention;
+
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_vertex *, uint32_t, const uint16_t *, uint32_t, ke_mesh_handle *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_vertex*, uint, ushort*, uint, ke_mesh_handle*, ke_result> create_mesh;
 

@@ -224,6 +224,20 @@ const char* BgfxGpuDevice::GetShaderSubdir() const
     }
 }
 
+GpuNdcConvention BgfxGpuDevice::GetNdcConvention() const
+{
+    ke_thread_assert_current("ke.render");
+    const ::bgfx::Caps* caps = ::bgfx::getCaps();
+    GpuNdcConvention conv{};
+    // homogeneousDepth = true → clip z in [-1,1] (OpenGL); false → [0,1] (Vulkan/D3D).
+    conv.z_zero_to_one = caps ? !caps->homogeneousDepth : true;
+    // Our projection builders are right-handed and don't flip Y (bgfx abstracts framebuffer
+    // origin per backend), matching the current hand-tuned matrices.
+    conv.y_flip      = false;
+    conv.left_handed = false;
+    return conv;
+}
+
 
 const GpuMemoryBuffer* BgfxGpuDevice::Alloc(uint32_t size)
 {

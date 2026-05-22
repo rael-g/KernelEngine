@@ -123,6 +123,9 @@ public class Application : IDisposable
             {
                 Logger?.Info("Application", "ke.render: initializing renderer");
                 Renderer.Initialize();
+                // Capture the backend's clip-space convention so the matrix builders target it.
+                // Set before ke.sim's first frame (which happens after renderReady below).
+                Internal.ViewProjection.SetConvention(Renderer.GetNdcConvention());
                 Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
 
                 // Create the shadow map on ke.render (GPU creation requires this thread).

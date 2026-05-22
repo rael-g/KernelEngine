@@ -1,3 +1,4 @@
+using System.Numerics;
 using KernelEngine.Framework.Internal;
 using KernelEngine.Kernel;
 
@@ -5,8 +6,9 @@ namespace KernelEngine.Framework;
 
 /// <summary>
 /// Pure-managed render system that extracts camera state from the ECS and publishes it into the
-/// frame packet via the safe <see cref="IFramePacket.SetCamera"/> API. Math is column-major
-/// (matches <c>ke_mat4</c>, right-handed, Vulkan depth [0,1]).
+/// frame packet via the safe <see cref="IFramePacket.SetCamera"/> API. The view matrix is the
+/// inverse of the camera's world transform (System.Numerics); the projection is built in the active
+/// backend's NDC convention by <see cref="Projection"/>.
 /// </summary>
 public sealed class CameraRenderSystem : ISystem
 {
@@ -33,10 +35,12 @@ public sealed class CameraRenderSystem : ISystem
         { var slot = registry.GetComponent<TransformComponent>(cameras.Entities[0], _transformCid); if (slot.IsEmpty) return; transform = slot[0]; }
 
         var cam = cameras.Data[0];
-        var view = Mat4.InvertTrs(transform.WorldMatrix);
+        // WorldMatrix carries column-major ke_mat4 bytes; inverting it (treated as the .NET-side
+        // transpose) yields the column-major view directly — the double transpose cancels.
+        var view = Matrix4x4.Invert(transform.WorldMatrix, out var inv) ? inv : Matrix4x4.Identity;
         var proj = cam.Orthographic != 0
-            ? Mat4.Ortho(-Aspect * 10f, Aspect * 10f, -10f, 10f, cam.Near, cam.Far)
-            : Mat4.Perspective(cam.Fov, Aspect, cam.Near, cam.Far);
+            ? ViewProjection.Ortho(-Aspect * 10f, Aspect * 10f, -10f, 10f, cam.Near, cam.Far)
+            : ViewProjection.Perspective(cam.Fov, Aspect, cam.Near, cam.Far);
 
         packet.SetCamera(view, proj, transform.Position);
     }

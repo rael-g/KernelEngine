@@ -65,9 +65,10 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 > Goal: lift coverage from 30.8% to **≥ 60%** in critical paths. Currently render/threading/Application = 0%. Any change to these is currently unsafe.
 
-##### [B2.1] Unit tests for threading primitives (`KeThread`, `KeFrameSync`, `KeSemaphore`)
+##### [B2.1] Unit tests for threading primitives (`KeThread`, `KeFrameSync`, `KeSemaphore`) — ✅ DONE (already covered; verified 2026-05-22)
 - **Tags**: `test`
-- **Why**: 0% coverage today. Bug 1.24 (thread name use-after-free) shipped because no test guarded it.
+- **Status**: the "0% coverage" premise was **stale**. `tests/cpp/test_threading.cpp` already covers the card's scope: Thread create/join + `join_timeout` (timeout & success) + TLS-name (guards Bug 1.24); Semaphore signal/wait + counting; FrameSync handoff (producer/consumer) + blocking. All run green in ctest (part of the 179 C++ tests).
+- **Remaining (minor, optional)**: a dedicated stress/race harness (many producers/consumers) if we ever want >80% confidence under contention; not needed for the gate.
 - **What**: xUnit/gtest tests for thread create/join/timeout, semaphore signal/wait, frame_sync producer/consumer.
 - **Acceptance**: ≥ 80% line coverage on `src/cpp/threading/src/`. Race-condition test harness for cross-thread scenarios.
 - **Effort**: M (1–2 days).
@@ -242,17 +243,18 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 - **Tags**: `refactor`, `bug` (Bug 1.52)
 - **Why**: Extension method `ResourceFactoryExtensions.CreateMeshAsync` requires `Queue` public, leaking the dispatch mechanism.
 
-##### [B5.8] Math = user's library + runtime convention adapter (ADR-10)
+##### [B5.8] Math = user's library; engine builds matrices in backend-declared NDC convention (ADR-10, revised) — ✅ DONE (2026-05-22)
+- **Outcome**: dead C ops deleted (`math.h` keeps types + `from_transform`/`mul`); `ke_render.get_ndc_convention()` capability added + bgfx impl (reads `caps.homogeneousDepth`); `Mat4.cs` deleted → `Framework/Internal/ViewProjection.cs` (the explicit convention adapter: projection in backend NDC + RH `LookAt`) + System.Numerics for invert/vector math; `Application` captures the convention at init. Shadow validated visually after fixing the lookat handedness (System.Numerics `CreateLookAt` flips forward). 179 C++ + 80 C# tests green.
 - **Tags**: `refactor`, `feat` (architecture)
-- **Why**: Two hand-rolled math copies kept in sync by hand — kernel `math.h` (`static inline ke_mat4_*`) and the C# `Framework/Internal/Mat4.cs` (`unsafe`). Same conventions duplicated (column-major, RH, Vulkan [0,1], `ke_mat4_mul == b·a`); this drift class produced the shadow lightVP bug. GLM is already a vcpkg dep but unused. Decision recorded in **ADR-10** ([12 - Architecture Backlog & Decisions](Reference/12%20-%20Architecture%20Backlog%20%26%20Decisions.md)).
+- **Why**: Freedom philosophy — anyone can use any math lib, and a fork can ship any render backend. The real problem isn't "convert the user's matrix": the user passes **convention-neutral data** (pos/rot/scale, fov/near/far), so math-lib freedom already works with zero infra. The real problem is the engine's matrix **builders** (`Mat4.Perspective/Ortho`) **hardcode Vulkan [0,1]** → a forked OpenGL/D3D backend (z[-1,1], Y-flip) gets wrong projection/view. Full reasoning + the rejected matrix-adapter shape in **ADR-10** ([12 - Architecture Backlog & Decisions](Reference/12%20-%20Architecture%20Backlog%20%26%20Decisions.md)).
 - **What**:
-    1. Delete hand-rolled operations: `math.h` keeps only the ABI **types** (`ke_vec3/vec4/quat/mat4/transform`); C++ math uses **GLM**. `Mat4.cs` deleted; C# uses **System.Numerics**.
-    2. Kernel defines `ke_math_convention { handedness, z_range, y_down, column_major }`.
-    3. Source convention declared at runtime by the matrix producer (Framework config); target convention exposed by the active backend via `ke_render.get_math_convention()` (bgfx reads `caps.homogeneousDepth` etc.).
-    4. Boundary adapter `convert(in ke_mat4, src, dst)` — pure function, identity when equal; reconciles transpose / Y-flip / depth-range. `src`/`dst` cached at init; per-matrix is a predicted branch, **no vtable, not on the math hot path**.
-- **Acceptance**: no `ke_mat4_*` operation functions remain (only types); no `Mat4.cs`; swapping the backend changes the target convention with zero game-code change; examples render identically before/after.
-- **Note**: **NOT required to remove `unsafe`** from Framework (B5.1) — that only needs `Mat4.cs` de-pointered. This card is the deeper, dedicated effort; do separately.
-- **Effort**: M–L (touches C, C++, C#; convention reconciliation is small but delicate + must be visually validated).
+    1. **Delete dead C ops** (0 callers, verified): `ke_mat4_identity/_inv/_proj/_lookat/_ortho` in `math.h`. Keep the live internal helpers `ke_mat4_from_transform` + `ke_mat4_mul` (C TransformSystem in `world.c` — C, not C++, so GLM doesn't apply; document `mul == b·a`). Keep all `ke_*` ABI types.
+    2. **Backend declares its NDC convention as a capability**: add `get_ndc_convention()` to the `ke_render` vtable → `{ z_range, y_flip, handedness }`. bgfx implements it (reads `caps.homogeneousDepth`).
+    3. **Framework matrix builders consume it**: `Mat4.Perspective/Ortho/LookAt` build directly in the active backend's convention instead of hardcoding Vulkan. `Mat4.cs` stays (already de-pointered) — it becomes the single place that honors the capability.
+    4. **No** `ke_math_convention` matrix-convert adapter / `convert()` — wrong shape (no foreign matrix crosses the boundary). Optional future: a per-input convention tag *if* we ever expose raw user-supplied view/proj matrices.
+- **Acceptance**: dead `ke_mat4_*` ops gone; `ke_render.get_ndc_convention()` exists + bgfx implements; `Mat4.cs` builds from the capability (no hardcoded Vulkan constants); a (hypothetical) backend declaring `z_range=minus-one-to-one` would get a correct projection without touching game code or `Mat4.cs`; all examples render identically with bgfx.
+- **Note**: not required for B5.1 (unsafe) — already done. The math-lib freedom (System.Numerics/GLM) needs **no** code — it already holds via the neutral-data boundary.
+- **Effort**: M (delete dead ops = trivial; add capability to vtable + bgfx + wire 3 builders; visually validate).
 
 ##### [B5.6] Asset pipeline assembly — `IAssetLoader` + `IModel` abstractions
 - **Tags**: `refactor`, `feat` (architecture)

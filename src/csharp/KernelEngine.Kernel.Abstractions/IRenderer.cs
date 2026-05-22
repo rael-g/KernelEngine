@@ -21,6 +21,9 @@ public interface IRenderer : IDisposable
     Result SetOrthographic(bool enabled);
     Result SetViewTransform(Matrix4x4 view, Matrix4x4 proj);
 
+    /// <summary>The clip-space convention this backend expects matrices in. Valid after <see cref="Initialize"/>.</summary>
+    NdcConvention GetNdcConvention();
+
     Result<MeshHandle> CreateMesh(Vertex[] vertices, ushort[] indices);
     Result DestroyMesh(MeshHandle handle);
 
