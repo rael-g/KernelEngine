@@ -5,6 +5,7 @@
 #include "texture_manager.hpp"
 #include "shader_provider.hpp"
 #include "gpu_device.hpp"
+#include "view_ids.hpp"
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -122,29 +123,25 @@ void PostProcessPipeline::SubmitPostProcess(RenderContext& ctx, GeometryManager&
 {
     if (!ctx.gpu || !pp_enabled_ || hdr_fb_ == kGpuInvalidHandle) return;
 
-    // BGFX view layout (per project memory):
-    // 1=SCENE (HDR), 3=BRIGHT, 4=BLUR_H, 5=BLUR_V, 6=TONEMAP composite → backbuffer
-    constexpr uint8_t kBrightView   = 3;
-    constexpr uint8_t kBlurHView    = 4;
-    constexpr uint8_t kBlurVView    = 5;
-    constexpr uint8_t kTonemapView  = 6;
+    const uint8_t kBrightView  = (uint8_t)Id(ViewId::BrightPass);
+    const uint8_t kBlurHView   = (uint8_t)Id(ViewId::BlurH);
+    const uint8_t kBlurVView   = (uint8_t)Id(ViewId::BlurV);
+    const uint8_t kTonemapView = (uint8_t)Id(ViewId::Tonemap);
 
     GpuTextureHandle hdr_color_tex = ctx.gpu->GetTexture(hdr_fb_, 0);
 
     auto submit_fs = [&](uint8_t view, GpuFrameBufferHandle fb, int w, int h, GpuProgramHandle prog) {
         if (fb != kGpuInvalidHandle) {
             ctx.gpu->SetViewFrameBuffer(view, fb);
-            ctx.gpu->SetViewClear(view, 0x0001, 0x000000ff, 1.0f, 0); // CLEAR_COLOR
+            ctx.gpu->SetViewClear(view, GpuClearFlags::Color, 0x000000ff, 1.0f, 0);
         } else {
             ctx.gpu->SetViewFrameBuffer(view, kGpuInvalidHandle);
-            ctx.gpu->SetViewClear(view, 0, 0, 0, 0); // CLEAR_NONE
+            ctx.gpu->SetViewClear(view, GpuClearFlags::None, 0, 0, 0);
         }
         ctx.gpu->SetViewRect(view, 0, 0, (uint16_t)w, (uint16_t)h);
         ctx.gpu->SetVertexBuffer(0, geom.fullscreen_vb);
         ctx.gpu->SetIndexBufferStatic(geom.fullscreen_ib);
-        // BGFX_STATE_WRITE_R|G|B|A = 0x0F. Previous mask was 0x01|0x08 (only R+A), which
-        // left G and B unwritten → all output looked red.
-        ctx.gpu->SetState(0x000000000000000FULL, 0);
+        ctx.gpu->SetState(GpuStateFlags::WriteRgba, 0);
         ctx.gpu->Submit(view, prog, 0, false);
     };
 

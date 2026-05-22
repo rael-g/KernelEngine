@@ -6,6 +6,7 @@
 #include "shadow_pipeline.hpp"
 #include "post_process_pipeline.hpp"
 #include "gpu_device.hpp"
+#include "view_ids.hpp"
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
 #include <kernel_engine/threading/threading.h>
@@ -34,7 +35,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
                            (uint32_t(packet.clear_color[1] * 255.0F) << 16) |
                            (uint32_t(packet.clear_color[2] * 255.0F) << 8)  |
                            (uint32_t(packet.clear_color[3] * 255.0F));
-    ctx.gpu->SetViewClear(1 /*SCENE*/, 0x0001 | 0x0002, clear_color, 1.0f, 0);
+    ctx.gpu->SetViewClear(Id(ViewId::Scene), GpuClearFlags::Color | GpuClearFlags::Depth, clear_color, 1.0f, 0);
 
     lighting.SetAmbientLight(packet.ambient_light[0], packet.ambient_light[1], packet.ambient_light[2]);
 
@@ -84,7 +85,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     }
 
     // ── 3. Scene View Transform ──────────────────────────────────────────────
-    ctx.gpu->SetViewTransform(1 /*SCENE*/, packet.camera.view.m, packet.camera.proj.m);
+    ctx.gpu->SetViewTransform(Id(ViewId::Scene), packet.camera.view.m, packet.camera.proj.m);
 
     // ── 4. Skybox Pass ───────────────────────────────────────────────────────
     GpuTextureHandle env_tex = textures.default_cube_tex;
@@ -143,9 +144,9 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         ctx.gpu->SetTransform(cmd.transform.m, 1);
         ctx.gpu->SetVertexBuffer(0, entry.vb);
         ctx.gpu->SetIndexBufferStatic(entry.ib);
-        // WRITE_RGBA | WRITE_Z | DEPTH_TEST_LESS | MSAA — no cull (meshes are two-sided)
-        ctx.gpu->SetState(UINT64_C(0x010000400000001F), 0);
-        ctx.gpu->Submit(1 /*SCENE*/, main_program, 0, false);
+        // no cull (meshes are two-sided)
+        ctx.gpu->SetState(GpuStateFlags::WriteRgba | GpuStateFlags::WriteZ | GpuStateFlags::DepthTestLess | GpuStateFlags::Msaa, 0);
+        ctx.gpu->Submit(Id(ViewId::Scene), main_program, 0, false);
     }
 
     return KE_OK;

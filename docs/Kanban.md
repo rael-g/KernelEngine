@@ -122,7 +122,8 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 - **Acceptance**: Tracy connects to a running example, shows 3-thread timeline, system names visible per wave.
 - **Effort**: M (1–2 days). Tracy is mature, integration is mostly include + zone macros.
 
-##### [B4.2] Named constants for bgfx state bits + view IDs (replace magic numbers)
+##### [B4.2] Named constants for bgfx state bits + view IDs (replace magic numbers) — ✅ DONE (2026-05-22)
+- **Resolution**: done the *correct* way (not the literal card). The magic numbers weren't just unreadable — the agnostic `render/core` passed raw bgfx state/clear bits to `IGpuDevice`, a layer leak (fails the swap test). Fix: semantic backend-agnostic enums `GpuClearFlags`/`GpuStateFlags` in the contract ([gpu_types.hpp](../src/cpp/render/contract/include/gpu_types.hpp)); `SetState`/`SetViewClear` take them; the **bgfx backend** translates to `BGFX_STATE_*`/`BGFX_CLEAR_*` (only place those live). View IDs centralised in `ViewId` enum ([view_ids.hpp](../src/cpp/render/core/src/view_ids.hpp)) in render/core (the device still sees `uint16_t` — agnostic). All call sites converted; acceptance grep empty; 179/179 C++ tests pass; visually confirmed no regression.
 - **Tags**: `refactor`, `bug` (Bug 1.41)
 - **Why**: Render code is full of `SetState(0x0000000000000001ULL | 0x0000000000000008ULL, 0)` and `Submit(1 /*SCENE*/, ...)`. Magic numbers are unreadable and silently wrong-by-typo. The visible-faces-only-red regression today was *literally* `WRITE_R | WRITE_A` instead of `WRITE_RGBA` — would have jumped off the page if it read `kStateWriteRA` vs `kStateWriteRGBA`. View IDs (0, 1, 2, 3, 6) are spread across `core_renderer.cpp`, `frame_submitter.cpp`, `texture_manager.cpp`, `shadow_pipeline.cpp`, `post_process_pipeline.cpp` with no central definition.
 - **What**: Add named constants in `src/cpp/render/contract/include/gpu_types.hpp` (or new `gpu_state.hpp`):

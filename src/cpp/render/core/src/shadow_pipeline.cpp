@@ -3,6 +3,7 @@
 #include "geometry_manager.hpp"
 #include "render_context.hpp"
 #include "gpu_device.hpp"
+#include "view_ids.hpp"
 #include <cstring>
 #include <algorithm>
 
@@ -66,11 +67,11 @@ ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_hand
     // BEFORE the scene samples it in the same frame. On view 3 the scene (view 1) ran first and
     // read the cleared (1.0) depth → ComputeShadow never found occlusion → no shadow. View 0 is
     // otherwise unused (the depth prepass is not implemented).
-    ctx.gpu->SetViewFrameBuffer(0 /*SHADOW*/, entry.fb);
-    ctx.gpu->SetViewRect(0, 0, 0, (uint16_t)entry.w, (uint16_t)entry.h);
+    ctx.gpu->SetViewFrameBuffer(Id(ViewId::Shadow), entry.fb);
+    ctx.gpu->SetViewRect(Id(ViewId::Shadow), 0, 0, (uint16_t)entry.w, (uint16_t)entry.h);
     // Clear COLOR to 1.0 (far) — the R32F target stores depth — and clear DEPTH for the test.
-    ctx.gpu->SetViewClear(0, 0x0001 | 0x0002 /*COLOR|DEPTH*/, 0xFFFFFFFF, 1.0f, 0);
-    ctx.gpu->SetViewTransform(0, v->m, p->m);
+    ctx.gpu->SetViewClear(Id(ViewId::Shadow), GpuClearFlags::Color | GpuClearFlags::Depth, 0xFFFFFFFF, 1.0f, 0);
+    ctx.gpu->SetViewTransform(Id(ViewId::Shadow), v->m, p->m);
 
     // Propagate light VP + shadow-enabled flag to the main scene shader uniforms.
     // Without this, vs_basic computes v_shadowCoord = mul(0, worldPos) = 0 and the
@@ -105,8 +106,8 @@ ke_result ShadowPipeline::SubmitMeshShadow(RenderContext& ctx, const GeometryMan
     // WRITE_R carries fs_shadow's gl_FragCoord.z into the R32F target; WRITE_Z populates the depth
     // attachment for the test. The previous value (0x10<<32) was neither a real WRITE_Z nor a color
     // write, so the shadow map was never written and stayed at its clear value (no shadow ever).
-    ctx.gpu->SetState(UINT64_C(0x000000400000001F), 0);
-    ctx.gpu->Submit(0 /*SHADOW*/, prog, 0, false);
+    ctx.gpu->SetState(GpuStateFlags::WriteRgba | GpuStateFlags::WriteZ | GpuStateFlags::DepthTestLess, 0);
+    ctx.gpu->Submit(Id(ViewId::Shadow), prog, 0, false);
 
     return KE_OK;
 }

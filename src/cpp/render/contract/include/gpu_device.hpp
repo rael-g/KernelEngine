@@ -61,7 +61,7 @@ public:
     virtual const GpuMemoryBuffer* MakeRef(const void* data, uint32_t size) = 0;
 
     // ── View Management ──────────────────────────────────────────────────────
-    virtual void SetViewClear(uint16_t id, uint16_t flags, uint32_t rgba, float depth, uint8_t stencil) = 0;
+    virtual void SetViewClear(uint16_t id, GpuClearFlags flags, uint32_t rgba, float depth, uint8_t stencil) = 0;
     virtual void SetViewRect(uint16_t id, uint16_t x, uint16_t y, uint16_t width, uint16_t height) = 0;
     virtual void SetViewMode(uint16_t id, GpuViewMode mode) = 0;
     virtual void SetViewTransform(uint16_t id, const void* view, const void* proj) = 0;
@@ -96,7 +96,7 @@ public:
     virtual void DestroyDynamicIndexBuffer(GpuDynamicIndexBufferHandle handle) = 0;
 
     // ── State & Submission ───────────────────────────────────────────────────
-    virtual void SetState(uint64_t state, uint32_t rgba) = 0;
+    virtual void SetState(GpuStateFlags state, uint32_t rgba) = 0;
     virtual void SetTransform(const void* mtx, uint16_t num) = 0;
     virtual void SetUniform(GpuUniformHandle handle, const void* value, uint16_t num) = 0;
     virtual void SetTexture(uint8_t stage, GpuUniformHandle sampler, GpuTextureHandle handle, uint32_t flags) = 0;

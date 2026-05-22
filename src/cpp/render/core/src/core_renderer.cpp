@@ -8,6 +8,7 @@
 #include <clustered_forward.hpp>
 #include <shader_provider.hpp>
 #include <frame_submitter.hpp>
+#include "view_ids.hpp"
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/window/window.h>
 #include <new>
@@ -262,12 +263,12 @@ ke_result CoreRenderer::OnInitialize()
         ctx_.view_w = w;
         ctx_.view_h = h;
 
-        ctx_.gpu->SetViewClear(0, 0x0002 /*DEPTH*/, 0, 1.0f, 0);
-        ctx_.gpu->SetViewRect(0, 0, 0, (uint16_t)w, (uint16_t)h);
+        ctx_.gpu->SetViewClear(Id(ViewId::Shadow), GpuClearFlags::Depth, 0, 1.0f, 0);
+        ctx_.gpu->SetViewRect(Id(ViewId::Shadow), 0, 0, (uint16_t)w, (uint16_t)h);
 
-        ctx_.gpu->SetViewClear(1 /*SCENE*/, 0x0001 | 0x0002, 0x303030ff, 1.0f, 0);
-        ctx_.gpu->SetViewRect(1, 0, 0, (uint16_t)w, (uint16_t)h);
-        ctx_.gpu->SetViewMode(1, GpuViewMode::Sequential);
+        ctx_.gpu->SetViewClear(Id(ViewId::Scene), GpuClearFlags::Color | GpuClearFlags::Depth, 0x303030ff, 1.0f, 0);
+        ctx_.gpu->SetViewRect(Id(ViewId::Scene), 0, 0, (uint16_t)w, (uint16_t)h);
+        ctx_.gpu->SetViewMode(Id(ViewId::Scene), GpuViewMode::Sequential);
 
         ke_result res = SetupShader();
         if (res != KE_OK) return res;
@@ -334,7 +335,7 @@ ke_result CoreRenderer::Frame()
 {
     try {
         if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
-        ctx_.gpu->Touch(1);
+        ctx_.gpu->Touch(Id(ViewId::Scene));
         ctx_.gpu->Frame();
         
         textures_.has_skybox       = false;
@@ -373,9 +374,9 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
         // SSAO pass.
         if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
         {
-            ctx_.gpu->SetViewFrameBuffer(2, post_process_.GetGbufFb());
-            ctx_.gpu->SetViewClear(2, 0x0001 | 0x0002, 0x00000000, 1.0f, 0);
-            ctx_.gpu->SetViewRect(2, 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
+            ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Ssao), post_process_.GetGbufFb());
+            ctx_.gpu->SetViewClear(Id(ViewId::Ssao), GpuClearFlags::Color | GpuClearFlags::Depth, 0x00000000, 1.0f, 0);
+            ctx_.gpu->SetViewRect(Id(ViewId::Ssao), 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
             post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
         }
 
@@ -385,13 +386,13 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
         // receives the scene and the user sees garbage from previous frame state.
         if (post_process_.IsTonemapEnabled() && post_process_.GetHdrFb() != kGpuInvalidHandle)
         {
-            ctx_.gpu->SetViewFrameBuffer(1, post_process_.GetHdrFb());
+            ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Scene), post_process_.GetHdrFb());
             post_process_.SubmitPostProcess(ctx_, geometry_, textures_,
                                             bright_pass_program_, blur_program_, tonemap_program_);
         }
         else
         {
-            ctx_.gpu->SetViewFrameBuffer(1, kGpuInvalidHandle);
+            ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Scene), kGpuInvalidHandle);
         }
 
         return KE_OK;
@@ -410,7 +411,7 @@ ke_result CoreRenderer::ClearColor(float r, float g, float b, float a)
     if (!initialized_ || !ctx_.gpu) return KE_ERROR_NOT_INITIALIZED;
     uint32_t color = (uint32_t(r * 255.0F) << 24) | (uint32_t(g * 255.0F) << 16) |
                      (uint32_t(b * 255.0F) << 8)  | (uint32_t(a * 255.0F));
-    ctx_.gpu->SetViewClear(1, 0x0001 | 0x0002, color, 1.0f, 0);
+    ctx_.gpu->SetViewClear(Id(ViewId::Scene), GpuClearFlags::Color | GpuClearFlags::Depth, color, 1.0f, 0);
     return KE_OK;
 }
 
@@ -433,10 +434,10 @@ ke_result CoreRenderer::SetViewTransform(const ke_mat4 *view, const ke_mat4 *pro
         ctx_.far_z  = f;
     }
 
-    ctx_.gpu->SetViewTransform(0, view->m, proj->m);
-    ctx_.gpu->SetViewTransform(2, view->m, proj->m);
-    ctx_.gpu->SetViewTransform(3, view->m, proj->m);
-    ctx_.gpu->SetViewTransform(1, view->m, proj->m);
+    ctx_.gpu->SetViewTransform(Id(ViewId::Shadow), view->m, proj->m);
+    ctx_.gpu->SetViewTransform(Id(ViewId::Ssao), view->m, proj->m);
+    ctx_.gpu->SetViewTransform(Id(ViewId::BrightPass), view->m, proj->m);
+    ctx_.gpu->SetViewTransform(Id(ViewId::Scene), view->m, proj->m);
     return KE_OK;
 }
 

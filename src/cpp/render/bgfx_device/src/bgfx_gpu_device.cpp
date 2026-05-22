@@ -16,6 +16,38 @@
 namespace kernel_engine::render
 {
 
+// ── Semantic flag translation (the ONLY place bgfx encoding lives) ─────────
+
+namespace
+{
+uint16_t ToBgfxClear(GpuClearFlags flags)
+{
+    uint16_t out = BGFX_CLEAR_NONE;
+    if (HasFlag(flags, GpuClearFlags::Color))   out |= BGFX_CLEAR_COLOR;
+    if (HasFlag(flags, GpuClearFlags::Depth))   out |= BGFX_CLEAR_DEPTH;
+    if (HasFlag(flags, GpuClearFlags::Stencil)) out |= BGFX_CLEAR_STENCIL;
+    return out;
+}
+
+uint64_t ToBgfxState(GpuStateFlags state)
+{
+    uint64_t out = 0;
+    if (HasFlag(state, GpuStateFlags::WriteR))          out |= BGFX_STATE_WRITE_R;
+    if (HasFlag(state, GpuStateFlags::WriteG))          out |= BGFX_STATE_WRITE_G;
+    if (HasFlag(state, GpuStateFlags::WriteB))          out |= BGFX_STATE_WRITE_B;
+    if (HasFlag(state, GpuStateFlags::WriteA))          out |= BGFX_STATE_WRITE_A;
+    if (HasFlag(state, GpuStateFlags::WriteZ))          out |= BGFX_STATE_WRITE_Z;
+    if (HasFlag(state, GpuStateFlags::DepthTestLess))   out |= BGFX_STATE_DEPTH_TEST_LESS;
+    if (HasFlag(state, GpuStateFlags::DepthTestLEqual)) out |= BGFX_STATE_DEPTH_TEST_LEQUAL;
+    if (HasFlag(state, GpuStateFlags::CullCw))          out |= BGFX_STATE_CULL_CW;
+    if (HasFlag(state, GpuStateFlags::CullCcw))         out |= BGFX_STATE_CULL_CCW;
+    if (HasFlag(state, GpuStateFlags::Msaa))            out |= BGFX_STATE_MSAA;
+    if (HasFlag(state, GpuStateFlags::BlendAlpha))      out |= BGFX_STATE_BLEND_ALPHA;
+    if (HasFlag(state, GpuStateFlags::BlendAdditive))   out |= BGFX_STATE_BLEND_ADD;
+    return out;
+}
+} // namespace
+
 // ── Fatal Error Handling ─────────────────────────────────────────────────
 
 static char s_last_fatal_error[1024] = {0};
@@ -211,10 +243,10 @@ const GpuMemoryBuffer* BgfxGpuDevice::MakeRef(const void* data, uint32_t size)
     return (const GpuMemoryBuffer*)::bgfx::makeRef(data, size);
 }
 
-void BgfxGpuDevice::SetViewClear(uint16_t id, uint16_t flags, uint32_t rgba, float depth, uint8_t stencil)
+void BgfxGpuDevice::SetViewClear(uint16_t id, GpuClearFlags flags, uint32_t rgba, float depth, uint8_t stencil)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setViewClear(id, flags, rgba, depth, stencil);
+    ::bgfx::setViewClear(id, ToBgfxClear(flags), rgba, depth, stencil);
 }
 
 void BgfxGpuDevice::SetViewRect(uint16_t id, uint16_t x, uint16_t y, uint16_t width, uint16_t height)
@@ -382,10 +414,10 @@ void BgfxGpuDevice::DestroyDynamicIndexBuffer(GpuDynamicIndexBufferHandle handle
     ::bgfx::destroy(::bgfx::DynamicIndexBufferHandle{handle});
 }
 
-void BgfxGpuDevice::SetState(uint64_t state, uint32_t rgba)
+void BgfxGpuDevice::SetState(GpuStateFlags state, uint32_t rgba)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setState(state, rgba);
+    ::bgfx::setState(ToBgfxState(state), rgba);
 }
 
 void BgfxGpuDevice::SetTransform(const void* mtx, uint16_t num)
