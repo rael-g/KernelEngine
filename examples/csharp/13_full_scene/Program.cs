@@ -23,18 +23,26 @@ app.OnReady = async (resources) =>
     Console.WriteLine("[KernelEngine] Example: 13_full_scene");
     Console.WriteLine("[KernelEngine] Features: all_stabilized_systems, shadows, hdr, bloom, ssao, many_lights, assimp");
 
-    // Camera
+    // Camera. No CameraNode.LookAt helper yet (framework gap — Kanban OBS.5); the camera looks
+    // down its local -Z, so orient it manually toward the scene center for a 3/4 framing.
     var cam = app.Scene.AddNode(
         new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
         "MainCamera");
-    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(8f, 8f, 15f) };
+    var eye = new Vector3(8f, 8f, 15f);
+    var lookRot = Quaternion.CreateFromRotationMatrix(
+        Matrix4x4.CreateWorld(eye, Vector3.Normalize(new Vector3(0f, 2f, 0f) - eye), Vector3.UnitY));
+    cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
-    // Static directional light
+    // Static directional light. Direction is the vector FROM the lit surface TOWARD the light
+    // source; a directional light ignores Position, so this must be set for shading + shadows.
     var sun = app.Scene.AddNode(
-        new LightNode { Color = new Vector3(1f, 0.95f, 0.8f), Intensity = 4.0f },
+        new LightNode {
+            Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
+            Color = new Vector3(1f, 0.95f, 0.8f),
+            Intensity = 4.0f
+        },
         "Sun");
-    sun.LocalTransform = sun.LocalTransform with { Position = new Vector3(10f, 20f, 10f) };
 
     // Ground plane
     var floorMat = await resources.CreateMaterialAsync(new Vector4(0.2f, 0.2f, 0.2f, 1f), metallic: 0.0f, roughness: 0.9f);
@@ -94,9 +102,9 @@ app.OnReady = async (resources) =>
     for (int i = 0; i < 8; i++)
     {
         app.Scene.AddNode(
-            new OrbitingLight { 
-                Color = i % 2 == 0 ? Vector3.UnitX : Vector3.UnitZ, 
-                Radius = 8f,
+            new OrbitingLight {
+                Color = i % 2 == 0 ? Vector3.UnitX : Vector3.UnitZ,
+                Radius = 5f,
                 Speed = 0.5f + i * 0.1f,
                 Phase = i * (MathF.PI / 4f)
             },
@@ -130,7 +138,7 @@ sealed class OrbitingLight : Node
     protected override void OnStart()
     {
         var comp = AddComponent<PointLightComponent>(PointLightNode.ComponentId);
-        comp[0] = new PointLightComponent { R = Color.X, G = Color.Y, B = Color.Z, Intensity = 10f, Radius = 10f };
+        comp[0] = new PointLightComponent { R = Color.X, G = Color.Y, B = Color.Z, Intensity = 40f, Radius = 18f };
     }
 
     protected override void OnUpdate(float dt)
