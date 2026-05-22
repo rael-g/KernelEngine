@@ -1,6 +1,22 @@
 import os
+import shutil
 import subprocess
 import sys
+
+def output_dir_for(rsp):
+    """Return the absolute --output directory declared inside an .rsp, or None.
+
+    ClangSharp resolves --output relative to the working directory, which we set to the
+    .rsp's own folder. multi-file codegen emits one .cs per type there, so wiping this
+    directory before regenerating is what drops bindings for types removed from headers.
+    """
+    rsp_dir = os.path.dirname(rsp)
+    with open(rsp, "r", encoding="utf-8") as f:
+        lines = [ln.strip() for ln in f.readlines()]
+    for i, line in enumerate(lines):
+        if line == "--output" and i + 1 < len(lines):
+            return os.path.normpath(os.path.join(rsp_dir, lines[i + 1]))
+    return None
 
 def run_command(command, cwd=None):
     print(f"Running: {' '.join(command)} in {cwd}")
@@ -34,6 +50,11 @@ def generate():
     success_count = 0
     for rsp in rsp_files:
         print(f"\n--- Generating: {os.path.relpath(rsp, root_dir)} ---")
+        # Wipe the output dir first so bindings for types removed from the headers don't linger.
+        out_dir = output_dir_for(rsp)
+        if out_dir and os.path.isdir(out_dir):
+            print(f"Cleaning stale bindings in {os.path.relpath(out_dir, root_dir)}")
+            shutil.rmtree(out_dir)
         # Run as a local dotnet tool
         if run_command(["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", f"@{rsp}"], cwd=os.path.dirname(rsp)):
             success_count += 1
