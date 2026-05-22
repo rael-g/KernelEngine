@@ -19,6 +19,13 @@ public static class ResourceFactoryExtensions
         return Task.FromResult(factory.CreateTexture(width, height, pixels));
     }
 
+    public static Task<TextureHandle> CreateCubemapAsync(this IResourceFactory factory, uint faceSize, byte[] data)
+    {
+        if (factory is ResourceCommandFactory rcf)
+            return rcf.EnqueueAsync(ResourceCommandType.CreateCubemap, (faceSize, data), val => new TextureHandle(val));
+        return Task.FromResult(factory.CreateCubemap(faceSize, data));
+    }
+
     public static Task<MaterialHandle> CreateMaterialAsync(this IResourceFactory factory,
         Vector4 color,
         TextureHandle textureHandle = default,

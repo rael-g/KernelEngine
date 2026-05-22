@@ -39,6 +39,14 @@ public class Application : IDisposable
     /// <summary>Called once on ke.sim after ke.render is initialized and systems are registered.</summary>
     public Action<IResourceFactory>? OnReady { get; set; }
 
+    /// <summary>
+    /// High-level ref-counted GPU resource manager (Phase 1 of the resource pipeline). Valid from
+    /// the start of <see cref="OnReady"/> onward. Prefer this over the raw <see cref="IResourceFactory"/>
+    /// for new code — its <c>CreateXAsync</c> methods don't block ke.sim and produce
+    /// <see cref="Material"/>/<see cref="Mesh"/>/<see cref="Texture"/> with managed lifetime.
+    /// </summary>
+    public ResourceManager Resources { get; private set; } = null!;
+
     /// <summary>Called every sim frame after <c>IWorld.Update</c>.</summary>
     public Action<ISceneWriter, IInputReader>? OnUpdate { get; set; }
 
@@ -196,6 +204,7 @@ public class Application : IDisposable
                 if (_cts.IsCancellationRequested) return;
 
                 var factory = _resourceQueue.CreateFactory();
+                Resources = new ResourceManager(factory);
                 OnReady?.Invoke(factory);
                 Logger?.Info("Application", "ke.sim: OnReady complete — entering frame loop");
                 simReady.Set(); // signal ke.render that OnReady is complete
