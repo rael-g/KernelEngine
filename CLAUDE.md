@@ -43,6 +43,10 @@ python scripts/run_tests.py         # C/C++ + C# tests with coverage report (gco
 
 Shaders compile to `src/cpp/render/bgfx/shaders/compiled/spirv/`. Bindings run `dotnet tool restore` from `src/csharp/` first, then process every `.rsp` file under `src/csharp/Native/`.
 
+### Running examples after a native rebuild — never use `dotnet run --no-build`
+
+Native DLLs (`ke_*.dll`) are copied into each example's output via a `PreserveNewest` item in `NativeDependencies.targets`, but that copy only runs during a build. So after a `cmake --build` (new native code), `dotnet run --no-build` keeps the **stale** DLL already in `bin/Debug/net10.0/` and you silently run old C++ (Bug 1.42). Always run `dotnet run` / `dotnet build` (no `--no-build`) — the timestamp-based copy then refreshes the native DLL automatically.
+
 ---
 
 ## Architecture

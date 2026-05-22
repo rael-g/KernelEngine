@@ -48,12 +48,16 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
     4. Delete the branch locally and remote.
 - **Effort**: S (half day if W.9 done).
 
-##### [B1.5] Eliminate the `dotnet --no-build` stale-DLL trap
+##### [B1.5] Eliminate the `dotnet --no-build` stale-DLL trap — ✅ DONE by convention (2026-05-22)
+- **Resolution**: no code. The trap only bites when `--no-build` skips the build (and thus the `PreserveNewest` native-DLL copy in `NativeDependencies.targets`); a build-time guard can't help since `--no-build` skips it too. Fixed as a workflow rule in `CLAUDE.md`: never use `dotnet run --no-build` — a normal `dotnet run`/`dotnet build` refreshes the native DLL by timestamp. Optional future hardening (a `scripts/check_native_freshness.py` mtime guard for CI/agents) deferred — not worth it for the human workflow.
+
+<details><summary>original card</summary>
 - **Tags**: `chore`, `bug` (Bug 1.42)
 - **Why**: Running `dotnet run --no-build` after a native C++ rebuild silently uses the previously-deployed `.dll` in `bin/Debug/net10.0/` — the rebuild does NOT propagate. Symptoms: edited C++ code but example shows old behavior. Multiple agents (and the senior reviewer) have wasted debug cycles on this exactly.
 - **What**: Either (a) drop `--no-build` from the standard run workflow (force `dotnet build` to copy fresh native DLLs), or (b) add a pre-run helper script that compares `build/native/bin/ke_*.dll` mtimes against the deployed copies in `examples/csharp/*/bin/Debug/net10.0/` and warns/copies on mismatch.
 - **Acceptance**: Running the example after a `cmake --build` always picks up the latest native code without manual `dotnet build`. CI catches stale-deploy as an error.
 - **Effort**: S (1–2 hours).
+</details>
 
 ---
 
@@ -236,6 +240,18 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 ##### [B5.5] Hide `ResourceCommandFactory.Queue`; expose `EnqueueAsync` instead (Bug 1.52)
 - **Tags**: `refactor`, `bug` (Bug 1.52)
 - **Why**: Extension method `ResourceFactoryExtensions.CreateMeshAsync` requires `Queue` public, leaking the dispatch mechanism.
+
+##### [B5.8] Math = user's library + runtime convention adapter (ADR-10)
+- **Tags**: `refactor`, `feat` (architecture)
+- **Why**: Two hand-rolled math copies kept in sync by hand — kernel `math.h` (`static inline ke_mat4_*`) and the C# `Framework/Internal/Mat4.cs` (`unsafe`). Same conventions duplicated (column-major, RH, Vulkan [0,1], `ke_mat4_mul == b·a`); this drift class produced the shadow lightVP bug. GLM is already a vcpkg dep but unused. Decision recorded in **ADR-10** ([12 - Architecture Backlog & Decisions](Reference/12%20-%20Architecture%20Backlog%20%26%20Decisions.md)).
+- **What**:
+    1. Delete hand-rolled operations: `math.h` keeps only the ABI **types** (`ke_vec3/vec4/quat/mat4/transform`); C++ math uses **GLM**. `Mat4.cs` deleted; C# uses **System.Numerics**.
+    2. Kernel defines `ke_math_convention { handedness, z_range, y_down, column_major }`.
+    3. Source convention declared at runtime by the matrix producer (Framework config); target convention exposed by the active backend via `ke_render.get_math_convention()` (bgfx reads `caps.homogeneousDepth` etc.).
+    4. Boundary adapter `convert(in ke_mat4, src, dst)` — pure function, identity when equal; reconciles transpose / Y-flip / depth-range. `src`/`dst` cached at init; per-matrix is a predicted branch, **no vtable, not on the math hot path**.
+- **Acceptance**: no `ke_mat4_*` operation functions remain (only types); no `Mat4.cs`; swapping the backend changes the target convention with zero game-code change; examples render identically before/after.
+- **Note**: **NOT required to remove `unsafe`** from Framework (B5.1) — that only needs `Mat4.cs` de-pointered. This card is the deeper, dedicated effort; do separately.
+- **Effort**: M–L (touches C, C++, C#; convention reconciliation is small but delicate + must be visually validated).
 
 ##### [B5.6] Asset pipeline assembly — `IAssetLoader` + `IModel` abstractions
 - **Tags**: `refactor`, `feat` (architecture)
