@@ -345,6 +345,18 @@ After all 5 blocks complete:
 - **Acceptance**: an example renders 100k+ instances of one mesh at interactive framerate via a single high-level node; zero plugin code written by the game dev.
 - **Effort**: M–L (touches kernel frame-packet contract + bgfx + a Framework node).
 
+##### [F.RC2] Render-graph + GPU-compute primitives as UNIVERSAL kernel contracts (extensibility doctrine)
+- **Tags**: `feat` (architecture), roadmap (post-functional). Doctrine: [docs/Reference/13 - Extensibility & Universality.md].
+- **Why**: The project's competitive bet is decentralized extensibility (Linux formula) — a dev adds any graphics technique (FXAA, SSAO, TAA, …, up to Nanite) as a **plugin** without forking the core, and it must survive a render-backend swap (bgfx→OpenGL). For that, the extension surface must be a **kernel contract**, not a render-plugin invention (else it binds users to bgfx).
+- **What**:
+    1. **`ke_render_graph` kernel contract** — register a pass `{ type (fullscreen|geometry|compute), reads:[named resources], writes:[named resource], shader, insertion point }`; engine resolves the graph + manages intermediate targets. Each backend plugin implements it. Built-in bloom/SSAO/tonemap re-expressed as registered passes (kills the current hardcoded view chain / OBS.4 fragility).
+    2. **Standardized named resources** (`scene_color`, `depth`, `normal`, `velocity`…) every backend must expose, so technique plugins are backend-agnostic.
+    3. **GPU-compute/buffer primitives in the render contract** — structured/storage buffers, compute dispatch (incl. indirect), writable storage images, atomics (incl. 64-bit), GPU-driven indirect draw, custom/opaque resource types. **Prerequisite for ALL GPU-driven techniques** (GPU particles, GPU culling, virtual texturing, Nanite). Surfaced by the Nanite validation exercise (Reference ch.13): orchestration infra is sufficient, but these primitives are the missing universal layer.
+    4. **Capability negotiation** (`isSupported`) + portable shader authoring (cross-compiled by the shader-compiler plugin).
+    5. **Custom materials/shaders** (Godot `ShaderMaterial` style) — per-object custom surface shaders; fullscreen-quad effect = a registered fullscreen pass.
+- **Acceptance (validation)**: a third-party `AddMyFXAA()` plugin adds a post-pass with zero core changes; swapping the bgfx plugin for another backend keeps it working (only shaders change). Stretch: GPU particles implemented purely as a plugin via the compute primitives.
+- **Effort**: L (foundational). Strictly **after** the engine is functional (user's call). Don't over-promote speculative parts; render-graph + named resources + compute primitives are clearly universal.
+
 #### Tier A — Resources & assets (largest leak)
 
 > Reframe `Material` / `Mesh` / `Texture` / model as a **shared, ref-counted asset family** (Unity-like `Asset` / .NET resource semantics): loadable by path, cached, ownership-tracked. F.A4 (`Assets`/`AssetManager`) is the loader/cache façade for the family.

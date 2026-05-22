@@ -54,6 +54,7 @@ Dependencies point downward only. A plugin never depends on the framework; the f
 | If you want to understand… | Read |
 |---|---|
 | Why the engine is shaped this way | [01 - Philosophy & Principles](01%20-%20Philosophy%20%26%20Principles.md) |
+| ⭐ The core doctrine (Linux formula, universality, extensibility) | [13 - Extensibility & Universality](13%20-%20Extensibility%20%26%20Universality.md) |
 | How the layers fit and depend | [02 - Layered Architecture](02%20-%20Layered%20Architecture.md) |
 | The C core and its contracts | [03 - C Kernel](03%20-%20C%20Kernel.md) |
 | How plugins work and why they're swappable | [04 - C++ Plugins](04%20-%20C%2B%2B%20Plugins.md) |
