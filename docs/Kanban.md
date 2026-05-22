@@ -374,6 +374,20 @@ After all 5 blocks complete:
 - **Acceptance (validation)**: a third-party `AddMyFXAA()` plugin adds a post-pass with zero core changes; swapping the bgfx plugin for another backend keeps it working (only shaders change). Stretch: GPU particles implemented purely as a plugin via the compute primitives.
 - **Effort**: L (foundational). Strictly **after** the engine is functional (user's call). Don't over-promote speculative parts; render-graph + named resources + compute primitives are clearly universal.
 
+#### Reference harvest — Luna.Core (studied 2026-05-22, folder then deleted)
+
+> A prior OOP framework (`Luna.Core`) was studied for reusable ideas/code. Its **core** (single-thread `Host.Run` loop, retained-mode render keyed by node UID, `Injector` service-locator DI) is **incompatible** with our 3-thread + frame-packet + ECS model and was NOT taken. What we kept:
+>
+> **Lifted as code (done):** input enums + `InputReaderExtensions` (F.C1), `Time` (F.E1), and an `Animation/` library (`Easing`, `AnimationBase`, `Tween`, `AnimationCurve`, `KeyframeAnimation`, `Timing`) in Framework — self-contained, not yet wired to nodes (driver comes with the animation domain, M2+).
+>
+> **Kept as design reference (implement our way, ECS-backed):**
+> - **Everything is a Node** — Luna had `PerspectiveCamera`/`OrthographicCamera`, `DirectionalLight`/`PointLight`/`SpotLight`, `Model`, primitives (`Box`/`Rectangle`/`Ellipse`/`Label`), `Skybox`, `Sound`, `PostProcessor` all as nodes. Validates **F.0a** and the **F.D5** node taxonomy/rename target.
+> - **Node lifecycle vocabulary** — `Awake`/`Start`/`EarlyUpdate`/`Update`/`LateUpdate`/`FixedUpdate` + `On*` action hooks + async `ExecuteAsync` + main-thread marshalling. Target set for **F.H2** (today we only have OnStart/OnUpdate via ScriptComponent).
+> - **Input as events** — `Node.Input(InputEvent)` propagated down the tree (`KeyboardEvent`/`MouseButtonEvent`/`MousePositionEvent`/`MouseScrollEvent`). The fix for OBS.5#3 (edge events) → **F.H3**: an event queue, not snapshot polling.
+> - **Transform ergonomics** — `GlobalPosition`/`GlobalRotation`/`GlobalScale` (computed up the parent chain), `Origin` (pivot), `EulerAngles`/`Quaternion` convenience, `ModelMatrix()` compose order. Target API surface for **F.D** (our world matrix stays computed in C).
+> - **Scene query** — `FindNode("Head/Mouth/Tongue")` path lookup, a `Tree` UID index, `GetAllNodesOfType<T>()`. Target for **F.D4**.
+> - **Camera resolution** — a node with no camera walks up parents to find one. Nice ergonomic for the camera/node work (F.D1).
+
 #### Tier A — Resources & assets (largest leak)
 
 > Reframe `Material` / `Mesh` / `Texture` / model as a **shared, ref-counted asset family** (Unity-like `Asset` / .NET resource semantics): loadable by path, cached, ownership-tracked. F.A4 (`Assets`/`AssetManager`) is the loader/cache façade for the family.
@@ -416,9 +430,10 @@ After all 5 blocks complete:
 
 #### Tier C — High-level input
 
-##### [F.C1] `Key` / `MouseButton` enums
+##### [F.C1] `Key` / `MouseButton` enums — ✅ DONE (2026-05-22)
 - **What**: `Input.IsKeyDown(Key.W)` instead of `87`.
-- **Acceptance**: no integer keycodes in `examples/csharp/`.
+- **Resolution**: lifted GLFW-aligned enums (`Key`, `MouseButton`, `InputAction`, `KeyModifiers`) into `Kernel.Abstractions/Input/` from the Luna.Core reference; added `InputReaderExtensions` typed overloads (`IsKeyDown(Key)`/`IsMouseButtonDown(MouseButton)`) — plain casts, zero implementer churn. Example 00 converted off raw keycodes. Closes OBS.5#2.
+- **Remaining**: sweep other examples that still poll raw ints (none currently besides 00, done).
 
 ##### [F.C2] Input action/axis mapping
 - **What**: `input.Bind("MoveForward", Key.W, Key.Up)`, then `input.GetAxis("Move")` / `input.IsActionPressed("Jump")`. Decouples gameplay from physical keys (enables gamepad later).
@@ -471,8 +486,10 @@ After all 5 blocks complete:
 
 #### Tier E — Gameplay plumbing
 
-##### [F.E1] `Time` service
+##### [F.E1] `Time` service — 🚧 PARTIAL (2026-05-22)
 - **What**: `Time.DeltaTime`, `Time.TotalTime`, `Time.FrameCount`. (Today only the `dt` parameter.)
+- **Done**: static `Time` in Framework (`Time.DeltaTime`, `Time.ElapsedTime`) driven by `Time.NewFrame()` at the top of the ke.sim loop (Application.cs). Lifted/adapted from Luna.Core.
+- **Remaining**: `FrameCount`; `FixedDeltaTime` once a fixed-step loop exists; expose to node callbacks.
 
 ##### [F.E2] Richer behaviors (evaluate — may be premature)
 - **What**: Timers, `Invoke(delay)`, coroutines, scene events beyond `OnStart`/`OnUpdate`.
@@ -523,7 +540,7 @@ After all 5 blocks complete:
 - **Why**: While bringing up example 11 these authoring rough edges appeared. None are bugs (engine behaves as built) but each forces game code to drop to low-level/magic values — exactly what Tier 2 should hide.
 - **Items**:
     1. **No `CameraNode.LookAt(target, up)` helper.** Game code must hand-build orientation: `Quaternion.CreateFromRotationMatrix(Matrix4x4.CreateWorld(eye, Vector3.Normalize(target-eye), Vector3.UnitY))`. The camera looks down local -Z (`CameraRenderSystem` uses `Mat4.InvertTrs(WorldMatrix)`, no look-at). Add a `LookAt` convenience on `CameraNode`.
-    2. **No `Key` enum — magic keycodes.** Input polling uses raw integers (e.g. `32` = Space, `87` = W). Add a `Key` enum mapped to the GLFW keycodes so game code reads `input.IsKeyDown(Key.Space)`.
+    2. ✅ **RESOLVED (2026-05-22)** — `Key`/`MouseButton`/`InputAction`/`KeyModifiers` enums + `InputReaderExtensions` overloads added (F.C1); game code now reads `input.IsKeyDown(Key.Space)`.
     3. **Edge events unreliable over the lock-free input buffer.** `IsKeyPressed` (press-edge) is unreliable because `InputBuffer` is a single-slot *snapshot* exchange — fast press/release between sim frames is lost. Edge detection needs an **event queue** (key-down/up events drained per frame), not snapshot diffing. Only `IsKeyDown` (level) is reliable today.
 
 ##### [OBS.6] Point & spot lights cast no shadows (feature, deferred — future)

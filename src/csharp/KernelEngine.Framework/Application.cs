@@ -199,6 +199,7 @@ public class Application : IDisposable
 
                 while (!_cts.IsCancellationRequested)
                 {
+                    Time.NewFrame();
                     var packet = frameSync.BeginWrite();
                     if (_cts.IsCancellationRequested) { packet.EndWrite(); break; } // poison-pill
 

@@ -18,12 +18,12 @@ var services = new ServiceCollection()
 
 using var app = new Application();
 
-// Keys to monitor: name → GLFW keycode
-var watchKeys = new (string Name, int Code)[]
+// Keys to monitor — typed Key enum (no magic keycodes).
+var watchKeys = new (string Name, Key Key)[]
 {
-    ("W",       87),  ("A",      65),  ("S",    83),  ("D",       68),
-    ("Up",     265),  ("Down",  264),  ("Left", 263),  ("Right",  262),
-    ("Space",   32),  ("Shift", 340),  ("Ctrl", 341),  ("Escape",  256),
+    ("W", Key.W),       ("A", Key.A),         ("S", Key.S),           ("D", Key.D),
+    ("Up", Key.Up),     ("Down", Key.Down),   ("Left", Key.Left),     ("Right", Key.Right),
+    ("Space", Key.Space), ("Shift", Key.ShiftLeft), ("Ctrl", Key.ControlLeft), ("Escape", Key.Escape),
 };
 
 app.OnUpdate = (scene, input) =>
@@ -34,11 +34,11 @@ app.OnUpdate = (scene, input) =>
     var released = new System.Text.StringBuilder();
     var held     = new System.Text.StringBuilder();
 
-    foreach (var (name, code) in watchKeys)
+    foreach (var (name, key) in watchKeys)
     {
-        if (input.IsKeyPressed(code))  pressed.Append($" [{name}]");
-        if (input.IsKeyReleased(code)) released.Append($" [{name}]");
-        if (input.IsKeyDown(code))     held.Append($" {name}");
+        if (input.IsKeyPressed(key))  pressed.Append($" [{name}]");
+        if (input.IsKeyReleased(key)) released.Append($" [{name}]");
+        if (input.IsKeyDown(key))     held.Append($" {name}");
     }
 
     if (pressed.Length  > 0) Console.WriteLine($"PRESSED: {pressed}");
