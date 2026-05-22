@@ -36,6 +36,13 @@ public:
     ke_result StorePointLights(const ke_point_light *lights, uint32_t count);
     ke_result StoreSpotLights(const ke_spot_light *lights, uint32_t count);
 
+    /// Packs the stored point/spot lights into the GPU uniform arrays and sets u_lightCounts.
+    /// Forward (brute-force) path: caps at kMaxPointLights / kMaxSpotLights.
+    void UploadLights(RenderContext& ctx);
+
+    static constexpr uint32_t kMaxPointLights = 64;  // u_pointLights[128] = 2 vec4 each
+    static constexpr uint32_t kMaxSpotLights  = 48;  // u_spotLights[192]  = 4 vec4 each
+
     // Recording methods for multithreading
     ke_result RecordLights(struct ke_frame_packet& packet, const ke_point_light *lights, uint32_t count);
     ke_result RecordSpotLights(struct ke_frame_packet& packet, const ke_spot_light *lights, uint32_t count);

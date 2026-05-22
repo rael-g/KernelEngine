@@ -35,7 +35,8 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 ##### [W.9] Eliminate `bgfx_system_factory.h` (unblock the branch)
 *(Already detailed below. Pre-requisite for the rest of cleanup.)*
 
-##### [B1.1] Final validation pass + merge `feat/multithread-architecture` to main
+##### [B1.1] Final validation pass + merge `feat/multithread-architecture` to main — ✅ DONE (2026-05-21, merge commit `de97b24`)
+- **Resolution**: W.9 verified done; build clean; ctest 179/179; dotnet test 80/80; example 05 confirmed. Merged with `--no-ff` (159 commits — main had not diverged). Branch kept locally as a safety net (not yet deleted).
 - **Tags**: `chore`
 - **Why**: 94 commits, never merged. Main has not diverged (verified). Every new commit on the branch increases blast radius of eventual merge.
 - **What**: Run full validation (build + ctests + dotnet test + example 05). On green, merge with `git merge --no-ff feat/multithread-architecture` from main.
@@ -344,6 +345,18 @@ After all 5 blocks complete:
 - **Acceptance**: an example renders 100k+ instances of one mesh at interactive framerate via a single high-level node; zero plugin code written by the game dev.
 - **Effort**: M–L (touches kernel frame-packet contract + bgfx + a Framework node).
 
+##### [F.RC2] Render-graph + GPU-compute primitives as UNIVERSAL kernel contracts (extensibility doctrine)
+- **Tags**: `feat` (architecture), roadmap (post-functional). Doctrine: [docs/Reference/13 - Extensibility & Universality.md].
+- **Why**: The project's competitive bet is decentralized extensibility (Linux formula) — a dev adds any graphics technique (FXAA, SSAO, TAA, …, up to Nanite) as a **plugin** without forking the core, and it must survive a render-backend swap (bgfx→OpenGL). For that, the extension surface must be a **kernel contract**, not a render-plugin invention (else it binds users to bgfx).
+- **What**:
+    1. **`ke_render_graph` kernel contract** — register a pass `{ type (fullscreen|geometry|compute), reads:[named resources], writes:[named resource], shader, insertion point }`; engine resolves the graph + manages intermediate targets. Each backend plugin implements it. Built-in bloom/SSAO/tonemap re-expressed as registered passes (kills the current hardcoded view chain / OBS.4 fragility).
+    2. **Standardized named resources** (`scene_color`, `depth`, `normal`, `velocity`…) every backend must expose, so technique plugins are backend-agnostic.
+    3. **GPU-compute/buffer primitives in the render contract** — structured/storage buffers, compute dispatch (incl. indirect), writable storage images, atomics (incl. 64-bit), GPU-driven indirect draw, custom/opaque resource types. **Prerequisite for ALL GPU-driven techniques** (GPU particles, GPU culling, virtual texturing, Nanite). Surfaced by the Nanite validation exercise (Reference ch.13): orchestration infra is sufficient, but these primitives are the missing universal layer.
+    4. **Capability negotiation** (`isSupported`) + portable shader authoring (cross-compiled by the shader-compiler plugin).
+    5. **Custom materials/shaders** (Godot `ShaderMaterial` style) — per-object custom surface shaders; fullscreen-quad effect = a registered fullscreen pass.
+- **Acceptance (validation)**: a third-party `AddMyFXAA()` plugin adds a post-pass with zero core changes; swapping the bgfx plugin for another backend keeps it working (only shaders change). Stretch: GPU particles implemented purely as a plugin via the compute primitives.
+- **Effort**: L (foundational). Strictly **after** the engine is functional (user's call). Don't over-promote speculative parts; render-graph + named resources + compute primitives are clearly universal.
+
 #### Tier A — Resources & assets (largest leak)
 
 > Reframe `Material` / `Mesh` / `Texture` / model as a **shared, ref-counted asset family** (Unity-like `Asset` / .NET resource semantics): loadable by path, cached, ownership-tracked. F.A4 (`Assets`/`AssetManager`) is the loader/cache façade for the family.
@@ -473,7 +486,7 @@ After all 5 blocks complete:
 - **NOT a regression** of the C# refactor — the C# `LightRenderSystem` records the lights correctly.
 - **Secondary**: bgfx `Failed to find memory that supports flags 0x00000003` (device-local+host-visible) at init — likely the cluster-cull compute buffers; their result isn't consumed by `fs_basic` anyway. Investigate separately.
 - **Fix**: implement point/spot accumulation in `fs_basic.sc`. Either (a) brute-force loop over the uniform arrays (works for ≤128 point / ≤? spot, simplest), or (b) full clustered loop reading the cull buffer (matches the "unlimited lights" intent; 09 has 200 → exceeds 128, so clustered is needed for it). Decide approach before implementing.
-- **Status**: diagnosed; fix deferred (substantial — shader feature).
+- **Status (updated 2026-05-22)**: ✅ **brute-force loops implemented** — `fs_basic.sc` now accumulates point ([fs_basic.sc:118-128](../src/cpp/render/bgfx/shaders/fs_basic.sc#L118-L128)) and spot ([:130-144](../src/cpp/render/bgfx/shaders/fs_basic.sc#L130-L144)) lights (Cook-Torrance `PbrDirect` + linear-squared attenuation; spot adds cone falloff). 07/08/09/13 now light up; confirmed visually. **Remaining gap**: brute-force is capped (`u_pointLights[128]` / `u_spotLights[192]` → ~64 point / 48 spot effective); the clustered path (option b) for >cap counts (09 places ~200) is still unimplemented — surplus lights are silently ignored. Clustered remains deferred.
 
 ##### [OBS.3] Examples 12/13 asset loading — "prototyped, never ran" bugs (FIXED inline) + brittle asset path
 - **Tags**: `bug` (fixed), tech-debt
@@ -483,8 +496,37 @@ After all 5 blocks complete:
 ##### [OBS.4] Examples 10/11 post-processing pipelines broken (BUG, deferred — complex)
 - **Tags**: `bug`
 - **Symptoms (2026-05-21 visual)**: **10 hdr_bloom** → entirely black screen (HDR FB → tonemap composite path not reaching backbuffer, or nothing lit). **11 ssao** → dark-blue background with several black quads clustered in the lower-left corner (geometry projecting to wrong screen region — gbuffer-prepass/SSAO viewport or fullscreen-quad UV issue).
-- **Status**: deferred — post-FX pipeline bugs (HDR composite, SSAO gbuffer prepass) are complex and "prototyped, never validated". Note for a focused render-pipeline session. Likely related to view setup / fullscreen-pass UVs / FB redirection in `post_process_pipeline` + `core_renderer` SubmitPacket.
+- **Status**: deferred — post-FX pipeline bugs (HDR composite, SSAO gbuffer prepass) are complex and "prototyped, never validated". Needs a focused iterative-visual session (like the shadow bring-up).
+- **Diagnosis (2026-05-21)**: the SubmitPacket/SubmitPostProcess **orchestration looks structurally correct** — scene→HDR FB (view 1), bloom bright/blur (views 3/4/5), tonemap composite (view 6 → backbuffer/`kGpuInvalidHandle`), state `WRITE_RGBA`, fullscreen quad bound, view IDs ordered. So 10's black screen is NOT an obvious orchestration bug; it's deeper — likely in `fs_tonemap` (UV/sampling of the HDR texture), the fullscreen-quad NDC geometry, or the HDR texture format/sampling. 11's corner-quads point at the SSAO gbuffer-prepass fullscreen/viewport or `vs_prepass`/`vs_fullscreen` UVs. Both need shader-level visual iteration. All examples build + run (no crash) with the new lighting shader.
+- **SSAO root cause (2026-05-21, confirmed)**: `PostProcessPipeline::SetupSsao` ([src/cpp/render/core/src/post_process_pipeline.cpp:114](../src/cpp/render/core/src/post_process_pipeline.cpp#L114)) is an **empty stub** (`// Implementation placeholder; return KE_OK`). Consequence chain: the gbuffer FB is never created → the SSAO/prepass pass in `SubmitPacket` is skipped (`GetGbufFb()` invalid) → `s_ssaoBlurred` stays the default white texture (AO=1) → **SSAO has zero visible effect**. The contact darkening seen in example 11 is **100% directional shadow-map shadows**, not SSAO. `scene.SetSsao(...)` is a no-op until this is implemented. Example 11 was cleaned up to document this (commit `216c510`).
 - **Note**: 12 (asset+directional) renders correctly; 13's box+Sun render, only its floor had the quad-orientation bug (fixed) and its orbiting point lights are dark (OBS.2).
+
+##### [OBS.5] Framework ergonomics gaps surfaced during example 11 (refactor, deferred)
+- **Tags**: `refactor`, `framework`
+- **Why**: While bringing up example 11 these authoring rough edges appeared. None are bugs (engine behaves as built) but each forces game code to drop to low-level/magic values — exactly what Tier 2 should hide.
+- **Items**:
+    1. **No `CameraNode.LookAt(target, up)` helper.** Game code must hand-build orientation: `Quaternion.CreateFromRotationMatrix(Matrix4x4.CreateWorld(eye, Vector3.Normalize(target-eye), Vector3.UnitY))`. The camera looks down local -Z (`CameraRenderSystem` uses `Mat4.InvertTrs(WorldMatrix)`, no look-at). Add a `LookAt` convenience on `CameraNode`.
+    2. **No `Key` enum — magic keycodes.** Input polling uses raw integers (e.g. `32` = Space, `87` = W). Add a `Key` enum mapped to the GLFW keycodes so game code reads `input.IsKeyDown(Key.Space)`.
+    3. **Edge events unreliable over the lock-free input buffer.** `IsKeyPressed` (press-edge) is unreliable because `InputBuffer` is a single-slot *snapshot* exchange — fast press/release between sim frames is lost. Edge detection needs an **event queue** (key-down/up events drained per frame), not snapshot diffing. Only `IsKeyDown` (level) is reliable today.
+
+##### [OBS.6] Point & spot lights cast no shadows (feature, deferred — future)
+- **Tags**: `feature`, `render`
+- **Why**: Only the **directional** light has a shadow map today. In `fs_basic.sc` point/spot lights are accumulated "forward, **unshadowed**" ([fs_basic.sc:115](../src/cpp/render/bgfx/shaders/fs_basic.sc#L115)) — they correctly brighten even directional-shadowed regions (shadow only attenuates the directional term, [:113](../src/cpp/render/bgfx/shaders/fs_basic.sc#L113)), but they cast no shadows of their own. Surfaced in example 13: orbiting point lights light the box but objects don't occlude each other's point-light contribution.
+- **What**: Add omni/spot shadows. **Spot** = a perspective depth map per light (same shape as the existing directional ortho map). **Point/omni** = a cube depth map (6 faces) or a dual-paraboloid map per light. Needs: per-light shadow-map allocation + atlas/array management, shadow VP upload per light, and a `ComputeShadow`-style lookup inside the point/spot loops.
+- **Acceptance**: a scene with two boxes + one point light shows one box shadowing the other from that light.
+- **Scope note**: substantial — per-light shadow passes multiply draw cost; almost certainly wants to ride on the future render-graph (F.RC2) rather than be hardcoded into the current view chain. Defer until render-graph lands or a focused shadow session.
+
+###### Target architecture — a robust, performant shadow system
+> Current system is **minimalist**: a single fixed-size directional ortho map (1024², hardcoded frustum — see OBS.1), one shadow pass on view 0, basic depth-compare in `ComputeShadow` with a constant bias (`coord.z - 0.005`). It works for one directional light and does not scale to many lights or large scenes. The robust target below is what to build when implementing OBS.6; design it as render-graph passes (F.RC2), not hardcoded views.
+
+- **Directional → Cascaded Shadow Maps (CSM).** Split the view frustum into N depth slices (typ. 3–4), each with its own ortho light-map sized to its slice → near objects get high resolution, far ones low, no wasted texels. Per-cascade: stabilize the projection (snap the light ortho to texel-size increments) to kill shimmering as the camera moves; blend a band between cascades to hide seams. Upload N light-VPs + split distances; the fragment picks its cascade by view-space depth.
+- **Spot → single perspective depth map.** Same shape as today's directional map but with the light's perspective projection. Cheapest non-directional shadow.
+- **Point/omni → cube depth map or dual-paraboloid.** Cube = 6 perspective passes (one per face); dual-paraboloid = 2 passes, cheaper but with edge artifacts. Store linear distance (not post-projection depth) for a clean cube compare.
+- **Shadow atlas + per-light budget.** Allocate all live shadow maps from **one large texture atlas** (e.g. 4096²) carved into tiles, instead of N separate render targets. A per-frame **tile allocator** sizes each light's tile by importance (distance to camera, screen coverage, intensity) and skips off-screen / fully-attenuated lights entirely. Bounds total shadow memory and binds; one sampler, many lookups by UV-rect.
+- **Caching for static lights/geometry.** A light whose transform and casters didn't move keeps its rendered tile across frames (dirty-flag invalidation). Most lights in a scene are static → re-render only what moved. Biggest single perf win for many-light scenes.
+- **Culling per shadow view.** Cull casters against each light's frustum/sphere before the depth pass (reuse the scene's spatial structure). Optionally tighten the directional ortho to the visible casters' bounds.
+- **Filtering / quality.** PCF (NxN taps) as the baseline soft edge; PCSS or a variance/exponential map (VSM/ESM) for contact-hardening soft shadows. Bias as **slope-scaled depth bias + normal-offset** (not the current constant) to remove acne without large peter-panning.
+- **Capability-gated.** Per the universality doctrine, expose a `shadowQuality`/cascade-count knob and degrade gracefully when a backend lacks compare-samplers or array textures (`isSupported`).
 
 ---
 

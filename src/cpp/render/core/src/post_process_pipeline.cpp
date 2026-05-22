@@ -85,7 +85,18 @@ ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
         return ctx.gpu->CreateFrameBuffer(1, &tex, true);
     };
 
-    hdr_fb_    = make_color_fb(w, h, kTexFmtRGBA8);
+    // The HDR scene FB receives depth-tested geometry, so it MUST have a depth attachment —
+    // a color-only FB renders nothing for depth-tested draws (the scene never reaches the HDR
+    // target → black screen). NOTE: format stays RGBA8 because kTexFmtRGBA16F (=16) is a wrong
+    // enum value (compressed block, not a valid RT) — true HDR range is a separate fix (OBS.5).
+    auto make_color_depth_fb = [&](uint32_t fw, uint32_t fh, uint32_t fmt) -> GpuFrameBufferHandle {
+        GpuTextureHandle color = ctx.gpu->CreateTexture2D((uint16_t)fw, (uint16_t)fh, false, 1, fmt, kTexFlagRT, nullptr);
+        GpuTextureHandle depth = ctx.gpu->CreateTexture2D((uint16_t)fw, (uint16_t)fh, false, 1, kTexFmtD16, kTexFlagRT, nullptr);
+        GpuTextureHandle att[2] = { color, depth };
+        return ctx.gpu->CreateFrameBuffer(2, att, true);
+    };
+
+    hdr_fb_    = make_color_depth_fb(w, h, kTexFmtRGBA8);
     bright_fb_ = make_color_fb(pp_w_, pp_h_, kTexFmtRGBA8);
     blur_a_fb_ = make_color_fb(pp_w_, pp_h_, kTexFmtRGBA8);
     blur_b_fb_ = make_color_fb(pp_w_, pp_h_, kTexFmtRGBA8);

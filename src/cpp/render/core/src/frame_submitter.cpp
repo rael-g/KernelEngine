@@ -50,11 +50,9 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     if (packet.has_dir_light)
         lighting.SetDirectionalLight(&packet.dir_light);
 
-    if (packet.point_light_count > 0)
-        lighting.StorePointLights(packet.point_lights, packet.point_light_count);
-
-    if (packet.spot_light_count > 0)
-        lighting.StoreSpotLights(packet.spot_lights, packet.spot_light_count);
+    // Always store (even count 0) so last frame's lights don't persist.
+    lighting.StorePointLights(packet.point_lights, packet.point_light_count);
+    lighting.StoreSpotLights(packet.spot_lights, packet.spot_light_count);
 
     ctx.gpu->SetUniform(lighting.light_dir_uniform,     lighting.light_dir,     1);
     ctx.gpu->SetUniform(lighting.light_color_uniform,   lighting.light_color,   1);
@@ -65,6 +63,9 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
 
     float ibl_params[4] = {packet.has_skybox ? 1.0f : 0.0f, 0, 0, 0};
     ctx.gpu->SetUniform(lighting.ibl_params_uniform, ibl_params, 1);
+
+    // Pack + upload point/spot lights into u_pointLights/u_spotLights + u_lightCounts (forward path).
+    lighting.UploadLights(ctx);
 
     // ── 2. Shadow Pass ───────────────────────────────────────────────────────
     if (ke_shadow_map_is_valid(packet.shadow.map_handle))
