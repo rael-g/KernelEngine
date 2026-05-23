@@ -12,16 +12,18 @@ namespace KernelEngine.Framework;
 /// </summary>
 public sealed class Assets
 {
-    private readonly IAssetLoader _loader;
+    private readonly IAssetLoader? _modelLoader;
+    private readonly IImageLoader? _imageLoader;
     private readonly ResourceManager _resources;
 
     // Cache holds a strong reference; eviction is driven by Resource.OnDestroyed (set at insert).
     private readonly Dictionary<string, Resource> _cache = new(StringComparer.Ordinal);
     private readonly object _gate = new();
 
-    public Assets(IAssetLoader loader, ResourceManager resources)
+    public Assets(IAssetLoader? modelLoader, IImageLoader? imageLoader, ResourceManager resources)
     {
-        _loader = loader;
+        _modelLoader = modelLoader;
+        _imageLoader = imageLoader;
         _resources = resources;
     }
 
@@ -31,6 +33,8 @@ public sealed class Assets
     /// </summary>
     public async Task<Model> LoadModelAsync(string path)
     {
+        if (_modelLoader == null) throw new InvalidOperationException("No IAssetLoader registered — call AddAssimpAssetLoader() (or equivalent) in your service collection.");
+
         // Cache fast path.
         lock (_gate)
         {
@@ -40,7 +44,7 @@ public sealed class Assets
 
         // CPU-side parse runs on the loader's worker threads (enkiTS via the task scheduler);
         // GPU upload routes through ResourceManager → ke.render. ke.sim never blocks.
-        using var data = await _loader.LoadModelAsync(path);
+        using var data = await _modelLoader.LoadModelAsync(path);
 
         var textures = new Texture[data.Textures.Count];
         for (int i = 0; i < data.Textures.Count; i++)
@@ -92,5 +96,37 @@ public sealed class Assets
             _cache[path] = model;
         }
         return model;
+    }
+
+    /// <summary>
+    /// Loads a 2D image file (PNG/JPG/...) into a ref-counted <see cref="Texture"/>, caching by
+    /// path. CPU-side decode runs on a worker (<see cref="IImageLoader.LoadImageAsync"/>); the GPU
+    /// upload routes through <see cref="ResourceManager"/> → ke.render. ke.sim never blocks.
+    /// </summary>
+    public async Task<Texture> LoadTextureAsync(string path)
+    {
+        if (_imageLoader == null) throw new InvalidOperationException("No IImageLoader registered — call AddStbImageLoader() (or equivalent) in your service collection.");
+
+        lock (_gate)
+        {
+            if (_cache.TryGetValue(path, out var cached))
+                return (Texture)cached.Retain();
+        }
+
+        using var img = await _imageLoader.LoadImageAsync(path);
+        var pixels = img.Pixels.ToArray();
+        var texture = await _resources.CreateTextureAsync(img.Width, img.Height, pixels);
+
+        lock (_gate)
+        {
+            if (_cache.TryGetValue(path, out var winner))
+            {
+                texture.Release();
+                return (Texture)winner.Retain();
+            }
+            texture.OnDestroyed = () => { lock (_gate) _cache.Remove(path); };
+            _cache[path] = texture;
+        }
+        return texture;
     }
 }

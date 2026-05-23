@@ -23,7 +23,7 @@ public class AssetsTests
         model.Textures.Returns(Array.Empty<IModelTexture>());
         loader.LoadModelAsync(Arg.Any<string>()).Returns(Task.FromResult(model));
 
-        return (new Assets(loader, new ResourceManager(factory)), loader, factory);
+        return (new Assets(loader, imageLoader: null, new ResourceManager(factory)), loader, factory);
     }
 
     [Fact]
@@ -67,5 +67,53 @@ public class AssetsTests
         Assert.NotSame(a, b);
         Assert.Equal(1, a.ReferenceCount);
         Assert.Equal(1, b.ReferenceCount);
+    }
+
+    [Fact]
+    public async Task LoadModelAsync_WithoutLoader_Throws()
+    {
+        var assets = new Assets(modelLoader: null, imageLoader: null, new ResourceManager(Substitute.For<IResourceFactory>()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => assets.LoadModelAsync("x.gltf"));
+    }
+
+    private sealed class FakeImageData : IImageData
+    {
+        private readonly byte[] _pixels;
+        public FakeImageData(string path, uint w, uint h) { Path = path; Width = w; Height = h; _pixels = new byte[w * h * 4]; }
+        public string Path { get; }
+        public uint Width { get; }
+        public uint Height { get; }
+        public ReadOnlySpan<byte> Pixels => _pixels;
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public async Task LoadTextureAsync_CachesByPath_AndEvictsOnRelease()
+    {
+        var imageLoader = Substitute.For<IImageLoader>();
+        imageLoader.LoadImageAsync(Arg.Any<string>())
+            .Returns(call => Task.FromResult<IImageData>(new FakeImageData((string)call[0], 2, 2)));
+
+        var factory = Substitute.For<IResourceFactory>();
+        var assets = new Assets(modelLoader: null, imageLoader, new ResourceManager(factory));
+
+        var t1 = await assets.LoadTextureAsync("a.png");
+        var t2 = await assets.LoadTextureAsync("a.png");
+        Assert.Same(t1, t2);
+        Assert.Equal(2, t1.ReferenceCount);
+        await imageLoader.Received(1).LoadImageAsync("a.png");
+
+        t1.Release();
+        t2.Release();
+        var t3 = await assets.LoadTextureAsync("a.png");
+        Assert.NotSame(t1, t3);
+        await imageLoader.Received(2).LoadImageAsync("a.png");
+    }
+
+    [Fact]
+    public async Task LoadTextureAsync_WithoutLoader_Throws()
+    {
+        var assets = new Assets(modelLoader: null, imageLoader: null, new ResourceManager(Substitute.For<IResourceFactory>()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => assets.LoadTextureAsync("x.png"));
     }
 }

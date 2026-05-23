@@ -212,8 +212,10 @@ public class Application : IDisposable
 
                 var factory = _resourceQueue.CreateFactory();
                 Resources = new ResourceManager(factory);
-                var loader = Services.GetService<IAssetLoader>();
-                if (loader != null) Assets = new Assets(loader, Resources);
+                var modelLoader = Services.GetService<IAssetLoader>();
+                var imageLoader = Services.GetService<IImageLoader>();
+                if (modelLoader != null || imageLoader != null)
+                    Assets = new Assets(modelLoader, imageLoader, Resources);
                 OnReady?.Invoke(factory);
                 Logger?.Info("Application", "ke.sim: OnReady complete — entering frame loop");
                 simReady.Set(); // signal ke.render that OnReady is complete

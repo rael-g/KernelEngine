@@ -39,6 +39,7 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/dev_platform/dev_platform.h
 ../../../c/kernel/include/kernel_engine/kernel/asset/mesh_data.h
 ../../../c/kernel/include/kernel_engine/kernel/asset/asset_loader.h
+../../../c/kernel/include/kernel_engine/kernel/asset/image_loader.h
 --methodClassName
 NativeMethods
 --prefixStrip
