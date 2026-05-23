@@ -27,6 +27,7 @@ add_subdirectory(src/cpp/render/bgfx_device)
 add_subdirectory(src/cpp/render/bgfx)
 add_subdirectory(src/cpp/render/bgfx_shader_compiler)
 add_subdirectory(src/cpp/asset/assimp)
+add_subdirectory(src/cpp/asset/stb_image)
 
 add_subdirectory(examples/c/01_minimal_log)
 add_subdirectory(examples/c/02_window_graphics)
