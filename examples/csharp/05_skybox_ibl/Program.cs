@@ -58,14 +58,14 @@ app.OnReady = (resources) =>
     var cubeHandle = resources.CreateCubemap(faceSize, cubeData);
     Console.WriteLine($"[KernelEngine] Cubemap: handle={cubeHandle} faceSize={faceSize}");
 
-    app.Scene.AddNode(new SkyboxNode { CubemapHandle = cubeHandle }, "Skybox");
+    app.Scene.AddNode(new Skybox { CubemapHandle = cubeHandle }, "Skybox");
     entityCount++;
 
     var mirrorMat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.8f, roughness: 0.1f);
-    app.Scene.AddNode(new MeshNode { MaterialHandle = mirrorMat }, "MirrorQuad");
+    app.Scene.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
     entityCount++;
 
-    app.Scene.AddNode(new LightNode
+    app.Scene.AddNode(new DirectionalLight
     {
         Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
         Intensity = 1.5f,
@@ -100,14 +100,14 @@ app.Run(services);
 
 // ── FreeLook camera — arrow keys: look, WASD: move, Shift/Ctrl: fly ──────────
 
-sealed class FreeLookNode : CameraNode
+sealed class FreeLookNode : Camera
 {
     private float _speed     = 8.0f;
     private float _rotateDeg = 90.0f;
     private float _pitch     = 0f;
     private float _yaw       = 0f;
 
-    protected override void OnUpdate(float dt)
+    protected override void Update(float dt)
     {
         var input = Input.Current;
 

@@ -23,10 +23,10 @@ app.OnReady = async (resources) =>
     Console.WriteLine("[KernelEngine] Example: 13_full_scene");
     Console.WriteLine("[KernelEngine] Features: all_stabilized_systems, shadows, hdr, bloom, ssao, many_lights, assimp");
 
-    // Camera. No CameraNode.LookAt helper yet (framework gap — Kanban OBS.5); the camera looks
+    // Camera. No Camera.LookAt helper yet (framework gap — Kanban OBS.5); the camera looks
     // down its local -Z, so orient it manually toward the scene center for a 3/4 framing.
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "MainCamera");
     var eye = new Vector3(8f, 8f, 15f);
     var lookRot = Quaternion.CreateFromRotationMatrix(
@@ -37,7 +37,7 @@ app.OnReady = async (resources) =>
     // Static directional light. Direction is the vector FROM the lit surface TOWARD the light
     // source; a directional light ignores Position, so this must be set for shading + shadows.
     var sun = app.Scene.AddNode(
-        new LightNode {
+        new DirectionalLight {
             Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
             Color = new Vector3(1f, 0.95f, 0.8f),
             Intensity = 4.0f
@@ -46,7 +46,7 @@ app.OnReady = async (resources) =>
 
     // Ground plane
     var floorMat = await resources.CreateMaterialAsync(new Vector4(0.2f, 0.2f, 0.2f, 1f), metallic: 0.0f, roughness: 0.9f);
-    var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshRenderer { MaterialHandle = floorMat }, "Floor");
     // Default mesh (handle 0) is a quad in the XY plane (normal +Z). Rotate -90° about X to lay it
     // flat as a ground plane (normal +Y); local Y becomes world depth, so scale X and Y for size.
     floor.LocalTransform = floor.LocalTransform with
@@ -89,7 +89,7 @@ app.OnReady = async (resources) =>
                 meshData.Indices.ToArray());
             var material = meshData.MaterialIndex >= 0 ? gpuMaterials[meshData.MaterialIndex] : default;
             app.Scene.AddNode(
-                new MeshNode { MeshHandle = gpuMesh, MaterialHandle = material },
+                new MeshRenderer { MeshHandle = gpuMesh, MaterialHandle = material },
                 meshData.Name, parent: modelRoot);
         }
         modelRoot.LocalTransform = modelRoot.LocalTransform with {
@@ -135,13 +135,13 @@ sealed class OrbitingLight : Node
     public float Phase { get; init; } = 0.0f;
     private float _time;
 
-    protected override void OnStart()
+    protected override void Start()
     {
-        var comp = AddComponent<PointLightComponent>(PointLightNode.ComponentId);
+        var comp = AddComponent<PointLightComponent>(PointLight.ComponentId);
         comp[0] = new PointLightComponent { R = Color.X, G = Color.Y, B = Color.Z, Intensity = 40f, Radius = 18f };
     }
 
-    protected override void OnUpdate(float dt)
+    protected override void Update(float dt)
     {
         _time += dt * Speed;
         float x = MathF.Cos(_time + Phase) * Radius;

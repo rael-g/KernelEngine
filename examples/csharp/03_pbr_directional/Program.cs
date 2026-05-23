@@ -38,7 +38,7 @@ app.OnReady = (resources) =>
     entityCount++;
 
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
     {
@@ -51,14 +51,14 @@ app.OnReady = (resources) =>
     var mat1 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal1, roughness: rough1);
     var mat2 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal2, roughness: rough2);
 
-    var n0 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat0 }, "QuadDielectric");
+    var n0 = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat0 }, "QuadDielectric");
     n0.LocalTransform = n0.LocalTransform with { Position = new Vector3(-2f, 0f, 0f) };
     entityCount++;
 
-    var n1 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat1 }, "QuadMetal");
+    var n1 = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat1 }, "QuadMetal");
     entityCount++;
 
-    var n2 = app.Scene.AddNode(new MeshNode { MaterialHandle = mat2 }, "QuadMixed");
+    var n2 = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat2 }, "QuadMixed");
     n2.LocalTransform = n2.LocalTransform with { Position = new Vector3(2f, 0f, 0f) };
     entityCount++;
 };
@@ -91,21 +91,21 @@ sealed class OrbitingLightNode : Node
 
     private float _angle;
 
-    protected override void OnStart()
+    protected override void Start()
     {
-        if (LightNode.ComponentId == uint.MaxValue) return;
+        if (DirectionalLight.ComponentId == uint.MaxValue) return;
         var dir = CurrentDir();
-        var comp = AddComponent<LightComponent>(LightNode.ComponentId);
+        var comp = AddComponent<LightComponent>(DirectionalLight.ComponentId);
         comp[0] = new LightComponent { DirX = dir.X, DirY = dir.Y, DirZ = dir.Z,
                                     R = Color.X, G = Color.Y, B = Color.Z,
                                     Intensity = Intensity };
     }
 
-    protected override void OnUpdate(float dt)
+    protected override void Update(float dt)
     {
         _angle += 60f * dt * MathF.PI / 180f;
         var dir = CurrentDir();
-        var comp = GetComponent<LightComponent>(LightNode.ComponentId);
+        var comp = GetComponent<LightComponent>(DirectionalLight.ComponentId);
         comp[0].DirX = dir.X;
         comp[0].DirY = dir.Y;
         comp[0].DirZ = dir.Z;

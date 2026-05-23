@@ -295,26 +295,26 @@ public class Application : IDisposable
 
     private void InitializeSystems()
     {
-        LightNode.Initialize(ActiveWorld.Registry);
-        PointLightNode.Initialize(ActiveWorld.Registry);
-        SpotLightNode.Initialize(ActiveWorld.Registry);
-        CameraNode.Initialize(ActiveWorld.Registry);
-        MeshNode.Initialize(ActiveWorld.Registry);
-        SkyboxNode.Initialize(ActiveWorld.Registry);
+        DirectionalLight.Initialize(ActiveWorld.Registry);
+        PointLight.Initialize(ActiveWorld.Registry);
+        SpotLight.Initialize(ActiveWorld.Registry);
+        Camera.Initialize(ActiveWorld.Registry);
+        MeshRenderer.Initialize(ActiveWorld.Registry);
+        Skybox.Initialize(ActiveWorld.Registry);
 
-        MeshNode.DefaultMeshHandle     = new(0);
-        MeshNode.DefaultMaterialHandle = new(0);
+        MeshRenderer.DefaultMeshHandle     = new(0);
+        MeshRenderer.DefaultMaterialHandle = new(0);
 
         var xformCid = ActiveWorld.TransformComponentId;
 
         // All render systems are pure-managed now — render/core C++ is no longer in the pipeline.
-        ActiveWorld.AddSystem(new CameraRenderSystem(CameraNode.ComponentId, xformCid));
+        ActiveWorld.AddSystem(new CameraRenderSystem(Camera.ComponentId, xformCid));
         ActiveWorld.AddSystem(new LightRenderSystem(
-            LightNode.ComponentId, PointLightNode.ComponentId, SpotLightNode.ComponentId, xformCid));
-        ActiveWorld.AddSystem(new MeshRenderSystem(MeshNode.ComponentId, xformCid));
-        ActiveWorld.AddSystem(new SkyboxRenderSystem(SkyboxNode.ComponentId));
+            DirectionalLight.ComponentId, PointLight.ComponentId, SpotLight.ComponentId, xformCid));
+        ActiveWorld.AddSystem(new MeshRenderSystem(MeshRenderer.ComponentId, xformCid));
+        ActiveWorld.AddSystem(new SkyboxRenderSystem(Skybox.ComponentId));
 
-        _shadowSystem = new ShadowRenderSystem(LightNode.ComponentId, MeshNode.ComponentId, xformCid);
+        _shadowSystem = new ShadowRenderSystem(DirectionalLight.ComponentId, MeshRenderer.ComponentId, xformCid);
         ActiveWorld.AddSystem(_shadowSystem);
     }
 

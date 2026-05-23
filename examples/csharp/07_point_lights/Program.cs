@@ -22,7 +22,7 @@ app.OnReady = (resources) =>
 
     // Camera
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
@@ -35,7 +35,7 @@ app.OnReady = (resources) =>
     {
         for (int y = -5; y <= 5; y += 2)
         {
-            var n = app.Scene.AddNode(new MeshNode { MaterialHandle = mat }, $"Sphere_{x}_{y}");
+            var n = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat }, $"Sphere_{x}_{y}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, y, 0f) };
         }
     }
@@ -72,10 +72,10 @@ sealed class MovingLightNode : Node
 
     private float _time;
 
-    protected override void OnStart()
+    protected override void Start()
     {
-        if (PointLightNode.ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<PointLightComponent>(PointLightNode.ComponentId);
+        if (PointLight.ComponentId == uint.MaxValue) return;
+        var comp = AddComponent<PointLightComponent>(PointLight.ComponentId);
         comp[0] = new PointLightComponent { 
             R = Color.X, G = Color.Y, B = Color.Z,
             Intensity = Intensity,
@@ -83,7 +83,7 @@ sealed class MovingLightNode : Node
         };
     }
 
-    protected override void OnUpdate(float dt)
+    protected override void Update(float dt)
     {
         _time += dt;
         float x = MathF.Cos(_time + Phase) * 5.0f;

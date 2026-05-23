@@ -49,7 +49,7 @@ public class Node
     {
         if (_world == null) return;
         s_registry[_entity] = this;
-        _world.RegisterScript(_entity, OnStart, OnUpdate);
+        _world.RegisterScript(_entity, TickStart, TickUpdate);
     }
 
     // ── Identity ──────────────────────────────────────────────────────────────
@@ -138,27 +138,48 @@ public class Node
             ? Span<HierarchyComponent>.Empty
             : _world.Registry.GetComponent<HierarchyComponent>(_entity, _world.HierarchyComponentId);
 
-    // ── ECS helpers for subclasses ────────────────────────────────────────────
+    // ── ECS helpers (engine-internal — user code expresses behavior with managed fields, not
+    //    by adding components; new capabilities arrive as new nodes + systems, per F.0b) ─────
 
-    /// <summary>Adds a component to this node's entity and returns a length-1 span.</summary>
-    protected Span<T> AddComponent<T>(uint componentId) where T : unmanaged =>
-        _world!.Registry.AddComponent<T>(_entity, componentId);
+    internal Span<T> AddComponent<T>(uint componentId) where T : unmanaged =>
+        _world == null ? Span<T>.Empty : _world.Registry.AddComponent<T>(_entity, componentId);
 
-    /// <summary>Returns a length-1 span over the component, or empty when absent.</summary>
-    protected Span<T> GetComponent<T>(uint componentId) where T : unmanaged =>
-        _world!.Registry.GetComponent<T>(_entity, componentId);
+    /// <summary>Returns an empty span until the node is bound to a world (e.g. during init setters).</summary>
+    internal Span<T> GetComponent<T>(uint componentId) where T : unmanaged =>
+        _world == null ? Span<T>.Empty : _world.Registry.GetComponent<T>(_entity, componentId);
 
-    /// <summary>Removes a component from this node's entity.</summary>
-    protected void RemoveComponent(uint componentId) =>
-        _world!.Registry.RemoveComponent(_entity, componentId);
+    internal void RemoveComponent(uint componentId)
+    {
+        if (_world != null) _world.Registry.RemoveComponent(_entity, componentId);
+    }
 
-    // ── Script overrides ──────────────────────────────────────────────────────
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    //   Override the methods (Start/Update) in subclasses; instances can additionally hook
+    //   the On* actions (no override needed). Both fire each tick: method first, then action.
 
-    /// <summary>Called once before the first <see cref="OnUpdate"/> call.</summary>
-    protected virtual void OnStart() { }
+    /// <summary>Called once before the first <see cref="Update"/> call. Override to initialize.</summary>
+    protected virtual void Start() { }
 
-    /// <summary>Called every frame.</summary>
-    protected virtual void OnUpdate(float deltaTime) { }
+    /// <summary>Called every sim frame. Override to drive per-frame behavior.</summary>
+    protected virtual void Update(float deltaTime) { }
+
+    /// <summary>Instance hook fired after <see cref="Start"/>.</summary>
+    public Action? OnStart { get; set; }
+
+    /// <summary>Instance hook fired after <see cref="Update"/>.</summary>
+    public Action<float>? OnUpdate { get; set; }
+
+    private void TickStart()
+    {
+        Start();
+        OnStart?.Invoke();
+    }
+
+    private void TickUpdate(float dt)
+    {
+        Update(dt);
+        OnUpdate?.Invoke(dt);
+    }
 
     // ── Internal registry ─────────────────────────────────────────────────────
 

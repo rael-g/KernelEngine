@@ -22,7 +22,7 @@ app.OnReady = async (resources) =>
     Console.WriteLine("[KernelEngine] Example: 06_shadow_map");
     Console.WriteLine("[KernelEngine] Features: shadow_mapping, directional_light, floor_plane, cube");
 
-    // Directional light (Sun). Per LightNode docs, Direction is the vector pointing
+    // Directional light (Sun). Per DirectionalLight docs, Direction is the vector pointing
     // FROM the lit surface TOWARD the light source. Sun in upper-right-back → (+x, +y, +z).
     var light = app.Scene.AddNode(
         new AnimatedSun
@@ -36,7 +36,7 @@ app.OnReady = async (resources) =>
 
     // Camera
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
     {
@@ -52,12 +52,12 @@ app.OnReady = async (resources) =>
     var cubeMesh  = await app.Resources.CreateMeshAsync(MeshShape.Cube());
 
     // Floor.
-    var floor = app.Scene.AddNode(new MeshNode { Mesh = floorMesh, Material = floorMat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshRenderer { Mesh = floorMesh, Material = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(10f, 1f, 10f) };
     entityCount++;
 
     // Cube (casting shadow).
-    var cube = app.Scene.AddNode(new MeshNode { Mesh = cubeMesh, Material = cubeMat }, "Caster");
+    var cube = app.Scene.AddNode(new MeshRenderer { Mesh = cubeMesh, Material = cubeMat }, "Caster");
     cube.LocalTransform = cube.LocalTransform with { Position = new Vector3(0f, 1f, 0f) };
     entityCount++;
 };
@@ -88,20 +88,14 @@ app.Run(services);
 /// Directional light that sweeps its azimuth back and forth over time, so the cube's shadow
 /// slides across the floor — a visual check that the shadow projection tracks the light.
 /// </summary>
-sealed class AnimatedSun : LightNode
+sealed class AnimatedSun : DirectionalLight
 {
     private float _t;
 
-    protected override void OnUpdate(float dt)
+    protected override void Update(float dt)
     {
         _t += dt;
         float a = MathF.Sin(_t * 0.8f);                       // -1..1 sweep
-        var dir = Vector3.Normalize(new Vector3(a * 0.8f, 1.0f, 0.5f));
-
-        var comp = GetComponent<LightComponent>(ComponentId);
-        if (comp.IsEmpty) return;
-        comp[0].DirX = dir.X;
-        comp[0].DirY = dir.Y;
-        comp[0].DirZ = dir.Z;
+        Direction = Vector3.Normalize(new Vector3(a * 0.8f, 1.0f, 0.5f));
     }
 }

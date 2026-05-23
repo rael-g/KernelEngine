@@ -5,7 +5,7 @@ namespace KernelEngine.Kernel;
 
 /// <summary>Directional light parameters published in the frame packet.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public struct DirectionalLight
+public struct DirectionalLightData
 {
     public Vector3 Direction;
     public Vector3 Color;
@@ -14,7 +14,7 @@ public struct DirectionalLight
 
 /// <summary>Point light parameters published in the frame packet.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public struct PointLight
+public struct PointLightData
 {
     public Vector3 Position;
     public float Radius;
@@ -24,7 +24,7 @@ public struct PointLight
 
 /// <summary>Spot light parameters published in the frame packet.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public struct SpotLight
+public struct SpotLightData
 {
     public Vector3 Position;
     public float Range;

@@ -4,10 +4,10 @@ namespace KernelEngine.Framework;
 
 /// <summary>
 /// A scene node that acts as a camera. Adds a <see cref="CameraComponent"/> to its ECS entity on start.
-/// Register via <c>scene.AddNode(new CameraNode(), "Camera")</c>, then set
-/// <c>world.ActiveCamera = cameraNode.Entity</c> so <see cref="CameraRenderSystem"/> picks it up.
+/// Register via <c>scene.AddNode(new Camera(), "Camera")</c>, then set
+/// <c>world.ActiveCamera = Camera.Entity</c> so <see cref="CameraRenderSystem"/> picks it up.
 /// </summary>
-public class CameraNode : Node
+public class Camera : Node
 {
     // ── ECS registration ──────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ public class CameraNode : Node
     /// <summary>Use orthographic projection instead of perspective.</summary>
     public bool Orthographic { get; init; } = false;
 
-    protected override void OnStart()
+    protected override void Start()
     {
         if (ComponentId == uint.MaxValue) return;
         var comp = AddComponent<CameraComponent>(ComponentId);

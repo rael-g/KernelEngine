@@ -25,14 +25,14 @@ app.OnReady = async (resources) =>
 
     // Camera
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 5f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Lights
     app.Scene.AddNode(
-        new LightNode { Color = Vector3.One, Intensity = 3.0f },
+        new DirectionalLight { Color = Vector3.One, Intensity = 3.0f },
         "Sun").LocalTransform = new Transform { Position = new Vector3(5f, 10f, 5f) };
 
     // One-line load + add via the Assets façade (cache + dedup) and scene.Add() (uploads textures

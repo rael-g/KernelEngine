@@ -7,9 +7,9 @@ namespace KernelEngine.Framework;
 /// Set <see cref="MeshHandle"/> and <see cref="MaterialHandle"/> before adding to the scene,
 /// or leave as default to use the built-in unit quad with a white material.
 /// </summary>
-public class MeshNode : Node
+public class MeshRenderer : Node
 {
-    // ── ECS registration (shared across all MeshNode instances) ──────────────
+    // ── ECS registration (shared across all MeshRenderer instances) ──────────────
 
     public static uint ComponentId { get; private set; } = uint.MaxValue;
 
@@ -21,7 +21,7 @@ public class MeshNode : Node
 
     /// <summary>
     /// Registers the MeshComponent with the ECS registry and stores the component ID.
-    /// Must be called once per world, before any MeshNode is added to the scene.
+    /// Must be called once per world, before any MeshRenderer is added to the scene.
     /// </summary>
     internal static void Initialize(IEcsRegistry registry)
     {
@@ -48,7 +48,7 @@ public class MeshNode : Node
     /// <summary>Raw GPU material handle (escape hatch / backward compat). Prefer <see cref="Material"/>.</summary>
     public MaterialHandle MaterialHandle { get; init; } = MaterialHandle.None;
 
-    protected override void OnStart()
+    protected override void Start()
     {
         if (ComponentId == uint.MaxValue) return;
 

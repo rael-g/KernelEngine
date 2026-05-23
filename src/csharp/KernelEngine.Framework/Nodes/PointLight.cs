@@ -4,10 +4,12 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that acts as a directional light source. Adds a <see cref="LightComponent"/>
-/// to its ECS entity on start. <see cref="LightRenderSystem"/> reads all light entities each frame.
+/// A scene node that acts as an omnidirectional point light source.
+/// Adds a <see cref="PointLightComponent"/> to its ECS entity on start.
+/// <see cref="LightRenderSystem"/> collects all point light entities each frame.
+/// The light position is derived from the node's world-space transform.
 /// </summary>
-public class LightNode : Node
+public class PointLight : Node
 {
     // ── ECS registration ──────────────────────────────────────────────────────
 
@@ -16,13 +18,13 @@ public class LightNode : Node
     internal static void Initialize(IEcsRegistry registry)
     {
         if (ComponentId == uint.MaxValue)
-            ComponentId = registry.RegisterComponent<LightComponent>("LightComponent");
+            ComponentId = registry.RegisterComponent<PointLightComponent>("PointLightComponent");
     }
 
     // ── Per-instance ──────────────────────────────────────────────────────────
 
-    /// <summary>Direction toward the light source (world space). Default: sun directly above.</summary>
-    public Vector3 Direction { get; init; } = Vector3.UnitY;
+    /// <summary>Influence radius. Attenuation reaches zero at this distance.</summary>
+    public float Radius { get; init; } = 10f;
 
     /// <summary>Linear light color.</summary>
     public Vector3 Color { get; init; } = Vector3.One;
@@ -30,13 +32,13 @@ public class LightNode : Node
     /// <summary>Intensity multiplier.</summary>
     public float Intensity { get; init; } = 1f;
 
-    protected override void OnStart()
+    protected override void Start()
     {
         if (ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<LightComponent>(ComponentId);
-        comp[0] = new LightComponent
+        var comp = AddComponent<PointLightComponent>(ComponentId);
+        comp[0] = new PointLightComponent
         {
-            DirX = Direction.X, DirY = Direction.Y, DirZ = Direction.Z,
+            Radius = Radius,
             R = Color.X, G = Color.Y, B = Color.Z,
             Intensity = Intensity,
         };

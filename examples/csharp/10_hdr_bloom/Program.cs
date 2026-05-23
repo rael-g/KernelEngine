@@ -22,7 +22,7 @@ app.OnReady = (resources) =>
 
     // Camera
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 10f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
@@ -31,14 +31,14 @@ app.OnReady = (resources) =>
     var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
 
     // Glowing cube
-    var glowingCube = app.Scene.AddNode(new MeshNode { MaterialHandle = mat }, "GlowCube");
+    var glowingCube = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat }, "GlowCube");
     glowingCube.LocalTransform = glowingCube.LocalTransform with { Scale = new Vector3(2f, 2f, 2f) };
 
     // Very intense light to trigger bloom. Direction must point toward the camera-facing quad
     // (normal +Z), otherwise N·L = 0 and the "glow" cube stays black. Direction is the vector
     // toward the light source, so +Z lights the front face.
     var light = app.Scene.AddNode(
-        new LightNode { Direction = new Vector3(0f, 0f, 1f), Color = new Vector3(1f, 0.5f, 0.2f), Intensity = 50.0f },
+        new DirectionalLight { Direction = new Vector3(0f, 0f, 1f), Color = new Vector3(1f, 0.5f, 0.2f), Intensity = 50.0f },
         "BrightSun");
 };
 

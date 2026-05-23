@@ -24,13 +24,13 @@ public interface IFramePacket
     void SetCamera(Matrix4x4 view, Matrix4x4 projection, Vector3 position);
 
     /// <summary>Sets the directional (sun) light for this frame.</summary>
-    void SetDirectionalLight(DirectionalLight light);
+    void SetDirectionalLight(DirectionalLightData light);
 
     /// <summary>Appends a point light. Ignored when the per-frame capacity is exhausted.</summary>
-    void AddPointLight(PointLight light);
+    void AddPointLight(PointLightData light);
 
     /// <summary>Appends a spot light. Ignored when the per-frame capacity is exhausted.</summary>
-    void AddSpotLight(SpotLight light);
+    void AddSpotLight(SpotLightData light);
 
     /// <summary>Appends a draw command to the main scene pass. Ignored when capacity is exhausted.</summary>
     void AddDrawCommand(MeshHandle mesh, MaterialHandle material, Matrix4x4 transform);

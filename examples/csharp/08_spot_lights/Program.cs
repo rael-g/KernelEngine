@@ -22,7 +22,7 @@ app.OnReady = (resources) =>
 
     // Camera
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
@@ -32,7 +32,7 @@ app.OnReady = (resources) =>
     var cubeMat = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
     // Floor
-    var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = floorMat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshRenderer { MaterialHandle = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with 
     { 
         Scale = new Vector3(20f, 0.1f, 20f),
@@ -44,7 +44,7 @@ app.OnReady = (resources) =>
     {
         for (int z = -4; z <= 4; z += 4)
         {
-            var n = app.Scene.AddNode(new MeshNode { MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
+            var n = app.Scene.AddNode(new MeshRenderer { MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, 1f, z) };
         }
     }
@@ -93,10 +93,10 @@ sealed class RotatingSpotLightNode : Node
 
     private float _time;
 
-    protected override void OnStart()
+    protected override void Start()
     {
-        if (SpotLightNode.ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<SpotLightComponent>(SpotLightNode.ComponentId);
+        if (SpotLight.ComponentId == uint.MaxValue) return;
+        var comp = AddComponent<SpotLightComponent>(SpotLight.ComponentId);
         comp[0] = new SpotLightComponent { 
             R = Color.X, G = Color.Y, B = Color.Z,
             Intensity = Intensity,
@@ -106,7 +106,7 @@ sealed class RotatingSpotLightNode : Node
         };
     }
 
-    protected override void OnUpdate(float dt)
+    protected override void Update(float dt)
     {
         _time += dt;
         float x = MathF.Cos(_time + Offset) * 8.0f;
@@ -117,7 +117,7 @@ sealed class RotatingSpotLightNode : Node
         // Point towards center
         var lookDir = Vector3.Normalize(new Vector3(0, 0, 0) - LocalTransform.Position);
         
-        var comp = GetComponent<SpotLightComponent>(SpotLightNode.ComponentId);
+        var comp = GetComponent<SpotLightComponent>(SpotLight.ComponentId);
         comp[0].DirX = lookDir.X;
         comp[0].DirY = lookDir.Y;
         comp[0].DirZ = lookDir.Z;

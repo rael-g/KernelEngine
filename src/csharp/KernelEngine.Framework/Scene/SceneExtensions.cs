@@ -8,7 +8,7 @@ public static class SceneExtensions
 {
     /// <summary>
     /// Adds <paramref name="model"/>'s meshes to the scene under a new parent node. Each
-    /// sub-mesh becomes a <see cref="MeshNode"/> (which retains its <see cref="Mesh"/> +
+    /// sub-mesh becomes a <see cref="MeshRenderer"/> (which retains its <see cref="Mesh"/> +
     /// <see cref="Material"/>). The returned root is the parent — transform it to place/scale
     /// the whole model.
     /// </summary>
@@ -22,7 +22,7 @@ public static class SceneExtensions
         foreach (var entry in model.Meshes)
         {
             scene.AddNode(
-                new MeshNode { Mesh = entry.Mesh, Material = entry.Material },
+                new MeshRenderer { Mesh = entry.Mesh, Material = entry.Material },
                 entry.Name,
                 parent: root);
         }

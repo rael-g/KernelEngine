@@ -32,7 +32,7 @@ public sealed class LightRenderSystem : ISystem
         if (dirLights.Length > 0)
         {
             var l = dirLights.Data[0];
-            packet.SetDirectionalLight(new DirectionalLight
+            packet.SetDirectionalLight(new DirectionalLightData
             {
                 Direction = new Vector3(l.DirX, l.DirY, l.DirZ),
                 Color = new Vector3(l.R, l.G, l.B),
@@ -46,7 +46,7 @@ public sealed class LightRenderSystem : ISystem
         {
             var c = pointLights.Data[i];
             var pos = ReadPosition(registry, pointLights.Entities[i]);
-            packet.AddPointLight(new PointLight
+            packet.AddPointLight(new PointLightData
             {
                 Position = pos,
                 Radius = c.Radius,
@@ -61,7 +61,7 @@ public sealed class LightRenderSystem : ISystem
         {
             var c = spotLights.Data[i];
             var pos = ReadPosition(registry, spotLights.Entities[i]);
-            packet.AddSpotLight(new SpotLight
+            packet.AddSpotLight(new SpotLightData
             {
                 Position = pos,
                 Range = c.Range,

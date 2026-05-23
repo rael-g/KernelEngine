@@ -9,7 +9,7 @@ namespace KernelEngine.Framework;
 /// <see cref="LightRenderSystem"/> collects all spot light entities each frame.
 /// The light position is derived from the node's world-space transform.
 /// </summary>
-public class SpotLightNode : Node
+public class SpotLight : Node
 {
     // ── ECS registration ──────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ public class SpotLightNode : Node
     /// <summary>Intensity multiplier.</summary>
     public float Intensity { get; init; } = 1f;
 
-    protected override void OnStart()
+    protected override void Start()
     {
         if (ComponentId == uint.MaxValue) return;
         var comp = AddComponent<SpotLightComponent>(ComponentId);

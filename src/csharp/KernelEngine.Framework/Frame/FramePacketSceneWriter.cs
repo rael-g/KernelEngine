@@ -39,7 +39,7 @@ public sealed class FramePacketSceneWriter : ISceneWriter
     public void SetDirectionalLight(Vector3 direction, Vector3 color, float intensity)
     {
         _threads.AssertCurrentThread("ke.sim");
-        _packet.SetDirectionalLight(new DirectionalLight
+        _packet.SetDirectionalLight(new DirectionalLightData
         {
             Direction = direction,
             Color = color,

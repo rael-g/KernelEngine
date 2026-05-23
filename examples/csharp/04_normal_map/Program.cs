@@ -47,20 +47,20 @@ app.OnReady = (resources) =>
     var matPlain  = resources.CreateMaterial(Vector4.One, roughness: 0.3f);
     var matNormal = resources.CreateMaterial(Vector4.One, roughness: 0.3f, normalMap: nmHandle);
 
-    var left = app.Scene.AddNode(new MeshNode { MaterialHandle = matPlain  }, "PlainQuad");
+    var left = app.Scene.AddNode(new MeshRenderer { MaterialHandle = matPlain  }, "PlainQuad");
     left.LocalTransform = left.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
     entityCount++;
 
-    var right = app.Scene.AddNode(new MeshNode { MaterialHandle = matNormal }, "NormalQuad");
+    var right = app.Scene.AddNode(new MeshRenderer { MaterialHandle = matNormal }, "NormalQuad");
     right.LocalTransform = right.LocalTransform with { Position = new Vector3(1.2f, 0f, 0f) };
     entityCount++;
 
     app.Scene.AddNode(
-        new LightNode { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },
+        new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },
         "Sun");
     entityCount++;
 
-    var cam = app.Scene.AddNode(new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+    var cam = app.Scene.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;

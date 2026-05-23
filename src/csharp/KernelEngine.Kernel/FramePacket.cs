@@ -35,7 +35,7 @@ public sealed unsafe class FramePacket : IFramePacket
     }
 
     /// <summary>Sets the directional light for this frame.</summary>
-    public void SetDirectionalLight(DirectionalLight light)
+    public void SetDirectionalLight(DirectionalLightData light)
     {
         _packet->dir_light = new ke_directional_light {
             dir_x = light.Direction.X, dir_y = light.Direction.Y, dir_z = light.Direction.Z,
@@ -46,7 +46,7 @@ public sealed unsafe class FramePacket : IFramePacket
     }
 
     /// <summary>Appends a point light. Ignored when at capacity.</summary>
-    public void AddPointLight(PointLight light)
+    public void AddPointLight(PointLightData light)
     {
         if (_packet->point_light_count < _packet->point_light_capacity)
             _packet->point_lights[_packet->point_light_count++] = new ke_point_light {
@@ -58,7 +58,7 @@ public sealed unsafe class FramePacket : IFramePacket
     }
 
     /// <summary>Appends a spot light. Ignored when at capacity.</summary>
-    public void AddSpotLight(SpotLight light)
+    public void AddSpotLight(SpotLightData light)
     {
         if (_packet->spot_light_count < _packet->spot_light_capacity)
             _packet->spot_lights[_packet->spot_light_count++] = new ke_spot_light {
@@ -167,7 +167,7 @@ public sealed unsafe class FramePacket : IFramePacket
     public ke_frame_camera Camera => _packet->camera;
 
     /// <summary>Directional light, or <see langword="null"/> when absent.</summary>
-    public ke_directional_light? DirectionalLight =>
+    public ke_directional_light? DirectionalLightData =>
         _packet->has_dir_light ? _packet->dir_light : null;
 
     /// <summary>Span over the point lights recorded this frame.</summary>

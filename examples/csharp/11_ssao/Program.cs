@@ -44,9 +44,9 @@ app.OnReady = (resources) =>
 
     // Camera
     var cam = app.Scene.AddNode(
-        new CameraNode { Fov = 60f, Near = 0.1f, Far = 1000f },
+        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
-    // The camera looks down its local -Z (no CameraNode.LookAt helper yet — framework gap).
+    // The camera looks down its local -Z (no Camera.LookAt helper yet — framework gap).
     // Orient it manually toward the cube wall for a 3/4 angle that frames wall + floor + SSAO.
     var eye = new Vector3(6f, 5f, 9f);
     var lookRot = Quaternion.CreateFromRotationMatrix(
@@ -60,7 +60,7 @@ app.OnReady = (resources) =>
     // Directional light so surfaces are lit (without it the scene is near-black and SSAO has
     // nothing to darken). Direction is the vector toward the light source.
     app.Scene.AddNode(
-        new LightNode { Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)), Color = Vector3.One, Intensity = 4.0f },
+        new DirectionalLight { Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)), Color = Vector3.One, Intensity = 4.0f },
         "Sun");
 
     // Real cube mesh — flat quads don't occlude each other, so SSAO needs actual geometry.
@@ -68,7 +68,7 @@ app.OnReady = (resources) =>
     var cubeMesh = resources.CreateMesh(cubeVerts, cubeIdx);
 
     // Floor. Default mesh is a quad in the XY plane (normal +Z); rotate -90° about X to lay it flat.
-    var floor = app.Scene.AddNode(new MeshNode { MaterialHandle = mat }, "Floor");
+    var floor = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with
     {
         Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
@@ -80,7 +80,7 @@ app.OnReady = (resources) =>
     {
         for (int y = 1; y <= 4; y += 1)
         {
-            var n = app.Scene.AddNode(new MeshNode { MeshHandle = cubeMesh, MaterialHandle = mat }, $"Cube_{x}_{y}");
+            var n = app.Scene.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, $"Cube_{x}_{y}");
             n.LocalTransform = n.LocalTransform with {
                 Position = new Vector3(x, y, 0f),
                 Scale = new Vector3(0.9f, 0.9f, 0.9f)
