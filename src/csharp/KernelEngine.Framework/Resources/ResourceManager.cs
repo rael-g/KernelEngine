@@ -45,6 +45,9 @@ public sealed class ResourceManager
         => _factory.CreateMeshAsync(vertices, indices)
             .ContinueWith(t => new Mesh(_factory, t.Result), TaskContinuationOptions.ExecuteSynchronously);
 
+    /// <summary>Uploads a <see cref="MeshShape"/> descriptor (e.g. <c>MeshShape.Cube()</c>) as a ref-counted <see cref="Mesh"/>.</summary>
+    public Task<Mesh> CreateMeshAsync(MeshShape shape) => CreateMeshAsync(shape.Vertices, shape.Indices);
+
     public Task<Texture> CreateTextureAsync(uint width, uint height, byte[] pixels)
         => _factory.CreateTextureAsync(width, height, pixels)
             .ContinueWith(t => new Texture(_factory, t.Result), TaskContinuationOptions.ExecuteSynchronously);
