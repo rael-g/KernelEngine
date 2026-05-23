@@ -31,25 +31,38 @@ public class MeshNode : Node
     // ── Per-instance ──────────────────────────────────────────────────────────
 
     /// <summary>
-    /// GPU mesh handle to render. Defaults to <see cref="DefaultMeshHandle"/> (built-in unit quad).
-    /// Set this to a handle returned by <see cref="Renderer.CreateMesh"/> for custom geometry.
+    /// High-level mesh resource. When set, the node retains a reference for its lifetime and uses
+    /// its handle. Falls back to <see cref="MeshHandle"/> / <see cref="DefaultMeshHandle"/>.
     /// </summary>
-    public MeshHandle MeshHandle { get; init; } = MeshHandle.None;
+    public Mesh? Mesh { get; init; }
 
     /// <summary>
-    /// Material handle to use for rendering. Defaults to <see cref="DefaultMaterialHandle"/> (built-in white).
-    /// Set this to a handle returned by <see cref="Renderer.CreateMaterial"/> for custom materials.
+    /// High-level material resource. When set, the node retains a reference for its lifetime and
+    /// uses its handle. Falls back to <see cref="MaterialHandle"/> / <see cref="DefaultMaterialHandle"/>.
     /// </summary>
+    public Material? Material { get; init; }
+
+    /// <summary>Raw GPU mesh handle (escape hatch / backward compat). Prefer <see cref="Mesh"/>.</summary>
+    public MeshHandle MeshHandle { get; init; } = MeshHandle.None;
+
+    /// <summary>Raw GPU material handle (escape hatch / backward compat). Prefer <see cref="Material"/>.</summary>
     public MaterialHandle MaterialHandle { get; init; } = MaterialHandle.None;
 
     protected override void OnStart()
     {
         if (ComponentId == uint.MaxValue) return;
+
+        // Retain managed resources so they stay alive while the node references them. Until Node
+        // gets an OnDestroy hook, the retain isn't paired with a Release here — resources live
+        // for the node's lifetime (acceptable for "create once at OnReady" usage; a future node-
+        // lifecycle slice pairs this with a release on node destruction).
+        Mesh?.Retain();
+        Material?.Retain();
+
+        var meshHandle = Mesh?.Handle ?? (MeshHandle.IsValid ? MeshHandle : DefaultMeshHandle);
+        var materialHandle = Material?.Handle ?? (MaterialHandle.IsValid ? MaterialHandle : DefaultMaterialHandle);
+
         var comp = AddComponent<MeshComponent>(ComponentId);
-        comp[0] = new MeshComponent
-        {
-            MeshHandle     = MeshHandle.IsValid     ? MeshHandle     : DefaultMeshHandle,
-            MaterialHandle = MaterialHandle.IsValid ? MaterialHandle : DefaultMaterialHandle,
-        };
+        comp[0] = new MeshComponent { MeshHandle = meshHandle, MaterialHandle = materialHandle };
     }
 }
