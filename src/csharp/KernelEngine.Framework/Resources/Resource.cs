@@ -23,6 +23,13 @@ public abstract class Resource : IDisposable
         return this;
     }
 
+    /// <summary>
+    /// Optional hook fired once, after <see cref="DestroyNative"/>, when the reference count
+    /// reaches zero. Used by <see cref="Assets"/> to evict the resource from its cache without
+    /// coupling <see cref="Resource"/> to the cache. Set once by the creator.
+    /// </summary>
+    internal Action? OnDestroyed { get; set; }
+
     /// <summary>Decrements the reference count; destroys the GPU handle when it reaches zero.</summary>
     public void Release()
     {
@@ -32,6 +39,7 @@ public abstract class Resource : IDisposable
             throw new InvalidOperationException($"{GetType().Name} released more times than retained.");
         _destroyed = true;
         DestroyNative();
+        OnDestroyed?.Invoke();
     }
 
     /// <summary><see cref="Release"/>s one reference (so <c>using</c> / DI disposal frees a resource).</summary>

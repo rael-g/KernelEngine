@@ -47,6 +47,13 @@ public class Application : IDisposable
     /// </summary>
     public ResourceManager Resources { get; private set; } = null!;
 
+    /// <summary>
+    /// Load-from-path façade with cache + dedup (Phase 2). Non-null when an <see cref="IAssetLoader"/>
+    /// is registered (e.g. via <c>AddAssimpAssetLoader()</c>); otherwise null. Same path → same
+    /// ref-counted instance (a fresh reference; release like any resource).
+    /// </summary>
+    public Assets? Assets { get; private set; }
+
     /// <summary>Called every sim frame after <c>IWorld.Update</c>.</summary>
     public Action<ISceneWriter, IInputReader>? OnUpdate { get; set; }
 
@@ -205,6 +212,8 @@ public class Application : IDisposable
 
                 var factory = _resourceQueue.CreateFactory();
                 Resources = new ResourceManager(factory);
+                var loader = Services.GetService<IAssetLoader>();
+                if (loader != null) Assets = new Assets(loader, Resources);
                 OnReady?.Invoke(factory);
                 Logger?.Info("Application", "ke.sim: OnReady complete — entering frame loop");
                 simReady.Set(); // signal ke.render that OnReady is complete
