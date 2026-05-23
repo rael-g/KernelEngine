@@ -3,8 +3,8 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that renders a mesh via the ECS mesh render system.
-/// Set <see cref="MeshHandle"/> and <see cref="MaterialHandle"/> before adding to the scene,
+/// A Tree node that renders a mesh via the ECS mesh render system.
+/// Set <see cref="MeshHandle"/> and <see cref="MaterialHandle"/> before adding to the Tree,
 /// or leave as default to use the built-in unit quad with a white material.
 /// </summary>
 public class MeshRenderer : Node
@@ -21,7 +21,7 @@ public class MeshRenderer : Node
 
     /// <summary>
     /// Registers the MeshComponent with the ECS registry and stores the component ID.
-    /// Must be called once per world, before any MeshRenderer is added to the scene.
+    /// Must be called once per world, before any MeshRenderer is added to the Tree.
     /// </summary>
     internal static void Initialize(IEcsRegistry registry)
     {

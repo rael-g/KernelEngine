@@ -21,7 +21,7 @@ app.OnReady = (resources) =>
     Console.WriteLine("[KernelEngine] Features: hdr_rendering, bloom, tonemapping");
 
     // Camera
-    var cam = app.Scene.AddNode(
+    var cam = app.Tree.AddNode(
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 10f) };
@@ -31,24 +31,24 @@ app.OnReady = (resources) =>
     var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
 
     // Glowing cube
-    var glowingCube = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat }, "GlowCube");
+    var glowingCube = app.Tree.AddNode(new MeshRenderer { MaterialHandle = mat }, "GlowCube");
     glowingCube.LocalTransform = glowingCube.LocalTransform with { Scale = new Vector3(2f, 2f, 2f) };
 
     // Very intense light to trigger bloom. Direction must point toward the camera-facing quad
     // (normal +Z), otherwise N·L = 0 and the "glow" cube stays black. Direction is the vector
     // toward the light source, so +Z lights the front face.
-    var light = app.Scene.AddNode(
+    var light = app.Tree.AddNode(
         new DirectionalLight { Direction = new Vector3(0f, 0f, 1f), Color = new Vector3(1f, 0.5f, 0.2f), Intensity = 50.0f },
         "BrightSun");
 };
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.01f, 0.01f, 0.01f, 1f);
+    tree.ClearColor(0.01f, 0.01f, 0.01f, 1f);
     
     // Enable Post-FX
-    scene.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
-    scene.SetBloom(true, threshold: 0.8f, intensity: 1.5f);
+    tree.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
+    tree.SetBloom(true, threshold: 0.8f, intensity: 1.5f);
 };
 
 app.Run(services);

@@ -47,20 +47,20 @@ app.OnReady = (resources) =>
     var matPlain  = resources.CreateMaterial(Vector4.One, roughness: 0.3f);
     var matNormal = resources.CreateMaterial(Vector4.One, roughness: 0.3f, normalMap: nmHandle);
 
-    var left = app.Scene.AddNode(new MeshRenderer { MaterialHandle = matPlain  }, "PlainQuad");
+    var left = app.Tree.AddNode(new MeshRenderer { MaterialHandle = matPlain  }, "PlainQuad");
     left.LocalTransform = left.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
     entityCount++;
 
-    var right = app.Scene.AddNode(new MeshRenderer { MaterialHandle = matNormal }, "NormalQuad");
+    var right = app.Tree.AddNode(new MeshRenderer { MaterialHandle = matNormal }, "NormalQuad");
     right.LocalTransform = right.LocalTransform with { Position = new Vector3(1.2f, 0f, 0f) };
     entityCount++;
 
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },
         "Sun");
     entityCount++;
 
-    var cam = app.Scene.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+    var cam = app.Tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
@@ -69,9 +69,9 @@ app.OnReady = (resources) =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
+    tree.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)

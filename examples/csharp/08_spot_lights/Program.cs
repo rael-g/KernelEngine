@@ -21,7 +21,7 @@ app.OnReady = (resources) =>
     Console.WriteLine("[KernelEngine] Features: spot_lights, clustered_lighting");
 
     // Camera
-    var cam = app.Scene.AddNode(
+    var cam = app.Tree.AddNode(
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
@@ -32,7 +32,7 @@ app.OnReady = (resources) =>
     var cubeMat = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
     // Floor
-    var floor = app.Scene.AddNode(new MeshRenderer { MaterialHandle = floorMat }, "Floor");
+    var floor = app.Tree.AddNode(new MeshRenderer { MaterialHandle = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with 
     { 
         Scale = new Vector3(20f, 0.1f, 20f),
@@ -44,13 +44,13 @@ app.OnReady = (resources) =>
     {
         for (int z = -4; z <= 4; z += 4)
         {
-            var n = app.Scene.AddNode(new MeshRenderer { MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
+            var n = app.Tree.AddNode(new MeshRenderer { MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, 1f, z) };
         }
     }
 
     // Spot lights
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new RotatingSpotLightNode { 
             Color = new Vector3(1, 0, 0), 
             Intensity = 10.0f,
@@ -58,7 +58,7 @@ app.OnReady = (resources) =>
         },
         "Spot_Red");
 
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new RotatingSpotLightNode { 
             Color = new Vector3(0, 1, 0), 
             Intensity = 10.0f,
@@ -66,7 +66,7 @@ app.OnReady = (resources) =>
         },
         "Spot_Green");
 
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new RotatingSpotLightNode { 
             Color = new Vector3(0, 0, 1), 
             Intensity = 10.0f,
@@ -75,10 +75,10 @@ app.OnReady = (resources) =>
         "Spot_Blue");
 };
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.01f, 0.01f, 0.01f, 1f);
-    scene.SetAmbientLight(0.01f, 0.01f, 0.01f);
+    tree.ClearColor(0.01f, 0.01f, 0.01f, 1f);
+    tree.SetAmbientLight(0.01f, 0.01f, 0.01f);
 };
 
 app.Run(services);

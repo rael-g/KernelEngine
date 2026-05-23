@@ -43,7 +43,7 @@ app.OnReady = (resources) =>
     Console.WriteLine("[KernelEngine] Features: ssao, gbuffer_prepass");
 
     // Camera
-    var cam = app.Scene.AddNode(
+    var cam = app.Tree.AddNode(
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     // The camera looks down its local -Z (no Camera.LookAt helper yet — framework gap).
@@ -57,9 +57,9 @@ app.OnReady = (resources) =>
     // Materials
     var mat = resources.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), metallic: 0.0f, roughness: 0.5f);
 
-    // Directional light so surfaces are lit (without it the scene is near-black and SSAO has
+    // Directional light so surfaces are lit (without it the Tree is near-black and SSAO has
     // nothing to darken). Direction is the vector toward the light source.
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new DirectionalLight { Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)), Color = Vector3.One, Intensity = 4.0f },
         "Sun");
 
@@ -68,7 +68,7 @@ app.OnReady = (resources) =>
     var cubeMesh = resources.CreateMesh(cubeVerts, cubeIdx);
 
     // Floor. Default mesh is a quad in the XY plane (normal +Z); rotate -90° about X to lay it flat.
-    var floor = app.Scene.AddNode(new MeshRenderer { MaterialHandle = mat }, "Floor");
+    var floor = app.Tree.AddNode(new MeshRenderer { MaterialHandle = mat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with
     {
         Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
@@ -80,7 +80,7 @@ app.OnReady = (resources) =>
     {
         for (int y = 1; y <= 4; y += 1)
         {
-            var n = app.Scene.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, $"Cube_{x}_{y}");
+            var n = app.Tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, $"Cube_{x}_{y}");
             n.LocalTransform = n.LocalTransform with {
                 Position = new Vector3(x, y, 0f),
                 Scale = new Vector3(0.9f, 0.9f, 0.9f)
@@ -89,14 +89,14 @@ app.OnReady = (resources) =>
     }
 };
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.2f, 0.2f, 0.2f, 1f);
-    scene.SetAmbientLight(0.3f, 0.3f, 0.3f);
+    tree.ClearColor(0.2f, 0.2f, 0.2f, 1f);
+    tree.SetAmbientLight(0.3f, 0.3f, 0.3f);
     // NOTE: SSAO is currently a NO-OP — PostProcessPipeline::SetupSsao is an unimplemented stub,
     // so no ambient-occlusion is produced. Until it's implemented, the contact darkening visible
     // here is the directional SHADOW MAP, not SSAO. (Tracked: Kanban OBS.4.)
-    scene.SetSsao(true, radius: 0.5f, bias: 0.025f, strength: 2.0f);
+    tree.SetSsao(true, radius: 0.5f, bias: 0.025f, strength: 2.0f);
 };
 
 app.Run(services);

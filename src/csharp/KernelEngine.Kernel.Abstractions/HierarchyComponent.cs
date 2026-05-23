@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace KernelEngine.Kernel;
 
 /// <summary>
-/// ECS component that stores scene-graph hierarchy links as entity IDs.
+/// ECS component that stores Tree-graph hierarchy links as entity IDs.
 /// Memory layout matches <c>ke_hierarchy_component</c> exactly.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]

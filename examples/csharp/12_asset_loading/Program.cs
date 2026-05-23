@@ -24,18 +24,18 @@ app.OnReady = async (resources) =>
     Console.WriteLine("[KernelEngine] Features: assimp_loader, model_to_scene");
 
     // Camera
-    var cam = app.Scene.AddNode(
+    var cam = app.Tree.AddNode(
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 5f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Lights
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new DirectionalLight { Color = Vector3.One, Intensity = 3.0f },
         "Sun").LocalTransform = new Transform { Position = new Vector3(5f, 10f, 5f) };
 
-    // One-line load + add via the Assets façade (cache + dedup) and scene.Add() (uploads textures
+    // One-line load + add via the Assets façade (cache + dedup) and tree.Add() (uploads textures
     // / materials / meshes + creates MeshNodes per sub-mesh under a root). Replaces the previous
     // 3-step manual loop. Zero raw handles in game code.
     try {
@@ -43,7 +43,7 @@ app.OnReady = async (resources) =>
         Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
         var model = await app.Assets!.LoadModelAsync(modelPath);
         Console.WriteLine($"[KernelEngine] Model loaded: {model.Meshes.Count} sub-meshes");
-        app.Scene.Add(model, name: "Box");
+        app.Tree.Add(model, name: "Box");
     }
     catch (Exception ex)
     {
@@ -51,10 +51,10 @@ app.OnReady = async (resources) =>
     }
 };
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.1f, 0.1f, 0.15f, 1f);
-    scene.SetAmbientLight(0.05f, 0.05f, 0.05f);
+    tree.ClearColor(0.1f, 0.1f, 0.15f, 1f);
+    tree.SetAmbientLight(0.05f, 0.05f, 0.05f);
 };
 
 app.Run(services);

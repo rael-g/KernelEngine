@@ -26,9 +26,9 @@ var watchKeys = new (string Name, Key Key)[]
     ("Space", Key.Space), ("Shift", Key.ShiftLeft), ("Ctrl", Key.ControlLeft), ("Escape", Key.Escape),
 };
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.1f, 0.1f, 0.1f, 1f);
+    tree.ClearColor(0.1f, 0.1f, 0.1f, 1f);
 
     var pressed  = new System.Text.StringBuilder();
     var released = new System.Text.StringBuilder();

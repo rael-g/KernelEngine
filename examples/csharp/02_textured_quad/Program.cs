@@ -44,7 +44,7 @@ app.OnReady = (resources) =>
 
     var matHandle = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), albedo: texHandle);
 
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new DirectionalLight
         {
             Direction = Vector3.Normalize(new(0.2f, 1f, 0.5f)),
@@ -54,7 +54,7 @@ app.OnReady = (resources) =>
         "Sun");
     entityCount++;
 
-    var cam = app.Scene.AddNode(
+    var cam = app.Tree.AddNode(
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -64,7 +64,7 @@ app.OnReady = (resources) =>
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
 
-    app.Scene.AddNode(
+    app.Tree.AddNode(
         new MeshRenderer { MaterialHandle = matHandle },
         "Quad");
     entityCount++;
@@ -73,9 +73,9 @@ app.OnReady = (resources) =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
+    tree.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)

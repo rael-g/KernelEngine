@@ -4,7 +4,7 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node backed by an ECS entity. Represents a spatial object with optional behavior.
+/// A Tree node backed by an ECS entity. Represents a spatial object with optional behavior.
 /// <para>
 /// Subclass and override <see cref="OnStart"/>/<see cref="OnUpdate"/> to attach behavior.
 /// The entity is created by the world; transform and hierarchy live in ECS components.
@@ -31,7 +31,7 @@ public class Node
         s_registry[_entity] = this;
     }
 
-    /// <summary>Called by <see cref="Scene.AddNode{T}"/> to bind this instance to an entity.</summary>
+    /// <summary>Called by <see cref="Tree.AddNode{T}"/> to bind this instance to an entity.</summary>
     internal void Initialize(ulong entity, IWorld world, string name)
     {
         _entity = entity;

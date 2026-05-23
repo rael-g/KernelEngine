@@ -4,7 +4,7 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that acts as a directional light source. Setting <see cref="Direction"/> /
+/// A Tree node that acts as a directional light source. Setting <see cref="Direction"/> /
 /// <see cref="Color"/> / <see cref="Intensity"/> at any time (init or per-frame in Update)
 /// syncs to the underlying ECS slot transparently — game code never touches components.
 /// </summary>

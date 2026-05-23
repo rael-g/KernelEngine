@@ -24,7 +24,7 @@ app.OnReady = async (resources) =>
 
     // Directional light (Sun). Per DirectionalLight docs, Direction is the vector pointing
     // FROM the lit surface TOWARD the light source. Sun in upper-right-back → (+x, +y, +z).
-    var light = app.Scene.AddNode(
+    var light = app.Tree.AddNode(
         new AnimatedSun
         {
             Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
@@ -35,7 +35,7 @@ app.OnReady = async (resources) =>
     entityCount++;
 
     // Camera
-    var cam = app.Scene.AddNode(
+    var cam = app.Tree.AddNode(
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with
@@ -52,12 +52,12 @@ app.OnReady = async (resources) =>
     var cubeMesh  = await app.Resources.CreateMeshAsync(MeshShape.Cube());
 
     // Floor.
-    var floor = app.Scene.AddNode(new MeshRenderer { Mesh = floorMesh, Material = floorMat }, "Floor");
+    var floor = app.Tree.AddNode(new MeshRenderer { Mesh = floorMesh, Material = floorMat }, "Floor");
     floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(10f, 1f, 10f) };
     entityCount++;
 
     // Cube (casting shadow).
-    var cube = app.Scene.AddNode(new MeshRenderer { Mesh = cubeMesh, Material = cubeMat }, "Caster");
+    var cube = app.Tree.AddNode(new MeshRenderer { Mesh = cubeMesh, Material = cubeMat }, "Caster");
     cube.LocalTransform = cube.LocalTransform with { Position = new Vector3(0f, 1f, 0f) };
     entityCount++;
 };
@@ -65,10 +65,10 @@ app.OnReady = async (resources) =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.ClearColor(0.1f, 0.1f, 0.15f, 1f);
-    scene.SetAmbientLight(0.15f, 0.15f, 0.15f);
+    tree.ClearColor(0.1f, 0.1f, 0.15f, 1f);
+    tree.SetAmbientLight(0.15f, 0.15f, 0.15f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)

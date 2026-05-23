@@ -4,7 +4,7 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that acts as a cone-shaped spot light source.
+/// A Tree node that acts as a cone-shaped spot light source.
 /// Adds a <see cref="SpotLightComponent"/> to its ECS entity on start.
 /// <see cref="LightRenderSystem"/> collects all spot light entities each frame.
 /// The light position is derived from the node's world-space transform.

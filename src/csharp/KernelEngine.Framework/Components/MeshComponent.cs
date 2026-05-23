@@ -4,7 +4,7 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// ECS component linking a scene node to a GPU mesh and a material.
+/// ECS component linking a Tree node to a GPU mesh and a material.
 /// Stored contiguously in native memory via <see cref="EcsRegistry"/>.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]

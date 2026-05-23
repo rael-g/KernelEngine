@@ -4,7 +4,7 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that acts as an omnidirectional point light source.
+/// A Tree node that acts as an omnidirectional point light source.
 /// Adds a <see cref="PointLightComponent"/> to its ECS entity on start.
 /// <see cref="LightRenderSystem"/> collects all point light entities each frame.
 /// The light position is derived from the node's world-space transform.

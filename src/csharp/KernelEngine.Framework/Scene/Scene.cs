@@ -1,165 +1,49 @@
-using System.Numerics;
-using System.Runtime.InteropServices;
-using KernelEngine.Kernel;
-
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Scene graph facade built on top of the ECS world.
-/// Manages a hierarchy of <see cref="Node"/> instances backed by ECS entities.
-/// Node/scene are framework-level concepts; the ECS world itself knows only
-/// entities, components, and systems.
+/// A reusable bundle of nodes: describe a subtree code-first via a builder action, then
+/// <see cref="Instantiate"/> it into the live <see cref="Tree"/> as many times as you want.
+/// Each call produces a fresh subtree rooted under its own parent node.
 /// </summary>
+/// <remarks>
+/// Today: code-first only. Future: load from a serialized <c>.kescene</c> asset (Tier A asset
+/// family), and inherit from other <see cref="Scene"/>s.
+/// </remarks>
+/// <example>
+/// <code>
+/// var enemy = new Scene((tree, root) => {
+///     tree.AddNode(new MeshRenderer { Mesh = bodyMesh, Material = bodyMat }, "Body", parent: root);
+///     tree.AddNode(new PointLight { Color = Vector3.UnitX, Intensity = 5f }, "Glow", parent: root);
+/// }) { Name = "Enemy" };
+///
+/// enemy.Instantiate(app.Tree);
+/// enemy.Instantiate(app.Tree).LocalTransform = ...;
+/// </code>
+/// </example>
 public sealed class Scene
 {
-    private readonly IWorld _world;
-    private readonly Node   _root;
+    private readonly Action<Tree, Node>? _build;
 
-    public Scene(IWorld world)
-    {
-        _world = world;
-        var rootEntity = CreateEntityWithHierarchy("Root", KE_ENTITY_INVALID);
-        _root = new Node(rootEntity, world, "Root");
-    }
-
-    private const ulong KE_ENTITY_INVALID = 0;
-
-    /// <summary>The implicit root node of this scene.</summary>
-    public Node Root => _root;
-
-    // ── High-level add ────────────────────────────────────────────────────────
+    /// <summary>Empty scene — its root is created but otherwise empty.</summary>
+    public Scene() { }
 
     /// <summary>
-    /// Creates a plain (non-scripted) node as a child of <paramref name="parent"/>
-    /// (defaults to <see cref="Root"/>).
+    /// Scene whose subtree is constructed by <paramref name="build"/> each time it is instantiated.
+    /// The builder receives the target <see cref="Tree"/> and the freshly created root node.
     /// </summary>
-    public Node AddNode(string name, Node? parent = null)
-    {
-        var parentEntity = parent?.Entity ?? _root.Entity;
-        var entity = CreateEntityWithHierarchy(name, parentEntity);
-        return new Node(entity, _world, name);
-    }
+    public Scene(Action<Tree, Node> build) { _build = build; }
+
+    /// <summary>Root node name used when instantiating (default: <c>"Scene"</c>).</summary>
+    public string Name { get; init; } = "Scene";
 
     /// <summary>
-    /// Creates a scripted node as a child of <paramref name="parent"/>
-    /// (defaults to <see cref="Root"/>). <see cref="Node.OnStart"/> and
-    /// <see cref="Node.OnUpdate"/> will be called by the built-in ScriptSystem.
+    /// Adds a fresh instance of this scene to <paramref name="tree"/> under <paramref name="parent"/>
+    /// (or the tree root when <c>null</c>) and returns the new root.
     /// </summary>
-    public T AddNode<T>(T node, string name, Node? parent = null) where T : Node
+    public Node Instantiate(Tree tree, Node? parent = null)
     {
-        var parentEntity = parent?.Entity ?? _root.Entity;
-        var entity = CreateEntityWithHierarchy(name, parentEntity);
-        node.Initialize(entity, _world, name);
-        node.RegisterScript();
-        return node;
-    }
-
-    // ── Destruction ───────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Destroys a node (and all its descendants) and removes it from the scripting registry.
-    /// Do not use <paramref name="node"/> after this call.
-    /// </summary>
-    public void DestroyNode(Node node)
-    {
-        _world.UnregisterScript(node.Entity);
-        Node.Unregister(node.Entity);
-        DestroyEntityRecursive(node.Entity);
-    }
-
-    // ── Entity/hierarchy management ───────────────────────────────────────────
-
-    /// <summary>
-    /// Creates an ECS entity initialised with Transform, Hierarchy, and Name components,
-    /// and links it into the parent's child list.
-    /// </summary>
-    private ulong CreateEntityWithHierarchy(string name, ulong parent)
-    {
-        var reg    = _world.Registry;
-        var entity = reg.CreateEntity();
-
-        // Transform — default: origin, identity rotation, unit scale
-        var t = reg.AddComponent<TransformComponent>(entity, _world.TransformComponentId);
-        t[0] = new TransformComponent
-        {
-            Position    = Vector3.Zero,
-            Rotation    = Quaternion.Identity,
-            Scale       = Vector3.One,
-            WorldMatrix = Matrix4x4.Identity,
-        };
-
-        // Hierarchy — link to parent, no children yet
-        var h = reg.AddComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        h[0] = new HierarchyComponent { Parent = parent };
-
-        // Name
-        var n = reg.AddComponent<NameComponent>(entity, _world.NameComponentId);
-        SetName(ref n[0], name);
-
-        // Prepend entity into parent's child list (O(1) doubly-linked prepend)
-        if (parent != KE_ENTITY_INVALID)
-        {
-            var ph = reg.GetComponent<HierarchyComponent>(parent, _world.HierarchyComponentId);
-            if (!ph.IsEmpty)
-            {
-                h[0].NextSibling = ph[0].FirstChild;
-                if (ph[0].FirstChild != KE_ENTITY_INVALID)
-                {
-                    var sib = reg.GetComponent<HierarchyComponent>(ph[0].FirstChild, _world.HierarchyComponentId);
-                    if (!sib.IsEmpty) sib[0].PrevSibling = entity;
-                }
-                ph[0].FirstChild = entity;
-            }
-        }
-
-        return entity;
-    }
-
-    /// <summary>Recursively destroys an entity and all its descendants, unlinking from parent.</summary>
-    private void DestroyEntityRecursive(ulong entity)
-    {
-        var reg = _world.Registry;
-        var h   = reg.GetComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        if (h.IsEmpty) return;
-
-        // Destroy children first (depth-first)
-        var child = h[0].FirstChild;
-        while (child != KE_ENTITY_INVALID)
-        {
-            var ch   = reg.GetComponent<HierarchyComponent>(child, _world.HierarchyComponentId);
-            var next = !ch.IsEmpty ? ch[0].NextSibling : KE_ENTITY_INVALID;
-            DestroyEntityRecursive(child);
-            child = next;
-        }
-
-        // Unlink from parent's child list
-        if (h[0].Parent != KE_ENTITY_INVALID)
-        {
-            var ph = reg.GetComponent<HierarchyComponent>(h[0].Parent, _world.HierarchyComponentId);
-            if (!ph.IsEmpty && ph[0].FirstChild == entity)
-                ph[0].FirstChild = h[0].NextSibling;
-
-            if (h[0].PrevSibling != KE_ENTITY_INVALID)
-            {
-                var ps = reg.GetComponent<HierarchyComponent>(h[0].PrevSibling, _world.HierarchyComponentId);
-                if (!ps.IsEmpty) ps[0].NextSibling = h[0].NextSibling;
-            }
-            if (h[0].NextSibling != KE_ENTITY_INVALID)
-            {
-                var ns = reg.GetComponent<HierarchyComponent>(h[0].NextSibling, _world.HierarchyComponentId);
-                if (!ns.IsEmpty) ns[0].PrevSibling = h[0].PrevSibling;
-            }
-        }
-
-        reg.DestroyEntity(entity);
-    }
-
-    private static void SetName(ref NameComponent comp, string name)
-    {
-        if (string.IsNullOrEmpty(name)) return;
-        var bytes = System.Text.Encoding.UTF8.GetBytes(name);
-        int len = Math.Min(bytes.Length, 63);
-        for (int i = 0; i < len; i++) comp.Name[i] = bytes[i];
-        comp.Name[len] = 0;
+        var root = tree.AddNode(Name, parent);
+        _build?.Invoke(tree, root);
+        return root;
     }
 }

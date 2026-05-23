@@ -12,7 +12,7 @@ public class WorldSceneTests
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
-        Assert.NotNull(new Scene(world).Root);
+        Assert.NotNull(new Tree(world).Root);
     }
 
     [Fact]
@@ -21,7 +21,7 @@ public class WorldSceneTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var node = new Scene(world).AddNode("TestNode");
+        var node = new Tree(world).AddNode("TestNode");
         Assert.NotNull(node);
         Assert.Equal("TestNode", node.Name);
         Assert.NotEqual(0UL, node.Entity);
@@ -34,8 +34,8 @@ public class WorldSceneTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var parent = new Scene(world).AddNode("Parent");
-        var child = new Scene(world).AddNode("Child", parent);
+        var parent = new Tree(world).AddNode("Parent");
+        var child = new Tree(world).AddNode("Child", parent);
         
         Assert.Equal(parent.Entity, child.Parent?.Entity);
         Assert.Equal(child.Entity, parent.FirstChild?.Entity);

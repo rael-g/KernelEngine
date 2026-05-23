@@ -3,8 +3,8 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that acts as a camera. Adds a <see cref="CameraComponent"/> to its ECS entity on start.
-/// Register via <c>scene.AddNode(new Camera(), "Camera")</c>, then set
+/// A Tree node that acts as a camera. Adds a <see cref="CameraComponent"/> to its ECS entity on start.
+/// Register via <c>Tree.AddNode(new Camera(), "Camera")</c>, then set
 /// <c>world.ActiveCamera = Camera.Entity</c> so <see cref="CameraRenderSystem"/> picks it up.
 /// </summary>
 public class Camera : Node

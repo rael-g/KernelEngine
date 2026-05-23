@@ -17,7 +17,7 @@ public interface IFramePacket
     /// <summary>Background color cleared at the start of the frame.</summary>
     void SetClearColor(float r, float g, float b, float a);
 
-    /// <summary>Ambient light color used for the scene (constant per frame).</summary>
+    /// <summary>Ambient light color used for the Tree (constant per frame).</summary>
     void SetAmbientLight(float r, float g, float b);
 
     /// <summary>Camera state for this frame (view / projection / world-space position).</summary>
@@ -32,7 +32,7 @@ public interface IFramePacket
     /// <summary>Appends a spot light. Ignored when the per-frame capacity is exhausted.</summary>
     void AddSpotLight(SpotLightData light);
 
-    /// <summary>Appends a draw command to the main scene pass. Ignored when capacity is exhausted.</summary>
+    /// <summary>Appends a draw command to the main Tree pass. Ignored when capacity is exhausted.</summary>
     void AddDrawCommand(MeshHandle mesh, MaterialHandle material, Matrix4x4 transform);
 
     /// <summary>Appends a draw command to the shadow depth pass. Ignored when capacity is exhausted.</summary>
@@ -44,7 +44,7 @@ public interface IFramePacket
     /// <summary>Sets the shadow map handle + light view/proj for the depth pass.</summary>
     void SetShadow(ShadowMapHandle map, Matrix4x4 lightView, Matrix4x4 lightProjection);
 
-    /// <summary>Overrides the active shadow map handle for the main scene pass.</summary>
+    /// <summary>Overrides the active shadow map handle for the main Tree pass.</summary>
     void SetActiveShadowMap(ShadowMapHandle handle);
 
     // ── Post-process state ───────────────────────────────────────────────────

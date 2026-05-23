@@ -71,7 +71,7 @@ public sealed unsafe class FramePacket : IFramePacket
             };
     }
 
-    /// <summary>Appends a draw command to the main scene pass. Ignored when at capacity.</summary>
+    /// <summary>Appends a draw command to the main Tree pass. Ignored when at capacity.</summary>
     public void AddDrawCommand(MeshHandle meshHandle, MaterialHandle materialHandle, Matrix4x4 transform)
     {
         if (_packet->draw_count < _packet->draw_capacity)
@@ -127,7 +127,7 @@ public sealed unsafe class FramePacket : IFramePacket
         _packet->ambient_light[2] = b;
     }
 
-    /// <summary>Overrides the active shadow map for the scene pass.</summary>
+    /// <summary>Overrides the active shadow map for the Tree pass.</summary>
     public void SetActiveShadowMap(ShadowMapHandle handle)
     {
         _packet->active_shadow_map = new ke_shadow_map_handle { idx = handle.Value };

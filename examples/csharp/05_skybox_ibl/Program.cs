@@ -58,21 +58,21 @@ app.OnReady = (resources) =>
     var cubeHandle = resources.CreateCubemap(faceSize, cubeData);
     Console.WriteLine($"[KernelEngine] Cubemap: handle={cubeHandle} faceSize={faceSize}");
 
-    app.Scene.AddNode(new Skybox { CubemapHandle = cubeHandle }, "Skybox");
+    app.Tree.AddNode(new Skybox { CubemapHandle = cubeHandle }, "Skybox");
     entityCount++;
 
     var mirrorMat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.8f, roughness: 0.1f);
-    app.Scene.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
+    app.Tree.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
     entityCount++;
 
-    app.Scene.AddNode(new DirectionalLight
+    app.Tree.AddNode(new DirectionalLight
     {
         Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
         Intensity = 1.5f,
     }, "Sun");
     entityCount++;
 
-    var cam = app.Scene.AddNode(new FreeLookNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+    var cam = app.Tree.AddNode(new FreeLookNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
     app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
@@ -81,10 +81,10 @@ app.OnReady = (resources) =>
 Stopwatch sw = Stopwatch.StartNew();
 int frameCount = 0;
 
-app.OnUpdate = (scene, input) =>
+app.OnUpdate = (tree, input) =>
 {
-    scene.SetTonemapping(true, 1.0f, 2.2f);
-    scene.ClearColor(0.05f, 0.05f, 0.05f, 1f);
+    tree.SetTonemapping(true, 1.0f, 2.2f);
+    tree.ClearColor(0.05f, 0.05f, 0.05f, 1f);
 
     frameCount++;
     if (sw.Elapsed.TotalSeconds >= 5.0)

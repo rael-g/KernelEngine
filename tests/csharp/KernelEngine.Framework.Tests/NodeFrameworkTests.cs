@@ -13,7 +13,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var scene = new Scene(world); var node = scene.AddNode(new MeshRenderer(), "Mesh");
+        var Tree = new Tree(world); var node = Tree.AddNode(new MeshRenderer(), "Mesh");
         Assert.NotNull(node);
     }
 
@@ -23,7 +23,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var scene = new Scene(world); var node = scene.AddNode(new Camera(), "Camera");
+        var Tree = new Tree(world); var node = Tree.AddNode(new Camera(), "Camera");
         Assert.NotNull(node);
     }
 
@@ -33,7 +33,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var scene = new Scene(world); var node = scene.AddNode(new DirectionalLight(), "Light");
+        var Tree = new Tree(world); var node = Tree.AddNode(new DirectionalLight(), "Light");
         Assert.NotNull(node);
     }
 
@@ -43,7 +43,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var scene = new Scene(world); var node = scene.AddNode(new PointLight(), "PointLightData");
+        var Tree = new Tree(world); var node = Tree.AddNode(new PointLight(), "PointLightData");
         Assert.NotNull(node);
     }
 
@@ -53,7 +53,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var scene = new Scene(world); var node = scene.AddNode(new SpotLight(), "SpotLightData");
+        var Tree = new Tree(world); var node = Tree.AddNode(new SpotLight(), "SpotLightData");
         Assert.NotNull(node);
     }
 
@@ -63,7 +63,7 @@ public class NodeFrameworkTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         
-        var scene = new Scene(world); var node = scene.AddNode(new Skybox(), "Skybox");
+        var Tree = new Tree(world); var node = Tree.AddNode(new Skybox(), "Skybox");
         Assert.NotNull(node);
     }
 }

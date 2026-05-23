@@ -3,8 +3,8 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A scene node that designates a cubemap as the active skybox for this world.
-/// Add exactly one <see cref="Skybox"/> to the scene and set <see cref="CubemapHandle"/>
+/// A Tree node that designates a cubemap as the active skybox for this world.
+/// Add exactly one <see cref="Skybox"/> to the Tree and set <see cref="CubemapHandle"/>
 /// to a handle returned by <see cref="Renderer.CreateCubemap"/>.
 /// The <see cref="SkyboxRenderSystem"/> renders it each frame and enables IBL
 /// (image-based lighting) in the PBR shader.

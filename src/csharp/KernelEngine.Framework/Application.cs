@@ -28,13 +28,13 @@ public class Application : IDisposable
     private IKernelFactory _kernelFactory = null!;
     private IProxyAllocator? _proxyAllocator;
 
-    /// <summary>The current simulation world containing the scene graph and ECS registry.</summary>
+    /// <summary>The current simulation world containing the Tree graph and ECS registry.</summary>
     public IWorld ActiveWorld { get; set; } = null!;
 
-    private Scene? _scene;
+    private Tree? _scene;
 
-    /// <summary>The scene graph facade for <see cref="ActiveWorld"/>.</summary>
-    public Scene Scene => _scene ??= new Scene(ActiveWorld);
+    /// <summary>The Tree graph facade for <see cref="ActiveWorld"/>.</summary>
+    public Tree Tree => _scene ??= new Tree(ActiveWorld);
 
     /// <summary>Called once on ke.sim after ke.render is initialized and systems are registered.</summary>
     public Action<IResourceFactory>? OnReady { get; set; }

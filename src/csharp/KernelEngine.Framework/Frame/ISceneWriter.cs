@@ -4,7 +4,7 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Mediates per-frame scene commands. These commands are recorded into a frame packet
+/// Mediates per-frame Tree commands. These commands are recorded into a frame packet
 /// and executed by the renderer at the end of the frame.
 /// MUST be called from the simulation thread.
 /// </summary>

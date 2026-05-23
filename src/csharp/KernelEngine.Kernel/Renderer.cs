@@ -328,7 +328,7 @@ public sealed unsafe class Renderer : IRenderer
 
     /// <summary>
     /// Begins the shadow depth pass for the given shadow map. Call once per frame before
-    /// any <see cref="SubmitMeshShadow"/> calls. Stores the combined light VP for the scene pass.
+    /// any <see cref="SubmitMeshShadow"/> calls. Stores the combined light VP for the Tree pass.
     /// </summary>
     [RequiresThread("ke.render")]
     public Result BeginShadowPass(ShadowMapHandle shadowMapHandle, Matrix4x4 lightView, Matrix4x4 lightProj)
@@ -348,7 +348,7 @@ public sealed unsafe class Renderer : IRenderer
         return _native->submit_mesh_shadow(_native, new ke_mesh_handle { idx = meshHandle.Value }, &mat).Wrap();
     }
 
-    /// <summary>Ends the shadow depth pass. The shadow map is now available for scene rendering.</summary>
+    /// <summary>Ends the shadow depth pass. The shadow map is now available for Tree rendering.</summary>
     [RequiresThread("ke.render")]
     public Result EndShadowPass()
     {
@@ -356,7 +356,7 @@ public sealed unsafe class Renderer : IRenderer
         return _native->end_shadow_pass(_native).Wrap();
     }
 
-    /// <summary>Overrides which shadow map is bound during the current frame's scene pass.</summary>
+    /// <summary>Overrides which shadow map is bound during the current frame's Tree pass.</summary>
     [RequiresThread("ke.render")]
     public Result SetShadowMap(ShadowMapHandle shadowMapHandle)
     {
@@ -365,7 +365,7 @@ public sealed unsafe class Renderer : IRenderer
     }
 
     /// <summary>
-    /// Enables HDR tonemapping. When enabled, the scene renders to an offscreen RGBA16F
+    /// Enables HDR tonemapping. When enabled, the Tree renders to an offscreen RGBA16F
     /// framebuffer; ACES tonemapping and gamma correction are applied before display.
     /// </summary>
     [RequiresThread("ke.render")]
