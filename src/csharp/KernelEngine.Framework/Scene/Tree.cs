@@ -27,6 +27,20 @@ public sealed class Tree
     /// <summary>The implicit root node of this Tree.</summary>
     public Node Root => _root;
 
+    /// <summary>
+    /// The <see cref="Camera"/> currently rendering the tree, or <c>null</c> if none is active.
+    /// A <see cref="Camera"/> auto-activates when added and no other is current; switch with
+    /// <see cref="Camera.MakeCurrent"/>.
+    /// </summary>
+    public Camera? CurrentCamera
+    {
+        get
+        {
+            var entity = _world.ActiveCamera;
+            return entity == 0 ? null : Node.FromEntity(entity) as Camera;
+        }
+    }
+
     // ── High-level add ────────────────────────────────────────────────────────
 
     /// <summary>

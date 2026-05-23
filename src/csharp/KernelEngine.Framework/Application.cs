@@ -28,8 +28,8 @@ public class Application : IDisposable
     private IKernelFactory _kernelFactory = null!;
     private IProxyAllocator? _proxyAllocator;
 
-    /// <summary>The current simulation world containing the Tree graph and ECS registry.</summary>
-    public IWorld ActiveWorld { get; set; } = null!;
+    /// <summary>The current simulation world (ECS). Engine-internal — game code uses <see cref="Tree"/>.</summary>
+    internal IWorld ActiveWorld { get; set; } = null!;
 
     private Tree? _scene;
 

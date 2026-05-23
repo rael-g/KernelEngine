@@ -54,8 +54,11 @@ public class Node
 
     // ── Identity ──────────────────────────────────────────────────────────────
 
-    /// <summary>The ECS entity ID. Immutable after node creation.</summary>
-    public ulong Entity => _entity;
+    /// <summary>The ECS entity ID. Engine-internal — game code interacts with nodes, not entities.</summary>
+    internal ulong Entity => _entity;
+
+    /// <summary>The owning world. Engine-internal — exposed to built-in nodes (e.g. Camera) for live ECS access.</summary>
+    internal IWorld? World => _world;
 
     /// <summary>The name given at node creation.</summary>
     public string Name => _name;

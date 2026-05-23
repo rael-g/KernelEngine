@@ -42,7 +42,7 @@ app.OnReady = async (resources) =>
     {
         Position = new Vector3(0f, 5.0f, 10.0f)
     };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
+    // (no need to mark active — single Camera in the tree auto-becomes current)
     entityCount++;
 
     // Resources via the high-level ResourceManager + MeshShape primitives — no Vertex[] / handles.

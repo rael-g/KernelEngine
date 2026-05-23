@@ -3,9 +3,8 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A Tree node that acts as a camera. Adds a <see cref="CameraComponent"/> to its ECS entity on start.
-/// Register via <c>Tree.AddNode(new Camera(), "Camera")</c>, then set
-/// <c>world.ActiveCamera = Camera.Entity</c> so <see cref="CameraRenderSystem"/> picks it up.
+/// A scene-graph node that acts as a camera. Add it to a tree (<c>tree.AddNode(new Camera(), "Camera")</c>)
+/// and it auto-activates when no other camera is current. Switch with <see cref="MakeCurrent"/>.
 /// </summary>
 public class Camera : Node
 {
@@ -33,6 +32,17 @@ public class Camera : Node
     /// <summary>Use orthographic projection instead of perspective.</summary>
     public bool Orthographic { get; init; } = false;
 
+    /// <summary>True when this camera is the one the render system draws from.</summary>
+    public bool IsCurrent => World != null && World.ActiveCamera == Entity;
+
+    /// <summary>
+    /// Make this the current camera. Deactivates any other camera that was current (last-wins).
+    /// </summary>
+    public void MakeCurrent()
+    {
+        if (World != null) World.ActiveCamera = Entity;
+    }
+
     protected override void Start()
     {
         if (ComponentId == uint.MaxValue) return;
@@ -44,5 +54,7 @@ public class Camera : Node
             Far = Far,
             Orthographic = Orthographic ? (byte)1 : (byte)0,
         };
+        // Auto-activate when no camera is current yet (so a single-camera scene "just works").
+        if (World != null && World.ActiveCamera == 0) MakeCurrent();
     }
 }
