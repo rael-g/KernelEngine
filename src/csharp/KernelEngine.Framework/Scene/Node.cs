@@ -40,18 +40,6 @@ public class Node
         s_registry[_entity] = this;
     }
 
-    /// <summary>
-    /// Wires this node's <see cref="OnStart"/>/<see cref="OnUpdate"/> into the built-in C ScriptSystem
-    /// via the world's managed registration API. No <c>unsafe</c> here — the function-pointer plumbing
-    /// lives in the kernel concrete (<c>ScriptBridge</c>).
-    /// </summary>
-    internal void RegisterScript()
-    {
-        if (_world == null) return;
-        s_registry[_entity] = this;
-        _world.RegisterScript(_entity, TickStart, TickUpdate);
-    }
-
     // ── Identity ──────────────────────────────────────────────────────────────
 
     /// <summary>The ECS entity ID. Engine-internal — game code interacts with nodes, not entities.</summary>
@@ -157,8 +145,21 @@ public class Node
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
-    //   Override the methods (Start/Update) in subclasses; instances can additionally hook
-    //   the On* actions (no override needed). Both fire each tick: method first, then action.
+    //   Override virtuals in subclasses; instances can additionally hook the On* actions
+    //   (no override needed). Both fire each tick: virtual first, then action.
+    //
+    //   Per-frame order (driven by Tree walks from ke.sim):
+    //     1. Awake + Start  — one-shot on the first tick after the node is added
+    //     2. Update         — every frame
+    //     3. LateUpdate     — every frame, after Update of every node
+    //
+    //   Tree-walk order within each pass is pre-order (parent before children, siblings
+    //   left-to-right). Game code can rely on it.
+
+    private bool _started;
+
+    /// <summary>Called once when the node enters the tree, before <see cref="Start"/>.</summary>
+    protected virtual void Awake() { }
 
     /// <summary>Called once before the first <see cref="Update"/> call. Override to initialize.</summary>
     protected virtual void Start() { }
@@ -166,17 +167,26 @@ public class Node
     /// <summary>Called every sim frame. Override to drive per-frame behavior.</summary>
     protected virtual void Update(float deltaTime) { }
 
+    /// <summary>Called every sim frame, after <see cref="Update"/> of every node.</summary>
+    protected virtual void LateUpdate(float deltaTime) { }
+
     /// <summary>
     /// Called once per input event each sim frame, in tree pre-order (parent then children).
     /// Override to react to discrete events; call <c>evt.Consume()</c> to stop propagation.
     /// </summary>
     protected virtual void OnInput(ref InputEvent evt) { }
 
+    /// <summary>Instance hook fired after <see cref="Awake"/>.</summary>
+    public Action? OnAwakeEvent { get; set; }
+
     /// <summary>Instance hook fired after <see cref="Start"/>.</summary>
     public Action? OnStart { get; set; }
 
     /// <summary>Instance hook fired after <see cref="Update"/>.</summary>
     public Action<float>? OnUpdate { get; set; }
+
+    /// <summary>Instance hook fired after <see cref="LateUpdate"/>.</summary>
+    public Action<float>? OnLateUpdate { get; set; }
 
     /// <summary>Instance hook fired after <see cref="OnInput"/> for each event.</summary>
     public InputHandler? OnInputEvent { get; set; }
@@ -187,16 +197,26 @@ public class Node
         OnInputEvent?.Invoke(ref evt);
     }
 
-    private void TickStart()
+    internal void TickAwakeAndStart()
     {
+        if (_started) return;
+        Awake();
+        OnAwakeEvent?.Invoke();
         Start();
         OnStart?.Invoke();
+        _started = true;
     }
 
-    private void TickUpdate(float dt)
+    internal void TickUpdate(float dt)
     {
         Update(dt);
         OnUpdate?.Invoke(dt);
+    }
+
+    internal void TickLateUpdate(float dt)
+    {
+        LateUpdate(dt);
+        OnLateUpdate?.Invoke(dt);
     }
 
     // ── Internal registry ─────────────────────────────────────────────────────

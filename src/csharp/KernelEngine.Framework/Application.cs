@@ -237,7 +237,17 @@ public class Application : IDisposable
                     if (events.Length > 0)
                         Tree.DispatchInput(events);
 
+                    // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
+                    //   Awake+Start (one-shot) → Update → ECS systems → LateUpdate
+                    // Game logic that needs ECS-post-Transform reads (e.g. camera follow) goes in
+                    // LateUpdate; the kernel ScriptSystem is no longer the script driver.
+                    var dt = Time.DeltaTime;
+                    Tree.TickAwakeAndStart();
+                    Tree.TickUpdate(dt);
+
                     ActiveWorld?.Update(packet: packet, input: input);
+
+                    Tree.TickLateUpdate(dt);
                     OnUpdate?.Invoke(writer, input);
 
                     packet.EndWrite();

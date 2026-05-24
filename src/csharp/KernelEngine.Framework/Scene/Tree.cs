@@ -57,14 +57,15 @@ public sealed class Tree
     /// <summary>
     /// Creates a scripted node as a child of <paramref name="parent"/>
     /// (defaults to <see cref="Root"/>). <see cref="Node.OnStart"/> and
-    /// <see cref="Node.OnUpdate"/> will be called by the built-in ScriptSystem.
+    /// <see cref="Node.Awake"/>, <see cref="Node.Start"/>, <see cref="Node.EarlyUpdate"/>,
+    /// <see cref="Node.Update"/>, and <see cref="Node.LateUpdate"/> are driven by the
+    /// tree-walking lifecycle dispatcher (see <see cref="TickUpdate"/>).
     /// </summary>
     public T AddNode<T>(T node, string name, Node? parent = null) where T : Node
     {
         var parentEntity = parent?.Entity ?? _root.Entity;
         var entity = CreateEntityWithHierarchy(name, parentEntity);
         node.Initialize(entity, _world, name);
-        node.RegisterScript();
         return node;
     }
 
@@ -104,9 +105,31 @@ public sealed class Tree
     /// </summary>
     public void DestroyNode(Node node)
     {
-        _world.UnregisterScript(node.Entity);
         Node.Unregister(node.Entity);
         DestroyEntityRecursive(node.Entity);
+    }
+
+    // ── Lifecycle dispatch ────────────────────────────────────────────────────
+    //   Pre-order walk: parent before children, siblings left-to-right.
+    //   Application calls these once per sim frame, in order:
+    //     TickAwakeAndStart → TickUpdate → TickLateUpdate
+
+    internal void TickAwakeAndStart() => Walk(_root, static n => n.TickAwakeAndStart());
+
+    internal void TickUpdate(float dt) => WalkDt(_root, dt, static (n, d) => n.TickUpdate(d));
+
+    internal void TickLateUpdate(float dt) => WalkDt(_root, dt, static (n, d) => n.TickLateUpdate(d));
+
+    private static void Walk(Node n, Action<Node> visit)
+    {
+        visit(n);
+        for (var c = n.FirstChild; c != null; c = c.NextSibling) Walk(c, visit);
+    }
+
+    private static void WalkDt(Node n, float dt, Action<Node, float> visit)
+    {
+        visit(n, dt);
+        for (var c = n.FirstChild; c != null; c = c.NextSibling) WalkDt(c, dt, visit);
     }
 
     // ── Entity/hierarchy management ───────────────────────────────────────────
