@@ -35,7 +35,6 @@ app.OnReady = (resources) =>
     {
         Position = new Vector3(0f, 0f, 5f),
     };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     var orangeMat = resources.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
 

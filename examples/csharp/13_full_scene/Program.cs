@@ -32,7 +32,6 @@ app.OnReady = async (resources) =>
     var lookRot = Quaternion.CreateFromRotationMatrix(
         Matrix4x4.CreateWorld(eye, Vector3.Normalize(new Vector3(0f, 2f, 0f) - eye), Vector3.UnitY));
     cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Static directional light. Direction is the vector FROM the lit surface TOWARD the light
     // source; a directional light ignores Position, so this must be set for shading + shadows.
@@ -104,7 +103,9 @@ app.OnReady = async (resources) =>
         app.Tree.AddNode(
             new OrbitingLight {
                 Color = i % 2 == 0 ? Vector3.UnitX : Vector3.UnitZ,
-                Radius = 5f,
+                Intensity = 40f,
+                Radius = 18f,
+                OrbitRadius = 5f,
                 Speed = 0.5f + i * 0.1f,
                 Phase = i * (MathF.PI / 4f)
             },
@@ -127,25 +128,18 @@ app.Run(services);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-sealed class OrbitingLight : Node
+sealed class OrbitingLight : PointLight
 {
-    public Vector3 Color { get; init; } = Vector3.One;
-    public float Radius { get; init; } = 5f;
+    public float OrbitRadius { get; init; } = 5f;
     public float Speed { get; init; } = 1.0f;
     public float Phase { get; init; } = 0.0f;
     private float _time;
 
-    protected override void Start()
-    {
-        var comp = AddComponent<PointLightComponent>(PointLight.ComponentId);
-        comp[0] = new PointLightComponent { R = Color.X, G = Color.Y, B = Color.Z, Intensity = 40f, Radius = 18f };
-    }
-
     protected override void Update(float dt)
     {
         _time += dt * Speed;
-        float x = MathF.Cos(_time + Phase) * Radius;
-        float z = MathF.Sin(_time + Phase) * Radius;
+        float x = MathF.Cos(_time + Phase) * OrbitRadius;
+        float z = MathF.Sin(_time + Phase) * OrbitRadius;
         LocalTransform = LocalTransform with { Position = new Vector3(x, 3f, z) };
     }
 }

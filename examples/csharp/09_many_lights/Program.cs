@@ -27,7 +27,6 @@ app.OnReady = (resources) =>
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 30f) };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Materials
     var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
@@ -79,38 +78,26 @@ app.Run(services);
 
 // ── Random moving point light ──────────────────────────────────────────────────
 
-sealed class RandomMovingLightNode : Node
+sealed class RandomMovingLightNode : PointLight
 {
-    public Vector3 Color     { get; init; } = Vector3.One;
-    public float   Intensity { get; init; } = 5.0f;
-    public float   Speed     { get; init; } = 1.0f;
-    public float   Radius    { get; init; } = 10.0f;
+    public float Speed { get; init; } = 1.0f;
 
     private float _time;
     private Vector3 _seed;
 
     protected override void Start()
     {
+        base.Start();
         var rand = new Random(GetHashCode());
         _seed = new Vector3((float)rand.NextDouble() * 100f, (float)rand.NextDouble() * 100f, (float)rand.NextDouble() * 100f);
-        
-        if (PointLight.ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<PointLightComponent>(PointLight.ComponentId);
-        comp[0] = new PointLightComponent { 
-            R = Color.X, G = Color.Y, B = Color.Z,
-            Intensity = Intensity,
-            Radius = Radius
-        };
     }
 
     protected override void Update(float dt)
     {
         _time += dt * Speed;
-        
         float x = MathF.Sin(_time + _seed.X) * 15.0f;
         float y = MathF.Cos(_time + _seed.Y) * 15.0f;
         float z = MathF.Sin(_time * 0.7f + _seed.Z) * 5.0f + 5.0f;
-
         LocalTransform = LocalTransform with { Position = new Vector3(x, y, z) };
     }
 }

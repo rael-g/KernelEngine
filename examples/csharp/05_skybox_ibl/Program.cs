@@ -74,7 +74,6 @@ app.OnReady = (resources) =>
 
     var cam = app.Tree.AddNode(new FreeLookNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
 };
 

@@ -61,7 +61,6 @@ app.OnReady = (resources) =>
     {
         Position = new Vector3(0f, 0f, 3f),
     };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
 
     app.Tree.AddNode(

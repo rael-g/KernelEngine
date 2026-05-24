@@ -44,7 +44,6 @@ app.OnReady = (resources) =>
     {
         Position = new Vector3(0f, 1.0f, 5.0f),
     };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
     entityCount++;
 
     var mat0 = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal0, roughness: rough0);
@@ -84,33 +83,13 @@ app.Run(services);
 
 // ── Orbiting directional light ────────────────────────────────────────────────
 
-sealed class OrbitingLightNode : Node
+sealed class OrbitingLightNode : DirectionalLight
 {
-    public Vector3 Color     { get; init; } = Vector3.One;
-    public float   Intensity { get; init; } = 3f;
-
     private float _angle;
-
-    protected override void Start()
-    {
-        if (DirectionalLight.ComponentId == uint.MaxValue) return;
-        var dir = CurrentDir();
-        var comp = AddComponent<LightComponent>(DirectionalLight.ComponentId);
-        comp[0] = new LightComponent { DirX = dir.X, DirY = dir.Y, DirZ = dir.Z,
-                                    R = Color.X, G = Color.Y, B = Color.Z,
-                                    Intensity = Intensity };
-    }
 
     protected override void Update(float dt)
     {
         _angle += 60f * dt * MathF.PI / 180f;
-        var dir = CurrentDir();
-        var comp = GetComponent<LightComponent>(DirectionalLight.ComponentId);
-        comp[0].DirX = dir.X;
-        comp[0].DirY = dir.Y;
-        comp[0].DirZ = dir.Z;
+        Direction = Vector3.Normalize(new Vector3(MathF.Sin(_angle), 1f, MathF.Cos(_angle)));
     }
-
-    private Vector3 CurrentDir() =>
-        Vector3.Normalize(new Vector3(MathF.Sin(_angle), 1f, MathF.Cos(_angle)));
 }

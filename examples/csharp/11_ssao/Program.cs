@@ -52,7 +52,6 @@ app.OnReady = (resources) =>
     var lookRot = Quaternion.CreateFromRotationMatrix(
         Matrix4x4.CreateWorld(eye, Vector3.Normalize(new Vector3(0f, 2f, 0f) - eye), Vector3.UnitY));
     cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Materials
     var mat = resources.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), metallic: 0.0f, roughness: 0.5f);

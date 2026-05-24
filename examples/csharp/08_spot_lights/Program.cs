@@ -25,7 +25,6 @@ app.OnReady = (resources) =>
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Materials
     var floorMat = resources.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), metallic: 0.0f, roughness: 0.8f);
@@ -85,41 +84,18 @@ app.Run(services);
 
 // ── Rotating spot light ───────────────────────────────────────────────────────
 
-sealed class RotatingSpotLightNode : Node
+sealed class RotatingSpotLightNode : SpotLight
 {
-    public Vector3 Color     { get; init; } = Vector3.One;
-    public float   Intensity { get; init; } = 10.0f;
-    public float   Offset    { get; init; } = 0.0f;
+    public float Offset { get; init; } = 0.0f;
 
     private float _time;
-
-    protected override void Start()
-    {
-        if (SpotLight.ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<SpotLightComponent>(SpotLight.ComponentId);
-        comp[0] = new SpotLightComponent { 
-            R = Color.X, G = Color.Y, B = Color.Z,
-            Intensity = Intensity,
-            Range = 20.0f,
-            InnerAngle = 15f,
-            OuterAngle = 30f
-        };
-    }
 
     protected override void Update(float dt)
     {
         _time += dt;
         float x = MathF.Cos(_time + Offset) * 8.0f;
         float z = MathF.Sin(_time + Offset) * 8.0f;
-        
         LocalTransform = LocalTransform with { Position = new Vector3(x, 10.0f, z) };
-
-        // Point towards center
-        var lookDir = Vector3.Normalize(new Vector3(0, 0, 0) - LocalTransform.Position);
-        
-        var comp = GetComponent<SpotLightComponent>(SpotLight.ComponentId);
-        comp[0].DirX = lookDir.X;
-        comp[0].DirY = lookDir.Y;
-        comp[0].DirZ = lookDir.Z;
+        Direction = Vector3.Normalize(-LocalTransform.Position);
     }
 }

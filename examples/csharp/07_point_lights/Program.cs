@@ -25,7 +25,6 @@ app.OnReady = (resources) =>
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Materials
     var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
@@ -64,24 +63,11 @@ app.Run(services);
 
 // ── Moving point light ────────────────────────────────────────────────────────
 
-sealed class MovingLightNode : Node
+sealed class MovingLightNode : PointLight
 {
-    public Vector3 Color     { get; init; } = Vector3.One;
-    public float   Intensity { get; init; } = 5.0f;
-    public float   Phase     { get; init; } = 0.0f;
+    public float Phase { get; init; } = 0.0f;
 
     private float _time;
-
-    protected override void Start()
-    {
-        if (PointLight.ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<PointLightComponent>(PointLight.ComponentId);
-        comp[0] = new PointLightComponent { 
-            R = Color.X, G = Color.Y, B = Color.Z,
-            Intensity = Intensity,
-            Radius = 10.0f
-        };
-    }
 
     protected override void Update(float dt)
     {
@@ -89,7 +75,6 @@ sealed class MovingLightNode : Node
         float x = MathF.Cos(_time + Phase) * 5.0f;
         float y = MathF.Sin(_time + Phase) * 5.0f;
         float z = MathF.Sin(_time * 0.5f) * 2.0f + 2.0f;
-
         LocalTransform = LocalTransform with { Position = new Vector3(x, y, z) };
     }
 }

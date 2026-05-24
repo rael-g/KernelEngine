@@ -28,7 +28,6 @@ app.OnReady = async (resources) =>
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 5f) };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Lights
     app.Tree.AddNode(

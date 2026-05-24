@@ -25,7 +25,6 @@ app.OnReady = (resources) =>
         new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
         "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 10f) };
-    app.ActiveWorld.ActiveCamera = cam.Entity;
 
     // Materials
     var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
