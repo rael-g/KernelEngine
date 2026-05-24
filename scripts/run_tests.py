@@ -109,18 +109,19 @@ def main():
         "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*"
     ]
 
-    if run_command(report_cmd, cwd=BASE_DIR).returncode == 0: 
+    if run_command(report_cmd, cwd=BASE_DIR).returncode == 0:
         summary_txt = report_dir / "Summary.txt"
         if summary_txt.exists():
-            print("\n" + "─" * 70)
-            print(summary_txt.read_text())
-            print("─" * 70)    
+            print("\n" + "-" * 70)
+            print(summary_txt.read_text(encoding="utf-8"))
+            print("-" * 70)
             print(f"\nFull Report: {report_dir / 'index.html'}")
 
     # 4. Cleanup & Environment Restore
     print("\n[Cleanup] Restoring environment...")
     run_command(["cmake", "--preset", preset, "-DKE_COVERAGE=OFF"], cwd=BASE_DIR)
-    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()    
+    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()
+    for gcno in build_dir.glob("**/*.gcno"): gcno.unlink()
     for f in BASE_DIR.glob("*.gcov"): f.unlink()
 
 if __name__ == "__main__":     
