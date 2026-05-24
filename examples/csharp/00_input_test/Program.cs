@@ -5,45 +5,66 @@ using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
 // ── 00 Input Test ─────────────────────────────────────────────────────────────
-// Press keys and watch the console output.
-// WASD, arrow keys, Space, Shift, Ctrl, Escape — all reported here.
+// Validates the input event pipeline (kernel ring buffer → cross-thread queue →
+// tree dispatch → node OnInputEvent). Mouse-cursor position is continuous state
+// and is read via polling in OnUpdate — it is intentionally NOT an event.
+//
+// Click the window first so it has keyboard focus, then:
+//   • Tap any key                  → "KEY DOWN ... / UP ..."
+//   • Click any mouse button       → "BUTTON DOWN ... / UP ..."
+//   • Scroll the wheel             → "SCROLL dx=... dy=..."
+//   • Move the cursor              → live "POS x=... y=..." line
+//   • Escape                       → quit
 
 var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .AddGlfwWindow(640, 120, "KernelEngine — 00 Input Test (press keys, watch console)")
+    .AddGlfwWindow(640, 160, "KernelEngine — 00 Input Test (click window, then type)")
     .AddBgfxRenderer(System.IO.Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();
 
-// Keys to monitor — typed Key enum (no magic keycodes).
-var watchKeys = new (string Name, Key Key)[]
+// Root listener: receives every event the tree dispatches, before any descendant.
+app.OnReady = _ =>
 {
-    ("W", Key.W),       ("A", Key.A),         ("S", Key.S),           ("D", Key.D),
-    ("Up", Key.Up),     ("Down", Key.Down),   ("Left", Key.Left),     ("Right", Key.Right),
-    ("Space", Key.Space), ("Shift", Key.ShiftLeft), ("Ctrl", Key.ControlLeft), ("Escape", Key.Escape),
+    var listener = app.Tree.AddNode(new Listener(), "InputListener");
 };
 
 app.OnUpdate = (tree, input) =>
 {
-    tree.ClearColor(0.1f, 0.1f, 0.1f, 1f);
+    tree.ClearColor(0.05f, 0.05f, 0.08f, 1f);
 
-    var pressed  = new System.Text.StringBuilder();
-    var released = new System.Text.StringBuilder();
-    var held     = new System.Text.StringBuilder();
-
-    foreach (var (name, key) in watchKeys)
-    {
-        if (input.IsKeyPressed(key))  pressed.Append($" [{name}]");
-        if (input.IsKeyReleased(key)) released.Append($" [{name}]");
-        if (input.IsKeyDown(key))     held.Append($" {name}");
-    }
-
-    if (pressed.Length  > 0) Console.WriteLine($"PRESSED: {pressed}");
-    if (released.Length > 0) Console.WriteLine($"RELEASED:{released}");
-    if (held.Length     > 0) Console.Write($"\rHELD:    {held,-40}");
+    // Mouse position is continuous state, not an event — read it via the snapshot.
+    var p = input.MousePosition;
+    Console.Write($"\rPOS x={p.X,6:F1} y={p.Y,6:F1}    ");
 };
 
 app.Run(services);
+
+sealed class Listener : Node
+{
+    protected override void OnInput(ref InputEvent evt)
+    {
+        switch (evt.Kind)
+        {
+            case InputEventKind.KeyDown:
+                Console.WriteLine($"\nKEY DOWN  {evt.Key}");
+                if (evt.Key == Key.Escape) Environment.Exit(0);
+                break;
+            case InputEventKind.KeyUp:
+                Console.WriteLine($"\nKEY UP    {evt.Key}");
+                break;
+            case InputEventKind.MouseButtonDown:
+                Console.WriteLine($"\nBUTTON DOWN  {evt.Button}");
+                break;
+            case InputEventKind.MouseButtonUp:
+                Console.WriteLine($"\nBUTTON UP    {evt.Button}");
+                break;
+            case InputEventKind.MouseScroll:
+                Console.WriteLine($"\nSCROLL dx={evt.Scroll.X:F1} dy={evt.Scroll.Y:F1}");
+                break;
+        }
+    }
+}

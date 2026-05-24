@@ -13,4 +13,10 @@ public interface IInput : IDisposable
     /// managed <see cref="IInputReader"/>. Safe to publish across threads (e.g. via
     /// <see cref="IInputBuffer"/>).</summary>
     IInputReader CaptureSnapshot();
+
+    /// <summary>
+    /// Drains all events captured since the last call into <paramref name="buffer"/>.
+    /// Returns the number of events written (<= <c>buffer.Length</c>). Must run on ke.main.
+    /// </summary>
+    int DrainEvents(Span<InputEvent> buffer);
 }

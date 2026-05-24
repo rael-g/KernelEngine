@@ -59,6 +59,8 @@ public class Application : IDisposable
 
     private readonly CancellationTokenSource _cts = new();
     private IInputBuffer _inputBuffer = null!;
+    private readonly InputEventBuffer _eventBuffer = new();
+    private readonly InputEvent[] _eventStaging = new InputEvent[256];
     private IResourceCommandQueue _resourceQueue = null!;
     private ShadowRenderSystem? _shadowSystem;
 
@@ -229,6 +231,12 @@ public class Application : IDisposable
                     var input = _inputBuffer.Consume();
                     var writer = new FramePacketSceneWriter(packet, _kernelFactory);
 
+                    // Drain queued input events and dispatch through the tree before any update
+                    // logic runs — node OnInput handlers can flip state that Update consumes.
+                    var events = _eventBuffer.Drain();
+                    if (events.Length > 0)
+                        Tree.DispatchInput(events);
+
                     ActiveWorld?.Update(packet: packet, input: input);
                     OnUpdate?.Invoke(writer, input);
 
@@ -256,7 +264,11 @@ public class Application : IDisposable
                 Input?.Update();
                 Window.PollEvents();
                 if (Input != null)
+                {
+                    int n = Input.DrainEvents(_eventStaging);
+                    if (n > 0) _eventBuffer.Enqueue(_eventStaging.AsSpan(0, n));
                     _inputBuffer.Produce(Input.CaptureSnapshot());
+                }
 
                 if (Window.ShouldClose())
                     _cts.Cancel();

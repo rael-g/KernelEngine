@@ -68,6 +68,34 @@ public sealed class Tree
         return node;
     }
 
+    // ── Input dispatch ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Dispatches a batch of input events to every node, in pre-order from <see cref="Root"/>.
+    /// Stops visiting further nodes for an event as soon as a handler calls <c>evt.Consume()</c>;
+    /// the next event in the batch restarts at the root.
+    /// </summary>
+    public void DispatchInput(InputEvent[] events)
+    {
+        if (events is null || events.Length == 0) return;
+        for (int i = 0; i < events.Length; i++)
+        {
+            ref var evt = ref events[i];
+            DispatchInputRecursive(_root, ref evt);
+        }
+    }
+
+    private static void DispatchInputRecursive(Node node, ref InputEvent evt)
+    {
+        node.TickInput(ref evt);
+        if (evt.Handled) return;
+        for (var c = node.FirstChild; c != null; c = c.NextSibling)
+        {
+            DispatchInputRecursive(c, ref evt);
+            if (evt.Handled) return;
+        }
+    }
+
     // ── Destruction ───────────────────────────────────────────────────────────
 
     /// <summary>

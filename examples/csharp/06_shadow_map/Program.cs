@@ -10,6 +10,7 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink(LogLevel.Info)
+    .AddInput()
     .AddGlfwWindow(1280, 720, "KernelEngine — 06 Shadow Map Verification")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 

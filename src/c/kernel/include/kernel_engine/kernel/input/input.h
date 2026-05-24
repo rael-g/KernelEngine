@@ -4,6 +4,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/input/snapshot.h>
+#include <kernel_engine/kernel/input/event.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -37,6 +38,13 @@ extern "C"
          * @brief Captures a frozen snapshot of the current input state.
          */
         void (*get_snapshot)(struct ke_input *self, ke_input_snapshot *out_snapshot);
+
+        /**
+         * @brief Drains pending discrete input events into @p out_buf and clears the queue.
+         * Returns the number of events written (<= @p capacity). Excess events are dropped.
+         * Must be called on ke.main (same thread as the on_* sinks).
+         */
+        uint32_t (*drain_events)(struct ke_input *self, ke_input_event *out_buf, uint32_t capacity);
 
         // ── Event Sinks (Main Thread Only) ────────────────────────────────────
 

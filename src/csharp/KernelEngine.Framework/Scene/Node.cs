@@ -166,11 +166,26 @@ public class Node
     /// <summary>Called every sim frame. Override to drive per-frame behavior.</summary>
     protected virtual void Update(float deltaTime) { }
 
+    /// <summary>
+    /// Called once per input event each sim frame, in tree pre-order (parent then children).
+    /// Override to react to discrete events; call <c>evt.Consume()</c> to stop propagation.
+    /// </summary>
+    protected virtual void OnInput(ref InputEvent evt) { }
+
     /// <summary>Instance hook fired after <see cref="Start"/>.</summary>
     public Action? OnStart { get; set; }
 
     /// <summary>Instance hook fired after <see cref="Update"/>.</summary>
     public Action<float>? OnUpdate { get; set; }
+
+    /// <summary>Instance hook fired after <see cref="OnInput"/> for each event.</summary>
+    public InputHandler? OnInputEvent { get; set; }
+
+    internal void TickInput(ref InputEvent evt)
+    {
+        OnInput(ref evt);
+        OnInputEvent?.Invoke(ref evt);
+    }
 
     private void TickStart()
     {
