@@ -12,9 +12,9 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink(LogLevel.Info)
     .AddInput()
-    .AddProjectConfig("Project.toml")   // window size/title/etc. now come from Project.toml
+    .AddProjectConfig("Project.toml")   // window + renderer settings come from Project.toml
     .AddGlfwWindow()
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
+    .AddBgfxRenderer();
 
 using var app = new Application();
 

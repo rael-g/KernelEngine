@@ -6,3 +6,7 @@ width      = 1280
 height     = 720
 title      = "KernelEngine — 06 Shadow Map Verification"
 fullscreen = false
+
+[runtime.renderer]
+shader_path = "shaders"
+vsync       = true
