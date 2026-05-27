@@ -22,6 +22,34 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 ---
 
+## 🎯 Next Up — Beta Roadmap (in priority order)
+
+> **How to use this section**: pick the topmost open item, work it to done, mark it ✅, move on. Items are ordered by **risk-reduction first** (resolve the unknown before the easy) not by effort. Each item links to the chapter or card where detail lives.
+>
+> Goal: get the engine to a state where someone outside the team can prototype a small game without fighting fundamentals. Target ~6–10 weeks of focused work to ship a credible beta.
+
+| # | Item | Why first | Detail |
+|---|---|---|---|
+| 1 | **Fix OBS.4 — Example 10 (HDR/bloom) black screen** | Render bug, indicates rot somewhere in tonemap/fullscreen-quad path. Cheaper to fix while context is fresh than to forget and rediscover later. | Kanban [OBS.4](#obs4-examples-1011-post-processing-pipelines-broken-bug-deferred--complex) |
+| 2 | **Implement OBS.4 SSAO — `PostProcessPipeline::SetupSsao` stub** | Today it returns `KE_OK` and does nothing; `Scene.SetSsao(...)` is a silent no-op. Either implement (gbuffer prepass + blur) or remove the API to stop lying. | Kanban [OBS.4](#obs4-examples-1011-post-processing-pipelines-broken-bug-deferred--complex) |
+| 3 | **Project.toml + config service** | Every game today hardcodes window/renderer in `Program.cs`. Without this nothing else (scene serialization, scaffold, agent) makes sense. Specs are pinned. | [Chapter 16](Reference/16%20-%20Configuration%20Service.md) |
+| 4 | **`.scene.toml` serialization + loader** | Engine is not "Godot-like" without file-based scenes. Specs pinned across chapters 15 + 17. | [Chapter 15 §5](Reference/15%20-%20Serialization%20%26%20Project%20Files.md#5-scene-file-schema-scenetoml), [Chapter 17](Reference/17%20-%20Scene%20%26%20Node%20Serialization.md) |
+| 5 | **Audio — `ke_audio` kernel contract + `KernelEngine.Audio.MiniAudio` plugin** | First gameplay-category beyond render/input. Validates the kernel-vtable+plugin pattern outside render. Play/Loop/Volume/3D positional. | New chapter (TBD); follows pattern of `ke_image_loader`/stb_image |
+| 6 | **Physics 2D — `ke_physics_2d` + `KernelEngine.Physics.Box2D`** | Second gameplay category. 2D first because debugging is dramatically simpler than 3D physics; covers Pong/Asteroids/platformer-class games. | New chapter (TBD); Box2D is MIT, mature, single-include-ish |
+| 7 | **Complete game example — Pong or Breakout** | Forces ergonomics gaps to surface. Input → state → render → audio → physics in one loop. "Engine usable" ≠ "engine ships a game". | new `examples/csharp/15_pong/` |
+| 8 | **Headless mode + screenshot dump** | Unlocks CI visual regression + agent visibility (Layer 3/4 of chapter 14). | [Chapter 14 §4](Reference/14%20-%20Editor%2C%20CLI%20%26%20Agent%20Layer.md#4-the-five-layers-of-agent-visibility) |
+| 9 | **CLI scaffold — `ke new project` / `ke run`** | Without it, creating a new project = copy-paste from `examples/`. Edges of the editor lib (chapter 18) get exercised. | [Chapter 18](Reference/18%20-%20Editor%20Lib%20API.md), [Chapter 19](Reference/19%20-%20CLI%20%26%20Agent%20Surface.md) |
+| 10 | **OBS.6 — Point/spot light shadows** | Visual completeness. Architectural design exists; not the most urgent for beta but expected for "modern engine". | Kanban [OBS.6](#obs6-point--spot-lights-cast-no-shadows-feature-deferred--future) |
+| 11 | **Tracy profiler integration** | Helps every subsequent investigation. Lower priority because it's a tool, not a capability gap. | Kanban [B4.1](#b41-phase-n--tracy-profiler-integration) |
+
+**Not in beta scope** (parking lot, planned post-beta):
+- Visual editor GUI (M4) — chapter 18 prepares the lib; the GUI itself waits.
+- Clustered forward shading proper (current cap: ~64 point / 48 spot via brute-force in `fs_basic`).
+- Skeletal animation, networking, particles, UI library, save/load framework.
+- MCP server for agents (CLI piping is enough for now — chapter 19 §9.2).
+
+---
+
 ## 📋 Todo
 
 ### Tier 1 — Stabilization First (Current Focus)
