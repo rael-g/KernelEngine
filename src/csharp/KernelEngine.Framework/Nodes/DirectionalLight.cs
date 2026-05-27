@@ -10,20 +10,10 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class DirectionalLight : Node
 {
-    // ── ECS registration ──────────────────────────────────────────────────────
-
-    public static uint ComponentId { get; private set; } = uint.MaxValue;
-
-    internal static void Initialize(IEcsRegistry registry)
-    {
-        if (ComponentId == uint.MaxValue)
-            ComponentId = registry.RegisterComponent<LightComponent>("LightComponent");
-    }
-
-    // ── Per-instance ──────────────────────────────────────────────────────────
-
     // Backing fields hold values supplied before Start; after Start the ECS slot is authoritative
-    // and the property accessors mirror through it.
+    // and the property accessors mirror through it. _componentId is cached in Start so live-sync
+    // setters don't re-resolve it per access.
+    private uint _componentId = uint.MaxValue;
     private Vector3 _direction = Vector3.UnitY;
     private Vector3 _color = Vector3.One;
     private float _intensity = 1f;
@@ -50,12 +40,13 @@ public class DirectionalLight : Node
     }
 
     private Span<LightComponent> Slot() =>
-        ComponentId == uint.MaxValue ? Span<LightComponent>.Empty : GetComponent<LightComponent>(ComponentId);
+        _componentId == uint.MaxValue ? Span<LightComponent>.Empty : GetComponent<LightComponent>(_componentId);
 
     protected override void Start()
     {
-        if (ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<LightComponent>(ComponentId);
+        if (World == null) return;
+        _componentId = World.GetOrRegisterComponentId<LightComponent>("LightComponent");
+        var comp = AddComponent<LightComponent>(_componentId);
         comp[0] = new LightComponent
         {
             DirX = _direction.X, DirY = _direction.Y, DirZ = _direction.Z,

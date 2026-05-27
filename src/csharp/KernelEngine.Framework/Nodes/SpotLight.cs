@@ -12,18 +12,7 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class SpotLight : Node
 {
-    // ── ECS registration ──────────────────────────────────────────────────────
-
-    public static uint ComponentId { get; private set; } = uint.MaxValue;
-
-    internal static void Initialize(IEcsRegistry registry)
-    {
-        if (ComponentId == uint.MaxValue)
-            ComponentId = registry.RegisterComponent<SpotLightComponent>("SpotLightComponent");
-    }
-
-    // ── Per-instance ──────────────────────────────────────────────────────────
-
+    private uint _componentId = uint.MaxValue;
     private Vector3 _direction = -Vector3.UnitY;
     private float _range = 15f;
     private float _innerAngleDegrees = 15f;
@@ -74,12 +63,13 @@ public class SpotLight : Node
     }
 
     private Span<SpotLightComponent> Slot() =>
-        ComponentId == uint.MaxValue ? Span<SpotLightComponent>.Empty : GetComponent<SpotLightComponent>(ComponentId);
+        _componentId == uint.MaxValue ? Span<SpotLightComponent>.Empty : GetComponent<SpotLightComponent>(_componentId);
 
     protected override void Start()
     {
-        if (ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<SpotLightComponent>(ComponentId);
+        if (World == null) return;
+        _componentId = World.GetOrRegisterComponentId<SpotLightComponent>("SpotLightComponent");
+        var comp = AddComponent<SpotLightComponent>(_componentId);
         comp[0] = new SpotLightComponent
         {
             DirX = _direction.X, DirY = _direction.Y, DirZ = _direction.Z,

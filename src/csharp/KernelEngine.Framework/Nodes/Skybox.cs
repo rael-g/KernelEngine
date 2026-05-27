@@ -11,13 +11,6 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class Skybox : Node
 {
-    public static uint ComponentId { get; private set; } = uint.MaxValue;
-
-    internal static void Initialize(IEcsRegistry registry)
-    {
-        ComponentId = registry.RegisterComponent<SkyboxComponent>("Skybox");
-    }
-
     /// <summary>
     /// GPU cubemap handle to use as the skybox. Must be a handle returned by
     /// <see cref="Renderer.CreateCubemap"/>.
@@ -26,8 +19,9 @@ public class Skybox : Node
 
     protected override void Start()
     {
-        if (ComponentId == uint.MaxValue || !CubemapHandle.IsValid) return;
-        var comp = AddComponent<SkyboxComponent>(ComponentId);
+        if (World == null || !CubemapHandle.IsValid) return;
+        var cid = World.GetOrRegisterComponentId<SkyboxComponent>("Skybox");
+        var comp = AddComponent<SkyboxComponent>(cid);
         comp[0].CubemapHandle = CubemapHandle;
     }
 }

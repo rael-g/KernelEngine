@@ -11,20 +11,7 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class PointLight : Node
 {
-    // ── ECS registration ──────────────────────────────────────────────────────
-
-    public static uint ComponentId { get; private set; } = uint.MaxValue;
-
-    internal static void Initialize(IEcsRegistry registry)
-    {
-        if (ComponentId == uint.MaxValue)
-            ComponentId = registry.RegisterComponent<PointLightComponent>("PointLightComponent");
-    }
-
-    // ── Per-instance ──────────────────────────────────────────────────────────
-
-    // Backing fields hold values supplied before Start; after Start the ECS slot is authoritative
-    // and the property accessors mirror through it.
+    private uint _componentId = uint.MaxValue;
     private float _radius = 10f;
     private Vector3 _color = Vector3.One;
     private float _intensity = 1f;
@@ -51,12 +38,13 @@ public class PointLight : Node
     }
 
     private Span<PointLightComponent> Slot() =>
-        ComponentId == uint.MaxValue ? Span<PointLightComponent>.Empty : GetComponent<PointLightComponent>(ComponentId);
+        _componentId == uint.MaxValue ? Span<PointLightComponent>.Empty : GetComponent<PointLightComponent>(_componentId);
 
     protected override void Start()
     {
-        if (ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<PointLightComponent>(ComponentId);
+        if (World == null) return;
+        _componentId = World.GetOrRegisterComponentId<PointLightComponent>("PointLightComponent");
+        var comp = AddComponent<PointLightComponent>(_componentId);
         comp[0] = new PointLightComponent
         {
             Radius = _radius,

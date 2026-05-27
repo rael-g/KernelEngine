@@ -258,7 +258,10 @@ public class Application : IDisposable
                 simException = ex;
                 Logger?.Error("Application", $"ke.sim fatal exception: {ex.Message}");
                 _cts.Cancel();
-                // Signal ke.render to exit BeginRead if it's waiting
+            }
+            finally
+            {
+                // Signal ke.render to exit BeginRead if it's waiting (poison pill)
                 try { var p = frameSync.BeginWrite(); p.EndWrite(); } catch { }
             }
         });
@@ -317,12 +320,13 @@ public class Application : IDisposable
 
     private void InitializeSystems()
     {
-        DirectionalLight.Initialize(ActiveWorld.Registry);
-        PointLight.Initialize(ActiveWorld.Registry);
-        SpotLight.Initialize(ActiveWorld.Registry);
-        Camera.Initialize(ActiveWorld.Registry);
-        MeshRenderer.Initialize(ActiveWorld.Registry);
-        Skybox.Initialize(ActiveWorld.Registry);
+        // IDs are owned by the world (not static), so creating a second world doesn't clobber the first.
+        var dirLightCid   = ActiveWorld.GetOrRegisterComponentId<LightComponent>("LightComponent");
+        var pointLightCid = ActiveWorld.GetOrRegisterComponentId<PointLightComponent>("PointLightComponent");
+        var spotLightCid  = ActiveWorld.GetOrRegisterComponentId<SpotLightComponent>("SpotLightComponent");
+        var cameraCid     = ActiveWorld.GetOrRegisterComponentId<CameraComponent>("CameraComponent");
+        var meshCid       = ActiveWorld.GetOrRegisterComponentId<MeshComponent>("ke_mesh_renderer");
+        var skyboxCid     = ActiveWorld.GetOrRegisterComponentId<SkyboxComponent>("Skybox");
 
         MeshRenderer.DefaultMeshHandle     = new(0);
         MeshRenderer.DefaultMaterialHandle = new(0);
@@ -330,13 +334,12 @@ public class Application : IDisposable
         var xformCid = ActiveWorld.TransformComponentId;
 
         // All render systems are pure-managed now — render/core C++ is no longer in the pipeline.
-        ActiveWorld.AddSystem(new CameraRenderSystem(Camera.ComponentId, xformCid));
-        ActiveWorld.AddSystem(new LightRenderSystem(
-            DirectionalLight.ComponentId, PointLight.ComponentId, SpotLight.ComponentId, xformCid));
-        ActiveWorld.AddSystem(new MeshRenderSystem(MeshRenderer.ComponentId, xformCid));
-        ActiveWorld.AddSystem(new SkyboxRenderSystem(Skybox.ComponentId));
+        ActiveWorld.AddSystem(new CameraRenderSystem(cameraCid, xformCid));
+        ActiveWorld.AddSystem(new LightRenderSystem(dirLightCid, pointLightCid, spotLightCid, xformCid));
+        ActiveWorld.AddSystem(new MeshRenderSystem(meshCid, xformCid));
+        ActiveWorld.AddSystem(new SkyboxRenderSystem(skyboxCid));
 
-        _shadowSystem = new ShadowRenderSystem(DirectionalLight.ComponentId, MeshRenderer.ComponentId, xformCid);
+        _shadowSystem = new ShadowRenderSystem(dirLightCid, meshCid, xformCid);
         ActiveWorld.AddSystem(_shadowSystem);
     }
 

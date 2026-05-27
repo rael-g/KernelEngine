@@ -13,6 +13,13 @@ public interface IWorld : IDisposable
     uint NameComponentId { get; }
     uint ScriptComponentId { get; }
 
+    /// <summary>
+    /// Returns the component ID for <typeparamref name="T"/> in this world's registry, registering
+    /// it on first call. Idempotent per-world. Lets game code keep IDs out of static fields, which
+    /// makes the framework safe across multiple concurrent worlds (each world owns its own ID set).
+    /// </summary>
+    uint GetOrRegisterComponentId<T>(string name) where T : unmanaged;
+
     /// <summary>Entity ID of the active camera. Render systems read this each frame.</summary>
     ulong ActiveCamera { get; set; }
 

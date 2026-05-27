@@ -9,26 +9,11 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class MeshRenderer : Node
 {
-    // ── ECS registration (shared across all MeshRenderer instances) ──────────────
-
-    public static uint ComponentId { get; private set; } = uint.MaxValue;
-
     /// <summary>Handle of the built-in unit quad mesh (handle 0, created by the renderer at init).</summary>
     public static MeshHandle DefaultMeshHandle { get; internal set; } = new(0);
 
     /// <summary>Handle of the built-in white material (handle 0, created by the renderer at init).</summary>
     public static MaterialHandle DefaultMaterialHandle { get; internal set; } = new(0);
-
-    /// <summary>
-    /// Registers the MeshComponent with the ECS registry and stores the component ID.
-    /// Must be called once per world, before any MeshRenderer is added to the Tree.
-    /// </summary>
-    internal static void Initialize(IEcsRegistry registry)
-    {
-        ComponentId = registry.RegisterComponent<MeshComponent>("ke_mesh_renderer");
-    }
-
-    // ── Per-instance ──────────────────────────────────────────────────────────
 
     /// <summary>
     /// High-level mesh resource. When set, the node retains a reference for its lifetime and uses
@@ -50,7 +35,7 @@ public class MeshRenderer : Node
 
     protected override void Start()
     {
-        if (ComponentId == uint.MaxValue) return;
+        if (World == null) return;
 
         // Retain managed resources so they stay alive while the node references them. Until Node
         // gets an OnDestroy hook, the retain isn't paired with a Release here — resources live
@@ -62,7 +47,8 @@ public class MeshRenderer : Node
         var meshHandle = Mesh?.Handle ?? (MeshHandle.IsValid ? MeshHandle : DefaultMeshHandle);
         var materialHandle = Material?.Handle ?? (MaterialHandle.IsValid ? MaterialHandle : DefaultMaterialHandle);
 
-        var comp = AddComponent<MeshComponent>(ComponentId);
+        var cid = World.GetOrRegisterComponentId<MeshComponent>("ke_mesh_renderer");
+        var comp = AddComponent<MeshComponent>(cid);
         comp[0] = new MeshComponent { MeshHandle = meshHandle, MaterialHandle = materialHandle };
     }
 }

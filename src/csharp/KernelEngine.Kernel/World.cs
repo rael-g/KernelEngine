@@ -39,6 +39,17 @@ public sealed unsafe class World : IWorld
     /// <summary>Component ID for <see cref="ScriptComponent"/>.</summary>
     public uint ScriptComponentId { get; private set; }
 
+    private readonly Dictionary<Type, uint> _componentIds = [];
+
+    /// <inheritdoc/>
+    public uint GetOrRegisterComponentId<T>(string name) where T : unmanaged
+    {
+        if (_componentIds.TryGetValue(typeof(T), out var id)) return id;
+        id = Registry.RegisterComponent<T>(name);
+        _componentIds[typeof(T)] = id;
+        return id;
+    }
+
     // ── Construction ──────────────────────────────────────────────────────────
 
     /// <summary>Creates a world bound to the given allocator.</summary>

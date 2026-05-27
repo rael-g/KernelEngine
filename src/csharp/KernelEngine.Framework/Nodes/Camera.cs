@@ -8,18 +8,6 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class Camera : Node
 {
-    // ── ECS registration ──────────────────────────────────────────────────────
-
-    public static uint ComponentId { get; private set; } = uint.MaxValue;
-
-    internal static void Initialize(IEcsRegistry registry)
-    {
-        if (ComponentId == uint.MaxValue)
-            ComponentId = registry.RegisterComponent<CameraComponent>("CameraComponent");
-    }
-
-    // ── Per-instance ──────────────────────────────────────────────────────────
-
     /// <summary>Vertical field of view in degrees.</summary>
     public float Fov { get; init; } = 60f;
 
@@ -45,8 +33,9 @@ public class Camera : Node
 
     protected override void Start()
     {
-        if (ComponentId == uint.MaxValue) return;
-        var comp = AddComponent<CameraComponent>(ComponentId);
+        if (World == null) return;
+        var cid = World.GetOrRegisterComponentId<CameraComponent>("CameraComponent");
+        var comp = AddComponent<CameraComponent>(cid);
         comp[0] = new CameraComponent
         {
             Fov = Fov * MathF.PI / 180f,
@@ -55,6 +44,6 @@ public class Camera : Node
             Orthographic = Orthographic ? (byte)1 : (byte)0,
         };
         // Auto-activate when no camera is current yet (so a single-camera scene "just works").
-        if (World != null && World.ActiveCamera == 0) MakeCurrent();
+        if (World.ActiveCamera == 0) MakeCurrent();
     }
 }
