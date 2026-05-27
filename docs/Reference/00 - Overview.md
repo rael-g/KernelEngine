@@ -76,3 +76,4 @@ Dependencies point downward only. A plugin never depends on the framework; the f
 | Asset pipeline (watch → import → cache → manifest → runtime) | [21 - Asset Pipeline](21%20-%20Asset%20Pipeline.md) |
 | Input action layer (action maps, bindings, rebinding, multi-device — the Unity-Antigo lesson) | [22 - Input Action Layer](22%20-%20Input%20Action%20Layer.md) |
 | Audio logical layer (events, clip pools, bus mixer, user settings) | [23 - Audio Logical Layer](23%20-%20Audio%20Logical%20Layer.md) |
+| Physics node layer (CollisionBody2D + subtypes, colliders, auto-step, collision events) | [24 - Physics Node Layer](24%20-%20Physics%20Node%20Layer.md) |

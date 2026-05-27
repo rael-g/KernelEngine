@@ -22,34 +22,54 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 ---
 
-## 🎯 Next Up — Beta Roadmap (in priority order)
+## 🎯 Next Up — Beta Roadmap (Pong-retro reordered)
 
-> **How to use this section**: pick the topmost open item, work it to done, mark it ✅, move on. Items are ordered by **risk-reduction first** (resolve the unknown before the easy) not by effort. Each item links to the chapter or card where detail lives.
+> **How to use this section**: pick the topmost open item from the current tier, work it to done, mark it ✅, move on. Items within a tier can be reordered; **do not skip ahead between tiers**.
 >
-> Goal: get the engine to a state where someone outside the team can prototype a small game without fighting fundamentals. Target ~6–10 weeks of focused work to ship a credible beta.
+> **Re-ordered after Pong retro (commit `8357944`)**: Pong shipped the first complete game and surfaced real ergonomic gaps. The new tier order is *(A) architectural debt → (B) non-physics/UI features → (C) physics+UI redesigns*. Items 1-5 of the original list (Project / scene / audio / physics MVP / Pong) are all ✅ done; what follows is what comes after.
 
-| # | Item | Why first | Detail |
+### Tier A — Architectural debt (pay first, regardless of feature direction)
+
+These cost us every time we touch them. None is physics- or UI-related; all surfaced during slices 1-5 of beta.
+
+| # | Item | Why now | Detail |
 |---|---|---|---|
-| ~~1~~ | ~~Fix OBS.4 — Example 10 (HDR/bloom) black screen~~ | **Stale entry — was actually fixed in commit `e8746da` (light direction was wrong, not the pipeline). Example 10 renders a bright glowing cube with bloom halo as expected.** | done |
-| ~~2~~ | ~~Implement SSAO stub~~ | **Deferred to post-beta** — solving SSAO directly asks the wrong question. The real question is "how do we add ANY new graphics technique without touching the renderer?" — answer is the render-graph ([F.RC2]). Once that exists, SSAO is one of many registered passes. Either remove `Scene.SetSsao` for now (it's a silent no-op) or leave it as a known TODO. | [F.RC2](#frc2-render-graph--gpu-compute-primitives-as-universal-kernel-contracts-extensibility-doctrine) |
-| 1 | **Project.toml + config service** | Every game today hardcodes window/renderer in `Program.cs`. Without this nothing else (scene serialization, scaffold, agent) makes sense. Specs are pinned. | [Chapter 16](Reference/16%20-%20Configuration%20Service.md) |
-| 2 | **`.scene.toml` serialization + loader** | Engine is not "Godot-like" without file-based scenes. Specs pinned across chapters 15 + 17. | [Chapter 15 §5](Reference/15%20-%20Serialization%20%26%20Project%20Files.md#5-scene-file-schema-scenetoml), [Chapter 17](Reference/17%20-%20Scene%20%26%20Node%20Serialization.md) |
-| 3 | **Audio — `ke_audio` kernel contract + `KernelEngine.Audio.MiniAudio` plugin** | First gameplay-category beyond render/input. Validates the kernel-vtable+plugin pattern outside render. Play/Loop/Volume/3D positional. | New chapter (TBD); follows pattern of `ke_image_loader`/stb_image |
-| 4 | **Physics 2D — `ke_physics_2d` + `KernelEngine.Physics.Box2D`** | Second gameplay category. 2D first because debugging is dramatically simpler than 3D physics; covers Pong/Asteroids/platformer-class games. | New chapter (TBD); Box2D is MIT, mature, single-include-ish |
-| 5 | **Complete game example — Pong or Breakout** | Forces ergonomics gaps to surface. Input → state → render → audio → physics in one loop. "Engine usable" ≠ "engine ships a game". | new `examples/csharp/15_pong/` |
-| 6 | **Headless mode + screenshot dump** | Unlocks CI visual regression + agent visibility (Layer 3/4 of chapter 14). | [Chapter 14 §4](Reference/14%20-%20Editor%2C%20CLI%20%26%20Agent%20Layer.md#4-the-five-layers-of-agent-visibility) |
-| 7 | **CLI scaffold — `ke new project` / `ke run`** | Without it, creating a new project = copy-paste from `examples/`. Edges of the editor lib (chapter 18) get exercised. | [Chapter 18](Reference/18%20-%20Editor%20Lib%20API.md), [Chapter 19](Reference/19%20-%20CLI%20%26%20Agent%20Surface.md) |
-| 8 | **OBS.6 — Point/spot light shadows** | Visual completeness. Architectural design exists; not the most urgent for beta but expected for "modern engine". | Kanban [OBS.6](#obs6-point--spot-lights-cast-no-shadows-feature-deferred--future) |
-| 9 | **Tracy profiler integration** | Helps every subsequent investigation. Lower priority because it's a tool, not a capability gap. | Kanban [B4.1](#b41-phase-n--tracy-profiler-integration) |
+| A1 | **Asset pipeline real implementation** | Today `SceneLoader` reads `.material` on each scene load; no cache, no manifest, no shipping path. Chapter 21 spec is pinned; implementing it removes a class of "works in dev, breaks shipped" bugs and unlocks asset hot-reload. | [Chapter 21](Reference/21%20-%20Asset%20Pipeline.md) |
+| A2 | **Snapshot edge-poll deprecation** | `IsKeyPressed` is unreliable across the single-slot snapshot exchange (OBS.5 §3). Today we lean on events for edges, but the polling API is still public and lying. Either fix (accumulate in `InputBuffer`) or mark `[Obsolete]` and point at events. | OBS.5 §3 |
+| A3 | **`Tree.AddNode(node, "Name")` ergonomics** | Pong's setup repeats `, "PaddleLeft"` etc. — name passed at every call site. Option: derive default from type name; override via `node.Name = ...` post-construction or a `[NodeName("Foo")]` attribute. | new |
+| A4 | **Magic-default audit** | The Box2D plugin had a `if (gx == 0 && gy == 0) gy = -9.81f` "helpful default" that broke Pong's no-gravity setup. Sweep the codebase for similar patterns — defensive defaults that overwrite explicit user input. | retrospective |
 
-**Not in beta scope** (parking lot, planned post-beta):
+### Tier B — Non-physics, non-UI features (build the missing pieces)
+
+Concrete capability gaps surfaced by Pong or earlier examples that are not physics/UI.
+
+| # | Item | Why | Detail |
+|---|---|---|---|
+| B1 | **Sprite + `Sprite2D` node** | Pong drew floor as a thin cube. Real 2D games need textured quads with pivot / UV / nine-slice. Renderer can absorb this without major refactor. | new |
+| B2 | **`Camera2D` orthographic helper** | Pong placed a 3D camera at +Z faking ortho. Need a proper 2D camera node with pixel/unit scale + zoom. | new |
+| B3 | **Headless mode + screenshot dump** | Unlocks CI visual regression + agent visibility (chapter 14 layer 3/4). | [Chapter 14 §4](Reference/14%20-%20Editor%2C%20CLI%20%26%20Agent%20Layer.md#4-the-five-layers-of-agent-visibility) |
+| B4 | **CLI scaffold — `ke new project` / `ke run`** | Without it, creating a new project = copy-paste from `examples/`. Edges of the editor lib (chapter 18) get exercised. | [Chapter 18](Reference/18%20-%20Editor%20Lib%20API.md), [Chapter 19](Reference/19%20-%20CLI%20%26%20Agent%20Surface.md) |
+| B5 | **Input action layer** | `Action.Jump` instead of `Key.Space`. Hard pre-req for gamepad / touch / VR; also the proper fix for OBS.5 §3 edge-poll. | [Chapter 22](Reference/22%20-%20Input%20Action%20Layer.md), expands `F.C2` |
+| B6 | **Audio logical layer** | Bus mixer + clip pools + `.event` TOML. Beta-shippable game needs Music/SFX volume sliders at minimum. | [Chapter 23](Reference/23%20-%20Audio%20Logical%20Layer.md) |
+| B7 | **OBS.6 — Point/spot shadows** | Visual completeness; expected for "modern engine". | [OBS.6](#obs6-point--spot-lights-cast-no-shadows-feature-deferred--future) |
+| B8 | **Tracy profiler integration** | Helps every subsequent investigation. Tool, not a capability gap. | [B4.1](#b41-phase-n--tracy-profiler-integration) |
+
+### Tier C — Physics + UI redesigns (do last)
+
+Touchy and have ripple effects. Pin specs first (already done); implementation after Tiers A + B.
+
+| # | Item | Why | Detail |
+|---|---|---|---|
+| C1 | **Physics node layer (`CollisionBody2D` + subtypes, auto-step, collision events)** | Pong's `PhysicsStepper` + manual body sync + hand-rolled hit detection are ergonomic debt. Spec pinned in chapter 24. Migrating Pong to it cuts the example by ~half. | [Chapter 24](Reference/24%20-%20Physics%20Node%20Layer.md) |
+| C2 | **UI primitives — text rendering + minimal layout** | Pong's score is in console. No shipping game ships without on-screen text. Likely ImGui first (dev tooling), then a gameplay UI library (RmlUi or similar). | no chapter yet |
+
+### Parking lot — explicitly post-beta
+
 - Visual editor GUI (M4) — chapter 18 prepares the lib; the GUI itself waits.
-- **Render-graph + GPU-compute primitives ([F.RC2])** — the universal extensibility surface for graphics techniques. Once it lands, SSAO/FXAA/TAA/SSR/DoF and any other technique becomes a registered pass with zero core changes; built-in bloom/SSAO/tonemap re-expressed through it (kills the hardcoded view chain). Foundational for the engine's competitive bet (decentralized graphics extension). Deferred because getting the contract wrong ossifies, and beta doesn't need it.
+- **Render-graph + GPU-compute primitives ([F.RC2])** — universal extensibility surface for graphics techniques. SSAO/FXAA/TAA/SSR/DoF become registered passes; built-in bloom/SSAO/tonemap re-expressed through it (kills hardcoded view chain).
 - **Clustered forward shading ([F.RC3])** — current brute-force caps at ~64 point / 48 spot; surplus silently dropped. Naturally rides on F.RC2.
 - **GPU instancing + `MultiMeshRenderer` ([F.RC1])** — required for grass/crowds/particles at scale.
-- **Input action layer ([chapter 22](Reference/22%20-%20Input%20Action%20Layer.md))** — game code reaches `Action.Jump`, never `Key.Space`. Mandatory **before** any new device (gamepad/touch/VR) lands, otherwise we recreate Unity Antigo's coupling pain. Includes the proper fix for `IsKeyPressed` edge-poll unreliability (OBS.5 §3) via event-stream-derived `WasActionPressed`. Expands existing card `F.C2`.
-- **Audio logical layer ([chapter 23](Reference/23%20-%20Audio%20Logical%20Layer.md))** — buses (Master/Music/SFX/UI) with persisted volumes, clip pools (variation + pitch jitter), `.event` TOML so audio designers swap clips without recompile. Layered cleanly on the current `IAudio`. Spatial 3D + bus effects are further-future slices on the same layers.
-- Skeletal animation, networking, particles, UI library, save/load framework.
+- Skeletal animation, networking, particles, save/load framework, joints/raycasts on top of physics layer (chapter 24 §8).
 - MCP server for agents (CLI piping is enough for now — chapter 19 §9.2).
 
 ---
