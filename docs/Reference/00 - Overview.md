@@ -68,3 +68,4 @@ Dependencies point downward only. A plugin never depends on the framework; the f
 | Decision/defect log | [12 - Architecture Backlog & Decisions](12%20-%20Architecture%20Backlog%20%26%20Decisions.md) |
 | Editor lib, CLI, and how AI agents drive the engine | [14 - Editor, CLI & Agent Layer](14%20-%20Editor%2C%20CLI%20%26%20Agent%20Layer.md) |
 | File formats (TOML), project/scene/resource schemas | [15 - Serialization & Project Files](15%20-%20Serialization%20%26%20Project%20Files.md) |
+| Configuration service (IOptions plumbing, DI direction, mutability rules) | [16 - Configuration Service](16%20-%20Configuration%20Service.md) |
