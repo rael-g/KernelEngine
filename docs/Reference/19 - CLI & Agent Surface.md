@@ -43,11 +43,11 @@ Closed set; new verbs require a chapter update.
 
 ```bash
 ke new project MyGame
-ke new scene scenes/Level1.scene.toml
-ke add node MeshRenderer Cube --to scenes/Level1.scene.toml --parent Root
-ke set property scenes/Level1.scene.toml Cube.MaterialHandle res://materials/red.material.toml
-ke list nodes --scene scenes/Level1.scene.toml --type MeshRenderer
-ke inspect scene scenes/Level1.scene.toml
+ke new scene scenes/Level1.scene
+ke add node MeshRenderer Cube --to scenes/Level1.scene --parent Root
+ke set property scenes/Level1.scene Cube.MaterialHandle res://materials/red.material
+ke list nodes --scene scenes/Level1.scene --type MeshRenderer
+ke inspect scene scenes/Level1.scene
 ke import assets/meshes/character.glb
 ke build win-x64 --configuration Release
 ke run --headless --frames 60 --trace run.jsonl
@@ -94,9 +94,9 @@ Includes verb completion, noun completion based on verb, and dynamic completion 
 No invented composition language. Use the shell:
 
 ```bash
-ke list nodes --json --scene Level1.scene.toml | \
+ke list nodes --json --scene Level1.scene | \
   jq -r '.[] | select(.type == "MeshRenderer") | .name' | \
-  xargs -I {} ke set property Level1.scene.toml {}.MaterialHandle res://materials/grey.toml
+  xargs -I {} ke set property Level1.scene {}.MaterialHandle res://materials/grey.toml
 ```
 
 If an operation needs "do N edits atomically", that is a transaction in the Editor Lib (§6 of chapter 18) — exposed in the CLI as:
@@ -130,7 +130,7 @@ Rationale: REPLs are local-only and don't compose with agents or scripts. Anythi
 
 ## 8. Configuration & state
 
-`ke` is mostly stateless between invocations. The one piece of state it carries is the "current project" — the directory it was invoked from (containing a `Project.toml`). Standard discovery: walk up parents until found, like `git`.
+`ke` is mostly stateless between invocations. The one piece of state it carries is the "current project" — the directory it was invoked from (containing a `Project`). Standard discovery: walk up parents until found, like `git`.
 
 `ke --project /path/to/project ...` overrides the discovery.
 

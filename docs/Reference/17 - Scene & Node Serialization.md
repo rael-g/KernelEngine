@@ -1,6 +1,6 @@
 # 17 — Scene & Node Serialization
 
-> **Status**: 📋 Architectural decision. Not implemented. This chapter freezes the model by which scene files (`*.scene.toml`, defined in chapter 15) map to live `Node` trees at runtime — the rules for what gets serialized, how types are resolved, and how the runtime hydrator stays portable across reflection-friendly and AOT-only build targets.
+> **Status**: 📋 Architectural decision. Not implemented. This chapter freezes the model by which scene files (`*.scene`, defined in chapter 15) map to live `Node` trees at runtime — the rules for what gets serialized, how types are resolved, and how the runtime hydrator stays portable across reflection-friendly and AOT-only build targets.
 
 ## 1. The model in one paragraph
 
@@ -179,7 +179,7 @@ A scene can include another scene as a subtree via the `include` field on a node
 ```toml
 [[node]]
 name = "EnemyA"
-include = "res://scenes/EnemyTemplate.scene.toml"
+include = "res://scenes/EnemyTemplate.scene"
 transform = { position = [10, 0, 0] }
 properties = { Hp = 50 }     # overrides on the included root
 ```

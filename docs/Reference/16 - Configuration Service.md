@@ -13,7 +13,7 @@ services.AddGlfwWindow(1280, 720, "MyGame")
 
 Knobs are scattered across `AddX(...)` calls. Changing the window size means editing C#. There is no single place a developer (or agent, or future GUI editor) can read or write engine settings.
 
-`Project.toml` (chapter 15) is the *file format* answer. This chapter defines the *runtime service* that loads it and feeds it into the rest of the engine.
+`Project` (chapter 15) is the *file format* answer. This chapter defines the *runtime service* that loads it and feeds it into the rest of the engine.
 
 ## 2. The six decisions
 
@@ -45,7 +45,7 @@ Registration order: configuration first, plugins second.
 
 ```csharp
 services
-    .AddProjectConfig("Project.toml")   // singleton, registered first
+    .AddProjectConfig("Project")   // singleton, registered first
     .AddGlfwWindow()                    // injects IOptions<WindowOptions>
     .AddBgfxRenderer();                 // injects IOptions<BgfxRendererOptions>
 ```
@@ -67,7 +67,7 @@ window.SetFullscreen(true);   // ✅ live change
 config.Window.Fullscreen = true; // ❌ no effect on a running window
 ```
 
-When a developer wants to *persist* the live state back to disk, the editor lib offers `config.Snapshot()` to capture the current state of all plugins and `config.Save()` to write it back to `Project.toml`. That is a deliberate save, not a reactive sync.
+When a developer wants to *persist* the live state back to disk, the editor lib offers `config.Snapshot()` to capture the current state of all plugins and `config.Save()` to write it back to `Project`. That is a deliberate save, not a reactive sync.
 
 **Rejected:** `IOptionsMonitor<T>` style with change notifications. Adds cross-thread notification, "which frame does this apply on" questions, reentrancy hazards. Covers maybe 10% of use cases; the other 90% is "load at boot, never change". Revisit if a real need emerges.
 
@@ -77,11 +77,11 @@ Defaults live as initializers on the POCO (see §2.1: `Width = 1280` directly on
 
 Load semantics:
 1. Construct `WindowOptions` with C# defaults.
-2. Apply values from `Project.toml.[runtime.window]` on top, where present.
-3. Apply values from `User.local.toml.[runtime.overrides.window]` on top of that.
+2. Apply values from `Project.[runtime.window]` on top, where present.
+3. Apply values from `User.local.[runtime.overrides.window]` on top of that.
 4. Hand to plugin.
 
-Missing TOML section → plugin gets full defaults. Missing field within a section → that field keeps its default. **No setting is ever required in `Project.toml`** unless the plugin genuinely cannot function without it (e.g. shader path for the renderer).
+Missing TOML section → plugin gets full defaults. Missing field within a section → that field keeps its default. **No setting is ever required in `Project`** unless the plugin genuinely cannot function without it (e.g. shader path for the renderer).
 
 **Rejected:** central defaults registry. Adds a maintenance point that drifts from the POCO.
 **Rejected:** fail-fast on missing settings. Makes greenfield development painful and forces TOML files to mention every setting just to keep working.
@@ -126,7 +126,7 @@ Plugin declares the path; configuration service handles the hydration. Plugin-sp
 ## 3. Visual summary
 
 ```
-Project.toml ─┐
+Project ─┐
               │  ProjectConfig (singleton, registered first)
 User.local ───┤   ├─ hydrates → IOptions<WindowOptions>      ← Window plugin
               │   ├─ hydrates → IOptions<BgfxRendererOptions> ← Renderer plugin
@@ -145,7 +145,7 @@ Boot order:
 
 ## 4. What this is NOT
 
-- **Not a key-value database.** No persistence beyond `Project.toml` / `User.local.toml`. No transactions, no history.
+- **Not a key-value database.** No persistence beyond `Project` / `User.local`. No transactions, no history.
 - **Not a settings UI.** The future GUI editor will read from `IProjectConfig` and call the same `SetValue` / `Save` methods the CLI uses. The config service has no opinions about how settings are presented.
 - **Not where game state goes.** Player score, save files, runtime data — none of that. The config service is *engine wiring*, not game data.
 - **Not a feature flag system.** Project-wide constants, not per-build feature toggles.
@@ -156,7 +156,7 @@ These are flagged here so when the work begins we revisit them with context, ins
 
 - **Environment / profile overlays.** Per-platform sections like `[runtime.window.linux]` overriding `[runtime.window]`? Yes likely, but the schema isn't pinned.
 - **Validation.** Do we run `IValidateOptions<T>` at boot? Probably yes — catch invalid values once at startup rather than crashing on first use. Trivial to add later.
-- **Hot reload.** A debug-only option that re-reads `Project.toml` when it changes on disk and re-applies to plugins that *do* opt into reactive updates (i.e. a small whitelist, not §2.3 by default). Useful for tweaking, not on the critical path.
+- **Hot reload.** A debug-only option that re-reads `Project` when it changes on disk and re-applies to plugins that *do* opt into reactive updates (i.e. a small whitelist, not §2.3 by default). Useful for tweaking, not on the critical path.
 
 ## 6. Implementation order (when work begins)
 

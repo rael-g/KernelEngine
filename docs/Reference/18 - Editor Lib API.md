@@ -29,17 +29,17 @@ IEditorSession
 
 | Operation | Purpose |
 |---|---|
-| `Create(path, ProjectTemplate)` | Scaffold a new project folder with `Project.toml`. |
+| `Create(path, ProjectTemplate)` | Scaffold a new project folder with `Project`. |
 | `Open(path)` | Load an existing project; becomes the session's active project. |
-| `Save()` | Write any pending changes to `Project.toml`. |
+| `Save()` | Write any pending changes to `Project`. |
 | `Close()` | Release the active project. |
-| `GetSettings()` / `SetSettings(...)` | Typed access to `Project.toml` sections via the config service (chapter 16). |
+| `GetSettings()` / `SetSettings(...)` | Typed access to `Project` sections via the config service (chapter 16). |
 
 ### 2.2 Scene
 
 | Operation | Purpose |
 |---|---|
-| `Create(name)` | Make a new empty `*.scene.toml`. |
+| `Create(name)` | Make a new empty `*.scene`. |
 | `Open(path)` | Load a scene into the working set. |
 | `Save(path)` / `SaveAll()` | Persist scene(s) to disk. |
 | `Close(path)` | Drop from working set. |
@@ -53,8 +53,8 @@ IEditorSession
 
 | Operation | Purpose |
 |---|---|
-| `CreateMaterial(name, params)` | Writes a `*.material.toml`. |
-| `CreateSkybox(name, cubemap)` | Writes a `*.skybox.toml`. |
+| `CreateMaterial(name, params)` | Writes a `*.material`. |
+| `CreateSkybox(name, cubemap)` | Writes a `*.skybox`. |
 | `Read(path)` / `Update(path, patch)` / `Delete(path)` | CRUD on resource manifests. |
 
 ### 2.4 Asset
@@ -63,7 +63,7 @@ IEditorSession
 |---|---|
 | `Import(sourcePath)` | Trigger import for one binary asset. Async. |
 | `Reimport(assetPath)` | Force reimport (e.g. settings changed). Async. |
-| `GetImportSettings(assetPath)` / `SetImportSettings(...)` | Read/write the `*.import.toml` sidecar. |
+| `GetImportSettings(assetPath)` / `SetImportSettings(...)` | Read/write the `*.import` sidecar. |
 | `List(filter?)` | Enumerate assets in the project. |
 
 ### 2.5 Build

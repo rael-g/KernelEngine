@@ -30,12 +30,12 @@ The `<hash>` is a content hash of `(source bytes + import settings + cache schem
 
 Cache files are binary, engine-internal, format-versioned. Their layout is not part of any public API — they can be tossed and regenerated.
 
-## 3. Import settings — the `*.import.toml` sidecar
+## 3. Import settings — the `*.import` sidecar
 
-Defined in [15 - Serialization & Project Files §6.3](15%20-%20Serialization%20%26%20Project%20Files.md#63-asset-import-settings-importtoml). Each binary asset *may* have a sidecar `<asset>.import.toml` next to it. Without one, the importer uses category defaults.
+Defined in [15 - Serialization & Project Files §6.3](15%20-%20Serialization%20%26%20Project%20Files.md#63-asset-import-settings-importtoml). Each binary asset *may* have a sidecar `<asset>.import` next to it. Without one, the importer uses category defaults.
 
 ```toml
-# assets/textures/brick_albedo.png.import.toml
+# assets/textures/brick_albedo.png.import
 [import]
 type        = "texture"
 srgb        = true
@@ -44,7 +44,7 @@ compression = "bc7"
 ```
 
 ```toml
-# assets/meshes/character.glb.import.toml
+# assets/meshes/character.glb.import
 [import]
 type             = "mesh"
 generate_normals = false
@@ -125,7 +125,7 @@ public interface IAssetImporter
 Multiple importers per category coexist (e.g. `assimp` and a hypothetical `meshoptimizer-direct`). The plugin database (chapter 20) lists who can handle what. Project settings or per-asset settings choose the importer when there's ambiguity:
 
 ```toml
-# Project.toml
+# Project
 [import.defaults]
 mesh    = "assimp"
 texture = "stb_image"

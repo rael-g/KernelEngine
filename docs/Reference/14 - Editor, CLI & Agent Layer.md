@@ -47,8 +47,8 @@ Command style follows the `dotnet` / `cargo` convention:
 ```
 ke new project MyGame                  # scaffold a project
 ke new scene Level1                    # create a scene file
-ke add node MeshRenderer --parent Root --name Cube --to scenes/Level1.scene.toml
-ke set property scenes/Level1.scene.toml Cube.MaterialHandle = res://materials/red.toml
+ke add node MeshRenderer --parent Root --name Cube --to scenes/Level1.scene
+ke set property scenes/Level1.scene Cube.MaterialHandle = res://materials/red.toml
 ke run --headless --frames 60 --trace run.jsonl
 ke build --target win-x64
 ```

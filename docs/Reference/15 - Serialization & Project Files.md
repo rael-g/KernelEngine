@@ -26,16 +26,16 @@ Headless replay traces, structured logs, agent introspection responses — these
 
 | File | Format | Purpose | Versioned in git |
 |---|---|---|---|
-| `Project.toml` | TOML | Root project manifest. One per project. | ✅ |
-| `User.local.toml` | TOML | Per-developer overrides (window pos, last opened scene). | ❌ (gitignored) |
-| `scenes/*.scene.toml` | TOML | Serialized scene (node tree + resource refs). | ✅ |
-| `resources/**/*.material.toml` | TOML | Material definitions. | ✅ |
-| `resources/**/*.skybox.toml` | TOML | Skybox / cubemap definitions. | ✅ |
+| `Project` | TOML | Root project manifest. One per project. | ✅ |
+| `User.local` | TOML | Per-developer overrides (window pos, last opened scene). | ❌ (gitignored) |
+| `scenes/*.scene` | TOML | Serialized scene (node tree + resource refs). | ✅ |
+| `resources/**/*.material` | TOML | Material definitions. | ✅ |
+| `resources/**/*.skybox` | TOML | Skybox / cubemap definitions. | ✅ |
 | `assets/**/*` | native binary | Meshes, textures, audio. | ✅ (or LFS) |
-| `assets/**/*.import.toml` | TOML | Import settings for a binary asset (compression, mipmaps, etc.). | ✅ |
+| `assets/**/*.import` | TOML | Import settings for a binary asset (compression, mipmaps, etc.). | ✅ |
 | `bin/`, `obj/`, `build/` | — | Build artifacts. | ❌ |
 
-A project is a folder containing `Project.toml` at the root. Everything else is referenced from there.
+A project is a folder containing `Project` at the root. Everything else is referenced from there.
 
 ## 3. Asset reference scheme
 
@@ -43,7 +43,7 @@ All cross-file references use the `res://` URI scheme, paths relative to the pro
 
 ```toml
 mesh     = "res://assets/meshes/cube.glb"
-material = "res://resources/materials/red.material.toml"
+material = "res://resources/materials/red.material"
 texture  = "res://assets/textures/wall.png"
 ```
 
@@ -55,7 +55,7 @@ Rules:
 
 GUIDs may revisit later if collaborative editing demands them. For now, simple path-based references are cheaper and easier to reason about.
 
-## 4. `Project.toml` schema
+## 4. `Project` schema
 
 The project manifest. Analogous in role to `Cargo.toml` or Godot's `project.godot`. Single file, project root.
 
@@ -64,7 +64,7 @@ The project manifest. Analogous in role to `Cargo.toml` or Godot's `project.godo
 name        = "MyGame"
 version     = "0.1.0"
 description = "A first KernelEngine project."
-default_scene = "res://scenes/Main.scene.toml"
+default_scene = "res://scenes/Main.scene"
 
 [runtime]
 # Plugins selected by name; the lib resolves them via DI registration.
@@ -105,7 +105,7 @@ output  = "build/dist"
 
 `[project]`, `[runtime]`, `[determinism]`, `[build]`, `[dependencies]`, `[editor]`. Everything else under a top-level key the engine does not recognize is **preserved on write** and ignored on read — game-specific config can live in `[game]` or any namespaced table without the engine touching it.
 
-## 5. Scene file schema (`*.scene.toml`)
+## 5. Scene file schema (`*.scene`)
 
 A scene is a tree of nodes, each with a name, a type, an optional parent reference, and a per-type property bag. The format mirrors the runtime `Tree` exactly — load is a straight tree-build, save is a pre-order walk.
 
@@ -136,7 +136,7 @@ name = "Floor"
 type = "MeshRenderer"
 transform = { scale = [10, 1, 10] }
 properties = { Mesh = "res://assets/meshes/plane.glb",
-               Material = "res://resources/materials/grey.material.toml" }
+               Material = "res://resources/materials/grey.material" }
 
 [[node]]
 name = "Cube"
@@ -144,7 +144,7 @@ type = "MeshRenderer"
 parent = "Floor"                      # Cube becomes a child of Floor
 transform = { position = [0, 1, 0] }
 properties = { Mesh = "res://assets/meshes/cube.glb",
-               Material = "res://resources/materials/red.material.toml" }
+               Material = "res://resources/materials/red.material" }
 ```
 
 ### Field semantics
@@ -164,7 +164,7 @@ A scene can include another scene as a subtree:
 ```toml
 [[node]]
 name = "EnemySpawn"
-include = "res://scenes/EnemyTemplate.scene.toml"
+include = "res://scenes/EnemyTemplate.scene"
 transform = { position = [10, 0, 0] }
 ```
 
@@ -172,9 +172,9 @@ transform = { position = [10, 0, 0] }
 
 ## 6. Resource files
 
-Resources that have meaningful authored data (materials, skyboxes, terrain layers) get TOML manifests. Resources that are pure binary (meshes, textures) stay binary with optional `.import.toml` sidecars.
+Resources that have meaningful authored data (materials, skyboxes, terrain layers) get TOML manifests. Resources that are pure binary (meshes, textures) stay binary with optional `.import` sidecars.
 
-### 6.1 Material (`*.material.toml`)
+### 6.1 Material (`*.material`)
 
 ```toml
 [material]
@@ -191,7 +191,22 @@ normal = "res://assets/textures/brick_normal.png"
 # Absent textures → engine defaults (white for albedo, flat normal, etc.).
 ```
 
-### 6.2 Skybox (`*.skybox.toml`)
+**Inline alternative inside a scene.** For one-off materials used by a single node, skip the
+file and define the material as an inline table on the node's `Material` property:
+
+```toml
+[[node]]
+name = "Floor"
+type = "MeshRenderer"
+properties.Mesh = "res://primitives/plane"
+properties.Material = { base_color = [0.5, 0.5, 0.5, 1.0], metallic = 0.0, roughness = 0.8 }
+```
+
+The inline table accepts the same keys as the file's `[material]` section. Use files when the
+same material is shared across multiple scenes; use inline when a node needs a unique surface
+that no other node references.
+
+### 6.2 Skybox (`*.skybox`)
 
 ```toml
 [skybox]
@@ -200,12 +215,12 @@ cubemap = "res://assets/cubemaps/desert.ktx2"
 ibl = true                     # generate diffuse + specular IBL maps
 ```
 
-### 6.3 Asset import settings (`*.import.toml`)
+### 6.3 Asset import settings (`*.import`)
 
 A sidecar next to a binary asset, optional. Without it, the loader uses defaults.
 
 ```toml
-# Lives at: assets/textures/wall.png.import.toml
+# Lives at: assets/textures/wall.png.import
 [import]
 type       = "texture"
 srgb       = true
@@ -214,33 +229,33 @@ compression = "bc7"            # bc7 / bc1 / none
 ```
 
 ```toml
-# Lives at: assets/meshes/character.glb.import.toml
+# Lives at: assets/meshes/character.glb.import
 [import]
 type            = "mesh"
 generate_normals = false       # use what's in the file
 scale_factor     = 1.0
 ```
 
-The loader reads `<asset>.import.toml` if it exists, falls back to format defaults otherwise.
+The loader reads `<asset>.import` if it exists, falls back to format defaults otherwise.
 
-## 7. `User.local.toml` (gitignored)
+## 7. `User.local` (gitignored)
 
 Per-developer state that should never be committed. The editor / CLI writes here freely; the runtime ignores it.
 
 ```toml
 [editor]
-last_opened_scene = "res://scenes/Level3.scene.toml"
+last_opened_scene = "res://scenes/Level3.scene"
 window.position = [120, 80]
 window.size     = [1600, 900]
 
 [runtime.overrides]
-# Local overrides for Project.toml.[runtime] — useful for "I want a smaller
+# Local overrides for Project.[runtime] — useful for "I want a smaller
 # window while debugging" without polluting the committed project file.
 window.width  = 800
 window.height = 600
 ```
 
-Reading precedence: `Project.toml` is the base; `User.local.toml.[runtime.overrides]` shallow-merges on top.
+Reading precedence: `Project` is the base; `User.local.[runtime.overrides]` shallow-merges on top.
 
 ## 8. Versioning & migration
 
@@ -261,7 +276,7 @@ Bumps are infrequent and accompanied by a migrator. The schema for `version 1` i
 
 ## 10. What is intentionally not specified
 
-- **Binary format for compiled scenes.** A future "build" step may compile `*.scene.toml` into a `.scene.bin` for shipping (faster load, no parser at runtime). Deferred until profiling shows TOML load time matters.
+- **Binary format for compiled scenes.** A future "build" step may compile `*.scene` into a `.scene.bin` for shipping (faster load, no parser at runtime). Deferred until profiling shows TOML load time matters.
 - **Network sync of scenes.** Multiplayer / collaborative editing implies a delta protocol on top of these files. Not in scope yet.
 - **Nested arrays of nodes.** TOML supports `[[node.child]]` etc., but using flat `parent = "..."` references is simpler to author and to merge. Revisit if scene files get unwieldy.
 
@@ -269,4 +284,4 @@ Bumps are infrequent and accompanied by a migrator. The schema for `version 1` i
 
 - The editor surface that reads and writes these files: [14 - Editor, CLI & Agent Layer](14%20-%20Editor%2C%20CLI%20%26%20Agent%20Layer.md).
 - The runtime Tree the scene files mirror: [06 - Framework](06%20-%20Framework.md).
-- Asset loaders that consume `.import.toml` sidecars: [09 - Assets & Pipelines](09%20-%20Assets%20%26%20Pipelines.md).
+- Asset loaders that consume `.import` sidecars: [09 - Assets & Pipelines](09%20-%20Assets%20%26%20Pipelines.md).

@@ -67,7 +67,7 @@ extends   = "Node"
 
 ## 4. `plugin_database.toml`
 
-Lists every plugin available to the project. The project's `Project.toml` `[runtime]` section names plugins; this DB describes what's behind those names.
+Lists every plugin available to the project. The project's `Project` `[runtime]` section names plugins; this DB describes what's behind those names.
 
 ```toml
 [[plugin]]
@@ -112,7 +112,7 @@ native   = "ke_asset_assimp"
 **Conventions:**
 - `category` is closed: `window`, `renderer`, `audio`, `input`, `asset_loader`, `task_scheduler`, `logger_sink`, `image_loader`, `image_decoder`, `dev_platform`.
 - `capabilities` is free-form per category (renderer talks backends/features; window talks platforms).
-- `option` lists project-level options the plugin reads from `Project.toml.[runtime.<plugin>]` (chapter 16).
+- `option` lists project-level options the plugin reads from `Project.[runtime.<plugin>]` (chapter 16).
 
 **Plugin manifests.** Each plugin folder ships a `plugin.toml` describing itself:
 
@@ -133,7 +133,7 @@ The build aggregates every `plugin.toml` it finds into one `plugin_database.toml
 
 **Consumers:**
 - Project scaffolder (`ke new project`): which plugins to wire by default.
-- `ke add reference <plugin>` validates the name and updates `Project.toml`.
+- `ke add reference <plugin>` validates the name and updates `Project`.
 - Editor GUI: shows available backends in a "renderer settings" UI.
 
 ## 5. `operation_database.toml`
@@ -225,7 +225,7 @@ Each database carries a top-level `version` field. The Editor Lib accepts the ve
 JSON would be marginally more convenient for non-C# consumers (jq is everywhere). TOML wins because:
 
 - These files are checked into the repo. Humans review the diff after a refactor moves properties around. TOML diffs read cleaner.
-- The rest of the project's source-of-truth is already TOML; tooling that reads `Project.toml` already has a TOML parser.
+- The rest of the project's source-of-truth is already TOML; tooling that reads `Project` already has a TOML parser.
 - Agents that prefer JSON are served by `ke describe ... --json` which streams the same content as JSON. **Storage format and interchange format are different concerns**; we don't need to constrain both.
 
 ## 9. What this is NOT
