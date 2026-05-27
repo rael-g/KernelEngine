@@ -13,13 +13,16 @@ public readonly struct Result(KernelResult code)
     public bool IsOk => Code == KernelResult.Ok;
     public bool IsError => Code != KernelResult.Ok;
 
+    public static Result Ok() => new(KernelResult.Ok);
+    public static Result Error(KernelResult code) => new(code);
+
     public static implicit operator Result(KernelResult code) => new(code);
     public static implicit operator KernelResult(Result result) => result.Code;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ThrowIfFailed() => KernelException.ThrowIfFailed(Code);
 
-    public override string ToString() => Code.ToString();
+    public override string ToString() => IsOk ? "Ok" : $"Error({Code})";
 }
 
 /// <summary>
@@ -38,6 +41,7 @@ public readonly struct Result<T>(KernelResult code, T value = default!)
         : throw new KernelException(Code, "Attempted to access value of a failed Result.");
 
     public static implicit operator Result<T>(KernelResult code) => new(code);
+    public static implicit operator Result<T>(T value) => new(KernelResult.Ok, value);
     public static implicit operator Result(Result<T> result) => new(result.Code);
 
     public override string ToString() => IsOk ? $"Ok({_value})" : $"Error({Code})";
