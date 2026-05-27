@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace KernelEngine.Configuration;
@@ -32,6 +33,11 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddProjectConfigSection<TOptions>(
         this IServiceCollection services, string sectionPath) where TOptions : class
     {
+        // Plugins call this from their AddX() — a plugin may be added without an explicit
+        // AddProjectConfig() (e.g. examples that pass settings inline via legacy overloads).
+        // Register a default IProjectConfig so the Options-based path still resolves; POCO
+        // defaults apply when no Project file is present.
+        services.TryAddSingleton<IProjectConfig>(_ => new ProjectConfig(ResolvePath("Project")));
         services.AddOptions<TOptions>().Configure<IProjectConfig>((opts, config) =>
         {
             var section = config.GetSection(sectionPath);

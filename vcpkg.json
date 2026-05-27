@@ -10,6 +10,7 @@
     "assimp",
     "gtest",
     "enkits",
+    "miniaudio",
     {
       "name": "bgfx",
       "features": [ "tools" ],

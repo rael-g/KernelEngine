@@ -117,4 +117,10 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_ID_DEV_PLATFORM \"ke_dev_platform\"")]
     public static ReadOnlySpan<byte> KE_ID_DEV_PLATFORM => "ke_dev_platform"u8;
+
+    [NativeTypeName("#define KE_ID_AUDIO \"ke_audio\"")]
+    public static ReadOnlySpan<byte> KE_ID_AUDIO => "ke_audio"u8;
+
+    [NativeTypeName("#define KE_AUDIO_SOUND_INVALID ((ke_audio_sound)0)")]
+    public const uint KE_AUDIO_SOUND_INVALID = ((uint)(0));
 }

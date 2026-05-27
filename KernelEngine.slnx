@@ -15,12 +15,14 @@
     <Project Path="examples/csharp/11_ssao/11_ssao.csproj" />
     <Project Path="examples/csharp/12_asset_loading/12_asset_loading.csproj" />
     <Project Path="examples/csharp/13_full_scene/13_full_scene.csproj" />
+    <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
     <Project Path="src/csharp/KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
     <Project Path="src/csharp/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
     <Project Path="src/csharp/KernelEngine.Asset.StbImage/KernelEngine.Asset.StbImage.csproj" />
+    <Project Path="src/csharp/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj" />
     <Project Path="src/csharp/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
     <Project Path="src/csharp/KernelEngine.DevPlatform.Win32/KernelEngine.DevPlatform.Win32.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
