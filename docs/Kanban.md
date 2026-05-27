@@ -31,8 +31,8 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 | # | Item | Why first | Detail |
 |---|---|---|---|
 | ~~1~~ | ~~Fix OBS.4 — Example 10 (HDR/bloom) black screen~~ | **Stale entry — was actually fixed in commit `e8746da` (light direction was wrong, not the pipeline). Example 10 renders a bright glowing cube with bloom halo as expected.** | done |
-| 1 | **Implement SSAO — `PostProcessPipeline::SetupSsao` stub** | Today it returns `KE_OK` and does nothing; `Scene.SetSsao(...)` is a silent no-op. Either implement (gbuffer prepass + blur kernel) or remove the API to stop lying about a capability we don't have. | Kanban [OBS.4](#obs4-examples-1011-post-processing-pipelines-broken-bug-deferred--complex) |
-| 2 | **Project.toml + config service** | Every game today hardcodes window/renderer in `Program.cs`. Without this nothing else (scene serialization, scaffold, agent) makes sense. Specs are pinned. | [Chapter 16](Reference/16%20-%20Configuration%20Service.md) |
+| ~~2~~ | ~~Implement SSAO stub~~ | **Deferred to post-beta** — solving SSAO directly asks the wrong question. The real question is "how do we add ANY new graphics technique without touching the renderer?" — answer is the render-graph ([F.RC2]). Once that exists, SSAO is one of many registered passes. Either remove `Scene.SetSsao` for now (it's a silent no-op) or leave it as a known TODO. | [F.RC2](#frc2-render-graph--gpu-compute-primitives-as-universal-kernel-contracts-extensibility-doctrine) |
+| 1 | **Project.toml + config service** | Every game today hardcodes window/renderer in `Program.cs`. Without this nothing else (scene serialization, scaffold, agent) makes sense. Specs are pinned. | [Chapter 16](Reference/16%20-%20Configuration%20Service.md) |
 | 3 | **`.scene.toml` serialization + loader** | Engine is not "Godot-like" without file-based scenes. Specs pinned across chapters 15 + 17. | [Chapter 15 §5](Reference/15%20-%20Serialization%20%26%20Project%20Files.md#5-scene-file-schema-scenetoml), [Chapter 17](Reference/17%20-%20Scene%20%26%20Node%20Serialization.md) |
 | 4 | **Audio — `ke_audio` kernel contract + `KernelEngine.Audio.MiniAudio` plugin** | First gameplay-category beyond render/input. Validates the kernel-vtable+plugin pattern outside render. Play/Loop/Volume/3D positional. | New chapter (TBD); follows pattern of `ke_image_loader`/stb_image |
 | 5 | **Physics 2D — `ke_physics_2d` + `KernelEngine.Physics.Box2D`** | Second gameplay category. 2D first because debugging is dramatically simpler than 3D physics; covers Pong/Asteroids/platformer-class games. | New chapter (TBD); Box2D is MIT, mature, single-include-ish |
@@ -403,6 +403,17 @@ After all 5 blocks complete:
     5. **Custom materials/shaders** (Godot `ShaderMaterial` style) — per-object custom surface shaders; fullscreen-quad effect = a registered fullscreen pass.
 - **Acceptance (validation)**: a third-party `AddMyFXAA()` plugin adds a post-pass with zero core changes; swapping the bgfx plugin for another backend keeps it working (only shaders change). Stretch: GPU particles implemented purely as a plugin via the compute primitives.
 - **Effort**: L (foundational). Strictly **after** the engine is functional (user's call). Don't over-promote speculative parts; render-graph + named resources + compute primitives are clearly universal.
+
+##### [F.RC3] Clustered forward shading — finish the job
+- **Tags**: `feat` (rendering), post-beta, naturally rides on [F.RC2]
+- **Why**: Today's brute-force point/spot loops in `fs_basic.sc` are capped at ~64 point / 48 spot lights. Scenes that exceed (example 09 places ~200) silently drop surplus lights. The original "clustered" implementation was wired through the kernel but never completed in the fragment shader; what shipped is brute-force, not clustered. Memory docs claiming "unlimited lights, dynamic grid" are stale and have been corrected.
+- **What**:
+    1. Cluster build (compute pass): assign lights to a 3D screen-space frustum grid. Existing kernel scaffolding (`ClusteredForward` class under `src/cpp/render/core/`) is the starting point — audit what's salvageable vs needs redo.
+    2. Fragment shader: replace the brute-force loops in `fs_basic.sc` with a clustered loop reading the cluster buffer + light index list.
+    3. Resolve the secondary bgfx warning `Failed to find memory that supports flags 0x00000003` at init (compute buffer creation flags — likely device-local+host-visible mismatch).
+- **Acceptance**: example 09 (200 point lights) renders correctly with no silent light dropouts; profile shows clustering wins vs brute force at high counts.
+- **Dependency**: cleaner if done *after* [F.RC2] (render-graph + compute primitives) — clustered build naturally expresses as a compute pass in the graph. Doing it before F.RC2 means more hardcoded view chain, which F.RC2 will then rewrite.
+- **Effort**: M (after F.RC2 lands), L (if attempted standalone before F.RC2).
 
 #### Reference harvest — Luna.Core (studied 2026-05-22, folder then deleted)
 
