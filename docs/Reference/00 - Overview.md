@@ -74,3 +74,5 @@ Dependencies point downward only. A plugin never depends on the framework; the f
 | CLI grammar + agent integration surface | [19 - CLI & Agent Surface](19%20-%20CLI%20%26%20Agent%20Surface.md) |
 | Build-time capability databases (class/plugin/operation) | [20 - Capability Database](20%20-%20Capability%20Database.md) |
 | Asset pipeline (watch → import → cache → manifest → runtime) | [21 - Asset Pipeline](21%20-%20Asset%20Pipeline.md) |
+| Input action layer (action maps, bindings, rebinding, multi-device — the Unity-Antigo lesson) | [22 - Input Action Layer](22%20-%20Input%20Action%20Layer.md) |
+| Audio logical layer (events, clip pools, bus mixer, user settings) | [23 - Audio Logical Layer](23%20-%20Audio%20Logical%20Layer.md) |
