@@ -72,13 +72,13 @@ public unsafe class InputDrainTests
         data.keys_down[1] = 1UL << (65 % 64);
         data.mouse_x = 100;
         data.mouse_y = 200;
-        data.mouse_buttons_pressed = 1u << (int)MouseButton.Right;
+        data.mouse_buttons_down = 1u << (int)MouseButton.Right;
 
         var reader = new InputSnapshotReader(data);
-        
+
         Assert.True(reader.IsKeyDown(65));
         Assert.False(reader.IsKeyDown(64));
         Assert.Equal(100, reader.MousePosition.X);
-        Assert.True(reader.IsMouseButtonPressed((int)MouseButton.Right));
+        Assert.True(reader.IsMouseButtonDown((int)MouseButton.Right));
     }
 }

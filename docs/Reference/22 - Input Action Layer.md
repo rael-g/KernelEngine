@@ -206,17 +206,21 @@ foreach (var device in input.Devices.Where(d => d.Kind == DeviceKind.Gamepad))
 
 A map paired with a specific device ignores input from others. Multiple maps over multiple devices = couch co-op for free.
 
-## 10. Fixing the snapshot edge-poll unreliability
+## 10. Edge polling is gone (Tier A2)
 
-`IsKeyPressed` (edge poll) is unreliable today (OBS.5 §3 in the Kanban). Root cause: `InputBuffer` is a single-slot exchange — when ke.main publishes faster than ke.sim consumes, the older snapshot is overwritten and a `keys_pressed` bit that fired briefly is lost.
+`IsKeyPressed(Key)` / `IsKeyReleased(Key)` / `IsMouseButtonPressed(int)` / `IsMouseButtonReleased(int)` **no longer exist** on `IInputReader` (removed in Tier A2). Root cause: `InputBuffer` is a single-slot exchange — when ke.main publishes faster than ke.sim consumes, the older snapshot is overwritten and a `keys_pressed` bit that fired briefly is lost. The engine isn't public yet, no game depends on the broken API, so it was cut rather than carried as legacy.
 
-The action layer fixes this **by construction**:
+What replaces it:
 
-- `WasActionPressed(action)` / `WasActionReleased(action)` are derived from the **event stream** drained per frame, not from a snapshot bitset.
-- The event stream is the kernel ring buffer + cross-thread queue from Slice 4 — accumulates, never loses entries.
-- The legacy `IsKeyPressed(Key)` / `IsKeyReleased(Key)` polling stays for backward compat but is marked obsolete; the docs steer new code at the action API.
+- **Edges** — subscribe via `Node.OnInput(ref InputEvent)`. The event stream is the kernel ring buffer + cross-thread queue from Slice 4 — accumulates per frame, never loses entries.
+- **Action layer (this chapter)** — `WasActionPressed(action)` will be derived from the same event stream once it ships, giving polling-shaped ergonomics with event-shaped reliability.
 
-`IsKeyDown` / `IsActionDown` (level polling) stay fully reliable because they read steady state, not edges.
+What stays:
+
+- **`IsKeyDown(Key)` / `IsMouseButtonDown(int)`** — level state from the snapshot, fully reliable (a held key reads `true` consistently regardless of producer/consumer rate).
+- **`MousePosition` / `MouseDelta` / `ScrollDelta`** — continuous cursor state. There is no event flavor for these (we removed `MouseMove` events in Slice 4); polling is the API by design.
+
+The C kernel's `ke_input.is_key_pressed` / `is_key_released` vtable methods are kept for non-managed clients (similar to `ScriptComponent`); the C# wrapper just doesn't expose them.
 
 ## 11. Implementation order (when work begins)
 

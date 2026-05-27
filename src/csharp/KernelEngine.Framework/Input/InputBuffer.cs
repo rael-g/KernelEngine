@@ -6,14 +6,10 @@ namespace KernelEngine.Framework;
 internal sealed class EmptyInputReader : IInputReader
 {
     public bool IsKeyDown(int keyCode) => false;
-    public bool IsKeyPressed(int keyCode) => false;
-    public bool IsKeyReleased(int keyCode) => false;
     public System.Numerics.Vector2 MousePosition => default;
     public System.Numerics.Vector2 MouseDelta => default;
     public System.Numerics.Vector2 ScrollDelta => default;
     public bool IsMouseButtonDown(int button) => false;
-    public bool IsMouseButtonPressed(int button) => false;
-    public bool IsMouseButtonReleased(int button) => false;
 }
 
 /// <summary>

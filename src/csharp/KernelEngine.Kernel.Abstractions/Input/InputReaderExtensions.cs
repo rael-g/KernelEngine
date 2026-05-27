@@ -8,10 +8,5 @@ namespace KernelEngine.Kernel;
 public static class InputReaderExtensions
 {
     public static bool IsKeyDown(this IInputReader input, Key key) => input.IsKeyDown((int)key);
-    public static bool IsKeyPressed(this IInputReader input, Key key) => input.IsKeyPressed((int)key);
-    public static bool IsKeyReleased(this IInputReader input, Key key) => input.IsKeyReleased((int)key);
-
     public static bool IsMouseButtonDown(this IInputReader input, MouseButton button) => input.IsMouseButtonDown((int)button);
-    public static bool IsMouseButtonPressed(this IInputReader input, MouseButton button) => input.IsMouseButtonPressed((int)button);
-    public static bool IsMouseButtonReleased(this IInputReader input, MouseButton button) => input.IsMouseButtonReleased((int)button);
 }

@@ -23,22 +23,6 @@ public class InputTests
     }
 
     [Fact]
-    public void IsKeyPressed_ReturnsFalse_ByDefault()
-    {
-        using var allocator = new MallocAllocator();
-        using var input = new Input(allocator, null);
-        Assert.False(input.IsKeyPressed(65));
-    }
-
-    [Fact]
-    public void IsKeyReleased_ReturnsFalse_ByDefault()
-    {
-        using var allocator = new MallocAllocator();
-        using var input = new Input(allocator, null);
-        Assert.False(input.IsKeyReleased(65));
-    }
-
-    [Fact]
     public void CaptureSnapshot_ReturnsValidReader()
     {
         KernelThread.SetCurrentName("ke.main");
@@ -64,11 +48,6 @@ public class InputTests
         
         var reader = input.CaptureSnapshot();
         Assert.False(reader.IsKeyDown(Key.W));
-        Assert.False(reader.IsKeyPressed(Key.Space));
-        Assert.False(reader.IsKeyReleased(Key.Escape));
-        
         Assert.False(reader.IsMouseButtonDown(MouseButton.Left));
-        Assert.False(reader.IsMouseButtonPressed(MouseButton.Right));
-        Assert.False(reader.IsMouseButtonReleased(MouseButton.Middle));
     }
 }

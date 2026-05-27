@@ -106,12 +106,6 @@ public sealed unsafe class Input : IInput
         return (int)count;
     }
 
-    /// <summary>Returns true if the key was pressed this frame.</summary>
-    public bool IsKeyPressed(int key) => _native->is_key_pressed(_native, key) != 0;
-
-    /// <summary>Returns true if the key was released this frame.</summary>
-    public bool IsKeyReleased(int key) => _native->is_key_released(_native, key) != 0;
-
     /// <summary>Returns true if the key is currently held down.</summary>
     public bool IsKeyDown(int key) => _native->is_key_down(_native, key) != 0;
 

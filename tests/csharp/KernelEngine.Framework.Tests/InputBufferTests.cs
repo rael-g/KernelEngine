@@ -15,14 +15,10 @@ public class InputBufferTests
         
         Assert.NotNull(reader);
         Assert.False(reader.IsKeyDown(0));
-        Assert.False(reader.IsKeyPressed(0));
-        Assert.False(reader.IsKeyReleased(0));
         Assert.Equal(0, reader.MousePosition.X);
         Assert.Equal(0, reader.MouseDelta.Y);
         Assert.Equal(0, reader.ScrollDelta.X);
         Assert.False(reader.IsMouseButtonDown(0));
-        Assert.False(reader.IsMouseButtonPressed(0));
-        Assert.False(reader.IsMouseButtonReleased(0));
     }
 
     [Fact]
