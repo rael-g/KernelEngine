@@ -23,6 +23,7 @@
 # Build artifacts for C#
 [Bb]in/
 [Oo]bj/
+TestResults/
 *.exe
 *.pdb
 *.dll
