@@ -247,6 +247,18 @@ Luna shipped a 2D physics layer in a sibling project; I studied it before pinnin
 - **Per-body density/friction/restitution** in Luna — these are actually per-fixture in Box2D. We move them onto the `Collider2D` record where they belong.
 - **Fixed-timestep accumulator** — Luna had this on a per-WorldManager basis; we centralize on `Physics2DSystem` so all consumers share the same model.
 
+## 7.5 World units, pixels, and Box2D's MKS sweet spot
+
+Box2D is tuned for **meters-kilogram-second (MKS) units**. Moving shapes between 0.1 and 10 meters work best; static shapes up to ~50 m are fine; the world should fit in ~12 km. Using raw pixel coordinates as world units (a 200 px character ≈ a 45-story building to Box2D) leads to poor simulation and weird behavior. (See [Box2D manual — Units](https://box2d.org/documentation/md__d_1__git_hub_box2d_docs_hello.html#autotoc_md17).)
+
+**Engine policy** — codified here because physics is what enforces it:
+
+- **World units are meters.** Every `Transform`, `Position`, `LinearVelocity`, collider half-extent is in meters. Game code never sees pixels in physics or Transform.
+- **Pixels are a sprite-import concern**, not a runtime concern. When `Sprite2D` (Tier B1) lands, it will read `[runtime] pixels_per_unit` from `Project` (default 100). A 64×64-pixel sprite at PPU=100 renders at 0.64 world units, and the natural physics body for it is 0.64×0.64 — automatically inside Box2D's sweet spot.
+- **The conversion happens once, at asset import time**, not at every physics call. The renderer applies the scaling when drawing sprites; physics never sees pixels.
+
+Rejected alternative — per-call `ToMeters()` / `ToPixels()` helpers (the Luna.Box2D pattern): forces every game-code line that touches physics to do conversion, spreads the unit concern across the whole game, and makes naive code (`new BoxCollider2D(new Vector2(64, 64))`) silently wrong.
+
 ## 8. What this chapter is NOT
 
 - **Not a 3D physics design.** Different contract (`ke_physics_3d`), different backends (Jolt, PhysX). When 3D arrives, it will be a parallel chapter.
