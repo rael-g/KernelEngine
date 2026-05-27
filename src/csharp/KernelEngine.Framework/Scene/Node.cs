@@ -17,10 +17,13 @@ public class Node
 
     private ulong _entity;
     private IWorld? _world;
-    private string _name = "";
+    private string _name;
 
-    /// <summary>Parameterless constructor for user subclasses.</summary>
-    protected Node() { }
+    /// <summary>Parameterless constructor for user subclasses. Default <see cref="Name"/> is the type's short name (Godot-like).</summary>
+    protected Node()
+    {
+        _name = GetType().Name;
+    }
 
     /// <summary>Internal constructor for wrapping an existing entity (e.g. root).</summary>
     internal Node(ulong entity, IWorld world, string name)
@@ -48,8 +51,17 @@ public class Node
     /// <summary>The owning world. Engine-internal — exposed to built-in nodes (e.g. Camera) for live ECS access.</summary>
     internal IWorld? World => _world;
 
-    /// <summary>The name given at node creation.</summary>
-    public string Name => _name;
+    /// <summary>
+    /// Node name. Defaults to the type's short name (e.g. <c>"Paddle"</c> for <c>class Paddle : Node</c>).
+    /// <see cref="Tree.AddNode{T}"/> auto-suffixes on collision under the same parent (<c>"Paddle"</c>,
+    /// <c>"Paddle_2"</c>, ...). Settable post-construction; the ECS name component is not currently
+    /// updated on rename (the engine reads names by Tree walk, not via the component).
+    /// </summary>
+    public string Name
+    {
+        get => _name;
+        set => _name = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     // ── Transform ─────────────────────────────────────────────────────────────
 
@@ -122,6 +134,42 @@ public class Node
             if (h.IsEmpty || h[0].NextSibling == 0) return null;
             return s_registry.GetValueOrDefault(h[0].NextSibling);
         }
+    }
+
+    // ── Path-based navigation (Godot-like) ─────────────────────────────────────
+
+    /// <summary>
+    /// Resolves a node relative to this one. Path is slash-separated:
+    /// <list type="bullet">
+    ///   <item><c>"."</c> → self.</item>
+    ///   <item><c>".."</c> → parent.</item>
+    ///   <item><c>"Child"</c> → direct child named <c>Child</c>.</item>
+    ///   <item><c>"Child/Grandchild"</c> → walks down.</item>
+    ///   <item><c>"../Sibling"</c> → goes up then down.</item>
+    /// </list>
+    /// Returns <c>null</c> if any segment is missing. Path is leading/trailing-slash tolerant.
+    /// </summary>
+    public Node? GetNode(string path)
+    {
+        if (string.IsNullOrEmpty(path) || path == ".") return this;
+
+        Node? current = this;
+        foreach (var seg in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current is null) return null;
+            current = seg == ".." ? current.Parent : current.FindChild(seg);
+        }
+        return current;
+    }
+
+    /// <summary>Typed convenience over <see cref="GetNode"/>.</summary>
+    public T? GetNode<T>(string path) where T : Node => GetNode(path) as T;
+
+    private Node? FindChild(string name)
+    {
+        for (var c = FirstChild; c != null; c = c.NextSibling)
+            if (c.Name == name) return c;
+        return null;
     }
 
     private Span<HierarchyComponent> HierarchySlot =>

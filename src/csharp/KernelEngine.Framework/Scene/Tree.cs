@@ -28,13 +28,19 @@ public sealed class Tree
     public Node Root => _root;
 
     /// <summary>
-    /// Pre-order search for the first descendant whose <see cref="Node.Name"/> matches.
-    /// Returns <c>null</c> when not found. Case-sensitive by default — game code expecting
-    /// case-insensitive matches should normalize node names at creation.
+    /// Locates a node. Accepts three forms:
+    /// <list type="bullet">
+    ///   <item><c>"Name"</c> — pre-order recursive search by name from the root (first match wins).</item>
+    ///   <item><c>"/Path"</c> or <c>"/Path/Subpath"</c> — absolute path from the root, segment by segment.</item>
+    ///   <item><c>"./relative"</c> — same as the absolute form (the leading <c>"."</c> is just hygiene).</item>
+    /// </list>
+    /// Returns <c>null</c> when not found. Case-sensitive.
     /// </summary>
-    public Node? FindNode(string name)
+    public Node? FindNode(string nameOrPath)
     {
-        return FindRecursive(_root, name);
+        if (string.IsNullOrEmpty(nameOrPath)) return null;
+        if (nameOrPath.Contains('/')) return _root.GetNode(nameOrPath);
+        return FindRecursive(_root, nameOrPath);
 
         static Node? FindRecursive(Node node, string name)
         {
@@ -47,6 +53,9 @@ public sealed class Tree
             return null;
         }
     }
+
+    /// <summary>Typed convenience over <see cref="FindNode(string)"/>.</summary>
+    public T? FindNode<T>(string nameOrPath) where T : Node => FindNode(nameOrPath) as T;
 
     /// <summary>
     /// The <see cref="Camera"/> currently rendering the tree, or <c>null</c> if none is active.
@@ -70,24 +79,49 @@ public sealed class Tree
     /// </summary>
     public Node AddNode(string name, Node? parent = null)
     {
-        var parentEntity = parent?.Entity ?? _root.Entity;
-        var entity = CreateEntityWithHierarchy(name, parentEntity);
-        return new Node(entity, _world, name);
+        var parentNode = parent ?? _root;
+        var uniqueName = MakeUniqueChildName(parentNode, name);
+        var entity = CreateEntityWithHierarchy(uniqueName, parentNode.Entity);
+        return new Node(entity, _world, uniqueName);
     }
 
     /// <summary>
-    /// Creates a scripted node as a child of <paramref name="parent"/>
-    /// (defaults to <see cref="Root"/>). <see cref="Node.OnStart"/> and
-    /// <see cref="Node.Awake"/>, <see cref="Node.Start"/>, <see cref="Node.EarlyUpdate"/>,
-    /// <see cref="Node.Update"/>, and <see cref="Node.LateUpdate"/> are driven by the
-    /// tree-walking lifecycle dispatcher (see <see cref="TickUpdate"/>).
+    /// Adds <paramref name="node"/> as a child of <paramref name="parent"/> (defaults to <see cref="Root"/>).
+    /// <para>
+    /// When <paramref name="name"/> is omitted, the node's own <see cref="Node.Name"/> is used
+    /// (which defaults to the type's short name — Godot-like). When the chosen name collides with
+    /// an existing sibling, the engine auto-suffixes (<c>"Paddle"</c>, <c>"Paddle_2"</c>, <c>"Paddle_3"</c>).
+    /// </para>
+    /// <para>
+    /// Lifecycle (<see cref="Node.Awake"/> / <see cref="Node.Start"/> / <see cref="Node.Update"/> /
+    /// <see cref="Node.LateUpdate"/>) is driven by the tree-walking dispatcher (see <see cref="TickUpdate"/>).
+    /// </para>
     /// </summary>
-    public T AddNode<T>(T node, string name, Node? parent = null) where T : Node
+    public T AddNode<T>(T node, string? name = null, Node? parent = null) where T : Node
     {
-        var parentEntity = parent?.Entity ?? _root.Entity;
-        var entity = CreateEntityWithHierarchy(name, parentEntity);
-        node.Initialize(entity, _world, name);
+        var parentNode = parent ?? _root;
+        var requested  = name ?? node.Name;
+        var uniqueName = MakeUniqueChildName(parentNode, requested);
+        var entity     = CreateEntityWithHierarchy(uniqueName, parentNode.Entity);
+        node.Initialize(entity, _world, uniqueName);
         return node;
+    }
+
+    private static string MakeUniqueChildName(Node parent, string requested)
+    {
+        if (!HasChildNamed(parent, requested)) return requested;
+        for (int i = 2; ; i++)
+        {
+            var candidate = $"{requested}_{i}";
+            if (!HasChildNamed(parent, candidate)) return candidate;
+        }
+    }
+
+    private static bool HasChildNamed(Node parent, string name)
+    {
+        for (var c = parent.FirstChild; c != null; c = c.NextSibling)
+            if (c.Name == name) return true;
+        return false;
     }
 
     // ── Input dispatch ────────────────────────────────────────────────────────
