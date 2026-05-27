@@ -14,18 +14,56 @@ namespace KernelEngine.Framework;
 /// settable properties are hydrated via reflection (primitives, enums, <see cref="Vector3"/>,
 /// <see cref="Vector4"/>, <see cref="Quaternion"/> from TOML arrays). Transform position/rotation/scale
 /// supported. Parents resolved by <see cref="Node.Name"/> — a parent must appear earlier in the array
-/// than its children. Resource references (Mesh/Material/Texture) and sub-scene <c>include</c> are
-/// deferred to later slices; for now game code attaches resources to nodes by name after loading.
+/// than its children.
 /// </para>
+///
+/// <para>
+/// Resource references (<c>"res://..."</c> strings on <see cref="Mesh"/>/<see cref="Material"/>
+/// properties) are resolved by <see cref="LoadAsync"/>. The sync <see cref="Load"/> entry point
+/// throws on res:// strings since async loaders cannot block the calling thread safely.
+/// </para>
+///
+/// <para>
+/// A resource-typed property (<see cref="Mesh"/>, <see cref="Material"/>) accepts either:
+/// </para>
+/// <list type="bullet">
+///   <item>A <c>"res://..."</c> string — load from a file (reusable across scenes).</item>
+///   <item>An inline TOML table — define right here (one-off, no separate file). Inline applies
+///   to types that are pure data (Material today); meshes stay path-based since vertex data
+///   does not belong in a scene file.</item>
+/// </list>
+///
+/// <para>
+/// Supported res:// schemes in this slice:
+/// </para>
+/// <list type="bullet">
+///   <item><c>res://primitives/{plane|cube|quad|sphere}</c> — built-in <see cref="MeshShape"/> primitives.</item>
+///   <item><c>res://path/to/X.material</c> — material manifest (base_color, metallic, roughness; textures deferred to next slice).</item>
+/// </list>
 /// </summary>
 public static class SceneLoader
 {
     /// <summary>
-    /// Reads the scene TOML at <paramref name="path"/> and adds its nodes under <paramref name="tree"/>.
-    /// Each node's name from the file is used as the Tree node name; <see cref="Tree.FindNode"/> can
-    /// then locate them for post-load wiring (resources, signals, etc.).
+    /// Synchronous load — accepts scenes that do not reference resources via <c>res://</c>.
+    /// Use <see cref="LoadAsync"/> when properties bind to <see cref="Mesh"/>/<see cref="Material"/> by path.
     /// </summary>
     public static void Load(Tree tree, string path)
+    {
+        LoadCore(tree, path, resources: null).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Async load — resolves <c>res://</c> references on resource properties through
+    /// <paramref name="resources"/>. Awaitable; the typical caller is <c>OnReady</c>.
+    /// </summary>
+    public static Task LoadAsync(Tree tree, string path, ResourceManager resources)
+    {
+        return LoadCore(tree, path, resources);
+    }
+
+    // ── Core ──────────────────────────────────────────────────────────────────
+
+    private static async Task LoadCore(Tree tree, string path, ResourceManager? resources)
     {
         if (!File.Exists(path))
             throw new FileNotFoundException($"Scene file not found: {path}");
@@ -34,7 +72,6 @@ public static class SceneLoader
         if (!doc.TryGetValue("node", out var rawNodes) || rawNodes is not TomlTableArray nodes)
             return; // empty scene
 
-        // name → constructed Node (parent lookup table)
         var byName = new Dictionary<string, Node>(StringComparer.Ordinal);
 
         foreach (var entry in nodes)
@@ -52,7 +89,7 @@ public static class SceneLoader
             tree.AddNode(instance, name, parent);
 
             ApplyTransform(instance, entry);
-            ApplyProperties(instance, entry);
+            await ApplyProperties(instance, entry, resources);
 
             byName[name] = instance;
         }
@@ -117,7 +154,7 @@ public static class SceneLoader
 
     // ── Properties (reflection) ───────────────────────────────────────────────
 
-    private static void ApplyProperties(Node node, TomlTable entry)
+    private static async Task ApplyProperties(Node node, TomlTable entry, ResourceManager? resources)
     {
         if (!entry.TryGetValue("properties", out var raw) || raw is not TomlTable props) return;
 
@@ -130,9 +167,20 @@ public static class SceneLoader
             var value = props[key];
             try
             {
-                prop.SetValue(node, Convert(value, prop.PropertyType));
+                object? converted;
+                if (IsResourceType(prop.PropertyType))
+                {
+                    if (resources is null)
+                        throw new InvalidOperationException($"Scene references a resource on {type.Name}.{prop.Name} but loader is sync; call SceneLoader.LoadAsync(tree, path, resources) instead.");
+                    converted = await ResolveResourceFromAny(prop.PropertyType, value, resources);
+                }
+                else
+                {
+                    converted = Convert(value, prop.PropertyType);
+                }
+                prop.SetValue(node, converted);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not InvalidOperationException)
             {
                 throw new InvalidDataException(
                     $"Could not bind TOML value '{value}' to {type.Name}.{prop.Name} ({prop.PropertyType.Name}): {ex.Message}", ex);
@@ -165,6 +213,78 @@ public static class SceneLoader
         return System.Convert.ChangeType(raw, underlying, System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    // ── Resource resolution (res:// path OR inline table) ────────────────────
+
+    private static bool IsResourceType(Type t) =>
+        t == typeof(Mesh) || t == typeof(Material);
+
+    private static Task<object?> ResolveResourceFromAny(Type type, object? raw, ResourceManager resources)
+    {
+        if (raw is string s && s.StartsWith("res://", StringComparison.Ordinal))
+            return ResolveResource(type, s, resources);
+        if (raw is TomlTable inline)
+            return ResolveInlineResource(type, inline, resources);
+        throw new InvalidDataException($"Resource of type {type.Name} must be a 'res://' path or an inline table; got {raw?.GetType().Name ?? "null"}");
+    }
+
+    private static async Task<object?> ResolveInlineResource(Type type, TomlTable inline, ResourceManager resources)
+    {
+        if (type == typeof(Material)) return await BuildMaterial(inline, resources);
+        throw new InvalidDataException($"Inline definition of {type.Name} is not supported (use res:// instead)");
+    }
+
+    private static Task<object?> ResolveResource(Type type, string resPath, ResourceManager resources)
+    {
+        if (type == typeof(Mesh))     return ResolveMesh(resPath, resources);
+        if (type == typeof(Material)) return ResolveMaterial(resPath, resources);
+        throw new InvalidDataException($"Don't know how to resolve '{type.Name}' from {resPath} (only Mesh and Material supported in this slice)");
+    }
+
+    private static async Task<object?> ResolveMesh(string resPath, ResourceManager resources)
+    {
+        const string primitivePrefix = "res://primitives/";
+        if (!resPath.StartsWith(primitivePrefix, StringComparison.Ordinal))
+            throw new InvalidDataException($"Mesh path '{resPath}' is not recognized (only {primitivePrefix}{{plane|cube|quad|sphere}} supported in this slice)");
+
+        var name = resPath[primitivePrefix.Length..];
+        MeshShape shape = name switch
+        {
+            "plane"  => MeshShape.Plane(),
+            "cube"   => MeshShape.Cube(),
+            "quad"   => MeshShape.Quad(),
+            "sphere" => MeshShape.Sphere(32),
+            _ => throw new InvalidDataException($"Unknown primitive '{name}' (known: plane, cube, quad, sphere)"),
+        };
+        return await resources.CreateMeshAsync(shape);
+    }
+
+    private static async Task<object?> ResolveMaterial(string resPath, ResourceManager resources)
+    {
+        if (!resPath.EndsWith(".material", StringComparison.Ordinal))
+            throw new InvalidDataException($"Material path '{resPath}' must end with .material");
+
+        var relative = resPath["res://".Length..];
+        var absolute = Path.Combine(AppContext.BaseDirectory, relative);
+        if (!File.Exists(absolute))
+            throw new FileNotFoundException($"Material file not found: {absolute} (referenced as {resPath})");
+
+        var doc = Toml.ToModel(File.ReadAllText(absolute));
+        if (!doc.TryGetValue("material", out var rawMat) || rawMat is not TomlTable mat)
+            throw new InvalidDataException($"Material file {resPath} missing [material] section");
+
+        return await BuildMaterial(mat, resources);
+    }
+
+    private static async Task<Material> BuildMaterial(TomlTable mat, ResourceManager resources)
+    {
+        var baseColor = mat.TryGetValue("base_color", out var bc) && bc is TomlArray bca
+            ? AsVector4(bca)
+            : new Vector4(1, 1, 1, 1);
+        var metallic  = mat.TryGetValue("metallic",  out var m) ? ToFloat(m) : 0f;
+        var roughness = mat.TryGetValue("roughness", out var r) ? ToFloat(r) : 0.5f;
+        return await resources.CreateMaterialAsync(baseColor, metallic: metallic, roughness: roughness);
+    }
+
     // ── TOML helpers ──────────────────────────────────────────────────────────
 
     private static string? GetString(TomlTable t, string key)
@@ -175,16 +295,14 @@ public static class SceneLoader
     private static Vector4 AsVector4(TomlArray a) => new(F(a, 0), F(a, 1), F(a, 2), F(a, 3));
     private static Quaternion AsQuaternion(TomlArray a) => new(F(a, 0), F(a, 1), F(a, 2), F(a, 3));
 
-    private static float F(TomlArray a, int i)
+    private static float F(TomlArray a, int i) => ToFloat(a[i]);
+
+    private static float ToFloat(object? v) => v switch
     {
-        var v = a[i];
-        return v switch
-        {
-            long l => l,
-            double d => (float)d,
-            int n => n,
-            float f => f,
-            _ => System.Convert.ToSingle(v, System.Globalization.CultureInfo.InvariantCulture),
-        };
-    }
+        long l => l,
+        double d => (float)d,
+        int n => n,
+        float f => f,
+        _ => System.Convert.ToSingle(v, System.Globalization.CultureInfo.InvariantCulture),
+    };
 }

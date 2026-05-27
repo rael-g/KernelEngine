@@ -3,7 +3,6 @@ name    = "Main"
 version = 1
 
 # Directional light. AnimatedSun is a user subclass declared in Program.cs; resolved by FQN.
-# (Top-level types with file-scoped declarations land in the global namespace.)
 [[node]]
 name = "Sun"
 type = "AnimatedSun"
@@ -16,14 +15,17 @@ type = "Camera"
 transform = { position = [0, 5, 10] }
 properties = { Fov = 60, Near = 0.1, Far = 1000 }
 
-# Floor and Caster carry MeshRenderer; the actual Mesh/Material resources are attached in code
-# (resource refs in TOML come in a later slice, depend on the asset pipeline — chapter 21).
+# Floor: material defined inline — one-off, no separate file needed.
 [[node]]
 name = "Floor"
 type = "MeshRenderer"
 transform = { scale = [10, 1, 10] }
+properties.Mesh = "res://primitives/plane"
+properties.Material = { base_color = [0.5, 0.5, 0.5, 1.0], metallic = 0.0, roughness = 0.8 }
 
+# Caster: material loaded from a shared file — would let other scenes reuse the same red.
 [[node]]
 name = "Caster"
 type = "MeshRenderer"
 transform = { position = [0, 1, 0] }
+properties = { Mesh = "res://primitives/cube", Material = "res://resources/red.material" }

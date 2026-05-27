@@ -16,10 +16,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Project.toml">
+    <Content Include="Project">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Main.scene.toml">
+    <Content Include="Main.scene">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="resources\*.material">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

@@ -12,40 +12,19 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink(LogLevel.Info)
     .AddInput()
-    .AddProjectConfig("Project.toml")
+    .AddProjectConfig()   // auto-discovers ./Project next to the executable
     .AddGlfwWindow()
     .AddBgfxRenderer();
 
 using var app = new Application();
 
-int entityCount = 0;
-
-app.OnReady = async (resources) =>
+app.OnReady = async (_) =>
 {
     Console.WriteLine("[KernelEngine] Example: 06_shadow_map");
     Console.WriteLine("[KernelEngine] Features: shadow_mapping, directional_light, floor_plane, cube");
 
-    // Scene structure (nodes, transforms, light/camera properties) lives in Main.scene.toml.
-    // Resources (Mesh, Material) still come from code — the resource pipeline is a future slice.
-    SceneLoader.Load(app.Tree, "Main.scene.toml");
-    entityCount = 4;
-
-    // Hydrate the mesh-bearing nodes with their resources by name.
-    var floorMat  = await app.Resources.CreateMaterialAsync(new Vector4(0.5f, 0.5f, 0.5f, 1f), metallic: 0.0f, roughness: 0.8f);
-    var cubeMat   = await app.Resources.CreateMaterialAsync(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
-    var floorMesh = await app.Resources.CreateMeshAsync(MeshShape.Plane());
-    var cubeMesh  = await app.Resources.CreateMeshAsync(MeshShape.Cube());
-
-    Attach(app.Tree.FindNode("Floor"),  floorMesh, floorMat);
-    Attach(app.Tree.FindNode("Caster"), cubeMesh,  cubeMat);
-
-    static void Attach(Node? node, Mesh mesh, Material material)
-    {
-        if (node is not MeshRenderer mr)
-            throw new InvalidOperationException($"Expected MeshRenderer node, got {node?.GetType().Name ?? "null"}");
-        mr.Mesh = mesh;
-        mr.Material = material;
-    }
+    // Scene is fully self-describing: nodes + transforms + resource refs (Mesh/Material via res://).
+    await SceneLoader.LoadAsync(app.Tree, "Main.scene", app.Resources);
 };
 
 Stopwatch sw = Stopwatch.StartNew();
@@ -60,7 +39,7 @@ app.OnUpdate = (tree, input) =>
     if (sw.Elapsed.TotalSeconds >= 5.0)
     {
         double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Entities: {entityCount}");
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}");
         frameCount = 0;
         sw.Restart();
     }

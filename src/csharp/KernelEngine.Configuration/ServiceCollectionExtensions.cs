@@ -6,20 +6,21 @@ namespace KernelEngine.Configuration;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers an <see cref="IProjectConfig"/> singleton that loads the given Project.toml.
+    /// Registers an <see cref="IProjectConfig"/> singleton. With no arguments, looks for a
+    /// <c>Project</c> file next to the executable (<see cref="AppContext.BaseDirectory"/>).
     /// Plugins call <see cref="AddProjectConfigSection{TOptions}"/> separately to bind their
-    /// section. Safe to call when <paramref name="tomlPath"/> does not exist — every plugin
-    /// then sees POCO defaults (chapter 16 §2.4).
+    /// section. Safe to call when the file does not exist — every plugin then sees POCO
+    /// defaults (chapter 16 §2.4).
     /// </summary>
-    /// <param name="tomlPath">
-    /// Absolute or relative path to the Project.toml. When relative, the runtime resolves
-    /// it against <see cref="AppContext.BaseDirectory"/>; <c>null</c> means "no file —
-    /// every plugin uses POCO defaults".
+    /// <param name="path">
+    /// Absolute or relative path to the project manifest. Relative paths resolve against
+    /// <see cref="AppContext.BaseDirectory"/>. <c>null</c> means "auto-discover <c>Project</c>
+    /// in the base directory, fall back to defaults if absent".
     /// </param>
-    public static IServiceCollection AddProjectConfig(this IServiceCollection services, string? tomlPath = null)
+    public static IServiceCollection AddProjectConfig(this IServiceCollection services, string? path = null)
     {
         services.AddOptions();
-        services.AddSingleton<IProjectConfig>(_ => new ProjectConfig(ResolvePath(tomlPath)));
+        services.AddSingleton<IProjectConfig>(_ => new ProjectConfig(ResolvePath(path ?? "Project")));
         return services;
     }
 
