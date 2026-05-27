@@ -36,8 +36,12 @@ public class Application : IDisposable
     /// <summary>The Tree graph facade for <see cref="ActiveWorld"/>.</summary>
     public Tree Tree => _scene ??= new Tree(ActiveWorld);
 
-    /// <summary>Called once on ke.sim after ke.render is initialized and systems are registered.</summary>
-    public Action<IResourceFactory>? OnReady { get; set; }
+    /// <summary>
+    /// Called once on ke.sim after ke.render is initialized and systems are registered.
+    /// The frame loop does not start until the returned <see cref="Task"/> completes —
+    /// safe to <c>await</c> resource creation here without racing the first tick.
+    /// </summary>
+    public Func<IResourceFactory, Task>? OnReady { get; set; }
 
     /// <summary>
     /// High-level ref-counted GPU resource manager (Phase 1 of the resource pipeline). Valid from
@@ -218,7 +222,10 @@ public class Application : IDisposable
                 var imageLoader = Services.GetService<IImageLoader>();
                 if (modelLoader != null || imageLoader != null)
                     Assets = new Assets(modelLoader, imageLoader, Resources);
-                OnReady?.Invoke(factory);
+                // Await so async setup (e.g. scene loading + async resource creation) completes
+                // before the first sim tick. Without this, an async OnReady becomes fire-and-forget
+                // and the frame loop races the lambda's continuation.
+                if (OnReady != null) OnReady(factory).GetAwaiter().GetResult();
                 Logger?.Info("Application", "ke.sim: OnReady complete — entering frame loop");
                 simReady.Set(); // signal ke.render that OnReady is complete
 

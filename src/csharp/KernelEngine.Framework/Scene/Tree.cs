@@ -28,6 +28,27 @@ public sealed class Tree
     public Node Root => _root;
 
     /// <summary>
+    /// Pre-order search for the first descendant whose <see cref="Node.Name"/> matches.
+    /// Returns <c>null</c> when not found. Case-sensitive by default — game code expecting
+    /// case-insensitive matches should normalize node names at creation.
+    /// </summary>
+    public Node? FindNode(string name)
+    {
+        return FindRecursive(_root, name);
+
+        static Node? FindRecursive(Node node, string name)
+        {
+            for (var c = node.FirstChild; c != null; c = c.NextSibling)
+            {
+                if (c.Name == name) return c;
+                var found = FindRecursive(c, name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The <see cref="Camera"/> currently rendering the tree, or <c>null</c> if none is active.
     /// A <see cref="Camera"/> auto-activates when added and no other is current; switch with
     /// <see cref="Camera.MakeCurrent"/>.

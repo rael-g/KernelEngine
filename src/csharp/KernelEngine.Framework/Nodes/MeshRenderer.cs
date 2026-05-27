@@ -18,14 +18,17 @@ public class MeshRenderer : Node
     /// <summary>
     /// High-level mesh resource. When set, the node retains a reference for its lifetime and uses
     /// its handle. Falls back to <see cref="MeshHandle"/> / <see cref="DefaultMeshHandle"/>.
+    /// Read once in <see cref="Start"/>; changing after Start has no effect on the live ECS slot
+    /// (live mesh swap is a future enhancement).
     /// </summary>
-    public Mesh? Mesh { get; init; }
+    public Mesh? Mesh { get; set; }
 
     /// <summary>
     /// High-level material resource. When set, the node retains a reference for its lifetime and
     /// uses its handle. Falls back to <see cref="MaterialHandle"/> / <see cref="DefaultMaterialHandle"/>.
+    /// Read once in <see cref="Start"/>; changing after Start has no effect on the live ECS slot.
     /// </summary>
-    public Material? Material { get; init; }
+    public Material? Material { get; set; }
 
     /// <summary>Raw GPU mesh handle (escape hatch / backward compat). Prefer <see cref="Mesh"/>.</summary>
     public MeshHandle MeshHandle { get; init; } = MeshHandle.None;
