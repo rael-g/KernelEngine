@@ -9,18 +9,9 @@ namespace KernelEngine.Kernel;
 /// </summary>
 public sealed unsafe class Input : IInput
 {
-    // ── Static Access ────────────────────────────────────────────────────────
-
-    [ThreadStatic]
-    private static IInputReader? s_currentReader;
-
-    /// <summary>
-    /// Accesses the input snapshot for the current frame.
-    /// Available during <see cref="ISystem.Update"/> and <see cref="Node.OnUpdate"/>.
-    /// </summary>
-    public static IInputReader Current => s_currentReader ?? throw new InvalidOperationException("Input.Current is only available during the simulation update.");
-
-    internal static void SetCurrentReader(IInputReader? reader) => s_currentReader = reader;
+    // Per-frame current-reader accessor moved to KernelEngine.Kernel.InputContext (Abstractions) so
+    // the Framework can set it without referencing this concrete. Game code that polled Input.Current
+    // should switch to InputContext.Current.
 
     // ── Instance members ──────────────────────────────────────────────────────
 

@@ -183,10 +183,9 @@ extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
     state->logger    = params->logger;
     state->next_id   = 1;
 
-    float gx = params->gravity_x;
-    float gy = params->gravity_y;
-    if (gx == 0.0f && gy == 0.0f) gy = -9.81f; // sensible default
-    state->world = new b2World(b2Vec2(gx, gy));
+    // Use the gravity the caller passed verbatim — zero means zero (top-down games rely on it).
+    // C# AddBox2D() defaults to (0, -9.81) so omitting args still gives Earth gravity.
+    state->world = new b2World(b2Vec2(params->gravity_x, params->gravity_y));
 
     auto *api = static_cast<ke_physics_2d *>(alloc->alloc(alloc, sizeof(ke_physics_2d), alignof(ke_physics_2d)));
     if (!api)

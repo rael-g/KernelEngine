@@ -18,6 +18,12 @@
     <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
     <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
   </Folder>
+  <Folder Name="/examples/csharp/games/">
+    <Project Path="examples/csharp/games/pong/pong.csproj" />
+  </Folder>
+  <Folder Name="/reference/">
+    <Project Path="reference/Luna.Box2D/Luna.Box2D.csproj" />
+  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
     <Project Path="src/csharp/KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />

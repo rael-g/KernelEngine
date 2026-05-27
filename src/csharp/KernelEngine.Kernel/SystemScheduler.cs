@@ -55,7 +55,7 @@ internal sealed class SystemScheduler
             if (!wave.Parallel)
             {
                 // Serial execution: run directly on the sim thread
-                Input.SetCurrentReader(input);
+                InputContext.Set(input);
                 try
                 {
                     foreach (var system in wave.Systems)
@@ -65,7 +65,7 @@ internal sealed class SystemScheduler
                 }
                 finally
                 {
-                    Input.SetCurrentReader(null);
+                    InputContext.Set(null);
                 }
             }
             else if (taskScheduler != null)
@@ -77,14 +77,14 @@ internal sealed class SystemScheduler
                     var sys = wave.Systems[i];
                     tasks[i] = taskScheduler.Dispatch(() =>
                     {
-                        Input.SetCurrentReader(input);
+                        InputContext.Set(input);
                         try
                         {
                             sys.Update(world, dt, packet, input);
                         }
                         finally
                         {
-                            Input.SetCurrentReader(null);
+                            InputContext.Set(null);
                         }
                     });
                 }
@@ -95,7 +95,7 @@ internal sealed class SystemScheduler
             else
             {
                 // No task scheduler — fall back to sequential
-                Input.SetCurrentReader(input);
+                InputContext.Set(input);
                 try
                 {
                     foreach (var system in wave.Systems)
@@ -103,7 +103,7 @@ internal sealed class SystemScheduler
                 }
                 finally
                 {
-                    Input.SetCurrentReader(null);
+                    InputContext.Set(null);
                 }
             }
         }

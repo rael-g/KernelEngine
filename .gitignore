@@ -24,6 +24,9 @@
 [Bb]in/
 [Oo]bj/
 TestResults/
+
+# External reference projects copied locally for study (Luna.* etc.) — not part of engine source
+reference/
 *.exe
 *.pdb
 *.dll

@@ -109,7 +109,7 @@ sealed class FreeLookNode : Camera
 
     protected override void Update(float dt)
     {
-        var input = Input.Current;
+        var input = InputContext.Current;
 
         if (input.IsKeyDown(262)) _yaw   -= _rotateDeg * dt; // Right arrow
         if (input.IsKeyDown(263)) _yaw   += _rotateDeg * dt; // Left arrow

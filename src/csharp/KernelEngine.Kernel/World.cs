@@ -127,7 +127,7 @@ public sealed unsafe class World : IWorld
     public Result Update(IFramePacket? packet = null, IInputReader? input = null)
     {
         KernelThread.AssertCurrent("ke.sim");
-        Input.SetCurrentReader(input);
+        InputContext.Set(input);
         try
         {
             var now = _stopwatch.Elapsed;
@@ -159,7 +159,7 @@ public sealed unsafe class World : IWorld
         }
         finally
         {
-            Input.SetCurrentReader(null);
+            InputContext.Set(null);
         }
     }
 

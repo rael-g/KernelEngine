@@ -243,24 +243,35 @@ public class Application : IDisposable
                     var input = _inputBuffer.Consume();
                     var writer = new FramePacketSceneWriter(packet, _kernelFactory);
 
-                    // Drain queued input events and dispatch through the tree before any update
-                    // logic runs — node OnInput handlers can flip state that Update consumes.
-                    var events = _eventBuffer.Drain();
-                    if (events.Length > 0)
-                        Tree.DispatchInput(events);
+                    // InputContext.Current spans the whole frame's game-logic phase so Node.Update,
+                    // LateUpdate, and OnInput handlers can read polling state directly. World.Update
+                    // still sets/clears it again internally — defensive double-set is harmless.
+                    InputContext.Set(input);
+                    try
+                    {
+                        // Drain queued input events and dispatch through the tree before any update
+                        // logic runs — node OnInput handlers can flip state that Update consumes.
+                        var events = _eventBuffer.Drain();
+                        if (events.Length > 0)
+                            Tree.DispatchInput(events);
 
-                    // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
-                    //   Awake+Start (one-shot) → Update → ECS systems → LateUpdate
-                    // Game logic that needs ECS-post-Transform reads (e.g. camera follow) goes in
-                    // LateUpdate; the kernel ScriptSystem is no longer the script driver.
-                    var dt = Time.DeltaTime;
-                    Tree.TickAwakeAndStart();
-                    Tree.TickUpdate(dt);
+                        // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
+                        //   Awake+Start (one-shot) → Update → ECS systems → LateUpdate
+                        // Game logic that needs ECS-post-Transform reads (e.g. camera follow) goes
+                        // in LateUpdate; the kernel ScriptSystem is no longer the script driver.
+                        var dt = Time.DeltaTime;
+                        Tree.TickAwakeAndStart();
+                        Tree.TickUpdate(dt);
 
-                    ActiveWorld?.Update(packet: packet, input: input);
+                        ActiveWorld?.Update(packet: packet, input: input);
 
-                    Tree.TickLateUpdate(dt);
-                    OnUpdate?.Invoke(writer, input);
+                        Tree.TickLateUpdate(dt);
+                        OnUpdate?.Invoke(writer, input);
+                    }
+                    finally
+                    {
+                        InputContext.Set(null);
+                    }
 
                     packet.EndWrite();
                 }
