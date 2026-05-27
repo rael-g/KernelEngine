@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Diagnostics;
+using KernelEngine.Configuration;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
@@ -11,7 +12,8 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink(LogLevel.Info)
     .AddInput()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 06 Shadow Map Verification")
+    .AddProjectConfig("Project.toml")   // window size/title/etc. now come from Project.toml
+    .AddGlfwWindow()
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
 
 using var app = new Application();

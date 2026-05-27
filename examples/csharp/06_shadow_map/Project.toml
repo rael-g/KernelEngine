@@ -1,0 +1,8 @@
+[project]
+name = "06_shadow_map"
+
+[runtime.window]
+width      = 1280
+height     = 720
+title      = "KernelEngine — 06 Shadow Map Verification"
+fullscreen = false
