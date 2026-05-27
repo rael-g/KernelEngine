@@ -72,6 +72,7 @@ app.OnReady = (resources) =>
             Offset = MathF.PI * 4f / 3f
         },
         "Spot_Blue");
+    return Task.CompletedTask;
 };
 
 app.OnUpdate = (tree, input) =>

@@ -1,0 +1,29 @@
+[scene]
+name    = "Main"
+version = 1
+
+# Directional light. AnimatedSun is a user subclass declared in Program.cs; resolved by FQN.
+# (Top-level types with file-scoped declarations land in the global namespace.)
+[[node]]
+name = "Sun"
+type = "AnimatedSun"
+properties = { Direction = [0.5, 1.0, 0.5], Color = [1, 1, 1], Intensity = 10.0 }
+
+# Single camera in the tree auto-activates as current.
+[[node]]
+name = "Camera"
+type = "Camera"
+transform = { position = [0, 5, 10] }
+properties = { Fov = 60, Near = 0.1, Far = 1000 }
+
+# Floor and Caster carry MeshRenderer; the actual Mesh/Material resources are attached in code
+# (resource refs in TOML come in a later slice, depend on the asset pipeline — chapter 21).
+[[node]]
+name = "Floor"
+type = "MeshRenderer"
+transform = { scale = [10, 1, 10] }
+
+[[node]]
+name = "Caster"
+type = "MeshRenderer"
+transform = { position = [0, 1, 0] }

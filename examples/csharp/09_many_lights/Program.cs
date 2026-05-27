@@ -54,6 +54,7 @@ app.OnReady = (resources) =>
             },
             $"Light_{i}");
     }
+    return Task.CompletedTask;
 };
 
 Stopwatch sw = Stopwatch.StartNew();

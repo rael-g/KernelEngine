@@ -60,6 +60,7 @@ app.OnReady = (resources) =>
     var n2 = app.Tree.AddNode(new MeshRenderer { MaterialHandle = mat2 }, "QuadMixed");
     n2.LocalTransform = n2.LocalTransform with { Position = new Vector3(2f, 0f, 0f) };
     entityCount++;
+    return Task.CompletedTask;
 };
 
 Stopwatch sw = Stopwatch.StartNew();

@@ -63,6 +63,7 @@ app.OnReady = (resources) =>
     var cam = app.Tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
     cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
     entityCount++;
+    return Task.CompletedTask;
 };
 
 Stopwatch sw = Stopwatch.StartNew();

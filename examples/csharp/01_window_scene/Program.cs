@@ -43,6 +43,7 @@ app.OnReady = (resources) =>
         new MeshRenderer { MaterialHandle = orangeMat },
         "Quad",
         parent: spinner);
+    return Task.CompletedTask;
 };
 
 Stopwatch sw = Stopwatch.StartNew();

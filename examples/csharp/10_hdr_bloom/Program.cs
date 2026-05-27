@@ -39,6 +39,7 @@ app.OnReady = (resources) =>
     var light = app.Tree.AddNode(
         new DirectionalLight { Direction = new Vector3(0f, 0f, 1f), Color = new Vector3(1f, 0.5f, 0.2f), Intensity = 50.0f },
         "BrightSun");
+    return Task.CompletedTask;
 };
 
 app.OnUpdate = (tree, input) =>

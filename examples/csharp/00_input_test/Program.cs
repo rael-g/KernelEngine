@@ -30,6 +30,7 @@ using var app = new Application();
 app.OnReady = _ =>
 {
     var listener = app.Tree.AddNode(new Listener(), "InputListener");
+    return Task.CompletedTask;
 };
 
 app.OnUpdate = (tree, input) =>

@@ -86,6 +86,7 @@ app.OnReady = (resources) =>
             };
         }
     }
+    return Task.CompletedTask;
 };
 
 app.OnUpdate = (tree, input) =>

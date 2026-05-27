@@ -12,7 +12,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink(LogLevel.Info)
     .AddInput()
-    .AddProjectConfig("Project.toml")   // window + renderer settings come from Project.toml
+    .AddProjectConfig("Project.toml")
     .AddGlfwWindow()
     .AddBgfxRenderer();
 
@@ -25,44 +25,27 @@ app.OnReady = async (resources) =>
     Console.WriteLine("[KernelEngine] Example: 06_shadow_map");
     Console.WriteLine("[KernelEngine] Features: shadow_mapping, directional_light, floor_plane, cube");
 
-    // Directional light (Sun). Per DirectionalLight docs, Direction is the vector pointing
-    // FROM the lit surface TOWARD the light source. Sun in upper-right-back → (+x, +y, +z).
-    var light = app.Tree.AddNode(
-        new AnimatedSun
-        {
-            Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
-            Color = Vector3.One,
-            Intensity = 10.0f,
-        },
-        "Sun");
-    entityCount++;
+    // Scene structure (nodes, transforms, light/camera properties) lives in Main.scene.toml.
+    // Resources (Mesh, Material) still come from code — the resource pipeline is a future slice.
+    SceneLoader.Load(app.Tree, "Main.scene.toml");
+    entityCount = 4;
 
-    // Camera
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    cam.LocalTransform = cam.LocalTransform with
-    {
-        Position = new Vector3(0f, 5.0f, 10.0f)
-    };
-    // (no need to mark active — single Camera in the tree auto-becomes current)
-    entityCount++;
-
-    // Resources via the high-level ResourceManager + MeshShape primitives — no Vertex[] / handles.
-    var floorMat = await app.Resources.CreateMaterialAsync(new Vector4(0.5f, 0.5f, 0.5f, 1f), metallic: 0.0f, roughness: 0.8f);
-    var cubeMat  = await app.Resources.CreateMaterialAsync(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
-    var floorMesh = await app.Resources.CreateMeshAsync(MeshShape.Plane());  // horizontal, normal +Y
+    // Hydrate the mesh-bearing nodes with their resources by name.
+    var floorMat  = await app.Resources.CreateMaterialAsync(new Vector4(0.5f, 0.5f, 0.5f, 1f), metallic: 0.0f, roughness: 0.8f);
+    var cubeMat   = await app.Resources.CreateMaterialAsync(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
+    var floorMesh = await app.Resources.CreateMeshAsync(MeshShape.Plane());
     var cubeMesh  = await app.Resources.CreateMeshAsync(MeshShape.Cube());
 
-    // Floor.
-    var floor = app.Tree.AddNode(new MeshRenderer { Mesh = floorMesh, Material = floorMat }, "Floor");
-    floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(10f, 1f, 10f) };
-    entityCount++;
+    Attach(app.Tree.FindNode("Floor"),  floorMesh, floorMat);
+    Attach(app.Tree.FindNode("Caster"), cubeMesh,  cubeMat);
 
-    // Cube (casting shadow).
-    var cube = app.Tree.AddNode(new MeshRenderer { Mesh = cubeMesh, Material = cubeMat }, "Caster");
-    cube.LocalTransform = cube.LocalTransform with { Position = new Vector3(0f, 1f, 0f) };
-    entityCount++;
+    static void Attach(Node? node, Mesh mesh, Material material)
+    {
+        if (node is not MeshRenderer mr)
+            throw new InvalidOperationException($"Expected MeshRenderer node, got {node?.GetType().Name ?? "null"}");
+        mr.Mesh = mesh;
+        mr.Material = material;
+    }
 };
 
 Stopwatch sw = Stopwatch.StartNew();

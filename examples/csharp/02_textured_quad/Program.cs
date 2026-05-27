@@ -67,6 +67,7 @@ app.OnReady = (resources) =>
         new MeshRenderer { MaterialHandle = matHandle },
         "Quad");
     entityCount++;
+    return Task.CompletedTask;
 };
 
 Stopwatch sw = Stopwatch.StartNew();

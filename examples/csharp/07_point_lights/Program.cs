@@ -51,6 +51,7 @@ app.OnReady = (resources) =>
             },
             $"PointLight_{i}");
     }
+    return Task.CompletedTask;
 };
 
 app.OnUpdate = (tree, input) =>
