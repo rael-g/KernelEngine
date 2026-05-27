@@ -21,9 +21,6 @@
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />
   </Folder>
-  <Folder Name="/reference/">
-    <Project Path="reference/Luna.Box2D/Luna.Box2D.csproj" />
-  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
     <Project Path="src/csharp/KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />

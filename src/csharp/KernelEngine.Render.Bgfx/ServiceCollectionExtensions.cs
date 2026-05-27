@@ -54,11 +54,12 @@ public static class ServiceCollectionExtensions
 
             var @params = new ke_render_bgfx_params
             {
-                allocator   = sp.GetRequiredService<Allocator>().Native,
-                logger      = logger != null ? logger.Native : null,
-                window      = ((Window)sp.GetRequiredService<IWindow>()).Native,
-                shader_path = (sbyte*)shaderPtr,
-                vsync       = (byte)(opts.Vsync ? 1 : 0),
+                allocator     = sp.GetRequiredService<Allocator>().Native,
+                logger        = logger != null ? logger.Native : null,
+                window        = ((Window)sp.GetRequiredService<IWindow>()).Native,
+                shader_path   = (sbyte*)shaderPtr,
+                vsync         = (byte)(opts.Vsync ? 1 : 0),
+                renderer_type = uint.MaxValue, // sentinel: auto-pick (currently → Vulkan); BgfxRendererOptions does not yet expose this
             };
 
             ke_render* native;

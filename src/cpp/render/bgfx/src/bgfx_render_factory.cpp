@@ -17,8 +17,10 @@ extern "C" {
         if (!device_mem) return KE_RENDER_LOG_ERR(params->logger, KE_ERROR_OUT_OF_MEMORY, "ke_render_bgfx_create", "Failed to allocate BgfxGpuDevice");
         auto* device = new (device_mem) kernel_engine::render::bgfx::BgfxGpuDevice();
 
-        // renderer_type == 0 means "use engine default" → Vulkan
-        uint32_t renderer_type = params->renderer_type == 0
+        // renderer_type == UINT32_MAX means "auto-pick" (default → Vulkan). Real bgfx values
+        // start at 0 (RendererType::Noop), so UINT32_MAX is a sentinel that can never collide
+        // with a legitimate user choice — including Noop, which is a valid headless backend.
+        uint32_t renderer_type = params->renderer_type == UINT32_MAX
             ? (uint32_t)::bgfx::RendererType::Vulkan
             : params->renderer_type;
 
