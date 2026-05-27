@@ -47,6 +47,8 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 - **Render-graph + GPU-compute primitives ([F.RC2])** — the universal extensibility surface for graphics techniques. Once it lands, SSAO/FXAA/TAA/SSR/DoF and any other technique becomes a registered pass with zero core changes; built-in bloom/SSAO/tonemap re-expressed through it (kills the hardcoded view chain). Foundational for the engine's competitive bet (decentralized graphics extension). Deferred because getting the contract wrong ossifies, and beta doesn't need it.
 - **Clustered forward shading ([F.RC3])** — current brute-force caps at ~64 point / 48 spot; surplus silently dropped. Naturally rides on F.RC2.
 - **GPU instancing + `MultiMeshRenderer` ([F.RC1])** — required for grass/crowds/particles at scale.
+- **Input action layer ([chapter 22](Reference/22%20-%20Input%20Action%20Layer.md))** — game code reaches `Action.Jump`, never `Key.Space`. Mandatory **before** any new device (gamepad/touch/VR) lands, otherwise we recreate Unity Antigo's coupling pain. Includes the proper fix for `IsKeyPressed` edge-poll unreliability (OBS.5 §3) via event-stream-derived `WasActionPressed`. Expands existing card `F.C2`.
+- **Audio logical layer ([chapter 23](Reference/23%20-%20Audio%20Logical%20Layer.md))** — buses (Master/Music/SFX/UI) with persisted volumes, clip pools (variation + pitch jitter), `.event` TOML so audio designers swap clips without recompile. Layered cleanly on the current `IAudio`. Spatial 3D + bus effects are further-future slices on the same layers.
 - Skeletal animation, networking, particles, UI library, save/load framework.
 - MCP server for agents (CLI piping is enough for now — chapter 19 §9.2).
 
