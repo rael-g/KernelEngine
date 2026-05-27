@@ -102,4 +102,16 @@ public sealed unsafe class ProxyAllocator : Allocator, IProxyAllocator
 
         NativeMethods.allocator_proxy_report(Native, nativeLogger);
     }
+
+    /// <inheritdoc/>
+    public AllocatorStats GetStats()
+    {
+        ke_allocator_stats stats;
+        NativeMethods.allocator_proxy_get_stats(Native, &stats);
+        return new AllocatorStats(
+            TotalAllocated: stats.total_allocated,
+            TotalFreed:     stats.total_freed,
+            ActiveBytes:    stats.active_bytes,
+            ActiveAllocs:   stats.active_allocs);
+    }
 }

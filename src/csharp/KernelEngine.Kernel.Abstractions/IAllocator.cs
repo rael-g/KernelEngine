@@ -17,9 +17,19 @@ public interface IMallocAllocator : IAllocator { }
 /// <summary>Fixed-capacity bump allocator. Marker for DI.</summary>
 public interface IArenaAllocator : IAllocator { }
 
+/// <summary>Snapshot of a proxy allocator's bookkeeping counters.</summary>
+public readonly record struct AllocatorStats(
+    ulong TotalAllocated,
+    ulong TotalFreed,
+    ulong ActiveBytes,
+    uint  ActiveAllocs);
+
 /// <summary>Wraps another allocator to track statistics and detect leaks.</summary>
 public interface IProxyAllocator : IAllocator
 {
     /// <summary>Logs a memory usage report to the provided logger.</summary>
     void Report(ILogger? logger);
+
+    /// <summary>Returns a snapshot of the proxy's allocation counters.</summary>
+    AllocatorStats GetStats();
 }
