@@ -69,3 +69,4 @@ Dependencies point downward only. A plugin never depends on the framework; the f
 | Editor lib, CLI, and how AI agents drive the engine | [14 - Editor, CLI & Agent Layer](14%20-%20Editor%2C%20CLI%20%26%20Agent%20Layer.md) |
 | File formats (TOML), project/scene/resource schemas | [15 - Serialization & Project Files](15%20-%20Serialization%20%26%20Project%20Files.md) |
 | Configuration service (IOptions plumbing, DI direction, mutability rules) | [16 - Configuration Service](16%20-%20Configuration%20Service.md) |
+| Scene & Node serialization (type resolution, hydrator, class database, AOT) | [17 - Scene & Node Serialization](17%20-%20Scene%20%26%20Node%20Serialization.md) |
