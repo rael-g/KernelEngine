@@ -20,7 +20,7 @@ public class ApplicationTests
         
         // Use a real allocator for KernelThread creation (it needs a native pointer)
         // Note: this assumes we can create a malloc allocator in tests.
-        var allocator = new MallocAllocator();
+        using var allocator = new MallocAllocator();
         
         services.AddSingleton<Allocator>(allocator);
         services.AddSingleton<IAllocator>(allocator);
@@ -46,12 +46,55 @@ public class ApplicationTests
         
         // At least one frame should have been rendered
         mockRenderer.Received().Frame();
-        mockRenderer.Received().SubmitPacket(Arg.Any<FramePacket>());
+        mockRenderer.Received().SubmitPacket(Arg.Any<IFramePacket>());
         
         mockWindow.Received().PollEvents();
-        mockRenderer.Received().Dispose();
+        // NSubstitute sometimes needs explicit cast for inherited interfaces if it's confused
+        ((IDisposable)mockRenderer).Received().Dispose();
         
         app.Dispose();
+    }
+
+    [Fact]
+    public void Run_GpuFatal_ThrowsWithErrorMessage()
+    {
+        var services = new ServiceCollection();
+        var mockRenderer = Substitute.For<IRenderer>();
+        var allocator = new MallocAllocator();
+        
+        services.AddSingleton<Allocator>(allocator);
+        services.AddSingleton<IAllocator>(allocator);
+        services.AddSingleton<IKernelFactory, KernelFactory>();
+        services.AddSingleton<IWindow>(Substitute.For<IWindow>());
+        services.AddSingleton<IRenderer>(mockRenderer);
+
+        // Frame() returns Result, so we can mock its return value
+        mockRenderer.Frame().Returns(new Result(KernelResult.GpuFatal));
+        mockRenderer.GetLastFatalError().Returns("Device Lost");
+
+        var app = new Application();
+        
+        var ex = Assert.Throws<KernelException>(() => app.Run(services));
+        Assert.Contains("Device Lost", ex.Message);
+        
         allocator.Dispose();
+    }
+
+    [Fact]
+    public void Application_CanBeDisposed()
+    {
+        var app = new Application();
+        app.Dispose();
+        // Should not crash
+    }
+
+    [Fact]
+    public void Run_MissingRequiredServices_ThrowsInvalidOperationException()
+    {
+        var app = new Application();
+        var services = new ServiceCollection();
+        // Empty services
+        
+        Assert.Throws<InvalidOperationException>(() => app.Run(services));
     }
 }

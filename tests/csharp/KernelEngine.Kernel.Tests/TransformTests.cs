@@ -5,6 +5,7 @@ using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
 
+[Collection("KernelRegistry")]
 public class TransformTests
 {
     [Fact]

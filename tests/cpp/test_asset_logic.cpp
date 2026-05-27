@@ -12,17 +12,19 @@
 
 using namespace kernel_engine::asset::assimp;
 
-// Use a simple allocator that works within the same binary
-static void* local_alloc(ke_allocator*, size_t size, size_t) { return std::malloc(size); }
-static void local_free(ke_allocator*, void* ptr) { std::free(ptr); }
-
 class AssetLogicTest : public ::testing::Test {
+
 protected:
-    ke_allocator local_allocator{};
+    ke_allocator* kernel_allocator = nullptr;
 
     void SetUp() override {
-        local_allocator.alloc = local_alloc;
-        local_allocator.free = local_free;
+        kernel_allocator = ke_allocator_malloc_create();
+    }
+
+    void TearDown() override {
+        if (kernel_allocator) {
+            kernel_allocator->destroy(kernel_allocator);
+        }
     }
 };
 
@@ -47,3 +49,27 @@ TEST_F(AssetLogicTest, Converter_GetDirectory_Success) {
     dir = Converter::GetDirectory("car.obj");
     EXPECT_EQ(dir, "");
 }
+
+TEST_F(AssetLogicTest, TextureDecoder_DecodeEmbedded_Raw) {
+    aiTexture et;
+    et.mWidth = 2;
+    et.mHeight = 2;
+    // Allocate pixels using the kernel allocator so it's on the same heap as the DLL
+    aiTexel* pixels = (aiTexel*)kernel_allocator->alloc(kernel_allocator, sizeof(aiTexel) * 4, 0);
+    for(int i=0; i<4; ++i) { pixels[i].r = 255; pixels[i].g = 0; pixels[i].b = 0; pixels[i].a = 255; }
+    et.pcData = pixels;
+
+    ke_texture_data td{};
+    ke_result res = TextureDecoder::DecodeEmbedded(&et, kernel_allocator, nullptr, &td);
+
+    ASSERT_EQ(res, KE_OK);
+    EXPECT_EQ(td.width, 2);
+    EXPECT_EQ(td.height, 2);
+    ASSERT_NE(td.pixels, nullptr);
+    EXPECT_EQ(td.pixels[0], 255);
+    EXPECT_EQ(td.pixels[1], 0);
+
+    kernel_allocator->free(kernel_allocator, td.pixels);
+    // kernel_allocator->free(kernel_allocator, pixels); // REMOVED: Decoder already freed this via CopyAndFree
+}
+

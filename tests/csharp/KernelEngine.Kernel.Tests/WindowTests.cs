@@ -4,6 +4,7 @@ using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
 
+[Collection("KernelRegistry")]
 public unsafe class WindowTests
 {
     private static int _initializeCalled = 0;

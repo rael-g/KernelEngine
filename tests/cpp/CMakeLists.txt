@@ -6,6 +6,8 @@ add_executable(test_cpp_services
     test_window_glfw.cpp
     test_shader_compiler.cpp
     test_asset_loader.cpp
+    test_dev_platform_win32.cpp
+    test_stb_image_loader.cpp
 )
 
 target_include_directories(test_cpp_services PRIVATE
@@ -19,6 +21,8 @@ target_include_directories(test_cpp_services PRIVATE
     ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx_shader_compiler/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/dev_platform/win32/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/asset/stb_image/include
 )
 
 target_link_libraries(test_cpp_services PRIVATE
@@ -26,6 +30,8 @@ target_link_libraries(test_cpp_services PRIVATE
     ke_window_glfw
     ke_shader_compiler_bgfx
     ke_asset_assimp
+    ke_dev_platform_win32
+    ke_asset_stb_image
     GTest::gtest_main
     GTest::gmock
 )

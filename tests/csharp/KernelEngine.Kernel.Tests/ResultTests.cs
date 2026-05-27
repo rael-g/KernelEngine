@@ -24,43 +24,52 @@ public class ResultTests
     }
 
     [Fact]
-    public void SuccessResultWithValue_HasValue()
+    public void FailedResultT_AccessValue_Throws()
     {
-        var result = new Result<int>(KernelResult.Ok, 42);
+        var result = new Result<int>(KernelResult.NotFound);
+        Assert.Throws<KernelException>(() => result.Value);
+    }
+
+    [Fact]
+    public void ResultT_ImplicitConversion_FromValue()
+    {
+        Result<int> result = 42;
         Assert.True(result.IsOk);
         Assert.Equal(42, result.Value);
     }
 
     [Fact]
-    public void FailureResult_ThrowsOnValueAccess()
+    public void ResultT_ImplicitConversion_ToPlainResult()
     {
-        var result = new Result<int>(KernelResult.OutOfMemory);
-        Assert.Throws<KernelException>(() => result.Value);
+        var resultT = new Result<int>(KernelResult.Ok, 42);
+        Result result = resultT;
+        Assert.True(result.IsOk);
     }
 
     [Fact]
-    public void ResultT_ImplicitConversionToResult_Works()
+    public void Result_ToString_ReturnsCorrectFormat()
     {
-        Result<int> rt = KernelResult.Io;
-        Result r = rt;
-        Assert.Equal(KernelResult.Io, r.Code);
-    }
-
-    [Fact]
-    public void ResultT_ToString_Works()
-    {
-        Result<int> ok = new(KernelResult.Ok, 42);
-        Result<int> err = KernelResult.NotFound;
+        Assert.Equal("Ok", Result.Ok().ToString());
+        Assert.Equal("Error(NotFound)", Result.Error(KernelResult.NotFound).ToString());
         
-        Assert.Contains("Ok(42)", ok.ToString());
-        Assert.Contains("Error(NotFound)", err.ToString());
+        var resultT = new Result<int>(KernelResult.Ok, 123);
+        Assert.Equal("Ok(123)", resultT.ToString());
     }
 
     [Fact]
-    public void Result_ToString_Works()
+    public void ResultT_IsError_Works()
     {
-        Result r = KernelResult.Ok;
-        Assert.Equal("Ok", r.ToString());
+        var result = new Result<int>(KernelResult.Error);
+        Assert.True(result.IsError);
+        Assert.False(result.IsOk);
+    }
+
+    [Fact]
+    public void ResultT_ImplicitConversion_ToPlainResult_MaintainsCode()
+    {
+        var resultT = new Result<int>(KernelResult.InvalidArgument, 0);
+        Result result = resultT;
+        Assert.Equal(KernelResult.InvalidArgument, result.Code);
     }
 
     [Fact]

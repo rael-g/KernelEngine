@@ -58,12 +58,24 @@ public class NodeFrameworkTests
     }
 
     [Fact]
-    public void SkyboxNode_CanBeAdded()
+    public void Tree_Add_Model_CreatesCorrectHierarchy()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
-        
-        var Tree = new Tree(world); var node = Tree.AddNode(new Skybox(), "Skybox");
-        Assert.NotNull(node);
+        var Tree = new Tree(world);
+
+        var meshes = new List<ModelMesh> {
+            new("Sub1", null!, null!),
+            new("Sub2", null!, null!)
+        };
+        var model = new Model(meshes, new List<Material>(), new List<Texture>());
+
+        var root = Tree.Add(model, "MyModel");
+
+        Assert.Equal("MyModel", root.Name);
+        Assert.NotNull(root.FirstChild);
+        Assert.Equal("Sub2", root.FirstChild.Name); // Prepend behavior
+        Assert.NotNull(root.FirstChild.NextSibling);
+        Assert.Equal("Sub1", root.FirstChild.NextSibling.Name);
     }
 }

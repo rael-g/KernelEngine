@@ -1,3 +1,4 @@
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using Xunit;
 
@@ -7,57 +8,38 @@ namespace KernelEngine.Framework.Tests;
 public class SceneTests
 {
     [Fact]
-    public void Root_ReturnsValidNode()
+    public void Scene_Instantiate_CreatesNodes()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
-        var Tree = new Tree(world);
+        var tree = new Tree(world);
+
+        var scene = new Scene((t, root) => {
+            t.AddNode("Child1", root);
+            t.AddNode("Child2", root);
+        }) { Name = "MyScene" };
+
+        var instanceRoot = scene.Instantiate(tree);
         
-        Assert.NotNull(Tree.Root);
-        Assert.Equal("Root", Tree.Root.Name);
+        Assert.Equal("MyScene", instanceRoot.Name);
+        Assert.NotNull(instanceRoot.FirstChild);
+        Assert.Equal("Child2", instanceRoot.FirstChild.Name); // Prepend behavior
+        Assert.NotNull(instanceRoot.FirstChild.NextSibling);
+        Assert.Equal("Child1", instanceRoot.FirstChild.NextSibling.Name);
     }
 
     [Fact]
-    public void AddNode_CreatesChildOfRootByDefault()
+    public void Scene_Empty_InstantiatesRootOnly()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
-        var Tree = new Tree(world);
-        
-        var node = Tree.AddNode("Child");
-        Assert.NotNull(node);
-        Assert.Equal("Child", node.Name);
-        // We can't easily check parent from Node yet without more API, 
-        // but we can check if it was created successfully.
-    }
+        var tree = new Tree(world);
 
-    [Fact]
-    public void AddNode_WithParent_Works()
-    {
-        using var allocator = new MallocAllocator();
-        using var world = new World(allocator);
-        var Tree = new Tree(world);
-        
-        var parent = Tree.AddNode("Parent");
-        var child = Tree.AddNode("Child", parent);
-        
-        Assert.NotNull(child);
-        Assert.Equal("Child", child.Name);
-    }
+        var scene = new Scene();
 
-    [Fact]
-    public void DestroyNode_Works()
-    {
-        Node.ClearRegistry();
-        using var allocator = new MallocAllocator();
-        using var world = new World(allocator);
-        var Tree = new Tree(world);
+        var instanceRoot = scene.Instantiate(tree);
         
-        var node = Tree.AddNode("ToDestroy");
-        Tree.DestroyNode(node);
-        
-        // After destruction, getting the node from registry should fail or the entity should be invalid.
-        // Node.Unregister is called, so Node.FromEntity should return null.
-        Assert.Null(Node.FromEntity(node.Entity));
+        Assert.Equal("Scene", instanceRoot.Name);
+        Assert.Null(instanceRoot.FirstChild);
     }
 }

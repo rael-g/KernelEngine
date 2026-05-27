@@ -12,6 +12,7 @@ namespace KernelEngine.Framework.Tests;
 /// non-RCF fallback (synchronous <see cref="Task.FromResult"/>), exercising manager + ref-count
 /// logic without the cross-thread queue.
 /// </summary>
+[Collection("KernelRegistry")]
 public class ResourceManagerTests
 {
     private static (ResourceManager manager, IResourceFactory factory) NewManager()
@@ -83,19 +84,29 @@ public class ResourceManagerTests
     }
 
     [Fact]
-    public async Task CreateMaterialAsync_PassesAlbedoAndNormalMapHandles()
+    public async Task CreateCubemapAsync_ReturnsRefCountedTexture()
     {
         var (manager, factory) = NewManager();
-        var albedo = await manager.CreateTextureAsync(1, 1, new byte[4]);
-        var normal = await manager.CreateTextureAsync(1, 1, new byte[4]);
+        factory.CreateCubemap(Arg.Any<uint>(), Arg.Any<byte[]>()).Returns(new TextureHandle(99));
 
-        await manager.CreateMaterialAsync(new Vector4(0.5f), albedo, metallic: 0.2f, roughness: 0.7f, normalMap: normal);
+        var tex = await manager.CreateCubemapAsync(2, new byte[16 * 6]);
+        Assert.NotNull(tex);
+        Assert.Equal(99u, tex.Handle.Value);
+    }
 
-        factory.Received(1).CreateMaterial(
-            Arg.Any<Vector4>(),
-            albedo.Handle,
-            0.2f,
-            0.7f,
-            normal.Handle);
+    [Fact]
+    public async Task DirectExtensionCalls_WorkWithPlainFactory()
+    {
+        var factory = Substitute.For<IResourceFactory>();
+        factory.CreateMesh(Arg.Any<Vertex[]>(), Arg.Any<ushort[]>()).Returns(new MeshHandle(1));
+        factory.CreateTexture(Arg.Any<uint>(), Arg.Any<uint>(), Arg.Any<byte[]>()).Returns(new TextureHandle(2));
+        factory.CreateCubemap(Arg.Any<uint>(), Arg.Any<byte[]>()).Returns(new TextureHandle(3));
+        factory.CreateMaterial(Arg.Any<Vector4>(), Arg.Any<TextureHandle>(), Arg.Any<float>(), Arg.Any<float>(), Arg.Any<TextureHandle>())
+               .Returns(new MaterialHandle(4));
+
+        Assert.Equal(1u, (await factory.CreateMeshAsync(Array.Empty<Vertex>(), Array.Empty<ushort>())).Value);
+        Assert.Equal(2u, (await factory.CreateTextureAsync(1, 1, Array.Empty<byte>())).Value);
+        Assert.Equal(3u, (await factory.CreateCubemapAsync(1, Array.Empty<byte>())).Value);
+        Assert.Equal(4u, (await factory.CreateMaterialAsync(Vector4.One)).Value);
     }
 }

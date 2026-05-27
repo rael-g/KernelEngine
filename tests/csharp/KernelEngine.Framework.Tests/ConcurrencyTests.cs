@@ -6,6 +6,7 @@ using Xunit;
 
 namespace KernelEngine.Framework.Tests;
 
+[Collection("KernelRegistry")]
 public class ConcurrencyTests
 {
     // ── InputBuffer Tests ────────────────────────────────────────────────────

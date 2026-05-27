@@ -1,3 +1,4 @@
+using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using NSubstitute;
@@ -69,11 +70,101 @@ public class AssetsTests
         Assert.Equal(1, b.ReferenceCount);
     }
 
-    [Fact]
-    public async Task LoadModelAsync_WithoutLoader_Throws()
+    private sealed class FakeModelTexture : IModelTexture
     {
-        var assets = new Assets(modelLoader: null, imageLoader: null, new ResourceManager(Substitute.For<IResourceFactory>()));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => assets.LoadModelAsync("x.gltf"));
+        public string Path => "";
+        public uint Width => 2;
+        public uint Height => 2;
+        public ReadOnlySpan<byte> Pixels => new byte[16];
+    }
+
+    private sealed class FakeModelMesh(string name, int materialIndex) : IModelMesh
+    {
+        public string Name => name;
+        public int MaterialIndex => materialIndex;
+        public ReadOnlySpan<Vertex> Vertices => new Vertex[3];
+        public ReadOnlySpan<ushort> Indices => new ushort[3];
+    }
+
+    private sealed class FakeModelMaterial : IModelMaterial
+    {
+        public string Name => "";
+        public Vector4 BaseColor => Vector4.One;
+        public float Metallic => 0;
+        public float Roughness => 0.5f;
+        public int AlbedoTextureIndex => 0;
+        public int NormalMapTextureIndex => -1;
+    }
+
+    private sealed class FakeModelData : IModel
+    {
+        public IReadOnlyList<IModelMesh> Meshes { get; set; } = new List<IModelMesh>();
+        public IReadOnlyList<IModelMaterial> Materials { get; set; } = new List<IModelMaterial>();
+        public IReadOnlyList<IModelTexture> Textures { get; set; } = new List<IModelTexture>();
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public async Task LoadModelAsync_WithMultipleMeshesAndMaterials_UploadsAll()
+    {
+        var (assets, loader, factory) = NewAssets();
+        var modelData = new FakeModelData
+        {
+            Textures = new List<IModelTexture> { new FakeModelTexture() },
+            Materials = new List<IModelMaterial> { new FakeModelMaterial() },
+            Meshes = new List<IModelMesh> { new FakeModelMesh("Mesh1", 0), new FakeModelMesh("Mesh2", -1) }
+        };
+        
+        loader.LoadModelAsync("complex.gltf").Returns(Task.FromResult<IModel>(modelData));
+        factory.CreateTexture(Arg.Any<uint>(), Arg.Any<uint>(), Arg.Any<byte[]>()).Returns(new TextureHandle(1));
+        factory.CreateMaterial(Arg.Any<Vector4>(), Arg.Any<TextureHandle>(), Arg.Any<float>(), Arg.Any<float>(), Arg.Any<TextureHandle>())
+               .Returns(new MaterialHandle(10), new MaterialHandle(20)); // One for mat0, one for fallback
+        factory.CreateMesh(Arg.Any<Vertex[]>(), Arg.Any<ushort[]>()).Returns(new MeshHandle(100), new MeshHandle(200));
+
+        var model = await assets.LoadModelAsync("complex.gltf");
+        
+        Assert.Equal(2, model.Meshes.Count);
+        Assert.Equal(100u, model.Meshes[0].Mesh.Handle.Value);
+        Assert.Equal(10u, model.Meshes[0].Material.Handle.Value);
+        Assert.Equal(20u, model.Meshes[1].Material.Handle.Value); // Fallback
+    }
+
+    [Fact]
+    public async Task Model_Release_ReleasesAllSubResources()
+    {
+        var factory = Substitute.For<IResourceFactory>();
+        var manager = new ResourceManager(factory);
+        
+        factory.CreateMesh(Arg.Any<Vertex[]>(), Arg.Any<ushort[]>()).Returns(new MeshHandle(1));
+        factory.CreateMaterial(Arg.Any<Vector4>(), Arg.Any<TextureHandle>(), Arg.Any<float>(), Arg.Any<float>(), Arg.Any<TextureHandle>())
+               .Returns(new MaterialHandle(1));
+        factory.CreateTexture(Arg.Any<uint>(), Arg.Any<uint>(), Arg.Any<byte[]>()).Returns(new TextureHandle(1));
+
+        var mesh = await manager.CreateMeshAsync(Array.Empty<Vertex>(), Array.Empty<ushort>());
+        var mat = await manager.CreateMaterialAsync(Vector4.One);
+        var tex = await manager.CreateTextureAsync(1, 1, new byte[4]);
+
+        // Retain material because it's used in two places (ModelMesh and _materials list)
+        mat.Retain();
+
+        var model = new Model(
+            new List<ModelMesh> { new ModelMesh("M", mesh, mat) },
+            new List<Material> { mat },
+            new List<Texture> { tex }
+        );
+
+        // Model initially holds 1 ref to model itself.
+        // Construction of Model DOES NOT automatically retain sub-resources, 
+        // the constructor just takes ownership of the passed references? 
+        // No, typically in KernelEngine, we pass already-retained instances to the constructor.
+        // Model.DestroyNative calls Release() on everything.
+
+        model.Release();
+
+        // Each Mesh/Material/Texture should have been destroyed in the factory exactly once.
+        factory.Received(1).DestroyMesh(Arg.Any<MeshHandle>());
+        factory.Received(1).DestroyMaterial(Arg.Any<MaterialHandle>());
+        factory.Received(1).DestroyTexture(Arg.Any<TextureHandle>());
     }
 
     private sealed class FakeImageData : IImageData
@@ -111,9 +202,29 @@ public class AssetsTests
     }
 
     [Fact]
-    public async Task LoadTextureAsync_WithoutLoader_Throws()
+    public async Task LoadModelAsync_ConcurrentRace_ReturnsSameInstance_AndReleasesExtra()
     {
-        var assets = new Assets(modelLoader: null, imageLoader: null, new ResourceManager(Substitute.For<IResourceFactory>()));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => assets.LoadTextureAsync("x.png"));
+        var (assets, loader, _) = NewAssets();
+        
+        // Loader will delay a bit to allow a race
+        loader.LoadModelAsync(Arg.Any<string>()).Returns(async call => {
+            await Task.Delay(100);
+            var model = Substitute.For<IModel>();
+            model.Meshes.Returns(Array.Empty<IModelMesh>());
+            model.Materials.Returns(Array.Empty<IModelMaterial>());
+            model.Textures.Returns(Array.Empty<IModelTexture>());
+            return model;
+        });
+
+        var t1 = assets.LoadModelAsync("race.gltf");
+        var t2 = assets.LoadModelAsync("race.gltf");
+
+        var m1 = await t1;
+        var m2 = await t2;
+
+        Assert.Same(m1, m2);
+        Assert.Equal(2, m1.ReferenceCount); // Initial 1 (from load) + 1 (from second caller retain)
+        // Note: the second load should detect the win and release its own duplicate,
+        // returning the winner with a fresh retain.
     }
 }

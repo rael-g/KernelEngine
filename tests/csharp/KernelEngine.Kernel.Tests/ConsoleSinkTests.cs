@@ -3,6 +3,7 @@ using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
 
+[Collection("Console")]
 public class ConsoleSinkTests
 {
     [Fact]
