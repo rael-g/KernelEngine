@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="../KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,5 +1,6 @@
 [project]
-name = "06_shadow_map"
+name          = "06_shadow_map"
+default_scene = "res://Main.scene"
 
 [runtime.window]
 width      = 1280

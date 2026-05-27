@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Diagnostics;
 using KernelEngine.Configuration;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
@@ -9,40 +8,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddKernel()
-    .AddLogger()
-    .AddConsoleSink(LogLevel.Info)
+    .AddLogger().AddConsoleSink(LogLevel.Info)
     .AddInput()
-    .AddProjectConfig()   // auto-discovers ./Project next to the executable
+    .AddProjectConfig()
     .AddGlfwWindow()
     .AddBgfxRenderer();
 
 using var app = new Application();
 
-app.OnReady = async (_) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 06_shadow_map");
-    Console.WriteLine("[KernelEngine] Features: shadow_mapping, directional_light, floor_plane, cube");
-
-    // Scene is fully self-describing: nodes + transforms + resource refs (Mesh/Material via res://).
-    await SceneLoader.LoadAsync(app.Tree, "Main.scene", app.Resources);
-};
-
-Stopwatch sw = Stopwatch.StartNew();
-int frameCount = 0;
-
-app.OnUpdate = (tree, input) =>
+app.OnUpdate = (tree, _) =>
 {
     tree.ClearColor(0.1f, 0.1f, 0.15f, 1f);
     tree.SetAmbientLight(0.15f, 0.15f, 0.15f);
-
-    frameCount++;
-    if (sw.Elapsed.TotalSeconds >= 5.0)
-    {
-        double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}");
-        frameCount = 0;
-        sw.Restart();
-    }
 };
 
 app.Run(services);

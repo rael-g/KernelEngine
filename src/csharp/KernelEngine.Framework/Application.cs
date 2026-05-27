@@ -222,11 +222,16 @@ public class Application : IDisposable
                 var imageLoader = Services.GetService<IImageLoader>();
                 if (modelLoader != null || imageLoader != null)
                     Assets = new Assets(modelLoader, imageLoader, Resources);
+
+                // If the project declares a default scene, load it before OnReady runs — the scene
+                // is the starting state of the world; OnReady is the place to customize it further.
+                LoadDefaultSceneIfDeclared();
+
                 // Await so async setup (e.g. scene loading + async resource creation) completes
                 // before the first sim tick. Without this, an async OnReady becomes fire-and-forget
                 // and the frame loop races the lambda's continuation.
                 if (OnReady != null) OnReady(factory).GetAwaiter().GetResult();
-                Logger?.Info("Application", "ke.sim: OnReady complete — entering frame loop");
+                Logger?.Info("Application", "ke.sim: ready — entering frame loop");
                 simReady.Set(); // signal ke.render that OnReady is complete
 
                 while (!_cts.IsCancellationRequested)
@@ -321,6 +326,27 @@ public class Application : IDisposable
             Logger?.Flush();
             ExceptionDispatchInfo.Capture(ex2).Throw();
         }
+    }
+
+    // ── Default scene auto-load ───────────────────────────────────────────────
+
+    private void LoadDefaultSceneIfDeclared()
+    {
+        var config = Services.GetService<KernelEngine.Configuration.IProjectConfig>();
+        if (config is null || !config.IsLoaded) return;
+
+        var project = config.GetSection("project");
+        if (project is null || !project.TryGetValue("default_scene", out var raw)) return;
+        if (raw is not string resPath) return;
+
+        const string prefix = "res://";
+        if (!resPath.StartsWith(prefix, StringComparison.Ordinal))
+            throw new InvalidDataException($"[project] default_scene must start with 'res://'; got '{resPath}'");
+
+        var relative = resPath[prefix.Length..];
+        var absolute = Path.Combine(AppContext.BaseDirectory, relative);
+        SceneLoader.LoadAsync(Tree, absolute, Resources).GetAwaiter().GetResult();
+        Logger?.Info("Application", $"Loaded default scene: {resPath}");
     }
 
     // ── Systems setup ─────────────────────────────────────────────────────────
