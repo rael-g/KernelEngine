@@ -152,16 +152,62 @@ public sealed class Tree
         }
     }
 
+    /// <summary>
+    /// Dispatches a batch of action events to every node, in pre-order from <see cref="Root"/>.
+    /// Same propagation rules as <see cref="DispatchInput"/>: <c>evt.Consume()</c> stops the rest
+    /// of the tree from seeing this event; the next event in the batch restarts at the root.
+    /// </summary>
+    public void DispatchInputActions(List<InputActionEvent> events)
+    {
+        if (events is null || events.Count == 0) return;
+        for (int i = 0; i < events.Count; i++)
+        {
+            var evt = events[i];
+            DispatchInputActionRecursive(_root, ref evt);
+        }
+    }
+
+    private static void DispatchInputActionRecursive(Node node, ref InputActionEvent evt)
+    {
+        node.TickInputAction(ref evt);
+        if (evt.Handled) return;
+        for (var c = node.FirstChild; c != null; c = c.NextSibling)
+        {
+            DispatchInputActionRecursive(c, ref evt);
+            if (evt.Handled) return;
+        }
+    }
+
     // ── Destruction ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Destroys a node (and all its descendants) and removes it from the scripting registry.
-    /// Do not use <paramref name="node"/> after this call.
+    /// Destroys a node (and all its descendants). Fires <see cref="Node.OnDestroy"/> in post-order
+    /// (children before parents) — a child can still read its parent's state during teardown — then
+    /// disposes any node implementing <see cref="IDisposable"/>, unregisters them from the managed
+    /// registry, and frees their ECS entities. Do not use <paramref name="node"/> after this call.
     /// </summary>
     public void DestroyNode(Node node)
     {
+        TickDestroyRecursive(node);
         Node.Unregister(node.Entity);
         DestroyEntityRecursive(node.Entity);
+    }
+
+    /// <summary>
+    /// Engine-internal: drives <see cref="Node.OnDestroy"/> on every live node post-order from
+    /// the root. Called by <see cref="Application.Dispose"/> so app-shutdown also runs the hook
+    /// (without freeing entities, since the world is going away anyway).
+    /// </summary>
+    internal void DestroyAll()
+    {
+        TickDestroyRecursive(_root);
+    }
+
+    private static void TickDestroyRecursive(Node node)
+    {
+        for (var c = node.FirstChild; c != null; c = c.NextSibling)
+            TickDestroyRecursive(c);
+        node.TickDestroy();
     }
 
     // ── Lifecycle dispatch ────────────────────────────────────────────────────

@@ -4,17 +4,30 @@ using KernelEngine.Kernel;
 namespace KernelEngine.Framework.Internal;
 
 /// <summary>
-/// The matrix-convention adapter (ADR-10). The engine builds exactly two kinds of matrix itself —
-/// the camera/light <b>view</b> and the <b>projection</b> — and both are convention-bound in ways no
-/// general-purpose math library targets: projection depends on the backend's NDC (depth range, Y),
-/// and the view depends on a fixed handedness. So these builders are the irreducible bridge between
-/// "any math library" and "any backend": System.Numerics does the vector/inverse math; this type
-/// emits the matrix in the active backend's convention.
+/// The matrix-convention adapter (ADR-10). The engine frontend commits to one convention for the
+/// matrices it builds itself — view and projection — and adapts the projection to the active
+/// backend's NDC via <see cref="NdcConvention"/>.
 /// </summary>
 /// <remarks>
-/// Everything else (world transforms, view = inverse-of-world, lerps) uses <see cref="Matrix4x4"/>
-/// directly. Results here are written into <see cref="Matrix4x4"/> slots so the flat bytes are the
-/// column-major <c>ke_mat4</c> layout; <c>FramePacket.ToKeMat4</c> blits them verbatim. Right-handed.
+/// <para>
+/// <b>Frontend convention:</b> view-space is right-handed (camera looks down -Z, forward =
+/// <c>target - eye</c>). Projection emits Vulkan-canonical output by default (Y-flip true,
+/// Z ∈ [0, 1]); GL and D3D NDCs are reached by toggling <see cref="NdcConvention.YFlip"/> and
+/// <see cref="NdcConvention.ZeroToOneDepth"/>. The backend reports its NDC at startup via
+/// <see cref="SetConvention"/> — the frontend never assumes one.
+/// </para>
+/// <para>
+/// <b>Why this class exists (instead of <see cref="Matrix4x4.CreateOrthographic"/> /
+/// <see cref="Matrix4x4.CreatePerspectiveFieldOfView"/>):</b> System.Numerics' builders are fixed
+/// at RH + Y-up + Z ∈ [0, 1] — D3D11+ only. There are no <c>...LH</c> overloads, no depth-range
+/// parameter, no Y-flip. They cannot target Vulkan (needs Y-flip) or OpenGL (needs Z ∈ [-1, 1]).
+/// This class is the irreducible bridge: System.Numerics still does the vector/inverse math
+/// everywhere else; only view+projection require convention-aware builders.
+/// </para>
+/// <para>
+/// Results are written into <see cref="Matrix4x4"/> slots so the flat bytes match the column-major
+/// <c>ke_mat4</c> layout; <c>FramePacket.ToKeMat4</c> blits them verbatim.
+/// </para>
 /// </remarks>
 internal static class ViewProjection
 {

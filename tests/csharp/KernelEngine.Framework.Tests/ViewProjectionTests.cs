@@ -61,9 +61,11 @@ public class ViewProjectionTests
         
         var proj = ViewProjection.Ortho(-10, 10, -10, 10, 0, 100);
         
+        // RH ortho + Z ∈ [0, 1] (Vulkan-canonical frontend): view-z ∈ [-near, -far] → clip-z ∈ [0, 1].
+        // M33 = -1 / (far - near) = -0.01; M43 = -near / (far - near) = 0 when near = 0.
         Assert.Equal(2f / 20f, proj.M11);
         Assert.Equal(2f / 20f, proj.M22);
-        Assert.Equal(1f / 100f, proj.M33);
+        Assert.Equal(-1f / 100f, proj.M33);
         Assert.Equal(0f, proj.M43);
     }
 }

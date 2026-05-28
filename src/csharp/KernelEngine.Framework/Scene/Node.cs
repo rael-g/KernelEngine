@@ -205,6 +205,7 @@ public class Node
     //   left-to-right). Game code can rely on it.
 
     private bool _started;
+    private bool _destroyed;
 
     /// <summary>Called once when the node enters the tree, before <see cref="Start"/>.</summary>
     protected virtual void Awake() { }
@@ -224,6 +225,14 @@ public class Node
     /// </summary>
     protected virtual void OnInput(ref InputEvent evt) { }
 
+    /// <summary>
+    /// Called once per action event each sim frame (after raw <see cref="OnInput"/> dispatch and
+    /// after the per-frame action-layer evaluation), in tree pre-order. Override to react to
+    /// abstract verbs (e.g. <c>GameAction.Jump</c> Started) without coupling to physical keys.
+    /// Call <c>evt.Consume()</c> to stop propagation through the rest of the tree.
+    /// </summary>
+    protected virtual void OnInputAction(ref InputActionEvent evt) { }
+
     /// <summary>Instance hook fired after <see cref="Awake"/>.</summary>
     public Action? OnAwakeEvent { get; set; }
 
@@ -236,13 +245,32 @@ public class Node
     /// <summary>Instance hook fired after <see cref="LateUpdate"/>.</summary>
     public Action<float>? OnLateUpdate { get; set; }
 
+    /// <summary>
+    /// Called once when the node leaves the tree (via <see cref="Tree.DestroyNode"/> or app shutdown),
+    /// in post-order — children before parents — so a child can still see its parent's state. After
+    /// this returns, the framework also disposes the node when it implements <see cref="IDisposable"/>.
+    /// </summary>
+    protected virtual void OnDestroy() { }
+
     /// <summary>Instance hook fired after <see cref="OnInput"/> for each event.</summary>
     public InputHandler? OnInputEvent { get; set; }
+
+    /// <summary>Instance hook fired after <see cref="OnDestroy"/>.</summary>
+    public Action? OnDestroyEvent { get; set; }
+
+    /// <summary>Instance hook fired after <see cref="OnInputAction"/> for each action event.</summary>
+    public InputActionHandler? OnInputActionEvent { get; set; }
 
     internal void TickInput(ref InputEvent evt)
     {
         OnInput(ref evt);
         OnInputEvent?.Invoke(ref evt);
+    }
+
+    internal void TickInputAction(ref InputActionEvent evt)
+    {
+        OnInputAction(ref evt);
+        OnInputActionEvent?.Invoke(ref evt);
     }
 
     internal void TickAwakeAndStart()
@@ -265,6 +293,15 @@ public class Node
     {
         LateUpdate(dt);
         OnLateUpdate?.Invoke(dt);
+    }
+
+    internal void TickDestroy()
+    {
+        if (_destroyed) return;
+        _destroyed = true;
+        OnDestroy();
+        OnDestroyEvent?.Invoke();
+        if (this is IDisposable d) d.Dispose();
     }
 
     // ── Internal registry ─────────────────────────────────────────────────────

@@ -65,8 +65,13 @@ public class Application : IDisposable
     private IInputBuffer _inputBuffer = null!;
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
+    private readonly InputActionDispatcher _actionDispatcher = new();
+
+    private System.Numerics.Vector4? _projectClearColor;
+    private System.Numerics.Vector3? _projectAmbientLight;
     private IResourceCommandQueue _resourceQueue = null!;
     private ShadowRenderSystem? _shadowSystem;
+    private Physics2DSystem? _physics2DSystem;
 
     private string GetGpuFatalError()
     {
@@ -223,6 +228,13 @@ public class Application : IDisposable
                 if (modelLoader != null || imageLoader != null)
                     Assets = new Assets(modelLoader, imageLoader, Resources);
 
+                // Auto-load action bindings (when a game enum was registered via .AddInputActions<T>()).
+                // After this, InputActions.Get<TEnum>() works from anywhere; no game code involved.
+                Services.GetService<InputActions.IAutoLoader>()?.Load(this);
+
+                // Cache Project's render defaults (applied each frame just before OnUpdate).
+                LoadProjectRenderSettings();
+
                 // If the project declares a default scene, load it before OnReady runs — the scene
                 // is the starting state of the world; OnReady is the place to customize it further.
                 LoadDefaultSceneIfDeclared();
@@ -247,6 +259,7 @@ public class Application : IDisposable
                     // LateUpdate, and OnInput handlers can read polling state directly. World.Update
                     // still sets/clears it again internally — defensive double-set is harmless.
                     InputContext.Set(input);
+                    Physics2DContext.Set(Services.GetService<IPhysics2D>(), _physics2DSystem);
                     try
                     {
                         // Drain queued input events and dispatch through the tree before any update
@@ -254,6 +267,12 @@ public class Application : IDisposable
                         var events = _eventBuffer.Drain();
                         if (events.Length > 0)
                             Tree.DispatchInput(events);
+
+                        // Action layer: evaluate every registered map against the current snapshot,
+                        // then dispatch derived InputActionEvents through the tree. Polling readers
+                        // (IInputActionReader<TEnum>) read the same updated state inside Update.
+                        var actionEvents = _actionDispatcher.Evaluate(input);
+                        Tree.DispatchInputActions(actionEvents);
 
                         // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
                         //   Awake+Start (one-shot) → Update → ECS systems → LateUpdate
@@ -266,11 +285,18 @@ public class Application : IDisposable
                         ActiveWorld?.Update(packet: packet, input: input);
 
                         Tree.TickLateUpdate(dt);
+
+                        // Project-level render defaults (clear color + ambient). Applied every frame
+                        // because FramePacket carries them per-frame. Game's OnUpdate can override.
+                        if (_projectClearColor is { } cc) writer.ClearColor(cc.X, cc.Y, cc.Z, cc.W);
+                        if (_projectAmbientLight is { } al) writer.SetAmbientLight(al.X, al.Y, al.Z);
+
                         OnUpdate?.Invoke(writer, input);
                     }
                     finally
                     {
                         InputContext.Set(null);
+                        Physics2DContext.Set(null, null);
                     }
 
                     packet.EndWrite();
@@ -339,6 +365,32 @@ public class Application : IDisposable
         }
     }
 
+    // ── Project [render] section ──────────────────────────────────────────────
+
+    private void LoadProjectRenderSettings()
+    {
+        var config = Services.GetService<KernelEngine.Configuration.IProjectConfig>();
+        if (config is null || !config.IsLoaded) return;
+
+        var render = config.GetSection("render");
+        if (render is null) return;
+
+        if (render.TryGetValue("clear_color", out var ccRaw) && ccRaw is Tomlyn.Model.TomlArray cc && cc.Count == 4)
+            _projectClearColor = new System.Numerics.Vector4(ToF(cc[0]), ToF(cc[1]), ToF(cc[2]), ToF(cc[3]));
+
+        if (render.TryGetValue("ambient_light", out var alRaw) && alRaw is Tomlyn.Model.TomlArray al && al.Count == 3)
+            _projectAmbientLight = new System.Numerics.Vector3(ToF(al[0]), ToF(al[1]), ToF(al[2]));
+
+        static float ToF(object? v) => v switch
+        {
+            long l => l,
+            double d => (float)d,
+            float f => f,
+            int n => n,
+            _ => System.Convert.ToSingle(v, System.Globalization.CultureInfo.InvariantCulture),
+        };
+    }
+
     // ── Default scene auto-load ───────────────────────────────────────────────
 
     private void LoadDefaultSceneIfDeclared()
@@ -356,7 +408,7 @@ public class Application : IDisposable
 
         var relative = resPath[prefix.Length..];
         var absolute = Path.Combine(AppContext.BaseDirectory, relative);
-        SceneLoader.LoadAsync(Tree, absolute, Resources).GetAwaiter().GetResult();
+        SceneLoader.LoadAsync(Tree, absolute, Resources, Services).GetAwaiter().GetResult();
         Logger?.Info("Application", $"Loaded default scene: {resPath}");
     }
 
@@ -385,6 +437,15 @@ public class Application : IDisposable
 
         _shadowSystem = new ShadowRenderSystem(dirLightCid, meshCid, xformCid);
         ActiveWorld.AddSystem(_shadowSystem);
+
+        // Physics 2D: auto-register when a backend is in DI (chapter 24 §5 "Physics2DSystem auto-registered").
+        // Game code never instantiates this and never calls IPhysics2D.Step.
+        var physics2D = Services.GetService<IPhysics2D>();
+        if (physics2D != null)
+        {
+            _physics2DSystem = new Physics2DSystem(physics2D);
+            ActiveWorld.AddSystem(_physics2DSystem);
+        }
     }
 
     // ── Service validation ────────────────────────────────────────────────────
@@ -536,6 +597,7 @@ public class Application : IDisposable
     public virtual void Dispose()
     {
         _cts.Dispose();
+        _scene?.DestroyAll();   // fire OnDestroy + IDisposable.Dispose on every live node
         ActiveWorld?.Dispose();
 
         _proxyAllocator?.Report(Logger);

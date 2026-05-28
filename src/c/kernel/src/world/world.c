@@ -190,8 +190,13 @@ static void update_transform_recursive(ke_world_impl *impl, ke_entity entity,
     ke_mat4 local;
     ke_mat4_from_transform(&local, &t->position, &t->rotation, &t->scale);
 
+    // System.Numerics.Matrix4x4 (and our ke_mat4 byte layout — translation at m[12..14]) is
+    // row-major / row-vector. Composition rule: world = local * parent (apply local first, then
+    // parent's transform). Doing `parent * local` works only when the parent is identity (e.g.
+    // top-level nodes under the Root) — every 2-deep hierarchy gets the child's translation
+    // multiplied by the parent's scale instead of added to the parent's translation.
     if (parent_world)
-        ke_mat4_mul(&t->world_matrix, parent_world, &local);
+        ke_mat4_mul(&t->world_matrix, &local, parent_world);
     else
         t->world_matrix = local;
 

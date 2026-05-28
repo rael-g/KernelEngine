@@ -266,6 +266,7 @@ Rejected alternative — per-call `ToMeters()` / `ToPixels()` helpers (the Luna.
 - **Not raycasts / queries.** `physics.Raycast(from, to)` and area queries are essential for AI / pickups / line-of-sight. Deferred; should land in the slice after collision events.
 - **Not continuous collision detection (CCD) tuning.** Box2D supports bullet bodies for fast-moving objects; expose later when needed.
 - **Not interpolation for render-side smoothness.** Visible at high-refresh displays; deferred.
+- **Not runtime fixture removal.** F2 MVP ships `CollisionBody2D.AddCollider` (and the `CollisionShape2D` child node that calls it) as **add-only** — once attached, a fixture lives until the owning body is destroyed. `IPhysics2D` does not yet expose `RemoveFixture`. The case "attach a shape, remove it mid-game" (destructible armor, swap collision profile per state) needs a new kernel method, plus `CollisionShape2D.OnDestroy` removing its fixture from the parent body. Carried as Tier C debt; not blocking the MVP.
 
 ## 9. Implementation order (when the work begins)
 
