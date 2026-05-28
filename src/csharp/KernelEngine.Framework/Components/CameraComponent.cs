@@ -18,6 +18,12 @@ public struct CameraComponent
     /// <summary>Far clip plane distance.</summary>
     public float Far;
 
+    /// <summary>
+    /// Half-height of the orthographic viewport in world units (ignored when perspective).
+    /// E.g. <c>5</c> = viewport is 10 units tall; horizontal extents derive from aspect ratio.
+    /// </summary>
+    public float OrthographicSize;
+
     /// <summary>Non-zero for orthographic projection, zero for perspective.</summary>
     public byte Orthographic;
 }

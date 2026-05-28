@@ -65,6 +65,10 @@ internal static class ViewProjection
 
     public static Matrix4x4 Ortho(float left, float right, float bottom, float top, float near, float far)
     {
+        // Right-handed to match Perspective (camera looks down -Z; view-space Z is negative for
+        // content in front). M33/M43 derived so view-z in [-near, -far] maps to NDC z in [0, 1]
+        // (D3D-style) or [-1, 1] (GL-style). Earlier this matrix was accidentally LH and any
+        // Camera2D placed at +Z saw a blank screen because its content sat outside the frustum.
         var m = new Matrix4x4
         {
             M11 = 2f / (right - left),
@@ -75,12 +79,12 @@ internal static class ViewProjection
         };
         if (_convention.ZeroToOneDepth)
         {
-            m.M33 = 1f / (far - near);
+            m.M33 = -1f / (far - near);
             m.M43 = -near / (far - near);
         }
         else // OpenGL-style depth [-1,1]
         {
-            m.M33 = 2f / (far - near);
+            m.M33 = -2f / (far - near);
             m.M43 = -(far + near) / (far - near);
         }
         return m;

@@ -39,7 +39,7 @@ public sealed class CameraRenderSystem : ISystem
         // transpose) yields the column-major view directly — the double transpose cancels.
         var view = Matrix4x4.Invert(transform.WorldMatrix, out var inv) ? inv : Matrix4x4.Identity;
         var proj = cam.Orthographic != 0
-            ? ViewProjection.Ortho(-Aspect * 10f, Aspect * 10f, -10f, 10f, cam.Near, cam.Far)
+            ? ViewProjection.Ortho(-Aspect * cam.OrthographicSize, Aspect * cam.OrthographicSize, -cam.OrthographicSize, cam.OrthographicSize, cam.Near, cam.Far)
             : ViewProjection.Perspective(cam.Fov, Aspect, cam.Near, cam.Far);
 
         packet.SetCamera(view, proj, transform.Position);
