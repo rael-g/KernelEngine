@@ -137,6 +137,16 @@ extern "C"
         /// @brief Configures the cluster grid dimensions and light density limits.
         ke_result (*set_cluster_config)(struct ke_render *self, const ke_cluster_config *config);
 
+        /// @brief Records a textured screen-space quad into the frame packet's UI list. Coordinates
+        ///        are pixels (top-left origin); the texture handle may be KE_TEXTURE_NONE for a
+        ///        flat-colored quad. Drawn in the dedicated UI view (after post-fx, no depth,
+        ///        alpha-blended). Sim-side recorder — actual draw happens during submit_packet.
+        ke_result (*submit_ui_quad)(struct ke_render *self,
+                                    ke_texture_handle texture,
+                                    float dst_x, float dst_y, float dst_w, float dst_h,
+                                    float src_u0, float src_v0, float src_u1, float src_v1,
+                                    float r, float g, float b, float a);
+
         /// @brief Consumes a pre-recorded frame packet and submits all draw calls to the GPU.
         ///        Must be called on the bgfx API thread, before @c frame().
         ke_result (*submit_packet)(struct ke_render *self, const struct ke_frame_packet *packet);

@@ -19,6 +19,19 @@ extern "C" {
         ke_mat4            transform;
     } ke_draw_command;
 
+    /// @brief A single textured quad drawn in screen-space pixels, after the main scene + post-fx.
+    ///        Coordinates are pixels from the top-left of the backbuffer; UVs are normalized [0, 1].
+    ///        Used by the UI layer (Label glyphs, panels, …) and is the only API that targets the
+    ///        dedicated UI view (last in the chain, ortho 2D, no depth, alpha-blended).
+    typedef struct ke_ui_draw_command {
+        ke_texture_handle texture;       ///< Atlas / sprite to sample. KE_TEXTURE_NONE = solid color quad.
+        float             dst_x, dst_y;  ///< Top-left of destination rect, in backbuffer pixels.
+        float             dst_w, dst_h;  ///< Destination rect size in pixels.
+        float             src_u0, src_v0;///< Top-left UV in the source texture (normalized).
+        float             src_u1, src_v1;///< Bottom-right UV in the source texture (normalized).
+        float             color[4];      ///< Per-vertex tint applied to the sampled texel (premultiplied alpha).
+    } ke_ui_draw_command;
+
     // ── Camera Snapshot ───────────────────────────────────────────────────────
 
     typedef struct ke_frame_camera {
@@ -88,6 +101,13 @@ extern "C" {
         bool  bloom_enabled;
         float bloom_threshold;
         float bloom_intensity;
+
+        // ── UI Pass ───────────────────────────────────────────────────────────
+        // Appended at the end of the struct so existing C# bindings (which were generated before
+        // this field existed) keep correct offsets for every prior field until regeneration.
+        ke_ui_draw_command* ui_draw_commands;
+        uint32_t            ui_draw_count;
+        uint32_t            ui_draw_capacity;
 
     } ke_frame_packet;
 

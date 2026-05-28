@@ -49,6 +49,14 @@ KeFrameSync::KeFrameSync(ke_allocator *alloc,
             alloc->alloc(alloc, sizeof(ke_spot_light) * spot_capacity,
                          alignof(ke_spot_light)));
         p.spot_light_capacity = spot_capacity;
+
+        // UI draws: fixed default for now (256 quads/frame — fits Pong's score + instructions
+        // with room to spare). When a real game pushes past it we add a parameter or grow on demand.
+        constexpr uint32_t kUiDefaultCapacity = 256;
+        p.ui_draw_commands = static_cast<ke_ui_draw_command *>(
+            alloc->alloc(alloc, sizeof(ke_ui_draw_command) * kUiDefaultCapacity,
+                         alignof(ke_ui_draw_command)));
+        p.ui_draw_capacity = kUiDefaultCapacity;
     }
 }
 
@@ -60,6 +68,7 @@ KeFrameSync::~KeFrameSync()
         alloc_->free(alloc_, packets_[i].shadow_draw_commands);
         alloc_->free(alloc_, packets_[i].point_lights);
         alloc_->free(alloc_, packets_[i].spot_lights);
+        alloc_->free(alloc_, packets_[i].ui_draw_commands);
     }
     alloc_->free(alloc_, packets_);
 }
@@ -85,6 +94,7 @@ ke_frame_packet *KeFrameSync::BeginWrite()
     p.shadow_draw_count = 0;
     p.point_light_count = 0;
     p.spot_light_count  = 0;
+    p.ui_draw_count     = 0;
     p.has_dir_light     = false;
     p.has_skybox        = false;
     p.skybox_handle     = KE_TEXTURE_NONE;

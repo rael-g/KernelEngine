@@ -124,6 +124,15 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     render_api_.submit_skybox = [](ke_render *self, ke_texture_handle h) {
         return KE_OK;
     };
+    // submit_ui_quad: vtable seat reserved. C# games write UI commands straight into the
+    // FramePacket array via the safe wrapper (mirrors how submit_mesh isn't wired here either —
+    // packet writes are the real path; this is a stub for C consumers).
+    render_api_.submit_ui_quad = [](ke_render *,
+                                    ke_texture_handle, float, float, float, float,
+                                    float, float, float, float,
+                                    float, float, float, float) {
+        return KE_OK;
+    };
     render_api_.set_tonemapping = [](ke_render *self, ke_bool e, float ex, float g) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
