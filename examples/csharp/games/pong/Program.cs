@@ -7,8 +7,8 @@ using KernelEngine.Render.Bgfx;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// ── Pong ──────────────────────────────────────────────────────────────────────
-// First complete-game example. Stitches input + physics + audio + render in one loop.
+// ── Pong (2D) ─────────────────────────────────────────────────────────────────
+// First complete-game example, rewritten on top of Camera2D + Sprite2D.
 //   • W / S      — left paddle up / down
 //   • Up / Down  — right paddle up / down
 //   • Space      — launch ball (also after each score)
@@ -16,24 +16,29 @@ using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddKernel()
-    .AddLogger().AddConsoleSink(LogLevel.Warning)        // quiet bgfx info chatter
+    .AddLogger().AddConsoleSink(LogLevel.Warning)
     .AddInput()
-    .AddGlfwWindow(960, 540, "KernelEngine — Pong")
+    .AddGlfwWindow(960, 540, "KernelEngine — Pong (2D)")
     .AddBgfxRenderer(System.IO.Path.Combine(AppContext.BaseDirectory, "shaders"))
-    .AddBox2D(gravityX: 0f, gravityY: 0f)                // top-down: no gravity
+    .AddBox2D(gravityX: 0f, gravityY: 0f)        // top-down: no gravity
     .AddMiniAudio();
 
 using var app = new Application();
 app.OnReady = (_) => GameSetup.BuildAsync(app);
-app.OnUpdate = (tree, _) => tree.ClearColor(0.04f, 0.04f, 0.08f, 1f);
+app.OnUpdate = (tree, _) =>
+{
+    tree.ClearColor(0.04f, 0.04f, 0.08f, 1f);
+    // Flat ambient — sprites are unlit-feeling without a real 2D shader path.
+    tree.SetAmbientLight(1f, 1f, 1f);
+};
 app.Run(services);
 
 // ── Field constants ──────────────────────────────────────────────────────────
 
 static class Field
 {
-    public const float HalfW = 8f;
-    public const float HalfH = 4.5f;
+    public const float HalfW         = 8f;
+    public const float HalfH         = 4.5f;
     public const float WallThickness = 0.25f;
 }
 
@@ -46,48 +51,43 @@ static class GameSetup
         var physics = app.Services.GetRequiredService<IPhysics2D>();
         var audio   = app.Services.GetRequiredService<IAudio>();
 
-        // Camera + light
-        var cam = app.Tree.AddNode(new Camera { Fov = 55f, Near = 0.1f, Far = 100f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0, 0, 9.5f) };
+        // 2D camera: orthographic, 10-unit-tall viewport (OrthographicSize = 5).
+        app.Tree.AddNode(new Camera2D { OrthographicSize = 5f });
 
-        app.Tree.AddNode(new DirectionalLight {
-            Direction = Vector3.Normalize(new Vector3(0.2f, 0.6f, 1f)),
-            Color     = Vector3.One,
-            Intensity = 4f,
-        }, "Light");
+        // One shared quad mesh + per-color materials (Pong uses two: white and dark blue).
+        var quadMesh = await app.Resources.CreateMeshAsync(MeshShape.Quad());
+        var whiteMat = await app.Resources.CreateMaterialAsync(new Vector4(0.95f, 0.95f, 0.95f, 1));
+        var wallMat  = await app.Resources.CreateMaterialAsync(new Vector4(0.15f, 0.15f, 0.2f,  1));
 
-        // Materials + meshes
-        var whiteMat = await app.Resources.CreateMaterialAsync(new Vector4(0.95f, 0.95f, 0.95f, 1), metallic: 0.05f, roughness: 0.5f);
-        var wallMat  = await app.Resources.CreateMaterialAsync(new Vector4(0.15f, 0.15f, 0.2f, 1),  metallic: 0.0f,  roughness: 0.9f);
-        var cubeMesh = await app.Resources.CreateMeshAsync(MeshShape.Cube());
+        // Walls (top + bottom). Static body + visual quad.
+        AddWall(app, physics, quadMesh, wallMat, y: +Field.HalfH);
+        AddWall(app, physics, quadMesh, wallMat, y: -Field.HalfH);
 
-        // Walls (top + bottom). Static body + visual cube.
-        AddWall(app, physics, cubeMesh, wallMat, y: +Field.HalfH);
-        AddWall(app, physics, cubeMesh, wallMat, y: -Field.HalfH);
-
-        // Physics stepper — added FIRST so pre-order walk advances the world before paddle/ball
+        // Physics stepper — first child so pre-order walk advances the world before paddle/ball
         // Updates read/write velocities and positions this frame.
-        app.Tree.AddNode(new PhysicsStepper(physics), "PhysicsStepper");
+        app.Tree.AddNode(new PhysicsStepper(physics));
 
         // Paddles
-        app.Tree.AddNode(new Paddle(physics, x: -Field.HalfW + 0.5f, up: Key.W,  down: Key.S)    { Mesh = cubeMesh, Material = whiteMat }, "PaddleLeft");
-        app.Tree.AddNode(new Paddle(physics, x: +Field.HalfW - 0.5f, up: Key.Up, down: Key.Down) { Mesh = cubeMesh, Material = whiteMat }, "PaddleRight");
+        app.Tree.AddNode(new Paddle(physics, x: -Field.HalfW + 0.5f, up: Key.W,  down: Key.S)    { Mesh = quadMesh, Material = whiteMat, Name = "PaddleLeft"  });
+        app.Tree.AddNode(new Paddle(physics, x: +Field.HalfW - 0.5f, up: Key.Up, down: Key.Down) { Mesh = quadMesh, Material = whiteMat, Name = "PaddleRight" });
 
         // Audio: synth a beep and a score tone (no committed binary assets).
         var hitSfx   = audio.LoadSound(WavSynth.WriteSine(440, durationMs: 60,  filename: "ke_pong_hit"));
         var scoreSfx = audio.LoadSound(WavSynth.WriteSine(220, durationMs: 200, filename: "ke_pong_score"));
 
         // Ball
-        app.Tree.AddNode(new Ball(physics, audio, hitSfx, scoreSfx) { Mesh = cubeMesh, Material = whiteMat }, "Ball");
+        app.Tree.AddNode(new Ball(physics, audio, hitSfx, scoreSfx) { Mesh = quadMesh, Material = whiteMat });
     }
 
     static void AddWall(Application app, IPhysics2D physics, Mesh mesh, Material mat, float y)
     {
-        var node = app.Tree.AddNode(new MeshRenderer { Mesh = mesh, Material = mat }, $"Wall_{y:F0}");
-        node.LocalTransform = node.LocalTransform with {
-            Position = new Vector3(0, y, 0),
-            Scale    = new Vector3(Field.HalfW * 2, Field.WallThickness * 2, 0.5f),
-        };
+        app.Tree.AddNode(new Sprite2D {
+            Mesh       = mesh,
+            Material   = mat,
+            Size       = new Vector2(Field.HalfW * 2, Field.WallThickness * 2),
+            Position2D = new Vector2(0, y),
+            Name       = $"Wall_{y:F0}",
+        });
         var body = physics.CreateBody(BodyType2D.Static, new Vector2(0, y));
         physics.AddBoxFixture(body, new Vector2(Field.HalfW, Field.WallThickness), friction: 0f, restitution: 1.0f);
     }
@@ -102,7 +102,7 @@ sealed class PhysicsStepper(IPhysics2D physics) : Node
 
 // ── Paddle ────────────────────────────────────────────────────────────────────
 
-sealed class Paddle(IPhysics2D physics, float x, Key up, Key down) : MeshRenderer
+sealed class Paddle(IPhysics2D physics, float x, Key up, Key down) : Sprite2D
 {
     const float HalfW = 0.15f;
     const float HalfH = 0.9f;
@@ -112,15 +112,13 @@ sealed class Paddle(IPhysics2D physics, float x, Key up, Key down) : MeshRendere
 
     protected override void Start()
     {
-        base.Start();   // registers the MeshRenderer ECS component
+        // Visual: Sprite2D handles Size → Scale; we set Position2D for X (Y starts at 0).
+        Size       = new Vector2(HalfW * 2, HalfH * 2);
+        Position2D = new Vector2(x, 0);
+        base.Start();
 
         _body = physics.CreateBody(BodyType2D.Kinematic, new Vector2(x, 0));
         physics.AddBoxFixture(_body, new Vector2(HalfW, HalfH), friction: 0f, restitution: 1.0f);
-
-        LocalTransform = LocalTransform with {
-            Position = new Vector3(x, 0, 0),
-            Scale    = new Vector3(HalfW * 2, HalfH * 2, 0.4f),
-        };
     }
 
     protected override void Update(float dt)
@@ -131,21 +129,18 @@ sealed class Paddle(IPhysics2D physics, float x, Key up, Key down) : MeshRendere
         if (input.IsKeyDown(down)) vy -= Speed;
         physics.SetBodyVelocity(_body, new Vector2(0, vy));
 
-        // Clamp inside the field.
         var s = physics.GetBodyState(_body);
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
         var y = Math.Clamp(s.Position.Y, -maxY, maxY);
         if (y != s.Position.Y) physics.SetBodyPosition(_body, new Vector2(s.Position.X, y), 0);
 
-        LocalTransform = LocalTransform with {
-            Position = new Vector3(s.Position.X, y, 0),
-        };
+        Position2D = new Vector2(s.Position.X, y);
     }
 }
 
 // ── Ball ──────────────────────────────────────────────────────────────────────
 
-sealed class Ball(IPhysics2D physics, IAudio audio, SoundHandle hitSfx, SoundHandle scoreSfx) : MeshRenderer
+sealed class Ball(IPhysics2D physics, IAudio audio, SoundHandle hitSfx, SoundHandle scoreSfx) : Sprite2D
 {
     const float Half         = 0.18f;
     const float InitialSpeed = 6f;
@@ -157,11 +152,12 @@ sealed class Ball(IPhysics2D physics, IAudio audio, SoundHandle hitSfx, SoundHan
 
     protected override void Start()
     {
+        Size = new Vector2(Half * 2, Half * 2);
         base.Start();
+
         _body = physics.CreateBody(BodyType2D.Dynamic, Vector2.Zero);
         physics.AddBoxFixture(_body, new Vector2(Half, Half), density: 1.0f, friction: 0f, restitution: 1.0f);
 
-        LocalTransform = LocalTransform with { Scale = new Vector3(Half * 2, Half * 2, Half * 2) };
         Console.WriteLine("Pong ready. Press Space to launch the ball.");
     }
 
@@ -170,19 +166,15 @@ sealed class Ball(IPhysics2D physics, IAudio audio, SoundHandle hitSfx, SoundHan
         if (evt.Kind != InputEventKind.KeyDown) return;
         switch (evt.Key)
         {
-            case Key.Space:
-                if (_awaitingLaunch) Launch();
-                break;
-            case Key.Escape:
-                Environment.Exit(0);
-                break;
+            case Key.Space: if (_awaitingLaunch) Launch(); break;
+            case Key.Escape: Environment.Exit(0); break;
         }
     }
 
     protected override void Update(float dt)
     {
         var s = physics.GetBodyState(_body);
-        LocalTransform = LocalTransform with { Position = new Vector3(s.Position.X, s.Position.Y, 0) };
+        Position2D = s.Position;
 
         if (_awaitingLaunch) return;
 
