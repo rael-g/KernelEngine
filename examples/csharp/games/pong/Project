@@ -2,6 +2,9 @@
 name          = "Pong"
 default_scene = "res://scenes/Main.scene"
 
+[logging]
+console_level = "Warning"
+
 [runtime.window]
 width      = 960
 height     = 540
@@ -11,6 +14,10 @@ fullscreen = false
 [runtime.renderer]
 shader_path = "shaders"
 vsync       = true
+
+[runtime.physics_2d]
+gravity_x = 0.0
+gravity_y = 0.0
 
 [render]
 clear_color   = [0.04, 0.04, 0.08, 1.0]
