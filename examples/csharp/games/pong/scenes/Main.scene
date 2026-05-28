@@ -1,0 +1,32 @@
+[scene]
+name    = "Main"
+version = 1
+
+[[node]]
+name = "Camera"
+type = "Camera2D"
+properties = { OrthographicSize = 5.0 }
+
+[[node]]
+name  = "WallTop"
+scene = "res://scenes/Wall.scene"
+properties = { Position = [0.0, 4.5] }
+
+[[node]]
+name  = "WallBottom"
+scene = "res://scenes/Wall.scene"
+properties = { Position = [0.0, -4.5] }
+
+[[node]]
+name  = "PaddleLeft"
+scene = "res://scenes/Paddle.scene"
+properties = { Position = [-7.5, 0.0], MoveAction = "PaddleLeftMove" }
+
+[[node]]
+name  = "PaddleRight"
+scene = "res://scenes/Paddle.scene"
+properties = { Position = [7.5, 0.0], MoveAction = "PaddleRightMove" }
+
+[[node]]
+name  = "Ball"
+scene = "res://scenes/Ball.scene"

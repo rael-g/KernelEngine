@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using Tomlyn;
 using Tomlyn.Model;
 
@@ -44,67 +45,138 @@ namespace KernelEngine.Framework;
 public static class SceneLoader
 {
     /// <summary>
-    /// Synchronous load — accepts scenes that do not reference resources via <c>res://</c>.
-    /// Use <see cref="LoadAsync"/> when properties bind to <see cref="Mesh"/>/<see cref="Material"/> by path.
+    /// Synchronous load — accepts scenes that do not reference resources via <c>res://</c> and whose
+    /// node types have parameterless constructors. Use <see cref="LoadAsync"/> for resource-bound
+    /// or DI-constructor nodes.
     /// </summary>
     public static void Load(Tree tree, string path)
     {
-        LoadCore(tree, path, resources: null).GetAwaiter().GetResult();
+        LoadScene(tree, path, attachParent: null, rootNameOverride: null, rootEntryOverride: null,
+                  resources: null, services: null).GetAwaiter().GetResult();
     }
 
     /// <summary>
     /// Async load — resolves <c>res://</c> references on resource properties through
-    /// <paramref name="resources"/>. Awaitable; the typical caller is <c>OnReady</c>.
+    /// <paramref name="resources"/>, and constructs nodes via <paramref name="services"/>
+    /// (so user node classes can take dependencies — <c>IPhysics2D</c>, <c>IAudioService</c>, etc. —
+    /// through their constructors). Awaitable; the typical caller is <c>OnReady</c>.
     /// </summary>
-    public static Task LoadAsync(Tree tree, string path, ResourceManager resources)
+    public static Task LoadAsync(Tree tree, string path, ResourceManager resources, IServiceProvider? services = null)
     {
-        return LoadCore(tree, path, resources);
+        return LoadScene(tree, path, attachParent: null, rootNameOverride: null, rootEntryOverride: null,
+                         resources, services);
     }
 
     // ── Core ──────────────────────────────────────────────────────────────────
+    //
+    // A scene is a TOML file with an array of [[node]] entries. Each entry either:
+    //   • declares a node by `type = "..."` (built-in, FQN, or short name resolved across asms), or
+    //   • instantiates a nested scene via `scene = "res://Other.scene"` — that scene's first node
+    //     becomes this entry's root; the outer entry's name + properties override the inner root's
+    //     (the Godot PackedScene model).
+    //
+    // Parent resolution is by the inner-scene-local name table (`byName`): siblings in the inner
+    // scene reference each other by their inner-declared names. When instantiated, the inner root
+    // attaches to the outer entry's parent; descendants keep their inner-local parent strings.
+    //
+    // First-entry convention: at top level, the first entry has no special status (callers can
+    // write a flat list — see existing examples). At nested level, the first entry IS the inner
+    // root, and the outer entry's `name` + transform + properties override it.
 
-    private static async Task LoadCore(Tree tree, string path, ResourceManager? resources)
+    private static async Task<Node?> LoadScene(
+        Tree tree, string path,
+        Node? attachParent, string? rootNameOverride, TomlTable? rootEntryOverride,
+        ResourceManager? resources, IServiceProvider? services)
     {
         if (!File.Exists(path))
             throw new FileNotFoundException($"Scene file not found: {path}");
 
         var doc = Toml.ToModel(File.ReadAllText(path));
         if (!doc.TryGetValue("node", out var rawNodes) || rawNodes is not TomlTableArray nodes)
-            return; // empty scene
+            return null;
 
         var byName = new Dictionary<string, Node>(StringComparer.Ordinal);
+        Node? root = null;
+        bool isFirst = true;
 
         foreach (var entry in nodes)
         {
-            var name = GetString(entry, "name") ?? throw new InvalidDataException("[[node]] entry missing 'name'");
-            var typeName = GetString(entry, "type") ?? "Node";
+            var innerName = GetString(entry, "name");
+            var typeName = GetString(entry, "type");
+            var sceneRef = GetString(entry, "scene");
 
-            var parent = GetString(entry, "parent") is { } parentName
+            Node? parent = GetString(entry, "parent") is { } parentName
                 ? (byName.TryGetValue(parentName, out var p)
                     ? p
-                    : throw new InvalidDataException($"Node '{name}' references parent '{parentName}' that has not been declared yet (parents must come first)"))
-                : null;
+                    : throw new InvalidDataException($"Node '{innerName}' references parent '{parentName}' that has not been declared yet (parents must come first)"))
+                : (isFirst ? attachParent : null);
 
-            var instance = CreateInstance(typeName);
-            tree.AddNode(instance, name, parent);
+            // The first entry of a nested scene takes the name from the instancing site, not the file.
+            var effectiveName = (isFirst && rootNameOverride != null) ? rootNameOverride : innerName;
 
-            ApplyTransform(instance, entry);
-            await ApplyProperties(instance, entry, resources);
+            Node instance;
+            if (sceneRef != null)
+            {
+                // Nested scene: recurse, letting the inner file declare the actual node type +
+                // children. The outer entry's name/transform/properties override the inner root's.
+                instance = await LoadScene(tree, ResolveScenePath(sceneRef), parent, effectiveName, entry, resources, services)
+                    ?? throw new InvalidDataException($"Nested scene '{sceneRef}' produced no root.");
+            }
+            else
+            {
+                if (typeName is null)
+                    throw new InvalidDataException("[[node]] entry needs either 'type' or 'scene'.");
+                if (effectiveName is null)
+                    throw new InvalidDataException("[[node]] entry missing 'name'.");
 
-            byName[name] = instance;
+                instance = CreateInstance(typeName, services);
+                tree.AddNode(instance, effectiveName, parent);
+
+                ApplyTransform(instance, entry);
+                await ApplyProperties(instance, entry, resources);
+
+                // First entry of a nested scene: layer the instancing site's transform + properties
+                // on top of what the scene file declared (outer wins, Godot PackedScene semantics).
+                if (isFirst && rootEntryOverride != null)
+                {
+                    ApplyTransform(instance, rootEntryOverride);
+                    await ApplyProperties(instance, rootEntryOverride, resources);
+                }
+            }
+
+            // The inner-local name (from the file, not the override) is what siblings in the same
+            // file reference. Stored AFTER instance creation so circular refs would fail-fast.
+            if (innerName is not null) byName[innerName] = instance;
+
+            if (isFirst) { root = instance; isFirst = false; }
         }
+
+        return root;
+    }
+
+    private static string ResolveScenePath(string resPath)
+    {
+        const string prefix = "res://";
+        if (!resPath.StartsWith(prefix, StringComparison.Ordinal))
+            throw new InvalidDataException($"Scene reference '{resPath}' must start with 'res://'.");
+        return Path.Combine(AppContext.BaseDirectory, resPath[prefix.Length..]);
     }
 
     // ── Type resolution ───────────────────────────────────────────────────────
 
-    private static Node CreateInstance(string typeName)
+    private static Node CreateInstance(string typeName, IServiceProvider? services)
     {
         var type = ResolveType(typeName);
         if (!typeof(Node).IsAssignableFrom(type))
             throw new InvalidDataException($"Type '{typeName}' is not a Node");
 
-        var instance = Activator.CreateInstance(type)
-            ?? throw new InvalidDataException($"Type '{typeName}' has no public parameterless constructor");
+        // ActivatorUtilities resolves ctor arguments from DI when available, falling back to a
+        // parameterless ctor when not. Gives user node classes constructor injection
+        // (IPhysics2D, IInputActionReader<TEnum>, IAudioService, …) without service-locator antipattern.
+        var instance = services is not null
+            ? ActivatorUtilities.CreateInstance(services, type)
+            : Activator.CreateInstance(type)
+                ?? throw new InvalidDataException($"Type '{typeName}' has no public parameterless constructor");
         return (Node)instance;
     }
 
@@ -198,6 +270,9 @@ public static class SceneLoader
         if (underlying == typeof(Vector4) && raw is TomlArray v4) return AsVector4(v4);
         if (underlying == typeof(Quaternion) && raw is TomlArray q) return AsQuaternion(q);
 
+        if (typeof(Shape2D).IsAssignableFrom(underlying) && raw is TomlTable shapeTable)
+            return BuildShape(shapeTable);
+
         if (underlying.IsInstanceOfType(raw)) return raw;
 
         if (underlying.IsEnum)
@@ -211,6 +286,23 @@ public static class SceneLoader
         }
 
         return System.Convert.ChangeType(raw, underlying, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // ── Shape2D (polymorphic via 'kind' discriminator) ───────────────────────
+
+    private static Shape2D BuildShape(TomlTable t)
+    {
+        var kind = GetString(t, "kind") ?? throw new InvalidDataException(
+            "Shape table missing 'kind' (one of: rectangle, circle).");
+        return kind switch
+        {
+            "rectangle" => new RectangleShape2D(t.TryGetValue("half_extents", out var he) && he is TomlArray hea
+                ? AsVector2(hea)
+                : throw new InvalidDataException("rectangle shape missing 'half_extents'.")),
+            "circle"    => new CircleShape2D(t.TryGetValue("radius", out var r) ? ToFloat(r)
+                : throw new InvalidDataException("circle shape missing 'radius'.")),
+            _ => throw new InvalidDataException($"Unknown shape kind '{kind}' (valid: rectangle, circle)."),
+        };
     }
 
     // ── Resource resolution (res:// path OR inline table) ────────────────────

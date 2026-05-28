@@ -1,0 +1,19 @@
+[scene]
+name    = "Wall"
+version = 1
+
+[[node]]
+name = "Root"
+type = "StaticBody2D"
+
+[[node]]
+name   = "Shape"
+parent = "Root"
+type   = "CollisionShape2D"
+properties = { Shape = { kind = "rectangle", half_extents = [8.0, 0.25] }, Restitution = 1.0 }
+
+[[node]]
+name   = "Visual"
+parent = "Root"
+type   = "Sprite2D"
+properties = { Mesh = "res://primitives/quad", Material = { base_color = [0.15, 0.15, 0.2, 1.0] }, Size = [16.0, 0.5] }

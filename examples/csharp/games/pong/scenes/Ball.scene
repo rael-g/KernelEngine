@@ -1,0 +1,31 @@
+[scene]
+name    = "Ball"
+version = 1
+
+[[node]]
+name = "Root"
+type = "Pong.Ball"
+
+[[node]]
+name   = "Shape"
+parent = "Root"
+type   = "CollisionShape2D"
+properties = { Shape = { kind = "rectangle", half_extents = [0.18, 0.18] }, Restitution = 1.0, Friction = 0.0 }
+
+[[node]]
+name   = "Visual"
+parent = "Root"
+type   = "Sprite2D"
+properties = { Mesh = "res://primitives/quad", Material = { base_color = [0.95, 0.95, 0.95, 1.0] }, Size = [0.36, 0.36] }
+
+[[node]]
+name   = "HitSound"
+parent = "Root"
+type   = "AudioPlayer"
+properties = { Path = "assets/sounds/hit.wav", Volume = 0.5 }
+
+[[node]]
+name   = "ScoreSound"
+parent = "Root"
+type   = "AudioPlayer"
+properties = { Path = "assets/sounds/score.wav", Volume = 0.6 }

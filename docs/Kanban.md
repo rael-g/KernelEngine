@@ -63,6 +63,19 @@ Touchy and have ripple effects. Pin specs first (already done); implementation a
 | C1 | **Physics node layer (`CollisionBody2D` + subtypes, auto-step, collision events)** | Pong's `PhysicsStepper` + manual body sync + hand-rolled hit detection are ergonomic debt. Spec pinned in chapter 24. Migrating Pong to it cuts the example by ~half. | [Chapter 24](Reference/24%20-%20Physics%20Node%20Layer.md) |
 | C2 | **UI primitives — text rendering + minimal layout** | Pong's score is in console. No shipping game ships without on-screen text. Likely ImGui first (dev tooling), then a gameplay UI library (RmlUi or similar). | no chapter yet |
 
+### Tier P — "Pong journey" continuation (post-cleanup-slice, before parking-lot)
+
+After the F1/F2/cleanup slices, Pong is **scene-driven** end-to-end (4 sub-scenes + Project-driven config + auto-load action map + DI-injected nodes). The remaining items below take Pong from "works" to "shippable example", and unlock the workflow we actually want for users.
+
+| # | Item | Why | Status |
+|---|---|---|---|
+| P1 | **UI primitives — text, layout, ImGui-first dev tooling** | Pong's score lives in `Console.WriteLine`. No real game ships without on-screen text. Replaces and supersedes [C2]. | new |
+| P2 | **CLI editor — `ke add reference X`, `ke register defaultscene Y`, `ke register inputaction Z`** | Every change we made to `Project`, `*.scene`, `actions.input` was hand-edited TOML. The CLI must own those mutations (same API the future GUI editor will use) so users never touch them directly. Builds on [Chapter 18](Reference/18%20-%20Editor%20Lib%20API.md) / [Chapter 19](Reference/19%20-%20CLI%20%26%20Agent%20Surface.md). | new |
+| P3 | **Auto-generated `Program.cs`** | Today, adding a plugin requires the user to edit `Program.cs` *and* `csproj`. The CLI should drive both: `ke add reference KernelEngine.Physics.Box2D` adds the `<ProjectReference>` *and* the `.AddBox2D()` line in `Program.cs`. User only writes gameplay scripts (Paddle.cs, Ball.cs); the bootstrap is generated from `Project` + reference manifest. | new |
+| P4 | **Runtime fixture removal** | `IPhysics2D` lacks `RemoveFixture`; `CollisionShape2D` is add-only. Blocks "destroy a child collider at runtime" use cases (destructible armor, swap collision profile). Add the kernel method + wire `CollisionShape2D.OnDestroy`. | [Chapter 24 §8](Reference/24%20-%20Physics%20Node%20Layer.md#8-what-this-chapter-is-not) |
+
+Order: **P1 → P2 → P3**, then P4 as needed. P3 depends on P2 (CLI must exist first). P4 is independent.
+
 ### Parking lot — explicitly post-beta
 
 - Visual editor GUI (M4) — chapter 18 prepares the lib; the GUI itself waits.

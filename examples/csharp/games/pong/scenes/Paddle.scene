@@ -1,0 +1,19 @@
+[scene]
+name    = "Paddle"
+version = 1
+
+[[node]]
+name = "Root"
+type = "Pong.Paddle"
+
+[[node]]
+name   = "Shape"
+parent = "Root"
+type   = "CollisionShape2D"
+properties = { Shape = { kind = "rectangle", half_extents = [0.15, 0.9] }, Restitution = 1.0 }
+
+[[node]]
+name   = "Visual"
+parent = "Root"
+type   = "Sprite2D"
+properties = { Mesh = "res://primitives/quad", Material = { base_color = [0.95, 0.95, 0.95, 1.0] }, Size = [0.3, 1.8] }
