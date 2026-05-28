@@ -76,6 +76,36 @@ After the F1/F2/cleanup slices, Pong is **scene-driven** end-to-end (4 sub-scene
 
 Order: **P1 → P2 → P3**, then P4 as needed. P3 depends on P2 (CLI must exist first). P4 is independent.
 
+### Tier S — Scripting ABI / language-agnostic node system (post-beta replatforming)
+
+> **Owner vision, captured 2026-05-28.** Original microkernel goal: `C kernel = building blocks`, `any language = Built Blocks (framework)`, `C# = personal sugar helper` — no language privileged. Reality during prototyping: `KernelEngine.Framework` (C#) absorbed `Node`/`Tree`/lifecycle/`SceneLoader`/action layer / Camera2D/Sprite2D/CollisionBody2D/AudioPlayer; C# became implicitly special. **Acceptable for now** because prototyping speed mattered more than ABI purity, but the drift gets paid down once the engine is shippable-game-ready.
+>
+> **Trigger**: only start after Tier P (UI + CLI + auto-Program) AND the deferred render-pipeline items (clustered forward shading [F.RC3], render-graph [F.RC2], etc. — see Parking lot) are done. Engine must be a viable game-building tool first.
+>
+> **Goal**: turn the C kernel into the actual scripting ABI. Each language (C#, Lua, Python, …) becomes a binding of equal status; the C# binding becomes one option of many, not the canonical surface.
+
+**Architectural shifts required:**
+
+| # | Item | Effort estimate |
+|---|---|---|
+| S1 | Expand `ke_script_component` with every lifecycle hook (`on_awake`/`on_start`/`on_update`/`on_late_update`/`on_destroy`/`on_input`/`on_input_action`) — today only `on_start`/`on_update`. | 1 week |
+| S2 | Add `ke_node_type` registry + `set_property(entity, key, variant)` + `ke_variant` type to the C kernel — lets any language register a node type by string name and have the kernel populate properties without knowing the language's field model. | 2-3 weeks |
+| S3 | Move SceneLoader from C# into the C kernel — TOML parser in C, scene instantiation via the node-type registry, callbacks to the active language binding. Today's C# SceneLoader becomes a thin wrapper. | 2-3 weeks |
+| S4 | Move input action layer from C# into the C kernel — `.input` parser + dispatcher in C, callbacks for `on_input_action`. | 2 weeks |
+| S5 | Refactor `KernelEngine.Framework` (C#) into a binding on top of the new ABI without ergonomic regression — Camera2D/Sprite2D/etc. stay as ergonomic C# wrappers, but they're now wrappers over ABI-defined primitives, not the source of truth. | 3-4 weeks |
+| S6 | Validate by adding a second binding — **Lua (via LuaJIT or NLua)** is the recommended choice: small runtime (~500KB), trivial FFI, no GIL, suits embedding. Port Pong fully to Lua. | 4-6 weeks |
+| S7 | ABI documentation + stabilization (once published, refactoring freedom shrinks; commit only after the spike validates the shape). | 1-2 weeks |
+
+**Total: ~4-6 months focused.** Major architectural replatforming.
+
+**Spike first (2-3 weeks) before committing the full project:** expand only `ke_script_component` (S1 lite) + write a minimal Lua binding that overrides `on_start`/`on_update` on a single class. Don't move SceneLoader or action layer yet. Just prove cross-language dispatch works with acceptable latency. Then decide.
+
+**Open design questions to resolve during the spike:**
+- Resources (`Mesh`/`Material`/`Sound`) cross-language: ref-counted C# class today; Lua userdata with `__gc`; Python ctypes-managed. ABI needs neutral handle + lifecycle.
+- DI cross-language: `ActivatorUtilities` is .NET-specific. Each binding needs its own DI resolution from ctor signature in its language.
+- Generics + enums: `IInputActionReader<TEnum>` is .NET-only. ABI must be non-generic (lookup by string-name); each binding adds typed overlay on top.
+- Hot-reload: now becomes interesting per-binding; kernel needs "destroy all scripts of this type, reinstantiate with new factory".
+
 ### Parking lot — explicitly post-beta
 
 - Visual editor GUI (M4) — chapter 18 prepares the lib; the GUI itself waits.
