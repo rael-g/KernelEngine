@@ -17,6 +17,8 @@ extern "C"
 #endif
 
     struct ke_frame_packet;
+    struct ke_render_graph;
+    struct ke_allocator;
 
 #define KE_ID_RENDER "ke_render"
 
@@ -154,6 +156,12 @@ extern "C"
         /// @brief Retrieves implementation-specific fatal error details (e.g., GPU crash reason).
         ///        Returns a pointer to a string that is valid until the next renderer call.
         const char *(*get_last_fatal_error)(struct ke_render *self);
+
+        /// @brief Creates a render graph bound to this renderer. The backend implements the
+        ///        graph executor (DAG sort, transient resource pool, view-id assignment); the
+        ///        kernel only declares the contract (see kernel/render/render_graph.h).
+        ///        Callers usually use the @c ke_render_graph_create convenience wrapper.
+        struct ke_render_graph *(*create_render_graph)(struct ke_render *self, struct ke_allocator *allocator);
 
     } ke_render;
 

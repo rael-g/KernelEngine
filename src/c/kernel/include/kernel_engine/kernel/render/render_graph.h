@@ -4,6 +4,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/render/render.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -224,10 +225,15 @@ extern "C"
         ke_result (*execute)(struct ke_render_graph *self, const struct ke_frame_packet *packet);
     } ke_render_graph;
 
-    /// @brief Creates a graph bound to @c renderer. The graph holds a borrowed
-    /// reference to the renderer — caller keeps ownership and must outlive it.
-    /// Returns NULL on allocation failure.
-    ke_render_graph *ke_render_graph_create(struct ke_render *renderer, ke_allocator *allocator);
+    /// @brief Convenience wrapper that delegates to @c renderer->create_render_graph.
+    /// The graph holds a borrowed reference to the renderer — caller keeps ownership
+    /// and must outlive it. Returns NULL when the renderer does not implement the
+    /// graph contract or on allocation failure.
+    static inline ke_render_graph *ke_render_graph_create(struct ke_render *renderer, ke_allocator *allocator)
+    {
+        if (!renderer || !renderer->create_render_graph) return NULL;
+        return renderer->create_render_graph(renderer, allocator);
+    }
 
 #ifdef __cplusplus
 }
