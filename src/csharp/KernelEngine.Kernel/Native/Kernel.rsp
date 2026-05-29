@@ -31,6 +31,7 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/input/input.h
 ../../../c/kernel/include/kernel_engine/kernel/engine/frame_packet.h
 ../../../c/kernel/include/kernel_engine/kernel/render/render.h
+../../../c/kernel/include/kernel_engine/kernel/render/render_graph.h
 ../../../c/kernel/include/kernel_engine/kernel/render/shader_compiler.h
 ../../../c/kernel/include/kernel_engine/kernel/task_scheduler/task_scheduler.h
 ../../../c/kernel/include/kernel_engine/kernel/threading/thread.h
