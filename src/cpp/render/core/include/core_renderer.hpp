@@ -100,6 +100,11 @@ private:
     /// only pixels the scene left at the far plane.
     ke_result ExecuteSkyboxPass(const struct ke_frame_packet* packet);
 
+    /// @brief SSAO compose pass (Phase 3 Step D). No-op until
+    /// PostProcessPipeline::SetupSsao stops being a stub (OBS.4) — extracted
+    /// here so the future fix lands inside the graph instead of the legacy chain.
+    ke_result ExecuteSsaoPass(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;

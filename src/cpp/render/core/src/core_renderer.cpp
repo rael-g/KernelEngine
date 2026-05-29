@@ -424,6 +424,12 @@ ke_result CoreRenderer::SetupRenderGraph()
         if (rc != KE_OK) return rc;
     }
 
+    // Logical "scene ambient occlusion buffer". Stays imported (sentinel) until
+    // OBS.4 ships an actual SSAO output and Phase 5 hands resource ownership over.
+    rc = graph_->import_texture(graph_, "ssao_buffer",
+                                ke_texture_handle{ UINT32_MAX });
+    if (rc != KE_OK) return rc;
+
     // skybox.composite — Step C. Reads backbuffer (which scene writes) to be
     // ordered after the scene pass; writes backbuffer_post_skybox as the
     // logical handoff to later post-fx passes (Steps D-H).
@@ -445,6 +451,34 @@ ke_result CoreRenderer::SetupRenderGraph()
             auto* self = static_cast<CoreRenderer*>(user);
             const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
             if (self && pkt) self->ExecuteSkyboxPass(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
+
+    // ssao.compose — Step D. Reads backbuffer_post_skybox (scene+sky already
+    // rendered); writes ssao_buffer for future scene shader sampling. No-op
+    // body until OBS.4 lands SetupSsao; the DAG node still exists so the fix
+    // slots in without touching the legacy chain.
+    {
+        ke_resource_ref reads[] = {
+            { "backbuffer_post_skybox", KE_ACCESS_SAMPLED }
+        };
+        ke_resource_ref writes[] = {
+            { "ssao_buffer", KE_ACCESS_COLOR_ATTACHMENT }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "ssao.compose";
+        pp.type = KE_PASS_FULLSCREEN;
+        pp.reads = reads;
+        pp.reads_count = 1;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->ExecuteSsaoPass(pkt);
         };
         pp.user = this;
         rc = graph_->add_pass(graph_, &pp);
@@ -488,6 +522,21 @@ ke_result CoreRenderer::ExecuteSkyboxPass(const struct ke_frame_packet* packet)
                            skybox_program_,
                            geometry_.skybox_vb, geometry_.skybox_ib,
                            textures_.skybox_sampler_uniform, textures_.skybox_tint_uniform);
+    return KE_OK;
+}
+
+ke_result CoreRenderer::ExecuteSsaoPass(const struct ke_frame_packet*)
+{
+    if (!ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    // Guard mirrors the legacy chain: only do work when SSAO is both toggled
+    // on AND its g-buffer was actually built (which won't happen until OBS.4).
+    if (!post_process_.IsSsaoEnabled() || post_process_.GetGbufFb() == kGpuInvalidHandle)
+        return KE_OK;
+
+    ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Ssao), post_process_.GetGbufFb());
+    ctx_.gpu->SetViewClear(Id(ViewId::Ssao), GpuClearFlags::Color | GpuClearFlags::Depth, 0x00000000, 1.0f, 0);
+    ctx_.gpu->SetViewRect(Id(ViewId::Ssao), 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
+    post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
     return KE_OK;
 }
 
@@ -582,14 +631,7 @@ ke_result CoreRenderer::SubmitPacketLegacy(const struct ke_frame_packet* packet)
         clustered_.UpdateClusterBounds(ctx_);
         clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
 
-        // SSAO pass.
-        if (post_process_.IsSsaoEnabled() && post_process_.GetGbufFb() != kGpuInvalidHandle)
-        {
-            ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Ssao), post_process_.GetGbufFb());
-            ctx_.gpu->SetViewClear(Id(ViewId::Ssao), GpuClearFlags::Color | GpuClearFlags::Depth, 0x00000000, 1.0f, 0);
-            ctx_.gpu->SetViewRect(Id(ViewId::Ssao), 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
-            post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
-        }
+        // SSAO pass extracted in Step D — ExecuteSsaoPass via graph node "ssao.compose".
 
         // Post-process / tonemap: only redirect view 1 to the HDR FB when tonemap is
         // actually enabled. Otherwise view 1 must go straight to the backbuffer — if we
