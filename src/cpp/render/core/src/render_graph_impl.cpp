@@ -323,16 +323,23 @@ ke_result RenderGraphImpl::EnsureResourceMaterialized(Resource& r)
             return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_INVALID_ARGUMENT,
                 "RenderGraph.Compile",
                 "Storage buffer resource requires non-zero element_count and element_stride.");
-        // bgfx represents compute-rw storage buffers as dynamic index buffers
-        // tagged BGFX_BUFFER_COMPUTE_READ_WRITE (0x0c00 when truncated to the
-        // 16-bit flag word). Element stride is encoded by the buffer type —
-        // index32 = 4 bytes; tighter packing comes when the contract adds a
-        // dedicated storage-buffer creation path.
-        const uint16_t kComputeReadWrite = 0x0C00;
-        uint32_t total_words = r.desc.element_count;
-        if (r.desc.element_stride > 4)
-            total_words = (r.desc.element_count * r.desc.element_stride + 3) / 4;
-        r.storage_buffer = gpu->CreateDynamicIndexBuffer(total_words, kComputeReadWrite);
+        // bgfx flags layout:
+        //   COMPUTE_FORMAT bits   = 0x000F  (e.g. 32x1 = 0x0007, 32x4 = 0x000B)
+        //   COMPUTE_TYPE bits     = 0x0030  (UINT = 0x0020, FLOAT = 0x0030)
+        //   COMPUTE_READ          = 0x0100
+        //   COMPUTE_WRITE         = 0x0200
+        //   COMPUTE_READ_WRITE    = 0x0300  (= READ | WRITE)
+        // Phase 4.1 ships the simplest case: a generic uint32 read/write buffer
+        // (format 32x1 / type UINT). Buffers needing vec4 layout (cluster bounds,
+        // light data) get the right flags by callers staging through dedicated
+        // descriptors in Phase 4.2.
+        const uint16_t kFmt32x1   = 0x0007;
+        const uint16_t kTypeUint  = 0x0020;
+        const uint16_t kCompRW    = 0x0300;
+        const uint16_t flags = kFmt32x1 | kTypeUint | kCompRW;
+        // Convert byte size into 32-bit-element count for the index32 buffer.
+        const uint32_t total_words = (r.desc.element_count * r.desc.element_stride + 3) / 4;
+        r.storage_buffer = gpu->CreateDynamicIndexBuffer(total_words, flags);
         r.owns_storage_buffer = r.storage_buffer != kGpuInvalidHandle;
         return r.storage_buffer != kGpuInvalidHandle ? KE_OK : KE_ERROR_RENDER;
     }
