@@ -105,6 +105,13 @@ private:
     /// here so the future fix lands inside the graph instead of the legacy chain.
     ke_result ExecuteSsaoPass(const struct ke_frame_packet* packet);
 
+    /// @brief HDR post-fx chain (bright-pass + 2-tap blur + ACES tonemap) plus
+    /// the scene-FB redirect when tonemap is disabled (Phase 3 Step E). The
+    /// chain is bundled because @c PostProcessPipeline::SubmitPostProcess
+    /// already runs all three views in one call; gating them with one toggle
+    /// matches the legacy semantics 1:1.
+    ke_result ExecutePostFxPass(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;

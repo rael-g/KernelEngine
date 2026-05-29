@@ -429,6 +429,9 @@ ke_result CoreRenderer::SetupRenderGraph()
     rc = graph_->import_texture(graph_, "ssao_buffer",
                                 ke_texture_handle{ UINT32_MAX });
     if (rc != KE_OK) return rc;
+    rc = graph_->import_texture(graph_, "backbuffer_final",
+                                ke_texture_handle{ UINT32_MAX });
+    if (rc != KE_OK) return rc;
 
     // skybox.composite — Step C. Reads backbuffer (which scene writes) to be
     // ordered after the scene pass; writes backbuffer_post_skybox as the
@@ -479,6 +482,35 @@ ke_result CoreRenderer::SetupRenderGraph()
             auto* self = static_cast<CoreRenderer*>(user);
             const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
             if (self && pkt) self->ExecuteSsaoPass(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
+
+    // postfx.composite — Step E. Bundles bright-pass / blur×2 / ACES tonemap
+    // (PostProcessPipeline::SubmitPostProcess runs them as a unit, gated by the
+    // same toggle). Reads ssao_buffer (orders after ssao) + backbuffer_post_skybox
+    // (orders after skybox) and writes backbuffer_final.
+    {
+        ke_resource_ref reads[] = {
+            { "backbuffer_post_skybox", KE_ACCESS_SAMPLED },
+            { "ssao_buffer",            KE_ACCESS_SAMPLED },
+        };
+        ke_resource_ref writes[] = {
+            { "backbuffer_final", KE_ACCESS_COLOR_ATTACHMENT }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "postfx.composite";
+        pp.type = KE_PASS_FULLSCREEN;
+        pp.reads = reads;
+        pp.reads_count = 2;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->ExecutePostFxPass(pkt);
         };
         pp.user = this;
         rc = graph_->add_pass(graph_, &pp);
@@ -537,6 +569,28 @@ ke_result CoreRenderer::ExecuteSsaoPass(const struct ke_frame_packet*)
     ctx_.gpu->SetViewClear(Id(ViewId::Ssao), GpuClearFlags::Color | GpuClearFlags::Depth, 0x00000000, 1.0f, 0);
     ctx_.gpu->SetViewRect(Id(ViewId::Ssao), 0, 0, (uint16_t)ctx_.view_w, (uint16_t)ctx_.view_h);
     post_process_.SubmitSsao(ctx_, geometry_, textures_, ssao_program_, ssao_blur_program_);
+    return KE_OK;
+}
+
+ke_result CoreRenderer::ExecutePostFxPass(const struct ke_frame_packet*)
+{
+    if (!ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+
+    // When tonemap is on the scene view's FB stays redirected to the HDR target
+    // and the post-fx chain reads from it + writes to backbuffer. When off, the
+    // scene's view FB must point at the backbuffer directly so the next frame's
+    // scene draws land where the user can see them (otherwise the screen shows
+    // last frame's garbage). This branch matches the original legacy semantics.
+    if (post_process_.IsTonemapEnabled() && post_process_.GetHdrFb() != kGpuInvalidHandle)
+    {
+        ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Scene), post_process_.GetHdrFb());
+        post_process_.SubmitPostProcess(ctx_, geometry_, textures_,
+                                        bright_pass_program_, blur_program_, tonemap_program_);
+    }
+    else
+    {
+        ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Scene), kGpuInvalidHandle);
+    }
     return KE_OK;
 }
 
@@ -632,21 +686,7 @@ ke_result CoreRenderer::SubmitPacketLegacy(const struct ke_frame_packet* packet)
         clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
 
         // SSAO pass extracted in Step D — ExecuteSsaoPass via graph node "ssao.compose".
-
-        // Post-process / tonemap: only redirect view 1 to the HDR FB when tonemap is
-        // actually enabled. Otherwise view 1 must go straight to the backbuffer — if we
-        // redirect to HDR FB without running the tonemap composite, the backbuffer never
-        // receives the scene and the user sees garbage from previous frame state.
-        if (post_process_.IsTonemapEnabled() && post_process_.GetHdrFb() != kGpuInvalidHandle)
-        {
-            ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Scene), post_process_.GetHdrFb());
-            post_process_.SubmitPostProcess(ctx_, geometry_, textures_,
-                                            bright_pass_program_, blur_program_, tonemap_program_);
-        }
-        else
-        {
-            ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Scene), kGpuInvalidHandle);
-        }
+        // Bloom + tonemap extracted in Step E — ExecutePostFxPass via "postfx.composite".
 
         return KE_OK;
     } catch (const BgfxFatalException& e) {
