@@ -14,6 +14,7 @@ public sealed class Ball : DynamicBody2D
 
     private AudioPlayer? _hit;
     private AudioPlayer? _score;
+    private Scoreboard? _board;
     private int  _scoreLeft, _scoreRight;
     private bool _awaitingLaunch = true;
     private Vector2 _lastVelocity;
@@ -23,7 +24,8 @@ public sealed class Ball : DynamicBody2D
         base.Start();
         _hit   = GetNode<AudioPlayer>("HitSound");
         _score = GetNode<AudioPlayer>("ScoreSound");
-        Console.WriteLine("Pong ready. Press Space to launch the ball.");
+        _board = GetNode<Scoreboard>("../Scoreboard");
+        _board?.ShowHint("Press Space to launch");
     }
 
     protected override void OnInputAction(ref InputActionEvent evt)
@@ -52,6 +54,7 @@ public sealed class Ball : DynamicBody2D
     void Launch()
     {
         _awaitingLaunch = false;
+        _board?.HideHint();
         float dirX = (_scoreLeft + _scoreRight) % 2 == 0 ? 1 : -1;
         float dirY = (Random.Shared.NextSingle() - 0.5f) * 0.6f;
         LinearVelocity = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
@@ -61,11 +64,11 @@ public sealed class Ball : DynamicBody2D
     void Score(bool left)
     {
         if (left) _scoreLeft++; else _scoreRight++;
-        Console.WriteLine($"SCORE!  Left {_scoreLeft}  —  Right {_scoreRight}");
+        _board?.SetScore(_scoreLeft, _scoreRight);
         _score?.Play();
         Teleport(Vector2.Zero);
         LinearVelocity = Vector2.Zero;
         _awaitingLaunch = true;
-        Console.WriteLine("Press Space to launch again.");
+        _board?.ShowHint("Press Space to launch");
     }
 }

@@ -30,3 +30,32 @@ properties = { Position = [7.5, 0.0], MoveAction = "PaddleRightMove" }
 [[node]]
 name  = "Ball"
 scene = "res://scenes/Ball.scene"
+
+# ── Scoreboard ────────────────────────────────────────────────────────────────
+# Owns 3 child Labels (Left / Right / Hint). Scoreboard.Start loads the font once and
+# applies it to all three; Ball.Start finds the Scoreboard by path and updates text via
+# SetScore / HideHint when the ball crosses the goal lines.
+[[node]]
+name = "Scoreboard"
+type = "Pong.Scoreboard"
+properties = { FontPath = "C:/Windows/Fonts/arial.ttf", FontSize = 56.0 }
+
+# Walls at world y=±4.5 occupy ~14-41px from the top/bottom edges of the 960×540 window
+# (viewport is 10 world units tall). Label offsets stay clear of that band.
+[[node]]
+name   = "Left"
+parent = "Scoreboard"
+type   = "Label"
+properties = { Text = "0", Anchor = [0.30, 0.0], Offset = [0.0, 60.0], Color = [0.95, 0.95, 0.95, 1.0] }
+
+[[node]]
+name   = "Right"
+parent = "Scoreboard"
+type   = "Label"
+properties = { Text = "0", Anchor = [0.70, 0.0], Offset = [0.0, 60.0], Color = [0.95, 0.95, 0.95, 1.0] }
+
+[[node]]
+name   = "Hint"
+parent = "Scoreboard"
+type   = "Label"
+properties = { Text = "", Anchor = [0.5, 1.0], Offset = [0.0, -80.0], Color = [0.7, 0.7, 0.7, 1.0] }

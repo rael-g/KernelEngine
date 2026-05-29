@@ -100,6 +100,17 @@ public class Application : IDisposable
 
     public void Run(IServiceCollection serviceCollection)
     {
+        // Register late-bound singletons that Application creates during sim init (after the
+        // ServiceProvider is built). The factories close over `this` and resolve to the live
+        // instance — so node ctors that take Assets/ResourceManager via DI (e.g. Pong's
+        // Scoreboard) just work without manual wiring.
+        serviceCollection.AddSingleton(_ => Assets
+            ?? throw new InvalidOperationException(
+                "Assets is null. Either no asset loader is registered (.AddStbImageLoader / .AddAssimpAssetLoader / .AddTextStbTrueType) or the service was resolved before sim init reached OnReady."));
+        serviceCollection.AddSingleton(_ => Resources
+            ?? throw new InvalidOperationException(
+                "ResourceManager is null — resolved before sim init reached OnReady."));
+
         Services = serviceCollection.BuildServiceProvider();
 
         _kernelFactory = Services.GetRequiredService<IKernelFactory>();

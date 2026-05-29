@@ -4,6 +4,7 @@ using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Bgfx;
+using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,7 +28,8 @@ var services = new ServiceCollection()
     .AddBgfxRenderer()
     .AddBox2D()
     .AddMiniAudio()
-    .AddAudioFramework();
+    .AddAudioFramework()
+    .AddTextStbTrueType();
 
 using var app = new Application();
 app.Run(services);
