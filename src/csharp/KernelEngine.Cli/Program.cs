@@ -46,15 +46,61 @@ listModulesCmd.SetAction(parseResult =>
 
 var listCmd = new Command("list", "Enumerate entities matching a filter.") { listModulesCmd };
 
+// ── set config <path> <value> [--type ...] ──────────────────────────────────
+var setConfigPathArg  = new Argument<string>("path")  { Description = "Dotted TOML path inside Project (e.g. 'runtime.window.width')." };
+var setConfigValueArg = new Argument<string>("value") { Description = "Value as a string; auto-coerced to bool/int/float when it parses." };
+var setConfigTypeOpt  = new Option<ScalarParse.ScalarType>("--type") { Description = "Force scalar type (overrides auto-detect).", DefaultValueFactory = _ => ScalarParse.ScalarType.Auto };
+var setConfigCmd = new Command("config", "Set a scalar value in the project Project file.")
+{
+    setConfigPathArg, setConfigValueArg, setConfigTypeOpt,
+};
+setConfigCmd.SetAction(parseResult =>
+{
+    var path  = parseResult.GetValue(setConfigPathArg)!;
+    var value = parseResult.GetValue(setConfigValueArg)!;
+    var type  = parseResult.GetValue(setConfigTypeOpt);
+    var projectArg = parseResult.GetValue(projectOpt);
+    return Run(() => Commands.SetConfig(path, value, type, projectArg));
+});
+
+var setCmd = new Command("set", "Mutate an entity in the project (config, …).") { setConfigCmd };
+
+// ── get config <path> ───────────────────────────────────────────────────────
+var getConfigPathArg = new Argument<string>("path") { Description = "Dotted TOML path inside Project." };
+var getConfigCmd = new Command("config", "Read a scalar value from the project Project file (exit 2 when missing).")
+{
+    getConfigPathArg,
+};
+getConfigCmd.SetAction(parseResult =>
+{
+    var path = parseResult.GetValue(getConfigPathArg)!;
+    var projectArg = parseResult.GetValue(projectOpt);
+    return RunCode(() => Commands.GetConfig(path, projectArg));
+});
+
+var getCmd = new Command("get", "Read an entity from the project (config, …).") { getConfigCmd };
+
 root.Subcommands.Add(addCmd);
 root.Subcommands.Add(removeCmd);
 root.Subcommands.Add(listCmd);
+root.Subcommands.Add(setCmd);
+root.Subcommands.Add(getCmd);
 
 return await root.Parse(args).InvokeAsync();
 
 static int Run(Action body)
 {
     try { body(); return 0; }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"error: {ex.Message}");
+        return 1;
+    }
+}
+
+static int RunCode(Func<int> body)
+{
+    try { return body(); }
     catch (Exception ex)
     {
         Console.Error.WriteLine($"error: {ex.Message}");

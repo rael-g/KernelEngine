@@ -77,6 +77,36 @@ public static class Commands
         Console.WriteLine($"Removed module '{id}'.");
     }
 
+    public static void SetConfig(string path, string value, ScalarParse.ScalarType type, string? projectDir)
+    {
+        var ctx = ProjectContext.Discover(projectDir);
+        var manifest = ProjectManifest.Load(ctx.ProjectFilePath);
+        var parsed = ScalarParse.Parse(value, type);
+        manifest.SetConfigValue(path, parsed);
+        manifest.Save();
+        Console.WriteLine($"Set {path} = {Format(parsed)}");
+    }
+
+    /// <summary>Returns 0 on hit, 2 on miss (script-friendly: lets `if ! ke get …` branch cleanly).</summary>
+    public static int GetConfig(string path, string? projectDir)
+    {
+        var ctx = ProjectContext.Discover(projectDir);
+        var manifest = ProjectManifest.Load(ctx.ProjectFilePath);
+        var v = manifest.GetConfigValue(path);
+        if (v is null) return 2;
+        Console.WriteLine(Format(v));
+        return 0;
+    }
+
+    private static string Format(object value) => value switch
+    {
+        bool b   => b ? "true" : "false",
+        double d => d.ToString("G", System.Globalization.CultureInfo.InvariantCulture),
+        long l   => l.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        string s => s,
+        _        => value.ToString() ?? "",
+    };
+
     public static void ListModules(string? projectDir)
     {
         var ctx     = ProjectContext.Discover(projectDir);
