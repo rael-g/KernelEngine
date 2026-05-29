@@ -71,21 +71,9 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     // Pack + upload point/spot lights into u_pointLights/u_spotLights + u_lightCounts (forward path).
     lighting.UploadLights(ctx);
 
-    // ── 2. Shadow Pass ───────────────────────────────────────────────────────
-    if (ke_shadow_map_is_valid(packet.shadow.map_handle))
-    {
-        shadows.BeginShadowPass(ctx, packet.shadow.map_handle,
-                                &packet.shadow.light_view, &packet.shadow.light_proj);
-
-        for (uint32_t i = 0; i < packet.shadow_draw_count; ++i)
-        {
-            const auto& cmd = packet.shadow_draw_commands[i];
-            shadows.SubmitMeshShadow(ctx, geometry, shadow_program,
-                                     cmd.mesh_handle, &cmd.transform);
-        }
-
-        shadows.EndShadowPass(ctx);
-    }
+    // Shadow pass was here — extracted into CoreRenderer::ExecuteShadowPass and
+    // registered as its own render-graph node. The legacy_remaining pass now
+    // declares a read on "shadow_map" so the DAG runs the shadow pass first.
 
     // ── 3. Scene View Transform ──────────────────────────────────────────────
     ctx.gpu->SetViewTransform(Id(ViewId::Scene), packet.camera.view.m, packet.camera.proj.m);

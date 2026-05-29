@@ -359,33 +359,82 @@ ke_result CoreRenderer::SetupRenderGraph()
         return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_OUT_OF_MEMORY,
             "SetupRenderGraph", "create_render_graph returned NULL");
 
-    // The legacy chain writes to the default backbuffer (each view sets
-    // its own framebuffer to kGpuInvalidHandle). Import "backbuffer" so the
-    // pass has something to declare as a write — the kernel handle is the
-    // None sentinel because no TextureManager entry exists for the screen.
+    // Imported resources: name registrations the DAG uses to order passes.
+    // The actual GPU allocations stay with the pipeline managers (ShadowPipeline
+    // owns shadow_map's FB, the device owns the backbuffer) until Phase 5 hands
+    // resource ownership to the graph.
     ke_result rc = graph_->import_texture(graph_, "backbuffer",
                                           ke_texture_handle{ UINT32_MAX });
     if (rc != KE_OK) return rc;
-
-    ke_resource_ref writes[] = {
-        { "backbuffer", KE_ACCESS_COLOR_ATTACHMENT }
-    };
-    ke_render_pass_params params{};
-    params.name = "scene.legacy_monolithic";
-    params.type = KE_PASS_GEOMETRY;
-    params.writes = writes;
-    params.writes_count = 1;
-    params.record = [](ke_render_pass_ctx* ctx, void* user) {
-        auto* self = static_cast<CoreRenderer*>(user);
-        const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
-        if (self && pkt) self->SubmitPacketLegacy(pkt);
-    };
-    params.user = this;
-
-    rc = graph_->add_pass(graph_, &params);
+    rc = graph_->import_texture(graph_, "shadow_map",
+                                ke_texture_handle{ UINT32_MAX });
     if (rc != KE_OK) return rc;
 
+    // shadow.directional — extracted in Step B. Writes shadow_map so any pass
+    // that reads it (the legacy_remaining scene pass) is forced behind us.
+    {
+        ke_resource_ref writes[] = {
+            { "shadow_map", KE_ACCESS_DEPTH_ATTACHMENT }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "shadow.directional";
+        pp.type = KE_PASS_GEOMETRY;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->ExecuteShadowPass(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
+
+    // scene.legacy_remaining — everything still inside the legacy chain (main
+    // scene + skybox + ssao + post-fx + ui). Reads shadow_map so the DAG
+    // schedules shadow.directional first; writes backbuffer as the final sink.
+    {
+        ke_resource_ref reads[] = {
+            { "shadow_map", KE_ACCESS_SAMPLED }
+        };
+        ke_resource_ref writes[] = {
+            { "backbuffer", KE_ACCESS_COLOR_ATTACHMENT }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "scene.legacy_remaining";
+        pp.type = KE_PASS_GEOMETRY;
+        pp.reads = reads;
+        pp.reads_count = 1;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->SubmitPacketLegacy(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
+
     return graph_->compile(graph_);
+}
+
+ke_result CoreRenderer::ExecuteShadowPass(const struct ke_frame_packet* packet)
+{
+    if (!packet || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (!ke_shadow_map_is_valid(packet->shadow.map_handle)) return KE_OK;
+
+    shadows_.BeginShadowPass(ctx_, packet->shadow.map_handle,
+                             &packet->shadow.light_view, &packet->shadow.light_proj);
+    for (uint32_t i = 0; i < packet->shadow_draw_count; ++i) {
+        const auto& cmd = packet->shadow_draw_commands[i];
+        shadows_.SubmitMeshShadow(ctx_, geometry_, shadow_program_,
+                                  cmd.mesh_handle, &cmd.transform);
+    }
+    shadows_.EndShadowPass(ctx_);
+    return KE_OK;
 }
 
 ke_result CoreRenderer::OnShutdown()

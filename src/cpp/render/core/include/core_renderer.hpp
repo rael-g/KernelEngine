@@ -89,6 +89,11 @@ private:
     /// chain. Called from the legacy monolithic pass's record callback.
     ke_result SubmitPacketLegacy(const struct ke_frame_packet* packet);
 
+    /// @brief Runs the directional shadow depth pass — split out of the
+    /// monolithic pass in Phase 3 Step B. Skips silently when the packet
+    /// carries no valid shadow map handle.
+    ke_result ExecuteShadowPass(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;
