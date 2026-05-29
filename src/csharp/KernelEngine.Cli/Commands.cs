@@ -140,6 +140,51 @@ public static class Commands
         return true;
     }
 
+    /// <summary>
+    /// Scaffolds a new game project: shells out to <c>dotnet new sln</c> + <c>dotnet new console</c>
+    /// then overwrites <c>Program.cs</c> with the empty-services ke template and writes a minimal
+    /// <c>Project</c> file. Module wiring is left to <c>ke add module</c> so this command stays
+    /// focused on directory + sln + csproj layout — the same way <c>dotnet new</c> stays focused on
+    /// "give me files I can build".
+    /// </summary>
+    public static void NewGame(string name, string? targetParentDir)
+    {
+        if (!IsValidIdentifier(name))
+            throw new ArgumentException(
+                $"'{name}' is not a valid project name (PascalCase, alphanumeric + underscore, no leading digit).");
+
+        var parent     = Path.GetFullPath(targetParentDir ?? Directory.GetCurrentDirectory());
+        var projectDir = Path.Combine(parent, name);
+        if (Directory.Exists(projectDir) && Directory.EnumerateFileSystemEntries(projectDir).Any())
+            throw new InvalidOperationException(
+                $"'{projectDir}' already exists and is not empty. Pick another name or delete it first.");
+
+        Directory.CreateDirectory(projectDir);
+
+        DotnetRunner.Run("new", "sln",     "-n", name, "-o", parent);
+        DotnetRunner.Run("new", "console", "-n", name, "-o", projectDir, "-f", "net10.0");
+        // Recent dotnet SDKs emit .slnx (XML solution) instead of .sln; fall back if the new format
+        // isn't present so the command works across SDK versions.
+        var slnPath = new[] { ".slnx", ".sln" }
+            .Select(ext => Path.Combine(parent, name + ext))
+            .FirstOrDefault(File.Exists)
+            ?? throw new InvalidOperationException("`dotnet new sln` produced neither a .sln nor a .slnx file.");
+        DotnetRunner.Run("sln", slnPath, "add", Path.Combine(projectDir, name + ".csproj"));
+
+        // `dotnet new console` ships a Hello-World Program.cs — overwrite it with the ke scaffold so
+        // `ke add module` has the canonical `var services = new ServiceCollection()...` anchor to splice into.
+        File.WriteAllText(Path.Combine(projectDir, "Program.cs"), ProgramCsSync.ScaffoldTemplate());
+
+        // Minimal Project file. Modules array starts empty; `ke add module` populates it.
+        var nl = Environment.NewLine;
+        File.WriteAllText(
+            Path.Combine(projectDir, "Project"),
+            $"[project]{nl}name = \"{name}\"{nl}{nl}[ke]{nl}modules = []{nl}");
+
+        Console.WriteLine($"Created '{name}' at {projectDir}");
+        Console.WriteLine($"Next: cd {name} && ke add module KernelEngine.Kernel");
+    }
+
     public static void ListModules(string? projectDir)
     {
         var ctx     = ProjectContext.Discover(projectDir);

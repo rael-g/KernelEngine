@@ -95,6 +95,23 @@ getConfigCmd.SetAction(parseResult =>
 
 var getCmd = new Command("get", "Read an entity from the project (config, …).") { getConfigCmd };
 
+// ── new game <Name> [--path <dir>] ──────────────────────────────────────────
+var newGameNameArg = new Argument<string>("name") { Description = "Project name — used for sln, csproj, namespace, and folder." };
+var newGamePathOpt = new Option<string?>("--path") { Description = "Parent directory (default: CWD). The project folder '<name>' is created inside this directory." };
+var newGameCmd = new Command("game", "Scaffold a new game project (sln + csproj + Program.cs + Project).")
+{
+    newGameNameArg, newGamePathOpt,
+};
+newGameCmd.SetAction(parseResult =>
+{
+    var name = parseResult.GetValue(newGameNameArg)!;
+    var path = parseResult.GetValue(newGamePathOpt);
+    return Run(() => Commands.NewGame(name, path));
+});
+
+var newCmd = new Command("new", "Scaffold a new entity (game project, scene, …).") { newGameCmd };
+
+root.Subcommands.Add(newCmd);
 root.Subcommands.Add(addCmd);
 root.Subcommands.Add(removeCmd);
 root.Subcommands.Add(listCmd);

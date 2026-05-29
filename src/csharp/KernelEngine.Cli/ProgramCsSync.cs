@@ -100,13 +100,14 @@ public static class ProgramCsSync
 
     // ── template ────────────────────────────────────────────────────────────
 
-    private static string ScaffoldTemplate() => """
-        using KernelEngine.Framework;
+    internal static string ScaffoldTemplate() => """
         using Microsoft.Extensions.DependencyInjection;
 
         var services = new ServiceCollection();
 
-        using var app = new Application();
-        app.Run(services);
+        // ke add module <id>  — wire engine modules above (e.g. KernelEngine.Kernel).
+        // Once the Framework is in scope, the bootstrap is:
+        //   using var app = new Application();
+        //   app.Run(services);
         """;
 }
