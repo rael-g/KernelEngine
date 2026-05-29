@@ -55,6 +55,20 @@ public:
 
     ke_render *ToApi();
 
+    /// @brief Accessor used by the render-graph executor to reach the shared
+    /// renderer state (GPU device, logger, allocator) without re-passing
+    /// them on every call. Not stable public API — internal to render-core.
+    RenderContext& GetContext() { return ctx_; }
+
+    /// @brief Reports the current backbuffer size in pixels. Read from the
+    /// owning window, so it tracks resizes without manual notification.
+    void GetBackbufferSize(uint32_t* out_w, uint32_t* out_h) const;
+
+    /// @brief Creates a render graph bound to this renderer. Wired through the
+    /// @c create_render_graph slot on @c ke_render so callers go through the
+    /// generic kernel contract.
+    struct ke_render_graph* CreateRenderGraph(ke_allocator* allocator);
+
     void SetShaderProvider(ShaderProviderInterface* provider);
     void SetGpuDevice(render::GpuDevice* gpu);
 

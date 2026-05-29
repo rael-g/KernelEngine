@@ -8,6 +8,7 @@
 #include <clustered_forward.hpp>
 #include <shader_provider.hpp>
 #include <frame_submitter.hpp>
+#include "render_graph_impl.hpp"
 #include "view_ids.hpp"
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/window/window.h>
@@ -207,6 +208,31 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->GetLastFatalError();
     };
+    render_api_.create_render_graph = [](ke_render *self, ke_allocator *allocator) -> ke_render_graph* {
+        if (!self || !self->handle) return nullptr;
+        return static_cast<CoreRenderer *>(self->handle)->CreateRenderGraph(allocator);
+    };
+}
+
+void CoreRenderer::GetBackbufferSize(uint32_t* out_w, uint32_t* out_h) const
+{
+    if (out_w) *out_w = 0;
+    if (out_h) *out_h = 0;
+    if (!window_) return;
+    int32_t w = 0, h = 0;
+    window_->get_size(window_, &w, &h);
+    if (out_w) *out_w = static_cast<uint32_t>(w);
+    if (out_h) *out_h = static_cast<uint32_t>(h);
+}
+
+ke_render_graph* CoreRenderer::CreateRenderGraph(ke_allocator* allocator)
+{
+    if (!allocator) allocator = ctx_.allocator;
+    if (!allocator) return nullptr;
+    void* mem = allocator->alloc(allocator, sizeof(RenderGraphImpl), alignof(RenderGraphImpl));
+    if (!mem) return nullptr;
+    auto* graph = new (mem) RenderGraphImpl(this, allocator);
+    return graph->ToApi();
 }
 
 const char* CoreRenderer::GetLastFatalError()

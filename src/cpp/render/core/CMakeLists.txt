@@ -8,6 +8,7 @@ add_library(ke_render_core SHARED
     src/clustered_forward.cpp
     src/shader_provider.cpp
     src/frame_submitter.cpp
+    src/render_graph_impl.cpp
 )
 
 # render/core is a backend support library used by render plugins (bgfx, future Vulkan/DX12, ...).
