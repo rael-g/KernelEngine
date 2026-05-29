@@ -24,7 +24,7 @@ public class AssetsTests
         model.Textures.Returns(Array.Empty<IModelTexture>());
         loader.LoadModelAsync(Arg.Any<string>()).Returns(Task.FromResult(model));
 
-        return (new Assets(loader, imageLoader: null, new ResourceManager(factory)), loader, factory);
+        return (new Assets(loader, imageLoader: null, fontLoader: null, new ResourceManager(factory)), loader, factory);
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public class AssetsTests
             .Returns(call => Task.FromResult<IImageData>(new FakeImageData((string)call[0], 2, 2)));
 
         var factory = Substitute.For<IResourceFactory>();
-        var assets = new Assets(modelLoader: null, imageLoader, new ResourceManager(factory));
+        var assets = new Assets(modelLoader: null, imageLoader, fontLoader: null, new ResourceManager(factory));
 
         var t1 = await assets.LoadTextureAsync("a.png");
         var t2 = await assets.LoadTextureAsync("a.png");

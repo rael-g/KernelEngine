@@ -5,7 +5,7 @@ namespace KernelEngine.Text.StbTrueType.Native;
 
 public static unsafe partial class NativeMethods
 {
-    [DllImport("ke_text_stb_truetype", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_font_stb_create", ExactSpelling = true)]
+    [DllImport("ke_text_stb_truetype", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_font_loader_stb_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Kernel.Native.ke_result font_stb_create([NativeTypeName("const ke_font_stb_params *")] ke_font_stb_params* @params, [NativeTypeName("ke_font **")] KernelEngine.Kernel.Native.ke_font** @out);
+    public static extern KernelEngine.Kernel.Native.ke_result font_loader_stb_create([NativeTypeName("const ke_font_loader_stb_params *")] ke_font_loader_stb_params* @params, ke_font_loader** @out);
 }

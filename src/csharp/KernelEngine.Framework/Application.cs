@@ -225,8 +225,9 @@ public class Application : IDisposable
                 Resources = new ResourceManager(factory);
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
-                if (modelLoader != null || imageLoader != null)
-                    Assets = new Assets(modelLoader, imageLoader, Resources);
+                var fontLoader  = Services.GetService<IFontLoader>();
+                if (modelLoader != null || imageLoader != null || fontLoader != null)
+                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources);
 
                 // Auto-load action bindings (when a game enum was registered via .AddInputActions<T>()).
                 // After this, InputActions.Get<TEnum>() works from anywhere; no game code involved.
@@ -434,6 +435,12 @@ public class Application : IDisposable
         ActiveWorld.AddSystem(new LightRenderSystem(dirLightCid, pointLightCid, spotLightCid, xformCid));
         ActiveWorld.AddSystem(new MeshRenderSystem(meshCid, xformCid));
         ActiveWorld.AddSystem(new SkyboxRenderSystem(skyboxCid));
+        // Label rendering — polls current backbuffer size each frame so resizes propagate.
+        ActiveWorld.AddSystem(new LabelRenderSystem(() =>
+        {
+            var sz = Window.GetSize();
+            return sz.IsOk ? ((uint)sz.Value.Width, (uint)sz.Value.Height) : (0u, 0u);
+        }));
 
         _shadowSystem = new ShadowRenderSystem(dirLightCid, meshCid, xformCid);
         ActiveWorld.AddSystem(_shadowSystem);

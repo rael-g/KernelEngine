@@ -13,5 +13,11 @@ SAMPLER2D(s_texColor, 0);
 void main()
 {
     vec4 tex = texture2D(s_texColor, v_texcoord0);
+    // Premultiply texture RGB by its own alpha so atlases that store coverage in alpha (e.g.
+    // font glyph atlases — white RGB + glyph-shape alpha) don't bleed a colored halo around
+    // each glyph. The output blend is BLEND_ONE / INV_SRC_ALPHA (premultiplied), which adds
+    // src.rgb to the framebuffer unconditionally — so any rgb > 0 at alpha = 0 paints a tint.
+    // For solid-color quads (default 1×1 white texture: rgba=(1,1,1,1)), this is a no-op.
+    tex.rgb *= tex.a;
     gl_FragColor = tex * v_color0;
 }

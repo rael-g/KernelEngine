@@ -14,17 +14,19 @@ public sealed class Assets
 {
     private readonly IAssetLoader? _modelLoader;
     private readonly IImageLoader? _imageLoader;
+    private readonly IFontLoader?  _fontLoader;
     private readonly ResourceManager _resources;
 
     // Cache holds a strong reference; eviction is driven by Resource.OnDestroyed (set at insert).
     private readonly Dictionary<string, Resource> _cache = new(StringComparer.Ordinal);
     private readonly object _gate = new();
 
-    public Assets(IAssetLoader? modelLoader, IImageLoader? imageLoader, ResourceManager resources)
+    public Assets(IAssetLoader? modelLoader, IImageLoader? imageLoader, IFontLoader? fontLoader, ResourceManager resources)
     {
         _modelLoader = modelLoader;
         _imageLoader = imageLoader;
-        _resources = resources;
+        _fontLoader  = fontLoader;
+        _resources   = resources;
     }
 
     /// <summary>
@@ -103,6 +105,25 @@ public sealed class Assets
     /// path. CPU-side decode runs on a worker (<see cref="IImageLoader.LoadImageAsync"/>); the GPU
     /// upload routes through <see cref="ResourceManager"/> → ke.render. ke.sim never blocks.
     /// </summary>
+    /// <summary>
+    /// Loads a font into a <see cref="Font"/> at <paramref name="pixelSize"/>. CPU-side decode +
+    /// atlas bake runs on a worker (<see cref="IFontLoader.LoadFontAsync"/>); the atlas-texture
+    /// upload routes through <see cref="ResourceManager"/> → ke.render. ke.sim never blocks.
+    /// </summary>
+    /// <remarks>
+    /// Not cached today — each call produces a fresh Font (atlas + glyph dictionary). Cache
+    /// support arrives when a real game needs the same font at the same size twice.
+    /// </remarks>
+    public async Task<Font> LoadFontAsync(string path, float pixelSize)
+    {
+        if (_fontLoader == null)
+            throw new InvalidOperationException("No IFontLoader registered — call AddTextStbTrueType() (or equivalent) in your service collection.");
+
+        using var data = await _fontLoader.LoadFontAsync(path, pixelSize);
+        var texture = await _resources.CreateTextureAsync(data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
+        return new Font(texture, data.Glyphs, data.LineHeight, data.Ascent);
+    }
+
     public async Task<Texture> LoadTextureAsync(string path)
     {
         if (_imageLoader == null) throw new InvalidOperationException("No IImageLoader registered — call AddStbImageLoader() (or equivalent) in your service collection.");

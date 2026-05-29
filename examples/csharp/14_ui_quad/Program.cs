@@ -2,6 +2,7 @@ using System.Numerics;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
+using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,31 +20,54 @@ var services = new ServiceCollection()
     .AddKernel()
     .AddLogger().AddConsoleSink(LogLevel.Warning)
     .AddGlfwWindow(960, 540, "KernelEngine — 14 UI Quad")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
+    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"))
+    .AddTextStbTrueType();
 
 using var app = new Application();
+Font? font = null;
+
+app.OnReady = async (_) =>
+{
+    // Load a system font as the smoke source — Windows ships Arial at a well-known path.
+    var fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
+    font = await app.Assets!.LoadFontAsync(fontPath, pixelSize: 48);
+
+    app.Tree.AddNode(new Label {
+        Name   = "TopLeft",
+        Text   = "Top-left, anchor (0,0)",
+        Font   = font,
+        Color  = new Vector4(1f, 0.6f, 0.3f, 1f),
+        Anchor = new Vector2(0f, 0f),
+        Offset = new Vector2(20, 20),
+    });
+    app.Tree.AddNode(new Label {
+        Name   = "TopCenter",
+        Text   = "Top center, anchor (0.5, 0)",
+        Font   = font,
+        Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
+        Anchor = new Vector2(0.5f, 0f),
+        Offset = new Vector2(0, 80),
+    });
+    app.Tree.AddNode(new Label {
+        Name   = "BottomRight",
+        Text   = "Bottom-right (1,1)",
+        Font   = font,
+        Color  = new Vector4(0.3f, 0.7f, 1f, 1f),
+        Anchor = new Vector2(1f, 1f),
+        Offset = new Vector2(-20, -20),
+    });
+};
 
 app.OnUpdate = (writer, _) =>
 {
     writer.ClearColor(0.10f, 0.12f, 0.16f, 1f);
 
-    // Top-left: opaque red rectangle.
-    writer.AddUiQuadCommand(TextureHandle.None,
-        dstX: 40, dstY: 40, dstW: 240, dstH: 80,
-        u0: 0, v0: 0, u1: 1, v1: 1,
-        color: new Vector4(1f, 0.20f, 0.20f, 1f));
-
-    // Centered: semi-transparent green band.
+    // Plain UI quad backdrop (smoke test from Stage A — keep one to validate untextured path).
     writer.AddUiQuadCommand(TextureHandle.None,
         dstX: 300, dstY: 220, dstW: 360, dstH: 100,
         u0: 0, v0: 0, u1: 1, v1: 1,
         color: new Vector4(0.20f * 0.5f, 0.85f * 0.5f, 0.30f * 0.5f, 0.5f));   // premultiplied alpha
-
-    // Bottom-right: opaque blue rectangle.
-    writer.AddUiQuadCommand(TextureHandle.None,
-        dstX: 680, dstY: 420, dstW: 240, dstH: 80,
-        u0: 0, v0: 0, u1: 1, v1: 1,
-        color: new Vector4(0.20f, 0.50f, 1f, 1f));
 };
 
 app.Run(services);
+font?.Dispose();

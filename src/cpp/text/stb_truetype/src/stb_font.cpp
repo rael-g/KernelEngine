@@ -2,7 +2,6 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/text/font.h>
 
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -10,90 +9,58 @@
 
 #include <cstdio>
 #include <cstring>
+#include <new>
 #include <vector>
 
 namespace
 {
 
-struct StbFont
+struct StbFontLoader
 {
-    ke_font           api{};                  // Must be first (we cast self → StbFont*)
-    ke_allocator     *allocator = nullptr;
-    ke_logger        *logger    = nullptr;
-    ke_texture_handle atlas     = KE_TEXTURE_NONE;
-    ke_render        *render    = nullptr;
-    uint32_t          first_cp  = 32;
-    uint32_t          cp_count  = 95;
-    float             line_h    = 0.0f;
-    std::vector<stbtt_packedchar> chars;      // one per codepoint
-    uint16_t          atlas_size = 512;
+    ke_font_loader  api{};
+    ke_allocator   *allocator = nullptr;
+    ke_logger      *logger    = nullptr;
 };
 
-// ── vtable implementations ──────────────────────────────────────────────────
-
-void destroy(struct ke_font *self)
+void destroy_loader(struct ke_font_loader *self)
 {
-    auto *f = reinterpret_cast<StbFont *>(self);
-    if (!f) return;
-    if (f->render && ke_texture_is_valid(f->atlas))
-        f->render->destroy_texture(f->render, f->atlas);
-    auto *alloc = f->allocator;
-    f->~StbFont();
-    if (alloc) alloc->free(alloc, f);
+    auto *l = reinterpret_cast<StbFontLoader *>(self);
+    if (!l) return;
+    auto *alloc = l->allocator;
+    l->~StbFontLoader();
+    if (alloc) alloc->free(alloc, l);
 }
 
-ke_bool glyph(struct ke_font *self, uint32_t codepoint, ke_glyph_metrics *out)
+void free_font(struct ke_font_loader *self, ke_font_data *data)
 {
-    auto *f = reinterpret_cast<StbFont *>(self);
-    if (!f || !out) return 0;
-    if (codepoint < f->first_cp || codepoint >= f->first_cp + f->cp_count) return 0;
-
-    const stbtt_packedchar &pc = f->chars[codepoint - f->first_cp];
-
-    out->u0 = (float)pc.x0 / (float)f->atlas_size;
-    out->v0 = (float)pc.y0 / (float)f->atlas_size;
-    out->u1 = (float)pc.x1 / (float)f->atlas_size;
-    out->v1 = (float)pc.y1 / (float)f->atlas_size;
-
-    out->width     = (float)(pc.x1 - pc.x0);
-    out->height    = (float)(pc.y1 - pc.y0);
-    out->bearing_x = pc.xoff;
-    out->bearing_y = -pc.yoff;        // stb yoff is +down from baseline; we want +up to top of glyph
-    out->advance_x = pc.xadvance;
-
-    return 1;
+    auto *l = reinterpret_cast<StbFontLoader *>(self);
+    if (!l || !data) return;
+    auto *alloc = l->allocator;
+    if (data->atlas_rgba) alloc->free(alloc, data->atlas_rgba);
+    if (data->glyphs)     alloc->free(alloc, data->glyphs);
+    alloc->free(alloc, data);
 }
 
-ke_texture_handle atlas_texture(struct ke_font *self)
+ke_result load_font(struct ke_font_loader *self,
+                    const char *path,
+                    float pixel_size,
+                    uint32_t first_codepoint,
+                    uint32_t codepoint_count,
+                    uint32_t atlas_size,
+                    ke_font_data **out)
 {
-    auto *f = reinterpret_cast<StbFont *>(self);
-    return f ? f->atlas : KE_TEXTURE_NONE;
-}
+    auto *l = reinterpret_cast<StbFontLoader *>(self);
+    if (!l || !path || !out) return KE_ERROR_INVALID_ARGUMENT;
+    if (pixel_size <= 0.0f || atlas_size == 0 || codepoint_count == 0) return KE_ERROR_INVALID_ARGUMENT;
 
-float line_height(struct ke_font *self)
-{
-    auto *f = reinterpret_cast<StbFont *>(self);
-    return f ? f->line_h : 0.0f;
-}
+    auto *alloc = l->allocator;
 
-} // namespace
-
-extern "C"
-ke_result ke_font_stb_create(const ke_font_stb_params *params, ke_font **out)
-{
-    if (!params || !out || !params->allocator || !params->render || !params->ttf_path)
-        return KE_ERROR_INVALID_ARGUMENT;
-    if (params->pixel_size <= 0.0f || params->atlas_size == 0 || params->codepoint_count == 0)
-        return KE_ERROR_INVALID_ARGUMENT;
-
-    auto *alloc = params->allocator;
-
-    // 1. Slurp the TTF file.
+    // 1. Slurp the TTF.
     std::FILE *fp = nullptr;
 #if defined(_WIN32)
-    fopen_s(&fp, params->ttf_path, "rb");
+    fopen_s(&fp, path, "rb");
 #else
-    fp = std::fopen(params->ttf_path, "rb");
+    fp = std::fopen(path, "rb");
 #endif
     if (!fp) return KE_ERROR_IO;
     std::fseek(fp, 0, SEEK_END);
@@ -105,74 +72,103 @@ ke_result ke_font_stb_create(const ke_font_stb_params *params, ke_font **out)
     std::fclose(fp);
     if (read != (size_t)ttf_size) return KE_ERROR_IO;
 
-    // 2. Bake the requested codepoint range into a grayscale alpha atlas.
-    const uint16_t W = params->atlas_size;
-    const uint16_t H = params->atlas_size;
+    // 2. Pack the requested codepoint range into a grayscale alpha atlas.
+    const uint32_t W = atlas_size;
+    const uint32_t H = atlas_size;
     std::vector<uint8_t> alpha((size_t)W * H, 0);
 
     stbtt_pack_context pc;
-    if (!stbtt_PackBegin(&pc, alpha.data(), W, H, /*stride*/0, /*padding*/1, /*alloc_context*/nullptr))
+    if (!stbtt_PackBegin(&pc, alpha.data(), (int)W, (int)H, /*stride*/0, /*padding*/1, /*alloc_context*/nullptr))
         return KE_ERROR_RENDER;
     stbtt_PackSetOversampling(&pc, 1, 1);
 
-    std::vector<stbtt_packedchar> chars(params->codepoint_count);
-    if (!stbtt_PackFontRange(&pc, ttf.data(), /*font_index*/0, params->pixel_size,
-                             (int)params->first_codepoint, (int)params->codepoint_count, chars.data()))
+    std::vector<stbtt_packedchar> chars(codepoint_count);
+    if (!stbtt_PackFontRange(&pc, ttf.data(), /*font_index*/0, pixel_size,
+                             (int)first_codepoint, (int)codepoint_count, chars.data()))
     {
         stbtt_PackEnd(&pc);
         return KE_ERROR_RENDER;
     }
     stbtt_PackEnd(&pc);
 
-    // 3. Expand the alpha-only atlas into RGBA8 (white RGB, alpha from glyph coverage) so it
-    // works with the existing create_texture_rgba path and the UI shader (which multiplies
-    // by vertex tint — text gets its color from the vertex, not the atlas).
-    std::vector<uint8_t> rgba((size_t)W * H * 4);
+    // 3. Expand alpha → RGBA8 (white RGB + glyph-coverage alpha).
+    uint8_t *atlas_rgba = (uint8_t *)alloc->alloc(alloc, (size_t)W * H * 4, 4);
+    if (!atlas_rgba) return KE_ERROR_OUT_OF_MEMORY;
     for (size_t i = 0; i < (size_t)W * H; ++i)
     {
-        rgba[i * 4 + 0] = 0xFF;
-        rgba[i * 4 + 1] = 0xFF;
-        rgba[i * 4 + 2] = 0xFF;
-        rgba[i * 4 + 3] = alpha[i];
+        atlas_rgba[i * 4 + 0] = 0xFF;
+        atlas_rgba[i * 4 + 1] = 0xFF;
+        atlas_rgba[i * 4 + 2] = 0xFF;
+        atlas_rgba[i * 4 + 3] = alpha[i];
     }
 
-    // 4. Upload as the atlas texture (render-thread call).
-    ke_texture_handle tex = KE_TEXTURE_NONE;
-    if (params->render->create_texture_rgba(params->render, W, H, rgba.data(), &tex) != KE_OK)
-        return KE_ERROR_RENDER;
-
-    // 5. Compute line height from the unscaled font's v-metrics scaled to our pixel size.
+    // 4. Glyph metrics + line-height from the unscaled font's v-metrics scaled to pixel_size.
     stbtt_fontinfo info;
     if (!stbtt_InitFont(&info, ttf.data(), stbtt_GetFontOffsetForIndex(ttf.data(), 0)))
     {
-        params->render->destroy_texture(params->render, tex);
+        alloc->free(alloc, atlas_rgba);
         return KE_ERROR_RENDER;
     }
-    int ascent, descent, line_gap;
-    stbtt_GetFontVMetrics(&info, &ascent, &descent, &line_gap);
-    const float scale  = stbtt_ScaleForPixelHeight(&info, params->pixel_size);
-    const float line_h = (float)(ascent - descent + line_gap) * scale;
+    int ascent_i, descent_i, line_gap_i;
+    stbtt_GetFontVMetrics(&info, &ascent_i, &descent_i, &line_gap_i);
+    const float scale  = stbtt_ScaleForPixelHeight(&info, pixel_size);
+    const float ascent = (float)ascent_i * scale;
+    const float line_h = (float)(ascent_i - descent_i + line_gap_i) * scale;
 
-    // 6. Allocate the StbFont struct + wire the vtable.
-    void *mem = alloc->alloc(alloc, sizeof(StbFont), alignof(StbFont));
-    if (!mem) { params->render->destroy_texture(params->render, tex); return KE_ERROR_OUT_OF_MEMORY; }
-    auto *f = new (mem) StbFont();
-    f->allocator   = alloc;
-    f->logger      = params->logger;
-    f->render      = params->render;
-    f->atlas       = tex;
-    f->atlas_size  = W;
-    f->first_cp    = params->first_codepoint;
-    f->cp_count    = params->codepoint_count;
-    f->line_h      = line_h;
-    f->chars       = std::move(chars);
+    ke_glyph_metrics *glyphs = (ke_glyph_metrics *)alloc->alloc(
+        alloc, sizeof(ke_glyph_metrics) * codepoint_count, alignof(ke_glyph_metrics));
+    if (!glyphs) { alloc->free(alloc, atlas_rgba); return KE_ERROR_OUT_OF_MEMORY; }
 
-    f->api.handle        = f;
-    f->api.destroy       = destroy;
-    f->api.glyph         = glyph;
-    f->api.atlas_texture = atlas_texture;
-    f->api.line_height   = line_height;
+    for (uint32_t i = 0; i < codepoint_count; ++i)
+    {
+        const stbtt_packedchar &pc = chars[i];
+        glyphs[i].codepoint = first_codepoint + i;
+        glyphs[i].u0 = (float)pc.x0 / (float)W;
+        glyphs[i].v0 = (float)pc.y0 / (float)H;
+        glyphs[i].u1 = (float)pc.x1 / (float)W;
+        glyphs[i].v1 = (float)pc.y1 / (float)H;
+        glyphs[i].width     = (float)(pc.x1 - pc.x0);
+        glyphs[i].height    = (float)(pc.y1 - pc.y0);
+        glyphs[i].bearing_x = pc.xoff;
+        glyphs[i].bearing_y = -pc.yoff;  // stb yoff is +down from top of glyph; we want +up from baseline
+        glyphs[i].advance_x = pc.xadvance;
+    }
 
-    *out = &f->api;
+    // 5. Assemble ke_font_data.
+    ke_font_data *fd = (ke_font_data *)alloc->alloc(alloc, sizeof(ke_font_data), alignof(ke_font_data));
+    if (!fd) { alloc->free(alloc, atlas_rgba); alloc->free(alloc, glyphs); return KE_ERROR_OUT_OF_MEMORY; }
+    fd->atlas_rgba   = atlas_rgba;
+    fd->atlas_width  = W;
+    fd->atlas_height = H;
+    fd->glyphs       = glyphs;
+    fd->glyph_count  = codepoint_count;
+    fd->line_height  = line_h;
+    fd->ascent       = ascent;
+
+    *out = fd;
+    return KE_OK;
+}
+
+} // namespace
+
+extern "C"
+ke_result ke_font_loader_stb_create(const ke_font_loader_stb_params *params, ke_font_loader **out)
+{
+    if (!params || !out || !params->allocator) return KE_ERROR_INVALID_ARGUMENT;
+
+    auto *alloc = params->allocator;
+    void *mem = alloc->alloc(alloc, sizeof(StbFontLoader), alignof(StbFontLoader));
+    if (!mem) return KE_ERROR_OUT_OF_MEMORY;
+
+    auto *l = new (mem) StbFontLoader();
+    l->allocator = alloc;
+    l->logger    = params->logger;
+
+    l->api.handle    = l;
+    l->api.destroy   = destroy_loader;
+    l->api.load_font = load_font;
+    l->api.free_font = free_font;
+
+    *out = &l->api;
     return KE_OK;
 }

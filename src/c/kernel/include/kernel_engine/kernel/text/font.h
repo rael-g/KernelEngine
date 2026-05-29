@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_KERNEL_TEXT_FONT_H_
 
 #include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <stdint.h>
 
@@ -11,38 +10,58 @@ extern "C"
 {
 #endif
 
-#define KE_ID_FONT "ke_font"
+#define KE_ID_FONT_LOADER "ke_font_loader"
 
-    /// @brief Per-glyph layout + atlas-sampling info. All measurements in pixels (atlas-baked size).
-    /// `advance_x` is the pen advance; `bearing_{x,y}` shift the quad from the pen; `width/height`
-    /// is the quad size; `u0,v0,u1,v1` is the source rect in the font's atlas texture.
+    /// @brief Per-glyph layout + atlas-sampling info, in pixels at the baked size.
+    /// `bearing_x` shifts the quad right of the pen; `bearing_y` shifts up from the baseline.
+    /// `width`/`height` is the quad size; `u0,v0,u1,v1` is the source rect in the atlas.
     typedef struct ke_glyph_metrics {
-        float u0, v0, u1, v1;
-        float bearing_x, bearing_y;
-        float width, height;
-        float advance_x;
+        uint32_t codepoint;
+        float    u0, v0, u1, v1;
+        float    bearing_x, bearing_y;
+        float    width, height;
+        float    advance_x;
     } ke_glyph_metrics;
 
-    /// @brief ABI-stable vtable for a font. One implementation per backend (stb_truetype today;
-    /// FreeType / native shaper later). MVP supports ASCII range only; full Unicode glyph rasterization
-    /// on demand comes after the layer ships.
-    typedef struct ke_font
+    /// @brief CPU-side font data produced by a loader. Caller owns; release via the loader's
+    /// free_font. Atlas is RGBA8 (white RGB + alpha from coverage) so it goes through
+    /// ke_render.create_texture_rgba without a new texture format.
+    typedef struct ke_font_data {
+        uint8_t          *atlas_rgba;     ///< width * height * 4 bytes
+        uint32_t          atlas_width;
+        uint32_t          atlas_height;
+        ke_glyph_metrics *glyphs;          ///< glyph_count entries
+        uint32_t          glyph_count;
+        float             line_height;     ///< Recommended line spacing in pixels
+        float             ascent;          ///< Pixels above baseline to top of tallest glyph
+    } ke_font_data;
+
+    /// @brief ABI-stable vtable for decoding font files (TTF/OTF/…) on CPU. Async dispatch is
+    /// the caller's concern (C# wraps with Task.Run on a worker); this contract stays minimal.
+    /// Mirrors the ke_image_loader pattern — load returns raw bytes + metadata, texture upload
+    /// happens later via ke_render.
+    typedef struct ke_font_loader
     {
         void *handle;
 
-        /// @brief Releases backend memory + atlas texture.
-        void (*destroy)(struct ke_font *self);
+        /// @brief Destroys the loader.
+        void (*destroy)(struct ke_font_loader *self);
 
-        /// @brief Looks up the glyph for @p codepoint. Returns true + fills @p out when present in
-        /// the atlas; false otherwise (caller renders a fallback or skips).
-        ke_bool (*glyph)(struct ke_font *self, uint32_t codepoint, ke_glyph_metrics *out);
+        /// @brief Loads @p path and bakes a glyph atlas at @p pixel_size for the codepoint range
+        /// [first_codepoint, first_codepoint + codepoint_count). On success allocates a
+        /// ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font.
+        ke_result (*load_font)(struct ke_font_loader *self,
+                               const char *path,
+                               float pixel_size,
+                               uint32_t first_codepoint,
+                               uint32_t codepoint_count,
+                               uint32_t atlas_size,
+                               ke_font_data **out);
 
-        /// @brief The atlas texture (RGBA8) — bind to the UI quad shader's s_texColor sampler.
-        ke_texture_handle (*atlas_texture)(struct ke_font *self);
+        /// @brief Frees a ke_font_data previously returned by load_font.
+        void (*free_font)(struct ke_font_loader *self, ke_font_data *data);
 
-        /// @brief Recommended line spacing for the baked pixel size (ascent + descent + line gap).
-        float (*line_height)(struct ke_font *self);
-    } ke_font;
+    } ke_font_loader;
 
 #ifdef __cplusplus
 }

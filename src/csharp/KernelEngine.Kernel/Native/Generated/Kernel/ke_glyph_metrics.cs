@@ -2,6 +2,9 @@ namespace KernelEngine.Kernel.Native;
 
 public partial struct ke_glyph_metrics
 {
+    [NativeTypeName("uint32_t")]
+    public uint codepoint;
+
     public float u0;
 
     public float v0;
