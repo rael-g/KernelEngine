@@ -126,48 +126,13 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         ctx.gpu->Submit(Id(ViewId::Scene), main_program, 0, false);
     }
 
-    // ── 6. UI Overlay Pass ──────────────────────────────────────────────────
-    // Drawn after the main scene + post-fx, into the backbuffer in pixel coordinates.
-    // The view has no depth attachment, no clear (we want to composite over the scene),
-    // and a Y-down orthographic projection so (0,0) is top-left in screen space.
-    if (ui_quad_program != kGpuInvalidHandle && packet.ui_draw_count > 0)
-    {
-        ctx.gpu->SetViewClear(Id(ViewId::Ui), GpuClearFlags::None, 0, 0.0f, 0);
-        ctx.gpu->SetViewRect(Id(ViewId::Ui), 0, 0, backbuffer_width, backbuffer_height);
-
-        // Y-down orthographic: (0,0) at top-left, (w,h) at bottom-right. View matrix is identity;
-        // projection maps screen pixels to clip space. Identity view + ortho is enough — vertices
-        // arrive already in pixel coords.
-        float view[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
-        const float L = 0.0f, R = (float)backbuffer_width;
-        const float T = 0.0f, B = (float)backbuffer_height;
-        // Standard row-major / RH / [0,1] depth-range ortho (matches what the rest of the renderer
-        // outputs via the frontend builder; bgfx applies the active backend's NDC adapter on top).
-        const float depth_near = 0.0f, depth_far = 1.0f;
-        float proj[16] = {
-            2.f/(R-L),  0,         0,                        0,
-            0,          2.f/(T-B), 0,                        0,
-            0,          0,         1.f/(depth_far-depth_near), 0,
-            (L+R)/(L-R),(T+B)/(B-T),-depth_near/(depth_far-depth_near), 1
-        };
-        ctx.gpu->SetViewTransform(Id(ViewId::Ui), view, proj);
-
-        for (uint32_t i = 0; i < packet.ui_draw_count; ++i)
-        {
-            const auto& c = packet.ui_draw_commands[i];
-            GpuTextureHandle tex = ke_texture_is_valid(c.texture)
-                ? textures.GetTextureIdx(c.texture)
-                : textures.default_2d_tex;
-            const GpuDevice::UiQuad q{
-                c.dst_x, c.dst_y, c.dst_w, c.dst_h,
-                c.src_u0, c.src_v0, c.src_u1, c.src_v1,
-                c.color[0], c.color[1], c.color[2], c.color[3],
-            };
-            ctx.gpu->SubmitUiQuad(Id(ViewId::Ui), ui_quad_program,
-                                  textures.sampler_uniform, tex, q);
-        }
-    }
-
+    // UI overlay extracted in Step F — CoreRenderer::ExecuteUiPass via graph
+    // node "ui.overlay". ui_quad_program + backbuffer_width/height parameters
+    // are no longer consumed here; kept on the signature pending a wider
+    // FrameSubmitter signature trim (will land alongside Phase 3 cleanup).
+    (void)ui_quad_program;
+    (void)backbuffer_width;
+    (void)backbuffer_height;
     return KE_OK;
 }
 

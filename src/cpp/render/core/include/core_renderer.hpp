@@ -112,6 +112,11 @@ private:
     /// matches the legacy semantics 1:1.
     ke_result ExecutePostFxPass(const struct ke_frame_packet* packet);
 
+    /// @brief UI overlay pass (Phase 3 Step F). Renders the packet's
+    /// @c ui_draw_commands as 2D textured quads in backbuffer pixel space.
+    /// Runs after every other pass so the overlay composites on top.
+    ke_result ExecuteUiPass(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;

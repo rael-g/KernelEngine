@@ -488,6 +488,11 @@ ke_result CoreRenderer::SetupRenderGraph()
         if (rc != KE_OK) return rc;
     }
 
+    // Logical "screen with the UI overlay drawn on top". Sentinel-imported.
+    rc = graph_->import_texture(graph_, "screen",
+                                ke_texture_handle{ UINT32_MAX });
+    if (rc != KE_OK) return rc;
+
     // postfx.composite — Step E. Bundles bright-pass / blur×2 / ACES tonemap
     // (PostProcessPipeline::SubmitPostProcess runs them as a unit, gated by the
     // same toggle). Reads ssao_buffer (orders after ssao) + backbuffer_post_skybox
@@ -511,6 +516,32 @@ ke_result CoreRenderer::SetupRenderGraph()
             auto* self = static_cast<CoreRenderer*>(user);
             const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
             if (self && pkt) self->ExecutePostFxPass(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
+
+    // ui.overlay — Step F. Reads backbuffer_final (post-tonemap) so the DAG
+    // orders us last; writes "screen" as the final pre-present image.
+    {
+        ke_resource_ref reads[] = {
+            { "backbuffer_final", KE_ACCESS_SAMPLED }
+        };
+        ke_resource_ref writes[] = {
+            { "screen", KE_ACCESS_COLOR_ATTACHMENT }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "ui.overlay";
+        pp.type = KE_PASS_GEOMETRY;
+        pp.reads = reads;
+        pp.reads_count = 1;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->ExecuteUiPass(pkt);
         };
         pp.user = this;
         rc = graph_->add_pass(graph_, &pp);
@@ -590,6 +621,47 @@ ke_result CoreRenderer::ExecutePostFxPass(const struct ke_frame_packet*)
     else
     {
         ctx_.gpu->SetViewFrameBuffer(Id(ViewId::Scene), kGpuInvalidHandle);
+    }
+    return KE_OK;
+}
+
+ke_result CoreRenderer::ExecuteUiPass(const struct ke_frame_packet* packet)
+{
+    if (!packet || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (ui_quad_program_ == kGpuInvalidHandle || packet->ui_draw_count == 0) return KE_OK;
+
+    const uint16_t bb_w = (uint16_t)ctx_.view_w;
+    const uint16_t bb_h = (uint16_t)ctx_.view_h;
+
+    ctx_.gpu->SetViewClear(Id(ViewId::Ui), GpuClearFlags::None, 0, 0.0f, 0);
+    ctx_.gpu->SetViewRect(Id(ViewId::Ui), 0, 0, bb_w, bb_h);
+
+    // Y-down orthographic so (0,0) is top-left and UI vertices arrive already
+    // in pixel coordinates. View is identity (no camera in screen space).
+    float view[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    const float L = 0.0f, R = (float)bb_w;
+    const float T = 0.0f, B = (float)bb_h;
+    const float depth_near = 0.0f, depth_far = 1.0f;
+    float proj[16] = {
+        2.f/(R-L),  0,         0,                        0,
+        0,          2.f/(T-B), 0,                        0,
+        0,          0,         1.f/(depth_far-depth_near), 0,
+        (L+R)/(L-R),(T+B)/(B-T),-depth_near/(depth_far-depth_near), 1
+    };
+    ctx_.gpu->SetViewTransform(Id(ViewId::Ui), view, proj);
+
+    for (uint32_t i = 0; i < packet->ui_draw_count; ++i) {
+        const auto& c = packet->ui_draw_commands[i];
+        GpuTextureHandle tex = ke_texture_is_valid(c.texture)
+            ? textures_.GetTextureIdx(c.texture)
+            : textures_.default_2d_tex;
+        const GpuDevice::UiQuad q{
+            c.dst_x, c.dst_y, c.dst_w, c.dst_h,
+            c.src_u0, c.src_v0, c.src_u1, c.src_v1,
+            c.color[0], c.color[1], c.color[2], c.color[3],
+        };
+        ctx_.gpu->SubmitUiQuad(Id(ViewId::Ui), ui_quad_program_,
+                               textures_.sampler_uniform, tex, q);
     }
     return KE_OK;
 }
