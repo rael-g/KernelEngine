@@ -25,7 +25,10 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
                                  GpuProgramHandle main_program,
                                  GpuProgramHandle shadow_program,
                                  GpuProgramHandle skybox_program,
-                                 GpuProgramHandle /*prepass_program*/)
+                                 GpuProgramHandle /*prepass_program*/,
+                                 GpuProgramHandle ui_quad_program,
+                                 uint16_t backbuffer_width,
+                                 uint16_t backbuffer_height)
 {
     ke_thread_assert_current("ke.render");
     if (!ctx.gpu) return KE_ERROR_RENDER;
@@ -147,6 +150,48 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         // no cull (meshes are two-sided)
         ctx.gpu->SetState(GpuStateFlags::WriteRgba | GpuStateFlags::WriteZ | GpuStateFlags::DepthTestLess | GpuStateFlags::Msaa, 0);
         ctx.gpu->Submit(Id(ViewId::Scene), main_program, 0, false);
+    }
+
+    // ── 6. UI Overlay Pass ──────────────────────────────────────────────────
+    // Drawn after the main scene + post-fx, into the backbuffer in pixel coordinates.
+    // The view has no depth attachment, no clear (we want to composite over the scene),
+    // and a Y-down orthographic projection so (0,0) is top-left in screen space.
+    if (ui_quad_program != kGpuInvalidHandle && packet.ui_draw_count > 0)
+    {
+        ctx.gpu->SetViewClear(Id(ViewId::Ui), GpuClearFlags::None, 0, 0.0f, 0);
+        ctx.gpu->SetViewRect(Id(ViewId::Ui), 0, 0, backbuffer_width, backbuffer_height);
+
+        // Y-down orthographic: (0,0) at top-left, (w,h) at bottom-right. View matrix is identity;
+        // projection maps screen pixels to clip space. Identity view + ortho is enough — vertices
+        // arrive already in pixel coords.
+        float view[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+        const float L = 0.0f, R = (float)backbuffer_width;
+        const float T = 0.0f, B = (float)backbuffer_height;
+        // Standard row-major / RH / [0,1] depth-range ortho (matches what the rest of the renderer
+        // outputs via the frontend builder; bgfx applies the active backend's NDC adapter on top).
+        const float depth_near = 0.0f, depth_far = 1.0f;
+        float proj[16] = {
+            2.f/(R-L),  0,         0,                        0,
+            0,          2.f/(T-B), 0,                        0,
+            0,          0,         1.f/(depth_far-depth_near), 0,
+            (L+R)/(L-R),(T+B)/(B-T),-depth_near/(depth_far-depth_near), 1
+        };
+        ctx.gpu->SetViewTransform(Id(ViewId::Ui), view, proj);
+
+        for (uint32_t i = 0; i < packet.ui_draw_count; ++i)
+        {
+            const auto& c = packet.ui_draw_commands[i];
+            GpuTextureHandle tex = ke_texture_is_valid(c.texture)
+                ? textures.GetTextureIdx(c.texture)
+                : textures.default_2d_tex;
+            const GpuDevice::UiQuad q{
+                c.dst_x, c.dst_y, c.dst_w, c.dst_h,
+                c.src_u0, c.src_v0, c.src_u1, c.src_v1,
+                c.color[0], c.color[1], c.color[2], c.color[3],
+            };
+            ctx.gpu->SubmitUiQuad(Id(ViewId::Ui), ui_quad_program,
+                                  textures.sampler_uniform, tex, q);
+        }
     }
 
     return KE_OK;

@@ -38,6 +38,15 @@ public interface IFramePacket
     /// <summary>Appends a draw command to the shadow depth pass. Ignored when capacity is exhausted.</summary>
     void AddShadowDrawCommand(MeshHandle mesh, Matrix4x4 transform);
 
+    /// <summary>
+    /// Records a screen-space textured quad for the UI overlay pass. Pass
+    /// <see cref="TextureHandle.None"/> for a flat-colored quad.
+    /// </summary>
+    void AddUiQuadCommand(TextureHandle texture,
+                          float dstX, float dstY, float dstW, float dstH,
+                          float u0, float v0, float u1, float v1,
+                          float r, float g, float b, float a);
+
     /// <summary>Sets the skybox cubemap for this frame.</summary>
     void SetSkybox(TextureHandle cubemap);
 

@@ -17,6 +17,7 @@ enum class ViewId : uint16_t
     BlurH      = 4,
     BlurV      = 5,
     Tonemap    = 6,
+    Ui         = 7,   // Final overlay (textured 2D quads in backbuffer pixel space).
 };
 
 constexpr uint16_t Id(ViewId view) { return static_cast<uint16_t>(view); }

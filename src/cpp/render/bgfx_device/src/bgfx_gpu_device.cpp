@@ -494,6 +494,85 @@ void BgfxGpuDevice::SetPaletteColor(uint8_t index, float r, float g, float b, fl
     ::bgfx::setPaletteColor(index, r, g, b, a);
 }
 
+void BgfxGpuDevice::SubmitUiQuad(uint16_t view_id, GpuProgramHandle program,
+                                 GpuUniformHandle sampler_uniform, GpuTextureHandle texture,
+                                 const UiQuad& q)
+{
+    ke_thread_assert_current("ke.render");
+
+    // Vertex layout: position (3f, pixels with z=0) + texcoord (2f) + color (4 bytes, premultiplied).
+    // 3 floats for position because varying.def.sc declares `a_position : vec3` across all shaders;
+    // sharing the attribute slot dodges shader-binding mismatches at the cost of 8 bytes/vertex.
+    // 6 vertices = 2 triangles (no index buffer; tiny enough that duplicating the shared edge
+    // costs less than the per-quad bookkeeping for an index buffer).
+    struct UiVertex { float x, y, z; float u, v; uint32_t abgr; };
+
+    static ::bgfx::VertexLayout layout = []{
+        ::bgfx::VertexLayout l;
+        l.begin()
+            .add(::bgfx::Attrib::Position,  3, ::bgfx::AttribType::Float)
+            .add(::bgfx::Attrib::TexCoord0, 2, ::bgfx::AttribType::Float)
+            .add(::bgfx::Attrib::Color0,    4, ::bgfx::AttribType::Uint8, /*normalized=*/true)
+            .end();
+        return l;
+    }();
+
+    if (::bgfx::getAvailTransientVertexBuffer(4, layout) < 4) return;
+    if (::bgfx::getAvailTransientIndexBuffer(6) < 6) return;
+
+    ::bgfx::TransientVertexBuffer tvb;
+    ::bgfx::allocTransientVertexBuffer(&tvb, 4, layout);
+    ::bgfx::TransientIndexBuffer  tib;
+    ::bgfx::allocTransientIndexBuffer(&tib, 6);
+    auto* v = reinterpret_cast<UiVertex*>(tvb.data);
+    auto* idx = reinterpret_cast<uint16_t*>(tib.data);
+
+    // Pack RGBA into bgfx's ABGR (little-endian uint32, normalized to bytes).
+    auto pack = [](float r, float g, float b, float a) -> uint32_t {
+        auto c = [](float f) -> uint32_t {
+            int i = (int)(f * 255.0f + 0.5f);
+            if (i < 0) i = 0; if (i > 255) i = 255;
+            return (uint32_t)i;
+        };
+        return (c(a) << 24) | (c(b) << 16) | (c(g) << 8) | c(r);
+    };
+    const uint32_t abgr = pack(q.r, q.g, q.b, q.a);
+
+    // 4 unique corners + 6 indices forming the two triangles. Same exact structure as the
+    // engine's built-in mesh quad (geometry_manager creates a quad with this layout) — using
+    // it here too dodges the asymmetric-rendering bug we hit with non-indexed 6-vertex draws.
+    const float x0 = q.dst_x,             y0 = q.dst_y;
+    const float x1 = q.dst_x + q.dst_w,   y1 = q.dst_y + q.dst_h;
+    v[0] = {x0, y0, 0.f, q.u0, q.v0, abgr}; // 0: TL
+    v[1] = {x1, y0, 0.f, q.u1, q.v0, abgr}; // 1: TR
+    v[2] = {x1, y1, 0.f, q.u1, q.v1, abgr}; // 2: BR
+    v[3] = {x0, y1, 0.f, q.u0, q.v1, abgr}; // 3: BL
+
+    // Triangle 1: TL → BL → BR ;  Triangle 2: TL → BR → TR (same winding pattern).
+    idx[0] = 0; idx[1] = 3; idx[2] = 2;
+    idx[3] = 0; idx[4] = 2; idx[5] = 1;
+
+    ::bgfx::setVertexBuffer(0, &tvb, 0, 4);
+    ::bgfx::setIndexBuffer(&tib, 0, 6);
+
+    // Bind texture (or skip for solid-color quads — shader uses tint either way).
+    if (texture != UINT16_MAX)
+        ::bgfx::setTexture(0, ::bgfx::UniformHandle{sampler_uniform}, ::bgfx::TextureHandle{texture});
+
+    // State: write RGB+A, depth-test always-pass (defensive — the UI view shares the backbuffer
+    // depth and stale values from the scene pass were occluding half the quad in practice),
+    // premultiplied alpha blend, no culling (both triangles wind the same way in screen space
+    // but the active backend's NDC flip changes their effective orientation; not setting any
+    // cull bit lets both render regardless).
+    const uint64_t state =
+        BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
+        BGFX_STATE_DEPTH_TEST_ALWAYS |
+        BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+    ::bgfx::setState(state);
+
+    ::bgfx::submit(view_id, ::bgfx::ProgramHandle{program});
+}
+
 uint16_t BgfxGpuDevice::CreateVertexLayout(const void* bgfx_layout_ptr)
 {
     ke_thread_assert_current("ke.render");

@@ -54,6 +54,11 @@ public:
     MOCK_METHOD(void, SetBuffer, (uint8_t stage, GpuDynamicIndexBufferHandle handle, GpuAccess access), (override));
     MOCK_METHOD(void, Submit, (uint16_t id, GpuProgramHandle program, uint32_t depth, bool preserveState), (override));
     MOCK_METHOD(void, Dispatch, (uint16_t id, GpuProgramHandle program, uint32_t x, uint32_t y, uint32_t z), (override));
+    MOCK_METHOD(void, SubmitUiQuad,
+                (uint16_t view_id, GpuProgramHandle program,
+                 GpuUniformHandle sampler_uniform, GpuTextureHandle texture,
+                 const UiQuad& quad),
+                (override));
     MOCK_METHOD(void, SetPaletteColor, (uint8_t index, float r, float g, float b, float a), (override));
     MOCK_METHOD(uint16_t, CreateVertexLayout, (const void* bgfx_layout_ptr), (override));
     MOCK_METHOD(const char*, GetLastFatalError, (), (override));

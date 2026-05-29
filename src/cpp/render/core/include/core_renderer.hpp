@@ -87,6 +87,7 @@ private:
     render::GpuProgramHandle ssao_blur_program_   = render::kGpuInvalidHandle;
     render::GpuProgramHandle depth_program_       = render::kGpuInvalidHandle;
     render::GpuProgramHandle cull_program_        = render::kGpuInvalidHandle;
+    render::GpuProgramHandle ui_quad_program_     = render::kGpuInvalidHandle;
 
     ke_render render_api_{};
     struct ke_window* window_ = nullptr;

@@ -67,6 +67,10 @@ public:
     void Submit(uint16_t id, GpuProgramHandle program, uint32_t depth, bool preserveState) override;
     void Dispatch(uint16_t id, GpuProgramHandle program, uint32_t x, uint32_t y, uint32_t z) override;
 
+    void SubmitUiQuad(uint16_t view_id, GpuProgramHandle program,
+                      GpuUniformHandle sampler_uniform, GpuTextureHandle texture,
+                      const UiQuad& quad) override;
+
     void SetPaletteColor(uint8_t index, float r, float g, float b, float a) override;
 
     uint16_t CreateVertexLayout(const void* bgfx_layout_ptr) override;

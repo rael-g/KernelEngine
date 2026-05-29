@@ -95,6 +95,22 @@ public sealed unsafe class FramePacket : IFramePacket
         }
     }
 
+    /// <summary>Appends a UI quad to the overlay pass. Ignored when at capacity.</summary>
+    public void AddUiQuadCommand(TextureHandle texture,
+                                  float dstX, float dstY, float dstW, float dstH,
+                                  float u0, float v0, float u1, float v1,
+                                  float r, float g, float b, float a)
+    {
+        if (_packet->ui_draw_count < _packet->ui_draw_capacity)
+        {
+            ref var cmd = ref _packet->ui_draw_commands[_packet->ui_draw_count++];
+            cmd.texture = new ke_texture_handle { idx = texture.Value };
+            cmd.dst_x = dstX; cmd.dst_y = dstY; cmd.dst_w = dstW; cmd.dst_h = dstH;
+            cmd.src_u0 = u0;  cmd.src_v0 = v0;  cmd.src_u1 = u1;  cmd.src_v1 = v1;
+            cmd.color[0] = r; cmd.color[1] = g; cmd.color[2] = b; cmd.color[3] = a;
+        }
+    }
+
     /// <summary>Sets the skybox cubemap handle for this frame.</summary>
     public void SetSkybox(TextureHandle cubemapHandle)
     {

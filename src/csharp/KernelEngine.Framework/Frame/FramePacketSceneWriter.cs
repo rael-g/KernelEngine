@@ -53,6 +53,15 @@ public sealed class FramePacketSceneWriter : ISceneWriter
         _packet.AddDrawCommand(mesh, material, transform);
     }
 
+    public void AddUiQuadCommand(TextureHandle texture,
+                                 float dstX, float dstY, float dstW, float dstH,
+                                 float u0, float v0, float u1, float v1,
+                                 Vector4 color)
+    {
+        _threads.AssertCurrentThread("ke.sim");
+        _packet.AddUiQuadCommand(texture, dstX, dstY, dstW, dstH, u0, v0, u1, v1, color.X, color.Y, color.Z, color.W);
+    }
+
     public void SetSkybox(TextureHandle cubemap)
     {
         _threads.AssertCurrentThread("ke.sim");

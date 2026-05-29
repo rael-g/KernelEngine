@@ -31,7 +31,10 @@ public:
                              render::GpuProgramHandle main_program,
                              render::GpuProgramHandle shadow_program,
                              render::GpuProgramHandle skybox_program,
-                             render::GpuProgramHandle prepass_program);
+                             render::GpuProgramHandle prepass_program,
+                             render::GpuProgramHandle ui_quad_program,
+                             uint16_t backbuffer_width,
+                             uint16_t backbuffer_height);
 };
 
 } // namespace kernel_engine::render::core

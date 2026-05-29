@@ -15,6 +15,7 @@
     <Project Path="examples/csharp/11_ssao/11_ssao.csproj" />
     <Project Path="examples/csharp/12_asset_loading/12_asset_loading.csproj" />
     <Project Path="examples/csharp/13_full_scene/13_full_scene.csproj" />
+    <Project Path="examples/csharp/14_ui_quad/14_ui_quad.csproj" />
     <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
     <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
   </Folder>

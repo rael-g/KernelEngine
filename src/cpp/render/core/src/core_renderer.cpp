@@ -382,8 +382,14 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
         std::memcpy(ctx_.last_view, packet->camera.view.m, sizeof(float) * 16);
         std::memcpy(ctx_.last_proj, packet->camera.proj.m, sizeof(float) * 16);
 
+        // Backbuffer dimensions for the UI overlay's ortho projection. Resize-time updates land
+        // when the renderer re-inits; mid-frame resize is a separate concern.
+        const uint16_t bb_w = (uint16_t)ctx_.view_w;
+        const uint16_t bb_h = (uint16_t)ctx_.view_h;
+
         ke_result res = FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
-                                            post_process_, program_, shadow_program_, skybox_program_, prepass_program_);
+                                            post_process_, program_, shadow_program_, skybox_program_, prepass_program_,
+                                            ui_quad_program_, bb_w, bb_h);
         if (res != KE_OK) return res;
 
         // Clustered light culling (must run after scene uniforms are set).
@@ -573,6 +579,7 @@ ke_result CoreRenderer::SetupShader()
 
     load_extra("vs_shadow", "fs_shadow", shadow_program_);
     load_extra("vs_skybox", "fs_skybox", skybox_program_);
+    load_extra("vs_ui_quad", "fs_ui_quad", ui_quad_program_);
 
     struct SkyVert { float x, y, z; };
     static const SkyVert kSkyVerts[8] = {{-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1}, {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1}};

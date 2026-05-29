@@ -110,6 +110,23 @@ public:
     
     virtual void Submit(uint16_t id, GpuProgramHandle program, uint32_t depth, bool preserveState) = 0;
     virtual void Dispatch(uint16_t id, GpuProgramHandle program, uint32_t x, uint32_t y, uint32_t z) = 0;
+
+    /// Geometry + color payload for SubmitUiQuad. Aggregated into a struct (rather than 12 loose
+    /// floats) so the GpuDevice mock-method stays under gmock's parameter-count limit and so the
+    /// caller-side type-checks the field meaning.
+    struct UiQuad {
+        float dst_x, dst_y, dst_w, dst_h;  ///< Destination rect in backbuffer pixels (top-left origin).
+        float u0, v0, u1, v1;              ///< Source UVs (normalized).
+        float r, g, b, a;                  ///< Tint applied to the sampled texel (premultiplied alpha).
+    };
+
+    /// Submits a single textured quad in screen-space pixel coordinates.
+    /// Uses a backend-internal transient vertex buffer (frame-scoped, no destroy needed).
+    /// Texture may be invalid (UINT16_MAX) for a flat-colored quad; pass any valid sampler uniform.
+    /// State set internally: alpha blend (premultiplied), no depth test/write, CCW culling.
+    virtual void SubmitUiQuad(uint16_t view_id, GpuProgramHandle program,
+                              GpuUniformHandle sampler_uniform, GpuTextureHandle texture,
+                              const UiQuad& quad) = 0;
     
     virtual void SetPaletteColor(uint8_t index, float r, float g, float b, float a) = 0;
 

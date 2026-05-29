@@ -100,6 +100,9 @@ public unsafe partial struct ke_render
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_cluster_config *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_cluster_config*, ke_result> set_cluster_config;
 
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_texture_handle, float, float, float, float, float, float, float, float, float, float, float, float)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_texture_handle, float, float, float, float, float, float, float, float, float, float, float, float, ke_result> submit_ui_quad;
+
     [NativeTypeName("ke_result (*)(struct ke_render *, const struct ke_frame_packet *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_frame_packet*, ke_result> submit_packet;
 

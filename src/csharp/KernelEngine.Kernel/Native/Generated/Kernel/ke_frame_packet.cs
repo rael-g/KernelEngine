@@ -83,6 +83,14 @@ public unsafe partial struct ke_frame_packet
 
     public float bloom_intensity;
 
+    public ke_ui_draw_command* ui_draw_commands;
+
+    [NativeTypeName("uint32_t")]
+    public uint ui_draw_count;
+
+    [NativeTypeName("uint32_t")]
+    public uint ui_draw_capacity;
+
     [InlineArray(4)]
     public partial struct _clear_color_e__FixedBuffer
     {
