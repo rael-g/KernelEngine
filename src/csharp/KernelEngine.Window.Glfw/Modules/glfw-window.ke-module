@@ -1,0 +1,5 @@
+id          = "KernelEngine.Window.Glfw"
+using       = "KernelEngine.Window.Glfw"
+extension   = "AddGlfwWindow"
+csproj-ref  = "src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj"
+depends-on  = ["KernelEngine.Configuration"]

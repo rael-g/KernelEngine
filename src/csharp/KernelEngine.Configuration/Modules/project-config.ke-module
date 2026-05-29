@@ -1,0 +1,5 @@
+id          = "KernelEngine.Configuration"
+using       = "KernelEngine.Configuration"
+extension   = "AddProjectConfig"
+csproj-ref  = "src/csharp/KernelEngine.Configuration/KernelEngine.Configuration.csproj"
+depends-on  = []

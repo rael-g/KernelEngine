@@ -1,0 +1,5 @@
+id          = "KernelEngine.Audio.MiniAudio"
+using       = "KernelEngine.Audio.MiniAudio"
+extension   = "AddMiniAudio"
+csproj-ref  = "src/csharp/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj"
+depends-on  = ["KernelEngine.Kernel"]

@@ -1,0 +1,5 @@
+id          = "KernelEngine.Text.StbTrueType"
+using       = "KernelEngine.Text.StbTrueType"
+extension   = "AddTextStbTrueType"
+csproj-ref  = "src/csharp/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj"
+depends-on  = ["KernelEngine.Kernel"]

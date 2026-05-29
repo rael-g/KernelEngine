@@ -28,6 +28,7 @@
     <Project Path="src/csharp/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
     <Project Path="src/csharp/KernelEngine.Asset.StbImage/KernelEngine.Asset.StbImage.csproj" />
     <Project Path="src/csharp/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj" />
+    <Project Path="src/csharp/KernelEngine.Cli/KernelEngine.Cli.csproj" />
     <Project Path="src/csharp/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
     <Project Path="src/csharp/KernelEngine.DevPlatform.Win32/KernelEngine.DevPlatform.Win32.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />

@@ -1,0 +1,5 @@
+id          = "KernelEngine.Render.Bgfx"
+using       = "KernelEngine.Render.Bgfx"
+extension   = "AddBgfxRenderer"
+csproj-ref  = "src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj"
+depends-on  = ["KernelEngine.Configuration"]

@@ -1,27 +1,31 @@
 [project]
-name          = "Pong"
+name = "Pong"
 default_scene = "res://scenes/Main.scene"
 
 [logging]
 console_level = "Warning"
 
+[runtime]
 [runtime.window]
-width      = 960
-height     = 540
-title      = "KernelEngine — Pong (2D)"
+width = 960
+height = 540
+title = "KernelEngine — Pong (2D)"
 fullscreen = false
 
 [runtime.renderer]
 shader_path = "shaders"
-vsync       = true
+vsync = true
 
 [runtime.physics_2d]
 gravity_x = 0.0
 gravity_y = 0.0
 
 [render]
-clear_color   = [0.04, 0.04, 0.08, 1.0]
+clear_color = [0.04, 0.04, 0.08, 1.0]
 ambient_light = [1.0, 1.0, 1.0]
 
 [input]
 actions = "res://actions.input"
+
+[ke]
+modules = ["KernelEngine.Kernel", "KernelEngine.Kernel.Logger", "KernelEngine.Kernel.ConsoleSink", "KernelEngine.Kernel.Input", "KernelEngine.Configuration", "KernelEngine.Framework.InputActions", "KernelEngine.Window.Glfw", "KernelEngine.Render.Bgfx", "KernelEngine.Physics.Box2D", "KernelEngine.Audio.MiniAudio", "KernelEngine.Framework.AudioFramework", "KernelEngine.Text.StbTrueType"]
