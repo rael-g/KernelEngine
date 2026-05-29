@@ -78,6 +78,17 @@ protected:
     virtual ke_result SetupShader();
 
 private:
+    /// @brief Builds the render graph used by SubmitPacket. Phase 3 Step A
+    /// installs a single "scene.legacy_monolithic" pass that wraps the original
+    /// FrameSubmitter chain — orchestration goes through the graph immediately,
+    /// internal pipeline code stays untouched. Steps B-H split that pass into
+    /// per-stage callbacks.
+    ke_result SetupRenderGraph();
+
+    /// @brief Executes the original FrameSubmitter + clustered/SSAO/post-fx
+    /// chain. Called from the legacy monolithic pass's record callback.
+    ke_result SubmitPacketLegacy(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;
@@ -104,9 +115,10 @@ private:
     render::GpuProgramHandle ui_quad_program_     = render::kGpuInvalidHandle;
 
     ke_render render_api_{};
+    struct ke_render_graph* graph_ = nullptr; // owned; built in OnInitialize.
     struct ke_window* window_ = nullptr;
     std::string shader_path_;
-    uint32_t renderer_type_ = 0; 
+    uint32_t renderer_type_ = 0;
     bool vsync_ = true;
     bool orthographic_ = true;
 };

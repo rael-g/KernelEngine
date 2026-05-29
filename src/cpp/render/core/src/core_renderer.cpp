@@ -9,6 +9,7 @@
 #include <shader_provider.hpp>
 #include <frame_submitter.hpp>
 #include "render_graph_impl.hpp"
+#include <kernel_engine/kernel/render/render_graph.h>
 #include "view_ids.hpp"
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/window/window.h>
@@ -338,15 +339,66 @@ ke_result CoreRenderer::OnInitialize()
         }
 
         initialized_ = true;
+
+        // Graph standup happens after pipelines are ready — Phase 3 Step A puts
+        // a single monolithic pass in front of the existing chain so all draws
+        // now flow through the executor, but pipeline internals are unchanged.
+        res = SetupRenderGraph();
+        if (res != KE_OK) return res;
+
         return KE_OK;
     } catch (const BgfxFatalException& e) {
         return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "OnInitialize", e.what());
     }
 }
 
+ke_result CoreRenderer::SetupRenderGraph()
+{
+    graph_ = render_api_.create_render_graph(&render_api_, ctx_.allocator);
+    if (!graph_)
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_OUT_OF_MEMORY,
+            "SetupRenderGraph", "create_render_graph returned NULL");
+
+    // The legacy chain writes to the default backbuffer (each view sets
+    // its own framebuffer to kGpuInvalidHandle). Import "backbuffer" so the
+    // pass has something to declare as a write — the kernel handle is the
+    // None sentinel because no TextureManager entry exists for the screen.
+    ke_result rc = graph_->import_texture(graph_, "backbuffer",
+                                          ke_texture_handle{ UINT32_MAX });
+    if (rc != KE_OK) return rc;
+
+    ke_resource_ref writes[] = {
+        { "backbuffer", KE_ACCESS_COLOR_ATTACHMENT }
+    };
+    ke_render_pass_params params{};
+    params.name = "scene.legacy_monolithic";
+    params.type = KE_PASS_GEOMETRY;
+    params.writes = writes;
+    params.writes_count = 1;
+    params.record = [](ke_render_pass_ctx* ctx, void* user) {
+        auto* self = static_cast<CoreRenderer*>(user);
+        const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+        if (self && pkt) self->SubmitPacketLegacy(pkt);
+    };
+    params.user = this;
+
+    rc = graph_->add_pass(graph_, &params);
+    if (rc != KE_OK) return rc;
+
+    return graph_->compile(graph_);
+}
+
 ke_result CoreRenderer::OnShutdown()
 {
     try {
+        // Destroy graph first — its transient resources reference GPU state
+        // owned by the device, so it has to release before pipelines/managers
+        // tear down (and before gpu->Shutdown).
+        if (graph_) {
+            graph_->destroy(graph_);
+            graph_ = nullptr;
+        }
+
         textures_.Shutdown();
         geometry_.Shutdown();
         lighting_.Shutdown();
@@ -394,10 +446,15 @@ ke_result CoreRenderer::Frame()
 
 ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
 {
+    if (!initialized_ || !ctx_.gpu || !packet) return KE_ERROR_NOT_INITIALIZED;
+    if (!graph_) return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_NOT_INITIALIZED,
+        "SubmitPacket", "Render graph not built (OnInitialize never completed?)");
+    return graph_->execute(graph_, packet);
+}
+
+ke_result CoreRenderer::SubmitPacketLegacy(const struct ke_frame_packet* packet)
+{
     try {
-        if (!initialized_ || !ctx_.gpu || !packet) return KE_ERROR_NOT_INITIALIZED;
-
-
         // Extract near/far from proj matrix so clustered has current values.
         const float* p = packet->camera.proj.m;
         if (std::abs(p[10] - p[11]) > 0.0001f) {
