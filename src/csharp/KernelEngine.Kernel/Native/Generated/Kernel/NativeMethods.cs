@@ -129,4 +129,7 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_BODY_2D_INVALID ((ke_body_2d)0)")]
     public const uint KE_BODY_2D_INVALID = ((uint)(0));
+
+    [NativeTypeName("#define KE_ID_FONT \"ke_font\"")]
+    public static ReadOnlySpan<byte> KE_ID_FONT => "ke_font"u8;
 }
