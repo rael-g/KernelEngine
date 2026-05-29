@@ -223,11 +223,9 @@ ke_result RenderGraphImpl::Compile()
                     "RenderGraph.Compile",
                     "Pass declares a resource under 'writes' but the access is read-only.");
         }
-        // Compute passes deferred — surface the limit synchronously.
-        if (pass.type == KE_PASS_COMPUTE)
-            return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_NOT_SUPPORTED,
-                "RenderGraph.Compile",
-                "Compute passes (KE_PASS_COMPUTE) land with the F.RC3 / Phase-4 compute primitives. Use a geometry/fullscreen pass for now.");
+        // Compute pass acceptance landed in Phase 4.1; the per-pass record
+        // callback is responsible for the actual dispatch (the executor only
+        // schedules the view-id slot the pass should run under).
     }
 
     // 2. Producer map: which pass writes each resource? Two writers = error.
@@ -315,10 +313,31 @@ ke_result RenderGraphImpl::Compile()
 ke_result RenderGraphImpl::EnsureResourceMaterialized(Resource& r)
 {
     if (r.is_imported) return KE_OK; // caller's texture, nothing to allocate.
-    if (r.texture != kGpuInvalidHandle) return KE_OK; // already done.
 
     GpuDevice* gpu = renderer_->GetContext().gpu;
     if (!gpu) return KE_ERROR_NOT_INITIALIZED;
+
+    if (r.desc.type == KE_RESOURCE_TYPE_STORAGE_BUFFER) {
+        if (r.storage_buffer != kGpuInvalidHandle) return KE_OK;
+        if (r.desc.element_count == 0 || r.desc.element_stride == 0)
+            return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_INVALID_ARGUMENT,
+                "RenderGraph.Compile",
+                "Storage buffer resource requires non-zero element_count and element_stride.");
+        // bgfx represents compute-rw storage buffers as dynamic index buffers
+        // tagged BGFX_BUFFER_COMPUTE_READ_WRITE (0x0c00 when truncated to the
+        // 16-bit flag word). Element stride is encoded by the buffer type —
+        // index32 = 4 bytes; tighter packing comes when the contract adds a
+        // dedicated storage-buffer creation path.
+        const uint16_t kComputeReadWrite = 0x0C00;
+        uint32_t total_words = r.desc.element_count;
+        if (r.desc.element_stride > 4)
+            total_words = (r.desc.element_count * r.desc.element_stride + 3) / 4;
+        r.storage_buffer = gpu->CreateDynamicIndexBuffer(total_words, kComputeReadWrite);
+        r.owns_storage_buffer = r.storage_buffer != kGpuInvalidHandle;
+        return r.storage_buffer != kGpuInvalidHandle ? KE_OK : KE_ERROR_RENDER;
+    }
+
+    if (r.texture != kGpuInvalidHandle) return KE_OK; // already done.
 
     bool is_depth = false;
     uint32_t fmt = MapFormat(r.desc.format, is_depth);
@@ -359,12 +378,15 @@ ke_result RenderGraphImpl::ReleaseAllResources()
     GpuDevice* gpu = renderer_ ? renderer_->GetContext().gpu : nullptr;
     if (gpu) {
         for (auto& [name, r] : resources_) {
-            if (r.owns_framebuffer) gpu->DestroyFrameBuffer(r.framebuffer);
-            if (r.owns_texture)     gpu->DestroyTexture(r.texture);
+            if (r.owns_framebuffer)     gpu->DestroyFrameBuffer(r.framebuffer);
+            if (r.owns_texture)         gpu->DestroyTexture(r.texture);
+            if (r.owns_storage_buffer)  gpu->DestroyDynamicIndexBuffer(r.storage_buffer);
             r.framebuffer = kGpuInvalidHandle;
             r.texture = kGpuInvalidHandle;
+            r.storage_buffer = kGpuInvalidHandle;
             r.owns_framebuffer = false;
             r.owns_texture = false;
+            r.owns_storage_buffer = false;
         }
     }
     return KE_OK;

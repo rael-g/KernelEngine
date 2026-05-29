@@ -68,6 +68,12 @@ private:
         // Backend handles populated at compile (transient resources).
         GpuTextureHandle texture = kGpuInvalidHandle;
         GpuFrameBufferHandle framebuffer = kGpuInvalidHandle;
+        // Storage buffer (compute) — populated for KE_RESOURCE_TYPE_STORAGE_BUFFER
+        // resources at compile. Phase 4.1 backs them with bgfx dynamic index
+        // buffers tagged BGFX_BUFFER_COMPUTE_READ_WRITE; binding stays with the
+        // record callback (it has direct GpuDevice access on the internal path).
+        GpuDynamicIndexBufferHandle storage_buffer = kGpuInvalidHandle;
+        bool owns_storage_buffer = false;
         // True when the graph created the texture/framebuffer and must destroy
         // them. Imported textures are caller-owned; framebuffers built around
         // them are still graph-owned.
