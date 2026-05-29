@@ -369,6 +369,12 @@ ke_result CoreRenderer::SetupRenderGraph()
     rc = graph_->import_texture(graph_, "shadow_map",
                                 ke_texture_handle{ UINT32_MAX });
     if (rc != KE_OK) return rc;
+    // Logical "scene framebuffer after skybox is composited". Until the graph
+    // owns the actual color attachment (Phase 5), the underlying bgfx target
+    // is still the legacy backbuffer/HDR FB — this name only serves the DAG.
+    rc = graph_->import_texture(graph_, "backbuffer_post_skybox",
+                                ke_texture_handle{ UINT32_MAX });
+    if (rc != KE_OK) return rc;
 
     // shadow.directional — extracted in Step B. Writes shadow_map so any pass
     // that reads it (the legacy_remaining scene pass) is forced behind us.
@@ -391,9 +397,9 @@ ke_result CoreRenderer::SetupRenderGraph()
         if (rc != KE_OK) return rc;
     }
 
-    // scene.legacy_remaining — everything still inside the legacy chain (main
-    // scene + skybox + ssao + post-fx + ui). Reads shadow_map so the DAG
-    // schedules shadow.directional first; writes backbuffer as the final sink.
+    // scene.legacy_remaining — main scene + ssao + post-fx + ui. Reads shadow_map
+    // so the DAG schedules shadow.directional first; writes backbuffer (which
+    // skybox.composite then reads, ordering itself after).
     {
         ke_resource_ref reads[] = {
             { "shadow_map", KE_ACCESS_SAMPLED }
@@ -418,6 +424,33 @@ ke_result CoreRenderer::SetupRenderGraph()
         if (rc != KE_OK) return rc;
     }
 
+    // skybox.composite — Step C. Reads backbuffer (which scene writes) to be
+    // ordered after the scene pass; writes backbuffer_post_skybox as the
+    // logical handoff to later post-fx passes (Steps D-H).
+    {
+        ke_resource_ref reads[] = {
+            { "backbuffer", KE_ACCESS_SAMPLED }
+        };
+        ke_resource_ref writes[] = {
+            { "backbuffer_post_skybox", KE_ACCESS_COLOR_ATTACHMENT }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "skybox.composite";
+        pp.type = KE_PASS_GEOMETRY;
+        pp.reads = reads;
+        pp.reads_count = 1;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->ExecuteSkyboxPass(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
+
     return graph_->compile(graph_);
 }
 
@@ -434,6 +467,27 @@ ke_result CoreRenderer::ExecuteShadowPass(const struct ke_frame_packet* packet)
                                   cmd.mesh_handle, &cmd.transform);
     }
     shadows_.EndShadowPass(ctx_);
+    return KE_OK;
+}
+
+ke_result CoreRenderer::ExecuteSkyboxPass(const struct ke_frame_packet* packet)
+{
+    if (!packet || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    if (!packet->has_skybox || skybox_program_ == kGpuInvalidHandle) return KE_OK;
+
+    // Pin the unit cube at the camera so model×view cancels translation — only
+    // rotation remains so the skybox always surrounds the viewer.
+    float sky_model[16] = {
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        packet->camera.pos_x, packet->camera.pos_y, packet->camera.pos_z, 1
+    };
+    ctx_.gpu->SetTransform(sky_model, 1);
+    textures_.SubmitSkybox(ctx_, packet->skybox_handle,
+                           skybox_program_,
+                           geometry_.skybox_vb, geometry_.skybox_ib,
+                           textures_.skybox_sampler_uniform, textures_.skybox_tint_uniform);
     return KE_OK;
 }
 

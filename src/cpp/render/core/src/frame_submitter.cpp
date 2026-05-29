@@ -78,28 +78,14 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     // ── 3. Scene View Transform ──────────────────────────────────────────────
     ctx.gpu->SetViewTransform(Id(ViewId::Scene), packet.camera.view.m, packet.camera.proj.m);
 
-    // ── 4. Skybox Pass ───────────────────────────────────────────────────────
+    // Skybox draw was here — extracted into CoreRenderer::ExecuteSkyboxPass as a separate
+    // graph node. The IBL env-tex resolution stays in the scene pass because the main
+    // lighting shader samples it whether or not the skybox geometry is drawn.
     GpuTextureHandle env_tex = textures.default_cube_tex;
-    if (packet.has_skybox && skybox_program != kGpuInvalidHandle)
+    if (packet.has_skybox)
     {
         GpuTextureHandle sky = textures.GetTextureIdx(packet.skybox_handle);
         if (sky != kGpuInvalidHandle) env_tex = sky;
-
-        // Place the unit cube at the camera world position so that model×view cancels
-        // the translation and only rotation remains — the skybox always surrounds the camera.
-        // SetViewTransform is per-view-per-frame in bgfx, so we set the model instead.
-        float sky_model[16] = {
-            1,0,0,0,
-            0,1,0,0,
-            0,0,1,0,
-            packet.camera.pos_x, packet.camera.pos_y, packet.camera.pos_z, 1
-        };
-        ctx.gpu->SetTransform(sky_model, 1);
-
-        textures.SubmitSkybox(ctx, packet.skybox_handle,
-                              skybox_program,
-                              geometry.skybox_vb, geometry.skybox_ib,
-                              textures.skybox_sampler_uniform, textures.skybox_tint_uniform);
     }
 
     // ── 5. Main Scene Pass ───────────────────────────────────────────────────

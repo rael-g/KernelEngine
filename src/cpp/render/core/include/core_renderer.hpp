@@ -94,6 +94,12 @@ private:
     /// carries no valid shadow map handle.
     ke_result ExecuteShadowPass(const struct ke_frame_packet* packet);
 
+    /// @brief Renders the skybox cube around the camera (Phase 3 Step C).
+    /// Skips silently when the packet carries no skybox or the skybox program
+    /// failed to load. Runs after the main scene pass — depth-test LEQUAL fills
+    /// only pixels the scene left at the far plane.
+    ke_result ExecuteSkyboxPass(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;
