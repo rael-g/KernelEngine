@@ -670,6 +670,16 @@ After all 5 blocks complete:
     2. ✅ **RESOLVED (2026-05-22)** — `Key`/`MouseButton`/`InputAction`/`KeyModifiers` enums + `InputReaderExtensions` overloads added (F.C1); game code now reads `input.IsKeyDown(Key.Space)`.
     3. **Edge events unreliable over the lock-free input buffer.** `IsKeyPressed` (press-edge) is unreliable because `InputBuffer` is a single-slot *snapshot* exchange — fast press/release between sim frames is lost. Edge detection needs an **event queue** (key-down/up events drained per frame), not snapshot diffing. Only `IsKeyDown` (level) is reliable today.
 
+##### [OBS.7] Directional shadow not visible in example 06_shadow_map (BUG, pre-existing on main)
+- **Tags**: `bug`, `render`
+- **Symptoms (2026-05-29 visual)**: `dotnet run --project examples/csharp/06_shadow_map` renders the scene + lighting normally but the **projected shadow of the cube on the ground plane is absent**. Reproduces on `main` independent of the `feat/render-graph` branch — surfaced during render-graph Phase 3 visual validation, NOT introduced by the graph rewrite.
+- **Diagnosis so far**:
+    - ShadowPipeline pipeline runs end-to-end: `BeginShadowPass` is called with valid `packet->shadow.map_handle` (idx=0), 2 shadow draws submitted via `SubmitMeshShadow` to view 0, light_view/light_proj matrices non-zero and plausibly correct for a 25-unit eye distance + (-20,20,-20,20,0.1,50) ortho.
+    - Scene draw path sees `active_shadow_handle.idx=0` + `shadow_tex=8` (valid bgfx handle) at `SetTexture(2, shadows.shadow_map_uniform, shadow_tex, ...)` time, so the s_shadowMap sampler IS bound to the shadow target — not to the white fallback.
+    - That isolates the failure to one of: (a) `fs_shadow` not actually writing `gl_FragCoord.z` to the R32F color attachment (shadow map stays at clear=1.0); (b) `u_lightVP` set in BeginShadowPass not surviving into `fs_basic`'s `v_shadowCoord = mul(u_lightVP, worldPos)` (uniform overwrite or per-draw scoping?); (c) `u_shadowParams.x` not actually > 0.5 when `fs_basic.sc:113` evaluates; (d) `coord.z - 0.005 > texture2D(s_shadowMap, coord.xy).x` always false because the depth values written/sampled are on incompatible scales (NDC vs [0,1]).
+- **Next**: needs a focused shader-level visual session (RenderDoc capture of view 0's R32F attachment + the per-fragment shadow sampler value in view 1, against the legacy known-good build).
+- **Not blocking render-graph work** — the regression is independent. F.RC2 Phase 3 can ship without OBS.7 fixed; the broken shadow will resurface only when this fix lands.
+
 ##### [OBS.6] Point & spot lights cast no shadows (feature, deferred — future)
 - **Tags**: `feature`, `render`
 - **Why**: Only the **directional** light has a shadow map today. In `fs_basic.sc` point/spot lights are accumulated "forward, **unshadowed**" ([fs_basic.sc:115](../src/cpp/render/bgfx/shaders/fs_basic.sc#L115)) — they correctly brighten even directional-shadowed regions (shadow only attenuates the directional term, [:113](../src/cpp/render/bgfx/shaders/fs_basic.sc#L113)), but they cast no shadows of their own. Surfaced in example 13: orbiting point lights light the box but objects don't occlude each other's point-light contribution.
