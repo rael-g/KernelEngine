@@ -107,6 +107,39 @@ public static class Commands
         _        => value.ToString() ?? "",
     };
 
+    public static void AddInputAction(string name, string type, string? projectDir)
+    {
+        if (!IsValidIdentifier(name))
+            throw new ArgumentException(
+                $"'{name}' is not a valid C# identifier (PascalCase, alphanumeric + underscore, no leading digit).");
+        if (type is not ("Button" or "Axis1D" or "Axis2D"))
+            throw new ArgumentException(
+                $"Unknown action type '{type}'. Expected Button, Axis1D, or Axis2D.");
+
+        var ctx = ProjectContext.Discover(projectDir);
+
+        var actionsFile = InputActionsFile.LoadForProject(ctx);
+        if (actionsFile.HasAction(name))
+            throw new InvalidOperationException(
+                $"Action '{name}' is already declared in {actionsFile.AbsolutePath}.");
+
+        var enumLoc = GameActionsEnumEditor.AddMember(ctx.ProjectDirectory, name);
+
+        actionsFile.AppendAction(name, type);
+
+        Console.WriteLine($"Added action '{name}' ({type}) to enum {enumLoc.EnumName} ({Path.GetFileName(enumLoc.FilePath)}) and {Path.GetFileName(actionsFile.AbsolutePath)}.");
+        Console.WriteLine($"Bindings start empty — edit {Path.GetFileName(actionsFile.AbsolutePath)} or use a future `ke add inputbinding` to wire keys.");
+    }
+
+    private static bool IsValidIdentifier(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        if (!char.IsLetter(s[0]) && s[0] != '_') return false;
+        for (int i = 1; i < s.Length; i++)
+            if (!char.IsLetterOrDigit(s[i]) && s[i] != '_') return false;
+        return true;
+    }
+
     public static void ListModules(string? projectDir)
     {
         var ctx     = ProjectContext.Discover(projectDir);

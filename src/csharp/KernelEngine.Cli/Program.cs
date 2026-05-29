@@ -19,7 +19,22 @@ addModuleCmd.SetAction(parseResult =>
     return Run(() => Commands.AddModule(id, projectArg));
 });
 
-var addCmd = new Command("add", "Add an entity (module, scene, …) to the project.") { addModuleCmd };
+// ── add inputaction <Name> [--type Button|Axis1D|Axis2D] ────────────────────
+var addInputActionNameArg = new Argument<string>("name") { Description = "Action name (PascalCase; added as a member of the [GameActions] enum AND as an [action.<Name>] in actions.input)." };
+var addInputActionTypeOpt = new Option<string>("--type") { Description = "Action type: Button, Axis1D, or Axis2D.", DefaultValueFactory = _ => "Button" };
+var addInputActionCmd = new Command("inputaction", "Declare a new input action: appends to the [GameActions] enum and the actions.input file.")
+{
+    addInputActionNameArg, addInputActionTypeOpt,
+};
+addInputActionCmd.SetAction(parseResult =>
+{
+    var name = parseResult.GetValue(addInputActionNameArg)!;
+    var type = parseResult.GetValue(addInputActionTypeOpt)!;
+    var projectArg = parseResult.GetValue(projectOpt);
+    return Run(() => Commands.AddInputAction(name, type, projectArg));
+});
+
+var addCmd = new Command("add", "Add an entity (module, scene, …) to the project.") { addModuleCmd, addInputActionCmd };
 
 // ── remove module <id> ──────────────────────────────────────────────────────
 var removeModuleIdArg = new Argument<string>("id") { Description = "Module id to remove." };
