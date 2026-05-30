@@ -30,12 +30,15 @@ app.OnReady = (resources) =>
     var floorMat = resources.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), metallic: 0.0f, roughness: 0.8f);
     var cubeMat = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
-    // Floor
+    // Floor — the default mesh is a quad in the XY plane (normal +Z), so rotate -90° about X
+    // to lay it flat in the XZ plane with its normal pointing up. Scale X/Y (Y becomes depth Z
+    // after the rotation); the quad has no thickness so the old (20, 0.1, 20) made a thin strip.
     var floor = app.Tree.AddNode(new MeshRenderer { MaterialHandle = floorMat }, "Floor");
-    floor.LocalTransform = floor.LocalTransform with 
-    { 
-        Scale = new Vector3(20f, 0.1f, 20f),
-        Position = new Vector3(0f, -0.05f, 0f) 
+    floor.LocalTransform = floor.LocalTransform with
+    {
+        Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
+        Scale = new Vector3(30f, 30f, 1f),
+        Position = new Vector3(0f, 0f, 0f)
     };
 
     // Grid of cubes
@@ -51,24 +54,27 @@ app.OnReady = (resources) =>
     // Spot lights
     app.Tree.AddNode(
         new RotatingSpotLightNode { 
-            Color = new Vector3(1, 0, 0), 
-            Intensity = 10.0f,
+            Color = new Vector3(1, 0, 0),
+            Intensity = 25.0f,
+            Range = 60f,
             Offset = 0f
         },
         "Spot_Red");
 
     app.Tree.AddNode(
         new RotatingSpotLightNode { 
-            Color = new Vector3(0, 1, 0), 
-            Intensity = 10.0f,
+            Color = new Vector3(0, 1, 0),
+            Intensity = 25.0f,
+            Range = 60f,
             Offset = MathF.PI * 2f / 3f
         },
         "Spot_Green");
 
     app.Tree.AddNode(
         new RotatingSpotLightNode { 
-            Color = new Vector3(0, 0, 1), 
-            Intensity = 10.0f,
+            Color = new Vector3(0, 0, 1),
+            Intensity = 25.0f,
+            Range = 60f,
             Offset = MathF.PI * 4f / 3f
         },
         "Spot_Blue");
