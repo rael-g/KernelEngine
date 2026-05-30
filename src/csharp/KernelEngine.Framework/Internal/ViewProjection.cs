@@ -43,15 +43,20 @@ internal static class ViewProjection
     /// </summary>
     public static Matrix4x4 LookAt(Vector3 eye, Vector3 target, Vector3 up)
     {
-        var f = Vector3.Normalize(target - eye);         // forward (toward target)
-        var r = Vector3.Normalize(Vector3.Cross(up, f)); // right
-        var u = Vector3.Cross(f, r);                     // up
-        // Column-major: basis vectors as rows 0..2, translation in column 3.
+        // Right-handed view: forward (toward target) is built then negated into the matrix's
+        // z-row so that view-space z is NEGATIVE for content in front of the camera — matching
+        // the frustum Ortho/Perspective produce (which map view-z in [-near, -far] to NDC).
+        // The earlier '+f' layout was silently left-handed and only worked while Ortho was
+        // also LH (positive M33). The 16957b2 Ortho fix exposed the mismatch (OBS.7): shadow
+        // camera placed origin at view-z=+25 (outside RH frustum) → ComputeShadow saw empty.
+        var f = Vector3.Normalize(target - eye);
+        var r = Vector3.Normalize(Vector3.Cross(up, f));
+        var u = Vector3.Cross(f, r);
         return new Matrix4x4(
-            r.X, u.X, f.X, 0f,
-            r.Y, u.Y, f.Y, 0f,
-            r.Z, u.Z, f.Z, 0f,
-            -Vector3.Dot(r, eye), -Vector3.Dot(u, eye), -Vector3.Dot(f, eye), 1f);
+            r.X, u.X, -f.X, 0f,
+            r.Y, u.Y, -f.Y, 0f,
+            r.Z, u.Z, -f.Z, 0f,
+            -Vector3.Dot(r, eye), -Vector3.Dot(u, eye), Vector3.Dot(f, eye), 1f);
     }
 
     public static Matrix4x4 Perspective(float fovY, float aspect, float near, float far)

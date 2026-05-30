@@ -13,18 +13,20 @@ public class ViewProjectionTests
         var eye = new Vector3(0, 0, 10);
         var target = Vector3.Zero;
         var up = Vector3.UnitY;
-        
+
         var view = ViewProjection.LookAt(eye, target, up);
-        
-        // At eye (0,0,10) looking at (0,0,0), forward is (0,0,-1)
-        // In our builder: forward = normalize(target - eye) = (0,0,-1)
-        // Right = normalize(cross(up, forward)) = cross((0,1,0), (0,0,-1)) = (-1,0,0)
-        // Up = cross(forward, right) = cross((0,0,-1), (-1,0,0)) = (0,1,0)
-        
+
+        // At eye (0,0,10) looking at (0,0,0): forward (toward target) = (0,0,-1).
+        // RH view matrix stores -forward in the z column so view-space z is NEGATIVE for
+        // content in front of the camera (matches the [-near,-far] frustum Ortho/Perspective
+        // produce). With f=(0,0,-1): -f.Z = +1 → M33 = 1, and dot(f,eye) = -10 → M43 = -10.
+        // Origin transforms to view-z = M43 = -10, which Ortho(near=0.1, far=100) maps to
+        // NDC z ≈ 0.1 — inside the frustum (correct).
+
         Assert.Equal(-1, view.M11); // Right.X
         Assert.Equal(1, view.M22);  // Up.Y
-        Assert.Equal(-1, view.M33); // Forward.Z
-        Assert.Equal(10, view.M43); // Translation Z: -dot(f, eye) = -dot((0,0,-1), (0,0,10)) = 10
+        Assert.Equal(1, view.M33);  // -Forward.Z (RH)
+        Assert.Equal(-10, view.M43); // +dot(f, eye) (RH) — origin lands at view-z = -10
     }
 
     [Fact]
