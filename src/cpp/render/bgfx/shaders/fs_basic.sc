@@ -1,12 +1,23 @@
 $input v_normal, v_texcoord0, v_worldPos, v_shadowCoord, v_tangent
 
-#include <bgfx_shader.sh>
+#include <bgfx_compute.sh>
 
 SAMPLER2D(s_texColor,    0);
 SAMPLERCUBE(s_envMap,    1);
 SAMPLER2D(s_shadowMap,   2);
 SAMPLER2D(s_normalMap,   3);
 SAMPLER2D(s_ssaoBlurred, 4);
+
+// Cluster light data (read-only, populated by cs_light_cull each frame)
+// Point lights: 2 vec4 each — (pos.xyz, radius) | (r, g, b, intensity)
+BUFFER_RO(b_pointLightsFS,     vec4, 5);
+// Spot lights: 3 vec4 each — (pos.xyz, range) | (dir.xyz, inner_angle_rad) | (r, g, b, intensity)
+BUFFER_RO(b_spotLightsFS,      vec4, 6);
+// Per-cluster index lists and counts (output of cs_light_cull)
+BUFFER_RO(b_pointLightIndices, uint, 7);
+BUFFER_RO(b_pointLightCount,   uint, 8);
+BUFFER_RO(b_spotLightIndices,  uint, 9);
+BUFFER_RO(b_spotLightCount,    uint, 10);
 
 uniform vec4 u_color;
 uniform vec4 u_lightDir;
@@ -18,8 +29,10 @@ uniform vec4 u_iblParams;
 uniform vec4 u_shadowParams;
 uniform vec4 u_normalParams;
 uniform vec4 u_ssaoState;
-uniform vec4 u_clusterParams2;
-uniform vec4 u_lightCounts; // x = point light count, y = spot light count
+uniform vec4 u_clusterParams;   // x=numX, y=numY, z=numZ, w=maxLightsPerCluster
+uniform vec4 u_clusterParams2;  // x=pointLightCount, y=spotLightCount (unused here, kept for parity)
+uniform vec4 u_clusterViewport; // x=viewW, y=viewH, z=near, w=far
+uniform vec4 u_lightCounts;     // x=point (brute-force path, kept for fallback), y=spot
 
 uniform vec4 u_pointLights[128];
 uniform vec4 u_spotLights[192];
@@ -40,7 +53,7 @@ float GeometrySchlickGGX(float NdotV, float roughness) {
 }
 
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
-    return GeometrySchlickGGX(max(dot(N, V), 0.0), roughness) * 
+    return GeometrySchlickGGX(max(dot(N, V), 0.0), roughness) *
            GeometrySchlickGGX(max(dot(N, L), 0.0), roughness);
 }
 
@@ -68,11 +81,42 @@ float ComputeShadow(vec4 shadowCoord) {
     return (coord.z - 0.005 > texture2D(s_shadowMap, coord.xy).x) ? 0.3 : 1.0;
 }
 
+// Returns the flat cluster index for this fragment.
+// fragCoord = gl_FragCoord (passed from main because bgfx restricts built-ins to main scope).
+// Vulkan NDC depth is [0,1]; z_view is negative (right-hand camera).
+uint ComputeClusterIndex(vec4 fragCoord) {
+    float numX = u_clusterParams.x;
+    float numY = u_clusterParams.y;
+    float numZ = u_clusterParams.z;
+    float near  = u_clusterViewport.z;
+    float far   = u_clusterViewport.w;
+
+    float zNdc  = fragCoord.z;
+    float zView = -(near * far) / (far - zNdc * (far - near));
+
+    // Exponential slice matching UpdateClusterBounds (Olsson 2012)
+    int iz = int(numZ * log(-zView / near) / log(far / near));
+    iz = clamp(iz, 0, int(numZ) - 1);
+
+    int ix = int(fragCoord.x / u_clusterViewport.x * numX);
+    // gl_FragCoord.y here is bottom-origin (the scene renders to a Y-flipped target under Vulkan),
+    // while the cluster AABBs are built top-origin in UpdateClusterBounds. Flip Y so the fragment's
+    // tile matches the cluster the cull placed the light in. Without this, lighting is vertically
+    // mirrored — masked by symmetric light layouts except at the screen corners.
+    int iy = int((1.0 - fragCoord.y / u_clusterViewport.y) * numY);
+    ix = clamp(ix, 0, int(numX) - 1);
+    iy = clamp(iy, 0, int(numY) - 1);
+
+    return uint(iz) * uint(numX) * uint(numY)
+         + uint(iy) * uint(numX)
+         + uint(ix);
+}
+
 void main() {
     float metallic = u_pbrParams.x;
     float roughness = max(u_pbrParams.y, 0.04);
     vec3 V = normalize(u_cameraPos.xyz - v_worldPos);
-    
+
     vec3 N;
     if (u_normalParams.x > 0.5) {
         vec3 Tv = normalize(v_tangent.xyz);
@@ -112,13 +156,17 @@ void main() {
     if (u_ssaoState.x > 0.5) ambient *= texture2D(s_ssaoBlurred, gl_FragCoord.xy * u_ssaoState.yz).r;
     if (u_shadowParams.x > 0.5) direct *= ComputeShadow(v_shadowCoord);
 
-    // ── Point + spot lights (forward, unshadowed) ──
+    // ── Clustered point + spot lights ────────────────────────────────────────
     vec3 dynamicLight = vec3_splat(0.0);
+    uint maxPer = uint(u_clusterParams.w);
+    uint ci = ComputeClusterIndex(gl_FragCoord);
 
-    int pointCount = int(u_lightCounts.x);
-    for (int pi = 0; pi < pointCount; pi++) {
-        vec4 pa = u_pointLights[pi * 2 + 0];   // pos.xyz, radius
-        vec4 pb = u_pointLights[pi * 2 + 1];   // color.rgb, intensity
+    // Point lights — clamp count defensively against uninitialised buffer data
+    uint pCount = min(b_pointLightCount[ci], maxPer);
+    for (uint pi = 0u; pi < pCount; pi++) {
+        uint li = b_pointLightIndices[ci * maxPer + pi];
+        vec4 pa = b_pointLightsFS[li * 2u];      // pos.xyz, radius
+        vec4 pb = b_pointLightsFS[li * 2u + 1u]; // r, g, b, intensity
         vec3 toL = pa.xyz - v_worldPos;
         float dist = length(toL);
         vec3 Lp = toL / max(dist, 0.0001);
@@ -127,19 +175,23 @@ void main() {
         dynamicLight += PbrDirect(N, V, Lp, albedo.xyz, F0, metallic, roughness, pb.xyz * pb.w * att);
     }
 
-    int spotCount = int(u_lightCounts.y);
-    for (int si = 0; si < spotCount; si++) {
-        vec4 sa = u_spotLights[si * 4 + 0];    // pos.xyz, range
-        vec4 sb = u_spotLights[si * 4 + 1];    // dir.xyz, cos(inner)
-        vec4 sc = u_spotLights[si * 4 + 2];    // color.rgb, intensity
-        float cosOuter = u_spotLights[si * 4 + 3].x;
+    // Spot lights (4 vec4: pos/range | dir/innerAngle | rgb/intensity | outerAngle)
+    uint sCount = min(b_spotLightCount[ci], maxPer);
+    for (uint si = 0u; si < sCount; si++) {
+        uint li = b_spotLightIndices[ci * maxPer + si];
+        vec4 sa = b_spotLightsFS[li * 4u];      // pos.xyz, range
+        vec4 sb = b_spotLightsFS[li * 4u + 1u]; // dir.xyz, inner_angle_rad
+        vec4 sc = b_spotLightsFS[li * 4u + 2u]; // r, g, b, intensity
+        vec4 sd = b_spotLightsFS[li * 4u + 3u]; // outer_angle_rad
         vec3 toL = sa.xyz - v_worldPos;
         float dist = length(toL);
         vec3 Ls = toL / max(dist, 0.0001);
         float datt = clamp(1.0 - dist / max(sa.w, 0.0001), 0.0, 1.0);
         datt *= datt;
-        float cosA = dot(-Ls, normalize(sb.xyz));            // fragment vs cone axis
-        float catt = clamp((cosA - cosOuter) / max(sb.w - cosOuter, 0.0001), 0.0, 1.0);
+        float cosInner = cos(sb.w);
+        float cosOuter = cos(sd.x);
+        float cosA = dot(-Ls, normalize(sb.xyz));
+        float catt = clamp((cosA - cosOuter) / max(cosInner - cosOuter, 0.001), 0.0, 1.0);
         dynamicLight += PbrDirect(N, V, Ls, albedo.xyz, F0, metallic, roughness, sc.xyz * sc.w * datt * catt);
     }
 

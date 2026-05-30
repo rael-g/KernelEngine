@@ -733,11 +733,13 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
 ke_result CoreRenderer::SubmitPacketLegacy(const struct ke_frame_packet* packet)
 {
     try {
-        // Extract near/far from proj matrix so clustered has current values.
+        // Extract near/far from the perspective proj so clustered has current values.
+        // Vulkan [0,1] depth: m[10] = -far/(far-near), m[14] = -(far*near)/(far-near),
+        // m[11] = -1 (perspective). Invert: near = m14/m10, far = m14/(m10+1).
         const float* p = packet->camera.proj.m;
-        if (std::abs(p[10] - p[11]) > 0.0001f) {
-            ctx_.near_z = p[14] / (p[10] + 1.0f);
-            ctx_.far_z  = p[14] / (p[10] - 1.0f);
+        if (p[11] < -0.5f) { // perspective projection (skip ortho, where m[11] == 0)
+            ctx_.near_z = p[14] / p[10];
+            ctx_.far_z  = p[14] / (p[10] + 1.0f);
         }
         // Store view for clustered bounds.
         std::memcpy(ctx_.last_view, packet->camera.view.m, sizeof(float) * 16);
@@ -748,14 +750,12 @@ ke_result CoreRenderer::SubmitPacketLegacy(const struct ke_frame_packet* packet)
         const uint16_t bb_w = (uint16_t)ctx_.view_w;
         const uint16_t bb_h = (uint16_t)ctx_.view_h;
 
+        // Clustered light cull now runs INSIDE FrameSubmitter::Submit (before the scene draw loop)
+        // so the compute dispatch is submitted ahead of the draws that read its output.
         ke_result res = FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
                                             post_process_, program_, shadow_program_, skybox_program_, prepass_program_,
-                                            ui_quad_program_, bb_w, bb_h);
+                                            ui_quad_program_, bb_w, bb_h, &clustered_);
         if (res != KE_OK) return res;
-
-        // Clustered light culling (must run after scene uniforms are set).
-        clustered_.UpdateClusterBounds(ctx_);
-        clustered_.DispatchLightCull(ctx_, lighting_, cull_program_);
 
         // SSAO pass extracted in Step D — ExecuteSsaoPass via graph node "ssao.compose".
         // Bloom + tonemap extracted in Step E — ExecutePostFxPass via "postfx.composite".
@@ -787,13 +787,14 @@ ke_result CoreRenderer::SetViewTransform(const ke_mat4 *view, const ke_mat4 *pro
     std::memcpy(ctx_.last_view, view->m, sizeof(float) * 16);
     std::memcpy(ctx_.last_proj, proj->m, sizeof(float) * 16);
 
+    // Vulkan [0,1] depth perspective inverse (see SubmitPacketLegacy for the derivation).
     float n = 0.1f;
     float f = 1000.0f;
-    if (std::abs(proj->m[10] - proj->m[11]) > 0.0001f) {
-        n = proj->m[14] / (proj->m[10] + 1.0f);
-        f = proj->m[14] / (proj->m[10] - 1.0f);
+    if (proj->m[11] < -0.5f) { // perspective projection (m[11] == 0 for ortho)
+        n = proj->m[14] / proj->m[10];
+        f = proj->m[14] / (proj->m[10] + 1.0f);
     }
-    
+
     if (std::abs(n - ctx_.near_z) > 0.0001f || std::abs(f - ctx_.far_z) > 0.0001f) {
         ctx_.near_z = n;
         ctx_.far_z  = f;

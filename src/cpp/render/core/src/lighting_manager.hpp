@@ -55,6 +55,8 @@ public:
     const MaterialEntry& GetMaterial(ke_material_handle handle) const;
     uint32_t GetPointLightCount() const { return (uint32_t)point_lights_.size(); }
     uint32_t GetSpotLightCount() const { return (uint32_t)spot_lights_.size(); }
+    const ke_point_light* GetPointLightData() const { return point_lights_.data(); }
+    const ke_spot_light*  GetSpotLightData()  const { return spot_lights_.data(); }
 
     render::GpuUniformHandle env_map_uniform        = render::kGpuInvalidHandle;
     render::GpuUniformHandle color_uniform          = render::kGpuInvalidHandle;

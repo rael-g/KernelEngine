@@ -14,6 +14,7 @@ class LightingManager;
 class TextureManager;
 class ShadowPipeline;
 class PostProcessPipeline;
+class ClusteredForward;
 
 /**
  * @brief Responsible for taking a FramePacket and emitting GPU commands via HAL.
@@ -34,7 +35,8 @@ public:
                              render::GpuProgramHandle prepass_program,
                              render::GpuProgramHandle ui_quad_program,
                              uint16_t backbuffer_width,
-                             uint16_t backbuffer_height);
+                             uint16_t backbuffer_height,
+                             ClusteredForward* clustered = nullptr);
 };
 
 } // namespace kernel_engine::render::core

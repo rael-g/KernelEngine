@@ -5,6 +5,7 @@
 #include "texture_manager.hpp"
 #include "shadow_pipeline.hpp"
 #include "post_process_pipeline.hpp"
+#include "clustered_forward.hpp"
 #include "gpu_device.hpp"
 #include "view_ids.hpp"
 #include <kernel_engine/kernel/common/error.h>
@@ -28,7 +29,8 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
                                  GpuProgramHandle /*prepass_program*/,
                                  GpuProgramHandle ui_quad_program,
                                  uint16_t backbuffer_width,
-                                 uint16_t backbuffer_height)
+                                 uint16_t backbuffer_height,
+                                 ClusteredForward* clustered)
 {
     ke_thread_assert_current("ke.render");
     if (!ctx.gpu) return KE_ERROR_RENDER;
@@ -70,6 +72,11 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
 
     // Pack + upload point/spot lights into u_pointLights/u_spotLights + u_lightCounts (forward path).
     lighting.UploadLights(ctx);
+
+    // Light cull (compute, view 0) — submitted BEFORE the scene draws (view 1) so bgfx orders the
+    // compute-write → fragment-read barrier correctly. Lights were just stored above, so the cull
+    // sees this frame's positions (no 1-frame lag).
+    if (clustered) clustered->RunCull(ctx, lighting);
 
     // Shadow pass was here — extracted into CoreRenderer::ExecuteShadowPass and
     // registered as its own render-graph node. The legacy_remaining pass now
@@ -121,6 +128,7 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
         ctx.gpu->SetTransform(cmd.transform.m, 1);
         ctx.gpu->SetVertexBuffer(0, entry.vb);
         ctx.gpu->SetIndexBufferStatic(entry.ib);
+        if (clustered) clustered->BindForSceneRead(ctx);
         // no cull (meshes are two-sided)
         ctx.gpu->SetState(GpuStateFlags::WriteRgba | GpuStateFlags::WriteZ | GpuStateFlags::DepthTestLess | GpuStateFlags::Msaa, 0);
         ctx.gpu->Submit(Id(ViewId::Scene), main_program, 0, false);

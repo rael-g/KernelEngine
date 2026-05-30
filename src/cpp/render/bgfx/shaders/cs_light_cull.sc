@@ -8,7 +8,7 @@
 BUFFER_RO(b_clusterBounds, vec4, 0);
 // Each PointLight uses 2 vec4 (pos_r, color)
 BUFFER_RO(b_pointLights, vec4, 1);
-// Each SpotLight uses 3 vec4 (pos_r, dir_cosI, color_cosO)
+// Each SpotLight uses 4 vec4 (pos_range, dir_inner, color_intensity, outer)
 BUFFER_RO(b_spotLights, vec4, 2);
 
 // Outputs (uints fit in typed buffers)
@@ -58,7 +58,7 @@ void main()
     uint sCount = 0;
     for (uint si = 0; si < spotCount && sCount < maxLights; ++si)
     {
-        vec4 pos_r = b_spotLights[si * 3u];
+        vec4 pos_r = b_spotLights[si * 4u];
         // Transform position to view space
         vec3 sPos = mul(u_computeView, vec4(pos_r.xyz, 1.0)).xyz;
         float sRng = pos_r.w;
