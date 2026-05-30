@@ -29,8 +29,8 @@ public sealed unsafe class FrameSync : IFrameSync
     public static FrameSync Create(Allocator alloc,
                                    uint      bufferCount       = 2,
                                    uint      drawCapacity      = 2048,
-                                   uint      pointLightCapacity = 64,
-                                   uint      spotLightCapacity  = 64)
+                                   uint      pointLightCapacity = 512,
+                                   uint      spotLightCapacity  = 512)
     {
         ke_frame_sync* native;
         KernelException.ThrowIfFailed(NativeMethods.frame_sync_std_create(
