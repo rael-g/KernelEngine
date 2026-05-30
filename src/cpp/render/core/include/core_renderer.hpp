@@ -122,6 +122,12 @@ private:
     /// Runs after every other pass so the overlay composites on top.
     ke_result ExecuteUiPass(const struct ke_frame_packet* packet);
 
+    /// @brief Lights + scene-shader uniform upload pass (Phase 6.1). Pure
+    /// CPU pack + SetUniform calls — no GPU draws or dispatches. Runs first
+    /// in the chain so subsequent passes (cluster cull, scene draws) see
+    /// fresh light/camera/ambient/ibl uniforms.
+    ke_result ExecuteLightsUploadPass(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;

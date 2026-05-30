@@ -35,52 +35,18 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     ke_thread_assert_current("ke.render");
     if (!ctx.gpu) return KE_ERROR_RENDER;
 
-    // ── 0. Global State ──────────────────────────────────────────────────────
-    uint32_t clear_color = (uint32_t(packet.clear_color[0] * 255.0F) << 24) |
-                           (uint32_t(packet.clear_color[1] * 255.0F) << 16) |
-                           (uint32_t(packet.clear_color[2] * 255.0F) << 8)  |
-                           (uint32_t(packet.clear_color[3] * 255.0F));
-    ctx.gpu->SetViewClear(Id(ViewId::Scene), GpuClearFlags::Color | GpuClearFlags::Depth, clear_color, 1.0f, 0);
+    // Global state + lighting upload extracted in Phase 6.1 to
+    // CoreRenderer::ExecuteLightsUploadPass (graph node "lights.upload"). DAG
+    // forces it to run before this pass so all scene-shader uniforms +
+    // lighting buffers are populated by the time we reach the draw loop.
+    (void)post_process;
+    (void)shadows;
 
-    lighting.SetAmbientLight(packet.ambient_light[0], packet.ambient_light[1], packet.ambient_light[2]);
-
-    if (ke_shadow_map_is_valid(packet.active_shadow_map))
-        shadows.SetShadowMap(ctx, packet.active_shadow_map);
-
-    // ── Post-Processing & Pipeline ────────────────────────────────────────
-    post_process.SetSsao(ctx, packet.ssao_enabled, packet.ssao_radius, packet.ssao_bias, packet.ssao_strength);
-    post_process.SetTonemapping(ctx, packet.tonemapping_enabled, packet.exposure, packet.gamma);
-    post_process.SetBloom(ctx, packet.bloom_enabled, packet.bloom_threshold, packet.bloom_intensity);
-
-    // ── 1. Apply lighting from packet ────────────────────────────────────────
-    if (packet.has_dir_light)
-        lighting.SetDirectionalLight(&packet.dir_light);
-
-    // Always store (even count 0) so last frame's lights don't persist.
-    lighting.StorePointLights(packet.point_lights, packet.point_light_count);
-    lighting.StoreSpotLights(packet.spot_lights, packet.spot_light_count);
-
-    ctx.gpu->SetUniform(lighting.light_dir_uniform,     lighting.light_dir,     1);
-    ctx.gpu->SetUniform(lighting.light_color_uniform,   lighting.light_color,   1);
-    ctx.gpu->SetUniform(lighting.ambient_color_uniform, lighting.ambient_color, 1);
-
-    float camera_pos[4] = {packet.camera.pos_x, packet.camera.pos_y, packet.camera.pos_z, 1.0f};
-    ctx.gpu->SetUniform(lighting.camera_pos_uniform, camera_pos, 1);
-
-    float ibl_params[4] = {packet.has_skybox ? 1.0f : 0.0f, 0, 0, 0};
-    ctx.gpu->SetUniform(lighting.ibl_params_uniform, ibl_params, 1);
-
-    // Pack + upload point/spot lights into u_pointLights/u_spotLights + u_lightCounts (forward path).
-    lighting.UploadLights(ctx);
-
-    // Light cull (compute, view 0) — submitted BEFORE the scene draws (view 1) so bgfx orders the
-    // compute-write → fragment-read barrier correctly. Lights were just stored above, so the cull
-    // sees this frame's positions (no 1-frame lag).
+    // Clustered light cull (compute, view 0 by default). Stays here until
+    // Phase 6.2 extracts it into a dedicated compute graph pass. Must run
+    // before the scene draws — bgfx orders view 0 (cull) before view 1 (scene)
+    // automatically so the compute-write → fragment-read barrier is honoured.
     if (clustered) clustered->RunCull(ctx, lighting);
-
-    // Shadow pass was here — extracted into CoreRenderer::ExecuteShadowPass and
-    // registered as its own render-graph node. The legacy_remaining pass now
-    // declares a read on "shadow_map" so the DAG runs the shadow pass first.
 
     // ── 3. Scene View Transform ──────────────────────────────────────────────
     ctx.gpu->SetViewTransform(Id(ViewId::Scene), packet.camera.view.m, packet.camera.proj.m);

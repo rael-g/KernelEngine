@@ -379,6 +379,35 @@ ke_result CoreRenderer::SetupRenderGraph()
     rc = graph_->import_texture(graph_, "backbuffer_post_skybox",
                                 ke_texture_handle{ UINT32_MAX });
     if (rc != KE_OK) return rc;
+    // Logical sentinel: "this frame's scene-shader uniforms + light data have
+    // been packed and uploaded". Lights.upload writes it; every downstream pass
+    // that samples lights/camera/ambient uniforms (cluster cull, scene draws)
+    // reads it so the DAG enforces ordering without a real GPU resource.
+    rc = graph_->import_texture(graph_, "lights_uploaded",
+                                ke_texture_handle{ UINT32_MAX });
+    if (rc != KE_OK) return rc;
+
+    // lights.upload — Phase 6.1. CPU pack + uniform/buffer upload, no draws.
+    // Must run first so any subsequent pass (cluster cull, scene) sees fresh
+    // light/camera/ambient/IBL uniforms.
+    {
+        ke_resource_ref writes[] = {
+            { "lights_uploaded", KE_ACCESS_COLOR_ATTACHMENT }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "lights.upload";
+        pp.type = KE_PASS_GEOMETRY;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->ExecuteLightsUploadPass(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
 
     // shadow.directional — extracted in Step B. Writes shadow_map so any pass
     // that reads it (the legacy_remaining scene pass) is forced behind us.
@@ -402,11 +431,13 @@ ke_result CoreRenderer::SetupRenderGraph()
     }
 
     // scene.legacy_remaining — main scene + ssao + post-fx + ui. Reads shadow_map
-    // so the DAG schedules shadow.directional first; writes backbuffer (which
-    // skybox.composite then reads, ordering itself after).
+    // so the DAG schedules shadow.directional first; reads lights_uploaded so
+    // 6.1's lights.upload runs first; writes backbuffer (which skybox.composite
+    // then reads, ordering itself after).
     {
         ke_resource_ref reads[] = {
-            { "shadow_map", KE_ACCESS_SAMPLED }
+            { "shadow_map",       KE_ACCESS_SAMPLED },
+            { "lights_uploaded",  KE_ACCESS_SAMPLED },
         };
         ke_resource_ref writes[] = {
             { "backbuffer", KE_ACCESS_COLOR_ATTACHMENT }
@@ -415,7 +446,7 @@ ke_result CoreRenderer::SetupRenderGraph()
         pp.name = "scene.legacy_remaining";
         pp.type = KE_PASS_GEOMETRY;
         pp.reads = reads;
-        pp.reads_count = 1;
+        pp.reads_count = 2;
         pp.writes = writes;
         pp.writes_count = 1;
         pp.record = [](ke_render_pass_ctx* ctx, void* user) {
@@ -737,37 +768,69 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
 ke_result CoreRenderer::SubmitPacketLegacy(const struct ke_frame_packet* packet)
 {
     try {
-        // Extract near/far from the perspective proj so clustered has current values.
-        // Vulkan [0,1] depth: m[10] = -far/(far-near), m[14] = -(far*near)/(far-near),
-        // m[11] = -1 (perspective). Invert: near = m14/m10, far = m14/(m10+1).
-        const float* p = packet->camera.proj.m;
-        if (p[11] < -0.5f) { // perspective projection (skip ortho, where m[11] == 0)
-            ctx_.near_z = p[14] / p[10];
-            ctx_.far_z  = p[14] / (p[10] + 1.0f);
-        }
-        // Store view for clustered bounds.
-        std::memcpy(ctx_.last_view, packet->camera.view.m, sizeof(float) * 16);
-        std::memcpy(ctx_.last_proj, packet->camera.proj.m, sizeof(float) * 16);
-
-        // Backbuffer dimensions for the UI overlay's ortho projection. Resize-time updates land
-        // when the renderer re-inits; mid-frame resize is a separate concern.
         const uint16_t bb_w = (uint16_t)ctx_.view_w;
         const uint16_t bb_h = (uint16_t)ctx_.view_h;
-
-        // Clustered light cull now runs INSIDE FrameSubmitter::Submit (before the scene draw loop)
-        // so the compute dispatch is submitted ahead of the draws that read its output.
-        ke_result res = FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
-                                            post_process_, program_, shadow_program_, skybox_program_, prepass_program_,
-                                            ui_quad_program_, bb_w, bb_h, &clustered_);
-        if (res != KE_OK) return res;
-
-        // SSAO pass extracted in Step D — ExecuteSsaoPass via graph node "ssao.compose".
-        // Bloom + tonemap extracted in Step E — ExecutePostFxPass via "postfx.composite".
-
-        return KE_OK;
+        // lights.upload (Phase 6.1) and lights.cluster_cull (Phase 6.2) run as
+        // their own graph nodes ahead of this pass — see SetupRenderGraph.
+        return FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
+                                      post_process_, program_, shadow_program_, skybox_program_, prepass_program_,
+                                      ui_quad_program_, bb_w, bb_h, &clustered_);
     } catch (const BgfxFatalException& e) {
         return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "SubmitPacket", e.what());
     }
+}
+
+ke_result CoreRenderer::ExecuteLightsUploadPass(const struct ke_frame_packet* packet)
+{
+    if (!packet || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+
+    // Extract near/far from the perspective proj so clustered has current values.
+    // Vulkan [0,1] depth: m[10] = -far/(far-near), m[14] = -(far*near)/(far-near),
+    // m[11] = -1 (perspective). Invert: near = m14/m10, far = m14/(m10+1).
+    const float* p = packet->camera.proj.m;
+    if (p[11] < -0.5f) { // perspective only — ortho leaves m[11] == 0
+        ctx_.near_z = p[14] / p[10];
+        ctx_.far_z  = p[14] / (p[10] + 1.0f);
+    }
+    std::memcpy(ctx_.last_view, packet->camera.view.m, sizeof(float) * 16);
+    std::memcpy(ctx_.last_proj, packet->camera.proj.m, sizeof(float) * 16);
+
+    // Scene-view clear is configured here (view 1 still holds the legacy bgfx
+    // view-id for the main scene pass). One-shot config; bgfx persists it across
+    // frames until overridden.
+    const uint32_t clear_color = (uint32_t(packet->clear_color[0] * 255.0F) << 24) |
+                                 (uint32_t(packet->clear_color[1] * 255.0F) << 16) |
+                                 (uint32_t(packet->clear_color[2] * 255.0F) << 8)  |
+                                 (uint32_t(packet->clear_color[3] * 255.0F));
+    ctx_.gpu->SetViewClear(Id(ViewId::Scene), GpuClearFlags::Color | GpuClearFlags::Depth, clear_color, 1.0f, 0);
+
+    lighting_.SetAmbientLight(packet->ambient_light[0], packet->ambient_light[1], packet->ambient_light[2]);
+    if (ke_shadow_map_is_valid(packet->active_shadow_map))
+        shadows_.SetShadowMap(ctx_, packet->active_shadow_map);
+
+    // Post-fx toggles for the SSAO/bloom/tonemap passes. Cheap state updates,
+    // not GPU work — kept here so the dedicated post-fx passes don't have to
+    // re-read the packet just to know whether they're on.
+    post_process_.SetSsao(ctx_, packet->ssao_enabled, packet->ssao_radius, packet->ssao_bias, packet->ssao_strength);
+    post_process_.SetTonemapping(ctx_, packet->tonemapping_enabled, packet->exposure, packet->gamma);
+    post_process_.SetBloom(ctx_, packet->bloom_enabled, packet->bloom_threshold, packet->bloom_intensity);
+
+    if (packet->has_dir_light) lighting_.SetDirectionalLight(&packet->dir_light);
+    lighting_.StorePointLights(packet->point_lights, packet->point_light_count);
+    lighting_.StoreSpotLights(packet->spot_lights, packet->spot_light_count);
+
+    ctx_.gpu->SetUniform(lighting_.light_dir_uniform,     lighting_.light_dir,     1);
+    ctx_.gpu->SetUniform(lighting_.light_color_uniform,   lighting_.light_color,   1);
+    ctx_.gpu->SetUniform(lighting_.ambient_color_uniform, lighting_.ambient_color, 1);
+
+    const float camera_pos[4] = {packet->camera.pos_x, packet->camera.pos_y, packet->camera.pos_z, 1.0f};
+    ctx_.gpu->SetUniform(lighting_.camera_pos_uniform, camera_pos, 1);
+
+    const float ibl_params[4] = {packet->has_skybox ? 1.0f : 0.0f, 0, 0, 0};
+    ctx_.gpu->SetUniform(lighting_.ibl_params_uniform, ibl_params, 1);
+
+    lighting_.UploadLights(ctx_);
+    return KE_OK;
 }
 
 ke_result CoreRenderer::SetOrthographic(ke_bool enabled) {
