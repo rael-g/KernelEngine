@@ -386,6 +386,13 @@ ke_result CoreRenderer::SetupRenderGraph()
     rc = graph_->import_texture(graph_, "lights_uploaded",
                                 ke_texture_handle{ UINT32_MAX });
     if (rc != KE_OK) return rc;
+    // Logical sentinel: "this frame's cluster cull dispatch has been recorded
+    // and will have committed by the time scene draws read its output". The
+    // actual cluster buffers live inside ClusteredForward until Phase 5 of the
+    // resource ownership migration (separate from F.RC2 phasing).
+    rc = graph_->import_texture(graph_, "cluster_buffer",
+                                ke_texture_handle{ UINT32_MAX });
+    if (rc != KE_OK) return rc;
 
     // lights.upload — Phase 6.1. CPU pack + uniform/buffer upload, no draws.
     // Must run first so any subsequent pass (cluster cull, scene) sees fresh
@@ -403,6 +410,33 @@ ke_result CoreRenderer::SetupRenderGraph()
             auto* self = static_cast<CoreRenderer*>(user);
             const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
             if (self && pkt) self->ExecuteLightsUploadPass(pkt);
+        };
+        pp.user = this;
+        rc = graph_->add_pass(graph_, &pp);
+        if (rc != KE_OK) return rc;
+    }
+
+    // lights.cluster_cull — Phase 6.2. Compute-type pass; reads
+    // lights_uploaded so it runs after CPU pack, writes cluster_buffer so the
+    // scene pass orders itself behind us.
+    {
+        ke_resource_ref reads[] = {
+            { "lights_uploaded", KE_ACCESS_SAMPLED }
+        };
+        ke_resource_ref writes[] = {
+            { "cluster_buffer", KE_ACCESS_STORAGE_WRITE }
+        };
+        ke_render_pass_params pp{};
+        pp.name = "lights.cluster_cull";
+        pp.type = KE_PASS_COMPUTE;
+        pp.reads = reads;
+        pp.reads_count = 1;
+        pp.writes = writes;
+        pp.writes_count = 1;
+        pp.record = [](ke_render_pass_ctx* ctx, void* user) {
+            auto* self = static_cast<CoreRenderer*>(user);
+            const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
+            if (self && pkt) self->ExecuteClusterCullPass(pkt);
         };
         pp.user = this;
         rc = graph_->add_pass(graph_, &pp);
@@ -430,14 +464,14 @@ ke_result CoreRenderer::SetupRenderGraph()
         if (rc != KE_OK) return rc;
     }
 
-    // scene.legacy_remaining — main scene + ssao + post-fx + ui. Reads shadow_map
-    // so the DAG schedules shadow.directional first; reads lights_uploaded so
-    // 6.1's lights.upload runs first; writes backbuffer (which skybox.composite
-    // then reads, ordering itself after).
+    // scene.legacy_remaining — main scene + ssao + post-fx + ui. Reads
+    // shadow_map (shadow.directional first), lights_uploaded (6.1 first),
+    // cluster_buffer (6.2 first). Writes backbuffer (skybox reads after).
     {
         ke_resource_ref reads[] = {
             { "shadow_map",       KE_ACCESS_SAMPLED },
             { "lights_uploaded",  KE_ACCESS_SAMPLED },
+            { "cluster_buffer",   KE_ACCESS_STORAGE_READ },
         };
         ke_resource_ref writes[] = {
             { "backbuffer", KE_ACCESS_COLOR_ATTACHMENT }
@@ -446,7 +480,7 @@ ke_result CoreRenderer::SetupRenderGraph()
         pp.name = "scene.legacy_remaining";
         pp.type = KE_PASS_GEOMETRY;
         pp.reads = reads;
-        pp.reads_count = 2;
+        pp.reads_count = 3;
         pp.writes = writes;
         pp.writes_count = 1;
         pp.record = [](ke_render_pass_ctx* ctx, void* user) {
@@ -830,6 +864,13 @@ ke_result CoreRenderer::ExecuteLightsUploadPass(const struct ke_frame_packet* pa
     ctx_.gpu->SetUniform(lighting_.ibl_params_uniform, ibl_params, 1);
 
     lighting_.UploadLights(ctx_);
+    return KE_OK;
+}
+
+ke_result CoreRenderer::ExecuteClusterCullPass(const struct ke_frame_packet*)
+{
+    if (!ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+    clustered_.RunCull(ctx_, lighting_);
     return KE_OK;
 }
 

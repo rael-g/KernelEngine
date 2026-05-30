@@ -41,12 +41,10 @@ ke_result FrameSubmitter::Submit(RenderContext& ctx,
     // lighting buffers are populated by the time we reach the draw loop.
     (void)post_process;
     (void)shadows;
-
-    // Clustered light cull (compute, view 0 by default). Stays here until
-    // Phase 6.2 extracts it into a dedicated compute graph pass. Must run
-    // before the scene draws — bgfx orders view 0 (cull) before view 1 (scene)
-    // automatically so the compute-write → fragment-read barrier is honoured.
-    if (clustered) clustered->RunCull(ctx, lighting);
+    // Clustered light cull (compute) extracted in Phase 6.2 to
+    // CoreRenderer::ExecuteClusterCullPass (graph node "lights.cluster_cull").
+    // DAG: lights.upload → lights.cluster_cull → scene.legacy_remaining.
+    (void)clustered;
 
     // ── 3. Scene View Transform ──────────────────────────────────────────────
     ctx.gpu->SetViewTransform(Id(ViewId::Scene), packet.camera.view.m, packet.camera.proj.m);

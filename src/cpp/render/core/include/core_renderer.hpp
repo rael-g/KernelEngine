@@ -128,6 +128,12 @@ private:
     /// fresh light/camera/ambient/ibl uniforms.
     ke_result ExecuteLightsUploadPass(const struct ke_frame_packet* packet);
 
+    /// @brief Clustered light culling compute dispatch (Phase 6.2). Reads
+    /// the stored light arrays, packs them into the cluster cull's storage
+    /// buffers, and dispatches the CS that bins lights into screen-space
+    /// clusters. Runs between @c lights.upload and @c scene.legacy_remaining.
+    ke_result ExecuteClusterCullPass(const struct ke_frame_packet* packet);
+
     RenderContext ctx_;
     bool own_gpu_device_ = false;
     bool own_shader_provider_ = false;
