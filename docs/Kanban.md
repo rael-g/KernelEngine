@@ -118,29 +118,58 @@ P7/P8 are quality-of-life and cheap. P9 rides on collision events (already in sp
 >
 > **Trigger**: only start after Tier P (UI + CLI + auto-Program) AND the deferred render-pipeline items (clustered forward shading [F.RC3], render-graph [F.RC2], etc. — see Parking lot) are done. Engine must be a viable game-building tool first.
 >
-> **Goal**: turn the C kernel into the actual scripting ABI. Each language (C#, Lua, Python, …) becomes a binding of equal status; the C# binding becomes one option of many, not the canonical surface.
+> **Goal (corrected 2026-05-30)**: Tier S is **the same doctrine as Tier K, applied to Framework concepts** — NOT "move C# code into the C kernel". Each universal Framework concept gets PROMOTED to a kernel contract (vtable in `src/c/kernel/include/<domain>/<concept>.h`) + a plugin C++ implementation in `src/cpp/<domain>/<impl>/`. C# Framework becomes a binding that consumes those contracts; a future Lua or Python binding does the same. The engine stops having "C# is canonical, others wrap C#" and becomes "kernel defines contracts, every binding is equal".
 
-**Architectural shifts required:**
+**Receita única, repetida por conceito promovido:**
 
-| # | Item | Effort estimate |
-|---|---|---|
-| S1 | Expand `ke_script_component` with every lifecycle hook (`on_awake`/`on_start`/`on_update`/`on_late_update`/`on_destroy`/`on_input`/`on_input_action`) — today only `on_start`/`on_update`. | 1 week |
-| S2 | Add `ke_node_type` registry + `set_property(entity, key, variant)` + `ke_variant` type to the C kernel — lets any language register a node type by string name and have the kernel populate properties without knowing the language's field model. | 2-3 weeks |
-| S3 | Move SceneLoader from C# into the C kernel — TOML parser in C, scene instantiation via the node-type registry, callbacks to the active language binding. Today's C# SceneLoader becomes a thin wrapper. | 2-3 weeks |
-| S4 | Move input action layer from C# into the C kernel — `.input` parser + dispatcher in C, callbacks for `on_input_action`. | 2 weeks |
-| S5 | Refactor `KernelEngine.Framework` (C#) into a binding on top of the new ABI without ergonomic regression — Camera2D/Sprite2D/etc. stay as ergonomic C# wrappers, but they're now wrappers over ABI-defined primitives, not the source of truth. | 3-4 weeks |
-| S6 | Validate by adding a second binding — **Lua (via LuaJIT or NLua)** is the recommended choice: small runtime (~500KB), trivial FFI, no GIL, suits embedding. Port Pong fully to Lua. | 4-6 weeks |
-| S7 | ABI documentation + stabilization (once published, refactoring freedom shrinks; commit only after the spike validates the shape). | 1-2 weeks |
+1. Identifica conceito universal (todo binding/framework precisaria de algo equivalente)
+2. Define vtable em `src/c/kernel/include/kernel_engine/<domain>/<concept>.h`
+3. Implementa em plugin C++ `src/cpp/<domain>/<impl-name>/` (uma ou mais impls — múltiplos sabores convivem)
+4. C# Framework para de implementar internamente e passa a chamar via vtable
+5. Próximo binding (Lua, Python, …) ganha o conceito de graça via mesma vtable
 
-**Total: ~4-6 months focused.** Major architectural replatforming.
+**Multiple paradigm contracts coexist:** o kernel pode definir MAIS DE UM contrato concorrente quando ambos forem universais. Exemplo concreto: futuramente o kernel pode ter `ke_ecs` (sparse-set / archetype impls) E `ke_servers` (Godot-style global services) — dev escolhe o paradigma OU usa ambos em partes diferentes da cena. Kernel não opina; oferece contratos.
 
-**Spike first (2-3 weeks) before committing the full project:** expand only `ke_script_component` (S1 lite) + write a minimal Lua binding that overrides `on_start`/`on_update` on a single class. Don't move SceneLoader or action layer yet. Just prove cross-language dispatch works with acceptable latency. Then decide.
+**Concept extraction targets (não-exaustivo, ordem aberta):**
+
+| # | Concept | Today | Promoted shape |
+|---|---|---|---|
+| S1 | **Node lifecycle hooks** | `ke_script_component` only has `on_start`/`on_update`. | Expand to `on_awake`/`on_start`/`on_update`/`on_late_update`/`on_destroy`/`on_input`/`on_input_action`. Pure kernel header expansion + script-system update. |
+| S2 | **Node type registry + property bag** | C# Activator + reflection populate node properties from `.scene` TOML. | `ke_node_type` registry in kernel + `set_property(entity, key, ke_variant)` — each binding registers its node types by string name; SceneLoader (S3) drives population through this. |
+| S3 | **Scene loader** | `SceneLoader.cs` in `KernelEngine.Framework`. | `ke_scene_loader` contract in kernel + plugin impl (`scene-loader-toml` in C++ using existing TOML lib). Framework uses it via the contract — same Lua binding can use the same impl. |
+| S4 | **Input action layer** | `InputActions` + `InputActionsLoader` + dispatcher all in Framework. | `ke_input_actions` contract + plugin impl. `.input` parser stays in plugin C++; dispatch + `on_input_action` callback via contract. |
+| S5 | **ECS** (already pre-planned as Tier K1+K2, but logically also a Tier S item) | `world/ecs.c` in kernel src. | `ke_ecs` contract in kernel header + `ecs-sparse-set` plugin (current impl). `ecs-archetype` future. See [Tier K] above. |
+| S6 | **Resource family** (Mesh/Material/Sound/Font/…) | `Resource.cs` family in Framework with ref-counting + cache. | `ke_resource` contract + plugin impl. Cross-language handle + lifecycle without re-doing the cache in each binding. |
+| S7 | **Tree / scene graph** | `Tree.cs` in Framework. | `ke_scene_tree` contract + plugin impl. Or stays Framework-side if "tree organization" is acceptable as a binding choice (open). |
+| S8 | **Validate by adding a second binding** — **Lua** (LuaJIT or NLua, ~500KB runtime, trivial FFI, no GIL). Port Pong fully to Lua against the same kernel contracts the C# Framework uses. This is the real proof the doctrine works. |
+| S9 | **ABI documentation + stabilization** — once published, refactoring freedom shrinks. Commit after the Lua port validates the contract shapes. |
+
+**Spike first (2-3 weeks) before committing the full sequence:** S1 only (lifecycle hooks expansion) + minimal Lua binding that overrides `on_start`/`on_update` on a single Pong script (paddle or ball). Don't promote SceneLoader/InputActions yet. Just prove cross-language script dispatch works with acceptable latency through the kernel contract. Then decide whether to invest in S2-S9.
 
 **Open design questions to resolve during the spike:**
-- Resources (`Mesh`/`Material`/`Sound`) cross-language: ref-counted C# class today; Lua userdata with `__gc`; Python ctypes-managed. ABI needs neutral handle + lifecycle.
+- Resources cross-language: ref-counted C# class today; Lua userdata with `__gc`; Python ctypes-managed. The `ke_resource` contract (S6) needs neutral handle + lifecycle.
 - DI cross-language: `ActivatorUtilities` is .NET-specific. Each binding needs its own DI resolution from ctor signature in its language.
-- Generics + enums: `IInputActionReader<TEnum>` is .NET-only. ABI must be non-generic (lookup by string-name); each binding adds typed overlay on top.
-- Hot-reload: now becomes interesting per-binding; kernel needs "destroy all scripts of this type, reinstantiate with new factory".
+- Generics + enums: `IInputActionReader<TEnum>` is .NET-only. Kernel `ke_input_actions` (S4) must be non-generic (lookup by string-name); each binding adds typed overlay on top.
+- Hot-reload: now becomes interesting per-binding; kernel needs "destroy all scripts of this type, reinstantiate with new factory" primitive.
+
+### Tier E — Editor (CLI today, GUI later) — agnostic core + per-framework modules
+
+> **Owner doctrine, 2026-05-30**: The editor (CLI now, GUI later — chapter 18) must be agnostic of any specific framework/language. It manages **kernel-level concepts** (Project file, module catalog, scenes, input actions, assets). Per-framework knowledge (how to scaffold a C# script, how to edit `Program.cs`, how to manage a `.csproj`) lives in **editor modules** that plug into the core. When a Lua binding lands, a `editor-lua` module plugs in and the editor learns to scaffold Lua scripts — no core change.
+
+**Today's state vs target:**
+
+- `KernelEngine.Cli` does have C#-specific bits (Roslyn in `ProgramCsSync.cs`, csproj XML edits in `CsprojEditor.cs`, module discovery rooted at `src/csharp/*/Modules/*.ke-module`). Justified by "only C# binding exists today" — but the shape matters.
+- **Acceptable**: those C# bits all live in clearly-named files (`ProgramCsSync.cs`, `CsprojEditor.cs`) inside `KernelEngine.Cli`. When Tier S lands, those become an extractable `KernelEngine.Cli.Csharp` package; the rest of `KernelEngine.Cli` (Project file IO, manifest, scene/input verbs) stays framework-agnostic.
+- **Forbidden going forward**: pulling `Microsoft.CodeAnalysis.CSharp` into any new file that ISN'T explicitly C#-module work. Any new "editor verb" (scene management, asset import, input action editing) should manipulate kernel-level data only.
+
+| # | Item | Status |
+|---|---|---|
+| E1 | **Soft-segregate** `KernelEngine.Cli` internally — folder structure separates `Core/` (Project + module catalog + scene/input/asset verbs) from `Csharp/` (ProgramCsSync, CsprojEditor, .NET-specific scaffold). No package split yet (premature with one binding). Establishes the boundary so refactor is mechanical when Tier S lands. | new |
+| E2 | **Module discovery beyond `src/csharp/`** — today `.ke-module` files are discovered by walking `src/csharp/*/Modules/`. The "discover plugins" mechanism should accept multiple roots OR plugin entries that point to non-C# subtrees. When a `KernelEngine.Lua` plugin ships in `src/lua/` or `src/cpp/lua-binding/`, its `.ke-module` files should be findable without CLI core change. | new (depends Tier S spike) |
+| E3 | **Editor module manifest** — when GUI editor lands (chapter 18), it loads "editor extension modules" much like the runtime loads plugins. `editor-csharp` adds C# script editing + Roslyn-backed refactors; `editor-lua` adds Lua scaffolding; `editor-tilemap`, `editor-shader-graph` etc. become third-party-addable. | doctrine, separate card later |
+| E4 | **Don't plant new framework-coupled dependencies in CLI core** — invariant rule. Any new feature that "scaffolds a script" or "edits a project file in a language-specific way" goes in a `Cli.<Framework>` folder (today: `Cli.Csharp`). | rule, always-on |
+
+> **Why not now**: not blocking anything. The shape is small enough today (single C# binding) that we can refactor mechanically when needed. Registered so the discipline is preserved when adding new CLI verbs.
 
 ### Parking lot — explicitly post-beta
 
