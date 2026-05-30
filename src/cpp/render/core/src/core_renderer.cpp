@@ -7,7 +7,6 @@
 #include <post_process_pipeline.hpp>
 #include <clustered_forward.hpp>
 #include <shader_provider.hpp>
-#include <frame_submitter.hpp>
 #include "render_graph_impl.hpp"
 #include <kernel_engine/kernel/render/render_graph.h>
 #include "view_ids.hpp"
@@ -464,9 +463,9 @@ ke_result CoreRenderer::SetupRenderGraph()
         if (rc != KE_OK) return rc;
     }
 
-    // scene.legacy_remaining — main scene + ssao + post-fx + ui. Reads
-    // shadow_map (shadow.directional first), lights_uploaded (6.1 first),
-    // cluster_buffer (6.2 first). Writes backbuffer (skybox reads after).
+    // scene.opaque — Phase 6.3. The actual scene draw loop. Reads shadow_map
+    // (shadow first), lights_uploaded (uniforms ready), cluster_buffer (cull
+    // committed). Writes backbuffer (skybox reads after).
     {
         ke_resource_ref reads[] = {
             { "shadow_map",       KE_ACCESS_SAMPLED },
@@ -477,7 +476,7 @@ ke_result CoreRenderer::SetupRenderGraph()
             { "backbuffer", KE_ACCESS_COLOR_ATTACHMENT }
         };
         ke_render_pass_params pp{};
-        pp.name = "scene.legacy_remaining";
+        pp.name = "scene.opaque";
         pp.type = KE_PASS_GEOMETRY;
         pp.reads = reads;
         pp.reads_count = 3;
@@ -486,7 +485,7 @@ ke_result CoreRenderer::SetupRenderGraph()
         pp.record = [](ke_render_pass_ctx* ctx, void* user) {
             auto* self = static_cast<CoreRenderer*>(user);
             const ke_frame_packet* pkt = ctx->get_frame_packet(ctx);
-            if (self && pkt) self->SubmitPacketLegacy(pkt);
+            if (self && pkt) self->ExecuteSceneOpaquePass(pkt);
         };
         pp.user = this;
         rc = graph_->add_pass(graph_, &pp);
@@ -799,21 +798,6 @@ ke_result CoreRenderer::SubmitPacket(const struct ke_frame_packet* packet)
     return graph_->execute(graph_, packet);
 }
 
-ke_result CoreRenderer::SubmitPacketLegacy(const struct ke_frame_packet* packet)
-{
-    try {
-        const uint16_t bb_w = (uint16_t)ctx_.view_w;
-        const uint16_t bb_h = (uint16_t)ctx_.view_h;
-        // lights.upload (Phase 6.1) and lights.cluster_cull (Phase 6.2) run as
-        // their own graph nodes ahead of this pass — see SetupRenderGraph.
-        return FrameSubmitter::Submit(ctx_, *packet, geometry_, lighting_, textures_, shadows_,
-                                      post_process_, program_, shadow_program_, skybox_program_, prepass_program_,
-                                      ui_quad_program_, bb_w, bb_h, &clustered_);
-    } catch (const BgfxFatalException& e) {
-        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "SubmitPacket", e.what());
-    }
-}
-
 ke_result CoreRenderer::ExecuteLightsUploadPass(const struct ke_frame_packet* packet)
 {
     if (!packet || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
@@ -872,6 +856,63 @@ ke_result CoreRenderer::ExecuteClusterCullPass(const struct ke_frame_packet*)
     if (!ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
     clustered_.RunCull(ctx_, lighting_);
     return KE_OK;
+}
+
+ke_result CoreRenderer::ExecuteSceneOpaquePass(const struct ke_frame_packet* packet)
+{
+    if (!packet || !ctx_.gpu) return KE_ERROR_INVALID_ARGUMENT;
+
+    try {
+        ctx_.gpu->SetViewTransform(Id(ViewId::Scene), packet->camera.view.m, packet->camera.proj.m);
+
+        // Resolve IBL env-tex (skybox-conditional but used by main shader's
+        // ambient term regardless of whether the skybox geometry is drawn).
+        GpuTextureHandle env_tex = textures_.default_cube_tex;
+        if (packet->has_skybox) {
+            GpuTextureHandle sky = textures_.GetTextureIdx(packet->skybox_handle);
+            if (sky != kGpuInvalidHandle) env_tex = sky;
+        }
+
+        for (uint32_t i = 0; i < packet->draw_count; ++i) {
+            const auto& cmd   = packet->draw_commands[i];
+            const auto& entry = geometry_.GetMeshEntry(cmd.mesh_handle);
+            const auto& mat   = lighting_.GetMaterial(cmd.material_handle);
+
+            if (entry.vb == kGpuInvalidHandle || !mat.valid) continue;
+
+            float color[4] = {mat.r, mat.g, mat.b, mat.a};
+            float pbr[4]   = {mat.metallic, mat.roughness, 0.0f, 0.0f};
+            ctx_.gpu->SetUniform(lighting_.color_uniform,      color, 1);
+            ctx_.gpu->SetUniform(lighting_.pbr_params_uniform, pbr,   1);
+
+            GpuTextureHandle tex = textures_.GetTextureIdx(mat.texture_handle);
+            if (tex == kGpuInvalidHandle) tex = textures_.default_2d_tex;
+            GpuTextureHandle shadow_tex = shadows_.GetActiveShadowTex();
+            if (shadow_tex == kGpuInvalidHandle) shadow_tex = textures_.default_2d_tex;
+            GpuTextureHandle nmap_tex = ke_texture_is_valid(mat.normal_map_handle)
+                ? textures_.GetTextureIdx(mat.normal_map_handle)
+                : kGpuInvalidHandle;
+            float normal_params[4] = {nmap_tex != kGpuInvalidHandle ? 1.0f : 0.0f, 0.f, 0.f, 0.f};
+            if (nmap_tex == kGpuInvalidHandle) nmap_tex = textures_.default_2d_tex;
+            ctx_.gpu->SetUniform(lighting_.normal_params_uniform, normal_params, 1);
+            ctx_.gpu->SetTexture(0, textures_.sampler_uniform,      tex,                       0xFFFFFFFF);
+            ctx_.gpu->SetTexture(1, lighting_.env_map_uniform,      env_tex,                   0xFFFFFFFF);
+            ctx_.gpu->SetTexture(2, shadows_.shadow_map_uniform,    shadow_tex,                0xFFFFFFFF);
+            ctx_.gpu->SetTexture(3, lighting_.normal_map_uniform,   nmap_tex,                  0xFFFFFFFF);
+            ctx_.gpu->SetTexture(4, textures_.ssao_blurred_uniform, textures_.default_2d_tex,  0xFFFFFFFF);
+
+            ctx_.gpu->SetTransform(cmd.transform.m, 1);
+            ctx_.gpu->SetVertexBuffer(0, entry.vb);
+            ctx_.gpu->SetIndexBufferStatic(entry.ib);
+            clustered_.BindForSceneRead(ctx_);
+            // no cull (meshes are two-sided)
+            ctx_.gpu->SetState(GpuStateFlags::WriteRgba | GpuStateFlags::WriteZ | GpuStateFlags::DepthTestLess | GpuStateFlags::Msaa, 0);
+            ctx_.gpu->Submit(Id(ViewId::Scene), program_, 0, false);
+        }
+        return KE_OK;
+    } catch (const BgfxFatalException& e) {
+        return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR_GPU_FATAL, "SceneOpaque", e.what());
+    }
 }
 
 ke_result CoreRenderer::SetOrthographic(ke_bool enabled) {

@@ -7,7 +7,6 @@ add_library(ke_render_core SHARED
     src/post_process_pipeline.cpp
     src/clustered_forward.cpp
     src/shader_provider.cpp
-    src/frame_submitter.cpp
     src/render_graph_impl.cpp
 )
 

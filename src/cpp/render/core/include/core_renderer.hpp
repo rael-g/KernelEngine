@@ -90,10 +90,6 @@ private:
     /// per-stage callbacks.
     ke_result SetupRenderGraph();
 
-    /// @brief Executes the original FrameSubmitter + clustered/SSAO/post-fx
-    /// chain. Called from the legacy monolithic pass's record callback.
-    ke_result SubmitPacketLegacy(const struct ke_frame_packet* packet);
-
     /// @brief Runs the directional shadow depth pass — split out of the
     /// monolithic pass in Phase 3 Step B. Skips silently when the packet
     /// carries no valid shadow map handle.
@@ -131,8 +127,16 @@ private:
     /// @brief Clustered light culling compute dispatch (Phase 6.2). Reads
     /// the stored light arrays, packs them into the cluster cull's storage
     /// buffers, and dispatches the CS that bins lights into screen-space
-    /// clusters. Runs between @c lights.upload and @c scene.legacy_remaining.
+    /// clusters. Runs between @c lights.upload and the main scene pass.
     ke_result ExecuteClusterCullPass(const struct ke_frame_packet* packet);
+
+    /// @brief Main opaque scene pass (Phase 6.3). Sets the scene-view
+    /// transform and submits one draw per @c ke_draw_command, binding the
+    /// material colors, textures, shadow map, env cubemap, normal map, and
+    /// (via @c ClusteredForward::BindForSceneRead) the cluster buffers. The
+    /// last block of the legacy chain — its extraction completes F.RC2 and
+    /// retires @c FrameSubmitter + @c SubmitPacketLegacy.
+    ke_result ExecuteSceneOpaquePass(const struct ke_frame_packet* packet);
 
     RenderContext ctx_;
     bool own_gpu_device_ = false;
