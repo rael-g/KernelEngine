@@ -107,3 +107,7 @@ public unsafe partial struct ke_frame_packet
 public partial struct ke_frame_packet
 {
 }
+
+public partial struct ke_frame_packet
+{
+}

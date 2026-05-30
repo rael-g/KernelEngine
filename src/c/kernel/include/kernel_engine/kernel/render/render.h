@@ -163,6 +163,13 @@ extern "C"
         ///        Callers usually use the @c ke_render_graph_create convenience wrapper.
         struct ke_render_graph *(*create_render_graph)(struct ke_render *self, struct ke_allocator *allocator);
 
+        /// @brief Returns the renderer's *active* graph — the one whose passes
+        ///        are executed every @c submit_packet. Managed/plugin code adds
+        ///        new passes to this graph to plug techniques into the chain
+        ///        without owning a graph instance. May return NULL if the
+        ///        renderer was constructed without a default graph (rare).
+        struct ke_render_graph *(*get_render_graph)(struct ke_render *self);
+
     } ke_render;
 
 #ifdef __cplusplus

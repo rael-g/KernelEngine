@@ -99,6 +99,9 @@ public static unsafe partial class NativeMethods
     [NativeTypeName("#define KE_ID_RENDER \"ke_render\"")]
     public static ReadOnlySpan<byte> KE_ID_RENDER => "ke_render"u8;
 
+    [NativeTypeName("#define KE_ID_RENDER_GRAPH \"ke_render_graph\"")]
+    public static ReadOnlySpan<byte> KE_ID_RENDER_GRAPH => "ke_render_graph"u8;
+
     [NativeTypeName("#define KE_ID_SHADER_COMPILER \"ke_shader_compiler\"")]
     public static ReadOnlySpan<byte> KE_ID_SHADER_COMPILER => "ke_shader_compiler"u8;
 

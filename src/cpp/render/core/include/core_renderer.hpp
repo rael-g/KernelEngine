@@ -69,6 +69,11 @@ public:
     /// generic kernel contract.
     struct ke_render_graph* CreateRenderGraph(ke_allocator* allocator);
 
+    /// @brief Returns the renderer's active graph (the one executed on
+    /// @c SubmitPacket). Used by external/managed code to plug new passes
+    /// into the running chain.
+    struct ke_render_graph* GetRenderGraph() { return graph_; }
+
     void SetShaderProvider(ShaderProviderInterface* provider);
     void SetGpuDevice(render::GpuDevice* gpu);
 

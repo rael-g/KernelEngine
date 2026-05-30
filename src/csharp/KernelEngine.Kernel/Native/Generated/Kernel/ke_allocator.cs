@@ -19,3 +19,7 @@ public unsafe partial struct ke_allocator
     [NativeTypeName("void (*)(struct ke_allocator *)")]
     public delegate* unmanaged[Cdecl]<ke_allocator*, void> reset;
 }
+
+public partial struct ke_allocator
+{
+}

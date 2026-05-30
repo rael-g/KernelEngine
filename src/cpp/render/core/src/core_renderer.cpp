@@ -213,6 +213,10 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         if (!self || !self->handle) return nullptr;
         return static_cast<CoreRenderer *>(self->handle)->CreateRenderGraph(allocator);
     };
+    render_api_.get_render_graph = [](ke_render *self) -> ke_render_graph* {
+        if (!self || !self->handle) return nullptr;
+        return static_cast<CoreRenderer *>(self->handle)->GetRenderGraph();
+    };
 }
 
 void CoreRenderer::GetBackbufferSize(uint32_t* out_w, uint32_t* out_h) const

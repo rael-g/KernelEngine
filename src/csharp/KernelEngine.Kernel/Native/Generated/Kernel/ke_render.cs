@@ -108,4 +108,10 @@ public unsafe partial struct ke_render
 
     [NativeTypeName("const char *(*)(struct ke_render *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, sbyte*> get_last_fatal_error;
+
+    [NativeTypeName("struct ke_render_graph *(*)(struct ke_render *, struct ke_allocator *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_allocator*, ke_render_graph*> create_render_graph;
+
+    [NativeTypeName("struct ke_render_graph *(*)(struct ke_render *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_render_graph*> get_render_graph;
 }

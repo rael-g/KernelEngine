@@ -32,6 +32,21 @@ public sealed unsafe class Renderer : IRenderer
     }
 
     /// <summary>
+    /// Returns the renderer's active render graph — the one whose passes execute on every
+    /// <see cref="SubmitPacket"/>. Add new <see cref="RenderPass"/>es to plug techniques
+    /// (FXAA, debug overlays, custom compute) into the chain without forking the renderer.
+    /// Returns <c>null</c> when the backend was constructed without a default graph.
+    /// </summary>
+    [RequiresThread("ke.render")]
+    public RenderGraph? GetRenderGraph()
+    {
+        KernelThread.AssertCurrent("ke.render");
+        if (Native->get_render_graph == null) return null;
+        var g = Native->get_render_graph(Native);
+        return g != null ? new RenderGraph(g) : null;
+    }
+
+    /// <summary>
     /// Calls <c>on_initialize</c> (bgfx::init). Must be called on the same thread that will
     /// subsequently call <see cref="Frame"/>. Typically invoked by the framework on the sim thread.
     /// </summary>
