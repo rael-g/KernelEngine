@@ -109,6 +109,10 @@ public class Application : IDisposable
         // ServiceProvider is built). The factories close over `this` and resolve to the live
         // instance — so node ctors that take Assets/ResourceManager via DI (e.g. Pong's
         // Scoreboard) just work without manual wiring.
+        serviceCollection.AddSingleton<IWorld>(_ => ActiveWorld
+            ?? throw new InvalidOperationException(
+                "IWorld is null — resolved before Application.Run finished initializing."));
+        serviceCollection.AddSingleton<ISceneTree>(_ => (ISceneTree)Tree);
         serviceCollection.AddSingleton(_ => Assets
             ?? throw new InvalidOperationException(
                 "Assets is null. Either no asset loader is registered (.AddStbImageLoader / .AddAssimpAssetLoader / .AddTextStbTrueType) or the service was resolved before sim init reached OnReady."));
@@ -475,19 +479,19 @@ public class Application : IDisposable
             });
 
         // Built-in Framework node types — explicit fast path (skips assembly scan).
-        registry.Register<MeshRenderer>(ActiveWorld, Services);
-        registry.Register<Camera>(ActiveWorld, Services);
-        registry.Register<Camera2D>(ActiveWorld, Services);
-        registry.Register<DirectionalLight>(ActiveWorld, Services);
-        registry.Register<PointLight>(ActiveWorld, Services);
-        registry.Register<SpotLight>(ActiveWorld, Services);
-        registry.Register<Skybox>(ActiveWorld, Services);
-        registry.Register<Sprite2D>(ActiveWorld, Services);
-        registry.Register<Label>(ActiveWorld, Services);
+        registry.Register<MeshRenderer>(ActiveWorld, Services, Resources);
+        registry.Register<Camera>(ActiveWorld, Services, Resources);
+        registry.Register<Camera2D>(ActiveWorld, Services, Resources);
+        registry.Register<DirectionalLight>(ActiveWorld, Services, Resources);
+        registry.Register<PointLight>(ActiveWorld, Services, Resources);
+        registry.Register<SpotLight>(ActiveWorld, Services, Resources);
+        registry.Register<Skybox>(ActiveWorld, Services, Resources);
+        registry.Register<Sprite2D>(ActiveWorld, Services, Resources);
+        registry.Register<Label>(ActiveWorld, Services, Resources);
         if (Services.GetService<IPhysics2D>() is not null)
         {
-            registry.Register<CollisionBody2D>(ActiveWorld, Services);
-            registry.Register<CollisionShape2D>(ActiveWorld, Services);
+            registry.Register<CollisionBody2D>(ActiveWorld, Services, Resources);
+            registry.Register<CollisionShape2D>(ActiveWorld, Services, Resources);
         }
     }
 

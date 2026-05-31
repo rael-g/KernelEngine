@@ -354,6 +354,9 @@ public sealed class Tree : ISceneTree
 
     ulong ISceneTree.Root => _root.Entity;
 
+    ulong ISceneTree.CreateNode(string name, ulong parentEntity) =>
+        CreateEntityWithHierarchy(name, parentEntity == 0 ? _root.Entity : parentEntity);
+
     bool ISceneTree.DestroyNode(ulong entity)
     {
         var node = Node.FromEntity(entity);

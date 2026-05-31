@@ -31,7 +31,8 @@ public static class ServiceCollectionExtensions
         {
             var world    = sp.GetRequiredService<IWorld>();
             var registry = sp.GetRequiredService<INodeTypeRegistry>();
-            return new CSharpSceneLoader(world, registry);
+            var tree     = sp.GetRequiredService<ISceneTree>();
+            return new CSharpSceneLoader(world, registry, tree);
         });
 
         return services;

@@ -22,6 +22,14 @@ public interface ISceneTree
     void DestroyAll();
 
     /// <summary>
+    /// Creates a node as a child of <paramref name="parentEntity"/> (pass <c>Root</c> for top-level).
+    /// Initialises Transform, Hierarchy, and Name components and links the entity into the hierarchy.
+    /// Returns the new entity ID. The caller is then responsible for calling
+    /// <see cref="INodeTypeRegistry.TryCreate"/> to bind the managed node object to the entity.
+    /// </summary>
+    ulong CreateNode(string name, ulong parentEntity);
+
+    /// <summary>
     /// Resolves a node by name or path. Returns <c>0</c> (KE_ENTITY_INVALID) if not found.
     /// </summary>
     ulong FindNode(string nameOrPath);

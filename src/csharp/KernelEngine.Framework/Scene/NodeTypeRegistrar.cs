@@ -121,6 +121,14 @@ public static class NodeTypeRegistrar
                         $"Resource property requires ResourceManager; pass it to NodeTypeRegistrar.Register.");
                 return ResolveResource(underlying, resPath, resources);
             }
+            // Inline material table: { base_color = [r,g,b,a] }
+            if (underlying == typeof(Material) && raw is Tomlyn.Model.TomlTable matTable)
+            {
+                if (resources is null)
+                    throw new InvalidOperationException(
+                        $"Resource property requires ResourceManager; pass it to NodeTypeRegistrar.Register.");
+                return BuildInlineMaterial(matTable, resources);
+            }
         }
 
         // Direct type match.
@@ -183,6 +191,17 @@ public static class NodeTypeRegistrar
             return null; // TODO: extract ResolveMaterial from SceneLoader
         }
         throw new InvalidDataException($"Cannot resolve '{resPath}' as {type.Name}.");
+    }
+
+    private static Material BuildInlineMaterial(Tomlyn.Model.TomlTable t, ResourceManager resources)
+    {
+        var color = t.TryGetValue("base_color", out var bc) && bc is Tomlyn.Model.TomlArray bca
+            ? new System.Numerics.Vector4(F(bca, 0), F(bca, 1), F(bca, 2), F(bca, 3))
+            : System.Numerics.Vector4.One;
+        var metallic  = t.TryGetValue("metallic",  out var m) ? ToFloat(m) : 0f;
+        var roughness = t.TryGetValue("roughness",  out var r) ? ToFloat(r) : 0.5f;
+        return resources.CreateMaterialAsync(color, metallic: metallic, roughness: roughness)
+            .GetAwaiter().GetResult();
     }
 
     // ── TOML helpers ──────────────────────────────────────────────────────────
