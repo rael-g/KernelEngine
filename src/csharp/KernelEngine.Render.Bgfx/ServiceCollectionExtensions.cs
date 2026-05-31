@@ -59,7 +59,7 @@ public static class ServiceCollectionExtensions
                 window        = ((Window)sp.GetRequiredService<IWindow>()).Native,
                 shader_path   = (sbyte*)shaderPtr,
                 vsync         = (byte)(opts.Vsync ? 1 : 0),
-                renderer_type = uint.MaxValue, // sentinel: auto-pick (currently → Vulkan); BgfxRendererOptions does not yet expose this
+                renderer_type = (uint)opts.Backend,
             };
 
             ke_render* native;

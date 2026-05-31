@@ -75,6 +75,12 @@ vec3 PbrDirect(vec3 N, vec3 V, vec3 L, vec3 albedo, vec3 F0, float metallic, flo
 
 float ComputeShadow(vec4 shadowCoord) {
     vec3 coord = shadowCoord.xyz / shadowCoord.w;
+    // u_lightVP is built by ViewProjection with y_flip=false (bgfx reports y_flip=false for every
+    // backend — it applies the per-backend correction internally in setViewTransform). So the light
+    // clip space always follows the D3D/GL convention: Y+ = up, Y ∈ [-1,1]. Standard NDC-to-UV:
+    //   UV.x = NDC.x * 0.5 + 0.5   (same for all backends)
+    //   UV.y = -NDC.y * 0.5 + 0.5  (flip because UV.y=0 is top, NDC.y=+1 is also top)
+    // This is NOT backend-specific; the same formula is correct for Vulkan, D3D, OpenGL and Metal.
     coord.x = coord.x * 0.5 + 0.5;
     coord.y = -coord.y * 0.5 + 0.5;
     if (any(lessThan(coord, vec3_splat(0.0))) || any(greaterThan(coord, vec3_splat(1.0)))) return 1.0;
@@ -83,7 +89,8 @@ float ComputeShadow(vec4 shadowCoord) {
 
 // Returns the flat cluster index for this fragment.
 // fragCoord = gl_FragCoord (passed from main because bgfx restricts built-ins to main scope).
-// Vulkan NDC depth is [0,1]; z_view is negative (right-hand camera).
+// gl_FragCoord.z is window-space depth, always in [0,1] for all bgfx backends (the viewport
+// transform maps NDC z to [0,1] regardless of the NDC convention). z_view is negative (RH camera).
 uint ComputeClusterIndex(vec4 fragCoord) {
     float numX = u_clusterParams.x;
     float numY = u_clusterParams.y;
@@ -99,10 +106,11 @@ uint ComputeClusterIndex(vec4 fragCoord) {
     iz = clamp(iz, 0, int(numZ) - 1);
 
     int ix = int(fragCoord.x / u_clusterViewport.x * numX);
-    // gl_FragCoord.y here is bottom-origin (the scene renders to a Y-flipped target under Vulkan),
-    // while the cluster AABBs are built top-origin in UpdateClusterBounds. Flip Y so the fragment's
-    // tile matches the cluster the cull placed the light in. Without this, lighting is vertically
-    // mirrored — masked by symmetric light layouts except at the screen corners.
+    // The cluster AABBs are built top-origin in UpdateClusterBounds (tile y=0 = top row),
+    // but gl_FragCoord.y=0 maps to the top of the viewport in Vulkan/D3D and to the bottom
+    // in OpenGL. Under Vulkan and D3D the flip below is required to align the fragment tile
+    // with the AABB built by the cull pass. Under OpenGL the flip may be wrong — needs D.2
+    // visual parity test to confirm (tracked as F.BA Phase C open item).
     int iy = int((1.0 - fragCoord.y / u_clusterViewport.y) * numY);
     ix = clamp(ix, 0, int(numX) - 1);
     iy = clamp(iy, 0, int(numY) - 1);
