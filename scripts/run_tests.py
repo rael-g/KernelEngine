@@ -55,11 +55,16 @@ def main():
     run_command(["ctest", "--preset", preset, "--output-on-failure"], cwd=BASE_DIR)
 
     native_modules = {
-        "Native.Kernel":  "src/c/kernel",
-        "Native.Render":  "src/cpp/render",
-        "Native.Window":  "src/cpp/window",
-        "Native.Threads": "src/cpp/threading",
-        "Native.Assets":  "src/cpp/asset"
+        "Native.Kernel":        "src/c/kernel",
+        "Native.Render":        "src/cpp/render",
+        "Native.Window":        "src/cpp/window",
+        "Native.Threads":       "src/cpp/threading",
+        "Native.Assets":        "src/cpp/asset",
+        "Native.Audio":         "src/cpp/audio",
+        "Native.DevPlatform":   "src/cpp/dev_platform",
+        "Native.Physics":       "src/cpp/physics",
+        "Native.TaskScheduler": "src/cpp/task_scheduler",
+        "Native.Text":          "src/cpp/text",
     }
 
     # Use gcovr to create organized XMLs
