@@ -47,12 +47,26 @@ def main():
 
     # 1. Native C/C++
     print("\n[1/3] Processing Native Modules...")
-    run_command(["cmake", "--preset", preset, "-DKE_COVERAGE=ON"], cwd=BASE_DIR)
-    run_command(["cmake", "--build", "--preset", preset], cwd=BASE_DIR)
+    # Coverage uses a dedicated build dir so it never collides with dev builds.
+    # Regular dev workflow keeps using build/<preset>/ uninstrumented.
+    build_dir = BASE_DIR / "build" / f"{preset}-coverage"
+    if build_dir.exists(): shutil.rmtree(build_dir, ignore_errors=True)
+    triplet = "x64-windows-static-md" if preset == "win" else "x64-linux"
+    host_triplet = "x64-windows" if preset == "win" else "x64-linux"
+    vcpkg_root = os.environ.get("VCPKG_ROOT", "C:/vcpkg")
+    run_command([
+        "cmake", "-S", str(BASE_DIR), "-B", str(build_dir), "-G", "Ninja",
+        "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        f"-DVCPKG_TARGET_TRIPLET={triplet}",
+        f"-DVCPKG_HOST_TRIPLET={host_triplet}",
+        f"-DCMAKE_TOOLCHAIN_FILE={vcpkg_root}/scripts/buildsystems/vcpkg.cmake",
+        "-DKE_COVERAGE=ON",
+    ], cwd=BASE_DIR)
+    run_command(["cmake", "--build", str(build_dir)], cwd=BASE_DIR)
 
-    build_dir = BASE_DIR / "build" / preset
-    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()    
-    run_command(["ctest", "--preset", preset, "--output-on-failure"], cwd=BASE_DIR)
+    for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()
+    run_command(["ctest", "--test-dir", str(build_dir), "--output-on-failure"], cwd=BASE_DIR)
 
     native_modules = {
         "Native.Kernel":        "src/c/kernel",
@@ -122,11 +136,11 @@ def main():
             print("-" * 70)
             print(f"\nFull Report: {report_dir / 'index.html'}")
 
-    # 4. Cleanup & Environment Restore
-    print("\n[Cleanup] Restoring environment...")
-    run_command(["cmake", "--preset", preset, "-DKE_COVERAGE=OFF"], cwd=BASE_DIR)
+    # 4. Cleanup — only remove gcda/gcov dropped during this run.
+    #    Do NOT reconfigure with KE_COVERAGE=OFF: that left stale non-instrumented
+    #    objects which made the NEXT run's native modules silently disappear.
+    print("\n[Cleanup] Removing run artifacts...")
     for gcda in build_dir.glob("**/*.gcda"): gcda.unlink()
-    for gcno in build_dir.glob("**/*.gcno"): gcno.unlink()
     for f in BASE_DIR.glob("*.gcov"): f.unlink()
 
 if __name__ == "__main__":     
