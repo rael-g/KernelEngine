@@ -66,12 +66,16 @@ public class Application : IDisposable
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
     private readonly InputActionDispatcher _actionDispatcher = new();
+    private CSharpInputActions? _inputActions;
+    private CSharpResourceCache? _resourceCache;
+    private CSharpSceneTree? _sceneTree;
 
     private System.Numerics.Vector4? _projectClearColor;
     private System.Numerics.Vector3? _projectAmbientLight;
     private IResourceCommandQueue _resourceQueue = null!;
     private ShadowRenderSystem? _shadowSystem;
     private Physics2DSystem? _physics2DSystem;
+    private ISceneLoader? _sceneLoader;
 
     private string GetGpuFatalError()
     {
@@ -233,12 +237,23 @@ public class Application : IDisposable
                 if (_cts.IsCancellationRequested) return;
 
                 var factory = _resourceQueue.CreateFactory();
-                Resources = new ResourceManager(factory);
+                _resourceCache = new CSharpResourceCache();
+                Resources = new ResourceManager(factory, _resourceCache);
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
                 if (modelLoader != null || imageLoader != null || fontLoader != null)
                     Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources);
+
+                // Input actions — round-trip bridge over ke_input_actions (Tier S S4).
+                _inputActions = new CSharpInputActions(_actionDispatcher);
+
+                // Scene loader — round-trip bridge over ke_scene_loader (Tier S S3).
+                _sceneLoader = Services.GetService<ISceneLoader>()
+                    ?? new CSharpSceneLoader(Tree, Resources, Services);
+
+                // Scene tree — round-trip bridge over ke_scene_tree (Tier S S7).
+                _sceneTree = new CSharpSceneTree(Tree);
 
                 // Auto-load action bindings (when a game enum was registered via .AddInputActions<T>()).
                 // After this, InputActions.Get<TEnum>() works from anywhere; no game code involved.
@@ -280,10 +295,12 @@ public class Application : IDisposable
                         if (events.Length > 0)
                             Tree.DispatchInput(events);
 
-                        // Action layer: evaluate every registered map against the current snapshot,
-                        // then dispatch derived InputActionEvents through the tree. Polling readers
-                        // (IInputActionReader<TEnum>) read the same updated state inside Update.
-                        var actionEvents = _actionDispatcher.Evaluate(input);
+                        // Action layer: evaluate through the ke_input_actions kernel contract
+                        // (Tier S S4 round-trip). CSharpInputActions delegates to the existing
+                        // dispatcher; the native vtable is ready for a future C++ plugin.
+                        var actionEvents = _inputActions != null
+                            ? _inputActions.Evaluate(input)
+                            : _actionDispatcher.Evaluate(input);
                         Tree.DispatchInputActions(actionEvents);
 
                         // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
@@ -420,7 +437,8 @@ public class Application : IDisposable
 
         var relative = resPath[prefix.Length..];
         var absolute = Path.Combine(AppContext.BaseDirectory, relative);
-        SceneLoader.LoadAsync(Tree, absolute, Resources, Services).GetAwaiter().GetResult();
+        (_sceneLoader ?? new CSharpSceneLoader(Tree, Resources, Services))
+            .LoadAsync(absolute).GetAwaiter().GetResult();
         Logger?.Info("Application", $"Loaded default scene: {resPath}");
     }
 
@@ -615,7 +633,16 @@ public class Application : IDisposable
     public virtual void Dispose()
     {
         _cts.Dispose();
-        _scene?.DestroyAll();   // fire OnDestroy + IDisposable.Dispose on every live node
+        (_sceneLoader as IDisposable)?.Dispose();
+        _inputActions?.Dispose();
+        _resourceCache?.Dispose();
+        // Destroy all nodes through the ke_scene_tree contract (Tier S S7 round-trip).
+        // Falls back to direct Tree call if the bridge was never created (e.g. if sim never started).
+        if (_sceneTree != null)
+            unsafe { _sceneTree.Native->destroy_all(_sceneTree.Native); }
+        else
+            _scene?.DestroyAll();
+        _sceneTree?.Dispose();
         ActiveWorld?.Dispose();
 
         _proxyAllocator?.Report(Logger);

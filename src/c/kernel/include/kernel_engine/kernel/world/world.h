@@ -3,6 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/world/components.h>
 #include <kernel_engine/kernel/world/system.h>
 #include <kernel_engine/kernel/engine/frame.h>
 #include <kernel_engine/kernel/world/ecs.h>
@@ -45,6 +46,10 @@ extern "C" {
     } ke_world;
 
     KE_API ke_result ke_world_create(const ke_world_params *params, ke_world **out_world);
+
+    /// Fires on_destroy (if present) on the entity's script component before the caller removes
+    /// the entity from the ECS. Safe to call on entities without a script component (no-op).
+    KE_API ke_result ke_world_notify_destroy(ke_world *world, ke_entity entity);
 
 #ifdef __cplusplus
 }

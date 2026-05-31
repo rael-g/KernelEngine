@@ -53,7 +53,7 @@ public unsafe class WorldDetailsTests
         using var world = new World(allocator);
         
         bool started = false;
-        world.RegisterScript(1, () => started = true, dt => { });
+        world.RegisterScript(1, onStart: () => started = true, onUpdate: dt => { });
         
         // World.Update calls ScriptSystem which should call our bridge
         // Needs 2 updates: one to detect and call on_start, one to ensure it's processed.

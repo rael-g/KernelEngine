@@ -19,9 +19,9 @@ public class ScriptBridgeTests
         bool started = false;
         float updatedDt = 0;
 
-        ScriptBridge.Register(registry, world.ScriptComponentId, entity, 
-            () => started = true, 
-            (dt) => updatedDt = dt);
+        ScriptBridge.Register(registry, world.ScriptComponentId, entity,
+            onStart: () => started = true,
+            onUpdate: (dt) => updatedDt = dt);
 
         // We can't easily trigger the native call from managed without 
         // calling the world update, but we can verify it was registered.

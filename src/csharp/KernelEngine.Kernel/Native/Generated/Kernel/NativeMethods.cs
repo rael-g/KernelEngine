@@ -87,8 +87,26 @@ public static unsafe partial class NativeMethods
     [NativeTypeName("#define KE_ENTITY_INVALID 0")]
     public const int KE_ENTITY_INVALID = 0;
 
+    [NativeTypeName("#define KE_SCRIPT_STATE_FRESH 0")]
+    public const int KE_SCRIPT_STATE_FRESH = 0;
+
+    [NativeTypeName("#define KE_SCRIPT_STATE_AWOKE 1")]
+    public const int KE_SCRIPT_STATE_AWOKE = 1;
+
+    [NativeTypeName("#define KE_SCRIPT_STATE_STARTED 2")]
+    public const int KE_SCRIPT_STATE_STARTED = 2;
+
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_sparse_set_create", ExactSpelling = true)]
+    public static extern ke_result ecs_sparse_set_create(ke_ecs_registry* registry, ke_allocator* alloc, ke_ecs** out_ecs);
+
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_type_registry_create", ExactSpelling = true)]
+    public static extern ke_result node_type_registry_create(ke_allocator* alloc, ke_node_type_registry** out_registry);
+
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_create", ExactSpelling = true)]
     public static extern ke_result world_create([NativeTypeName("const ke_world_params *")] ke_world_params* @params, ke_world** out_world);
+
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_notify_destroy", ExactSpelling = true)]
+    public static extern ke_result world_notify_destroy(ke_world* world, [NativeTypeName("ke_entity")] ulong entity);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_create", ExactSpelling = true)]
     public static extern ke_result input_create([NativeTypeName("struct ke_allocator *")] ke_allocator* allocator, [NativeTypeName("struct ke_logger *")] ke_logger* logger, ke_input** out_input);
@@ -101,6 +119,9 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_ID_RENDER_GRAPH \"ke_render_graph\"")]
     public static ReadOnlySpan<byte> KE_ID_RENDER_GRAPH => "ke_render_graph"u8;
+
+    [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
+    public const uint KE_RESOURCE_HANDLE_NONE = 0xffffffffU;
 
     [NativeTypeName("#define KE_ID_SHADER_COMPILER \"ke_shader_compiler\"")]
     public static ReadOnlySpan<byte> KE_ID_SHADER_COMPILER => "ke_shader_compiler"u8;

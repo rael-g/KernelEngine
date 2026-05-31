@@ -3,6 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/math.h>
+#include <kernel_engine/kernel/input/snapshot.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -50,12 +51,22 @@ extern "C"
 
     typedef ke_result (*ke_script_func)(ke_entity entity);
     typedef ke_result (*ke_script_update_func)(ke_entity entity, float dt);
+    typedef ke_result (*ke_script_input_func)(ke_entity entity, const ke_input_snapshot *input);
+
+    // state values for ke_script_component.state
+    #define KE_SCRIPT_STATE_FRESH   0  // not yet ticked
+    #define KE_SCRIPT_STATE_AWOKE   1  // on_awake fired
+    #define KE_SCRIPT_STATE_STARTED 2  // on_start fired; normal update loop
 
     typedef struct ke_script_component
     {
-        bool started;
-        ke_script_func on_start;
+        uint8_t state;                    // KE_SCRIPT_STATE_*
+        ke_script_func        on_awake;   // called once before on_start
+        ke_script_func        on_start;   // called once before first on_update
         ke_script_update_func on_update;
+        ke_script_update_func on_late_update; // called after all on_update in same frame
+        ke_script_func        on_destroy; // called by ke_world_notify_destroy before ECS removal
+        ke_script_input_func  on_input;   // called per frame when input snapshot is available
     } ke_script_component;
 
 #ifdef __cplusplus

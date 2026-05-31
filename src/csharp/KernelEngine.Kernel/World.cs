@@ -10,6 +10,7 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class World : IWorld
 {
     private ke_world* _native;
+    private ke_ecs* _ecs;
     private EcsRegistry? _registry;
     private readonly List<ISystem> _systems = [];
 
@@ -67,12 +68,19 @@ public sealed unsafe class World : IWorld
         HierarchyComponentId = _native->hierarchy_id(_native);
         NameComponentId      = _native->name_id(_native);
         ScriptComponentId    = _native->script_id(_native);
+
+        // Wrap the world's internal ke_ecs_registry* in the ke_ecs vtable (S5 round-trip).
+        ke_ecs* ecs;
+        KernelException.ThrowIfFailed(
+            NativeMethods.ecs_sparse_set_create(
+                _native->get_registry(_native), allocator.Native, &ecs).ToManaged());
+        _ecs = ecs;
     }
 
     // ── Public properties ─────────────────────────────────────────────────────
 
     /// <summary>The ECS registry for this world.</summary>
-    public EcsRegistry Registry => _registry ??= new EcsRegistry(_native->get_registry(_native));
+    public EcsRegistry Registry => _registry ??= new EcsRegistry(_ecs);
 
     /// <summary>Interface view of the registry (Framework/user code path).</summary>
     IEcsRegistry IWorld.Registry => Registry;
@@ -108,8 +116,15 @@ public sealed unsafe class World : IWorld
     }
 
     /// <inheritdoc/>
-    public void RegisterScript(ulong entity, Action onStart, Action<float> onUpdate) =>
-        ScriptBridge.Register(Registry, ScriptComponentId, entity, onStart, onUpdate);
+    public void RegisterScript(
+        ulong entity,
+        Action? onAwake      = null,
+        Action? onStart      = null,
+        Action<float>? onUpdate     = null,
+        Action<float>? onLateUpdate = null,
+        Action? onDestroy    = null) =>
+        ScriptBridge.Register(Registry, ScriptComponentId, entity,
+            onAwake, onStart, onUpdate, onLateUpdate, onDestroy);
 
     /// <inheritdoc/>
     public void UnregisterScript(ulong entity) => ScriptBridge.Unregister(entity);
@@ -172,6 +187,11 @@ public sealed unsafe class World : IWorld
             _native->destroy(_native);
             _native = null;
             _registry = null;
+        }
+        if (_ecs != null)
+        {
+            _ecs->destroy(_ecs);
+            _ecs = null;
         }
     }
 }

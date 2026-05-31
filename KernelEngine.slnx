@@ -18,6 +18,7 @@
     <Project Path="examples/csharp/14_ui_quad/14_ui_quad.csproj" />
     <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
     <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
+    <Project Path="examples/csharp/lua_spike/lua_spike.csproj" />
   </Folder>
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />

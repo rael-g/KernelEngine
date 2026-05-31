@@ -158,23 +158,41 @@ static ke_result world_add_system(ke_world *self, const ke_system_params *desc)
 
 // ── Built-in systems ─────────────────────────────────────────────────────────
 
-static void run_script_system(ke_world_impl *impl, float dt)
+static void run_script_system(ke_world_impl *impl, const struct ke_frame *frame)
 {
     ke_entity *entities;
     void      *data;
     size_t     count;
     ke_ecs_registry_query(impl->registry, impl->script_cid, &entities, &data, &count);
 
+    float dt = frame ? (float)frame->delta_time : 0.0f;
+    const ke_input_snapshot *input = frame ? frame->input : NULL;
+
     ke_script_component *scripts = (ke_script_component *)data;
+
+    // Pass 1: awake → start → input → update
     for (size_t i = 0; i < count; i++)
     {
         ke_script_component *s = &scripts[i];
-        if (!s->started)
+        if (s->state == KE_SCRIPT_STATE_FRESH)
         {
-            s->started = true;
+            s->state = KE_SCRIPT_STATE_AWOKE;
+            if (s->on_awake) s->on_awake(entities[i]);
+        }
+        if (s->state == KE_SCRIPT_STATE_AWOKE)
+        {
+            s->state = KE_SCRIPT_STATE_STARTED;
             if (s->on_start) s->on_start(entities[i]);
         }
+        if (s->on_input && input) s->on_input(entities[i], input);
         if (s->on_update) s->on_update(entities[i], dt);
+    }
+
+    // Pass 2: late_update (runs after every on_update in this frame)
+    for (size_t i = 0; i < count; i++)
+    {
+        ke_script_component *s = &scripts[i];
+        if (s->on_late_update) s->on_late_update(entities[i], dt);
     }
 }
 
@@ -247,7 +265,7 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
     ke_world_impl *impl = (ke_world_impl *)self->handle;
     float dt = frame ? (float)frame->delta_time : 0.0f;
 
-    run_script_system(impl, dt);
+    run_script_system(impl, frame);
     update_transforms(impl);
 
     if (impl->waves_dirty) rebuild_waves(impl);
@@ -282,6 +300,19 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
         }
     }
 
+    return KE_OK;
+}
+
+// ── Script notify destroy ─────────────────────────────────────────────────────
+
+ke_result ke_world_notify_destroy(ke_world *world, ke_entity entity)
+{
+    if (!world || entity == 0) return KE_ERROR_INVALID_ARGUMENT;
+    ke_world_impl *impl = (ke_world_impl *)world->handle;
+    ke_script_component *s = (ke_script_component *)ke_ecs_component_get(
+        impl->registry, entity, impl->script_cid);
+    if (!s) return KE_OK; // entity has no script component — not an error
+    if (s->on_destroy) s->on_destroy(entity);
     return KE_OK;
 }
 
