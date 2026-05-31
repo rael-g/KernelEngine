@@ -58,6 +58,10 @@ internal static unsafe class ScriptBridge
     /// <summary>Forgets an entity's callbacks (call when the entity/node is destroyed).</summary>
     public static void Unregister(ulong entity) => s_callbacks.Remove(entity);
 
+    // Resets the static callback dictionary. Exposed only to test assemblies
+    // (via InternalsVisibleTo) so tests can isolate the shared state between runs.
+    internal static void ClearForTesting() => s_callbacks.Clear();
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_result NativeOnAwake(ulong entity)
     {
