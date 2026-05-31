@@ -194,6 +194,20 @@ P7/P8 are quality-of-life and cheap. P9 rides on collision events (already in sp
 
 > **Why not now**: not blocking anything. The shape is small enough today (single C# binding) that we can refactor mechanically when needed. Registered so the discipline is preserved when adding new CLI verbs.
 
+### Tier T — Testing backlog
+
+> Coverage pipeline audited 2026-05-31: 5 native plugins (`audio`, `dev_platform`, `physics`, `task_scheduler`, `text`) were not instrumented by `KE_COVERAGE` and not captured by `gcovr`. Fixed in commit `ff58ef4` — `dev_platform.win32` jumped 0% → 100% (tests already existed; cobertura was being discarded). Items below are the remaining gaps.
+
+| # | Item | Status |
+|---|---|---|
+| T1 | **`tests/csharp/KernelEngine.Logging.Serilog.Tests/`** exists on disk, **not in `KernelEngine.slnx`**, and has bit-rot: imports `KernelEngine.Kernel.Native` for `LogLevel`/`ILogger` but those moved to managed `KernelEngine.Kernel` (Abstractions). After the rename `ILogger` is ambiguous between `KernelEngine.Kernel.ILogger` and `Serilog.ILogger`. Fix with aliases (`using ILogger = Serilog.ILogger;` + `using LogLevel = KernelEngine.Kernel.LogLevel;`) or rewrite. Then add to slnx. Logging.Serilog has zero test coverage today. | new |
+| T2 | **`tests/cpp/test_task_scheduler.cpp`** uses a mock scheduler in-place (`make_sync_scheduler()`) — exercises only the contract semantics, never loads the real `ke_task_scheduler_enki` plugin. `src/cpp/task_scheduler/enki/` shows 0% native coverage as a result. Add a parallel integration test that instantiates the real enki scheduler via `ke_task_scheduler_enki_create()` and runs dispatches. | new |
+| T3 | **C# projects with non-trivial logic but no `.Tests`**: `KernelEngine.Cli` (Roslyn Program.cs sync, TOML scaffolding, ke-module discovery) and `KernelEngine.CSharp` (CSharpSceneLoader, NodeTypeRegistry, ISceneTree). Both are invisible to coverage. Create dedicated `.Tests` projects (convention: `KernelEngine.Framework.Tests`). | new |
+| T4 | **`KernelEngine.Configuration`** — visible at 0%. TOML binder + ServiceCollectionExtensions. Coverage added via expansion of `KernelEngine.Kernel.Tests` (too small to justify its own project). | new |
+| T5 | **Thin-shell plugin C# projects** (factory + 1 extension method): `Asset.Assimp`, `Asset.StbImage`, `Audio.MiniAudio`, `DevPlatform.Win32`, `Physics.Box2D`, `Render.Bgfx`, `Render.Core`, `TaskScheduler.Enki`, `Text.StbTrueType`, `Window.Glfw`. No dedicated `.Tests` warranted — exercised transitively by any example. Coverage gap that matters is the native plugin under `src/cpp/`, tracked separately (T2 + T7). | doctrine |
+| T6 | **Empty leftover folder**: `src/csharp/KernelEngine.Contracts/` contains only a `.lscache` (folder was renamed to `KernelEngine.Kernel.Abstractions` in commit `82905a1`). Safe to `git rm -r`. | trivial cleanup |
+| T7 | **Mock-only-tests audit**: every plugin under `src/cpp/` that ships a `<plugin>_create()` factory but shows 0% native coverage despite having a C++ test in `tests/cpp/`. Likely candidates: `test_render_bgfx.cpp`, `test_window_glfw.cpp`. Same root as T2 — replace mock-in-place with integration tests that load the real plugin. | new |
+
 ### Parking lot — explicitly post-beta
 
 - Visual editor GUI (M4) — chapter 18 prepares the lib; the GUI itself waits.
