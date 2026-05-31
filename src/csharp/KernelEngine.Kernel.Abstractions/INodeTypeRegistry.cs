@@ -41,4 +41,18 @@ public interface INodeTypeRegistry
     /// No-ops silently for unknown property names (the implementation should ignore them).
     /// </summary>
     bool TrySetProperty(string typeName, ulong entity, string key, object? value);
+
+    /// <summary>
+    /// Registers fallback delegates invoked by <see cref="TryCreate"/> and
+    /// <see cref="TrySetProperty"/> when no explicit entry matches the type name.
+    /// <para>
+    /// The C# binding uses this to support any <c>Node</c> subclass without explicit
+    /// <see cref="Register"/> calls — the fallback scans loaded assemblies by reflection,
+    /// preserving the legacy scene-loader behaviour. A future C++ plugin would not set a
+    /// fallback; unregistered types would be hard errors.
+    /// </para>
+    /// </summary>
+    void SetFallback(
+        Func<string, ulong, string, bool>           tryCreate,
+        Func<string, ulong, string, object?, bool>  trySetProperty);
 }

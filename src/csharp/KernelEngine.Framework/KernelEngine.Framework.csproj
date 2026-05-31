@@ -3,11 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <!-- Tier S round-trip: Framework temporarily holds the C# implementation of kernel contracts
-         (ke_scene_loader, etc.) while the C++ plugin bodies are being validated. Unsafe is
-         required for [UnmanagedCallersOnly] trampolines. Revert to false once the C++ impls
-         land and Framework stops owning native vtable structs. -->
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,8 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Framework knows only Abstractions — never the concrete Kernel or any plugin. -->
     <ProjectReference Include="../KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
-    <ProjectReference Include="../KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <ProjectReference Include="../KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
   </ItemGroup>
 

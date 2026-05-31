@@ -10,17 +10,32 @@ namespace KernelEngine.Framework;
 /// Node/Tree are framework-level concepts; the ECS world itself knows only
 /// entities, components, and systems.
 /// </summary>
-public sealed class Tree
+public sealed class Tree : ISceneTree
 {
-    private readonly IWorld _world;
-    private readonly Node   _root;
+    private readonly IWorld              _world;
+    private readonly Node                _root;
+    private readonly INodeTypeRegistry?  _nodeTypeRegistry;
+    private readonly IServiceProvider?   _services;
+    private ResourceManager?             _resources; // set after ResourceManager is created
 
-    public Tree(IWorld world)
+    private readonly HashSet<Type> _registeredTypes = [];
+
+    public Tree(IWorld world,
+                INodeTypeRegistry? nodeTypeRegistry = null,
+                IServiceProvider?  services         = null)
     {
-        _world = world;
-        var rootEntity = CreateEntityWithHierarchy("Root", KE_ENTITY_INVALID);
-        _root = new Node(rootEntity, world, "Root");
+        _world            = world;
+        _nodeTypeRegistry = nodeTypeRegistry;
+        _services         = services;
+        var rootEntity    = CreateEntityWithHierarchy("Root", KE_ENTITY_INVALID);
+        _root             = new Node(rootEntity, world, "Root");
     }
+
+    /// <summary>
+    /// Provides the <see cref="ResourceManager"/> for auto-registration of types that have
+    /// resource properties (<c>res://</c>). Set by Application after ResourceManager is created.
+    /// </summary>
+    internal void SetResourceManager(ResourceManager resources) => _resources = resources;
 
     private const ulong KE_ENTITY_INVALID = 0;
 
@@ -104,6 +119,12 @@ public sealed class Tree
         var uniqueName = MakeUniqueChildName(parentNode, requested);
         var entity     = CreateEntityWithHierarchy(uniqueName, parentNode.Entity);
         node.Initialize(entity, _world, uniqueName);
+
+        // Auto-register the type so scene files can reference it by name without
+        // explicit registration. First time only — subsequent adds of the same type are free.
+        if (_nodeTypeRegistry != null && _registeredTypes.Add(typeof(T)))
+            _nodeTypeRegistry.Register<T>(_world, _services, _resources);
+
         return node;
     }
 
@@ -328,4 +349,21 @@ public sealed class Tree
         for (int i = 0; i < len; i++) comp.Name[i] = bytes[i];
         comp.Name[len] = 0;
     }
+
+    // ── ISceneTree ────────────────────────────────────────────────────────────
+
+    ulong ISceneTree.Root => _root.Entity;
+
+    bool ISceneTree.DestroyNode(ulong entity)
+    {
+        var node = Node.FromEntity(entity);
+        if (node == null) return false;
+        DestroyNode(node);
+        return true;
+    }
+
+    void ISceneTree.DestroyAll() => DestroyAll();
+
+    ulong ISceneTree.FindNode(string nameOrPath) =>
+        FindNode(nameOrPath)?.Entity ?? 0UL;
 }

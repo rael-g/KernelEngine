@@ -12,28 +12,15 @@ namespace KernelEngine.Framework;
 /// resource is fully formed when the task completes. Each result starts with one reference (the
 /// caller's); dispose/release frees the GPU handle.
 /// </para>
-/// <para>
-/// Phase 1 of the resource pipeline: handle encapsulation + lifetime + non-blocking creation.
-/// Caching/dedup by key arrives with the <see cref="IAssetLoader"/>-fronted Assets façade (Phase 2),
-/// where CPU-side parse/decode runs on enkiTS worker threads via the engine task scheduler.
-/// </para>
 /// </summary>
 public sealed class ResourceManager
 {
     private readonly IResourceFactory _factory;
-    private readonly CSharpResourceCache? _cache;
 
-    public ResourceManager(IResourceFactory factory) : this(factory, null) { }
-
-    internal ResourceManager(IResourceFactory factory, CSharpResourceCache? cache)
+    public ResourceManager(IResourceFactory factory)
     {
         _factory = factory;
-        _cache   = cache;
     }
-
-    /// <summary>The underlying resource cache (Tier S S6). Exposed so Application can pass it
-    /// to future non-.NET bindings via <c>ke_resource_cache*</c>.</summary>
-    internal CSharpResourceCache? Cache => _cache;
 
     public Task<Material> CreateMaterialAsync(
         Vector4 color,
@@ -46,41 +33,25 @@ public sealed class ResourceManager
         var normalHandle = normalMap?.Handle ?? default;
         return _factory
             .CreateMaterialAsync(color, albedoHandle, metallic, roughness, normalHandle)
-            .ContinueWith(t =>
-            {
-                var r = new Material(_factory, t.Result);
-                _cache?.Register(t.Result.Value, r);
-                return r;
-            }, TaskContinuationOptions.ExecuteSynchronously);
+            .ContinueWith(t => new Material(_factory, t.Result),
+                TaskContinuationOptions.ExecuteSynchronously);
     }
 
     public Task<Mesh> CreateMeshAsync(Vertex[] vertices, ushort[] indices)
         => _factory.CreateMeshAsync(vertices, indices)
-            .ContinueWith(t =>
-            {
-                var r = new Mesh(_factory, t.Result);
-                _cache?.Register(t.Result.Value, r);
-                return r;
-            }, TaskContinuationOptions.ExecuteSynchronously);
+            .ContinueWith(t => new Mesh(_factory, t.Result),
+                TaskContinuationOptions.ExecuteSynchronously);
 
-    /// <summary>Uploads a <see cref="MeshShape"/> descriptor (e.g. <c>MeshShape.Cube()</c>) as a ref-counted <see cref="Mesh"/>.</summary>
+    /// <summary>Uploads a <see cref="MeshShape"/> descriptor as a ref-counted <see cref="Mesh"/>.</summary>
     public Task<Mesh> CreateMeshAsync(MeshShape shape) => CreateMeshAsync(shape.Vertices, shape.Indices);
 
     public Task<Texture> CreateTextureAsync(uint width, uint height, byte[] pixels)
         => _factory.CreateTextureAsync(width, height, pixels)
-            .ContinueWith(t =>
-            {
-                var r = new Texture(_factory, t.Result);
-                _cache?.Register(t.Result.Value, r);
-                return r;
-            }, TaskContinuationOptions.ExecuteSynchronously);
+            .ContinueWith(t => new Texture(_factory, t.Result),
+                TaskContinuationOptions.ExecuteSynchronously);
 
     public Task<Texture> CreateCubemapAsync(uint faceSize, byte[] data)
         => _factory.CreateCubemapAsync(faceSize, data)
-            .ContinueWith(t =>
-            {
-                var r = new Texture(_factory, t.Result);
-                _cache?.Register(t.Result.Value, r);
-                return r;
-            }, TaskContinuationOptions.ExecuteSynchronously);
+            .ContinueWith(t => new Texture(_factory, t.Result),
+                TaskContinuationOptions.ExecuteSynchronously);
 }

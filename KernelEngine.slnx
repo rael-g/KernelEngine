@@ -26,6 +26,7 @@
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
     <Project Path="src/csharp/KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
+    <Project Path="src/csharp/KernelEngine.CSharp/KernelEngine.CSharp.csproj" />
     <Project Path="src/csharp/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
     <Project Path="src/csharp/KernelEngine.Asset.StbImage/KernelEngine.Asset.StbImage.csproj" />
     <Project Path="src/csharp/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj" />

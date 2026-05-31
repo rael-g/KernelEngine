@@ -34,7 +34,10 @@ public class Application : IDisposable
     private Tree? _scene;
 
     /// <summary>The Tree graph facade for <see cref="ActiveWorld"/>.</summary>
-    public Tree Tree => _scene ??= new Tree(ActiveWorld);
+    public Tree Tree => _scene ??= new Tree(
+        ActiveWorld,
+        Services?.GetService<INodeTypeRegistry>(),
+        Services);
 
     /// <summary>
     /// Called once on ke.sim after ke.render is initialized and systems are registered.
@@ -66,9 +69,7 @@ public class Application : IDisposable
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
     private readonly InputActionDispatcher _actionDispatcher = new();
-    private CSharpInputActions? _inputActions;
-    private CSharpResourceCache? _resourceCache;
-    private CSharpSceneTree? _sceneTree;
+    private ISceneTree? _sceneTree;
 
     private System.Numerics.Vector4? _projectClearColor;
     private System.Numerics.Vector3? _projectAmbientLight;
@@ -237,23 +238,24 @@ public class Application : IDisposable
                 if (_cts.IsCancellationRequested) return;
 
                 var factory = _resourceQueue.CreateFactory();
-                _resourceCache = new CSharpResourceCache();
-                Resources = new ResourceManager(factory, _resourceCache);
+                Resources = new ResourceManager(factory);
+                // Give Tree access to ResourceManager for resource properties in auto-registration.
+                Tree.SetResourceManager(Resources);
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
                 if (modelLoader != null || imageLoader != null || fontLoader != null)
                     Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources);
 
-                // Input actions — round-trip bridge over ke_input_actions (Tier S S4).
-                _inputActions = new CSharpInputActions(_actionDispatcher);
+                // Scene tree — Framework's Tree implements ISceneTree directly (S7).
+                _sceneTree = Tree;
 
-                // Scene loader — round-trip bridge over ke_scene_loader (Tier S S3).
-                _sceneLoader = Services.GetService<ISceneLoader>()
-                    ?? new CSharpSceneLoader(Tree, Resources, Services);
+                // Scene loader from DI (provided by KernelEngine.CSharp plugin or custom impl).
+                _sceneLoader = Services.GetService<ISceneLoader>();
 
-                // Scene tree — round-trip bridge over ke_scene_tree (Tier S S7).
-                _sceneTree = new CSharpSceneTree(Tree);
+                // Register fallback so any Node subclass works in scene files without
+                // explicit registration. Built-in types are auto-registered on first AddNode<T>.
+                RegisterFrameworkNodeTypes();
 
                 // Auto-load action bindings (when a game enum was registered via .AddInputActions<T>()).
                 // After this, InputActions.Get<TEnum>() works from anywhere; no game code involved.
@@ -295,12 +297,8 @@ public class Application : IDisposable
                         if (events.Length > 0)
                             Tree.DispatchInput(events);
 
-                        // Action layer: evaluate through the ke_input_actions kernel contract
-                        // (Tier S S4 round-trip). CSharpInputActions delegates to the existing
-                        // dispatcher; the native vtable is ready for a future C++ plugin.
-                        var actionEvents = _inputActions != null
-                            ? _inputActions.Evaluate(input)
-                            : _actionDispatcher.Evaluate(input);
+                        // Action layer: evaluate every registered map against the current snapshot.
+                        var actionEvents = _actionDispatcher.Evaluate(input);
                         Tree.DispatchInputActions(actionEvents);
 
                         // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
@@ -437,9 +435,60 @@ public class Application : IDisposable
 
         var relative = resPath[prefix.Length..];
         var absolute = Path.Combine(AppContext.BaseDirectory, relative);
-        (_sceneLoader ?? new CSharpSceneLoader(Tree, Resources, Services))
-            .LoadAsync(absolute).GetAwaiter().GetResult();
+        if (_sceneLoader is null)
+            throw new InvalidOperationException(
+                "No ISceneLoader registered. Call AddCSharpPlugin() (or another scene loader plugin) in your service collection.");
+        _sceneLoader.LoadAsync(absolute).GetAwaiter().GetResult();
         Logger?.Info("Application", $"Loaded default scene: {resPath}");
+    }
+
+    // ── Node type registration ────────────────────────────────────────────────
+
+    private void RegisterFrameworkNodeTypes()
+    {
+        var registry = Services.GetService<INodeTypeRegistry>();
+        if (registry is null) return;
+
+        var world    = ActiveWorld;
+        var services = Services;
+
+        // Fallback: any Node subclass in any loaded assembly works automatically via
+        // reflection — same behaviour as the legacy SceneLoader. Explicit Register<T> calls
+        // take priority (fast path); this covers everything else including user-defined types.
+        registry.SetFallback(
+            tryCreate: (typeName, entity, name) =>
+            {
+                var type = NodeTypeRegistrar.ResolveNodeType(typeName);
+                if (type is null) return false;
+                var node = (Node)(services is not null
+                    ? Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance(services, type)
+                    : Activator.CreateInstance(type)!);
+                node.Initialize(entity, world, name);
+                return true;
+            },
+            trySetProperty: (typeName, entity, key, value) =>
+            {
+                var node = Node.FromEntity(entity);
+                if (node is null) return false;
+                NodeTypeRegistrar.ApplyProperty(node, key, value, Resources);
+                return true;
+            });
+
+        // Built-in Framework node types — explicit fast path (skips assembly scan).
+        registry.Register<MeshRenderer>(ActiveWorld, Services);
+        registry.Register<Camera>(ActiveWorld, Services);
+        registry.Register<Camera2D>(ActiveWorld, Services);
+        registry.Register<DirectionalLight>(ActiveWorld, Services);
+        registry.Register<PointLight>(ActiveWorld, Services);
+        registry.Register<SpotLight>(ActiveWorld, Services);
+        registry.Register<Skybox>(ActiveWorld, Services);
+        registry.Register<Sprite2D>(ActiveWorld, Services);
+        registry.Register<Label>(ActiveWorld, Services);
+        if (Services.GetService<IPhysics2D>() is not null)
+        {
+            registry.Register<CollisionBody2D>(ActiveWorld, Services);
+            registry.Register<CollisionShape2D>(ActiveWorld, Services);
+        }
     }
 
     // ── Systems setup ─────────────────────────────────────────────────────────
@@ -634,15 +683,11 @@ public class Application : IDisposable
     {
         _cts.Dispose();
         (_sceneLoader as IDisposable)?.Dispose();
-        _inputActions?.Dispose();
-        _resourceCache?.Dispose();
-        // Destroy all nodes through the ke_scene_tree contract (Tier S S7 round-trip).
-        // Falls back to direct Tree call if the bridge was never created (e.g. if sim never started).
+        // Destroy all nodes via ISceneTree (Tree implements it directly — S7).
         if (_sceneTree != null)
-            unsafe { _sceneTree.Native->destroy_all(_sceneTree.Native); }
+            _sceneTree.DestroyAll();
         else
             _scene?.DestroyAll();
-        _sceneTree?.Dispose();
         ActiveWorld?.Dispose();
 
         _proxyAllocator?.Report(Logger);
