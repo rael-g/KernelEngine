@@ -12,6 +12,7 @@
 
 #include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -65,6 +66,15 @@ extern "C"
         void (*destroy)(struct ke_resource_cache *self);
 
     } ke_resource_cache;
+
+    // ── Factory ───────────────────────────────────────────────────────────────
+
+    /// Allocates and wires a default ke_resource_cache (single-threaded; thread safety
+    /// is the caller's responsibility — the existing usage pattern serialises Retain/
+    /// Release on ke.sim and routes destroy_fn to ke.render through the resource queue).
+    KE_FRAMEWORK_API ke_result ke_resource_cache_create(
+        ke_allocator       *alloc,
+        ke_resource_cache **out_cache);
 
 #ifdef __cplusplus
 }
