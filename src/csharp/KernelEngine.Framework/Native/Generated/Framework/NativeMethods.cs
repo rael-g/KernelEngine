@@ -12,4 +12,7 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
     public const uint KE_RESOURCE_HANDLE_NONE = 0xffffffffU;
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_tree_create", ExactSpelling = true)]
+    public static extern ke_result scene_tree_create([NativeTypeName("struct ke_world *")] ke_world* world, ke_allocator* alloc, ke_scene_tree** out_tree);
 }

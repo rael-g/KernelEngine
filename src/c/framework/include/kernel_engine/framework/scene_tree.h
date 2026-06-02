@@ -16,7 +16,9 @@
 
 #include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/ecs.h>  // ke_entity
+struct ke_world;
 
 #ifdef __cplusplus
 extern "C"
@@ -48,6 +50,18 @@ extern "C"
         void (*destroy)(struct ke_scene_tree *self);
 
     } ke_scene_tree;
+
+    // ── Factory ───────────────────────────────────────────────────────────────
+
+    /// Allocates a default ke_scene_tree backed by the given world. The factory
+    /// creates the root entity (with hierarchy + name components attached) and
+    /// stores it as the tree's anchor; root() always returns it. Subsequent
+    /// children must be created by the caller and parented under root via
+    /// ke_hierarchy_component (the same way a binding would attach any node).
+    KE_FRAMEWORK_API ke_result ke_scene_tree_create(
+        struct ke_world  *world,
+        ke_allocator     *alloc,
+        ke_scene_tree   **out_tree);
 
 #ifdef __cplusplus
 }
