@@ -117,9 +117,6 @@ public static unsafe partial class NativeMethods
     [NativeTypeName("#define KE_ID_RENDER_GRAPH \"ke_render_graph\"")]
     public static ReadOnlySpan<byte> KE_ID_RENDER_GRAPH => "ke_render_graph"u8;
 
-    [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
-    public const uint KE_RESOURCE_HANDLE_NONE = 0xffffffffU;
-
     [NativeTypeName("#define KE_ID_SHADER_COMPILER \"ke_shader_compiler\"")]
     public static ReadOnlySpan<byte> KE_ID_SHADER_COMPILER => "ke_shader_compiler"u8;
 

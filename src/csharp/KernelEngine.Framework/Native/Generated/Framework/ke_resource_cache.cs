@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel.Native;
+namespace KernelEngine.Framework.Native;
 
 public unsafe partial struct ke_resource_cache
 {
@@ -14,7 +14,7 @@ public unsafe partial struct ke_resource_cache
     public delegate* unmanaged[Cdecl]<ke_resource_cache*, uint, ke_result> release;
 
     [NativeTypeName("bool (*)(struct ke_resource_cache *, const char *, ke_resource_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_resource_cache*, sbyte*, uint*, bool> try_get_cached;
+    public delegate* unmanaged[Cdecl]<ke_resource_cache*, sbyte*, uint*, byte> try_get_cached;
 
     [NativeTypeName("void (*)(struct ke_resource_cache *, const char *, ke_resource_handle)")]
     public delegate* unmanaged[Cdecl]<ke_resource_cache*, sbyte*, uint, void> cache_insert;
