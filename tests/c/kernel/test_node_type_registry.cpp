@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/framework/node_type_registry.h>
+#include <kernel_engine/framework/node_type_registry_create.h>
 #include <kernel_engine/kernel/context/allocator.h>
 
 class NodeTypeRegistryCTest : public ::testing::Test {

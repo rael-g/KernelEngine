@@ -68,11 +68,9 @@ extern "C"
         void (*destroy)(struct ke_node_type_registry *self);
     } ke_node_type_registry;
 
-    // ── Factory ──────────────────────────────────────────────────────────────
-
-    KE_FRAMEWORK_API ke_result ke_node_type_registry_create(
-        ke_allocator           *alloc,
-        ke_node_type_registry **out_registry);
+    // The factory `ke_node_type_registry_create()` lives in the default plugin
+    // — `src/cpp/framework/node_type_registry/` — alongside its implementation,
+    // declared in <kernel_engine/framework/node_type_registry_create.h>.
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,5 @@
 set(FRAMEWORK_SOURCES
     src/framework.c
-    src/node_type_registry.c
     src/resource_cache.c
     src/scene_tree.c
 )

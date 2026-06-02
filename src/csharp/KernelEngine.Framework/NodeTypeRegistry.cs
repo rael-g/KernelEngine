@@ -47,7 +47,7 @@ public sealed unsafe class NodeTypeRegistry : INodeTypeRegistry, IDisposable
     {
         ke_node_type_registry* reg;
         KernelException.ThrowIfFailed(
-            KernelEngine.Framework.Native.NativeMethods.node_type_registry_create(allocator.Native, &reg).ToManaged());
+            KernelEngine.Framework.Native.NodeTypeRegistryNativeMethods.node_type_registry_create(allocator.Native, &reg).ToManaged());
         _native = reg;
     }
 

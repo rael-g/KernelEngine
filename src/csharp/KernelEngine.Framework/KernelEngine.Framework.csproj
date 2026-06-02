@@ -10,6 +10,15 @@
   <Import Project="../NativeDependencies.targets" />
 
   <ItemGroup>
+    <!-- Framework concept plugins live in their own native libs; pull them in. -->
+    <None Include="$(NativeFinalDir)\ke_node_type_registry.$(NativeExt)" Condition="Exists('$(NativeFinalDir)\ke_node_type_registry.$(NativeExt)')">
+      <Link>ke_node_type_registry.$(NativeExt)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="KernelEngine.Framework.Tests" />
   </ItemGroup>
 
