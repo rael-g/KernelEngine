@@ -1,6 +1,7 @@
-#ifndef KERNEL_ENGINE_KERNEL_WORLD_SCENE_LOADER_H_
-#define KERNEL_ENGINE_KERNEL_WORLD_SCENE_LOADER_H_
+#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
+#define KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 
+#include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
 
 #ifdef __cplusplus
@@ -12,13 +13,12 @@ extern "C"
     //
     // Language-agnostic vtable for loading a scene file into the engine.
     // Each binding (C#, Lua, …) provides its own implementation. A future
-    // C++ plugin (`ke_scene_loader_toml`) will parse TOML and drive the
+    // C plugin (`ke_scene_loader_toml`) will parse TOML and drive the
     // ke_node_type_registry to create and configure nodes without any managed
     // runtime involvement.
     //
-    // For the Tier S round-trip phase, the C# Framework fills this vtable with
+    // Until the C impl lands, the C# Framework fills this vtable with
     // [UnmanagedCallersOnly] trampolines that delegate to SceneLoader.LoadAsync.
-    // The contract shape is validated; the C++ body comes later.
 
     typedef struct ke_scene_loader
     {
@@ -38,4 +38,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_KERNEL_WORLD_SCENE_LOADER_H_
+#endif // KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_

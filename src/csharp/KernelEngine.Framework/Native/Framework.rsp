@@ -11,6 +11,7 @@ ke_framework
 --file
 ../../../c/framework/include/kernel_engine/framework/types.h
 ../../../c/framework/include/kernel_engine/framework/node_type_registry.h
+../../../c/framework/include/kernel_engine/framework/scene_loader.h
 --methodClassName
 NativeMethods
 --prefixStrip
