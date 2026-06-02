@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel.Native;
+namespace KernelEngine.Framework.Native;
 
 public unsafe partial struct ke_node_type_registry
 {

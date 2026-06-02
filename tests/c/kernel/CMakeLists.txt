@@ -15,6 +15,7 @@ add_executable(test_ke_kernel
 
 target_link_libraries(test_ke_kernel PRIVATE
     ke_kernel
+    ke_framework
     GTest::gtest_main
 )
 

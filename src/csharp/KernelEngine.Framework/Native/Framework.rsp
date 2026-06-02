@@ -10,6 +10,7 @@ ke_framework
 ../../../c/kernel/include
 --file
 ../../../c/framework/include/kernel_engine/framework/types.h
+../../../c/framework/include/kernel_engine/framework/node_type_registry.h
 --methodClassName
 NativeMethods
 --prefixStrip
@@ -21,6 +22,5 @@ generate-helper-types
 generate-macro-bindings
 generate-file-scoped-namespaces
 exclude-funcs-with-body
-generate-disable-runtime-marshalling
 --language
 c++

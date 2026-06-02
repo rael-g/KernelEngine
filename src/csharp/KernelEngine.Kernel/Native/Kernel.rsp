@@ -26,7 +26,6 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/world/components.h
 ../../../c/kernel/include/kernel_engine/kernel/world/ke_ecs.h
 ../../../c/kernel/include/kernel_engine/kernel/world/variant.h
-../../../c/kernel/include/kernel_engine/kernel/world/node_type_registry.h
 ../../../c/kernel/include/kernel_engine/kernel/world/scene_loader.h
 ../../../c/kernel/include/kernel_engine/kernel/world/scene_tree.h
 ../../../c/kernel/include/kernel_engine/kernel/world/world.h

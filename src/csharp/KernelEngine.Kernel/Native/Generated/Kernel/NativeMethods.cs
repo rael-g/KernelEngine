@@ -99,9 +99,6 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_sparse_set_create", ExactSpelling = true)]
     public static extern ke_result ecs_sparse_set_create(ke_ecs_registry* registry, ke_allocator* alloc, ke_ecs** out_ecs);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_type_registry_create", ExactSpelling = true)]
-    public static extern ke_result node_type_registry_create(ke_allocator* alloc, ke_node_type_registry** out_registry);
-
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_create", ExactSpelling = true)]
     public static extern ke_result world_create([NativeTypeName("const ke_world_params *")] ke_world_params* @params, ke_world** out_world);
 

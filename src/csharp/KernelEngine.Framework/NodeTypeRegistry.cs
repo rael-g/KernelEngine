@@ -1,8 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Kernel;
+using KernelEngine.Framework.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Implements <see cref="INodeTypeRegistry"/> over the native <c>ke_node_type_registry</c>.
@@ -46,7 +47,7 @@ public sealed unsafe class NodeTypeRegistry : INodeTypeRegistry, IDisposable
     {
         ke_node_type_registry* reg;
         KernelException.ThrowIfFailed(
-            NativeMethods.node_type_registry_create(allocator.Native, &reg).ToManaged());
+            KernelEngine.Framework.Native.NativeMethods.node_type_registry_create(allocator.Native, &reg).ToManaged());
         _native = reg;
     }
 

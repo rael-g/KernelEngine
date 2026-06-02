@@ -1,5 +1,6 @@
 set(FRAMEWORK_SOURCES
     src/framework.c
+    src/node_type_registry.c
 )
 
 add_library(ke_framework ${FRAMEWORK_SOURCES})

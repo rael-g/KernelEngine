@@ -1,6 +1,7 @@
-#ifndef KERNEL_ENGINE_KERNEL_WORLD_NODE_TYPE_REGISTRY_H_
-#define KERNEL_ENGINE_KERNEL_WORLD_NODE_TYPE_REGISTRY_H_
+#ifndef KERNEL_ENGINE_FRAMEWORK_NODE_TYPE_REGISTRY_H_
+#define KERNEL_ENGINE_FRAMEWORK_NODE_TYPE_REGISTRY_H_
 
+#include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/context/types.h>
@@ -69,7 +70,7 @@ extern "C"
 
     // ── Factory ──────────────────────────────────────────────────────────────
 
-    KE_API ke_result ke_node_type_registry_create(
+    KE_FRAMEWORK_API ke_result ke_node_type_registry_create(
         ke_allocator           *alloc,
         ke_node_type_registry **out_registry);
 
@@ -77,4 +78,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_KERNEL_WORLD_NODE_TYPE_REGISTRY_H_
+#endif // KERNEL_ENGINE_FRAMEWORK_NODE_TYPE_REGISTRY_H_

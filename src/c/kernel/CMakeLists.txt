@@ -6,7 +6,6 @@ set(KERNEL_SOURCES
     src/input/input.c
     src/world/world.c
     src/world/ecs.c
-    src/world/node_type_registry.c
     src/dev_platform/dev_platform.c
 )
 

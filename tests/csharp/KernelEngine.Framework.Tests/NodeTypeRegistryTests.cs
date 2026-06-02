@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
 using Xunit;
+using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine.Kernel.Tests;
+namespace KernelEngine.Framework.Tests;
 
 public class NodeTypeRegistryTests
 {
