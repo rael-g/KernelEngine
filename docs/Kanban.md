@@ -114,6 +114,44 @@ P7/P8 are quality-of-life and cheap. P9 rides on collision events (already in sp
 
 ### Tier S — Scripting ABI / language-agnostic node system (post-beta replatforming)
 
+> **REFINEMENT 2026-06-02 — kernel vs framework split.** Owner pushed back on "promote to kernel": it conflated ABI-commitment with cross-language reuse, and would drag asset cache + scene tree + scene loader + input actions into the kernel where they don't belong (they're framework-level concerns built on TOP of kernel primitives). New structure introduces a parallel layer `src/c/framework/`:
+>
+> - `src/c/kernel/` keeps only kernel primitives (allocator, logger, ECS storage, threading semaphores, render/window/audio/scheduler contracts, frame packet). No policy. Pure C ABI, pure C impl.
+> - **NEW `src/c/framework/`** mirrors kernel structure exactly: `include/kernel_engine/framework/<concept>.h` contracts + `src/*.c` impl + single `ke_framework` shared lib. **Pure C impl** — these are pure-logic concepts (refcount, lookup, graph traversal, dispatch), no heavy C++ libs needed. Each concept exposes its own C factory in the same lib (`ke_scene_loader_create`, `ke_input_actions_create`, `ke_scene_tree_create`, `ke_resource_cache_create`, `ke_node_type_registry_create`) — same pattern as kernel today (`ke_world_create`, `ke_logger_create`, …).
+> - Doctrine: a developer should be able to make a game in pure C using only `src/c/framework/` — no need to reinvent the wheel. Lua/Python/C# bindings get the framework free; they only add language-specific sugar.
+> - C# Framework migrates aggressively until it's "binding + sugar". End-state: user code never sees `MeshHandle`, `uint` sentinels, `ke_*` native structs, or `unsafe` blocks. Public surface is `IMesh`, `IMaterial`, `INode`, `ITree`, `IInputActions`, etc., all `IDisposable`.
+>
+> **Re-classification of S1-S7** (currently all in `src/c/kernel/include/`):
+>
+> | # | Concept | Belongs in | Notes |
+> |---|---|---|---|
+> | S1 | `ke_script_component` lifecycle hooks | **kernel** ✓ | stays |
+> | S2.a | `ke_variant` (value type) | **kernel** ✓ | stays |
+> | S2.b | `ke_node_type_registry` (policy) | **framework** | move |
+> | S3 | `ke_scene_loader` | **framework** | move; TOML parser stays plugin-side |
+> | S4 | `ke_input_actions` | **framework** | move; built on `ke_input` primitive |
+> | S5 | `ke_ecs` storage contract | **kernel** ✓ | stays (impl can still be plugin per K2) |
+> | S6 | `ke_resource` cache | **framework** | move; depends on plugin loaders |
+> | S7 | `ke_scene_tree` | **framework** | move |
+>
+> **First mechanical step** when Stage 2 resumes: physically relocate 5 of 7 headers from `src/c/kernel/include/kernel_engine/...` to `src/c/framework/include/kernel_engine/framework/...`, regenerate bindings, fix C# Framework `using`s. Behavior unchanged; doctrine alignment.
+>
+> **Revised migration strategy — more aggressive (single round per concept):**
+>
+> 1. Define framework C ABI in `src/c/framework/include/kernel_engine/framework/<concept>.h`.
+> 2. Implement in C in `src/c/framework/src/<concept>.c`. NO round-trip back to C# first.
+> 3. Regenerate bindings.
+> 4. Replace C# Framework class body with thin sugar over the binding — exposes only interfaces, hides handles/pointers.
+> 5. Validate: Pong + every example green.
+> 6. Delete old C# implementation.
+> 7. Next concept.
+>
+> Justification for skipping the round-trip safety net: Stage 1 already shipped working contract shapes (exercised end-to-end via Pong + Lua spike), so the risk that the C ABI is wrong is much lower than at first design. The safety net becomes "Pong + examples green between every step" — same gate, applied at the C++ checkpoint instead of a bridge checkpoint. One round of code per concept instead of two.
+>
+> The round-trip pattern (original strategy below) is still the right move for genuinely UNKNOWN contract shapes (concepts not yet exercised). For S1-S7 we've already done that exercise; we don't need to re-pay that cost.
+>
+> Original 2026-05-28 vision and 2026-05-30 round-trip strategy preserved below for context — the FRAMEWORK SPLIT 2026-06-02 supersedes both on layer assignment and migration speed.
+
 > **Owner vision, captured 2026-05-28.** Original microkernel goal: `C kernel = building blocks`, `any language = Built Blocks (framework)`, `C# = personal sugar helper` — no language privileged. Reality during prototyping: `KernelEngine.Framework` (C#) absorbed `Node`/`Tree`/lifecycle/`SceneLoader`/action layer / Camera2D/Sprite2D/CollisionBody2D/AudioPlayer; C# became implicitly special. **Acceptable for now** because prototyping speed mattered more than ABI purity, but the drift gets paid down once the engine is shippable-game-ready.
 >
 > **Trigger**: only start after Tier P (UI + CLI + auto-Program) AND the deferred render-pipeline items (clustered forward shading [F.RC3], render-graph [F.RC2], etc. — see Parking lot) are done. Engine must be a viable game-building tool first.
