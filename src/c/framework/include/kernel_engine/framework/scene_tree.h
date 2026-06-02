@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_KERNEL_WORLD_SCENE_TREE_H_
-#define KERNEL_ENGINE_KERNEL_WORLD_SCENE_TREE_H_
+#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
+#define KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
 
 // ke_scene_tree — minimal language-agnostic scene graph contract (Tier S — S7).
 //
@@ -14,6 +14,7 @@
 // The C# Framework provides CSharpSceneTree as the round-trip implementation.
 // A future C++ plugin could provide the same contract without managed overhead.
 
+#include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/world/ecs.h>  // ke_entity
 
@@ -52,4 +53,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_KERNEL_WORLD_SCENE_TREE_H_
+#endif // KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_

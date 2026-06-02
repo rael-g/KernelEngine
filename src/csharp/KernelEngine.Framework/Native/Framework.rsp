@@ -14,6 +14,7 @@ ke_framework
 ../../../c/framework/include/kernel_engine/framework/scene_loader.h
 ../../../c/framework/include/kernel_engine/framework/input_actions.h
 ../../../c/framework/include/kernel_engine/framework/resource_cache.h
+../../../c/framework/include/kernel_engine/framework/scene_tree.h
 --methodClassName
 NativeMethods
 --prefixStrip
