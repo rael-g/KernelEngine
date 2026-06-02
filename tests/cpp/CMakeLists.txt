@@ -114,11 +114,6 @@ target_link_libraries(test_asset_logic PRIVATE
     GTest::gtest_main
 )
 
-enable_coverage(test_cpp_services)
-enable_coverage(test_renderer_logic)
-enable_coverage(test_threading)
-enable_coverage(test_asset_logic)
-
 gtest_discover_tests(test_cpp_services)
 gtest_discover_tests(test_renderer_logic)
 gtest_discover_tests(test_threading)

@@ -2,7 +2,19 @@ cmake_minimum_required(VERSION 3.15)
 
 project(kernel_engine LANGUAGES C CXX)
 
-include(cmake/Coverage.cmake)
+# ── Code coverage (source-based, Clang/LLVM) ─────────────────────────────────
+# When KE_COVERAGE=ON, every translation unit under src/ and tests/ is built
+# with -fprofile-instr-generate -fcoverage-mapping. New plugins/libraries are
+# instrumented automatically — no per-target opt-in. Drives scripts/coverage.py.
+option(KE_COVERAGE "Build with Clang source-based coverage instrumentation" OFF)
+if(KE_COVERAGE)
+    if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "KE_COVERAGE requires Clang (CMake sees ${CMAKE_CXX_COMPILER_ID}).")
+    endif()
+    message(STATUS "KE_COVERAGE enabled — instrumenting all src/ + tests/ targets.")
+    add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+    add_link_options(-fprofile-instr-generate)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,24 +54,3 @@ add_subdirectory(tests/c/kernel)
 add_subdirectory(tests/cpp)
 
 include(cmake/CodeQuality.cmake)
-
-if(KE_COVERAGE)
-    enable_coverage(ke_kernel)
-    enable_coverage(ke_render_core)
-    enable_coverage(ke_render_bgfx)
-    enable_coverage(ke_window_glfw)
-    enable_coverage(ke_window_glfw_device)
-    enable_coverage(ke_shader_compiler_bgfx)
-    enable_coverage(ke_audio_miniaudio)
-    enable_coverage(ke_physics_2d_box2d)
-    enable_coverage(ke_task_scheduler_enki)
-    enable_coverage(ke_text_stb_truetype)
-    enable_coverage(ke_threading)
-    enable_coverage(ke_asset_assimp)
-    enable_coverage(ke_asset_stb_image)
-    if(WIN32)
-        enable_coverage(ke_dev_platform_win32)
-    else()
-        enable_coverage(ke_dev_platform_posix)
-    endif()
-endif()

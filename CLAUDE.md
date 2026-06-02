@@ -38,7 +38,7 @@ dotnet test KernelEngine.slnx
 ```bash
 python scripts/compile_shaders.py   # compile all bgfx shaders to SPIR-V
 python scripts/generate_bindings.py # regenerate all C# P/Invoke bindings via ClangSharp
-python scripts/run_tests.py         # C/C++ + C# tests with coverage report (gcovr + reportgenerator)
+python scripts/coverage.py          # C/C++ + C# tests with unified coverage report (Clang source-based + coverlet + reportgenerator). `clean` and `report` subcommands available.
 ```
 
 Shaders compile to `src/cpp/render/bgfx/shaders/compiled/spirv/`. Bindings run `dotnet tool restore` from `src/csharp/` first, then process every `.rsp` file under `src/csharp/Native/`.

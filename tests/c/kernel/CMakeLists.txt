@@ -29,7 +29,3 @@ set_target_properties(test_ke_kernel PROPERTIES
 
 include(GoogleTest)
 gtest_discover_tests(test_ke_kernel)
-
-if(KE_COVERAGE)
-    enable_coverage(test_ke_kernel)
-endif()
