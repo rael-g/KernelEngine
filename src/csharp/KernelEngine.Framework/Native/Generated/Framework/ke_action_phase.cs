@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel.Native;
+namespace KernelEngine.Framework.Native;
 
 public enum ke_action_phase
 {

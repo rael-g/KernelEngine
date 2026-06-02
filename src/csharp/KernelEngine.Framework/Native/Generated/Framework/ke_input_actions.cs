@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel.Native;
+namespace KernelEngine.Framework.Native;
 
 public unsafe partial struct ke_input_actions
 {
@@ -11,13 +11,13 @@ public unsafe partial struct ke_input_actions
     public delegate* unmanaged[Cdecl]<ke_input_actions*, ke_input_snapshot*, delegate* unmanaged[Cdecl]<void*, ke_input_action_event, void>, void*, ke_result> evaluate;
 
     [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, bool> is_action_down;
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, byte> is_action_down;
 
     [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, bool> was_action_pressed;
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, byte> was_action_pressed;
 
     [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, bool> was_action_released;
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, byte> was_action_released;
 
     [NativeTypeName("float (*)(struct ke_input_actions *, int32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, int, float> get_axis1d;

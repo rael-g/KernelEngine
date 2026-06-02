@@ -32,7 +32,6 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/input/snapshot.h
 ../../../c/kernel/include/kernel_engine/kernel/input/event.h
 ../../../c/kernel/include/kernel_engine/kernel/input/input.h
-../../../c/kernel/include/kernel_engine/kernel/input/input_actions.h
 ../../../c/kernel/include/kernel_engine/kernel/engine/frame_packet.h
 ../../../c/kernel/include/kernel_engine/kernel/render/render.h
 ../../../c/kernel/include/kernel_engine/kernel/render/render_graph.h

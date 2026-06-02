@@ -1,6 +1,7 @@
-#ifndef KERNEL_ENGINE_KERNEL_INPUT_INPUT_ACTIONS_H_
-#define KERNEL_ENGINE_KERNEL_INPUT_INPUT_ACTIONS_H_
+#ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
+#define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 
+#include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/input/snapshot.h>
 #include <stdint.h>
@@ -92,4 +93,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_KERNEL_INPUT_INPUT_ACTIONS_H_
+#endif // KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_

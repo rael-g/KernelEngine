@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel.Native;
+namespace KernelEngine.Framework.Native;
 
 public partial struct ke_input_action_event
 {
