@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/kernel/world/ecs.h>
+#include <kernel_engine/kernel/world/ke_ecs.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <string.h>
 
@@ -227,52 +228,47 @@ TEST_F(EcsTest, ComponentRemove_MiddleElement_Works) {
     ASSERT_EQ(*(int*)ke_ecs_component_get(reg, e3, c), 3);
 }
 
-// --- Query Tests ---
+// --- Sparse Set VTable Tests ---
 
-TEST_F(EcsTest, Query_NullArgs_DoesNotCrash) {
-    ke_entity* ents; void* data; size_t count;
-    ke_ecs_registry_query(nullptr, 0, &ents, &data, &count);
-    ke_ecs_registry_query(reg, 0, nullptr, &data, &count);
-    SUCCEED();
+TEST_F(EcsTest, SparseSet_Create_NullArgs_ReturnsInvalidArgument) {
+    ke_ecs* ecs = nullptr;
+    ASSERT_EQ(ke_ecs_sparse_set_create(nullptr, alloc, &ecs), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_ecs_sparse_set_create(reg, nullptr, &ecs), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_ecs_sparse_set_create(reg, alloc, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
 
-TEST_F(EcsTest, Query_InvalidComponent_ReturnsEmpty) {
-    ke_entity* ents = (ke_entity*)1; 
-    void* data = (void*)1; 
-    size_t count = 1;
-    ke_ecs_registry_query(reg, 999, &ents, &data, &count);
-    ASSERT_EQ(count, 0);
+TEST_F(EcsTest, SparseSet_EntityCreate_Works) {
+    ke_ecs* ecs = nullptr;
+    ke_ecs_sparse_set_create(reg, alloc, &ecs);
+    
+    ke_entity e = ecs->entity_create(ecs);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+    
+    ecs->destroy(ecs);
 }
 
-TEST_F(EcsTest, Query_ReturnsCorrectData) {
-    ke_component_id c = ke_ecs_component_register(reg, "Comp", sizeof(int));
-    ke_entity e = ke_ecs_entity_create(reg);
-    *(int*)ke_ecs_component_add(reg, e, c) = 42;
+TEST_F(EcsTest, SparseSet_ComponentWorkflow_Works) {
+    ke_ecs* ecs = nullptr;
+    ke_ecs_sparse_set_create(reg, alloc, &ecs);
     
-    ke_entity* ents; void* data; size_t count;
-    ke_ecs_registry_query(reg, c, &ents, &data, &count);
+    ke_component_id cid = ecs->component_register(ecs, "VTableComp", sizeof(int));
+    ke_entity e = ecs->entity_create(ecs);
     
+    int* data = (int*)ecs->component_add(ecs, e, cid);
+    *data = 123;
+    
+    ASSERT_EQ(*(int*)ecs->component_get(ecs, e, cid), 123);
+    
+    ke_entity* ents; void* qdata; size_t count;
+    ecs->query(ecs, cid, &ents, &qdata, &count);
     ASSERT_EQ(count, 1);
+    ASSERT_EQ(((int*)qdata)[0], 123);
+    
+    ecs->component_remove(ecs, e, cid);
+    ASSERT_EQ(ecs->component_get(ecs, e, cid), nullptr);
+    
+    ecs->entity_destroy(ecs, e);
+    
+    ecs->destroy(ecs);
 }
 
-TEST_F(EcsTest, Query_ReturnsCorrectEntityId) {
-    ke_component_id c = ke_ecs_component_register(reg, "Comp", sizeof(int));
-    ke_entity e = ke_ecs_entity_create(reg);
-    ke_ecs_component_add(reg, e, c);
-    
-    ke_entity* ents; void* data; size_t count;
-    ke_ecs_registry_query(reg, c, &ents, &data, &count);
-    
-    ASSERT_EQ(ents[0], e);
-}
-
-TEST_F(EcsTest, Query_ReturnsCorrectComponentValue) {
-    ke_component_id c = ke_ecs_component_register(reg, "Comp", sizeof(int));
-    ke_entity e = ke_ecs_entity_create(reg);
-    *(int*)ke_ecs_component_add(reg, e, c) = 42;
-    
-    ke_entity* ents; void* data; size_t count;
-    ke_ecs_registry_query(reg, c, &ents, &data, &count);
-    
-    ASSERT_EQ(((int*)data)[0], 42);
-}

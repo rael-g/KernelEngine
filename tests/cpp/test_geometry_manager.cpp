@@ -82,6 +82,46 @@ TEST_F(GeometryManagerTest, CreateMesh_ReturnsError_WhenGpuFails)
     EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, &handle), KE_ERROR_RENDER);
 }
 
+TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnNullVerts)
+{
+    uint16_t idx[3] = {0, 1, 2};
+    ke_mesh_handle handle;
+    EXPECT_EQ(manager->CreateMesh(ctx, nullptr, 3, idx, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnZeroCount)
+{
+    ke_vertex verts[3] = {};
+    uint16_t idx[3] = {0, 1, 2};
+    ke_mesh_handle handle;
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 0, idx, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
+}
+
+// ── DestroyMesh Tests ─────────────────────────────────────────────────────────
+
+TEST_F(GeometryManagerTest, DestroyMesh_CallsGpuDestroy)
+{
+    ke_vertex verts[3] = {};
+    uint16_t idx[3] = {0, 1, 2};
+    ke_mesh_handle handle;
+
+    EXPECT_CALL(*gpu_mock, Copy(_, _)).WillRepeatedly(Return((const GpuMemoryBuffer*)0x123));
+    EXPECT_CALL(*gpu_mock, CreateVertexBuffer(_, _)).WillOnce(Return(GpuVertexBufferHandle{10}));
+    EXPECT_CALL(*gpu_mock, CreateIndexBuffer(_)).WillOnce(Return(GpuIndexBufferHandle{20}));
+
+    manager->CreateMesh(ctx, verts, 3, idx, 3, &handle);
+
+    EXPECT_CALL(*gpu_mock, DestroyVertexBuffer(GpuVertexBufferHandle{10})).Times(1);
+    EXPECT_CALL(*gpu_mock, DestroyIndexBuffer(GpuIndexBufferHandle{20})).Times(1);
+
+    EXPECT_EQ(manager->DestroyMesh(ctx, handle), KE_OK);
+}
+
+TEST_F(GeometryManagerTest, DestroyMesh_ReturnsInvalidArgument_OnInvalidHandle)
+{
+    EXPECT_EQ(manager->DestroyMesh(ctx, {999}), KE_ERROR_INVALID_ARGUMENT);
+}
+
 // ── RecordDraw Tests ─────────────────────────────────────────────────────────
 
 TEST_F(GeometryManagerTest, RecordDraw_IncrementsDrawCount)
@@ -124,4 +164,18 @@ TEST_F(GeometryManagerTest, RecordDraw_ReturnsError_WhenOutOfMemory)
 
     EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, &transform), KE_ERROR_OUT_OF_MEMORY);
     free(packet.draw_commands);
+}
+
+TEST_F(GeometryManagerTest, RecordDraw_ReturnsInvalidArgument_OnNullTransform)
+{
+    ke_frame_packet packet{};
+    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+// ── GetMeshEntry Tests ───────────────────────────────────────────────────────
+
+TEST_F(GeometryManagerTest, GetMeshEntry_ReturnsInvalidEntry_ForInvalidHandle)
+{
+    auto& entry = manager->GetMeshEntry({999});
+    EXPECT_EQ(entry.vb, kGpuInvalidHandle);
 }

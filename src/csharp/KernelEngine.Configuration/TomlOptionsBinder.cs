@@ -19,7 +19,7 @@ namespace KernelEngine.Configuration;
 /// <see cref="Apply{TOptions}"/> method, replaceable wholesale.
 /// </para>
 /// </summary>
-internal static class TomlOptionsBinder
+public static class TomlOptionsBinder
 {
     public static void Apply<TOptions>(TomlTable section, TOptions opts) where TOptions : class
     {

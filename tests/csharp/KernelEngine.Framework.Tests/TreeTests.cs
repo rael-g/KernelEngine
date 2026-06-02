@@ -71,9 +71,85 @@ public class TreeTests
         // Total visits: Root(0) + N3(1) + N2(1) = 2.
     }
 
+    [Fact]
+    public void FindNode_ByName_Works()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+        var child = tree.AddNode("Child");
+        
+        Assert.Same(child, tree.FindNode("Child"));
+    }
+
+    [Fact]
+    public void FindNode_ByPath_Works()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+        var child = tree.AddNode("A");
+        var grandchild = tree.AddNode("B", child);
+        
+        Assert.Same(grandchild, tree.FindNode("A/B"));
+        Assert.Same(grandchild, tree.FindNode("/A/B"));
+    }
+
+    [Fact]
+    public void FindNode_Recursive_Works()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+        var child = tree.AddNode("A");
+        var grandchild = tree.AddNode("Target", child);
+        
+        Assert.Same(grandchild, tree.FindNode("Target"));
+    }
+
+    [Fact]
+    public void AddNode_HandlesNameCollisions()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+        
+        var n1 = tree.AddNode("Test");
+        var n2 = tree.AddNode("Test");
+        var n3 = tree.AddNode("Test");
+
+        Assert.Equal("Test", n1.Name);
+        Assert.Equal("Test_2", n2.Name);
+        Assert.Equal("Test_3", n3.Name);
+    }
+
+    [Fact]
+    public void DispatchInputActions_PropagatesToChildren()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+        bool called = false;
+        var node = new InputActionMockNode(() => { called = true; return false; });
+        tree.AddNode(node, "act");
+
+        var list = new List<InputActionEvent> { new InputActionEvent { ActionId = 1 } };
+        tree.DispatchInputActions(list);
+
+        Assert.True(called);
+    }
+
     private class InputMockNode(Func<bool> onInput) : Node
     {
         protected override void OnInput(ref InputEvent evt)
+        {
+            if (onInput()) evt.Consume();
+        }
+    }
+
+    private class InputActionMockNode(Func<bool> onInput) : Node
+    {
+        protected override void OnInputAction(ref InputActionEvent evt)
         {
             if (onInput()) evt.Consume();
         }

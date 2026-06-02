@@ -46,5 +46,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Framework.Tests/KernelEngine.Framework.Tests.csproj" />
+    <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
   </Folder>
 </Solution>

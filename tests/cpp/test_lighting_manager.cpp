@@ -1,11 +1,15 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <lighting_manager.hpp>
 #include <texture_manager.hpp>
 #include <render_context.hpp>
+#include <gpu_device.hpp>
 #include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/engine/frame_packet.h>
 #include "mocks.hpp"
 
-using namespace kernel_engine::render::bgfx;
+using namespace kernel_engine::render;
+using namespace kernel_engine::render::core;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::NiceMock;
@@ -23,6 +27,8 @@ protected:
 
     void TearDown() override
     {
+        manager.reset();
+        textures.reset();
         delete gpu_mock;
     }
 
@@ -32,50 +38,109 @@ protected:
     RenderContext ctx{};
 };
 
-TEST_F(LightingManagerTest, SetDirectionalLight_StoresColorIntensity)
+// ── Directional Light Tests ──────────────────────────────────────────────────
+
+TEST_F(LightingManagerTest, SetDirectionalLight_StoresValues)
 {
-    ke_directional_light light = { 0, -1, 0, 0, 1, 0, 3.5f }; // Green, intensity 3.5
-    manager->SetDirectionalLight(&light);
-    EXPECT_FLOAT_EQ(manager->light_color[1], 3.5f);
+    ke_directional_light light = { 1, -2, 3, 0.1f, 0.2f, 0.3f, 2.0f };
+    EXPECT_EQ(manager->SetDirectionalLight(&light), KE_OK);
+    EXPECT_FLOAT_EQ(manager->light_dir[0], 1.0f);
+    EXPECT_FLOAT_EQ(manager->light_color[0], 0.2f); // 0.1 * 2.0
 }
 
-TEST_F(LightingManagerTest, SetPointLights_StoresCount)
+TEST_F(LightingManagerTest, SetDirectionalLight_ReturnsError_OnNull)
 {
-    ke_point_light lights[2] = {};
-    lights[0].intensity = 1.0f;
-    lights[1].intensity = 2.0f;
-    
-    // Explicitly test if method exists in LightingManager
-    // Note: If SetPointLights is not in LightingManager, we'll find out now
-    manager->SetPointLights(lights, 2);
-    EXPECT_EQ(manager->point_light_count, 2);
+    EXPECT_EQ(manager->SetDirectionalLight(nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
+
+// ── Ambient Light Tests ──────────────────────────────────────────────────────
 
 TEST_F(LightingManagerTest, SetAmbientLight_StoresRGB)
 {
-    manager->SetAmbientLight(0.5f, 0.6f, 0.7f);
-    EXPECT_FLOAT_EQ(manager->ambient_color[2], 0.7f);
+    EXPECT_EQ(manager->SetAmbientLight(0.1f, 0.2f, 0.3f), KE_OK);
+    EXPECT_FLOAT_EQ(manager->ambient_color[0], 0.1f);
+    EXPECT_FLOAT_EQ(manager->ambient_color[1], 0.2f);
+    EXPECT_FLOAT_EQ(manager->ambient_color[2], 0.3f);
 }
 
-TEST_F(LightingManagerTest, CreateMaterial_AssignsIncrementalHandles)
+// ── Point/Spot Light Storage Tests ───────────────────────────────────────────
+
+TEST_F(LightingManagerTest, StorePointLights_UpdatesSize)
+{
+    ke_point_light lights[2] = {};
+    EXPECT_EQ(manager->StorePointLights(lights, 2), KE_OK);
+    EXPECT_EQ(manager->GetPointLightCount(), 2);
+}
+
+TEST_F(LightingManagerTest, StoreSpotLights_UpdatesSize)
+{
+    ke_spot_light lights[3] = {};
+    EXPECT_EQ(manager->StoreSpotLights(lights, 3), KE_OK);
+    EXPECT_EQ(manager->GetSpotLightCount(), 3);
+}
+
+// ── UploadLights Tests ───────────────────────────────────────────────────────
+
+TEST_F(LightingManagerTest, UploadLights_CallsSetUniform_ForPointLights)
+{
+    ke_point_light lights[1] = {};
+    manager->StorePointLights(lights, 1);
+    manager->point_lights_uniform = GpuUniformHandle{10};
+
+    EXPECT_CALL(*gpu_mock, SetUniform(GpuUniformHandle{10}, _, 2)).Times(1);
+    manager->UploadLights(ctx);
+}
+
+TEST_F(LightingManagerTest, UploadLights_CallsSetUniform_ForSpotLights)
+{
+    ke_spot_light lights[1] = {};
+    manager->StoreSpotLights(lights, 1);
+    manager->spot_lights_uniform = GpuUniformHandle{20};
+
+    EXPECT_CALL(*gpu_mock, SetUniform(GpuUniformHandle{20}, _, 4)).Times(1);
+    manager->UploadLights(ctx);
+}
+
+// ── RecordLights Tests ───────────────────────────────────────────────────────
+
+TEST_F(LightingManagerTest, RecordLights_UpdatesPacket)
+{
+    ke_frame_packet packet{};
+    packet.point_light_capacity = 10;
+    packet.point_lights = (ke_point_light*)malloc(sizeof(ke_point_light) * 10);
+    
+    ke_point_light lights[2] = {};
+    lights[0].intensity = 5.0f;
+
+    EXPECT_EQ(manager->RecordLights(packet, lights, 2), KE_OK);
+    EXPECT_EQ(packet.point_light_count, 2);
+    EXPECT_FLOAT_EQ(packet.point_lights[0].intensity, 5.0f);
+
+    free(packet.point_lights);
+}
+
+// ── Material Tests ───────────────────────────────────────────────────────────
+
+TEST_F(LightingManagerTest, CreateMaterial_AssignsHandle)
 {
     ke_material mat{};
-    ke_material_handle h1, h2;
-    manager->CreateMaterial(ctx, *textures, &mat, &h1);
-    manager->CreateMaterial(ctx, *textures, &mat, &h2);
-    EXPECT_EQ(h1.idx, 0);
-    EXPECT_EQ(h2.idx, 1);
+    ke_material_handle h;
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), KE_OK);
+    EXPECT_EQ(h.idx, 0);
 }
 
-TEST_F(LightingManagerTest, GetMaterial_ReturnsInvalidForUnknownHandle)
+TEST_F(LightingManagerTest, DestroyMaterial_MarksInvalid)
+{
+    ke_material mat{};
+    ke_material_handle h;
+    manager->CreateMaterial(ctx, *textures, &mat, &h);
+    
+    EXPECT_EQ(manager->DestroyMaterial(ctx, h), KE_OK);
+    EXPECT_FALSE(manager->GetMaterial(h).valid);
+}
+
+TEST_F(LightingManagerTest, GetMaterial_ReturnsInvalidEntry_ForInvalidHandle)
 {
     auto& entry = manager->GetMaterial({999});
     EXPECT_FALSE(entry.valid);
-}
-
-TEST_F(LightingManagerTest, SetPointLights_ClampsToCapacity)
-{
-    std::vector<ke_point_light> many_lights(256); 
-    manager->SetPointLights(many_lights.data(), (uint32_t)many_lights.size());
-    EXPECT_LE(manager->point_light_count, 128);
 }

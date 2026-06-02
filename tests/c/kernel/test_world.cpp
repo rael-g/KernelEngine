@@ -134,13 +134,106 @@ TEST_F(WorldTest, AddSystem_Success) {
     ASSERT_EQ(world->add_system(world, &sys), KE_OK);
 }
 
-TEST_F(WorldTest, System_Update_Called) {
+// ── Transform tests ───────────────────────────────────────────────────────────
+
+TEST_F(WorldTest, Transform_HierarchyUpdate_Works) {
+    ke_entity parent = make_entity("P", KE_ENTITY_INVALID);
+    ke_entity child  = make_entity("C", parent);
+
+    ke_ecs_registry* reg = world->get_registry(world);
+    ke_transform_component* pt = (ke_transform_component*)ke_ecs_component_get(reg, parent, world->transform_id(world));
+    ke_transform_component* ct = (ke_transform_component*)ke_ecs_component_get(reg, child, world->transform_id(world));
+
+    pt->position = { 10.f, 0.f, 0.f };
+    ct->position = { 5.f, 0.f, 0.f };
+
+    world->update(world, nullptr);
+
+    // Row-major: world = local * parent.
+    // Child local (5,0,0) * Parent (10,0,0) = (15,0,0)
+    ASSERT_FLOAT_EQ(ct->world_matrix.m[12], 15.f);
+}
+
+// ── System dependency tests ──────────────────────────────────────────────────
+
+TEST_F(WorldTest, AddSystem_ParallelExecution_Works) {
+    static int s_c1, s_c2;
+    s_c1 = 0; s_c2 = 0;
+    
+    uint32_t r1[] = {1};
+    uint32_t r2[] = {2};
+
+    ke_system_params sys1{};
+    sys1.name = "S1";
+    sys1.reads = r1; sys1.read_count = 1;
+    sys1.update = [](void*, ke_world*, float, ke_frame_packet*) { s_c1++; };
+
+    ke_system_params sys2{};
+    sys2.name = "S2";
+    sys2.reads = r2; sys2.read_count = 1; // Different reads, no conflict
+    sys2.update = [](void*, ke_world*, float, ke_frame_packet*) { s_c2++; };
+
+    world->add_system(world, &sys1);
+    world->add_system(world, &sys2);
+    
+    world->update(world, nullptr);
+    
+    ASSERT_EQ(s_c1, 1);
+    ASSERT_EQ(s_c2, 1);
+}
+
+TEST_F(WorldTest, AddSystem_ConflictingSystems_RunInSerial) {
+    static int s_val; s_val = 0;
+    uint32_t c1[] = {10};
+
+    ke_system_params sys1{};
+    sys1.name = "Writer";
+    sys1.writes = c1; sys1.write_count = 1;
+    sys1.update = [](void*, ke_world*, float, ke_frame_packet*) { s_val = 42; };
+
+    ke_system_params sys2{};
+    sys2.name = "Reader";
+    sys2.reads = c1; sys2.read_count = 1; // Conflict on CID 10
+    sys2.update = [](void*, ke_world*, float, ke_frame_packet*) { if (s_val == 42) s_val = 99; };
+
+    world->add_system(world, &sys1);
+    world->add_system(world, &sys2);
+    
+    world->update(world, nullptr);
+    
+    // If they run in order (Serial), Writer runs then Reader runs -> 99.
+    ASSERT_EQ(s_val, 99);
+}
+
+TEST_F(WorldTest, AddSystem_SerialBarrier_Works) {
     static int s_updates; s_updates = 0;
     ke_system_params sys{};
-    sys.name = "TestUpdate";
-    sys.update = [](void* h, ke_world* w, float dt, ke_frame_packet* p) { s_updates++; };
+    sys.name = "Barrier";
+    sys.read_count = 0; sys.write_count = 0; // Empty system acts as barrier
+    sys.update = [](void*, ke_world*, float, ke_frame_packet*) { s_updates++; };
 
     world->add_system(world, &sys);
     world->update(world, nullptr);
     ASSERT_EQ(s_updates, 1);
 }
+
+// ── Notify destroy tests ──────────────────────────────────────────────────────
+
+TEST_F(WorldTest, NotifyDestroy_CallsOnDestroy) {
+    ke_ecs_registry* reg = world->get_registry(world);
+    ke_entity e = ke_ecs_entity_create(reg);
+    ke_script_component* s = (ke_script_component*)ke_ecs_component_add(reg, e, world->script_id(world));
+
+    static bool s_destroyed; s_destroyed = false;
+    s->on_destroy = [](ke_entity ent) { s_destroyed = true; return KE_OK; };
+
+    ASSERT_EQ(ke_world_notify_destroy(world, e), KE_OK);
+    ASSERT_TRUE(s_destroyed);
+}
+
+TEST_F(WorldTest, NotifyDestroy_SafeOnNullOrMissing) {
+    ASSERT_EQ(ke_world_notify_destroy(nullptr, 1), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_world_notify_destroy(world, 0), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_world_notify_destroy(world, 999), KE_OK); // Non-existent entity
+}
+

@@ -4,7 +4,6 @@
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
-#include <kernel_engine/render/core/render_core_export.h>
 
 namespace kernel_engine::render::core
 {
@@ -16,7 +15,7 @@ class TextureManager;
 /**
  * @brief Agnostic post-processing pipeline (HDR, Bloom, SSAO, Tonemapping).
  */
-class KE_RENDER_CORE_API PostProcessPipeline
+class PostProcessPipeline
 {
 public:
     ke_result SetupPostProcess(RenderContext& ctx, 

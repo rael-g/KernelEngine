@@ -5,7 +5,6 @@
 #include "gpu_types.hpp"
 #include <vector>
 
-#include <kernel_engine/render/core/render_core_export.h>
 
 namespace kernel_engine::render::core
 {
@@ -24,7 +23,7 @@ struct ShadowMapEntry
 /**
  * @brief Manages shadow mapping passes and GPU resources.
  */
-class KE_RENDER_CORE_API ShadowPipeline
+class ShadowPipeline
 {
 public:
     ke_result CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out);

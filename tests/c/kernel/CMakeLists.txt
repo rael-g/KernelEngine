@@ -8,6 +8,8 @@ add_executable(test_ke_kernel
     test_logger.cpp
     test_hash.cpp
     test_array.cpp
+    test_node_type_registry.cpp
+    test_dev_platform.cpp
 )
 
 

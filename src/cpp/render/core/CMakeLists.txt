@@ -1,4 +1,4 @@
-add_library(ke_render_core SHARED
+add_library(ke_render_core STATIC
     src/core_renderer.cpp
     src/geometry_manager.cpp
     src/texture_manager.cpp
@@ -12,10 +12,10 @@ add_library(ke_render_core SHARED
 
 # render/core is a backend support library used by render plugins (bgfx, future Vulkan/DX12, ...).
 # It exposes no public C ABI of its own — callers include the C++ headers from include/ + src/
-# directly. The previous public surface (the 5 *_describe factories) was deleted along with the
-# C++ render systems, which were ported to pure-managed C# in KernelEngine.Framework.
-
-target_compile_definitions(ke_render_core PRIVATE KE_RENDER_CORE_EXPORT)
+# directly. Built STATIC: the only consumers are render plugins (which embed it into their own
+# shared library) and the C++ test suite (which links it directly). A STATIC lib avoids needing
+# dllexport on every class, which is what the previous SHARED build required.
+set_property(TARGET ke_render_core PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(ke_render_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

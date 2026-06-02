@@ -11,8 +11,6 @@
 namespace kernel_engine::render::core
 {
 
-thread_local RenderGraphImpl::Bridge RenderGraphImpl::tls_bridge_;
-
 namespace {
 
 // Maps the cross-backend ke_resource_format → bgfx-style format constant the
@@ -401,18 +399,14 @@ ke_result RenderGraphImpl::ReleaseAllResources()
 
 // ── Execute ──────────────────────────────────────────────────────────────
 
-ke_render_pass_ctx RenderGraphImpl::BuildPassCtx(Pass& pass)
+ke_render_pass_ctx RenderGraphImpl::BuildPassCtx(Bridge& bridge)
 {
-    // The bridge lives in TLS for the duration of the record callback. It is
-    // populated freshly per pass per frame, so concurrent graph execution on
-    // different threads stays isolated (each thread owns its own slot).
-    auto& b = tls_bridge_;
-    b.impl = this;
-    b.pass = &pass;
-    b.packet = nullptr; // patched in Execute right before the callback fires.
-
+    // The bridge lives on Execute's stack for the duration of the record
+    // callback. Concurrent graph execution on different threads is isolated
+    // by construction (each thread owns its own stack frame). Record
+    // callbacks must not retain the ctx.handle past their return.
     ke_render_pass_ctx ctx{};
-    ctx.handle = &b;
+    ctx.handle = &bridge;
     ctx.get_texture = [](ke_render_pass_ctx* self, const char* name) -> ke_texture_handle {
         ke_texture_handle none{ UINT32_MAX };
         if (!self || !self->handle || !name) return none;
@@ -466,8 +460,8 @@ ke_result RenderGraphImpl::Execute(const ke_frame_packet* packet)
         gpu->SetViewFrameBuffer(pass.view_id, pass.target_fb);
         gpu->Touch(pass.view_id);
 
-        ke_render_pass_ctx ctx = BuildPassCtx(pass);
-        tls_bridge_.packet = packet;
+        Bridge bridge{ this, &pass, packet };
+        ke_render_pass_ctx ctx = BuildPassCtx(bridge);
 
         pass.record(&ctx, pass.user);
     }
