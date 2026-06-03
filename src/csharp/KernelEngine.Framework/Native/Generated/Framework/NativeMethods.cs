@@ -27,4 +27,10 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_mesh_shape_free", ExactSpelling = true)]
     public static extern void mesh_shape_free(ke_allocator* alloc, ke_mesh_shape_data* data);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_material_file_parse", ExactSpelling = true)]
+    public static extern ke_result material_file_parse([NativeTypeName("const char *")] sbyte* path, ke_material_spec* out_spec);
+
+    [NativeTypeName("#define KE_MATERIAL_PATH_MAX 256")]
+    public const int KE_MATERIAL_PATH_MAX = 256;
 }

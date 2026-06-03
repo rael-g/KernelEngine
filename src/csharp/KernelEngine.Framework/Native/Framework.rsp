@@ -13,6 +13,7 @@ ke_framework
 ../../../c/kernel/include/kernel_engine/framework/resource_cache.h
 ../../../c/kernel/include/kernel_engine/framework/scene_tree.h
 ../../../c/kernel/include/kernel_engine/framework/mesh_shape.h
+../../../c/kernel/include/kernel_engine/framework/material_file.h
 --methodClassName
 NativeMethods
 --prefixStrip
