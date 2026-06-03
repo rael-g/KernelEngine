@@ -6,7 +6,7 @@ set(KERNEL_SOURCES
     src/input/input.c
     src/world/world.c
     src/world/ecs.c
-    src/dev_platform/dev_platform.c
+    src/common/thread_name.c
 )
 
 add_library(ke_kernel ${KERNEL_SOURCES})

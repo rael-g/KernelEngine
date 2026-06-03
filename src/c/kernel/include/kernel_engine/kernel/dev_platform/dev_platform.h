@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_KERNEL_DEV_PLATFORM_DEV_PLATFORM_H_
 
 #include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/common/thread_name.h> // compat: TLS helpers moved here
 #include <kernel_engine/kernel/context/types.h>
 
 #ifdef __cplusplus
@@ -40,27 +41,10 @@ extern "C"
 
     } ke_dev_platform;
 
-    // ── Thread-name TLS helpers ──────────────────────────────────────────────
-    // Each thread carries a string label in TLS (default "unknown"). The label is set
-    // by `ke_thread_create` for spawned threads and by the application for the OS-given
-    // main thread, and is consumed by `ke_thread_assert_current` for thread-affinity
-    // checks. These functions live alongside `ke_dev_platform` because they exist
-    // primarily for development/observability, not for shipping-build behavior.
-
-    /**
-     * @brief Sets the kernel-side TLS name of the calling thread.
-     * Independent from `set_thread_name` on the vtable (which talks to the OS).
-     */
-    KE_API void ke_thread_set_current_name(const char *name);
-
-    /// @brief Retrieves the TLS name of the calling thread, or "unknown" if never set.
-    KE_API const char *ke_thread_get_current_name(void);
-
-    /**
-     * @brief Asserts that the calling thread's TLS name matches @p expected_name.
-     * Aborts with a fatal message in debug builds; no-op in release.
-     */
-    KE_API void ke_thread_assert_current(const char *expected_name);
+    // The TLS helpers (ke_thread_set_current_name / get / assert) used to live
+    // here but moved to <kernel_engine/kernel/common/thread_name.h>. The
+    // include at the top of this file forwards them so existing callers keep
+    // compiling without source changes during the migration.
 
 #ifdef __cplusplus
 }

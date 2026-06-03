@@ -1,4 +1,4 @@
-#include <kernel_engine/kernel/dev_platform/dev_platform.h>
+#include <kernel_engine/kernel/common/thread_name.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <string.h>
 #include <stdio.h>
