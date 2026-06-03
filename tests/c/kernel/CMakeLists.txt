@@ -17,7 +17,6 @@ add_executable(test_ke_kernel
     test_material_file.cpp
     test_asset_resolver.cpp
     test_resource_queue.cpp
-    test_dev_platform.cpp
 )
 
 

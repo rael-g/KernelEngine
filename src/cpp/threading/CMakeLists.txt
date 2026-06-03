@@ -1,6 +1,4 @@
 add_library(ke_threading
-    src/ke_thread.cpp
-    src/ke_semaphore.cpp
     src/ke_frame_sync.cpp
 )
 
