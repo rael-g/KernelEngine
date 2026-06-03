@@ -21,4 +21,10 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_tree_create", ExactSpelling = true)]
     public static extern ke_result scene_tree_create([NativeTypeName("struct ke_world *")] ke_world* world, ke_allocator* alloc, ke_scene_tree** out_tree);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_mesh_shape_bake", ExactSpelling = true)]
+    public static extern ke_result mesh_shape_bake(ke_allocator* alloc, ke_mesh_primitive prim, [NativeTypeName("uint32_t")] uint segments, ke_mesh_shape_data* out_data);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_mesh_shape_free", ExactSpelling = true)]
+    public static extern void mesh_shape_free(ke_allocator* alloc, ke_mesh_shape_data* data);
 }
