@@ -36,4 +36,17 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_resolver_create", ExactSpelling = true)]
     public static extern ke_result asset_resolver_create(ke_allocator* alloc, ke_image_loader* image_loader, [NativeTypeName("const char *")] sbyte* project_root, ke_asset_resolver** @out);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_future_wait", ExactSpelling = true)]
+    public static extern ke_result resource_future_wait(ke_resource_future* future, [NativeTypeName("uint32_t")] uint timeout_ms);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_future_get_handle", ExactSpelling = true)]
+    [return: NativeTypeName("uint32_t")]
+    public static extern uint resource_future_get_handle(ke_resource_future* future);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_future_release", ExactSpelling = true)]
+    public static extern void resource_future_release(ke_resource_future* future);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_queue_create", ExactSpelling = true)]
+    public static extern ke_result resource_queue_create(ke_allocator* alloc, ke_resource_queue** @out);
 }

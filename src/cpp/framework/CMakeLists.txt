@@ -10,6 +10,7 @@ add_library(ke_framework
     src/mesh_shape.cpp
     src/material_file.cpp
     src/asset_resolver.cpp
+    src/resource_queue.cpp
 )
 
 target_include_directories(ke_framework PRIVATE ${TOMLPLUSPLUS_INCLUDE_DIRS})
