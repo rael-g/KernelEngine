@@ -90,7 +90,7 @@ protected:
         ASSERT_EQ(ke_world_create(&params, &world), KE_OK);
         ASSERT_EQ(ke_scene_tree_create(world, allocator, &tree), KE_OK);
         ASSERT_EQ(ke_node_type_registry_create(allocator, &registry), KE_OK);
-        ASSERT_EQ(ke_scene_loader_create(allocator, world, tree, registry, &loader), KE_OK);
+        ASSERT_EQ(ke_scene_loader_create(allocator, world, tree, registry, nullptr, &loader), KE_OK);
 
         // Register a single test type that records every create + set_property.
         ke_node_type t{};
@@ -298,4 +298,57 @@ v4 = [1.0, 2.0, 3.0, 4.0]
     EXPECT_EQ(find("v3")->value.type, KE_VARIANT_VEC3);
     EXPECT_EQ(find("v4")->value.type, KE_VARIANT_VEC4);
     fs::remove(path);
+}
+
+// ── Nested scenes ───────────────────────────────────────────────────────────
+
+TEST_F(SceneLoaderTest, Load_NestedScene_BySiblingPath_InstantiatesChild)
+{
+    auto child_path = WriteTempSceneFile(R"(
+[[node]]
+name = "Inner"
+type = "TestNode"
+[node.transform]
+position = [10.0, 0.0, 0.0]
+)");
+    // Outer references child by its bare filename — same directory.
+    auto child_name = child_path.filename().string();
+    auto outer = std::string("[[node]]\nname = \"OuterRoot\"\nscene = \"") + child_name + "\"\n";
+    auto outer_path = WriteTempSceneFile(outer);
+
+    ASSERT_EQ(loader->load(loader, outer_path.string().c_str()), KE_OK);
+    EXPECT_EQ(recorder.creates.size(), 1u);
+    // Inner-root takes the outer entry's name (PackedScene semantics).
+    EXPECT_EQ(recorder.creates[0].name, "OuterRoot");
+    fs::remove(outer_path);
+    fs::remove(child_path);
+}
+
+TEST_F(SceneLoaderTest, Load_NestedScene_OuterEntryOverridesTransform)
+{
+    auto child_path = WriteTempSceneFile(R"(
+[[node]]
+name = "Inner"
+type = "TestNode"
+[node.transform]
+position = [1.0, 0.0, 0.0]
+)");
+    auto child_name = child_path.filename().string();
+    auto outer = std::string(R"(
+[[node]]
+name = "Root"
+scene = ")") + child_name + R"("
+[node.transform]
+position = [99.0, 0.0, 0.0]
+)";
+    auto outer_path = WriteTempSceneFile(outer);
+
+    ASSERT_EQ(loader->load(loader, outer_path.string().c_str()), KE_OK);
+    auto entity = recorder.creates[0].entity;
+    auto *t = static_cast<ke_transform_component *>(
+        ke_ecs_component_get(world->get_registry(world), entity, world->transform_id(world)));
+    ASSERT_NE(t, nullptr);
+    EXPECT_FLOAT_EQ(t->position.x, 99.0f); // outer wins
+    fs::remove(outer_path);
+    fs::remove(child_path);
 }

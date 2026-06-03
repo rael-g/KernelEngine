@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <new>
 #include <string>
 #include <unordered_map>
@@ -30,10 +31,11 @@ constexpr float kPi = 3.14159265358979323846f;
 struct SceneLoaderImpl
 {
     ke_scene_loader        api{};
-    ke_allocator          *allocator = nullptr;
-    ke_world              *world     = nullptr;
-    ke_scene_tree         *tree      = nullptr;
-    ke_node_type_registry *registry  = nullptr;
+    ke_allocator          *allocator   = nullptr;
+    ke_world              *world       = nullptr;
+    ke_scene_tree         *tree        = nullptr;
+    ke_node_type_registry *registry    = nullptr;
+    std::string            project_root; // empty = no res:// support; resolution is sibling-relative
 };
 
 // ── TOML → ke_variant ────────────────────────────────────────────────────────
@@ -145,21 +147,96 @@ void attach_to_parent(ke_ecs_registry *reg, ke_entity entity, ke_entity parent,
 
 // ── Loader core ──────────────────────────────────────────────────────────────
 
-ke_result process_node(SceneLoaderImpl *impl, const toml::table &node_tbl,
-                       const std::unordered_map<std::string, ke_entity> &by_name,
-                       std::unordered_map<std::string, ke_entity> &out_by_name)
-{
-    auto name = node_tbl["name"].value<std::string>();
-    auto type = node_tbl["type"].value<std::string>();
-    if (!name || !type) return KE_ERROR_INVALID_ARGUMENT;
+namespace fs = std::filesystem;
 
-    // Resolve parent entity (root by default).
-    ke_entity parent = impl->tree->root(impl->tree);
+// Resolve a nested-scene reference. Supports two shapes:
+//   "res://x/y.scene.toml" — prefixed with project_root (when configured)
+//   "sibling.toml"         — relative to base_dir
+std::string resolve_nested_path(SceneLoaderImpl *impl, const fs::path &base_dir,
+                                const std::string &ref)
+{
+    constexpr const char *prefix = "res://";
+    constexpr size_t      plen   = 6;
+    if (ref.compare(0, plen, prefix) == 0) {
+        if (!impl->project_root.empty()) {
+            return (fs::path(impl->project_root) / ref.substr(plen)).string();
+        }
+        return ref.substr(plen); // fallback: strip prefix, treat as relative cwd
+    }
+    return (base_dir / ref).string();
+}
+
+// Applies an outer entry's transform + properties on top of an already-instantiated
+// inner root. Mirrors C# SceneLoader's "first entry of a nested scene takes the
+// instancing site's overrides" semantics.
+void apply_overrides(SceneLoaderImpl *impl, ke_entity entity,
+                     const toml::table &outer_tbl, const ke_node_type *node_type)
+{
+    auto *reg  = impl->world->get_registry(impl->world);
+    auto  tcid = impl->world->transform_id(impl->world);
+
+    if (auto xform_tbl = outer_tbl["transform"].as_table()) {
+        auto *t = static_cast<ke_transform_component *>(
+            ke_ecs_component_get(reg, entity, tcid));
+        if (t) apply_transform(*t, *xform_tbl);
+    }
+    if (auto props = outer_tbl["properties"].as_table()) {
+        for (auto &&[k, v] : *props) {
+            ke_variant val = toml_to_variant(v);
+            if (node_type && node_type->set_property) {
+                node_type->set_property(node_type->ctx, entity,
+                                        std::string(k.str()).c_str(), val);
+            }
+        }
+    }
+}
+
+ke_result load_scene_recursive(SceneLoaderImpl *impl, const std::string &path,
+                               ke_entity attach_parent,
+                               const std::string *override_name,
+                               const toml::table *override_entry,
+                               ke_entity *out_root);
+
+ke_result process_node(SceneLoaderImpl *impl, const fs::path &base_dir,
+                       const toml::table &node_tbl,
+                       const std::unordered_map<std::string, ke_entity> &by_name,
+                       std::unordered_map<std::string, ke_entity> &out_by_name,
+                       ke_entity attach_parent_override,
+                       const std::string *override_name,
+                       const toml::table *override_entry,
+                       ke_entity *out_entity)
+{
+    auto inner_name = node_tbl["name"].value<std::string>();
+    auto type       = node_tbl["type"].value<std::string>();
+    auto scene_ref  = node_tbl["scene"].value<std::string>();
+
+    if (!inner_name && !override_name) return KE_ERROR_INVALID_ARGUMENT;
+    const std::string effective_name = override_name ? *override_name : *inner_name;
+
+    // Resolve parent entity.
+    ke_entity parent = (attach_parent_override != KE_ENTITY_INVALID)
+        ? attach_parent_override
+        : impl->tree->root(impl->tree);
     if (auto parent_name = node_tbl["parent"].value<std::string>()) {
         auto it = by_name.find(*parent_name);
         if (it == by_name.end()) return KE_ERROR_NOT_FOUND;
         parent = it->second;
     }
+
+    // Nested scene branch: recurse into the referenced file. The outer entry's
+    // name/transform/properties layer on top of the inner root via override_*.
+    if (scene_ref) {
+        auto resolved = resolve_nested_path(impl, base_dir, *scene_ref);
+        ke_entity nested_root = KE_ENTITY_INVALID;
+        ke_result rc = load_scene_recursive(impl, resolved, parent,
+                                            &effective_name, &node_tbl, &nested_root);
+        if (rc != KE_OK) return rc;
+        if (inner_name) out_by_name.emplace(*inner_name, nested_root);
+        if (out_entity) *out_entity = nested_root;
+        return KE_OK;
+    }
+
+    if (!type) return KE_ERROR_INVALID_ARGUMENT;
 
     // Allocate ECS entity + universal components.
     auto *reg  = impl->world->get_registry(impl->world);
@@ -170,22 +247,19 @@ ke_result process_node(SceneLoaderImpl *impl, const toml::table &node_tbl,
     ke_entity entity = ke_ecs_entity_create(reg);
     if (entity == KE_ENTITY_INVALID) return KE_ERROR_OUT_OF_MEMORY;
 
-    // Hierarchy stays the link-list shape ke_scene_tree expects.
     auto *h = static_cast<ke_hierarchy_component *>(
         ke_ecs_component_add(reg, entity, hcid));
     if (!h) return KE_ERROR_OUT_OF_MEMORY;
     h->parent = h->first_child = h->next_sibling = h->prev_sibling = KE_ENTITY_INVALID;
     attach_to_parent(reg, entity, parent, hcid);
 
-    // Name component — UTF-8, truncated at the 64-byte buffer.
     auto *nc = static_cast<ke_name_component *>(
         ke_ecs_component_add(reg, entity, ncid));
     if (nc) {
-        std::strncpy(nc->name, name->c_str(), sizeof(nc->name) - 1);
+        std::strncpy(nc->name, effective_name.c_str(), sizeof(nc->name) - 1);
         nc->name[sizeof(nc->name) - 1] = '\0';
     }
 
-    // Transform component — defaults if no [node.transform] table.
     auto *t = static_cast<ke_transform_component *>(
         ke_ecs_component_add(reg, entity, tcid));
     if (t) {
@@ -197,15 +271,13 @@ ke_result process_node(SceneLoaderImpl *impl, const toml::table &node_tbl,
         }
     }
 
-    // Resolve the registered type and fire create().
     const ke_node_type *node_type = nullptr;
     if (impl->registry->lookup(impl->registry, type->c_str(), &node_type) != KE_OK ||
         !node_type || !node_type->create) {
         return KE_ERROR_NOT_FOUND;
     }
-    node_type->create(node_type->ctx, entity, name->c_str());
+    node_type->create(node_type->ctx, entity, effective_name.c_str());
 
-    // Walk [node.properties] and forward each as a ke_variant.
     if (auto props = node_tbl["properties"].as_table()) {
         for (auto &&[k, v] : *props) {
             ke_variant val = toml_to_variant(v);
@@ -216,15 +288,20 @@ ke_result process_node(SceneLoaderImpl *impl, const toml::table &node_tbl,
         }
     }
 
-    out_by_name.emplace(*name, entity);
+    // Apply outer overrides (only fires when this node is a nested-scene root).
+    if (override_entry) apply_overrides(impl, entity, *override_entry, node_type);
+
+    if (inner_name) out_by_name.emplace(*inner_name, entity);
+    if (out_entity) *out_entity = entity;
     return KE_OK;
 }
 
-ke_result impl_load(ke_scene_loader *self, const char *path)
+ke_result load_scene_recursive(SceneLoaderImpl *impl, const std::string &path,
+                               ke_entity attach_parent,
+                               const std::string *override_name,
+                               const toml::table *override_entry,
+                               ke_entity *out_root)
 {
-    if (!self || !self->handle || !path) return KE_ERROR_INVALID_ARGUMENT;
-    auto *impl = static_cast<SceneLoaderImpl *>(self->handle);
-
     toml::table tbl;
     try {
         tbl = toml::parse_file(path);
@@ -232,17 +309,41 @@ ke_result impl_load(ke_scene_loader *self, const char *path)
         return KE_ERROR_NOT_FOUND;
     }
 
+    fs::path base_dir = fs::path(path).parent_path();
     const auto *nodes = tbl["node"].as_array();
-    if (!nodes) return KE_OK; // empty scene is valid
+    if (!nodes) {
+        if (out_root) *out_root = KE_ENTITY_INVALID;
+        return KE_OK;
+    }
 
     std::unordered_map<std::string, ke_entity> by_name;
+    bool is_first = true;
+    ke_entity root = KE_ENTITY_INVALID;
     for (const auto &n : *nodes) {
         const auto *node_tbl = n.as_table();
         if (!node_tbl) continue;
-        ke_result rc = process_node(impl, *node_tbl, by_name, by_name);
+        ke_entity entity = KE_ENTITY_INVALID;
+        ke_result rc;
+        if (is_first) {
+            rc = process_node(impl, base_dir, *node_tbl, by_name, by_name,
+                              attach_parent, override_name, override_entry, &entity);
+            root = entity;
+            is_first = false;
+        } else {
+            rc = process_node(impl, base_dir, *node_tbl, by_name, by_name,
+                              KE_ENTITY_INVALID, nullptr, nullptr, &entity);
+        }
         if (rc != KE_OK) return rc;
     }
+    if (out_root) *out_root = root;
     return KE_OK;
+}
+
+ke_result impl_load(ke_scene_loader *self, const char *path)
+{
+    if (!self || !self->handle || !path) return KE_ERROR_INVALID_ARGUMENT;
+    auto *impl = static_cast<SceneLoaderImpl *>(self->handle);
+    return load_scene_recursive(impl, path, KE_ENTITY_INVALID, nullptr, nullptr, nullptr);
 }
 
 void impl_destroy(ke_scene_loader *self)
@@ -263,6 +364,7 @@ extern "C" ke_result ke_scene_loader_create(
     struct ke_world        *world,
     ke_scene_tree          *tree,
     ke_node_type_registry  *registry,
+    const char             *project_root,
     ke_scene_loader       **out_loader)
 {
     if (!alloc || !world || !tree || !registry || !out_loader)
@@ -271,10 +373,11 @@ extern "C" ke_result ke_scene_loader_create(
     void *mem = alloc->alloc(alloc, sizeof(SceneLoaderImpl), alignof(SceneLoaderImpl));
     if (!mem) return KE_ERROR_OUT_OF_MEMORY;
     auto *impl = new (mem) SceneLoaderImpl();
-    impl->allocator = alloc;
-    impl->world     = world;
-    impl->tree      = tree;
-    impl->registry  = registry;
+    impl->allocator    = alloc;
+    impl->world        = world;
+    impl->tree         = tree;
+    impl->registry     = registry;
+    if (project_root) impl->project_root = project_root;
 
     impl->api.handle  = impl;
     impl->api.load    = impl_load;
