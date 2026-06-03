@@ -29,6 +29,7 @@
          SceneTree). The old "knows only Abstractions" rule was deprecated by the
          2026-06-02 kernel/framework split — see docs/Kanban.md Tier S refinement. -->
     <ProjectReference Include="../KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="../KernelEngine.Framework.Abstractions/KernelEngine.Framework.Abstractions.csproj" />
     <ProjectReference Include="../KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <ProjectReference Include="../KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
   </ItemGroup>
