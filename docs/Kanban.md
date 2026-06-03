@@ -114,7 +114,18 @@ P7/P8 are quality-of-life and cheap. P9 rides on collision events (already in sp
 
 ### Tier S — Scripting ABI / language-agnostic node system (post-beta replatforming)
 
-> **REFINEMENT 2026-06-03 — API ≠ plugin.** Mid-Stage-2 owner caught that bundling impls + factories inside `ke_framework` repeated the same mistake the kernel made (API and default impls in one lib, forcing all-or-nothing). New rule for BOTH kernel and framework layers:
+> **REFINEMENT 2026-06-03 (v2) — single framework plugin.** Walked back the per-concept sub-plugin split as over-engineered. Final shape:
+>
+> - **Contracts live with the kernel's other contracts**: `src/c/kernel/include/kernel_engine/framework/<concept>.h` (node_type_registry, scene_loader, input_actions, resource_cache, scene_tree) + `framework_export.h` with `KE_FRAMEWORK_API` macro.
+> - **One plugin** in `src/cpp/framework/` implements all concepts, one CMakeLists, one lib `ke_framework`, multiple `_create()` factories.
+> - **External deps stay scoped to the plugin** — tomlplusplus added for `ke_input_actions_create`'s parser, lives in plugin's CMakeLists `target_include_directories PRIVATE`. API consumers don't drag the dep.
+> - **Single Framework.rsp** processes all contract headers, libraryPath=`ke_framework`.
+>
+> This mirrors kernel-plugin pattern (`ke_render` contract → `ke_render_bgfx` plugin) but lets the plugin expose multiple factories because framework concepts are independent primitives. The per-concept-flavor-suffix idea from the aborted refinement below applies only if alternate impls of the same concept appear in the future.
+>
+> **Status (807 tests verde):** S2.b NodeTypeRegistry, S6 ResourceCache, S7 SceneTree, S4 InputActions all implemented. Added `kernel_engine/kernel/input/key.h` with named GLFW key constants used by S4. Pending: S3 SceneLoader (same TOML pattern as S4), then C# integration phase across all 4 concepts.
+
+> **ABORTED 2026-06-03 — API ≠ plugin.** Mid-Stage-2 owner caught that bundling impls + factories inside `ke_framework` repeated the same mistake the kernel made (API and default impls in one lib, forcing all-or-nothing). New rule for BOTH kernel and framework layers:
 >
 > - **API layer** `src/c/<layer>/include/...` = vtable contracts only. INTERFACE CMake target — no DLL, just an include path. No factories. No deps.
 > - **Plugin layer** `src/cpp/<layer>/<concept>[/<flavor>]/` = impl + factory + its own deps. One library per concept. Mirrors the existing kernel-plugin pattern (`src/cpp/render/bgfx/`, `src/cpp/window/glfw/`).
