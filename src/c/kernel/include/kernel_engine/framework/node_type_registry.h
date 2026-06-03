@@ -32,10 +32,12 @@ extern "C"
         void *ctx, ke_entity entity, const char *name);
 
     /// Called once per property key/value pair read from the scene file.
-    /// The string pointer in a KE_VARIANT_STRING value is valid only for
-    /// the duration of this call — copy if you need to retain it.
+    /// The variant is passed by pointer (blittable across the ABI to managed
+    /// CLR callbacks); the pointed-to data is valid only for the duration of
+    /// this call. The string pointer in a KE_VARIANT_STRING value is likewise
+    /// transient — copy if you need to retain it.
     typedef ke_result (*ke_node_set_property_func)(
-        void *ctx, ke_entity entity, const char *key, ke_variant value);
+        void *ctx, ke_entity entity, const char *key, const ke_variant *value);
 
     // ── Node type descriptor ─────────────────────────────────────────────────
 
@@ -46,6 +48,13 @@ extern "C"
         ke_node_create_func       create;       // required; must not be NULL
         ke_node_set_property_func set_property; // optional; NULL = no-op
     } ke_node_type;
+
+    /// Called by lookup() when a type name is unknown. The handler is expected
+    /// to register the type via register_type() so the subsequent retry succeeds.
+    /// Returns KE_OK if the type was successfully registered, anything else
+    /// causes lookup() to surface KE_ERROR_NOT_FOUND.
+    typedef ke_result (*ke_node_type_lookup_miss_func)(
+        void *ctx, struct ke_node_type_registry *registry, const char *name);
 
     // ── Registry vtable ──────────────────────────────────────────────────────
 
@@ -60,10 +69,19 @@ extern "C"
         ke_result (*register_type)(struct ke_node_type_registry *self,
                                    const ke_node_type           *type);
 
-        /// Resolves a type by name. Returns KE_ERROR_NOT_FOUND if unknown.
+        /// Resolves a type by name. On miss, fires the registered lookup_miss
+        /// callback (if any) for on-the-fly registration, then retries once.
+        /// Returns KE_ERROR_NOT_FOUND if still unknown.
         ke_result (*lookup)(struct ke_node_type_registry *self,
                             const char                   *name,
                             const ke_node_type          **out_type);
+
+        /// Installs a fallback called by lookup() on a miss. Callers (typically
+        /// language bindings) use this to defer registration until first use,
+        /// avoiding eager scanning of every Node subclass at startup.
+        void (*set_lookup_miss)(struct ke_node_type_registry *self,
+                                ke_node_type_lookup_miss_func fn,
+                                void                         *ctx);
 
         void (*destroy)(struct ke_node_type_registry *self);
     } ke_node_type_registry;

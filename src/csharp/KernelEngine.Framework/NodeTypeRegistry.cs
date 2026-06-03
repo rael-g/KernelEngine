@@ -41,6 +41,9 @@ public sealed unsafe class NodeTypeRegistry : INodeTypeRegistry, IDisposable
 
     private ke_node_type_registry* _native;
 
+    /// <summary>Engine-internal: raw pointer for plugins (scene loader, etc.) that need the C handle.</summary>
+    internal ke_node_type_registry* Native => _native;
+
     // ── Construction ──────────────────────────────────────────────────────────────────────
 
     public NodeTypeRegistry(Allocator allocator)
@@ -112,9 +115,50 @@ public sealed unsafe class NodeTypeRegistry : INodeTypeRegistry, IDisposable
     {
         _fallbackCreate      = tryCreate;
         _fallbackSetProperty = trySetProperty;
+
+        // Bridge to the C plugin's lookup-miss callback so non-managed callers
+        // (ke_scene_loader, future Lua binding) also benefit from on-demand resolution.
+        var selfHandle = GCHandle.Alloc(this);
+        _handles.Add(selfHandle);
+        _native->set_lookup_miss(_native, &NativeLookupMiss, (void*)GCHandle.ToIntPtr(selfHandle));
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static ke_result NativeLookupMiss(void* ctx, void* registry, sbyte* name)
+    {
+        try
+        {
+            var self    = (NodeTypeRegistry)GCHandle.FromIntPtr((nint)ctx).Target!;
+            var typeStr = Marshal.PtrToStringUTF8((nint)name);
+            if (typeStr is null || self._fallbackCreate is null || self._fallbackSetProperty is null)
+                return ke_result.KE_ERROR_NOT_FOUND;
+
+            // Register an on-the-fly entry that forwards to the fallback delegates.
+            var fallbackCreate      = self._fallbackCreate;
+            var fallbackSetProperty = self._fallbackSetProperty;
+            string captured         = typeStr;
+
+            self.Register(typeStr,
+                create: (entity, n) =>
+                {
+                    if (!fallbackCreate(captured, entity, n))
+                        throw new InvalidDataException($"Node type '{captured}' could not be resolved.");
+                },
+                setProperty: (entity, key, value) => fallbackSetProperty(captured, entity, key, value));
+            return ke_result.KE_OK;
+        }
+        catch { return ke_result.KE_ERROR; }
     }
 
     // ── Trampolines (for C / Lua / C++ callers that go through the native vtable) ─────────
+
+    /// <summary>
+    /// Captures a managed exception thrown inside a native trampoline so the calling C# code
+    /// (typically <see cref="NativeSceneLoader.Load"/>) can rethrow it after the native call
+    /// unwinds. <c>[UnmanagedCallersOnly]</c> methods are not allowed to let exceptions cross
+    /// the ABI; we surface them out-of-band instead.
+    /// </summary>
+    [ThreadStatic] internal static Exception? PendingTrampolineException;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_result NativeCreate(void* ctx, ulong entity, sbyte* name)
@@ -126,22 +170,30 @@ public sealed unsafe class NodeTypeRegistry : INodeTypeRegistry, IDisposable
             entry.Create(entity, nameStr);
             return ke_result.KE_OK;
         }
-        catch { return ke_result.KE_ERROR; }
+        catch (Exception ex)
+        {
+            PendingTrampolineException ??= ex;
+            return ke_result.KE_ERROR;
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result NativeSetProperty(void* ctx, ulong entity, sbyte* key, ke_variant value)
+    private static ke_result NativeSetProperty(void* ctx, ulong entity, sbyte* key, ke_variant* value)
     {
         try
         {
             var entry  = (TypeEntry)GCHandle.FromIntPtr((nint)ctx).Target!;
             var keyStr = Marshal.PtrToStringUTF8((nint)key);
-            if (keyStr is null) return ke_result.KE_ERROR_INVALID_ARGUMENT;
-            var managed = VariantToObject(value);
+            if (keyStr is null || value is null) return ke_result.KE_ERROR_INVALID_ARGUMENT;
+            var managed = VariantToObject(*value);
             entry.SetProperty(entity, keyStr, managed);
             return ke_result.KE_OK;
         }
-        catch { return ke_result.KE_ERROR; }
+        catch (Exception ex)
+        {
+            PendingTrampolineException ??= ex;
+            return ke_result.KE_ERROR;
+        }
     }
 
     // Converts ke_variant to a generic managed object. No type knowledge — the receiver

@@ -55,15 +55,15 @@ static ke_result RecordCreate(void *ctx, ke_entity e, const char *name)
     return KE_OK;
 }
 
-static ke_result RecordSetProperty(void *ctx, ke_entity e, const char *key, ke_variant v)
+static ke_result RecordSetProperty(void *ctx, ke_entity e, const char *key, const ke_variant *v)
 {
     auto *r = static_cast<Recorder *>(ctx);
     RecordedProperty rec;
     rec.entity = e;
     rec.key    = key ? std::string(key) : std::string();
-    rec.value  = v;
-    if (v.type == KE_VARIANT_STRING && v.s) {
-        rec.string_copy = v.s;
+    rec.value  = *v;
+    if (v->type == KE_VARIANT_STRING && v->s) {
+        rec.string_copy = v->s;
         rec.value.s     = nullptr; // mark: use string_copy
     }
     r->sets.push_back(std::move(rec));

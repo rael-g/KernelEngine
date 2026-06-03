@@ -185,7 +185,7 @@ void apply_overrides(SceneLoaderImpl *impl, ke_entity entity,
             ke_variant val = toml_to_variant(v);
             if (node_type && node_type->set_property) {
                 node_type->set_property(node_type->ctx, entity,
-                                        std::string(k.str()).c_str(), val);
+                                        std::string(k.str()).c_str(), &val);
             }
         }
     }
@@ -276,14 +276,15 @@ ke_result process_node(SceneLoaderImpl *impl, const fs::path &base_dir,
         !node_type || !node_type->create) {
         return KE_ERROR_NOT_FOUND;
     }
-    node_type->create(node_type->ctx, entity, effective_name.c_str());
+    if (node_type->create(node_type->ctx, entity, effective_name.c_str()) != KE_OK)
+        return KE_ERROR_NOT_FOUND;
 
     if (auto props = node_tbl["properties"].as_table()) {
         for (auto &&[k, v] : *props) {
             ke_variant val = toml_to_variant(v);
             if (node_type->set_property) {
                 node_type->set_property(node_type->ctx, entity,
-                                        std::string(k.str()).c_str(), val);
+                                        std::string(k.str()).c_str(), &val);
             }
         }
     }

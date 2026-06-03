@@ -8,9 +8,11 @@
 
 typedef struct ke_node_type_registry_impl
 {
-    ke_node_type_registry api;
-    ke_allocator         *allocator;
-    ke_hash_map           map; // uint64_t(hash of name) → ke_node_type*
+    ke_node_type_registry          api;
+    ke_allocator                  *allocator;
+    ke_hash_map                    map; // uint64_t(hash of name) → ke_node_type*
+    ke_node_type_lookup_miss_func  miss_fn;
+    void                          *miss_ctx;
 } ke_node_type_registry_impl;
 
 // ── vtable implementations ────────────────────────────────────────────────────
@@ -48,10 +50,26 @@ static ke_result registry_lookup(ke_node_type_registry *self,
     ke_node_type_registry_impl *impl = (ke_node_type_registry_impl *)self->handle;
     uint64_t key = ke_hash_string(name);
     ke_node_type *found = (ke_node_type *)ke_hash_map_get(&impl->map, key);
+    if (!found && impl->miss_fn) {
+        // Fire fallback — callee is expected to register the type, then we re-lookup once.
+        if (impl->miss_fn(impl->miss_ctx, self, name) == KE_OK) {
+            found = (ke_node_type *)ke_hash_map_get(&impl->map, key);
+        }
+    }
     if (!found) return KE_ERROR_NOT_FOUND;
 
     *out_type = found;
     return KE_OK;
+}
+
+static void registry_set_lookup_miss(ke_node_type_registry         *self,
+                                      ke_node_type_lookup_miss_func fn,
+                                      void                         *ctx)
+{
+    if (!self) return;
+    ke_node_type_registry_impl *impl = (ke_node_type_registry_impl *)self->handle;
+    impl->miss_fn  = fn;
+    impl->miss_ctx = ctx;
 }
 
 static void registry_destroy(ke_node_type_registry *self)
@@ -91,10 +109,11 @@ ke_result ke_node_type_registry_create(ke_allocator           *alloc,
         return res;
     }
 
-    impl->api.handle         = impl;
-    impl->api.register_type  = registry_register_type;
-    impl->api.lookup          = registry_lookup;
-    impl->api.destroy         = registry_destroy;
+    impl->api.handle           = impl;
+    impl->api.register_type    = registry_register_type;
+    impl->api.lookup           = registry_lookup;
+    impl->api.set_lookup_miss  = registry_set_lookup_miss;
+    impl->api.destroy          = registry_destroy;
 
     *out_registry = &impl->api;
     return KE_OK;

@@ -11,5 +11,5 @@ public unsafe partial struct ke_node_type
     public delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, ke_result> create;
 
     [NativeTypeName("ke_node_set_property_func")]
-    public delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, ke_variant, ke_result> set_property;
+    public delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, ke_variant*, ke_result> set_property;
 }

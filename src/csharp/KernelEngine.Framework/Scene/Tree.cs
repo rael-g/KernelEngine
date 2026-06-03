@@ -39,6 +39,10 @@ public sealed unsafe class Tree : ISceneTree, IDisposable
 
     public void Dispose() => _native.Dispose();
 
+    internal NativeSceneTree    NativeWrapper    => _native;
+    internal IWorld             World            => _world;
+    internal INodeTypeRegistry? NodeTypeRegistry => _nodeTypeRegistry;
+
     private void AttachTransform(ulong entity)
     {
         var reg = _world.Registry;

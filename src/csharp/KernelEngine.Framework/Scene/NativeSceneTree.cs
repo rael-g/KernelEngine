@@ -33,6 +33,9 @@ internal sealed unsafe class NativeSceneTree : IDisposable
 
     public ulong Root => _native->root(_native);
 
+    /// <summary>Engine-internal: raw pointer for plugins (scene loader, etc.).</summary>
+    internal ke_scene_tree* NativePtr => _native;
+
     public ulong FindNode(string nameOrPath)
     {
         var bytes = Encoding.UTF8.GetBytes(nameOrPath + "\0");
