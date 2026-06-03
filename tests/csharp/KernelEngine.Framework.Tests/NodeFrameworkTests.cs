@@ -68,7 +68,9 @@ public class NodeFrameworkTests
             new("Sub1", null!, null!),
             new("Sub2", null!, null!)
         };
-        var model = new Model(meshes, new List<Material>(), new List<Texture>());
+        using var cache = new NativeResourceCache(allocator);
+        uint h = cache.RegisterComposite(() => { });
+        var model = new Model(cache, h, meshes);
 
         var root = Tree.Add(model, "MyModel");
 

@@ -153,7 +153,13 @@ public class NodeTypeRegistrarTests
     public void ResolveResource_Primitives_Work()
     {
         var rf = Substitute.For<IResourceFactory>();
-        var rm = new ResourceManager(rf);
+        // Mock distinct handles per call so the native cache doesn't reject duplicates.
+        uint nextHandle = 1;
+        rf.CreateMesh(Arg.Any<Vertex[]>(), Arg.Any<ushort[]>())
+          .Returns(_ => new MeshHandle(nextHandle++));
+        using var allocator = new MallocAllocator();
+        using var cache = new NativeResourceCache(allocator);
+        var rm = new ResourceManager(rf, cache);
         var node = new MultiPropertyNode();
         
         NodeTypeRegistrar.ApplyProperty(node, "Mesh", "res://primitives/cube", rm);
@@ -173,7 +179,9 @@ public class NodeTypeRegistrarTests
     public void BuildInlineMaterial_Works()
     {
         var rf = Substitute.For<IResourceFactory>();
-        var rm = new ResourceManager(rf);
+        using var allocator = new MallocAllocator();
+        using var cache = new NativeResourceCache(allocator);
+        var rm = new ResourceManager(rf, cache);
         var node = new MultiPropertyNode();
         
         var matTable = new TomlTable { 

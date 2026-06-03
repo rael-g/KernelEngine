@@ -8,21 +8,28 @@ namespace KernelEngine.Framework.Tests;
 
 public class LabelRenderSystemTests
 {
+    private NativeResourceCache? _cache;
+    private MallocAllocator? _allocator;
+
     private Font CreateMockFont(GlyphMetrics[] glyphs)
     {
-        var factory = Substitute.For<IResourceFactory>();
+        _allocator ??= new MallocAllocator();
+        _cache ??= new NativeResourceCache(_allocator);
+        // Register the synthetic handle so subsequent Retain/Release in the Label lifecycle
+        // resolve cleanly in the native cache.
+        _cache.RegisterResource(1u, () => { });
         var texture = (Texture)Activator.CreateInstance(
-            typeof(Texture), 
-            BindingFlags.NonPublic | BindingFlags.Instance, 
-            null, 
-            new object[] { factory, new TextureHandle(1) }, 
+            typeof(Texture),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            null,
+            new object[] { _cache, new TextureHandle(1) },
             null)!;
 
         return (Font)Activator.CreateInstance(
-            typeof(Font), 
-            BindingFlags.NonPublic | BindingFlags.Instance, 
-            null, 
-            new object[] { texture, glyphs, 16f, 10f }, 
+            typeof(Font),
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            null,
+            new object[] { texture, glyphs, 16f, 10f },
             null)!;
     }
 

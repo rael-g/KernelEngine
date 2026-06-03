@@ -70,6 +70,7 @@ public class Application : IDisposable
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
     private readonly List<InputActionEvent> _actionEventBuffer = new(32);
+    private NativeResourceCache? _resourceCache;
     private ISceneTree? _sceneTree;
 
     private System.Numerics.Vector4? _projectClearColor;
@@ -243,14 +244,15 @@ public class Application : IDisposable
                 if (_cts.IsCancellationRequested) return;
 
                 var factory = _resourceQueue.CreateFactory();
-                Resources = new ResourceManager(factory);
+                _resourceCache = new NativeResourceCache(new MallocAllocator());
+                Resources = new ResourceManager(factory, _resourceCache);
                 // Give Tree access to ResourceManager for resource properties in auto-registration.
                 Tree.SetResourceManager(Resources);
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
                 if (modelLoader != null || imageLoader != null || fontLoader != null)
-                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources);
+                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _resourceCache);
 
                 // Scene tree — Framework's Tree implements ISceneTree directly (S7).
                 _sceneTree = Tree;

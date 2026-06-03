@@ -131,7 +131,8 @@ Mesh = ""res://primitives/cube""
             using var world = new World(allocator);
             var tree = new Tree(world);
             var rf = Substitute.For<IResourceFactory>();
-            var rm = new ResourceManager(rf);
+            using var cache = new NativeResourceCache(allocator);
+            var rm = new ResourceManager(rf, cache);
 
             await SceneLoader.LoadAsync(tree, path, rm);
             
@@ -246,7 +247,8 @@ metallic = 0.8
             using var world = new World(allocator);
             var tree = new Tree(world);
             var rf = Substitute.For<IResourceFactory>();
-            var rm = new ResourceManager(rf);
+            using var cache = new NativeResourceCache(allocator);
+            var rm = new ResourceManager(rf, cache);
 
             await SceneLoader.LoadAsync(tree, path, rm);
             

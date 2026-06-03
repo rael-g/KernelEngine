@@ -8,16 +8,11 @@ namespace KernelEngine.Framework;
 /// </summary>
 public sealed class Material : Resource
 {
-    private readonly IResourceFactory _factory;
-
     /// <summary>The underlying GPU handle (engine-internal — read by render systems).</summary>
     internal MaterialHandle Handle { get; }
 
-    internal Material(IResourceFactory factory, MaterialHandle handle)
+    internal Material(NativeResourceCache cache, MaterialHandle handle) : base(cache, handle.Value)
     {
-        _factory = factory;
         Handle = handle;
     }
-
-    protected override void DestroyNative() => _factory.DestroyMaterial(Handle);
 }
