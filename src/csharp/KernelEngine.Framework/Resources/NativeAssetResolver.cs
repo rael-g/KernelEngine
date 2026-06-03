@@ -35,6 +35,38 @@ internal sealed unsafe class NativeAssetResolver : IDisposable
     }
 
     /// <summary>
+    /// Resolves an image path (res:// or absolute) to a managed pixel buffer. Returns null
+    /// when the resolver returns NOT_FOUND (no image loader, missing file, unsupported ext).
+    /// </summary>
+    public TextureBuffer? ResolveTexture(string path)
+    {
+        var bytes = Encoding.UTF8.GetBytes(path + "\0");
+        KernelEngine.Framework.Native.ke_texture_data* data;
+        ke_result r;
+        fixed (byte* p = bytes)
+        {
+            r = _native->resolve_texture(_native, (sbyte*)p, &data);
+        }
+        if (r == ke_result.KE_ERROR_NOT_FOUND) return null;
+        KernelException.ThrowIfFailed(r.ToManaged());
+        if (data == null) return null;
+
+        try
+        {
+            uint w = data->width;
+            uint h = data->height;
+            int  byteCount = checked((int)(w * h * 4));
+            var  pixels = new byte[byteCount];
+            new ReadOnlySpan<byte>(data->pixels, byteCount).CopyTo(pixels);
+            return new TextureBuffer(w, h, pixels);
+        }
+        finally
+        {
+            _native->free_texture(_native, data);
+        }
+    }
+
+    /// <summary>
     /// Bakes a mesh primitive (<c>res://primitives/{quad|plane|cube|sphere}</c>) into a
     /// freshly-allocated CPU buffer pair. Returns null when the resolver returns NOT_FOUND.
     /// </summary>
@@ -117,6 +149,9 @@ internal sealed unsafe class NativeAssetResolver : IDisposable
         }
     }
 }
+
+/// <summary>Decoded RGBA8 pixel buffer plus its dimensions, owned by the caller.</summary>
+public sealed record TextureBuffer(uint Width, uint Height, byte[] Pixels);
 
 /// <summary>
 /// Managed projection of <c>ke_material_spec</c>: PBR parameters plus res:// paths for

@@ -252,9 +252,6 @@ public class Application : IDisposable
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
-                if (modelLoader != null || imageLoader != null || fontLoader != null)
-                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _resourceCache);
-
                 // Asset resolver: maps res:// + absolute paths to typed CPU-side data via the
                 // native ke_asset_resolver plugin. The injected image loader pointer comes from
                 // whichever IImageLoader plugin exposes INativeImageLoader; the C plugin never
@@ -267,6 +264,9 @@ public class Application : IDisposable
                                                              AppContext.BaseDirectory);
                 }
                 NodeTypeRegistrar.ActiveAssetResolver = _assetResolver;
+
+                if (modelLoader != null || imageLoader != null || fontLoader != null)
+                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _resourceCache, _assetResolver);
 
                 // Scene tree — Framework's Tree implements ISceneTree directly (S7).
                 _sceneTree = Tree;

@@ -16,18 +16,21 @@ public sealed class Assets
     private readonly IFontLoader?  _fontLoader;
     private readonly ResourceManager _resources;
     private readonly NativeResourceCache _cache;
+    private readonly NativeAssetResolver? _resolver;
 
     internal Assets(IAssetLoader? modelLoader,
                     IImageLoader? imageLoader,
                     IFontLoader?  fontLoader,
                     ResourceManager resources,
-                    NativeResourceCache cache)
+                    NativeResourceCache cache,
+                    NativeAssetResolver? resolver = null)
     {
         _modelLoader = modelLoader;
         _imageLoader = imageLoader;
         _fontLoader  = fontLoader;
         _resources   = resources;
         _cache       = cache;
+        _resolver    = resolver;
     }
 
     /// <summary>
@@ -102,14 +105,30 @@ public sealed class Assets
 
     public async Task<Texture> LoadTextureAsync(string path)
     {
-        if (_imageLoader == null) throw new InvalidOperationException("No IImageLoader registered — call AddStbImageLoader() (or equivalent) in your service collection.");
-
         if (_cache.TryGetCached(path, out var cachedHandle))
             return new Texture(_cache, new TextureHandle(cachedHandle));
 
-        using var img = await _imageLoader.LoadImageAsync(path);
-        var pixels = img.Pixels.ToArray();
-        var texture = await _resources.CreateTextureAsync(img.Width, img.Height, pixels);
+        // Preferred path: native ke_asset_resolver decodes via the injected ke_image_loader.
+        // Falls back to the managed IImageLoader when no resolver is wired (test/legacy paths).
+        TextureBuffer buffer;
+        if (_resolver is not null)
+        {
+            var resolved = await Task.Run(() => _resolver.ResolveTexture(path))
+                ?? throw new FileNotFoundException($"Texture not resolvable: {path}", path);
+            buffer = resolved;
+        }
+        else if (_imageLoader is not null)
+        {
+            using var img = await _imageLoader.LoadImageAsync(path);
+            buffer = new TextureBuffer(img.Width, img.Height, img.Pixels.ToArray());
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                "No image source registered — wire ke_asset_resolver via Application or register an IImageLoader.");
+        }
+
+        var texture = await _resources.CreateTextureAsync(buffer.Width, buffer.Height, buffer.Pixels);
         _cache.CacheInsert(path, texture.RawHandle);
         return texture;
     }
