@@ -12,6 +12,7 @@ add_executable(test_ke_kernel
     test_resource_cache.cpp
     test_scene_tree.cpp
     test_input_actions.cpp
+    test_scene_loader.cpp
     test_dev_platform.cpp
 )
 

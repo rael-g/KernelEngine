@@ -6,6 +6,7 @@ add_library(ke_framework
     src/resource_cache.c
     src/scene_tree.c
     src/input_actions.cpp
+    src/scene_loader.cpp
 )
 
 target_include_directories(ke_framework PRIVATE ${TOMLPLUSPLUS_INCLUDE_DIRS})
