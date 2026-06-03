@@ -152,7 +152,11 @@ public class Application : IDisposable
         ActiveWorld ??= _kernelFactory.CreateWorld(Allocator);
 
         _inputBuffer   = new InputBuffer();
-        _resourceQueue = new ResourceCommandQueue(_kernelFactory);
+        // NativeResourceQueue needs a concrete kernel Allocator (native pointer). When the
+        // application root allocator is a non-concrete proxy (tests, mocks), fall back to a
+        // private MallocAllocator owned by the queue itself.
+        var queueAllocator = Allocator as KernelEngine.Kernel.Allocator ?? new KernelEngine.Kernel.MallocAllocator();
+        _resourceQueue = new NativeResourceQueue(queueAllocator);
 
         InitializeSystems();
 

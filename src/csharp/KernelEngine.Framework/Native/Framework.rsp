@@ -16,6 +16,8 @@ ke_framework
 ../../../c/kernel/include/kernel_engine/framework/material_file.h
 ../../../c/kernel/include/kernel_engine/framework/asset_resolver.h
 ../../../c/kernel/include/kernel_engine/framework/resource_queue.h
+../../../c/kernel/include/kernel_engine/kernel/render/mesh.h
+../../../c/kernel/include/kernel_engine/kernel/render/material.h
 ../../../c/kernel/include/kernel_engine/kernel/asset/image_loader.h
 ../../../c/kernel/include/kernel_engine/kernel/asset/mesh_data.h
 --methodClassName
