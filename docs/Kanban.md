@@ -114,6 +114,17 @@ P7/P8 are quality-of-life and cheap. P9 rides on collision events (already in sp
 
 ### Tier S — Scripting ABI / language-agnostic node system (post-beta replatforming)
 
+> **REFINEMENT 2026-06-03 — API ≠ plugin.** Mid-Stage-2 owner caught that bundling impls + factories inside `ke_framework` repeated the same mistake the kernel made (API and default impls in one lib, forcing all-or-nothing). New rule for BOTH kernel and framework layers:
+>
+> - **API layer** `src/c/<layer>/include/...` = vtable contracts only. INTERFACE CMake target — no DLL, just an include path. No factories. No deps.
+> - **Plugin layer** `src/cpp/<layer>/<concept>[/<flavor>]/` = impl + factory + its own deps. One library per concept. Mirrors the existing kernel-plugin pattern (`src/cpp/render/bgfx/`, `src/cpp/window/glfw/`).
+>
+> **Factory naming:** pure-logic plugin = bare `ke_<concept>_create()` in `src/cpp/framework/<concept>/`. Dep-bound plugin = suffix `ke_<concept>_<flavor>_create()` in `src/cpp/framework/<concept>/<flavor>/` where flavor names the dep that justifies it (`ke_input_actions_toml_create`, `ke_render_bgfx_create`, etc.). Factory header lives in plugin's `include/kernel_engine/framework/<concept>[_<flavor>]_create.h`.
+>
+> **Status:** `ke_framework` is now INTERFACE (header-only). Plugins shipped: `node_type_registry`, `resource_cache`, `scene_tree`. `NativeDependencies.targets` accepts `<NativeDep Include="ke_xxx">` lists. Next plugin: `input_actions/toml/` (S4 with tomlplusplus via vcpkg — the TOML dep stays scoped to that plugin, API layer remains pristine).
+>
+> **Same doctrine applies to the kernel** (Tier K3 north star "kernel = mostly headers"): `ke_kernel` should also become headers-only with impls in plugins. Deferred until framework migration completes.
+
 > **REFINEMENT 2026-06-02 — kernel vs framework split.** Owner pushed back on "promote to kernel": it conflated ABI-commitment with cross-language reuse, and would drag asset cache + scene tree + scene loader + input actions into the kernel where they don't belong (they're framework-level concerns built on TOP of kernel primitives). New structure introduces a parallel layer `src/c/framework/`:
 >
 > - `src/c/kernel/` keeps only kernel primitives (allocator, logger, ECS storage, threading semaphores, render/window/audio/scheduler contracts, frame packet). No policy. Pure C ABI, pure C impl.
