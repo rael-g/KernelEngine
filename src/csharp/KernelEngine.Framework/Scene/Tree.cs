@@ -10,13 +10,14 @@ namespace KernelEngine.Framework;
 /// Node/Tree are framework-level concepts; the ECS world itself knows only
 /// entities, components, and systems.
 /// </summary>
-public sealed class Tree : ISceneTree
+public sealed unsafe class Tree : ISceneTree, IDisposable
 {
     private readonly IWorld              _world;
     private readonly Node                _root;
     private readonly INodeTypeRegistry?  _nodeTypeRegistry;
     private readonly IServiceProvider?   _services;
     private ResourceManager?             _resources; // set after ResourceManager is created
+    private readonly NativeSceneTree     _native;
 
     private readonly HashSet<Type> _registeredTypes = [];
 
@@ -27,8 +28,31 @@ public sealed class Tree : ISceneTree
         _world            = world;
         _nodeTypeRegistry = nodeTypeRegistry;
         _services         = services;
-        var rootEntity    = CreateEntityWithHierarchy("Root", KE_ENTITY_INVALID);
+        // The native scene tree owns the root entity (creates it with Hierarchy+Name
+        // components). C# Tree only adds Transform on top, then wraps in a Node.
+        var worldNative   = ((World)world).Native;
+        _native           = new NativeSceneTree(worldNative, new MallocAllocator());
+        var rootEntity    = _native.Root;
+        AttachTransform(rootEntity);
         _root             = new Node(rootEntity, world, "Root");
+    }
+
+    public void Dispose() => _native.Dispose();
+
+    private void AttachTransform(ulong entity)
+    {
+        var reg = _world.Registry;
+        if (reg.GetComponent<TransformComponent>(entity, _world.TransformComponentId).IsEmpty)
+        {
+            var t = reg.AddComponent<TransformComponent>(entity, _world.TransformComponentId);
+            t[0] = new TransformComponent
+            {
+                Position    = Vector3.Zero,
+                Rotation    = Quaternion.Identity,
+                Scale       = Vector3.One,
+                WorldMatrix = Matrix4x4.Identity,
+            };
+        }
     }
 
     /// <summary>
@@ -54,19 +78,8 @@ public sealed class Tree : ISceneTree
     public Node? FindNode(string nameOrPath)
     {
         if (string.IsNullOrEmpty(nameOrPath)) return null;
-        if (nameOrPath.Contains('/')) return _root.GetNode(nameOrPath);
-        return FindRecursive(_root, nameOrPath);
-
-        static Node? FindRecursive(Node node, string name)
-        {
-            for (var c = node.FirstChild; c != null; c = c.NextSibling)
-            {
-                if (c.Name == name) return c;
-                var found = FindRecursive(c, name);
-                if (found != null) return found;
-            }
-            return null;
-        }
+        ulong entity = _native.FindNode(nameOrPath);
+        return entity == KE_ENTITY_INVALID ? null : Node.FromEntity(entity);
     }
 
     /// <summary>Typed convenience over <see cref="FindNode(string)"/>.</summary>
@@ -210,8 +223,15 @@ public sealed class Tree : ISceneTree
     public void DestroyNode(Node node)
     {
         TickDestroyRecursive(node);
+        UnregisterNodesRecursive(node);
+        _native.DestroyNode(node.Entity);
+    }
+
+    private static void UnregisterNodesRecursive(Node node)
+    {
+        for (var c = node.FirstChild; c != null; c = c.NextSibling)
+            UnregisterNodesRecursive(c);
         Node.Unregister(node.Entity);
-        DestroyEntityRecursive(node.Entity);
     }
 
     /// <summary>
@@ -300,45 +320,6 @@ public sealed class Tree : ISceneTree
         }
 
         return entity;
-    }
-
-    /// <summary>Recursively destroys an entity and all its descendants, unlinking from parent.</summary>
-    private void DestroyEntityRecursive(ulong entity)
-    {
-        var reg = _world.Registry;
-        var h   = reg.GetComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        if (h.IsEmpty) return;
-
-        // Destroy children first (depth-first)
-        var child = h[0].FirstChild;
-        while (child != KE_ENTITY_INVALID)
-        {
-            var ch   = reg.GetComponent<HierarchyComponent>(child, _world.HierarchyComponentId);
-            var next = !ch.IsEmpty ? ch[0].NextSibling : KE_ENTITY_INVALID;
-            DestroyEntityRecursive(child);
-            child = next;
-        }
-
-        // Unlink from parent's child list
-        if (h[0].Parent != KE_ENTITY_INVALID)
-        {
-            var ph = reg.GetComponent<HierarchyComponent>(h[0].Parent, _world.HierarchyComponentId);
-            if (!ph.IsEmpty && ph[0].FirstChild == entity)
-                ph[0].FirstChild = h[0].NextSibling;
-
-            if (h[0].PrevSibling != KE_ENTITY_INVALID)
-            {
-                var ps = reg.GetComponent<HierarchyComponent>(h[0].PrevSibling, _world.HierarchyComponentId);
-                if (!ps.IsEmpty) ps[0].NextSibling = h[0].NextSibling;
-            }
-            if (h[0].NextSibling != KE_ENTITY_INVALID)
-            {
-                var ns = reg.GetComponent<HierarchyComponent>(h[0].NextSibling, _world.HierarchyComponentId);
-                if (!ns.IsEmpty) ns[0].PrevSibling = h[0].PrevSibling;
-            }
-        }
-
-        reg.DestroyEntity(entity);
     }
 
     private static void SetName(ref NameComponent comp, string name)
