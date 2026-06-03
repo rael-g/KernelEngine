@@ -307,6 +307,86 @@ ke_result impl_load(ke_input_actions *self, const char *path)
     return KE_OK;
 }
 
+// ── vtable: programmatic registration ───────────────────────────────────────
+
+int32_t impl_add_action(ke_input_actions *self, const char *name, ke_action_type type)
+{
+    if (!self || !self->handle || !name || !*name) return -1;
+    auto *impl = static_cast<InputActionsImpl *>(self->handle);
+    if (impl->name_to_id.count(name)) return -1;
+
+    Action act;
+    act.name = name;
+    act.type = type;
+    int32_t id = static_cast<int32_t>(impl->actions.size());
+    impl->actions.push_back(std::move(act));
+    impl->name_to_id[impl->actions.back().name] = id;
+    return id;
+}
+
+Action *get_action_mut(InputActionsImpl *impl, int32_t id)
+{
+    if (id < 0 || id >= static_cast<int32_t>(impl->actions.size())) return nullptr;
+    return &impl->actions[id];
+}
+
+ke_result impl_bind_key(ke_input_actions *self, int32_t action_id, ke_key key)
+{
+    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    auto *impl = static_cast<InputActionsImpl *>(self->handle);
+    Action *a = get_action_mut(impl, action_id);
+    if (!a) return KE_ERROR_NOT_FOUND;
+    Binding b;
+    b.kind = BindingKind::Key;
+    b.k0   = static_cast<int>(key);
+    a->bindings.push_back(b);
+    return KE_OK;
+}
+
+ke_result impl_bind_mouse_button(ke_input_actions *self, int32_t action_id, ke_mouse_button button)
+{
+    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    auto *impl = static_cast<InputActionsImpl *>(self->handle);
+    Action *a = get_action_mut(impl, action_id);
+    if (!a) return KE_ERROR_NOT_FOUND;
+    Binding b;
+    b.kind = BindingKind::MouseButton;
+    b.k0   = static_cast<int>(button);
+    a->bindings.push_back(b);
+    return KE_OK;
+}
+
+ke_result impl_bind_key_pair(ke_input_actions *self, int32_t action_id, ke_key negative, ke_key positive)
+{
+    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    auto *impl = static_cast<InputActionsImpl *>(self->handle);
+    Action *a = get_action_mut(impl, action_id);
+    if (!a) return KE_ERROR_NOT_FOUND;
+    Binding b;
+    b.kind = BindingKind::KeyPair;
+    b.k0   = static_cast<int>(negative);
+    b.k1   = static_cast<int>(positive);
+    a->bindings.push_back(b);
+    return KE_OK;
+}
+
+ke_result impl_bind_key_quad(ke_input_actions *self, int32_t action_id,
+                              ke_key up, ke_key down, ke_key left, ke_key right)
+{
+    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    auto *impl = static_cast<InputActionsImpl *>(self->handle);
+    Action *a = get_action_mut(impl, action_id);
+    if (!a) return KE_ERROR_NOT_FOUND;
+    Binding b;
+    b.kind = BindingKind::KeyQuad;
+    b.k0   = static_cast<int>(up);
+    b.k1   = static_cast<int>(down);
+    b.k2   = static_cast<int>(left);
+    b.k3   = static_cast<int>(right);
+    a->bindings.push_back(b);
+    return KE_OK;
+}
+
 // ── vtable: get_action_id ────────────────────────────────────────────────────
 
 int32_t impl_get_action_id(ke_input_actions *self, const char *name)
@@ -452,6 +532,11 @@ extern "C" ke_result ke_input_actions_create(ke_allocator *alloc, ke_input_actio
     impl->api.handle              = impl;
     impl->api.load                = impl_load;
     impl->api.get_action_id       = impl_get_action_id;
+    impl->api.add_action          = impl_add_action;
+    impl->api.bind_key             = impl_bind_key;
+    impl->api.bind_mouse_button    = impl_bind_mouse_button;
+    impl->api.bind_key_pair        = impl_bind_key_pair;
+    impl->api.bind_key_quad        = impl_bind_key_quad;
     impl->api.evaluate            = impl_evaluate;
     impl->api.is_action_down      = impl_is_action_down;
     impl->api.was_action_pressed  = impl_was_action_pressed;
