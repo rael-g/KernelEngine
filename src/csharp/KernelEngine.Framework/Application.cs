@@ -24,7 +24,6 @@ public class Application : IDisposable
     public IWindow Window { get; private set; } = null!;
     public IRenderer Renderer { get; private set; } = null!;
     public IInput? Input { get; private set; }
-    public IDevPlatform? DevPlatform { get; private set; }
 
     private IKernelFactory _kernelFactory = null!;
     private IProxyAllocator? _proxyAllocator;
@@ -101,10 +100,16 @@ public class Application : IDisposable
     }
 
     /// <summary>
-    /// Asks <see cref="DevPlatform"/> (when available) to publish the current thread's name to the OS,
-    /// making it visible in debuggers and profilers. No-op when DevPlatform is not registered.
+    /// Sets the calling thread's name on both the kernel-side TLS (for ke_thread_assert_current
+    /// from C plugins) and on the .NET runtime side (which since .NET 6 propagates the name to
+    /// the OS — Win32 SetThreadDescription / pthread_setname_np — making it visible in
+    /// debuggers and profilers).
     /// </summary>
-    private void SetOsThreadName(string name) => DevPlatform?.SetOsThreadName(name);
+    private static void SetThreadName(string name)
+    {
+        System.Threading.Thread.CurrentThread.Name = name;
+        KernelEngine.Kernel.KernelThread.SetCurrentName(name);
+    }
 
     public void Run(IServiceCollection serviceCollection)
     {
@@ -143,7 +148,6 @@ public class Application : IDisposable
         Window      = Services.GetRequiredService<IWindow>();
         Input       = Services.GetService<IInput>();
         Renderer    = Services.GetRequiredService<IRenderer>();
-        DevPlatform = Services.GetService<IDevPlatform>(); // optional dev-only diagnostics
 
         ActiveWorld ??= _kernelFactory.CreateWorld(Allocator);
 
@@ -162,12 +166,13 @@ public class Application : IDisposable
         Exception? renderException = null;
         Exception? simException    = null;
 
-        // OS-visible name for ke.main (TLS name was set at the top via SetCurrentName).
-        SetOsThreadName("ke.main");
+        // ke.main: kernel TLS + .NET name (which propagates to the OS on .NET 6+).
+        SetThreadName("ke.main");
 
         // ke.render: owns every renderer API call for the lifetime of the app.
-        using var renderThread = _kernelFactory.CreateThread(Allocator, "ke.render", DevPlatform, () =>
+        var renderThread = new System.Threading.Thread(() =>
         {
+            SetThreadName("ke.render");
             try
             {
                 Logger?.Info("Application", "ke.render: initializing renderer");
@@ -234,11 +239,13 @@ public class Application : IDisposable
             {
                 Renderer.Dispose();
             }
-        });
+        }) { Name = "ke.render", IsBackground = false };
+        renderThread.Start();
 
         // ke.sim: drives the world and records into FramePackets.
-        using var simThread = _kernelFactory.CreateThread(Allocator, "ke.sim", DevPlatform, () =>
+        var simThread = new System.Threading.Thread(() =>
         {
+            SetThreadName("ke.sim");
             try
             {
                 renderReady.Wait(); // wait for ke.render to finish Initialize()
@@ -368,7 +375,8 @@ public class Application : IDisposable
                 // Signal ke.render to exit BeginRead if it's waiting (poison pill)
                 try { var p = frameSync.BeginWrite(); p.EndWrite(); } catch { }
             }
-        });
+        }) { Name = "ke.sim", IsBackground = false };
+        simThread.Start();
 
         NativeExceptionFilter.Register(Logger);
 

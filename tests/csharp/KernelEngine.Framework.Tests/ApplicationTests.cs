@@ -50,10 +50,6 @@ public class ApplicationTests
         var factory = Substitute.For<IKernelFactory>();
         factory.CreateWorld(Arg.Any<IAllocator>()).Returns(world);
         factory.CreateFrameSync(Arg.Any<IAllocator>(), Arg.Any<int>()).Returns(Substitute.For<IFrameSync>());
-        
-        // Mock threads to not actually start background work
-        factory.CreateThread(Arg.Any<IAllocator>(), Arg.Any<string>(), Arg.Any<IDevPlatform>(), Arg.Any<Action>())
-               .Returns(Substitute.For<IKernelThread>());
 
         services.AddSingleton(window);
         services.AddSingleton(renderer);
@@ -63,8 +59,8 @@ public class ApplicationTests
         app.Run(services);
 
         window.Received().PollEvents();
-        factory.Received(1).CreateThread(Arg.Any<IAllocator>(), "ke.render", Arg.Any<IDevPlatform>(), Arg.Any<Action>());
-        factory.Received(1).CreateThread(Arg.Any<IAllocator>(), "ke.sim", Arg.Any<IDevPlatform>(), Arg.Any<Action>());
+        // Thread spawning is now via System.Threading.Thread directly; the factory is no longer
+        // routed through for this purpose. Behavioral check (the loop ran) is what matters.
     }
 
     [Fact]

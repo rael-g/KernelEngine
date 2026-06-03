@@ -1,5 +1,5 @@
 #include "bgfx_gpu_device.hpp"
-#include <kernel_engine/threading/threading.h>
+#include <kernel_engine/kernel/common/thread_name.h>
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 #include <cstring>

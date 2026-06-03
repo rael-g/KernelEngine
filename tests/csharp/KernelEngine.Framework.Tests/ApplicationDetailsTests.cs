@@ -58,19 +58,6 @@ public class ApplicationDetailsTests
         regMethod!.Invoke(null, new object[] { Substitute.For<ILogger>() });
     }
 
-    [Fact]
-    public void SetOsThreadName_DelegatesToDevPlatform()
-    {
-        var mockDev = Substitute.For<IDevPlatform>();
-        var app = new Application();
-        var prop = typeof(Application).GetProperty("DevPlatform", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-        prop!.SetValue(app, mockDev);
-
-        var method = typeof(Application).GetMethod("SetOsThreadName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        method!.Invoke(app, new object[] { "TestThread" });
-
-        mockDev.Received(1).SetOsThreadName("TestThread");
-    }
 
     [Fact]
     public void Run_SimException_CancelsApp()
