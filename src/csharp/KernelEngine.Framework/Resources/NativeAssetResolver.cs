@@ -13,7 +13,7 @@ namespace KernelEngine.Framework;
 /// responsibility (today via <see cref="ResourceManager"/>; future: a C-side
 /// command queue).
 /// </summary>
-internal sealed unsafe class NativeAssetResolver : IDisposable
+internal sealed unsafe class NativeAssetResolver : IAssetResolverBackend
 {
     private ke_asset_resolver* _native;
 
@@ -70,7 +70,7 @@ internal sealed unsafe class NativeAssetResolver : IDisposable
     /// Bakes a mesh primitive (<c>res://primitives/{quad|plane|cube|sphere}</c>) into a
     /// freshly-allocated CPU buffer pair. Returns null when the resolver returns NOT_FOUND.
     /// </summary>
-    public MeshShape? ResolveMesh(string path)
+    public MeshBuffer? ResolveMesh(string path)
     {
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_mesh_shape_data data;
@@ -98,7 +98,7 @@ internal sealed unsafe class NativeAssetResolver : IDisposable
             }
             var idx = new ushort[data.index_count];
             for (uint i = 0; i < data.index_count; i++) idx[i] = data.indices[i];
-            return new MeshShape(verts, idx);
+            return new MeshBuffer(verts, idx);
         }
         finally
         {
@@ -150,16 +150,5 @@ internal sealed unsafe class NativeAssetResolver : IDisposable
     }
 }
 
-/// <summary>Decoded RGBA8 pixel buffer plus its dimensions, owned by the caller.</summary>
-public sealed record TextureBuffer(uint Width, uint Height, byte[] Pixels);
-
-/// <summary>
-/// Managed projection of <c>ke_material_spec</c>: PBR parameters plus res:// paths for
-/// any referenced textures (caller resolves them downstream).
-/// </summary>
-public sealed record MaterialSpec(
-    Vector4 BaseColor,
-    float   Metallic,
-    float   Roughness,
-    string? AlbedoPath,
-    string? NormalPath);
+// TextureBuffer and MaterialSpec records moved to KernelEngine.Framework.Abstractions
+// so the sugar layer can consume them without any unsafe dependencies.

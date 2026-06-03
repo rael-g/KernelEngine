@@ -11,7 +11,7 @@ public sealed class Model : Resource
     /// <summary>The sub-meshes that make up the model.</summary>
     public IReadOnlyList<ModelMesh> Meshes { get; }
 
-    internal Model(NativeResourceCache cache,
+    internal Model(IResourceCacheBackend cache,
                    uint                syntheticHandle,
                    IReadOnlyList<ModelMesh> meshes) : base(cache, syntheticHandle)
     {

@@ -8,9 +8,9 @@ namespace KernelEngine.Framework;
 public abstract class Resource : IDisposable
 {
     internal uint RawHandle { get; }
-    private readonly NativeResourceCache _cache;
+    private readonly IResourceCacheBackend _cache;
 
-    private protected Resource(NativeResourceCache cache, uint handle)
+    private protected Resource(IResourceCacheBackend cache, uint handle)
     {
         _cache    = cache;
         RawHandle = handle;

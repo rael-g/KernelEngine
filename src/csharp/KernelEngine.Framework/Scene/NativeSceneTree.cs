@@ -16,7 +16,7 @@ namespace KernelEngine.Framework;
 /// C#-specific and stay in <see cref="Tree"/>. This wrapper handles only the
 /// language-agnostic surface.
 /// </remarks>
-internal sealed unsafe class NativeSceneTree : IDisposable
+internal sealed unsafe class NativeSceneTree : ISceneTreeBackend
 {
     private ke_scene_tree* _native;
 

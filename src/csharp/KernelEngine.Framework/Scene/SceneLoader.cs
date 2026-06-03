@@ -68,7 +68,8 @@ public static class SceneLoader
 
         try
         {
-            using var loader = new NativeSceneLoader(new MallocAllocator(), world, tree.NativeWrapper,
+            using var loader = new NativeSceneLoader(new MallocAllocator(), world,
+                                                     (NativeSceneTree)tree.NativeWrapper,
                                                      registry, projectRoot: AppContext.BaseDirectory);
             loader.Load(path);
         }

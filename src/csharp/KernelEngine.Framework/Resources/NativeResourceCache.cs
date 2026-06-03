@@ -11,7 +11,7 @@ namespace KernelEngine.Framework;
 /// and path-keyed dedup live entirely on the C side; this wrapper just relays calls
 /// and dispatches the destroy callback back to a managed delegate.
 /// </summary>
-internal sealed unsafe class NativeResourceCache : IDisposable
+internal sealed unsafe class NativeResourceCache : IResourceCacheBackend
 {
     private ke_resource_cache* _native;
 

@@ -15,15 +15,15 @@ public sealed class Assets
     private readonly IImageLoader? _imageLoader;
     private readonly IFontLoader?  _fontLoader;
     private readonly ResourceManager _resources;
-    private readonly NativeResourceCache _cache;
-    private readonly NativeAssetResolver? _resolver;
+    private readonly IResourceCacheBackend _cache;
+    private readonly IAssetResolverBackend? _resolver;
 
     internal Assets(IAssetLoader? modelLoader,
                     IImageLoader? imageLoader,
                     IFontLoader?  fontLoader,
                     ResourceManager resources,
-                    NativeResourceCache cache,
-                    NativeAssetResolver? resolver = null)
+                    IResourceCacheBackend cache,
+                    IAssetResolverBackend? resolver = null)
     {
         _modelLoader = modelLoader;
         _imageLoader = imageLoader;

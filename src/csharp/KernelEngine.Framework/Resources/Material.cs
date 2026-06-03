@@ -11,7 +11,7 @@ public sealed class Material : Resource
     /// <summary>The underlying GPU handle (engine-internal — read by render systems).</summary>
     internal MaterialHandle Handle { get; }
 
-    internal Material(NativeResourceCache cache, MaterialHandle handle) : base(cache, handle.Value)
+    internal Material(IResourceCacheBackend cache, MaterialHandle handle) : base(cache, handle.Value)
     {
         Handle = handle;
     }

@@ -18,9 +18,9 @@ namespace KernelEngine.Framework;
 public sealed class ResourceManager
 {
     private readonly IResourceFactory    _factory;
-    private readonly NativeResourceCache _cache;
+    private readonly IResourceCacheBackend _cache;
 
-    internal ResourceManager(IResourceFactory factory, NativeResourceCache cache)
+    internal ResourceManager(IResourceFactory factory, IResourceCacheBackend cache)
     {
         _factory = factory;
         _cache   = cache;

@@ -11,7 +11,7 @@ public sealed class Mesh : Resource
     /// <summary>The underlying GPU handle (engine-internal — read by render systems).</summary>
     internal MeshHandle Handle { get; }
 
-    internal Mesh(NativeResourceCache cache, MeshHandle handle) : base(cache, handle.Value)
+    internal Mesh(IResourceCacheBackend cache, MeshHandle handle) : base(cache, handle.Value)
     {
         Handle = handle;
     }

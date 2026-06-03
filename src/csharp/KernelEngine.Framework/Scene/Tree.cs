@@ -17,7 +17,7 @@ public sealed unsafe class Tree : ISceneTree, IDisposable
     private readonly INodeTypeRegistry?  _nodeTypeRegistry;
     private readonly IServiceProvider?   _services;
     private ResourceManager?             _resources; // set after ResourceManager is created
-    private readonly NativeSceneTree     _native;
+    private readonly ISceneTreeBackend   _native;
 
     private readonly HashSet<Type> _registeredTypes = [];
 
@@ -39,7 +39,7 @@ public sealed unsafe class Tree : ISceneTree, IDisposable
 
     public void Dispose() => _native.Dispose();
 
-    internal NativeSceneTree    NativeWrapper    => _native;
+    internal ISceneTreeBackend  NativeWrapper    => _native;
     internal IWorld             World            => _world;
     internal INodeTypeRegistry? NodeTypeRegistry => _nodeTypeRegistry;
 
