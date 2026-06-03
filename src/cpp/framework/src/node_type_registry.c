@@ -1,4 +1,4 @@
-#include <kernel_engine/framework/node_type_registry_create.h>
+#include <kernel_engine/framework/node_type_registry.h>
 #include <kernel_engine/kernel/common/hash.h>
 #include <kernel_engine/kernel/common/hash_map.h>
 #include <string.h>

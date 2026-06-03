@@ -10,6 +10,7 @@
 // Caching (path → handle) is also provided so multiple callers loading the same asset
 // (e.g. Pong and a Lua menu loading the same texture) share a single GPU upload.
 
+#include <kernel_engine/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/context/types.h>
@@ -66,9 +67,11 @@ extern "C"
 
     } ke_resource_cache;
 
-    // Factory `ke_resource_cache_create()` lives in the default plugin
-    // (`src/cpp/framework/resource_cache/`), declared in
-    // <kernel_engine/framework/resource_cache_create.h>.
+    // ── Factory ───────────────────────────────────────────────────────────────
+
+    KE_FRAMEWORK_API ke_result ke_resource_cache_create(
+        ke_allocator       *alloc,
+        ke_resource_cache **out_cache);
 
 #ifdef __cplusplus
 }

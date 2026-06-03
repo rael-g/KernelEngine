@@ -14,6 +14,7 @@
 // The C# Framework provides CSharpSceneTree as the round-trip implementation.
 // A future C++ plugin could provide the same contract without managed overhead.
 
+#include <kernel_engine/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/ecs.h>  // ke_entity
@@ -50,9 +51,12 @@ extern "C"
 
     } ke_scene_tree;
 
-    // Factory `ke_scene_tree_create()` lives in the default plugin
-    // (`src/cpp/framework/scene_tree/`), declared in
-    // <kernel_engine/framework/scene_tree_create.h>.
+    // ── Factory ──────────────────────────────────────────────────────────────
+
+    KE_FRAMEWORK_API ke_result ke_scene_tree_create(
+        struct ke_world  *world,
+        ke_allocator     *alloc,
+        ke_scene_tree   **out_tree);
 
 #ifdef __cplusplus
 }

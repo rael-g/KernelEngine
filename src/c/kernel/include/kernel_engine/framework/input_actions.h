@@ -1,7 +1,9 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 
+#include <kernel_engine/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/input/snapshot.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -87,6 +89,12 @@ extern "C"
 
         void (*destroy)(struct ke_input_actions *self);
     } ke_input_actions;
+
+    // ── Factory ──────────────────────────────────────────────────────────────
+
+    KE_FRAMEWORK_API ke_result ke_input_actions_create(
+        ke_allocator       *alloc,
+        ke_input_actions  **out_actions);
 
 #ifdef __cplusplus
 }
