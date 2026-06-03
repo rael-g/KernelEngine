@@ -15,6 +15,7 @@ add_executable(test_ke_kernel
     test_scene_loader.cpp
     test_mesh_shape.cpp
     test_material_file.cpp
+    test_asset_resolver.cpp
     test_dev_platform.cpp
 )
 
