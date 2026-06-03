@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 
-#include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/input/snapshot.h>
 #include <stdint.h>

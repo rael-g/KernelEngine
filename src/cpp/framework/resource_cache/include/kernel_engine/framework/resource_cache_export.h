@@ -1,0 +1,22 @@
+#ifndef KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_EXPORT_H_
+#define KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_EXPORT_H_
+
+#if defined(_WIN32) || defined(__CYGWIN__)
+#define KE_RESOURCE_CACHE_HELPER_EXPORT __declspec(dllexport)
+#define KE_RESOURCE_CACHE_HELPER_IMPORT __declspec(dllimport)
+#else
+#define KE_RESOURCE_CACHE_HELPER_EXPORT __attribute__((visibility("default")))
+#define KE_RESOURCE_CACHE_HELPER_IMPORT __attribute__((visibility("default")))
+#endif
+
+#ifdef KE_RESOURCE_CACHE_STATIC
+#define KE_RESOURCE_CACHE_API
+#else
+#ifdef KE_RESOURCE_CACHE_EXPORT
+#define KE_RESOURCE_CACHE_API KE_RESOURCE_CACHE_HELPER_EXPORT
+#else
+#define KE_RESOURCE_CACHE_API KE_RESOURCE_CACHE_HELPER_IMPORT
+#endif
+#endif
+
+#endif // KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_EXPORT_H_

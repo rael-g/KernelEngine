@@ -63,9 +63,24 @@
     <NativeFinalDir>$(RepoRoot)\build\$(NativeOS)\$(NativeTypeDir)</NativeFinalDir>
   </PropertyGroup>
 
+  <!--
+    Csprojs declare every native DLL they need via:
+
+        <ItemGroup>
+          <NativeDep Include="ke_kernel" />
+          <NativeDep Include="ke_threading" />
+        </ItemGroup>
+
+    The legacy single-target shortcut `<NativeTarget>ke_foo</NativeTarget>` is
+    still honored — it just gets folded into the same list at evaluation time.
+  -->
   <ItemGroup Condition="'$(NativeTarget)' != ''">
-    <None Include="$(NativeFinalDir)\$(NativePre)$(NativeTarget).$(NativeExt)" Condition="Exists('$(NativeFinalDir)\$(NativePre)$(NativeTarget).$(NativeExt)')">
-      <Link>$(NativePre)$(NativeTarget).$(NativeExt)</Link>
+    <NativeDep Include="$(NativeTarget)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="@(NativeDep -> '$(NativeFinalDir)\$(NativePre)%(Identity).$(NativeExt)')">
+      <Link>$(NativePre)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
       <Pack>true</Pack>

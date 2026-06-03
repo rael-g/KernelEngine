@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 
-#include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
 
 #ifdef __cplusplus

@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_NODE_TYPE_REGISTRY_H_
 #define KERNEL_ENGINE_FRAMEWORK_NODE_TYPE_REGISTRY_H_
 
-#include <kernel_engine/framework/types.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/context/types.h>

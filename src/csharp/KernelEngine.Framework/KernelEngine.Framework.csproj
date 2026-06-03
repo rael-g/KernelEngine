@@ -4,19 +4,15 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NativeTarget>ke_framework</NativeTarget>
   </PropertyGroup>
 
-  <Import Project="../NativeDependencies.targets" />
-
   <ItemGroup>
-    <!-- Framework concept plugins live in their own native libs; pull them in. -->
-    <None Include="$(NativeFinalDir)\ke_node_type_registry.$(NativeExt)" Condition="Exists('$(NativeFinalDir)\ke_node_type_registry.$(NativeExt)')">
-      <Link>ke_node_type_registry.$(NativeExt)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </None>
+    <!-- ke_framework is header-only (the API layer); concrete impls come from
+         per-concept plugins. Only list ones whose factories the C# code calls. -->
+    <NativeDep Include="ke_node_type_registry" />
   </ItemGroup>
+
+  <Import Project="../NativeDependencies.targets" />
 
   <ItemGroup>
     <InternalsVisibleTo Include="KernelEngine.Framework.Tests" />
