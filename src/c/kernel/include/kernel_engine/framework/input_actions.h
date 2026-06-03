@@ -60,6 +60,11 @@ extern "C"
         /// than once to hot-reload. Returns KE_ERROR_NOT_FOUND if path does not exist.
         ke_result (*load)(struct ke_input_actions *self, const char *path);
 
+        /// Resolves an action's string name (the [action.NAME] in the .input file) to its
+        /// runtime integer id. Returns -1 if unknown. Callers typically cache the id once
+        /// after load() and reuse it across frames.
+        int32_t (*get_action_id)(struct ke_input_actions *self, const char *name);
+
         /// Run one frame of dispatch. Samples all bindings against snapshot, updates
         /// action state, and calls on_event for each phase transition. on_event may be
         /// NULL (useful when the caller only wants to update polling state).

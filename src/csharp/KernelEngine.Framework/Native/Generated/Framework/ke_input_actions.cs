@@ -7,6 +7,9 @@ public unsafe partial struct ke_input_actions
     [NativeTypeName("ke_result (*)(struct ke_input_actions *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, ke_result> load;
 
+    [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, int> get_action_id;
+
     [NativeTypeName("ke_result (*)(struct ke_input_actions *, const ke_input_snapshot *, ke_input_action_event_func, void *)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, ke_input_snapshot*, delegate* unmanaged[Cdecl]<void*, ke_input_action_event, void>, void*, ke_result> evaluate;
 
