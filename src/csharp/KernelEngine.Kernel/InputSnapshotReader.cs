@@ -4,7 +4,7 @@ using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 
-internal sealed unsafe class InputSnapshotReader : IInputReader
+public sealed unsafe class InputSnapshotReader : IInputReader
 {
     private readonly ke_input_snapshot _data;
 
@@ -12,6 +12,12 @@ internal sealed unsafe class InputSnapshotReader : IInputReader
     {
         _data = data;
     }
+
+    /// <summary>
+    /// Native snapshot struct backing this reader. Exposed for action-layer evaluation
+    /// which needs to call <c>ke_input_actions.evaluate</c> with a raw pointer.
+    /// </summary>
+    public ke_input_snapshot Native => _data;
 
     public bool IsKeyDown(int keyCode)
     {

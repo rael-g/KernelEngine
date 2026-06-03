@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
@@ -68,7 +69,7 @@ public class Application : IDisposable
     private IInputBuffer _inputBuffer = null!;
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
-    private readonly InputActionDispatcher _actionDispatcher = new();
+    private readonly List<InputActionEvent> _actionEventBuffer = new(32);
     private ISceneTree? _sceneTree;
 
     private System.Numerics.Vector4? _projectClearColor;
@@ -302,8 +303,15 @@ public class Application : IDisposable
                             Tree.DispatchInput(events);
 
                         // Action layer: evaluate every registered map against the current snapshot.
-                        var actionEvents = _actionDispatcher.Evaluate(input);
-                        Tree.DispatchInputActions(actionEvents);
+                        _actionEventBuffer.Clear();
+                        if (input is InputSnapshotReader snapReader)
+                        {
+                            var snap = snapReader.Native;
+                            foreach (var map in InputActions.AllMaps)
+                                map.Evaluate(snap, _actionEventBuffer);
+                        }
+                        if (_actionEventBuffer.Count > 0)
+                            Tree.DispatchInputActions(_actionEventBuffer);
 
                         // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
                         //   Awake+Start (one-shot) → Update → ECS systems → LateUpdate

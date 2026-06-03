@@ -1,125 +1,123 @@
-using System.Numerics;
+using System.Collections.Generic;
 using Xunit;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework.Tests;
 
+/// <summary>
+/// End-to-end tests over the new <see cref="InputActionMap{TEnum}"/> backed by the
+/// <c>ke_input_actions</c> native primitive. Each test builds a snapshot directly,
+/// runs the dispatcher via <see cref="IInputActionMap.Evaluate"/>, and asserts on
+/// the polling surface plus the event stream.
+/// </summary>
 public class InputActionMapTests
 {
-    public enum GameAction { Jump, Move, Look }
+    public enum GameAction { Jump, Move, Strafe, Quit }
+
+    private static ke_input_snapshot Snapshot(params Key[] keysDown)
+    {
+        var s = default(ke_input_snapshot);
+        foreach (var k in keysDown)
+        {
+            int idx = (int)k;
+            unsafe { s.keys_down[idx / 64] |= (1UL << (idx % 64)); }
+        }
+        return s;
+    }
 
     [Fact]
     public void AddAction_Throws_OnDuplicate()
     {
-        var map = new InputActionMap<GameAction>();
+        using var map = new InputActionMap<GameAction>();
         map.AddAction(GameAction.Jump, ActionType.Button);
         Assert.Throws<ArgumentException>(() => map.AddAction(GameAction.Jump, ActionType.Button));
     }
 
     [Fact]
-    public void AddButton_WithKey_RegistersCorrectly()
+    public void AddButton_WithKey_PollsCorrectly()
     {
-        var map = new InputActionMap<GameAction>();
+        using var map = new InputActionMap<GameAction>();
         map.AddButton(GameAction.Jump, Key.Space);
-        var actions = ((IInputActionMap)map).Actions;
-        Assert.Single(actions);
-        Assert.Equal((int)GameAction.Jump, actions[0].ActionId);
-    }
 
-    [Fact]
-    public void AddButton_WithMouseButton_RegistersCorrectly()
-    {
-        var map = new InputActionMap<GameAction>();
-        map.AddButton(GameAction.Jump, MouseButton.Left);
-        var actions = ((IInputActionMap)map).Actions;
-        Assert.Single(actions);
-        Assert.Equal((int)GameAction.Jump, actions[0].ActionId);
-    }
-
-    [Fact]
-    public void IsActionDown_ReturnsCorrectValue()
-    {
-        var map = new InputActionMap<GameAction>();
-        var jump = map.AddAction(GameAction.Jump, ActionType.Button);
-        
-        // Mock state
-        var action = ((IInputActionMap)map).Actions[0];
-        action.CurrX = 1f;
-
+        var iface = (IInputActionMap)map;
+        var events = new List<InputActionEvent>();
+        iface.Evaluate(Snapshot(Key.Space), events);
         Assert.True(map.IsActionDown(GameAction.Jump));
-        
-        action.CurrX = 0f;
-        Assert.False(map.IsActionDown(GameAction.Jump));
-    }
-
-    [Fact]
-    public void WasActionPressed_ReturnsTrue_OnTransition()
-    {
-        var map = new InputActionMap<GameAction>();
-        map.AddAction(GameAction.Jump, ActionType.Button);
-        var action = ((IInputActionMap)map).Actions[0];
-
-        action.PrevX = 0f;
-        action.CurrX = 1f;
         Assert.True(map.WasActionPressed(GameAction.Jump));
 
-        action.PrevX = 1f;
+        iface.Evaluate(Snapshot(Key.Space), events);
+        Assert.True(map.IsActionDown(GameAction.Jump));
         Assert.False(map.WasActionPressed(GameAction.Jump));
-    }
 
-    [Fact]
-    public void WasActionReleased_ReturnsTrue_OnTransition()
-    {
-        var map = new InputActionMap<GameAction>();
-        map.AddAction(GameAction.Jump, ActionType.Button);
-        var action = ((IInputActionMap)map).Actions[0];
-
-        action.PrevX = 1f;
-        action.CurrX = 0f;
+        iface.Evaluate(Snapshot(), events);
+        Assert.False(map.IsActionDown(GameAction.Jump));
         Assert.True(map.WasActionReleased(GameAction.Jump));
-
-        action.PrevX = 0f;
-        Assert.False(map.WasActionReleased(GameAction.Jump));
     }
 
     [Fact]
-    public void GetAxis1D_ReturnsCorrectValue()
+    public void AddKeyPair_DrivesAxis1D()
     {
-        var map = new InputActionMap<GameAction>();
-        map.AddAction(GameAction.Jump, ActionType.Axis1D);
-        var action = ((IInputActionMap)map).Actions[0];
+        using var map = new InputActionMap<GameAction>();
+        map.AddAction(GameAction.Strafe, ActionType.Axis1D).AddKeyPair(Key.A, Key.D);
 
-        action.CurrX = 0.75f;
-        Assert.Equal(0.75f, map.GetAxis1D(GameAction.Jump));
+        var iface = (IInputActionMap)map;
+        var events = new List<InputActionEvent>();
+        iface.Evaluate(Snapshot(Key.D), events);
+        Assert.Equal(1f, map.GetAxis1D(GameAction.Strafe));
+
+        iface.Evaluate(Snapshot(Key.A), events);
+        Assert.Equal(-1f, map.GetAxis1D(GameAction.Strafe));
     }
 
     [Fact]
-    public void GetAxis2D_ReturnsCorrectValue()
+    public void AddWASD_DrivesAxis2D()
     {
-        var map = new InputActionMap<GameAction>();
-        map.AddAction(GameAction.Move, ActionType.Axis2D);
-        var action = ((IInputActionMap)map).Actions[0];
+        using var map = new InputActionMap<GameAction>();
+        map.AddAction(GameAction.Move, ActionType.Axis2D).AddWASD();
 
-        action.CurrX = 0.5f;
-        action.CurrY = -0.5f;
-        var axis = map.GetAxis2D(GameAction.Move);
-        Assert.Equal(0.5f, axis.X);
-        Assert.Equal(-0.5f, axis.Y);
+        var iface = (IInputActionMap)map;
+        var events = new List<InputActionEvent>();
+        iface.Evaluate(Snapshot(Key.W, Key.D), events);
+        var v = map.GetAxis2D(GameAction.Move);
+        Assert.Equal(1f, v.X);
+        Assert.Equal(1f, v.Y);
     }
 
     [Fact]
-    public void GetAxis3D_ReturnsCorrectValue()
+    public void Evaluate_EmitsStartedAndCanceledForButton_NoPerformed()
     {
-        var map = new InputActionMap<GameAction>();
-        map.AddAction(GameAction.Look, ActionType.Axis3D);
-        var action = ((IInputActionMap)map).Actions[0];
+        using var map = new InputActionMap<GameAction>();
+        map.AddButton(GameAction.Jump, Key.Space);
 
-        action.CurrX = 1f;
-        action.CurrY = 2f;
-        action.CurrZ = 3f;
-        var axis = map.GetAxis3D(GameAction.Look);
-        Assert.Equal(1f, axis.X);
-        Assert.Equal(2f, axis.Y);
-        Assert.Equal(3f, axis.Z);
+        var iface = (IInputActionMap)map;
+        var events = new List<InputActionEvent>();
+
+        iface.Evaluate(Snapshot(Key.Space), events); // press
+        iface.Evaluate(Snapshot(Key.Space), events); // hold
+        iface.Evaluate(Snapshot(), events);          // release
+
+        Assert.Contains(events, e => e.Phase == ActionPhase.Started);
+        Assert.Contains(events, e => e.Phase == ActionPhase.Canceled);
+        Assert.DoesNotContain(events, e => e.Phase == ActionPhase.Performed); // Button never Performed
+    }
+
+    [Fact]
+    public void Evaluate_EmitsPerformedForAxis_OnValueChange()
+    {
+        using var map = new InputActionMap<GameAction>();
+        map.AddAction(GameAction.Strafe, ActionType.Axis1D).AddKeyPair(Key.A, Key.D);
+
+        var iface = (IInputActionMap)map;
+        var events = new List<InputActionEvent>();
+
+        iface.Evaluate(Snapshot(Key.D), events);    // 0 -> +1 (Started)
+        events.Clear();
+        iface.Evaluate(Snapshot(Key.D), events);    // +1 -> +1 (no event)
+        Assert.Empty(events);
+
+        iface.Evaluate(Snapshot(Key.A), events);    // +1 -> -1 (Performed, continued active)
+        Assert.Contains(events, e => e.Phase == ActionPhase.Performed);
     }
 }

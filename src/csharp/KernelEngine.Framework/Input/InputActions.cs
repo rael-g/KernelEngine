@@ -123,7 +123,12 @@ public static class InputActions
             throw new InvalidDataException($"[input] actions must start with 'res://'; got '{resPath}'.");
 
         var absolute = Path.Combine(AppContext.BaseDirectory, resPath[prefix.Length..]);
-        var map = InputActionsLoader.LoadFromFile<TEnum>(absolute);
+        if (!File.Exists(absolute))
+            throw new FileNotFoundException($"Input actions file not found: {absolute}", absolute);
+
+        var native = new NativeInputActions(new MallocAllocator());
+        native.Load(absolute);
+        var map = new InputActionMap<TEnum>(native);
         return Register(map);
     }
 
