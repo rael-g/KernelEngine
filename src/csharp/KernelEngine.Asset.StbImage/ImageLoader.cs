@@ -5,7 +5,7 @@ using KernelEngine.Kernel.Native;
 namespace KernelEngine.Asset.StbImage;
 
 /// <summary>stb_image-backed <see cref="IImageLoader"/>.</summary>
-public sealed unsafe class ImageLoader : IImageLoader
+public sealed unsafe class ImageLoader : IImageLoader, INativeImageLoader
 {
     private ke_image_loader* _native;
 
@@ -13,6 +13,12 @@ public sealed unsafe class ImageLoader : IImageLoader
     {
         _native = native;
     }
+
+    /// <summary>
+    /// Raw native pointer for downstream C plugins (e.g. ke_asset_resolver) that
+    /// take a ke_image_loader injection. Engine-internal.
+    /// </summary>
+    public ke_image_loader* Native => _native;
 
     public IImageData LoadImage(string path)
     {

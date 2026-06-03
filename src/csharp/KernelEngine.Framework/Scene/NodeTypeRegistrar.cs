@@ -13,6 +13,13 @@ namespace KernelEngine.Framework;
 public static class NodeTypeRegistrar
 {
     /// <summary>
+    /// Active asset resolver. Set by <see cref="Application"/> at startup so the property binder
+    /// can use it to resolve <c>res://*.material</c> references through the native
+    /// <c>ke_asset_resolver</c> plugin. Tests may set this directly.
+    /// </summary>
+    internal static NativeAssetResolver? ActiveAssetResolver { get; set; }
+
+    /// <summary>
     /// Registers a C# <typeparamref name="T"/> node type under its short class name.
     /// <para>
     /// The <c>create</c> callback uses <see cref="ActivatorUtilities"/> when
@@ -186,9 +193,19 @@ public static class NodeTypeRegistrar
         }
         if (type == typeof(Material) && resPath.EndsWith(".material", StringComparison.Ordinal))
         {
-            // Material resolution is complex (needs Tomlyn + ResourceManager). Delegate back to
-            // SceneLoader helper to avoid duplication.
-            return null; // TODO: extract ResolveMaterial from SceneLoader
+            // Native ke_asset_resolver parses the [material] TOML section into a spec; we then
+            // build the GPU material via ResourceManager. Texture references are deferred
+            // (left as paths in the spec) until the resolver also bridges resolve_texture.
+            var resolver = ActiveAssetResolver
+                ?? throw new InvalidOperationException(
+                    "Material file resolution requires an asset resolver. " +
+                    "Run inside Application or call NodeTypeRegistrar.SetActiveAssetResolver(...).");
+            var spec = resolver.ResolveMaterial(resPath)
+                ?? throw new InvalidDataException($"Material file '{resPath}' not found.");
+            return resources.CreateMaterialAsync(
+                spec.BaseColor,
+                metallic:  spec.Metallic,
+                roughness: spec.Roughness).GetAwaiter().GetResult();
         }
         throw new InvalidDataException($"Cannot resolve '{resPath}' as {type.Name}.");
     }

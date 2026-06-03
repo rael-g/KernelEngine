@@ -71,6 +71,7 @@ public class Application : IDisposable
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
     private readonly List<InputActionEvent> _actionEventBuffer = new(32);
     private NativeResourceCache? _resourceCache;
+    private NativeAssetResolver? _assetResolver;
     private ISceneTree? _sceneTree;
 
     private System.Numerics.Vector4? _projectClearColor;
@@ -253,6 +254,19 @@ public class Application : IDisposable
                 var fontLoader  = Services.GetService<IFontLoader>();
                 if (modelLoader != null || imageLoader != null || fontLoader != null)
                     Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _resourceCache);
+
+                // Asset resolver: maps res:// + absolute paths to typed CPU-side data via the
+                // native ke_asset_resolver plugin. The injected image loader pointer comes from
+                // whichever IImageLoader plugin exposes INativeImageLoader; the C plugin never
+                // links it directly.
+                unsafe
+                {
+                    KernelEngine.Kernel.Native.ke_image_loader* nativeImg = null;
+                    if (imageLoader is INativeImageLoader ni) nativeImg = ni.Native;
+                    _assetResolver = new NativeAssetResolver(new MallocAllocator(), nativeImg,
+                                                             AppContext.BaseDirectory);
+                }
+                NodeTypeRegistrar.ActiveAssetResolver = _assetResolver;
 
                 // Scene tree — Framework's Tree implements ISceneTree directly (S7).
                 _sceneTree = Tree;
