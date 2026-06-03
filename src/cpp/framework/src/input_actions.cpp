@@ -166,6 +166,7 @@ struct Action
 
     // Sampled state for the current frame.
     float curr_x = 0, curr_y = 0, curr_z = 0;
+    float prev_x = 0, prev_y = 0, prev_z = 0;
     bool  curr_active = false;
     bool  prev_active = false;
 };
@@ -410,6 +411,9 @@ ke_result impl_evaluate(ke_input_actions *self,
     for (int32_t id = 0; id < static_cast<int32_t>(impl->actions.size()); id++) {
         Action &a = impl->actions[id];
         a.prev_active = a.curr_active;
+        a.prev_x = a.curr_x;
+        a.prev_y = a.curr_y;
+        a.prev_z = a.curr_z;
 
         // Combine all bindings — last non-zero wins for axes, OR for buttons.
         float x = 0, y = 0, z = 0;
@@ -442,7 +446,12 @@ ke_result impl_evaluate(ke_input_actions *self,
             ev.x = x; ev.y = y; ev.z = z;
             on_event(event_ctx, ev);
         }
-        if (on_event && a.curr_active) {
+        // Performed: only on continued active (NOT on the Started frame), only
+        // for axes (Button is binary — Started conveys it), only when the
+        // value actually changed this frame.
+        if (on_event && a.curr_active && a.prev_active &&
+            a.type != KE_ACTION_TYPE_BUTTON &&
+            (a.prev_x != a.curr_x || a.prev_y != a.curr_y || a.prev_z != a.curr_z)) {
             ke_input_action_event ev{};
             ev.action_id = id;
             ev.type      = a.type;

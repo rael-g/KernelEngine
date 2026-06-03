@@ -223,11 +223,12 @@ bindings = [ { kind = "key", key = "Space" } ]
     SetKeyDown(snap, KE_KEY_SPACE);
     actions->evaluate(actions, &snap, cb, &c); // start
     EXPECT_EQ(c.started, 1);
-    EXPECT_GE(c.performed, 1);
+    // Button never fires Performed (Started conveys the press; matches C# dispatcher).
+    EXPECT_EQ(c.performed, 0);
 
-    actions->evaluate(actions, &snap, cb, &c); // still down → no new start, but performed again
+    actions->evaluate(actions, &snap, cb, &c); // still down → no new start, no performed
     EXPECT_EQ(c.started, 1);
-    EXPECT_GE(c.performed, 2);
+    EXPECT_EQ(c.performed, 0);
 
     snap = {};
     actions->evaluate(actions, &snap, cb, &c); // cancel
@@ -316,4 +317,32 @@ TEST_F(InputActionsTest, BindOnUnknownActionId_ReturnsNotFound)
 {
     EXPECT_EQ(actions->bind_key(actions, 99, KE_KEY_SPACE), KE_ERROR_NOT_FOUND);
     EXPECT_EQ(actions->bind_key_pair(actions, 99, KE_KEY_A, KE_KEY_D), KE_ERROR_NOT_FOUND);
+}
+
+TEST_F(InputActionsTest, Evaluate_AxisFiresPerformedOnValueChangeOnly)
+{
+    int32_t strafe = actions->add_action(actions, "Strafe", KE_ACTION_TYPE_AXIS1D);
+    ASSERT_EQ(actions->bind_key_pair(actions, strafe, KE_KEY_A, KE_KEY_D), KE_OK);
+
+    struct Counter { int started = 0, canceled = 0, performed = 0; } c;
+    auto cb = +[](void *ctx, ke_input_action_event ev) {
+        auto *cnt = static_cast<Counter *>(ctx);
+        if (ev.phase == KE_ACTION_PHASE_STARTED)   cnt->started++;
+        if (ev.phase == KE_ACTION_PHASE_CANCELED)  cnt->canceled++;
+        if (ev.phase == KE_ACTION_PHASE_PERFORMED) cnt->performed++;
+    };
+
+    ke_input_snapshot snap{};
+    SetKeyDown(snap, KE_KEY_D);
+    actions->evaluate(actions, &snap, cb, &c); // 0 -> +1: started, no performed (value just became active)
+    EXPECT_EQ(c.started, 1);
+    EXPECT_EQ(c.performed, 0);
+
+    actions->evaluate(actions, &snap, cb, &c); // +1 -> +1: nothing
+    EXPECT_EQ(c.performed, 0);
+
+    snap = {};
+    SetKeyDown(snap, KE_KEY_A);
+    actions->evaluate(actions, &snap, cb, &c); // +1 -> -1: still active, value changed → Performed
+    EXPECT_EQ(c.performed, 1);
 }
