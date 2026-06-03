@@ -16,7 +16,7 @@ namespace KernelEngine.Framework;
 /// <see cref="InputActionMap{TEnum}"/>. Exposed as <c>internal</c> so the
 /// Framework dispatcher loop and tests can drive it.
 /// </remarks>
-internal sealed unsafe class NativeInputActions : IDisposable
+internal sealed unsafe class NativeInputActions : IInputActionsBackend
 {
     private ke_input_actions* _native;
     private readonly List<IntPtr> _nameStrings = new();
@@ -104,30 +104,35 @@ internal sealed unsafe class NativeInputActions : IDisposable
 
     public float GetAxis1D(int id) => _native->get_axis1d(_native, id);
 
-    public (float X, float Y) GetAxis2D(int id)
+    public System.Numerics.Vector2 GetAxis2D(int id)
     {
         float x = 0, y = 0;
         _native->get_axis2d(_native, id, &x, &y);
-        return (x, y);
+        return new System.Numerics.Vector2(x, y);
     }
 
-    public (float X, float Y, float Z) GetAxis3D(int id)
+    public System.Numerics.Vector3 GetAxis3D(int id)
     {
         float x = 0, y = 0, z = 0;
         _native->get_axis3d(_native, id, &x, &y, &z);
-        return (x, y, z);
+        return new System.Numerics.Vector3(x, y, z);
     }
 
     /// <summary>
     /// Evaluates all registered actions against the snapshot and appends every
     /// phase-transition event (Started / Performed / Canceled) to <paramref name="output"/>.
     /// </summary>
-    public void Evaluate(ke_input_snapshot snapshot, List<InputActionEvent> output)
+    public void Evaluate(IInputReader snapshot, List<InputActionEvent> output)
     {
+        // The native plugin reads the kernel ke_input_snapshot struct; concrete InputSnapshotReader
+        // exposes it. Custom IInputReader impls (tests, synthetic) fall through to a no-op since
+        // the action dispatcher has no portable way to sample arbitrary managed readers.
+        if (snapshot is not InputSnapshotReader nativeReader) return;
+        var nativeSnap = nativeReader.Native;
         _frameEvents.Clear();
         IntPtr ctx = GCHandle.ToIntPtr(_eventBufferHandle);
         KernelException.ThrowIfFailed(
-            _native->evaluate(_native, &snapshot, &OnEventTrampoline, (void*)ctx).ToManaged());
+            _native->evaluate(_native, &nativeSnap, &OnEventTrampoline, (void*)ctx).ToManaged());
         output.AddRange(_frameEvents);
     }
 

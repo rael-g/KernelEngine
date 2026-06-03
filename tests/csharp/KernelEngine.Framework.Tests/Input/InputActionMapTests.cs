@@ -16,7 +16,7 @@ public class InputActionMapTests
 {
     public enum GameAction { Jump, Move, Strafe, Quit }
 
-    private static ke_input_snapshot Snapshot(params Key[] keysDown)
+    private static IInputReader Snapshot(params Key[] keysDown)
     {
         var s = default(ke_input_snapshot);
         foreach (var k in keysDown)
@@ -24,7 +24,7 @@ public class InputActionMapTests
             int idx = (int)k;
             unsafe { s.keys_down[idx / 64] |= (1UL << (idx % 64)); }
         }
-        return s;
+        return new InputSnapshotReader(s);
     }
 
     [Fact]

@@ -17,7 +17,7 @@ internal interface IInputActionMap
     /// Re-samples every action's bindings against the snapshot and appends every
     /// phase-transition event (Started / Performed / Canceled) to <paramref name="output"/>.
     /// </summary>
-    void Evaluate(ke_input_snapshot snapshot, List<InputActionEvent> output);
+    void Evaluate(IInputReader snapshot, List<InputActionEvent> output);
 }
 
 /// <summary>
@@ -44,7 +44,7 @@ internal interface IInputActionMap
 /// </example>
 public sealed class InputActionMap<TEnum> : IInputActionMap, IDisposable where TEnum : struct, Enum
 {
-    private readonly NativeInputActions _native;
+    private readonly IInputActionsBackend _native;
     private readonly Dictionary<int, int> _enumValueToActionId = new();
 
     Type IInputActionMap.EnumType => typeof(TEnum);
@@ -69,11 +69,11 @@ public sealed class InputActionMap<TEnum> : IInputActionMap, IDisposable where T
     }
 
     /// <summary>
-    /// Constructs a map from an already-loaded <see cref="NativeInputActions"/>. Action ids
-    /// are discovered by looking up each <typeparamref name="TEnum"/> value's name in the
-    /// native registry. Used by <see cref="InputActions.LoadFromProject"/>.
+    /// Constructs a map from an already-loaded backend. Action ids are discovered by looking up
+    /// each <typeparamref name="TEnum"/> value's name in the backend. Used by
+    /// <see cref="InputActions.LoadFromProject"/>.
     /// </summary>
-    internal InputActionMap(NativeInputActions native)
+    internal InputActionMap(IInputActionsBackend native)
     {
         _native = native;
         _native.EnumType = typeof(TEnum);
@@ -129,20 +129,16 @@ public sealed class InputActionMap<TEnum> : IInputActionMap, IDisposable where T
     internal Vector2 GetAxis2D(TEnum action)
     {
         int id = ResolveId(action);
-        if (id < 0) return Vector2.Zero;
-        var (x, y) = _native.GetAxis2D(id);
-        return new Vector2(x, y);
+        return id < 0 ? Vector2.Zero : _native.GetAxis2D(id);
     }
 
     internal Vector3 GetAxis3D(TEnum action)
     {
         int id = ResolveId(action);
-        if (id < 0) return Vector3.Zero;
-        var (x, y, z) = _native.GetAxis3D(id);
-        return new Vector3(x, y, z);
+        return id < 0 ? Vector3.Zero : _native.GetAxis3D(id);
     }
 
-    void IInputActionMap.Evaluate(ke_input_snapshot snapshot, List<InputActionEvent> output) =>
+    void IInputActionMap.Evaluate(IInputReader snapshot, List<InputActionEvent> output) =>
         _native.Evaluate(snapshot, output);
 
     public void Dispose() => _native.Dispose();
@@ -154,10 +150,10 @@ public sealed class InputActionMap<TEnum> : IInputActionMap, IDisposable where T
 /// </summary>
 public readonly struct InputActionBuilder
 {
-    private readonly NativeInputActions _native;
+    private readonly IInputActionsBackend _native;
     private readonly int _actionId;
 
-    internal InputActionBuilder(NativeInputActions native, int actionId)
+    internal InputActionBuilder(IInputActionsBackend native, int actionId)
     {
         _native = native;
         _actionId = actionId;

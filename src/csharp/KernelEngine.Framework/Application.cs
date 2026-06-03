@@ -331,12 +331,8 @@ public class Application : IDisposable
 
                         // Action layer: evaluate every registered map against the current snapshot.
                         _actionEventBuffer.Clear();
-                        if (input is InputSnapshotReader snapReader)
-                        {
-                            var snap = snapReader.Native;
-                            foreach (var map in InputActions.AllMaps)
-                                map.Evaluate(snap, _actionEventBuffer);
-                        }
+                        foreach (var map in InputActions.AllMaps)
+                            map.Evaluate(input, _actionEventBuffer);
                         if (_actionEventBuffer.Count > 0)
                             Tree.DispatchInputActions(_actionEventBuffer);
 
