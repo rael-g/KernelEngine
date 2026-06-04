@@ -54,9 +54,6 @@ public sealed class ResourceManager
                 return new Mesh(_cache, handle);
             }, TaskContinuationOptions.ExecuteSynchronously);
 
-    /// <summary>Uploads a <see cref="MeshShape"/> descriptor as a ref-counted <see cref="Mesh"/>.</summary>
-    public Task<Mesh> CreateMeshAsync(MeshShape shape) => CreateMeshAsync(shape.Vertices, shape.Indices);
-
     public Task<Texture> CreateTextureAsync(uint width, uint height, byte[] pixels)
         => _factory.CreateTextureAsync(width, height, pixels)
             .ContinueWith(t =>

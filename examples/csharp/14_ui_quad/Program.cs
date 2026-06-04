@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 // When Label + LabelRenderSystem land (Stage C), this example grows to include text.
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger().AddConsoleSink(LogLevel.Warning)
     .AddGlfwWindow(960, 540, "KernelEngine — 14 UI Quad")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"))

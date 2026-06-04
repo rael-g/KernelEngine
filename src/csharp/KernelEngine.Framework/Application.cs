@@ -36,6 +36,7 @@ public class Application : IDisposable
     /// <summary>The Tree graph facade for <see cref="ActiveWorld"/>.</summary>
     public Tree Tree => _scene ??= new Tree(
         ActiveWorld,
+        FrameworkBackends.Required,
         Services?.GetService<INodeTypeRegistry>(),
         Services);
 
@@ -69,8 +70,8 @@ public class Application : IDisposable
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
     private readonly List<InputActionEvent> _actionEventBuffer = new(32);
-    private NativeResourceCache? _resourceCache;
-    private NativeAssetResolver? _assetResolver;
+    private IResourceCacheBackend? _resourceCache;
+    private IAssetResolverBackend? _assetResolver;
     private ISceneTree? _sceneTree;
 
     private System.Numerics.Vector4? _projectClearColor;
@@ -152,11 +153,7 @@ public class Application : IDisposable
         ActiveWorld ??= _kernelFactory.CreateWorld(Allocator);
 
         _inputBuffer   = new InputBuffer();
-        // NativeResourceQueue needs a concrete kernel Allocator (native pointer). When the
-        // application root allocator is a non-concrete proxy (tests, mocks), fall back to a
-        // private MallocAllocator owned by the queue itself.
-        var queueAllocator = Allocator as KernelEngine.Kernel.Allocator ?? new KernelEngine.Kernel.MallocAllocator();
-        _resourceQueue = new NativeResourceQueue(queueAllocator);
+        _resourceQueue = FrameworkBackends.Required.CreateResourceQueue();
 
         InitializeSystems();
 
@@ -256,7 +253,7 @@ public class Application : IDisposable
                 if (_cts.IsCancellationRequested) return;
 
                 var factory = _resourceQueue.CreateFactory();
-                _resourceCache = new NativeResourceCache(new MallocAllocator());
+                _resourceCache = FrameworkBackends.Required.CreateResourceCache();
                 Resources = new ResourceManager(factory, _resourceCache);
                 // Give Tree access to ResourceManager for resource properties in auto-registration.
                 Tree.SetResourceManager(Resources);
@@ -264,16 +261,9 @@ public class Application : IDisposable
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
                 // Asset resolver: maps res:// + absolute paths to typed CPU-side data via the
-                // native ke_asset_resolver plugin. The injected image loader pointer comes from
-                // whichever IImageLoader plugin exposes INativeImageLoader; the C plugin never
-                // links it directly.
-                unsafe
-                {
-                    KernelEngine.Kernel.Native.ke_image_loader* nativeImg = null;
-                    if (imageLoader is INativeImageLoader ni) nativeImg = ni.Native;
-                    _assetResolver = new NativeAssetResolver(new MallocAllocator(), nativeImg,
-                                                             AppContext.BaseDirectory);
-                }
+                // native ke_asset_resolver plugin. The backend factory handles the image-loader
+                // pointer extraction internally — sugar layer never sees a ke_image_loader*.
+                _assetResolver = FrameworkBackends.Required.CreateAssetResolver(imageLoader, AppContext.BaseDirectory);
                 NodeTypeRegistrar.ActiveAssetResolver = _assetResolver;
 
                 if (modelLoader != null || imageLoader != null || fontLoader != null)

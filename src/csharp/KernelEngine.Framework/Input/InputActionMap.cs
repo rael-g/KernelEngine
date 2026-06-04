@@ -57,25 +57,24 @@ public sealed class InputActionMap<TEnum> : IInputActionMap, IDisposable where T
     }
 
     /// <summary>
-    /// Creates an empty map. Add actions via <see cref="AddAction"/> or load them from a file
-    /// via the <see cref="InputActions"/> entry points.
+    /// Creates an empty map. Uses <see cref="InputActions.CreateBackend"/> (set by the
+    /// registered backend assembly via DI extension, typically <c>AddNativeFramework()</c>).
+    /// Throws when no backend is registered.
     /// </summary>
-    public InputActionMap() : this(new MallocAllocator()) { }
-
-    /// <summary>Creates an empty map using a caller-provided allocator (used by tests).</summary>
-    public InputActionMap(Allocator allocator)
-    {
-        _native = new NativeInputActions(allocator) { EnumType = typeof(TEnum) };
-    }
+    public InputActionMap() : this(
+        InputActions.CreateBackend?.Invoke()
+            ?? throw new InvalidOperationException(
+                "No input-actions backend registered. Call services.AddNativeFramework() before creating an InputActionMap.")) { }
 
     /// <summary>
-    /// Constructs a map from an already-loaded backend. Action ids are discovered by looking up
-    /// each <typeparamref name="TEnum"/> value's name in the backend. Used by
-    /// <see cref="InputActions.LoadFromProject"/>.
+    /// Creates a map directly over <paramref name="backend"/>. Auto-discovers any
+    /// <typeparamref name="TEnum"/> values whose ToString() matches an existing action id in
+    /// <paramref name="backend"/> (used by <see cref="InputActions.LoadFromProject"/> for
+    /// already-loaded .input files); brand-new backends with no actions register cleanly too.
     /// </summary>
-    internal InputActionMap(IInputActionsBackend native)
+    public InputActionMap(IInputActionsBackend backend)
     {
-        _native = native;
+        _native = backend;
         _native.EnumType = typeof(TEnum);
         foreach (TEnum v in Enum.GetValues<TEnum>())
         {

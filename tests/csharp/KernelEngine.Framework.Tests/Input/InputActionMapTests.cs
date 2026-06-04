@@ -14,6 +14,18 @@ namespace KernelEngine.Framework.Tests;
 /// </summary>
 public class InputActionMapTests
 {
+    static InputActionMapTests()
+    {
+        // Tests bypass DI; wire the native backend factory directly so the parameterless
+        // InputActionMap<TEnum> constructor finds a backend.
+        if (FrameworkBackends.Default is null)
+        {
+            var factory = new NativeFrameworkBackendFactory();
+            FrameworkBackends.Default  = factory;
+            InputActions.CreateBackend = factory.CreateInputActions;
+        }
+    }
+
     public enum GameAction { Jump, Move, Strafe, Quit }
 
     private static IInputReader Snapshot(params Key[] keysDown)

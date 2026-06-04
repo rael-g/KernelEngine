@@ -8,7 +8,7 @@ using KernelEngine.TaskScheduler.Enki;
 using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger()
     .AddConsoleSink()
     .AddGlfwWindow(1280, 720, "KernelEngine — 13 Full Tree Demo")

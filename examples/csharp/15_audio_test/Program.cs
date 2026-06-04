@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 //   • Escape → quit
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger().AddConsoleSink()
     .AddInput()
     .AddGlfwWindow(640, 200, "KernelEngine — 15 Audio Test (click window, then Space)")

@@ -21,12 +21,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddCSharpPlugin(this IServiceCollection services)
     {
-        services.AddSingleton<INodeTypeRegistry>(sp =>
-        {
-            var alloc = sp.GetRequiredService<IAllocator>();
-            // Allocator is the concrete type in KernelEngine.Kernel; the plugin references Kernel.
-            return new NodeTypeRegistry((Allocator)alloc);
-        });
+        services.AddSingleton<INodeTypeRegistry>(_ =>
+            FrameworkBackends.Required.CreateNodeTypeRegistry());
 
         services.AddSingleton<ISceneLoader>(sp =>
         {

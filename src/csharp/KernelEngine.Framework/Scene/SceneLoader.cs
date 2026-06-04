@@ -32,10 +32,11 @@ public static class SceneLoader
 
     private static void RunLoad(Tree tree, string path, ResourceManager? resources, IServiceProvider? services)
     {
-        var world  = (World)tree.World;
+        var world  = tree.World;
+        var backends = FrameworkBackends.Required;
         bool ownsRegistry = false;
-        NodeTypeRegistry registry;
-        if (tree.NodeTypeRegistry is NodeTypeRegistry existing)
+        INodeTypeRegistry registry;
+        if (tree.NodeTypeRegistry is { } existing)
         {
             registry = existing;
         }
@@ -44,7 +45,7 @@ public static class SceneLoader
             // Self-contained fallback for callers (tests, scripts) that didn't wire a registry into
             // the Tree. Built-in framework types and user node types both resolve via the
             // reflection-backed NodeTypeRegistrar fallback registered below.
-            registry = new NodeTypeRegistry(new MallocAllocator());
+            registry = backends.CreateNodeTypeRegistry();
             ownsRegistry = true;
             registry.SetFallback(
                 tryCreate: (typeName, entity, name) =>
@@ -52,7 +53,7 @@ public static class SceneLoader
                     var type = NodeTypeRegistrar.ResolveNodeType(typeName);
                     if (type is null) return false;
                     var node = (Node)(services is not null
-                        ? Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance(services, type)
+                        ? ActivatorUtilities.CreateInstance(services, type)
                         : Activator.CreateInstance(type)!);
                     node.Initialize(entity, world, name);
                     return true;
@@ -68,9 +69,7 @@ public static class SceneLoader
 
         try
         {
-            using var loader = new NativeSceneLoader(new MallocAllocator(), world,
-                                                     (NativeSceneTree)tree.NativeWrapper,
-                                                     registry, projectRoot: AppContext.BaseDirectory);
+            using var loader = backends.CreateSceneLoader(world, tree.NativeWrapper, registry, AppContext.BaseDirectory);
             loader.Load(path);
         }
         finally

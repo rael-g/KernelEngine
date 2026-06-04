@@ -157,11 +157,13 @@ public class NodeTypeRegistrarTests
         uint nextHandle = 1;
         rf.CreateMesh(Arg.Any<Vertex[]>(), Arg.Any<ushort[]>())
           .Returns(_ => new MeshHandle(nextHandle++));
-        using var allocator = new MallocAllocator();
-        using var cache = new NativeResourceCache(allocator);
+        var factory = new NativeFrameworkBackendFactory();
+        FrameworkBackends.Default ??= factory;
+        using var cache = factory.CreateResourceCache();
         var rm = new ResourceManager(rf, cache);
+        NodeTypeRegistrar.ActiveAssetResolver ??= factory.CreateAssetResolver(null, AppContext.BaseDirectory);
         var node = new MultiPropertyNode();
-        
+
         NodeTypeRegistrar.ApplyProperty(node, "Mesh", "res://primitives/cube", rm);
         Assert.NotNull(node.Mesh);
         
@@ -179,8 +181,9 @@ public class NodeTypeRegistrarTests
     public void BuildInlineMaterial_Works()
     {
         var rf = Substitute.For<IResourceFactory>();
-        using var allocator = new MallocAllocator();
-        using var cache = new NativeResourceCache(allocator);
+        var factory = new NativeFrameworkBackendFactory();
+        FrameworkBackends.Default ??= factory;
+        using var cache = factory.CreateResourceCache();
         var rm = new ResourceManager(rf, cache);
         var node = new MultiPropertyNode();
         

@@ -11,7 +11,7 @@ namespace KernelEngine.Framework;
 /// <c>ke_node_type_registry</c> callbacks. The C# shell only owns the unmanaged handle and
 /// presents the path-string ABI in a managed-friendly form.
 /// </summary>
-internal sealed unsafe class NativeSceneLoader : IDisposable
+internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
 {
     private ke_scene_loader* _native;
 

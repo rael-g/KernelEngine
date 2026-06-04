@@ -10,7 +10,7 @@ namespace KernelEngine.Kernel;
 /// a future Lua binding would register Lua table factories.
 /// </para>
 /// </summary>
-public interface INodeTypeRegistry
+public interface INodeTypeRegistry : IDisposable
 {
     /// <summary>
     /// Registers a node type by string name.

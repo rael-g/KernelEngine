@@ -29,7 +29,7 @@ static (Vertex[] verts, ushort[] idx) BuildCube()
 }
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger()
     .AddConsoleSink()
     .AddGlfwWindow(1280, 720, "KernelEngine — 11 SSAO")

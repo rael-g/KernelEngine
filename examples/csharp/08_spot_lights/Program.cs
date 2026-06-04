@@ -7,7 +7,7 @@ using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger()
     .AddConsoleSink()
     .AddGlfwWindow(1280, 720, "KernelEngine — 08 Spot Lights")

@@ -17,7 +17,7 @@ public static class NodeTypeRegistrar
     /// can use it to resolve <c>res://*.material</c> references through the native
     /// <c>ke_asset_resolver</c> plugin. Tests may set this directly.
     /// </summary>
-    internal static NativeAssetResolver? ActiveAssetResolver { get; set; }
+    internal static IAssetResolverBackend? ActiveAssetResolver { get; set; }
 
     /// <summary>
     /// Registers a C# <typeparamref name="T"/> node type under its short class name.
@@ -177,19 +177,15 @@ public static class NodeTypeRegistrar
 
     private static object? ResolveResource(Type type, string resPath, ResourceManager resources)
     {
-        const string primitivePrefix = "res://primitives/";
-        if (type == typeof(Mesh) && resPath.StartsWith(primitivePrefix, StringComparison.Ordinal))
+        if (type == typeof(Mesh) && resPath.StartsWith("res://primitives/", StringComparison.Ordinal))
         {
-            var name = resPath[primitivePrefix.Length..];
-            MeshShape shape = name switch
-            {
-                "plane"  => MeshShape.Plane(),
-                "cube"   => MeshShape.Cube(),
-                "quad"   => MeshShape.Quad(),
-                "sphere" => MeshShape.Sphere(32),
-                _ => throw new InvalidDataException($"Unknown primitive '{name}'."),
-            };
-            return resources.CreateMeshAsync(shape).GetAwaiter().GetResult();
+            var resolver = ActiveAssetResolver
+                ?? throw new InvalidOperationException(
+                    "Mesh primitive resolution requires an asset resolver backend. " +
+                    "Call services.AddNativeFramework() before scene loading.");
+            var buffer = resolver.ResolveMesh(resPath)
+                ?? throw new InvalidDataException($"Unknown primitive '{resPath}'.");
+            return resources.CreateMeshAsync(buffer.Vertices, buffer.Indices).GetAwaiter().GetResult();
         }
         if (type == typeof(Material) && resPath.EndsWith(".material", StringComparison.Ordinal))
         {

@@ -9,6 +9,6 @@ using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.CSharp;
 
-var services = new ServiceCollection().AddKernel().AddLogger().AddConsoleSink().AddInput().AddProjectConfig().AddInputActions().AddGlfwWindow().AddBgfxRenderer().AddBox2D().AddMiniAudio().AddAudioFramework().AddTextStbTrueType().AddCSharpPlugin();
+var services = new ServiceCollection().AddKernel().AddNativeFramework().AddLogger().AddConsoleSink().AddInput().AddProjectConfig().AddInputActions().AddGlfwWindow().AddBgfxRenderer().AddBox2D().AddMiniAudio().AddAudioFramework().AddTextStbTrueType().AddCSharpPlugin();
 using var app = new Application();
 app.Run(services);

@@ -8,13 +8,12 @@ namespace KernelEngine.Framework.Tests;
 
 public class LabelRenderSystemTests
 {
-    private NativeResourceCache? _cache;
-    private MallocAllocator? _allocator;
+    private IResourceCacheBackend? _cache;
 
     private Font CreateMockFont(GlyphMetrics[] glyphs)
     {
-        _allocator ??= new MallocAllocator();
-        _cache ??= new NativeResourceCache(_allocator);
+        FrameworkBackends.Default ??= new NativeFrameworkBackendFactory();
+        _cache ??= FrameworkBackends.Required.CreateResourceCache();
         // Register the synthetic handle so subsequent Retain/Release in the Label lifecycle
         // resolve cleanly in the native cache.
         _cache.RegisterResource(1u, () => { });

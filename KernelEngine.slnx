@@ -34,6 +34,7 @@
     <Project Path="src/csharp/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework.Abstractions/KernelEngine.Framework.Abstractions.csproj" />
+    <Project Path="src/csharp/KernelEngine.Framework.Native/KernelEngine.Framework.Native.csproj" />
     <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/KernelEngine.Logging.Serilog/KernelEngine.Logging.Serilog.csproj" />
     <Project Path="src/csharp/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />

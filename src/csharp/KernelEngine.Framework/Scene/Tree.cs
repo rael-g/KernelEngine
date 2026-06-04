@@ -10,7 +10,7 @@ namespace KernelEngine.Framework;
 /// Node/Tree are framework-level concepts; the ECS world itself knows only
 /// entities, components, and systems.
 /// </summary>
-public sealed unsafe class Tree : ISceneTree, IDisposable
+public sealed class Tree : ISceneTree, IDisposable
 {
     private readonly IWorld              _world;
     private readonly Node                _root;
@@ -21,21 +21,44 @@ public sealed unsafe class Tree : ISceneTree, IDisposable
 
     private readonly HashSet<Type> _registeredTypes = [];
 
+    /// <summary>
+    /// Constructs a Tree on top of <paramref name="world"/> using the supplied scene-tree
+    /// backend. Backend creation lives in <c>KernelEngine.Framework.Native</c> — this
+    /// sugar layer accepts the interface so callers (or tests) can swap impls without
+    /// touching kernel pointers.
+    /// </summary>
     public Tree(IWorld world,
+                ISceneTreeBackend  backend,
                 INodeTypeRegistry? nodeTypeRegistry = null,
                 IServiceProvider?  services         = null)
     {
         _world            = world;
         _nodeTypeRegistry = nodeTypeRegistry;
         _services         = services;
-        // The native scene tree owns the root entity (creates it with Hierarchy+Name
-        // components). C# Tree only adds Transform on top, then wraps in a Node.
-        var worldNative   = ((World)world).Native;
-        _native           = new NativeSceneTree(worldNative, new MallocAllocator());
+        _native           = backend;
         var rootEntity    = _native.Root;
         AttachTransform(rootEntity);
         _root             = new Node(rootEntity, world, "Root");
     }
+
+    /// <summary>
+    /// Convenience constructor that resolves the scene-tree backend from
+    /// <paramref name="backendFactory"/> at construction time.
+    /// </summary>
+    public Tree(IWorld world,
+                IFrameworkBackendFactory backendFactory,
+                INodeTypeRegistry?       nodeTypeRegistry = null,
+                IServiceProvider?        services         = null)
+        : this(world, backendFactory.CreateSceneTree(world), nodeTypeRegistry, services) { }
+
+    /// <summary>
+    /// Convenience constructor that pulls the scene-tree backend from the process-wide
+    /// <see cref="FrameworkBackends.Required"/>. Throws if no backend was registered.
+    /// </summary>
+    public Tree(IWorld world,
+                INodeTypeRegistry? nodeTypeRegistry = null,
+                IServiceProvider?  services         = null)
+        : this(world, FrameworkBackends.Required, nodeTypeRegistry, services) { }
 
     public void Dispose() => _native.Dispose();
 
