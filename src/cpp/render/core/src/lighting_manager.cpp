@@ -118,6 +118,13 @@ ke_result LightingManager::CreateMaterial(RenderContext& ctx, const TextureManag
         return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateMaterial", "Invalid arguments");
     ke_texture_handle tex  = mat->albedo;
     ke_texture_handle nmap = mat->normal_map;
+    // Default-constructed (idx=0) normal map means "no normal map" — handle 0 is
+    // the built-in 1×1 white texture and decoding it as a tangent-space normal
+    // (white pixel * 2 - 1 = +1+1+1) corrupts every face's lighting. The valid-
+    // check `ke_texture_is_valid` keys off KE_HANDLE_NONE (UINT32_MAX), so we
+    // promote the unset case here at the API boundary; albedo legitimately uses
+    // handle 0 (white tint) and stays untouched.
+    if (nmap.idx == 0) nmap.idx = KE_HANDLE_NONE;
     materials_.push_back({mat->r, mat->g, mat->b, mat->a, tex, mat->metallic, mat->roughness, nmap, true});
     *out_handle = {(uint32_t)(materials_.size() - 1)};
     return KE_OK;

@@ -129,6 +129,36 @@ TEST_F(LightingManagerTest, CreateMaterial_AssignsHandle)
     EXPECT_EQ(h.idx, 0);
 }
 
+// Regression: an unset (idx=0) normal_map slot must be stored as KE_HANDLE_NONE
+// so the runtime's ke_texture_is_valid check returns false and the shader keeps
+// the vertex normal. Without this, the shader sampled handle 0 (the white
+// texture) as a tangent-space normal — every face's lighting was corrupted
+// (cube tops went dark in example 06, mirror reflections aimed at the wrong
+// cubemap face in example 05). Caller-side handling lived in the deleted
+// ResourceCommandQueue path; this owns the contract now.
+TEST_F(LightingManagerTest, CreateMaterial_NormalizesUnsetNormalMap)
+{
+    ke_material mat{};
+    mat.albedo.idx     = 0;
+    mat.normal_map.idx = 0;
+    ke_material_handle h;
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), KE_OK);
+    const auto& stored = manager->GetMaterial(h);
+    EXPECT_EQ(stored.normal_map_handle.idx, KE_HANDLE_NONE);
+    EXPECT_FALSE(ke_texture_is_valid(stored.normal_map_handle));
+    // Albedo idx=0 is the built-in white texture and stays untouched.
+    EXPECT_EQ(stored.texture_handle.idx, 0u);
+}
+
+TEST_F(LightingManagerTest, CreateMaterial_KeepsExplicitNormalMap)
+{
+    ke_material mat{};
+    mat.normal_map.idx = 7;
+    ke_material_handle h;
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), KE_OK);
+    EXPECT_EQ(manager->GetMaterial(h).normal_map_handle.idx, 7u);
+}
+
 TEST_F(LightingManagerTest, DestroyMaterial_MarksInvalid)
 {
     ke_material mat{};

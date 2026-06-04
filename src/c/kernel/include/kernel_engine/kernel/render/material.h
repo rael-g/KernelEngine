@@ -17,7 +17,7 @@ extern "C"
         ke_texture_handle albedo;   ///< Albedo texture handle; KE_TEXTURE_HANDLE_WHITE for solid color
         float metallic;             ///< [0..1]: 0 = dielectric, 1 = metallic
         float roughness;            ///< [0..1]: 0 = mirror, 1 = fully rough
-        ke_texture_handle normal_map; ///< Tangent-space normal map; 0 = disabled (flat normal)
+        ke_texture_handle normal_map; ///< Tangent-space normal map; KE_HANDLE_NONE (or idx 0) = disabled (flat normal). Renderer normalizes idx 0 → KE_HANDLE_NONE at material creation.
     } ke_material;
 
 #ifdef __cplusplus
