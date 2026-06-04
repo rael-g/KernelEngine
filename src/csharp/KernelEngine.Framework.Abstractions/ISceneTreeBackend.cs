@@ -11,6 +11,13 @@ public interface ISceneTreeBackend : IDisposable
     ulong Root { get; }
 
     /// <summary>
+    /// Creates a node attached under <paramref name="parent"/> (0 = the root). Initialises
+    /// Transform (origin, identity, unit scale), Hierarchy (linked into the parent's child
+    /// list), and Name. Returns the new entity, or 0 on failure.
+    /// </summary>
+    ulong CreateNode(string name, ulong parent);
+
+    /// <summary>
     /// Resolves a name or path to an entity. Supports plain names (recursive pre-order
     /// search) and "/Absolute/Path" form. Returns <see cref="KE_ENTITY_INVALID"/> when
     /// not found.

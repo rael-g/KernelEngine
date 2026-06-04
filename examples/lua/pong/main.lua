@@ -200,11 +200,59 @@ typedef struct ke_render_bgfx_params {
 } ke_render_bgfx_params;
 
 ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render);
+
+// ── World + ECS ─────────────────────────────────────────────────────────
+typedef uint64_t ke_entity;
+typedef uint32_t ke_component_id;
+typedef struct ke_frame ke_frame; // opaque
+typedef struct ke_system_params ke_system_params; // opaque
+typedef struct ke_task_scheduler ke_task_scheduler; // opaque
+typedef struct ke_ecs_registry {
+    struct ke_allocator *allocator;
+    ke_entity            next_entity;
+    void                *internal_data;
+} ke_ecs_registry;
+
+typedef struct ke_world_params {
+    struct ke_allocator *allocator;
+} ke_world_params;
+
+typedef struct ke_world {
+    void                *handle;
+    struct ke_allocator *allocator;
+    struct ke_ecs_registry *registry;
+    void                *internal_data;
+    void  (*destroy)(struct ke_world *self);
+    ke_result (*update)(struct ke_world *self, const struct ke_frame *frame);
+    struct ke_ecs_registry *(*get_registry)(struct ke_world *self);
+    ke_result (*add_system)(struct ke_world *self, const ke_system_params *params);
+    uint32_t (*transform_id)(struct ke_world *self);
+    uint32_t (*hierarchy_id)(struct ke_world *self);
+    uint32_t (*name_id)     (struct ke_world *self);
+    uint32_t (*script_id)   (struct ke_world *self);
+    struct ke_task_scheduler *(*get_task_scheduler)(struct ke_world *self);
+} ke_world;
+
+ke_result ke_world_create(const ke_world_params *params, ke_world **out_world);
+
+// ── Scene tree (framework plugin) ───────────────────────────────────────
+typedef struct ke_scene_tree {
+    void     *handle;
+    ke_entity (*root)        (struct ke_scene_tree *self);
+    ke_entity (*create_node) (struct ke_scene_tree *self, const char *name, ke_entity parent);
+    ke_result (*destroy_node)(struct ke_scene_tree *self, ke_entity entity);
+    void      (*destroy_all) (struct ke_scene_tree *self);
+    ke_entity (*find_node)   (struct ke_scene_tree *self, const char *name_or_path);
+    void      (*destroy)     (struct ke_scene_tree *self);
+} ke_scene_tree;
+
+ke_result ke_scene_tree_create(struct ke_world *world, struct ke_allocator *alloc, ke_scene_tree **out_tree);
 ]]
 
 local kernel = ffi.load("ke_kernel")
 local window_glfw = ffi.load("ke_window_glfw")
 local render_bgfx = ffi.load("ke_render_bgfx")
+local framework = ffi.load("ke_framework")
 
 local LOG_TRACE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL = 0, 1, 2, 3, 4, 5
 local LEVEL_NAMES = { [0]="TRACE", [1]="DEBUG", [2]="INFO", [3]="WARN", [4]="ERROR", [5]="FATAL" }
@@ -287,6 +335,31 @@ assert(render_bgfx.ke_render_bgfx_create(rb_params, render_out) == 0)
 local render = render_out[0]
 assert(render.on_initialize(render) == 0)
 
+-- ── World + Scene tree ──────────────────────────────────────────────────────
+
+local world_params = ffi.new("ke_world_params")
+world_params.allocator = alloc
+local world_out = ffi.new("ke_world*[1]")
+assert(kernel.ke_world_create(world_params, world_out) == 0)
+local world = world_out[0]
+
+local tree_out = ffi.new("ke_scene_tree*[1]")
+assert(framework.ke_scene_tree_create(world, alloc, tree_out) == 0)
+local tree = tree_out[0]
+
+local root = tree.root(tree)
+io.write(string.format("[scene] root entity = %d\n", tonumber(root)))
+local sun       = tree.create_node(tree, "Sun",       root)
+local floor_ent = tree.create_node(tree, "Floor",     root)
+local cube_ent  = tree.create_node(tree, "Caster",    root)
+io.write(string.format("[scene] created nodes: Sun=%d Floor=%d Caster=%d\n",
+    tonumber(sun), tonumber(floor_ent), tonumber(cube_ent)))
+
+local found = tree.find_node(tree, "Floor")
+io.write(string.format("[scene] find_node('Floor') = %d (expected %d)\n",
+    tonumber(found), tonumber(floor_ent)))
+assert(found == floor_ent, "find_node round-trip mismatch")
+
 -- ── Frame loop ──────────────────────────────────────────────────────────────
 -- Cycles the clear color so we get visual confirmation the renderer is alive
 -- (no scene yet — that requires ke_world + scene tree + render systems, next gaps).
@@ -308,6 +381,8 @@ io.write(string.format("[loop] exited after %d frames\n", frames))
 
 -- ── Shutdown ────────────────────────────────────────────────────────────────
 
+tree.destroy(tree)
+world.destroy(world)
 render.on_shutdown(render)
 render.destroy(render)
 win.on_shutdown(win)

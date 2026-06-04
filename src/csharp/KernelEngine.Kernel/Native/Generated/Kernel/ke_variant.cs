@@ -7,7 +7,7 @@ public unsafe partial struct ke_variant
 {
     public ke_variant_type type;
 
-    [NativeTypeName("__AnonymousRecord_variant_L38_C9")]
+    [NativeTypeName("__AnonymousRecord_variant_L42_C9")]
     public _Anonymous_e__Union Anonymous;
 
     [UnscopedRef]
@@ -124,21 +124,4 @@ public unsafe partial struct ke_variant
         [NativeTypeName("const struct ke_variant_table *")]
         public ke_variant_table* t;
     }
-}
-
-public unsafe partial struct ke_variant_table_entry
-{
-    [NativeTypeName("const char *")]
-    public sbyte* key;
-
-    public ke_variant value;
-}
-
-public unsafe partial struct ke_variant_table
-{
-    [NativeTypeName("uint32_t")]
-    public uint count;
-
-    [NativeTypeName("const ke_variant_table_entry *")]
-    public ke_variant_table_entry* entries;
 }

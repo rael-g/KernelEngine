@@ -13,6 +13,7 @@ typedef struct ke_scene_tree_impl
     ke_allocator     *allocator;
     ke_ecs_registry  *registry;
     ke_entity         root;
+    ke_component_id   transform_cid;
     ke_component_id   hierarchy_cid;
     ke_component_id   name_cid;
 } ke_scene_tree_impl;
@@ -37,6 +38,69 @@ static ke_entity tree_root(ke_scene_tree *self)
 {
     if (!self || !self->handle) return KE_ENTITY_INVALID;
     return ((ke_scene_tree_impl *)self->handle)->root;
+}
+
+// ── vtable: create_node ───────────────────────────────────────────────────────
+//
+// Ported 1:1 from C# Tree.CreateEntityWithHierarchy: spin up an ECS entity,
+// attach Transform (origin, identity, unit scale), Hierarchy, and Name, then
+// prepend the new node into the parent's first_child list in O(1).
+
+static ke_entity tree_create_node(ke_scene_tree *self, const char *name, ke_entity parent)
+{
+    if (!self || !self->handle) return KE_ENTITY_INVALID;
+    ke_scene_tree_impl *impl = (ke_scene_tree_impl *)self->handle;
+    if (parent == KE_ENTITY_INVALID) parent = impl->root;
+
+    ke_entity entity = ke_ecs_entity_create(impl->registry);
+    if (entity == KE_ENTITY_INVALID) return KE_ENTITY_INVALID;
+
+    ke_transform_component *t = (ke_transform_component *)ke_ecs_component_add(
+        impl->registry, entity, impl->transform_cid);
+    if (t) {
+        t->position = (ke_vec3){ 0.0f, 0.0f, 0.0f };
+        t->rotation = (ke_quat){ 0.0f, 0.0f, 0.0f, 1.0f };
+        t->scale    = (ke_vec3){ 1.0f, 1.0f, 1.0f };
+        // world_matrix is overwritten by the TransformSystem each tick; identity is fine.
+        for (int i = 0; i < 16; ++i) t->world_matrix.m[i] = (i % 5 == 0) ? 1.0f : 0.0f;
+    }
+
+    ke_hierarchy_component *h = (ke_hierarchy_component *)ke_ecs_component_add(
+        impl->registry, entity, impl->hierarchy_cid);
+    if (!h) {
+        ke_ecs_entity_destroy(impl->registry, entity);
+        return KE_ENTITY_INVALID;
+    }
+    h->parent       = parent;
+    h->first_child  = KE_ENTITY_INVALID;
+    h->next_sibling = KE_ENTITY_INVALID;
+    h->prev_sibling = KE_ENTITY_INVALID;
+
+    ke_name_component *n = (ke_name_component *)ke_ecs_component_add(
+        impl->registry, entity, impl->name_cid);
+    if (n) {
+        if (name && *name) {
+            // Copy up to 63 bytes; NameComponent is fixed 64 chars (last byte is the null terminator).
+            size_t len = 0;
+            while (name[len] && len < sizeof(n->name) - 1) { n->name[len] = name[len]; ++len; }
+            n->name[len] = '\0';
+        } else {
+            n->name[0] = '\0';
+        }
+    }
+
+    // Prepend into parent's first_child list (doubly-linked, O(1)).
+    ke_hierarchy_component *ph = get_hierarchy(impl, parent);
+    if (ph) {
+        h->next_sibling = ph->first_child;
+        if (ph->first_child != KE_ENTITY_INVALID) {
+            ke_hierarchy_component *sib = get_hierarchy(impl, ph->first_child);
+            if (sib) sib->prev_sibling = entity;
+        }
+        ph->first_child = entity;
+    }
+
+    return entity;
 }
 
 // ── vtable: find_node ─────────────────────────────────────────────────────────
@@ -211,6 +275,7 @@ ke_result ke_scene_tree_create(struct ke_world *world, ke_allocator *alloc, ke_s
     if (!world || !alloc || !out_tree) return KE_ERROR_INVALID_ARGUMENT;
     ke_ecs_registry *registry = world->get_registry(world);
     if (!registry) return KE_ERROR_NOT_INITIALIZED;
+    ke_component_id tcid = world->transform_id(world);
     ke_component_id hcid = world->hierarchy_id(world);
     ke_component_id ncid = world->name_id(world);
 
@@ -221,6 +286,7 @@ ke_result ke_scene_tree_create(struct ke_world *world, ke_allocator *alloc, ke_s
     impl->world = world;
     impl->allocator = alloc;
     impl->registry = registry;
+    impl->transform_cid = tcid;
     impl->hierarchy_cid = hcid;
     impl->name_cid = ncid;
 
@@ -254,6 +320,7 @@ ke_result ke_scene_tree_create(struct ke_world *world, ke_allocator *alloc, ke_s
     impl->api = (ke_scene_tree){
         .handle       = impl,
         .root         = tree_root,
+        .create_node  = tree_create_node,
         .destroy_node = tree_destroy_node,
         .destroy_all  = tree_destroy_all,
         .find_node    = tree_find_node,

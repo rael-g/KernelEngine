@@ -136,7 +136,7 @@ public sealed class Tree : ISceneTree, IDisposable
     {
         var parentNode = parent ?? _root;
         var uniqueName = MakeUniqueChildName(parentNode, name);
-        var entity = CreateEntityWithHierarchy(uniqueName, parentNode.Entity);
+        var entity = _native.CreateNode(uniqueName, parentNode.Entity);
         return new Node(entity, _world, uniqueName);
     }
 
@@ -157,7 +157,7 @@ public sealed class Tree : ISceneTree, IDisposable
         var parentNode = parent ?? _root;
         var requested  = name ?? node.Name;
         var uniqueName = MakeUniqueChildName(parentNode, requested);
-        var entity     = CreateEntityWithHierarchy(uniqueName, parentNode.Entity);
+        var entity = _native.CreateNode(uniqueName, parentNode.Entity);
         node.Initialize(entity, _world, uniqueName);
 
         // Auto-register the type so scene files can reference it by name without
@@ -301,69 +301,12 @@ public sealed class Tree : ISceneTree, IDisposable
         for (var c = n.FirstChild; c != null; c = c.NextSibling) WalkDt(c, dt, visit);
     }
 
-    // ── Entity/hierarchy management ───────────────────────────────────────────
-
-    /// <summary>
-    /// Creates an ECS entity initialised with Transform, Hierarchy, and Name components,
-    /// and links it into the parent's child list.
-    /// </summary>
-    private ulong CreateEntityWithHierarchy(string name, ulong parent)
-    {
-        var reg    = _world.Registry;
-        var entity = reg.CreateEntity();
-
-        // Transform — default: origin, identity rotation, unit scale
-        var t = reg.AddComponent<TransformComponent>(entity, _world.TransformComponentId);
-        t[0] = new TransformComponent
-        {
-            Position    = Vector3.Zero,
-            Rotation    = Quaternion.Identity,
-            Scale       = Vector3.One,
-            WorldMatrix = Matrix4x4.Identity,
-        };
-
-        // Hierarchy — link to parent, no children yet
-        var h = reg.AddComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        h[0] = new HierarchyComponent { Parent = parent };
-
-        // Name
-        var n = reg.AddComponent<NameComponent>(entity, _world.NameComponentId);
-        SetName(ref n[0], name);
-
-        // Prepend entity into parent's child list (O(1) doubly-linked prepend)
-        if (parent != KE_ENTITY_INVALID)
-        {
-            var ph = reg.GetComponent<HierarchyComponent>(parent, _world.HierarchyComponentId);
-            if (!ph.IsEmpty)
-            {
-                h[0].NextSibling = ph[0].FirstChild;
-                if (ph[0].FirstChild != KE_ENTITY_INVALID)
-                {
-                    var sib = reg.GetComponent<HierarchyComponent>(ph[0].FirstChild, _world.HierarchyComponentId);
-                    if (!sib.IsEmpty) sib[0].PrevSibling = entity;
-                }
-                ph[0].FirstChild = entity;
-            }
-        }
-
-        return entity;
-    }
-
-    private static void SetName(ref NameComponent comp, string name)
-    {
-        if (string.IsNullOrEmpty(name)) return;
-        var bytes = System.Text.Encoding.UTF8.GetBytes(name);
-        int len = Math.Min(bytes.Length, 63);
-        for (int i = 0; i < len; i++) comp.Name[i] = bytes[i];
-        comp.Name[len] = 0;
-    }
-
     // ── ISceneTree ────────────────────────────────────────────────────────────
 
     ulong ISceneTree.Root => _root.Entity;
 
     ulong ISceneTree.CreateNode(string name, ulong parentEntity) =>
-        CreateEntityWithHierarchy(name, parentEntity == 0 ? _root.Entity : parentEntity);
+        _native.CreateNode(name, parentEntity);
 
     bool ISceneTree.DestroyNode(ulong entity)
     {

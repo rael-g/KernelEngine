@@ -36,6 +36,15 @@ internal sealed unsafe class NativeSceneTree : ISceneTreeBackend
     /// <summary>Engine-internal: raw pointer for plugins (scene loader, etc.).</summary>
     internal ke_scene_tree* NativePtr => _native;
 
+    public ulong CreateNode(string name, ulong parent)
+    {
+        var bytes = Encoding.UTF8.GetBytes((name ?? string.Empty) + "\0");
+        fixed (byte* p = bytes)
+        {
+            return _native->create_node(_native, (sbyte*)p, parent);
+        }
+    }
+
     public ulong FindNode(string nameOrPath)
     {
         var bytes = Encoding.UTF8.GetBytes(nameOrPath + "\0");

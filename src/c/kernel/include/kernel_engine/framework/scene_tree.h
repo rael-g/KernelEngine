@@ -32,6 +32,12 @@ extern "C"
         /// Returns the root entity. Always valid for the lifetime of the tree.
         ke_entity (*root)(struct ke_scene_tree *self);
 
+        /// Creates a new node attached under `parent` (KE_ENTITY_INVALID = root).
+        /// Initialises Transform (origin, identity rotation, unit scale), Hierarchy
+        /// (prepended into the parent's child list — O(1)), and Name. Returns the
+        /// new entity, or KE_ENTITY_INVALID on failure. `name` may be NULL/empty.
+        ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent);
+
         /// Destroys a node and all its descendants. Fires on_destroy callbacks in
         /// post-order (children before parents). After this call the entity must not
         /// be used. Returns KE_ERROR_NOT_FOUND if the entity is not part of this tree.
