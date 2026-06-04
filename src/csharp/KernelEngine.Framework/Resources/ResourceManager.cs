@@ -18,12 +18,19 @@ namespace KernelEngine.Framework;
 public sealed class ResourceManager
 {
     private readonly IResourceFactory    _factory;
-    private readonly IResourceCacheBackend _cache;
+    private readonly IResourceCacheBackend _meshCache;
+    private readonly IResourceCacheBackend _materialCache;
+    private readonly IResourceCacheBackend _textureCache;
 
-    internal ResourceManager(IResourceFactory factory, IResourceCacheBackend cache)
+    internal ResourceManager(IResourceFactory factory,
+                             IResourceCacheBackend meshCache,
+                             IResourceCacheBackend materialCache,
+                             IResourceCacheBackend textureCache)
     {
-        _factory = factory;
-        _cache   = cache;
+        _factory       = factory;
+        _meshCache     = meshCache;
+        _materialCache = materialCache;
+        _textureCache  = textureCache;
     }
 
     public Task<Material> CreateMaterialAsync(
@@ -40,8 +47,8 @@ public sealed class ResourceManager
             .ContinueWith(t =>
             {
                 var handle  = t.Result;
-                _cache.RegisterResource(handle.Value, () => _factory.DestroyMaterial(handle));
-                return new Material(_cache, handle);
+                _materialCache.RegisterResource(handle.Value, () => _factory.DestroyMaterial(handle));
+                return new Material(_materialCache, handle);
             }, TaskContinuationOptions.ExecuteSynchronously);
     }
 
@@ -50,8 +57,8 @@ public sealed class ResourceManager
             .ContinueWith(t =>
             {
                 var handle = t.Result;
-                _cache.RegisterResource(handle.Value, () => _factory.DestroyMesh(handle));
-                return new Mesh(_cache, handle);
+                _meshCache.RegisterResource(handle.Value, () => _factory.DestroyMesh(handle));
+                return new Mesh(_meshCache, handle);
             }, TaskContinuationOptions.ExecuteSynchronously);
 
     public Task<Texture> CreateTextureAsync(uint width, uint height, byte[] pixels)
@@ -59,8 +66,8 @@ public sealed class ResourceManager
             .ContinueWith(t =>
             {
                 var handle = t.Result;
-                _cache.RegisterResource(handle.Value, () => _factory.DestroyTexture(handle));
-                return new Texture(_cache, handle);
+                _textureCache.RegisterResource(handle.Value, () => _factory.DestroyTexture(handle));
+                return new Texture(_textureCache, handle);
             }, TaskContinuationOptions.ExecuteSynchronously);
 
     public Task<Texture> CreateCubemapAsync(uint faceSize, byte[] data)
@@ -68,8 +75,8 @@ public sealed class ResourceManager
             .ContinueWith(t =>
             {
                 var handle = t.Result;
-                _cache.RegisterResource(handle.Value, () => _factory.DestroyTexture(handle));
-                return new Texture(_cache, handle);
+                _textureCache.RegisterResource(handle.Value, () => _factory.DestroyTexture(handle));
+                return new Texture(_textureCache, handle);
             }, TaskContinuationOptions.ExecuteSynchronously);
 
     /// <summary>
@@ -81,7 +88,7 @@ public sealed class ResourceManager
                                    IReadOnlyList<Material>  materials,
                                    IReadOnlyList<Texture>   textures)
     {
-        uint syntheticHandle = _cache.RegisterComposite(() =>
+        uint syntheticHandle = _textureCache.RegisterComposite(() =>
         {
             // Each ModelMesh entry holds its own reference to mesh + material; the materials and
             // textures lists separately hold the +1 reference from construction.
@@ -93,6 +100,6 @@ public sealed class ResourceManager
             foreach (var material in materials) material.Release();
             foreach (var texture  in textures)  texture.Release();
         });
-        return new Model(_cache, syntheticHandle, meshes);
+        return new Model(_textureCache, syntheticHandle, meshes);
     }
 }

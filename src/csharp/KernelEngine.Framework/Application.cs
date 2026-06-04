@@ -70,7 +70,9 @@ public class Application : IDisposable
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
     private readonly List<InputActionEvent> _actionEventBuffer = new(32);
-    private IResourceCacheBackend? _resourceCache;
+    private IResourceCacheBackend? _meshCache;
+    private IResourceCacheBackend? _materialCache;
+    private IResourceCacheBackend? _textureCache;
     private IAssetResolverBackend? _assetResolver;
     private ISceneTree? _sceneTree;
 
@@ -79,7 +81,6 @@ public class Application : IDisposable
     private IResourceCommandQueue _resourceQueue = null!;
     private ShadowRenderSystem? _shadowSystem;
     private Physics2DSystem? _physics2DSystem;
-    private ISceneLoader? _sceneLoader;
 
     private string GetGpuFatalError()
     {
@@ -253,8 +254,10 @@ public class Application : IDisposable
                 if (_cts.IsCancellationRequested) return;
 
                 var factory = _resourceQueue.CreateFactory();
-                _resourceCache = FrameworkBackends.Required.CreateResourceCache();
-                Resources = new ResourceManager(factory, _resourceCache);
+                _meshCache     = FrameworkBackends.Required.CreateResourceCache();
+                _materialCache = FrameworkBackends.Required.CreateResourceCache();
+                _textureCache  = FrameworkBackends.Required.CreateResourceCache();
+                Resources = new ResourceManager(factory, _meshCache, _materialCache, _textureCache);
                 // Give Tree access to ResourceManager for resource properties in auto-registration.
                 Tree.SetResourceManager(Resources);
                 var modelLoader = Services.GetService<IAssetLoader>();
@@ -267,13 +270,10 @@ public class Application : IDisposable
                 NodeTypeRegistrar.ActiveAssetResolver = _assetResolver;
 
                 if (modelLoader != null || imageLoader != null || fontLoader != null)
-                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _resourceCache, _assetResolver);
+                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _textureCache, _assetResolver);
 
                 // Scene tree — Framework's Tree implements ISceneTree directly (S7).
                 _sceneTree = Tree;
-
-                // Scene loader from DI (provided by KernelEngine.CSharp plugin or custom impl).
-                _sceneLoader = Services.GetService<ISceneLoader>();
 
                 // Register fallback so any Node subclass works in scene files without
                 // explicit registration. Built-in types are auto-registered on first AddNode<T>.
@@ -461,10 +461,7 @@ public class Application : IDisposable
 
         var relative = resPath[prefix.Length..];
         var absolute = Path.Combine(AppContext.BaseDirectory, relative);
-        if (_sceneLoader is null)
-            throw new InvalidOperationException(
-                "No ISceneLoader registered. Call AddCSharpPlugin() (or another scene loader plugin) in your service collection.");
-        _sceneLoader.LoadAsync(absolute).GetAwaiter().GetResult();
+        SceneLoader.LoadAsync(Tree, absolute, Resources, Services).GetAwaiter().GetResult();
         Logger?.Info("Application", $"Loaded default scene: {resPath}");
     }
 
@@ -708,13 +705,15 @@ public class Application : IDisposable
     public virtual void Dispose()
     {
         _cts.Dispose();
-        (_sceneLoader as IDisposable)?.Dispose();
         // Destroy all nodes via ISceneTree (Tree implements it directly — S7).
         if (_sceneTree != null)
             _sceneTree.DestroyAll();
         else
             _scene?.DestroyAll();
         ActiveWorld?.Dispose();
+        _meshCache?.Dispose();
+        _materialCache?.Dispose();
+        _textureCache?.Dispose();
 
         _proxyAllocator?.Report(Logger);
 

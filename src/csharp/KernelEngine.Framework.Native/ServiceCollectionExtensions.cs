@@ -1,3 +1,4 @@
+using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
@@ -14,6 +15,7 @@ public static class ServiceCollectionExtensions
     {
         var factory = new NativeFrameworkBackendFactory();
         services.AddSingleton<IFrameworkBackendFactory>(factory);
+        services.AddSingleton<INodeTypeRegistry>(_ => factory.CreateNodeTypeRegistry());
         FrameworkBackends.Default        = factory;
         InputActions.CreateBackend       = factory.CreateInputActions;
         return services;

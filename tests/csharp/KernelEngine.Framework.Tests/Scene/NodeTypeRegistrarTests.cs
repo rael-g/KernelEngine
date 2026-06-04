@@ -160,7 +160,7 @@ public class NodeTypeRegistrarTests
         var factory = new NativeFrameworkBackendFactory();
         FrameworkBackends.Default ??= factory;
         using var cache = factory.CreateResourceCache();
-        var rm = new ResourceManager(rf, cache);
+        var rm = new ResourceManager(rf, cache, cache, cache);
         NodeTypeRegistrar.ActiveAssetResolver ??= factory.CreateAssetResolver(null, AppContext.BaseDirectory);
         var node = new MultiPropertyNode();
 
@@ -184,7 +184,7 @@ public class NodeTypeRegistrarTests
         var factory = new NativeFrameworkBackendFactory();
         FrameworkBackends.Default ??= factory;
         using var cache = factory.CreateResourceCache();
-        var rm = new ResourceManager(rf, cache);
+        var rm = new ResourceManager(rf, cache, cache, cache);
         var node = new MultiPropertyNode();
         
         var matTable = new TomlTable { 

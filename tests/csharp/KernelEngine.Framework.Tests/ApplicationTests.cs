@@ -89,35 +89,6 @@ public class ApplicationTests
     }
 
     [Fact]
-    public void LoadDefaultScene_Works_WhenSceneFound()
-    {
-        var app = new Application();
-        var services = new ServiceCollection();
-        var config = Substitute.For<IProjectConfig>();
-        config.IsLoaded.Returns(true);
-        var project = new Tomlyn.Model.TomlTable { ["default_scene"] = "res://main.scene" };
-        config.GetSection("project").Returns(project);
-        services.AddSingleton(config);
-        
-        var loader = Substitute.For<ISceneLoader>();
-        services.AddSingleton(loader);
-        
-        typeof(Application).GetProperty("Services")!.SetValue(app, services.BuildServiceProvider());
-
-        // Setup paths
-        var path = Path.Combine(AppContext.BaseDirectory, "main.scene");
-        
-        // Inject loader directly
-        typeof(Application).GetField("_sceneLoader", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(app, loader);
-        
-        // Call private method
-        var method = typeof(Application).GetMethod("LoadDefaultSceneIfDeclared", BindingFlags.NonPublic | BindingFlags.Instance);
-        method!.Invoke(app, null);
-
-        loader.Received(1).LoadAsync(path);
-    }
-
-    [Fact]
     public void CheckResult_Throws_OnGpuFatal()
     {
         var app = new Application();
