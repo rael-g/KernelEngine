@@ -247,6 +247,34 @@ typedef struct ke_scene_tree {
 } ke_scene_tree;
 
 ke_result ke_scene_tree_create(struct ke_world *world, struct ke_allocator *alloc, ke_scene_tree **out_tree);
+
+// ── Frame + scripting (per-entity lifecycle callbacks dispatched by the native ScriptSystem)
+typedef struct ke_input_snapshot ke_input_snapshot; // already opaque elsewhere
+
+typedef struct ke_frame {
+    uint64_t                 frame_index;
+    double                   delta_time;
+    double                   total_time;
+    const ke_input_snapshot *input;
+} ke_frame;
+
+typedef ke_result (*ke_script_func)        (ke_entity entity);
+typedef ke_result (*ke_script_update_func) (ke_entity entity, float dt);
+typedef ke_result (*ke_script_input_func)  (ke_entity entity, const ke_input_snapshot *input);
+
+typedef struct ke_script_component {
+    uint8_t                state; // KE_SCRIPT_STATE_FRESH=0 / AWOKE=1 / STARTED=2
+    ke_script_func         on_awake;
+    ke_script_func         on_start;
+    ke_script_update_func  on_update;
+    ke_script_update_func  on_late_update;
+    ke_script_func         on_destroy;
+    ke_script_input_func   on_input;
+} ke_script_component;
+
+// ECS slots we need to attach + look up the script component on entities.
+void  *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
+void  *ke_ecs_component_get(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
 ]]
 
 local kernel = ffi.load("ke_kernel")
@@ -360,21 +388,66 @@ io.write(string.format("[scene] find_node('Floor') = %d (expected %d)\n",
     tonumber(found), tonumber(floor_ent)))
 assert(found == floor_ent, "find_node round-trip mismatch")
 
+-- ── Script hook on Sun — proof the native ScriptSystem dispatches into Lua ──
+
+local script_cid = world.script_id(world)
+local registry   = world.get_registry(world)
+
+local script_callbacks = {} -- anchor callbacks so they outlive GC
+local update_count = 0
+script_callbacks.on_start = ffi.cast("ke_script_func", function(entity)
+    io.write(string.format("[script] on_start  entity=%d\n", tonumber(entity)))
+    io.flush()
+    return 0
+end)
+script_callbacks.on_update = ffi.cast("ke_script_update_func", function(entity, dt)
+    update_count = update_count + 1
+    if update_count <= 3 or update_count % 60 == 0 then
+        io.write(string.format("[script] on_update entity=%d dt=%.4f (tick %d)\n",
+            tonumber(entity), dt, update_count))
+        io.flush()
+    end
+    return 0
+end)
+
+local sc = ffi.cast("ke_script_component*",
+    kernel.ke_ecs_component_add(registry, sun, script_cid))
+sc.state          = 0 -- KE_SCRIPT_STATE_FRESH
+sc.on_awake       = nil
+sc.on_start       = script_callbacks.on_start
+sc.on_update      = script_callbacks.on_update
+sc.on_late_update = nil
+sc.on_destroy     = nil
+sc.on_input       = nil
+
+io.write("[script] component attached on Sun; entering world.update loop\n")
+
 -- ── Frame loop ──────────────────────────────────────────────────────────────
 -- Cycles the clear color so we get visual confirmation the renderer is alive
 -- (no scene yet — that requires ke_world + scene tree + render systems, next gaps).
 
-local frames = 0
+local frames    = 0
+local total     = 0.0
+local frame_evt = ffi.new("ke_frame")
+local dt        = 1.0 / 60.0 -- fixed step until we wire a real clock
 while win.should_close(win) == 0 do
     win.poll_events(win)
     input.update(input)
-    local t = frames * 0.01
+
+    frame_evt.frame_index = frames
+    frame_evt.delta_time  = dt
+    frame_evt.total_time  = total
+    frame_evt.input       = nil
+    world.update(world, frame_evt)
+
+    local t = total
     render.clear_color(render, 0.5 + 0.5 * math.sin(t),
                                 0.5 + 0.5 * math.sin(t * 1.3),
                                 0.5 + 0.5 * math.sin(t * 1.7),
                                 1.0)
     render.frame(render)
     frames = frames + 1
+    total  = total + dt
 end
 
 io.write(string.format("[loop] exited after %d frames\n", frames))
