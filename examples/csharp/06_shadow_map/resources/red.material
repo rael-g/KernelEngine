@@ -1,5 +1,0 @@
-[material]
-name      = "Red"
-base_color = [0.8, 0.2, 0.2, 1.0]
-metallic   = 0.2
-roughness  = 0.3

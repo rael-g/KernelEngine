@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <new>
 #include <string>
@@ -39,13 +40,28 @@ struct SceneLoaderImpl
 };
 
 // ── TOML → ke_variant ────────────────────────────────────────────────────────
+//
+// Inline TOML tables become KE_VARIANT_TABLE — the recursive case needs stable
+// storage for the keys, entry arrays, and child ke_variant_table objects to live
+// as long as the outermost variant. VariantArena owns that storage for one
+// set_property call.
 
-ke_variant toml_to_variant(const toml::node &node)
+struct VariantArena
+{
+    std::deque<std::string>                          strings;     // stable c_str()
+    std::deque<std::vector<ke_variant_table_entry>>  entries;     // stable .data()
+    std::deque<ke_variant_table>                     tables;      // stable &table
+};
+
+ke_variant toml_to_variant(const toml::node &node, VariantArena &arena)
 {
     if (auto b = node.as_boolean()) return ke_variant_bool(b->get());
     if (auto i = node.as_integer()) return ke_variant_int(i->get());
     if (auto d = node.as_floating_point()) return ke_variant_float(d->get());
-    if (auto s = node.as_string()) return ke_variant_string(s->get().c_str());
+    if (auto s = node.as_string()) {
+        arena.strings.emplace_back(s->get());
+        return ke_variant_string(arena.strings.back().c_str());
+    }
     if (auto arr = node.as_array()) {
         size_t n = arr->size();
         auto get_f = [&](size_t i) -> float {
@@ -57,6 +73,17 @@ ke_variant toml_to_variant(const toml::node &node)
         if (n == 2) return ke_variant_vec2(get_f(0), get_f(1));
         if (n == 3) return ke_variant_vec3(get_f(0), get_f(1), get_f(2));
         if (n == 4) return ke_variant_vec4(get_f(0), get_f(1), get_f(2), get_f(3));
+    }
+    if (auto tbl = node.as_table()) {
+        arena.entries.emplace_back();
+        auto &entry_vec = arena.entries.back();
+        entry_vec.reserve(tbl->size());
+        for (auto &&[k, v] : *tbl) {
+            arena.strings.emplace_back(k.str());
+            entry_vec.push_back({ arena.strings.back().c_str(), toml_to_variant(v, arena) });
+        }
+        arena.tables.push_back({ static_cast<uint32_t>(entry_vec.size()), entry_vec.data() });
+        return ke_variant_table_v(&arena.tables.back());
     }
     return ke_variant_null();
 }
@@ -182,7 +209,8 @@ void apply_overrides(SceneLoaderImpl *impl, ke_entity entity,
     }
     if (auto props = outer_tbl["properties"].as_table()) {
         for (auto &&[k, v] : *props) {
-            ke_variant val = toml_to_variant(v);
+            VariantArena arena;
+            ke_variant val = toml_to_variant(v, arena);
             if (node_type && node_type->set_property) {
                 node_type->set_property(node_type->ctx, entity,
                                         std::string(k.str()).c_str(), &val);
@@ -281,7 +309,8 @@ ke_result process_node(SceneLoaderImpl *impl, const fs::path &base_dir,
 
     if (auto props = node_tbl["properties"].as_table()) {
         for (auto &&[k, v] : *props) {
-            ke_variant val = toml_to_variant(v);
+            VariantArena arena;
+            ke_variant val = toml_to_variant(v, arena);
             if (node_type->set_property) {
                 node_type->set_property(node_type->ctx, entity,
                                         std::string(k.str()).c_str(), &val);

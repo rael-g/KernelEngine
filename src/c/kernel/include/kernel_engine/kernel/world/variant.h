@@ -23,7 +23,11 @@ extern "C"
         KE_VARIANT_VEC3   = 6,
         KE_VARIANT_VEC4   = 7,
         KE_VARIANT_QUAT   = 8,
+        KE_VARIANT_TABLE  = 9,  // nested key→variant map (inline TOML tables, etc.)
     } ke_variant_type;
+
+    // Forward decl — defined below.
+    struct ke_variant_table;
 
     // ── Variant value ────────────────────────────────────────────────────────
     //
@@ -45,8 +49,28 @@ extern "C"
             ke_vec3   v3;
             ke_vec4   v4;
             ke_quat   q;
+            const struct ke_variant_table *t; // KE_VARIANT_TABLE — borrowed, valid for the callback only
         };
     } ke_variant;
+
+    // ── Table variant ────────────────────────────────────────────────────────
+    //
+    // Carries an inline TOML table (or any key→value bag) across the ABI. Like
+    // KE_VARIANT_STRING, entries are borrowed — valid only for the duration of
+    // the set_property call. Recursion is supported (a value can be another
+    // KE_VARIANT_TABLE).
+
+    typedef struct ke_variant_table_entry
+    {
+        const char *key;   // null-terminated UTF-8, borrowed
+        ke_variant  value; // recursive
+    } ke_variant_table_entry;
+
+    typedef struct ke_variant_table
+    {
+        uint32_t                       count;
+        const ke_variant_table_entry  *entries;
+    } ke_variant_table;
 
     // ── Convenience constructors (inline, zero overhead) ─────────────────────
 
@@ -76,6 +100,9 @@ extern "C"
 
     static inline ke_variant ke_variant_quat(float x, float y, float z, float w)
         { ke_variant v; v.type = KE_VARIANT_QUAT; v.q.x = x; v.q.y = y; v.q.z = z; v.q.w = w; return v; }
+
+    static inline ke_variant ke_variant_table_v(const ke_variant_table *t)
+        { ke_variant v; v.type = KE_VARIANT_TABLE; v.t = t; return v; }
 
 #ifdef __cplusplus
 }

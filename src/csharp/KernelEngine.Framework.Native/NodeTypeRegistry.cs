@@ -209,8 +209,24 @@ public sealed unsafe class NodeTypeRegistry : INodeTypeRegistry, IDisposable
         ke_variant_type.KE_VARIANT_VEC3   => v.v3,
         ke_variant_type.KE_VARIANT_VEC4   => v.v4,
         ke_variant_type.KE_VARIANT_QUAT   => v.q,
+        ke_variant_type.KE_VARIANT_TABLE  => TableToDictionary(v.t),
         _                                 => null,
     };
+
+    // Snapshots an inline ke_variant_table into a managed Dictionary<string, object?>.
+    // The Framework-side property binder (NodeTypeRegistrar) detects this shape and
+    // builds inline materials / shape descriptors / etc. without re-parsing TOML.
+    private static Dictionary<string, object?> TableToDictionary(ke_variant_table* tbl)
+    {
+        var dict = new Dictionary<string, object?>((int)tbl->count);
+        for (uint i = 0; i < tbl->count; i++)
+        {
+            var entry = tbl->entries[i];
+            var key = Marshal.PtrToStringUTF8((nint)entry.key) ?? string.Empty;
+            dict[key] = VariantToObject(entry.value);
+        }
+        return dict;
+    }
 
     // ── Dispose ───────────────────────────────────────────────────────────────────────────
 

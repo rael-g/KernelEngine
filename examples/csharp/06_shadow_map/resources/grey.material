@@ -1,5 +1,0 @@
-[material]
-name      = "Grey"
-base_color = [0.5, 0.5, 0.5, 1.0]
-metallic   = 0.0
-roughness  = 0.8

@@ -11,4 +11,5 @@ public enum ke_variant_type
     KE_VARIANT_VEC3 = 6,
     KE_VARIANT_VEC4 = 7,
     KE_VARIANT_QUAT = 8,
+    KE_VARIANT_TABLE = 9,
 }

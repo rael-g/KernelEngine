@@ -82,6 +82,15 @@ public unsafe partial struct ke_variant
         }
     }
 
+    [UnscopedRef]
+    public ref ke_variant_table* t
+    {
+        get
+        {
+            return ref Anonymous.t;
+        }
+    }
+
     [StructLayout(LayoutKind.Explicit)]
     public unsafe partial struct _Anonymous_e__Union
     {
@@ -110,5 +119,26 @@ public unsafe partial struct ke_variant
 
         [FieldOffset(0)]
         public ke_quat q;
+
+        [FieldOffset(0)]
+        [NativeTypeName("const struct ke_variant_table *")]
+        public ke_variant_table* t;
     }
+}
+
+public unsafe partial struct ke_variant_table_entry
+{
+    [NativeTypeName("const char *")]
+    public sbyte* key;
+
+    public ke_variant value;
+}
+
+public unsafe partial struct ke_variant_table
+{
+    [NativeTypeName("uint32_t")]
+    public uint count;
+
+    [NativeTypeName("const ke_variant_table_entry *")]
+    public ke_variant_table_entry* entries;
 }

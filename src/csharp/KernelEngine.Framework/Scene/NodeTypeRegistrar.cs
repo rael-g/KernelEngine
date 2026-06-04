@@ -114,9 +114,24 @@ public static class NodeTypeRegistrar
             if (underlying == typeof(Quaternion))  return AsQuaternion(arr);
         }
 
+        // Math types from the native scene loader (ke_vec2/3/4 structs).
+        if (raw is KernelEngine.Kernel.Native.ke_vec2 v2 && underlying == typeof(Vector2)) return new Vector2(v2.x, v2.y);
+        if (raw is KernelEngine.Kernel.Native.ke_vec3 v3)
+        {
+            if (underlying == typeof(Vector3)) return new Vector3(v3.x, v3.y, v3.z);
+            if (underlying == typeof(Vector4)) return new Vector4(v3.x, v3.y, v3.z, 1f);
+        }
+        if (raw is KernelEngine.Kernel.Native.ke_vec4 v4)
+        {
+            if (underlying == typeof(Vector4))    return new Vector4(v4.x, v4.y, v4.z, v4.w);
+            if (underlying == typeof(Quaternion)) return new Quaternion(v4.x, v4.y, v4.z, v4.w);
+        }
+
         // Shape2D from TOML inline table.
         if (typeof(Shape2D).IsAssignableFrom(underlying) && raw is Tomlyn.Model.TomlTable shapeTable)
             return BuildShape(shapeTable);
+        if (typeof(Shape2D).IsAssignableFrom(underlying) && raw is IDictionary<string, object?> shapeDict)
+            return BuildShapeFromDict(shapeDict);
 
         // Resource paths — resolved synchronously using ResourceManager.
         if (underlying == typeof(Mesh) || underlying == typeof(Material))
@@ -135,6 +150,14 @@ public static class NodeTypeRegistrar
                     throw new InvalidOperationException(
                         $"Resource property requires ResourceManager; pass it to NodeTypeRegistrar.Register.");
                 return BuildInlineMaterial(matTable, resources);
+            }
+            // Inline material from native ke_variant_table (scene loader path).
+            if (underlying == typeof(Material) && raw is IDictionary<string, object?> matDict)
+            {
+                if (resources is null)
+                    throw new InvalidOperationException(
+                        $"Resource property requires ResourceManager; pass it to NodeTypeRegistrar.Register.");
+                return BuildInlineMaterialFromDict(matDict, resources);
             }
         }
 
@@ -216,6 +239,53 @@ public static class NodeTypeRegistrar
         return resources.CreateMaterialAsync(color, metallic: metallic, roughness: roughness)
             .GetAwaiter().GetResult();
     }
+
+    // Dict variant — called when the native ke_scene_loader unpacks an inline table into
+    // KE_VARIANT_TABLE (NodeTypeRegistry.VariantToObject materialises it as a Dictionary).
+    // ke_variant arrays of length 4 already become Vector4 on the C# side, so the base_color
+    // entry arrives as a Vector4 here, not an array.
+    private static Material BuildInlineMaterialFromDict(IDictionary<string, object?> d, ResourceManager resources)
+    {
+        var color = d.TryGetValue("base_color", out var bc) ? ToVector4(bc) : System.Numerics.Vector4.One;
+        var metallic  = d.TryGetValue("metallic",  out var m) ? ToFloat(m) : 0f;
+        var roughness = d.TryGetValue("roughness", out var r) ? ToFloat(r) : 0.5f;
+        return resources.CreateMaterialAsync(color, metallic: metallic, roughness: roughness)
+            .GetAwaiter().GetResult();
+    }
+
+    private static Shape2D BuildShapeFromDict(IDictionary<string, object?> d)
+    {
+        var kind = d.TryGetValue("kind", out var k) ? k as string : null;
+        if (kind is null) throw new InvalidDataException("Shape table missing 'kind'.");
+        return kind switch
+        {
+            "rectangle" => new RectangleShape2D(
+                d.TryGetValue("half_extents", out var he) ? ToVector2(he)
+                    : throw new InvalidDataException("rectangle shape missing 'half_extents'.")),
+            "circle" => new CircleShape2D(
+                d.TryGetValue("radius", out var rv) ? ToFloat(rv)
+                    : throw new InvalidDataException("circle shape missing 'radius'.")),
+            _ => throw new InvalidDataException($"Unknown shape kind '{kind}'."),
+        };
+    }
+
+    private static Vector4 ToVector4(object? raw) => raw switch
+    {
+        Vector4 v                                       => v,
+        Vector3 v3                                      => new Vector4(v3, 1f),
+        KernelEngine.Kernel.Native.ke_vec4 nv4          => new Vector4(nv4.x, nv4.y, nv4.z, nv4.w),
+        KernelEngine.Kernel.Native.ke_vec3 nv3          => new Vector4(nv3.x, nv3.y, nv3.z, 1f),
+        Tomlyn.Model.TomlArray arr                      => new Vector4(F(arr, 0), F(arr, 1), F(arr, 2), F(arr, 3)),
+        _                                               => System.Numerics.Vector4.One,
+    };
+
+    private static Vector2 ToVector2(object? raw) => raw switch
+    {
+        Vector2 v                                       => v,
+        KernelEngine.Kernel.Native.ke_vec2 nv2          => new Vector2(nv2.x, nv2.y),
+        Tomlyn.Model.TomlArray arr                      => new Vector2(F(arr, 0), F(arr, 1)),
+        _                                               => Vector2.Zero,
+    };
 
     // ── TOML helpers ──────────────────────────────────────────────────────────
 
