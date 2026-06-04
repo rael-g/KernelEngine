@@ -275,12 +275,85 @@ typedef struct ke_script_component {
 // ECS slots we need to attach + look up the script component on entities.
 void  *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
 void  *ke_ecs_component_get(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
+
+// ── Input snapshot (layout matches src/c/kernel/include/kernel_engine/kernel/input/snapshot.h)
+typedef struct ke_input_snapshot {
+    uint64_t keys_down[8];
+    uint64_t keys_pressed[8];
+    uint64_t keys_released[8];
+    float    mouse_x, mouse_y;
+    float    mouse_dx, mouse_dy;
+    float    scroll_dx, scroll_dy;
+    uint32_t mouse_buttons_down;
+    uint32_t mouse_buttons_pressed;
+    uint32_t mouse_buttons_released;
+} ke_input_snapshot;
+
+// ── Input actions (framework plugin) ────────────────────────────────────────
+typedef int  ke_action_type;
+typedef int  ke_action_phase;
+typedef int  ke_key;
+typedef int  ke_mouse_button;
+
+typedef struct ke_input_action_event {
+    int32_t          action_id;
+    ke_action_type   type;
+    ke_action_phase  phase;
+    float            x, y, z;
+} ke_input_action_event;
+
+typedef void (*ke_input_action_event_func)(void *ctx, ke_input_action_event event);
+
+typedef struct ke_input_actions {
+    void *handle;
+    ke_result (*load)(struct ke_input_actions *self, const char *path);
+    int32_t   (*get_action_id)(struct ke_input_actions *self, const char *name);
+    int32_t   (*add_action)(struct ke_input_actions *self, const char *name, ke_action_type type);
+    ke_result (*bind_key)(struct ke_input_actions *self, int32_t action_id, ke_key key);
+    ke_result (*bind_mouse_button)(struct ke_input_actions *self, int32_t action_id, ke_mouse_button button);
+    ke_result (*bind_key_pair)(struct ke_input_actions *self, int32_t action_id, ke_key neg, ke_key pos);
+    ke_result (*bind_key_quad)(struct ke_input_actions *self, int32_t action_id,
+                               ke_key up, ke_key down, ke_key left, ke_key right);
+    ke_result (*evaluate)(struct ke_input_actions *self, const ke_input_snapshot *snap,
+                          ke_input_action_event_func on_event, void *ctx);
+    bool      (*is_action_down)     (struct ke_input_actions *self, int32_t action_id);
+    bool      (*was_action_pressed) (struct ke_input_actions *self, int32_t action_id);
+    bool      (*was_action_released)(struct ke_input_actions *self, int32_t action_id);
+    float     (*get_axis1d)(struct ke_input_actions *self, int32_t action_id);
+    void      (*get_axis2d)(struct ke_input_actions *self, int32_t action_id, float *x, float *y);
+    void      (*get_axis3d)(struct ke_input_actions *self, int32_t action_id, float *x, float *y, float *z);
+    void      (*destroy)   (struct ke_input_actions *self);
+} ke_input_actions;
+
+ke_result ke_input_actions_create(ke_allocator *alloc, ke_input_actions **out_actions);
+
+// Action type / phase / key enum values used below (mirrors the C headers).
+enum {
+    KE_ACTION_TYPE_BUTTON = 0,
+    KE_ACTION_TYPE_AXIS1D = 1,
+    KE_KEY_SPACE  = 32,
+    KE_KEY_S      = 83,
+    KE_KEY_W      = 87,
+    KE_KEY_UP     = 265,
+    KE_KEY_DOWN   = 264,
+    KE_KEY_ESCAPE = 256,
+};
 ]]
 
-local kernel = ffi.load("ke_kernel")
-local window_glfw = ffi.load("ke_window_glfw")
-local render_bgfx = ffi.load("ke_render_bgfx")
-local framework = ffi.load("ke_framework")
+-- Resolve dll directory from the script's own path so this runs from any CWD.
+-- examples/lua/pong/main.lua → ../../../build/native/bin/. We register the dir
+-- with the Windows loader (SetDllDirectoryA) so transitive deps like ke_threading
+-- resolve from the same folder without requiring CWD or PATH tweaks.
+local script_path = arg[0] or "examples/lua/pong/main.lua"
+local script_dir  = script_path:gsub("[^/\\]+$", "")
+local bin_dir     = script_dir .. "../../../build/native/bin/"
+ffi.cdef[[ int SetDllDirectoryA(const char *path); ]]
+ffi.C.SetDllDirectoryA((bin_dir:gsub("/", "\\")))
+
+local kernel       = ffi.load("ke_kernel")
+local window_glfw  = ffi.load("ke_window_glfw")
+local render_bgfx  = ffi.load("ke_render_bgfx")
+local framework    = ffi.load("ke_framework")
 
 local LOG_TRACE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL = 0, 1, 2, 3, 4, 5
 local LEVEL_NAMES = { [0]="TRACE", [1]="DEBUG", [2]="INFO", [3]="WARN", [4]="ERROR", [5]="FATAL" }
@@ -354,7 +427,8 @@ local rb_params = ffi.new("ke_render_bgfx_params")
 rb_params.allocator     = alloc
 rb_params.logger        = logger
 rb_params.window        = win
-rb_params.shader_path   = "shaders"
+local shader_path_str   = bin_dir .. "shaders"
+rb_params.shader_path   = shader_path_str
 rb_params.renderer_type = 0
 rb_params.vsync         = 1
 
@@ -422,6 +496,26 @@ sc.on_input       = nil
 
 io.write("[script] component attached on Sun; entering world.update loop\n")
 
+-- ── Input actions — Pong bindings registered programmatically ───────────────
+
+local actions_out = ffi.new("ke_input_actions*[1]")
+assert(framework.ke_input_actions_create(alloc, actions_out) == 0)
+local actions = actions_out[0]
+
+local PADDLE_LEFT  = actions.add_action(actions, "PaddleLeftMove",  ffi.C.KE_ACTION_TYPE_AXIS1D)
+local PADDLE_RIGHT = actions.add_action(actions, "PaddleRightMove", ffi.C.KE_ACTION_TYPE_AXIS1D)
+local LAUNCH       = actions.add_action(actions, "Launch",          ffi.C.KE_ACTION_TYPE_BUTTON)
+local QUIT         = actions.add_action(actions, "Quit",            ffi.C.KE_ACTION_TYPE_BUTTON)
+assert(actions.bind_key_pair(actions, PADDLE_LEFT,  ffi.C.KE_KEY_S,    ffi.C.KE_KEY_W)    == 0)
+assert(actions.bind_key_pair(actions, PADDLE_RIGHT, ffi.C.KE_KEY_DOWN, ffi.C.KE_KEY_UP)   == 0)
+assert(actions.bind_key      (actions, LAUNCH,                          ffi.C.KE_KEY_SPACE)  == 0)
+assert(actions.bind_key      (actions, QUIT,                            ffi.C.KE_KEY_ESCAPE) == 0)
+io.write(string.format("[actions] ids = PaddleLeft=%d PaddleRight=%d Launch=%d Quit=%d\n",
+    PADDLE_LEFT, PADDLE_RIGHT, LAUNCH, QUIT))
+
+local snapshot = ffi.new("ke_input_snapshot")
+local prev_left, prev_right, prev_launch = 0.0, 0.0, false
+
 -- ── Frame loop ──────────────────────────────────────────────────────────────
 -- Cycles the clear color so we get visual confirmation the renderer is alive
 -- (no scene yet — that requires ke_world + scene tree + render systems, next gaps).
@@ -434,10 +528,24 @@ while win.should_close(win) == 0 do
     win.poll_events(win)
     input.update(input)
 
+    input.get_snapshot(input, snapshot)
+    actions.evaluate(actions, snapshot, nil, nil)
+
+    if actions.is_action_down(actions, QUIT) then break end
+    local left  = actions.get_axis1d(actions, PADDLE_LEFT)
+    local right = actions.get_axis1d(actions, PADDLE_RIGHT)
+    local launch = actions.was_action_pressed(actions, LAUNCH)
+    if left ~= prev_left or right ~= prev_right or launch ~= prev_launch then
+        io.write(string.format("[actions] left=%.1f right=%.1f launch=%s\n",
+            left, right, tostring(launch)))
+        io.flush()
+        prev_left, prev_right, prev_launch = left, right, launch
+    end
+
     frame_evt.frame_index = frames
     frame_evt.delta_time  = dt
     frame_evt.total_time  = total
-    frame_evt.input       = nil
+    frame_evt.input       = snapshot
     world.update(world, frame_evt)
 
     local t = total
@@ -454,6 +562,7 @@ io.write(string.format("[loop] exited after %d frames\n", frames))
 
 -- ── Shutdown ────────────────────────────────────────────────────────────────
 
+actions.destroy(actions)
 tree.destroy(tree)
 world.destroy(world)
 render.on_shutdown(render)
