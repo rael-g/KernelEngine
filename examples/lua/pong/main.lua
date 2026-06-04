@@ -51,6 +51,11 @@ typedef struct ke_logger {
 
 ke_result ke_logger_create(ke_allocator *allocator, ke_logger **out_logger);
 
+// ── Thread name (kernel TLS) ─────────────────────────────────────────────
+void        ke_thread_set_current_name(const char *name);
+const char *ke_thread_get_current_name(void);
+void        ke_thread_assert_current  (const char *expected_name);
+
 // ── Input ────────────────────────────────────────────────────────────────
 typedef uint8_t ke_bool;
 
@@ -103,10 +108,103 @@ typedef struct ke_window_glfw_params {
 } ke_window_glfw_params;
 
 ke_result ke_window_glfw_create(const ke_window_glfw_params *params, ke_window **out_window);
+
+// ── Render ───────────────────────────────────────────────────────────────
+// Opaque pointers (Lua doesn't touch the layout for these types, only forwards them).
+typedef struct ke_mat4              ke_mat4;
+typedef struct ke_vertex            ke_vertex;
+typedef struct ke_material          ke_material;
+typedef struct ke_directional_light ke_directional_light;
+typedef struct ke_point_light       ke_point_light;
+typedef struct ke_spot_light        ke_spot_light;
+typedef struct ke_cluster_config    ke_cluster_config;
+typedef struct ke_frame_packet      ke_frame_packet;
+typedef struct ke_render_graph      ke_render_graph;
+typedef struct ke_mesh_handle      { uint32_t idx; } ke_mesh_handle;
+typedef struct ke_material_handle  { uint32_t idx; } ke_material_handle;
+typedef struct ke_texture_handle   { uint32_t idx; } ke_texture_handle;
+typedef struct ke_shadow_map_handle{ uint32_t idx; } ke_shadow_map_handle;
+
+typedef struct ke_ndc_convention { ke_bool y_flip; ke_bool zero_to_one_depth; } ke_ndc_convention;
+
+typedef struct ke_render {
+    void *handle;
+    void  (*destroy)(struct ke_render *self);
+
+    ke_result (*on_initialize)(struct ke_render *self);
+    ke_result (*on_shutdown)  (struct ke_render *self);
+
+    ke_result (*set_orthographic)(struct ke_render *self, ke_bool enabled);
+    ke_result (*clear_color)     (struct ke_render *self, float r, float g, float b, float a);
+
+    ke_result (*frame)(struct ke_render *self);
+    ke_result (*set_view_transform)(struct ke_render *self, const ke_mat4 *view, const ke_mat4 *proj);
+
+    ke_ndc_convention (*get_ndc_convention)(struct ke_render *self);
+
+    ke_result (*create_mesh)   (struct ke_render *self, const ke_vertex *vertices, uint32_t vc,
+                                const uint16_t *indices, uint32_t ic, ke_mesh_handle *out);
+    ke_result (*destroy_mesh)  (struct ke_render *self, ke_mesh_handle handle);
+    ke_result (*create_material)(struct ke_render *self, const ke_material *mat, ke_material_handle *out);
+    ke_result (*destroy_material)(struct ke_render *self, ke_material_handle handle);
+    ke_result (*submit_mesh)   (struct ke_render *self, ke_mesh_handle mesh, ke_material_handle mat,
+                                const ke_mat4 *transform);
+
+    ke_result (*create_texture_rgba)(struct ke_render *self, uint32_t w, uint32_t h,
+                                     const uint8_t *pixels, ke_texture_handle *out);
+    ke_result (*destroy_texture)(struct ke_render *self, ke_texture_handle handle);
+
+    ke_result (*set_directional_light)(struct ke_render *self, const ke_directional_light *light);
+    ke_result (*set_ambient_light)(struct ke_render *self, float r, float g, float b);
+    ke_result (*set_camera_pos)   (struct ke_render *self, float x, float y, float z);
+
+    ke_result (*create_cubemap_rgba)(struct ke_render *self, uint32_t size, const uint8_t *data,
+                                     ke_texture_handle *out);
+    ke_result (*submit_skybox)      (struct ke_render *self, ke_texture_handle cubemap);
+
+    ke_result (*create_shadow_map) (struct ke_render *self, uint32_t w, uint32_t h, ke_shadow_map_handle *out);
+    ke_result (*destroy_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle);
+    ke_result (*begin_shadow_pass) (struct ke_render *self, ke_shadow_map_handle handle,
+                                    const ke_mat4 *light_view, const ke_mat4 *light_proj);
+    ke_result (*submit_mesh_shadow)(struct ke_render *self, ke_mesh_handle mesh, const ke_mat4 *transform);
+    ke_result (*end_shadow_pass)   (struct ke_render *self);
+    ke_result (*set_shadow_map)    (struct ke_render *self, ke_shadow_map_handle handle);
+
+    ke_result (*set_tonemapping)(struct ke_render *self, ke_bool enabled, float exposure, float gamma);
+    ke_result (*set_bloom)      (struct ke_render *self, ke_bool enabled, float threshold, float intensity);
+
+    ke_result (*set_point_lights)(struct ke_render *self, const ke_point_light *lights, uint32_t count);
+    ke_result (*set_spot_lights) (struct ke_render *self, const ke_spot_light *lights, uint32_t count);
+    ke_result (*set_ssao)        (struct ke_render *self, ke_bool enabled, float radius, float bias, float strength);
+    ke_result (*set_cluster_config)(struct ke_render *self, const ke_cluster_config *config);
+
+    ke_result (*submit_ui_quad)(struct ke_render *self, ke_texture_handle texture,
+                                float dx, float dy, float dw, float dh,
+                                float u0, float v0, float u1, float v1,
+                                float r, float g, float b, float a);
+
+    ke_result (*submit_packet)(struct ke_render *self, const struct ke_frame_packet *packet);
+    const char *(*get_last_fatal_error)(struct ke_render *self);
+
+    struct ke_render_graph *(*create_render_graph)(struct ke_render *self, struct ke_allocator *allocator);
+    struct ke_render_graph *(*get_render_graph)   (struct ke_render *self);
+} ke_render;
+
+typedef struct ke_render_bgfx_params {
+    struct ke_allocator *allocator;
+    struct ke_logger    *logger;
+    struct ke_window    *window;
+    const char          *shader_path;
+    uint32_t             renderer_type; // 0 = Vulkan default
+    ke_bool              vsync;
+} ke_render_bgfx_params;
+
+ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render);
 ]]
 
 local kernel = ffi.load("ke_kernel")
 local window_glfw = ffi.load("ke_window_glfw")
+local render_bgfx = ffi.load("ke_render_bgfx")
 
 local LOG_TRACE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL = 0, 1, 2, 3, 4, 5
 local LEVEL_NAMES = { [0]="TRACE", [1]="DEBUG", [2]="INFO", [3]="WARN", [4]="ERROR", [5]="FATAL" }
@@ -126,6 +224,11 @@ sink_cbs.flush   = ffi.cast("void (*)(ke_logger_sink*)", function() io.flush() e
 sink_cbs.destroy = ffi.cast("void (*)(ke_logger_sink*)", function() end)
 
 -- ── Bootstrap: allocator → logger → sink → log a message ────────────────────
+
+-- Single-threaded bring-up: bgfx + window both run on this Lua thread, which
+-- the renderer asserts must be tagged "ke.render". Once we split the 3-thread
+-- orchestration (ke.main / ke.sim / ke.render), each will tag its own slot.
+kernel.ke_thread_set_current_name("ke.render")
 
 local alloc = kernel.ke_allocator_malloc_create()
 assert(alloc ~= nil)
@@ -169,12 +272,35 @@ assert(window_glfw.ke_window_glfw_create(win_params, win_out) == 0)
 local win = win_out[0]
 assert(win.on_initialize(win) == 0)
 
--- ── Frame loop (single-threaded for now — threading + renderer come next) ───
+-- ── Renderer ────────────────────────────────────────────────────────────────
+
+local rb_params = ffi.new("ke_render_bgfx_params")
+rb_params.allocator     = alloc
+rb_params.logger        = logger
+rb_params.window        = win
+rb_params.shader_path   = "shaders"
+rb_params.renderer_type = 0
+rb_params.vsync         = 1
+
+local render_out = ffi.new("ke_render*[1]")
+assert(render_bgfx.ke_render_bgfx_create(rb_params, render_out) == 0)
+local render = render_out[0]
+assert(render.on_initialize(render) == 0)
+
+-- ── Frame loop ──────────────────────────────────────────────────────────────
+-- Cycles the clear color so we get visual confirmation the renderer is alive
+-- (no scene yet — that requires ke_world + scene tree + render systems, next gaps).
 
 local frames = 0
 while win.should_close(win) == 0 do
     win.poll_events(win)
     input.update(input)
+    local t = frames * 0.01
+    render.clear_color(render, 0.5 + 0.5 * math.sin(t),
+                                0.5 + 0.5 * math.sin(t * 1.3),
+                                0.5 + 0.5 * math.sin(t * 1.7),
+                                1.0)
+    render.frame(render)
     frames = frames + 1
 end
 
@@ -182,10 +308,12 @@ io.write(string.format("[loop] exited after %d frames\n", frames))
 
 -- ── Shutdown ────────────────────────────────────────────────────────────────
 
+render.on_shutdown(render)
+render.destroy(render)
 win.on_shutdown(win)
 win.destroy(win)
 input.destroy(input)
 logger.destroy(logger)
 alloc.destroy(alloc)
 
-print("[bootstrap] kernel + glfw window round-trip OK")
+print("[bootstrap] kernel + glfw + bgfx round-trip OK")

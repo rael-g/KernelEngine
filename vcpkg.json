@@ -12,7 +12,6 @@
     "enkits",
     "miniaudio",
     "tomlplusplus",
-    "luajit",
     {
       "name": "bgfx",
       "features": [ "tools" ],
