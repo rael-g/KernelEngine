@@ -37,6 +37,16 @@ public class CollisionShape2D : Node
     protected override void Start()
     {
         base.Start();
+
+        // Phase 5.3: pull primitive scene-authored values from the bag (with
+        // the current field value as fallback so the legacy reflection path
+        // is not regressed). Shape itself stays reflection-driven for now —
+        // KE_VARIANT_TABLE inline-shape support in the bag is deferred (§5.4
+        // of plan), so user code that sets Shape programmatically still works.
+        Density     = Properties.GetFloat("Density",     Density);
+        Friction    = Properties.GetFloat("Friction",    Friction);
+        Restitution = Properties.GetFloat("Restitution", Restitution);
+
         if (Shape is null) return;
 
         var body = FindBodyAncestor();
