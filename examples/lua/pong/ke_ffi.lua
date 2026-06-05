@@ -28,8 +28,8 @@
 --   kernel_engine/framework/camera_render_system.h
 --   kernel_engine/framework/mesh_render_system.h
 --   kernel_engine/framework/light_render_system.h
+--   kernel_engine/framework/mesh_asset_system.h
 --   kernel_engine/kernel/world/variant.h
---   kernel_engine/framework/node_type_registry.h
 --   kernel_engine/framework/scene_loader.h
 --   kernel_engine/render/bgfx/bgfx_render.h
 --   kernel_engine/window/glfw/glfw_window.h
@@ -537,6 +537,78 @@ typedef struct ke_logger ke_logger;
 
            void ke_frame_packet_reset(ke_frame_packet *packet);
 
+    typedef enum ke_variant_type
+    {
+        KE_VARIANT_NULL = 0,
+        KE_VARIANT_BOOL = 1,
+        KE_VARIANT_INT = 2,
+        KE_VARIANT_FLOAT = 3,
+        KE_VARIANT_STRING = 4,
+        KE_VARIANT_VEC2 = 5,
+        KE_VARIANT_VEC3 = 6,
+        KE_VARIANT_VEC4 = 7,
+        KE_VARIANT_QUAT = 8,
+        KE_VARIANT_TABLE = 9,
+    } ke_variant_type;
+
+    struct ke_variant_table;
+    typedef struct ke_variant
+    {
+        ke_variant_type type;
+        union
+        {
+            _Bool b;
+            int64_t i;
+            double f;
+            const char *s;
+            ke_vec2 v2;
+            ke_vec3 v3;
+            ke_vec4 v4;
+            ke_quat q;
+            const struct ke_variant_table *t;
+        };
+    } ke_variant;
+    typedef struct ke_variant_table_entry
+    {
+        const char *key;
+        ke_variant value;
+    } ke_variant_table_entry;
+
+    typedef struct ke_variant_table
+    {
+        uint32_t count;
+        const ke_variant_table_entry *entries;
+    } ke_variant_table;
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    typedef struct ke_component_field
+    {
+        const char *name;
+        ke_variant_type type;
+        uint32_t offset;
+        uint32_t size;
+
+    } ke_component_field;
+
     typedef uint64_t ke_entity;
 
     typedef uint32_t ke_component_id;
@@ -557,6 +629,32 @@ typedef struct ke_logger ke_logger;
            void ke_ecs_entity_destroy(ke_ecs_registry *registry, ke_entity entity);
 
            ke_component_id ke_ecs_component_register(ke_ecs_registry *registry, const char *name, size_t size);
+
+           ke_component_id ke_ecs_component_register_v2(
+        ke_ecs_registry *registry,
+        const char *name,
+        size_t size,
+        const ke_component_field *fields,
+        uint32_t field_count);
+
+    typedef struct ke_component_meta
+    {
+        ke_component_id cid;
+        size_t size;
+        const ke_component_field *fields;
+        uint32_t field_count;
+    } ke_component_meta;
+
+           ke_result ke_ecs_component_lookup(
+        ke_ecs_registry *registry,
+        const char *name,
+        ke_component_meta *out_meta);
+           ke_result ke_ecs_component_apply_variant(
+        ke_ecs_registry *registry,
+        ke_entity entity,
+        ke_component_id cid,
+        const char *field_name,
+        const ke_variant *value);
 
            void *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
 
@@ -949,6 +1047,8 @@ struct ke_world;
     {
         ke_mesh_handle mesh;
         ke_material_handle material;
+        char primitive[32];
+        float color[4];
     } ke_mesh_component;
 
     typedef struct ke_mesh_render_system_params
@@ -1016,115 +1116,48 @@ struct ke_world;
 
                      void ke_light_render_system_get_system_params(
         ke_light_render_system *system, ke_system_params *out_params);
-    typedef enum ke_variant_type
+struct ke_world;
+struct ke_render;
+struct ke_mesh_render_system;
+
+    typedef struct ke_mesh_asset_system_params
     {
-        KE_VARIANT_NULL = 0,
-        KE_VARIANT_BOOL = 1,
-        KE_VARIANT_INT = 2,
-        KE_VARIANT_FLOAT = 3,
-        KE_VARIANT_STRING = 4,
-        KE_VARIANT_VEC2 = 5,
-        KE_VARIANT_VEC3 = 6,
-        KE_VARIANT_VEC4 = 7,
-        KE_VARIANT_QUAT = 8,
-        KE_VARIANT_TABLE = 9,
-    } ke_variant_type;
+        struct ke_world *world;
+        ke_allocator *allocator;
+        struct ke_render *render;
+        struct ke_mesh_render_system *mesh_system;
+    } ke_mesh_asset_system_params;
 
-    struct ke_variant_table;
-    typedef struct ke_variant
-    {
-        ke_variant_type type;
-        union
-        {
-            _Bool b;
-            int64_t i;
-            double f;
-            const char *s;
-            ke_vec2 v2;
-            ke_vec3 v3;
-            ke_vec4 v4;
-            ke_quat q;
-            const struct ke_variant_table *t;
-        };
-    } ke_variant;
-    typedef struct ke_variant_table_entry
-    {
-        const char *key;
-        ke_variant value;
-    } ke_variant_table_entry;
+    typedef struct ke_mesh_asset_system ke_mesh_asset_system;
 
-    typedef struct ke_variant_table
-    {
-        uint32_t count;
-        const ke_variant_table_entry *entries;
-    } ke_variant_table;
+                     ke_result ke_mesh_asset_system_create(
+        const ke_mesh_asset_system_params *params,
+        ke_mesh_asset_system **out_system);
 
-    
+                     void ke_mesh_asset_system_destroy(ke_mesh_asset_system *system);
 
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-    struct ke_node_type_registry;
-
-    typedef ke_result (*ke_node_create_func)(
-        void *ctx, ke_entity entity, const char *name);
-
-    typedef ke_result (*ke_node_set_property_func)(
-        void *ctx, ke_entity entity, const char *key, const ke_variant *value);
-
-    typedef struct ke_node_type
-    {
-        const char *name;
-        void *ctx;
-        ke_node_create_func create;
-        ke_node_set_property_func set_property;
-    } ke_node_type;
-
-    typedef ke_result (*ke_node_type_lookup_miss_func)(
-        void *ctx, struct ke_node_type_registry *registry, const char *name);
-
-    typedef struct ke_node_type_registry
-    {
-        void *handle;
-
-        ke_result (*register_type)(struct ke_node_type_registry *self,
-                                   const ke_node_type *type);
-
-        ke_result (*lookup)(struct ke_node_type_registry *self,
-                            const char *name,
-                            const ke_node_type **out_type);
-
-        void (*set_lookup_miss)(struct ke_node_type_registry *self,
-                                ke_node_type_lookup_miss_func fn,
-                                void *ctx);
-
-        void (*destroy)(struct ke_node_type_registry *self);
-    } ke_node_type_registry;
-
-                     ke_result ke_node_type_registry_create(
-        ke_allocator *alloc,
-        ke_node_type_registry **out_registry);
+                     void ke_mesh_asset_system_get_system_params(
+        ke_mesh_asset_system *system, ke_system_params *out_params);
 
 struct ke_world;
+    typedef ke_result (*ke_script_factory_func)(
+        void *ctx, ke_entity entity, const char *type_name);
+    typedef struct ke_scene_properties
+    {
+        const ke_variant_table_entry *entries;
+        uint32_t count;
+    } ke_scene_properties;
+
     typedef struct ke_scene_loader
     {
         void *handle;
 
         ke_result (*load)(struct ke_scene_loader *self, const char *path);
+
+        ke_result (*register_script_language)(struct ke_scene_loader *self,
+                                              const char *language,
+                                              ke_script_factory_func factory,
+                                              void *ctx);
 
         void (*destroy)(struct ke_scene_loader *self);
     } ke_scene_loader;
@@ -1132,7 +1165,6 @@ struct ke_world;
         ke_allocator *alloc,
         struct ke_world *world,
         ke_scene_tree *tree,
-        ke_node_type_registry *registry,
         const char *project_root,
         ke_scene_loader **out_loader);
 struct ke_window;

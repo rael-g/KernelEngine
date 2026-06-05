@@ -22,12 +22,23 @@ extern "C"
 {
 #endif
 
-    /// Layout MUST mirror KernelEngine.Framework.MeshComponent (two sequential
-    /// handle wrappers, each carrying a single uint).
+    /// Phase 3 of ECS-pure nodes: carries both resolved handles AND the
+    /// request data the asset system reads to produce them.
+    ///
+    /// `primitive` (e.g. "cube") and `color` are written by the SceneLoader from
+    /// `[entity.components.mesh]` properties. The first frame an entity is seen
+    /// with `primitive[0] != '\0'` and `mesh.idx == KE_HANDLE_NONE`,
+    /// ke_mesh_asset_system bakes the primitive and assigns the handle (cached
+    /// by name across the world). Same trick for `color`/`material`.
+    ///
+    /// Decision #2 — `primitive` is the canonical name, NOT a one-shot request.
+    /// The asset system leaves it in place so future hot-reload can re-bake.
     typedef struct ke_mesh_component
     {
-        ke_mesh_handle     mesh;
-        ke_material_handle material;
+        ke_mesh_handle     mesh;          ///< Resolved render handle (HANDLE_NONE = pending bake)
+        ke_material_handle material;      ///< Resolved render handle (HANDLE_NONE = pending bake)
+        char               primitive[32]; ///< Bake request, written by SceneLoader (snake_case primitive name)
+        float              color[4];      ///< RGBA tint, written by SceneLoader; alpha=0 = "no material set"
     } ke_mesh_component;
 
     typedef struct ke_mesh_render_system_params

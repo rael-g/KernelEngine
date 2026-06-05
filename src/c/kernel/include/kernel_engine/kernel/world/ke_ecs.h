@@ -37,6 +37,15 @@ extern "C"
                                                const char    *name,
                                                size_t         element_size);
 
+        /// Resolves a previously-registered component by name. Writes cid + size +
+        /// field metadata into *out_meta on success. Returns KE_ERROR_NOT_FOUND when no
+        /// component with that name is known. Bindings use this to discover engine-
+        /// defined components (e.g. "scene_properties" written by the SceneLoader) at
+        /// runtime without hard-coding the cid.
+        ke_result (*component_lookup)(struct ke_ecs *self,
+                                      const char    *name,
+                                      ke_component_meta *out_meta);
+
         // ── Component data ────────────────────────────────────────────────────
 
         /// Adds a zero-initialised component slot to entity; returns a pointer to it.

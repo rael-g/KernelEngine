@@ -1,8 +1,11 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/kernel/world/ecs.h>
 #include <kernel_engine/kernel/world/ke_ecs.h>
+#include <kernel_engine/kernel/world/variant.h>
+#include <kernel_engine/kernel/world/component_field.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <string.h>
+#include <stddef.h>
 
 class EcsTest : public ::testing::Test {
 protected:
@@ -266,9 +269,211 @@ TEST_F(EcsTest, SparseSet_ComponentWorkflow_Works) {
     
     ecs->component_remove(ecs, e, cid);
     ASSERT_EQ(ecs->component_get(ecs, e, cid), nullptr);
-    
+
     ecs->entity_destroy(ecs, e);
-    
+
     ecs->destroy(ecs);
+}
+
+// ── Phase 1: ke_ecs_component_register_v2 / lookup / apply_variant ──────────
+//
+// These tests exercise the ECS-pure-nodes machinery: components carry field
+// metadata at registration; bindings discover them by name and write
+// properties from variants without per-component dispatch code.
+
+namespace {
+struct PhaseOneComp {
+    int32_t  i;
+    float    f;
+    ke_vec3  pos;
+    uint8_t  flag;
+    const char *label;
+};
+}
+
+TEST_F(EcsTest, RegisterV2_StoresFields_LookupReturnsThem) {
+    ke_component_field fields[] = {
+        {"i",     KE_VARIANT_INT,    (uint32_t)offsetof(PhaseOneComp, i)},
+        {"f",     KE_VARIANT_FLOAT,  (uint32_t)offsetof(PhaseOneComp, f)},
+        {"pos",   KE_VARIANT_VEC3,   (uint32_t)offsetof(PhaseOneComp, pos)},
+        {"flag",  KE_VARIANT_BOOL,   (uint32_t)offsetof(PhaseOneComp, flag)},
+        {"label", KE_VARIANT_STRING, (uint32_t)offsetof(PhaseOneComp, label)},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "test_comp",
+                                                        sizeof(PhaseOneComp),
+                                                        fields, 5);
+    ASSERT_NE(cid, KE_COMPONENT_INVALID);
+
+    ke_component_meta meta{};
+    ASSERT_EQ(ke_ecs_component_lookup(reg, "test_comp", &meta), KE_OK);
+    EXPECT_EQ(meta.cid, cid);
+    EXPECT_EQ(meta.size, sizeof(PhaseOneComp));
+    EXPECT_EQ(meta.field_count, 5u);
+    EXPECT_STREQ(meta.fields[2].name, "pos");
+    EXPECT_EQ(meta.fields[2].type, KE_VARIANT_VEC3);
+}
+
+TEST_F(EcsTest, Lookup_UnknownName_ReturnsNotFound) {
+    ke_component_meta meta{};
+    EXPECT_EQ(ke_ecs_component_lookup(reg, "nope", &meta), KE_ERROR_NOT_FOUND);
+}
+
+TEST_F(EcsTest, RegisterLegacy_HasNoFields) {
+    ke_component_id cid = ke_ecs_component_register(reg, "opaque", sizeof(int));
+    ASSERT_NE(cid, KE_COMPONENT_INVALID);
+    ke_component_meta meta{};
+    ASSERT_EQ(ke_ecs_component_lookup(reg, "opaque", &meta), KE_OK);
+    EXPECT_EQ(meta.field_count, 0u);
+    EXPECT_EQ(meta.fields, nullptr);
+}
+
+TEST_F(EcsTest, ApplyVariant_AllSupportedTypes_WrittenAtCorrectOffsets) {
+    ke_component_field fields[] = {
+        {"i",     KE_VARIANT_INT,    (uint32_t)offsetof(PhaseOneComp, i)},
+        {"f",     KE_VARIANT_FLOAT,  (uint32_t)offsetof(PhaseOneComp, f)},
+        {"pos",   KE_VARIANT_VEC3,   (uint32_t)offsetof(PhaseOneComp, pos)},
+        {"flag",  KE_VARIANT_BOOL,   (uint32_t)offsetof(PhaseOneComp, flag)},
+        {"label", KE_VARIANT_STRING, (uint32_t)offsetof(PhaseOneComp, label)},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "test_comp",
+                                                        sizeof(PhaseOneComp),
+                                                        fields, 5);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *comp = (PhaseOneComp *)ke_ecs_component_add(reg, e, cid);
+    ASSERT_NE(comp, nullptr);
+
+    ke_variant vi{};  vi.type = KE_VARIANT_INT;    vi.i = 42;
+    ke_variant vf{};  vf.type = KE_VARIANT_FLOAT;  vf.f = 1.5;
+    ke_variant vv{};  vv.type = KE_VARIANT_VEC3;   vv.v3 = {1.f, 2.f, 3.f};
+    ke_variant vb{};  vb.type = KE_VARIANT_BOOL;   vb.b = true;
+    ke_variant vs{};  vs.type = KE_VARIANT_STRING; vs.s = "hello";
+
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "i",     &vi), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "f",     &vf), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "pos",   &vv), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "flag",  &vb), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "label", &vs), KE_OK);
+
+    EXPECT_EQ(comp->i, 42);
+    EXPECT_FLOAT_EQ(comp->f, 1.5f);
+    EXPECT_FLOAT_EQ(comp->pos.x, 1.f);
+    EXPECT_FLOAT_EQ(comp->pos.y, 2.f);
+    EXPECT_FLOAT_EQ(comp->pos.z, 3.f);
+    EXPECT_EQ(comp->flag, 1);
+    EXPECT_STREQ(comp->label, "hello");
+}
+
+TEST_F(EcsTest, ApplyVariant_StringWithSize_CopiesIntoFixedBuffer) {
+    // Phase 3 of ECS-pure nodes: STRING field with size > 0 copies into a
+    // fixed buffer so the value survives the transient variant pointer.
+    struct BufComp { char primitive[8]; };
+    ke_component_field fields[] = {
+        {"primitive", KE_VARIANT_STRING, (uint32_t)offsetof(BufComp, primitive), 8},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "buf",
+                                                        sizeof(BufComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *c = (BufComp *)ke_ecs_component_add(reg, e, cid);
+
+    char source[] = "cube";
+    ke_variant v{}; v.type = KE_VARIANT_STRING; v.s = source;
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "primitive", &v), KE_OK);
+    std::memset(source, 'x', sizeof(source) - 1);
+    EXPECT_STREQ(c->primitive, "cube");
+}
+
+TEST_F(EcsTest, ApplyVariant_StringWithSize_TruncatesAndAlwaysTerminates) {
+    struct SmallBuf { char tag[4]; };
+    ke_component_field fields[] = {
+        {"tag", KE_VARIANT_STRING, (uint32_t)offsetof(SmallBuf, tag), 4},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "small",
+                                                        sizeof(SmallBuf),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *c = (SmallBuf *)ke_ecs_component_add(reg, e, cid);
+
+    ke_variant v{}; v.type = KE_VARIANT_STRING; v.s = "overflow";
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "tag", &v), KE_OK);
+    EXPECT_STREQ(c->tag, "ove"); // 3 chars + NUL fit the 4-byte buffer
+}
+
+TEST_F(EcsTest, ApplyVariant_StringWithZeroSize_StoresPointerVerbatim) {
+    // size == 0 keeps the Phase 1 behaviour: store the variant's pointer.
+    struct PtrComp { const char *label; };
+    ke_component_field fields[] = {
+        {"label", KE_VARIANT_STRING, (uint32_t)offsetof(PtrComp, label), 0},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "ptr",
+                                                        sizeof(PtrComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *c = (PtrComp *)ke_ecs_component_add(reg, e, cid);
+
+    static const char *kHello = "hi";
+    ke_variant v{}; v.type = KE_VARIANT_STRING; v.s = kHello;
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "label", &v), KE_OK);
+    EXPECT_EQ(c->label, kHello);
+}
+
+TEST_F(EcsTest, ApplyVariant_IntToFloat_AllowedAndConverted) {
+    ke_component_field fields[] = {
+        {"f", KE_VARIANT_FLOAT, (uint32_t)offsetof(PhaseOneComp, f)},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "tc",
+                                                        sizeof(PhaseOneComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *c = (PhaseOneComp *)ke_ecs_component_add(reg, e, cid);
+
+    ke_variant v{}; v.type = KE_VARIANT_INT; v.i = 60;
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "f", &v), KE_OK);
+    EXPECT_FLOAT_EQ(c->f, 60.f);
+}
+
+TEST_F(EcsTest, ApplyVariant_TypeMismatch_ReturnsInvalidArgument) {
+    ke_component_field fields[] = {
+        {"i", KE_VARIANT_INT, (uint32_t)offsetof(PhaseOneComp, i)},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "tc",
+                                                        sizeof(PhaseOneComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    ke_ecs_component_add(reg, e, cid);
+
+    ke_variant v{}; v.type = KE_VARIANT_STRING; v.s = "no";
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "i", &v),
+              KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(EcsTest, ApplyVariant_UnknownField_ReturnsNotFound) {
+    ke_component_field fields[] = {
+        {"i", KE_VARIANT_INT, (uint32_t)offsetof(PhaseOneComp, i)},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "tc",
+                                                        sizeof(PhaseOneComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    ke_ecs_component_add(reg, e, cid);
+
+    ke_variant v{}; v.type = KE_VARIANT_INT; v.i = 1;
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "nope", &v),
+              KE_ERROR_NOT_FOUND);
+}
+
+TEST_F(EcsTest, ApplyVariant_ComponentNotAttached_ReturnsNotFound) {
+    ke_component_field fields[] = {
+        {"i", KE_VARIANT_INT, (uint32_t)offsetof(PhaseOneComp, i)},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "tc",
+                                                        sizeof(PhaseOneComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    // Note: component_add is NOT called.
+
+    ke_variant v{}; v.type = KE_VARIANT_INT; v.i = 1;
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "i", &v),
+              KE_ERROR_NOT_FOUND);
 }
 

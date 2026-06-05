@@ -7,7 +7,6 @@ ke_framework
 --include-directory
 ../../../c/kernel/include
 --file
-../../../c/kernel/include/kernel_engine/framework/node_type_registry.h
 ../../../c/kernel/include/kernel_engine/framework/scene_loader.h
 ../../../c/kernel/include/kernel_engine/framework/input_actions.h
 ../../../c/kernel/include/kernel_engine/framework/resource_cache.h

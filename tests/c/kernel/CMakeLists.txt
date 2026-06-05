@@ -8,7 +8,6 @@ add_executable(test_ke_kernel
     test_logger.cpp
     test_hash.cpp
     test_array.cpp
-    test_node_type_registry.cpp
     test_resource_cache.cpp
     test_scene_tree.cpp
     test_input_actions.cpp

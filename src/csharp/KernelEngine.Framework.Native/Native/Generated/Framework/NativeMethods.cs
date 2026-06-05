@@ -1,14 +1,15 @@
+using System;
 using System.Runtime.InteropServices;
 
 namespace KernelEngine.Framework.Native;
 
 public static unsafe partial class NativeMethods
 {
-    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_type_registry_create", ExactSpelling = true)]
-    public static extern ke_result node_type_registry_create(ke_allocator* alloc, ke_node_type_registry** out_registry);
-
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_loader_create", ExactSpelling = true)]
-    public static extern ke_result scene_loader_create(ke_allocator* alloc, [NativeTypeName("struct ke_world *")] ke_world* world, ke_scene_tree* tree, ke_node_type_registry* registry, [NativeTypeName("const char *")] sbyte* project_root, ke_scene_loader** out_loader);
+    public static extern ke_result scene_loader_create(ke_allocator* alloc, [NativeTypeName("struct ke_world *")] ke_world* world, ke_scene_tree* tree, [NativeTypeName("const char *")] sbyte* project_root, ke_scene_loader** out_loader);
+
+    [NativeTypeName("#define KE_SCENE_PROPERTIES_COMPONENT_NAME \"scene_properties\"")]
+    public static ReadOnlySpan<byte> KE_SCENE_PROPERTIES_COMPONENT_NAME => "scene_properties"u8;
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     public static extern ke_result input_actions_create(ke_allocator* alloc, ke_input_actions** out_actions);

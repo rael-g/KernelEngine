@@ -32,6 +32,12 @@ public sealed class Scoreboard : Node
     protected override async void Start()
     {
         base.Start();
+
+        // New scene format ([entity.properties] FontPath/FontSize): pull from the bag with the
+        // current field as fallback so the legacy reflection-set path still works.
+        FontPath = Properties.GetString("FontPath", FontPath);
+        FontSize = Properties.GetFloat ("FontSize", FontSize);
+
         try
         {
             _left  = GetNode<Label>("Left");

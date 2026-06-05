@@ -72,6 +72,15 @@ public class Camera : Node
     protected override void Start()
     {
         if (World == null) return;
+
+        // Phase 5.3: pull scene-authored values from the bag (fallback to current
+        // backing fields so legacy reflection-set values still take effect).
+        _fov              = Properties.GetFloat("Fov",              _fov);
+        _near             = Properties.GetFloat("Near",             _near);
+        _far              = Properties.GetFloat("Far",              _far);
+        _orthographicSize = Properties.GetFloat("OrthographicSize", _orthographicSize);
+        _orthographic     = Properties.GetBool ("Orthographic",     _orthographic);
+
         _componentId = World.GetOrRegisterComponentId<CameraComponent>("CameraComponent");
         var comp = AddComponent<CameraComponent>(_componentId);
         comp[0] = new CameraComponent

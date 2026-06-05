@@ -37,7 +37,6 @@ public class Application : IDisposable
     public Tree Tree => _scene ??= new Tree(
         ActiveWorld,
         FrameworkBackends.Required,
-        Services?.GetService<INodeTypeRegistry>(),
         Services);
 
     /// <summary>
@@ -260,6 +259,9 @@ public class Application : IDisposable
                 Resources = new ResourceManager(factory, _meshCache, _materialCache, _textureCache);
                 // Give Tree access to ResourceManager for resource properties in auto-registration.
                 Tree.SetResourceManager(Resources);
+                // Phase 5.3: expose to MeshRenderer.Start so Material colors authored as
+                // [entity.properties] MaterialBaseColor can be resolved into a GPU handle.
+                FrameworkBackends.Resources = Resources;
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
@@ -267,17 +269,12 @@ public class Application : IDisposable
                 // native ke_asset_resolver plugin. The backend factory handles the image-loader
                 // pointer extraction internally — sugar layer never sees a ke_image_loader*.
                 _assetResolver = FrameworkBackends.Required.CreateAssetResolver(imageLoader, AppContext.BaseDirectory);
-                NodeTypeRegistrar.ActiveAssetResolver = _assetResolver;
 
                 if (modelLoader != null || imageLoader != null || fontLoader != null)
                     Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _textureCache, _assetResolver);
 
                 // Scene tree — Framework's Tree implements ISceneTree directly (S7).
                 _sceneTree = Tree;
-
-                // Register fallback so any Node subclass works in scene files without
-                // explicit registration. Built-in types are auto-registered on first AddNode<T>.
-                RegisterFrameworkNodeTypes();
 
                 // Auto-load action bindings (when a game enum was registered via .AddInputActions<T>()).
                 // After this, InputActions.Get<TEnum>() works from anywhere; no game code involved.
@@ -463,55 +460,6 @@ public class Application : IDisposable
         var absolute = Path.Combine(AppContext.BaseDirectory, relative);
         SceneLoader.LoadAsync(Tree, absolute, Resources, Services).GetAwaiter().GetResult();
         Logger?.Info("Application", $"Loaded default scene: {resPath}");
-    }
-
-    // ── Node type registration ────────────────────────────────────────────────
-
-    private void RegisterFrameworkNodeTypes()
-    {
-        var registry = Services.GetService<INodeTypeRegistry>();
-        if (registry is null) return;
-
-        var world    = ActiveWorld;
-        var services = Services;
-
-        // Fallback: any Node subclass in any loaded assembly works automatically via
-        // reflection — same behaviour as the legacy SceneLoader. Explicit Register<T> calls
-        // take priority (fast path); this covers everything else including user-defined types.
-        registry.SetFallback(
-            tryCreate: (typeName, entity, name) =>
-            {
-                var type = NodeTypeRegistrar.ResolveNodeType(typeName);
-                if (type is null) return false;
-                var node = (Node)(services is not null
-                    ? Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance(services, type)
-                    : Activator.CreateInstance(type)!);
-                node.Initialize(entity, world, name);
-                return true;
-            },
-            trySetProperty: (typeName, entity, key, value) =>
-            {
-                var node = Node.FromEntity(entity);
-                if (node is null) return false;
-                NodeTypeRegistrar.ApplyProperty(node, key, value, Resources);
-                return true;
-            });
-
-        // Built-in Framework node types — explicit fast path (skips assembly scan).
-        registry.Register<MeshRenderer>(ActiveWorld, Services, Resources);
-        registry.Register<Camera>(ActiveWorld, Services, Resources);
-        registry.Register<Camera2D>(ActiveWorld, Services, Resources);
-        registry.Register<DirectionalLight>(ActiveWorld, Services, Resources);
-        registry.Register<PointLight>(ActiveWorld, Services, Resources);
-        registry.Register<SpotLight>(ActiveWorld, Services, Resources);
-        registry.Register<Skybox>(ActiveWorld, Services, Resources);
-        registry.Register<Sprite2D>(ActiveWorld, Services, Resources);
-        registry.Register<Label>(ActiveWorld, Services, Resources);
-        if (Services.GetService<IPhysics2D>() is not null)
-        {
-            registry.Register<CollisionBody2D>(ActiveWorld, Services, Resources);
-            registry.Register<CollisionShape2D>(ActiveWorld, Services, Resources);
-        }
     }
 
     // ── Systems setup ─────────────────────────────────────────────────────────

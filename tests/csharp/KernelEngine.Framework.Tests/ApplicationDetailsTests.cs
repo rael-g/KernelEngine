@@ -8,6 +8,13 @@ namespace KernelEngine.Framework.Tests;
 
 public class ApplicationDetailsTests
 {
+    static ApplicationDetailsTests()
+    {
+        // Application.Run resolves FrameworkBackends.Required during startup.
+        // Wire the native factory directly for test isolation.
+        FrameworkBackends.Default ??= new NativeFrameworkBackendFactory();
+    }
+
     [Fact]
     public void CheckResult_GpuFatal_ThrowsKernelExceptionWithDetails()
     {

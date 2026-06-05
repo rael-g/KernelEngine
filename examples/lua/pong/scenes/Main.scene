@@ -1,34 +1,37 @@
-# Cube demo scene — drives the Lua pong bootstrap until the real Pong scenes
-# (Paddle/Ball/Wall/Scoreboard) come online. Three nodes: a directional sun, a
-# perspective camera, a rotated cube. Equivalent to the imperative setup we
-# used to do in main.lua before SceneLoader was wired through Lua.
+# Cube demo scene (ECS-pure format — refactor/ecs-pure-nodes branch).
+#
+# `[[entity]]` instead of `[[node]] type=…`. Each `[entity.components.X]` table
+# references a component by its registered short name; field values are written
+# verbatim by the SceneLoader via ke_ecs_component_apply_variant. No node-type
+# callbacks, no per-binding decoding code.
 [scene]
 name    = "CubeDemo"
 version = 1
 
-[[node]]
+[[entity]]
 name = "Sun"
-type = "DirectionalLight"
-[node.properties]
+[entity.components.directional_light]
 direction = [-0.4,  0.8, -0.4]
 color     = [ 1.0,  1.0,  0.95]
 intensity = 1.0
 
-[[node]]
+[[entity]]
 name = "Camera"
-type = "Camera"
-[node.transform]
+[entity.transform]
 position = [0, 0, 5]
-[node.properties]
-fov_degrees = 60.0
-near        = 0.1
-far         = 100.0
+[entity.components.camera]
+# fov stored in radians directly; 60° ≈ 1.0472. Future field-binding hook may
+# accept fov_degrees as a virtual setter. For now we write rad.
+fov               = 1.0472
+near              = 0.1
+far               = 100.0
+orthographic_size = 0.0
+orthographic      = false
 
-[[node]]
+[[entity]]
 name = "Cube"
-type = "Mesh"
-[node.transform]
+[entity.transform]
 rotation_euler = [20, 35, 0]
-[node.properties]
+[entity.components.mesh]
 primitive = "cube"
 color     = [0.8, 0.3, 0.2, 1.0]

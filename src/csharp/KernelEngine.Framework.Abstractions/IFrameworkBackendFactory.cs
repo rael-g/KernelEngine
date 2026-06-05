@@ -14,10 +14,8 @@ public interface IFrameworkBackendFactory
     ISceneTreeBackend     CreateSceneTree(IWorld world);
     ISceneLoaderBackend   CreateSceneLoader(IWorld world,
                                              ISceneTreeBackend tree,
-                                             INodeTypeRegistry registry,
                                              string projectRoot);
     IResourceCacheBackend CreateResourceCache();
     IAssetResolverBackend CreateAssetResolver(IImageLoader? imageLoader, string projectRoot);
     IResourceCommandQueue CreateResourceQueue();
-    INodeTypeRegistry     CreateNodeTypeRegistry();
 }

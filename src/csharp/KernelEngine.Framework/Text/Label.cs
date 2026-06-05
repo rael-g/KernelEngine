@@ -41,6 +41,15 @@ public class Label : Node
     protected override void Start()
     {
         base.Start();
+
+        // Phase 5.3: pull scene-authored values from the bag (with current
+        // fields as fallback). Font stays out — it carries a Font handle that
+        // a parent node (e.g. Scoreboard) typically loads and assigns.
+        Text   = Properties.GetString ("Text",   Text);
+        Color  = Properties.GetVector4("Color",  Color);
+        Anchor = Properties.GetVector2("Anchor", Anchor);
+        Offset = Properties.GetVector2("Offset", Offset);
+
         if (!_registered)
         {
             lock (s_lock) s_all.Add(this);

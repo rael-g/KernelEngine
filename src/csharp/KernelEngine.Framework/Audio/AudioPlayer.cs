@@ -39,6 +39,17 @@ public class AudioPlayer(IAudioService audio) : Node, IDisposable
     protected override void Start()
     {
         base.Start();
+
+        // Phase 5.3 of ECS-pure nodes: read scene-authored values from the
+        // scene_properties bag. Falls back to the current field value, so the
+        // legacy [[node]] path (NodeTypeRegistrar.ApplyProperty already set
+        // the fields via reflection) and the new [[entity]] path (loader
+        // wrote the bag, fields still default) both produce the same result.
+        Path     = Properties.GetString("Path",     Path);
+        Volume   = Properties.GetFloat ("Volume",   Volume);
+        Loop     = Properties.GetBool  ("Loop",     Loop);
+        AutoPlay = Properties.GetBool  ("AutoPlay", AutoPlay);
+
         if (!string.IsNullOrEmpty(Path))
         {
             var resolved = System.IO.Path.IsPathRooted(Path)

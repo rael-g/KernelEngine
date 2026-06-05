@@ -111,6 +111,14 @@ public abstract class CollisionBody2D : Node, IDisposable
     {
         base.Start();
 
+        // Phase 5.3: pull body pose + velocity from scene_properties (with
+        // current pending-value as fallback). Property setters stash into the
+        // pending-* fields when the body isn't created yet, so the values land
+        // exactly as if the caller set them programmatically before Start.
+        Position       = Properties.GetVector2("Position",       Position);
+        LinearVelocity = Properties.GetVector2("LinearVelocity", LinearVelocity);
+        if (Properties.TryGetFloat("Rotation", out var rot)) Rotation = rot;
+
         _physics = Physics2DContext.PhysicsOrNull;
         _system  = Physics2DContext.SystemOrNull;
         if (_physics is null || _system is null)

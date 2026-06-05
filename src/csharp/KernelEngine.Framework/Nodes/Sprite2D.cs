@@ -61,6 +61,11 @@ public class Sprite2D : MeshRenderer
 
     protected override void Start()
     {
+        // Phase 5.3: pull scene-authored Size/Position2D from the bag (fallback to current
+        // value so the legacy reflection path keeps working).
+        if (Properties.TryGetVector2("Size",     out var sz))  _size = sz;
+        if (Properties.TryGetVector2("Position", out var pos)) Position2D = pos;
+
         // Apply Size at Start in case it was set on a not-yet-bound node (LocalTransform setter
         // is no-op until the node has a world; back-fill here once World is bound).
         LocalTransform = LocalTransform with { Scale = new Vector3(_size.X, _size.Y, 1f) };

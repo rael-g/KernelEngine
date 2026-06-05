@@ -192,6 +192,29 @@ public class Node
         if (_world != null) _world.Registry.RemoveComponent(_entity, componentId);
     }
 
+    // ── Scene-authored properties ─────────────────────────────────────────────
+
+    private ISceneProperties? _properties;
+
+    /// <summary>
+    /// Read-only view over the entity's <c>scene_properties</c> bag — what the SceneLoader
+    /// wrote from a <c>[entity.properties]</c> block. Use <c>Properties.GetString("Path")</c>
+    /// etc. in <see cref="Start"/> to pull scene-authored values into class fields. Returns
+    /// an empty bag (no values found) when the entity has no properties attached, so callers
+    /// can rely on the fallback overloads. Resolution is lazy: the bag is fetched on first
+    /// access per Node and cached for the lifetime of the wrapper.
+    /// </summary>
+    public ISceneProperties Properties
+    {
+        get
+        {
+            if (_properties is not null) return _properties;
+            if (_world is null) return EmptySceneProperties.Instance;
+            _properties = FrameworkBackends.ScenePropertiesResolver(_world, _entity);
+            return _properties;
+        }
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     //   Override virtuals in subclasses; instances can additionally hook the On* actions
     //   (no override needed). Both fire each tick: virtual first, then action.
@@ -308,7 +331,13 @@ public class Node
 
     internal static Node? FromEntity(ulong entity) => s_registry.GetValueOrDefault(entity);
 
+    /// <summary>Engine-internal: snapshot of all currently-wrapped nodes (for post-scene-load passes).</summary>
+    internal static IReadOnlyCollection<Node> SnapshotRegistry() => s_registry.Values.ToArray();
+
     internal static void Unregister(ulong entity) => s_registry.Remove(entity);
 
     internal static void ClearRegistry() => s_registry.Clear();
+
+    /// <summary>Test-only helper: wipes the per-process wrapper registry.</summary>
+    public static void ClearRegistryForTests() => s_registry.Clear();
 }

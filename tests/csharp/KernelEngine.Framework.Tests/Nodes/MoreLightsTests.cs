@@ -13,6 +13,7 @@ public class MoreLightsTests
         public ulong CreateEntity() => 0;
         public void DestroyEntity(ulong entity) { }
         public uint RegisterComponent<T>(string name) where T : unmanaged => 0;
+        public bool TryLookupComponent(string name, out uint componentId) { componentId = 0; return false; }
         public Span<T> AddComponent<T>(ulong entity, uint componentId) where T : unmanaged => GetComponent<T>(entity, componentId);
         public Span<T> GetComponent<T>(ulong entity, uint componentId) where T : unmanaged 
         {

@@ -15,6 +15,17 @@ public sealed class Paddle(IInputActionReader<PongAction> actions) : KinematicBo
 
     public PongAction MoveAction { get; set; }
 
+    protected override void Start()
+    {
+        // New scene format ([entity.properties] MoveAction = "PaddleLeftMove"): parse the string
+        // into the enum. Legacy format already set MoveAction via reflection; the bag has no key
+        // and the parse fallback keeps the existing value.
+        var actionName = Properties.GetString("MoveAction", MoveAction.ToString());
+        if (Enum.TryParse<PongAction>(actionName, ignoreCase: true, out var parsed))
+            MoveAction = parsed;
+        base.Start();
+    }
+
     protected override void Update(float dt)
     {
         float vy = actions.GetActionAxis1D(MoveAction) * Speed;

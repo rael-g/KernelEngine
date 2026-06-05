@@ -1,3 +1,5 @@
+using KernelEngine.Kernel;
+
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -23,4 +25,22 @@ public static class FrameworkBackends
         ?? throw new InvalidOperationException(
             "No framework backend registered. Call services.AddNativeFramework() during DI setup " +
             "(or set FrameworkBackends.Default explicitly for tests).");
+
+    /// <summary>
+    /// Resolves the <c>scene_properties</c> bag attached to an entity. Set by
+    /// <c>AddNativeFramework()</c>; defaults to returning <see cref="EmptySceneProperties.Instance"/>
+    /// (so <see cref="Node.Properties"/> stays usable in tests that don't bring up the backend).
+    /// The sugar layer's <c>Node.Properties</c> accessor calls this; nobody else should.
+    /// </summary>
+    public static Func<IWorld, ulong, ISceneProperties> ScenePropertiesResolver { get; set; }
+        = static (_, _) => EmptySceneProperties.Instance;
+
+    /// <summary>
+    /// Active resource manager (typed <c>ResourceManager</c>; opaque here because the type lives
+    /// in <c>KernelEngine.Framework</c> which Abstractions can't reference). Set by
+    /// <c>Application</c> when GPU resource creation is ready; read by Node subclasses
+    /// (MeshRenderer) that resolve scene-authored material colors during <see cref="Node.Start"/>
+    /// via a typed wrapper in the Framework assembly. <c>null</c> until init.
+    /// </summary>
+    public static object? Resources { get; set; }
 }
