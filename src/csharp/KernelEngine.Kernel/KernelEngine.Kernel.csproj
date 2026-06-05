@@ -20,7 +20,6 @@
          Tests keep it for white-box assertions. -->
     <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
     <InternalsVisibleTo Include="KernelEngine.Framework.Tests" />
-    <InternalsVisibleTo Include="KernelEngine.Logging.Serilog.Tests" />
   </ItemGroup>
 
   <ItemGroup>
