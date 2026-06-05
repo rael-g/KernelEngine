@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -38,14 +40,27 @@ public class CollisionShape2D : Node
     {
         base.Start();
 
-        // Phase 5.3: pull primitive scene-authored values from the bag (with
-        // the current field value as fallback so the legacy reflection path
-        // is not regressed). Shape itself stays reflection-driven for now —
-        // KE_VARIANT_TABLE inline-shape support in the bag is deferred (§5.4
-        // of plan), so user code that sets Shape programmatically still works.
+        // Phase 5.3: pull scene-authored values from the bag (with current field
+        // values as fallback so the legacy reflection path is not regressed).
+        // Shape inline tables are forbidden in the new format (decision #4); the
+        // scene file instead carries flat ShapeKind / ShapeHalfExtents / ShapeRadius
+        // and CollisionShape2D builds the Shape2D itself here.
         Density     = Properties.GetFloat("Density",     Density);
         Friction    = Properties.GetFloat("Friction",    Friction);
         Restitution = Properties.GetFloat("Restitution", Restitution);
+
+        if (Shape is null)
+        {
+            var kind = Properties.GetString("ShapeKind", "");
+            if (kind == "rectangle")
+            {
+                Shape = new RectangleShape2D(Properties.GetVector2("ShapeHalfExtents", Vector2.One));
+            }
+            else if (kind == "circle")
+            {
+                Shape = new CircleShape2D(Properties.GetFloat("ShapeRadius", 0.5f));
+            }
+        }
 
         if (Shape is null) return;
 

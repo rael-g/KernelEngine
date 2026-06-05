@@ -40,6 +40,19 @@ public class MeshRenderer : Node
     {
         if (World == null) return;
 
+        // Phase 5.3: resolve scene-authored Material/Mesh references from the bag (option C
+        // of plan §5b). Inline material colors live as a single MaterialBaseColor vec4;
+        // mesh paths like "res://primitives/quad" map to the built-in default handle, so the
+        // common Pong case (every Sprite2D uses the quad) needs no real path resolver.
+        if (Material is null && Properties.TryGetVector4("MaterialBaseColor", out var color))
+        {
+            if (FrameworkBackends.Resources is ResourceManager rm)
+                Material = rm.CreateMaterialAsync(color).GetAwaiter().GetResult();
+        }
+        // Mesh string property: today only "res://primitives/quad" is supported (== default).
+        // Other primitives (cube/sphere) and arbitrary res:// paths land in S8 with the full
+        // ResourceResolver port — see plan §7a.
+
         // Retain managed resources so they stay alive while the node references them. Until Node
         // gets an OnDestroy hook, the retain isn't paired with a Release here — resources live
         // for the node's lifetime (acceptable for "create once at OnReady" usage; a future node-

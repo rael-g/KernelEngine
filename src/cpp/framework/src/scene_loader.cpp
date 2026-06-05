@@ -366,24 +366,59 @@ ke_result process_node(SceneLoaderImpl *impl, const fs::path &base_dir,
 // Format detection: if the file's top-level array is named `entity`, this
 // path runs. The legacy `node` array still works in parallel until Phase 5.
 
-ke_result process_entity(SceneLoaderImpl *impl, const toml::table &entity_tbl,
+ke_result load_entity_scene_recursive(SceneLoaderImpl *impl,
+                                      const std::string &path,
+                                      ke_entity attach_parent,
+                                      const std::string *override_name,
+                                      const toml::table *override_outer,
+                                      ke_entity *out_root);
+
+// Applies the outer [entity.transform] / [entity.properties] / [entity.script]
+// blocks onto a previously-instantiated root, used after a nested-scene load
+// to layer the instancing-site overrides on top of the nested defaults.
+void apply_entity_overrides(SceneLoaderImpl *impl, ke_entity entity,
+                            const toml::table &outer);
+
+ke_result process_entity(SceneLoaderImpl *impl, const fs::path &base_dir,
+                         const toml::table &entity_tbl,
                          const std::unordered_map<std::string, ke_entity> &by_name,
                          std::unordered_map<std::string, ke_entity> &out_by_name,
+                         ke_entity attach_parent_override,
+                         const std::string *override_name,
+                         const toml::table *override_outer,
                          ke_entity *out_entity)
 {
-    auto name = entity_tbl["name"].value<std::string>();
-    if (!name) return KE_ERROR_INVALID_ARGUMENT;
+    auto inner_name = entity_tbl["name"].value<std::string>();
+    if (!inner_name && !override_name) return KE_ERROR_INVALID_ARGUMENT;
+    const std::string effective_name = override_name ? *override_name : *inner_name;
 
     // Resolve parent (root unless an explicit `parent = "X"` references a
     // sibling we've already created). Decision #3: flat string reference.
-    ke_entity parent = impl->tree->root(impl->tree);
+    ke_entity parent = (attach_parent_override != KE_ENTITY_INVALID)
+        ? attach_parent_override
+        : impl->tree->root(impl->tree);
     if (auto parent_name = entity_tbl["parent"].value<std::string>()) {
         auto it = by_name.find(*parent_name);
         if (it == by_name.end()) return KE_ERROR_NOT_FOUND;
         parent = it->second;
     }
 
-    ke_entity entity = impl->tree->create_node(impl->tree, name->c_str(), parent);
+    // Nested-scene branch: `scene = "res://x.scene"` loads x recursively and
+    // layers this entry's overrides (name, transform, properties, script) on
+    // top of the loaded root. Same shape as the legacy [[node]] scene_ref.
+    if (auto scene_ref = entity_tbl["scene"].value<std::string>()) {
+        auto resolved = resolve_nested_path(impl, base_dir, *scene_ref);
+        ke_entity nested_root = KE_ENTITY_INVALID;
+        ke_result rc = load_entity_scene_recursive(impl, resolved, parent,
+                                                    &effective_name, &entity_tbl,
+                                                    &nested_root);
+        if (rc != KE_OK) return rc;
+        if (inner_name) out_by_name.emplace(*inner_name, nested_root);
+        if (out_entity) *out_entity = nested_root;
+        return KE_OK;
+    }
+
+    ke_entity entity = impl->tree->create_node(impl->tree, effective_name.c_str(), parent);
     if (entity == KE_ENTITY_INVALID) return KE_ERROR_OUT_OF_MEMORY;
 
     auto *reg  = impl->world->get_registry(impl->world);
@@ -482,8 +517,133 @@ ke_result process_entity(SceneLoaderImpl *impl, const toml::table &entity_tbl,
         }
     }
 
-    out_by_name.emplace(*name, entity);
+    // Apply outer overrides if this is the root of a nested-scene load (the outer
+    // entry's transform/properties/script layer on top of the nested defaults).
+    if (override_outer) apply_entity_overrides(impl, entity, *override_outer);
+
+    if (inner_name) out_by_name.emplace(*inner_name, entity);
     if (out_entity) *out_entity = entity;
+    return KE_OK;
+}
+
+void apply_entity_overrides(SceneLoaderImpl *impl, ke_entity entity,
+                            const toml::table &outer)
+{
+    auto *reg  = impl->world->get_registry(impl->world);
+    auto  tcid = impl->world->transform_id(impl->world);
+
+    if (auto xform = outer["transform"].as_table()) {
+        auto *t = static_cast<ke_transform_component *>(
+            ke_ecs_component_get(reg, entity, tcid));
+        if (t) apply_transform(*t, *xform);
+    }
+
+    // Outer properties merge into the existing scene_properties bag (or create
+    // it if the inner scene had none). Reusing the same per-loader arena keeps
+    // memory ownership simple — we just allocate a fresh arena and replace the
+    // component pointer with the merged result.
+    if (auto props = outer["properties"].as_table()) {
+        auto arena = std::make_unique<PropertyArena>();
+        arena->entries.reserve(props->size() + 8); // headroom for inner keys
+
+        // Carry over any existing inner keys first, so outer wins on key clash.
+        auto *bag = static_cast<ke_scene_properties *>(
+            ke_ecs_component_get(reg, entity, impl->scene_properties_cid));
+        std::vector<std::string> outer_keys;
+        outer_keys.reserve(props->size());
+        for (auto &&[k, _] : *props) outer_keys.emplace_back(k.str());
+        auto is_overridden = [&](const char *k) {
+            for (auto &s : outer_keys) if (s == k) return true;
+            return false;
+        };
+        if (bag) {
+            for (uint32_t i = 0; i < bag->count; ++i) {
+                const auto &kv = bag->entries[i];
+                if (kv.key && is_overridden(kv.key)) continue;
+                arena->strings.emplace_back(kv.key);
+                const char *kc = arena->strings.back().c_str();
+                ke_variant val = kv.value;
+                if (val.type == KE_VARIANT_STRING && val.s) {
+                    arena->strings.emplace_back(val.s);
+                    val.s = arena->strings.back().c_str();
+                }
+                arena->entries.push_back(ke_variant_table_entry{kc, val});
+            }
+        }
+
+        VariantArena va;
+        for (auto &&[k, v] : *props) {
+            ke_variant val = toml_to_variant(v, va);
+            arena->strings.emplace_back(k.str());
+            const char *kc = arena->strings.back().c_str();
+            if (val.type == KE_VARIANT_STRING && val.s) {
+                arena->strings.emplace_back(val.s);
+                val.s = arena->strings.back().c_str();
+            }
+            if (val.type == KE_VARIANT_TABLE) val.t = nullptr;
+            arena->entries.push_back(ke_variant_table_entry{kc, val});
+        }
+
+        if (!bag) {
+            bag = static_cast<ke_scene_properties *>(
+                ke_ecs_component_add(reg, entity, impl->scene_properties_cid));
+        }
+        if (bag) {
+            bag->entries = arena->entries.data();
+            bag->count   = (uint32_t)arena->entries.size();
+        }
+        impl->arenas.push_back(std::move(arena));
+    }
+
+    if (auto script_tbl = outer["script"].as_table()) {
+        auto lang = (*script_tbl)["language"].value<std::string>();
+        auto type = (*script_tbl)["type"].value<std::string>();
+        if (lang && type) {
+            for (auto &sl : impl->script_languages) {
+                if (sl.name == *lang && sl.factory) {
+                    sl.factory(sl.ctx, entity, type->c_str());
+                    break;
+                }
+            }
+        }
+    }
+}
+
+ke_result load_entity_scene_recursive(SceneLoaderImpl *impl,
+                                      const std::string &path,
+                                      ke_entity attach_parent,
+                                      const std::string *override_name,
+                                      const toml::table *override_outer,
+                                      ke_entity *out_root)
+{
+    toml::table tbl;
+    try { tbl = toml::parse_file(path); }
+    catch (const toml::parse_error &) { return KE_ERROR_NOT_FOUND; }
+
+    fs::path base_dir = fs::path(path).parent_path();
+    const auto *entities = tbl["entity"].as_array();
+    if (!entities) { if (out_root) *out_root = KE_ENTITY_INVALID; return KE_OK; }
+
+    std::unordered_map<std::string, ke_entity> by_name;
+    ke_entity root = KE_ENTITY_INVALID;
+    bool is_first = true;
+    for (const auto &n : *entities) {
+        const auto *e_tbl = n.as_table();
+        if (!e_tbl) continue;
+        ke_entity entity = KE_ENTITY_INVALID;
+        ke_result rc;
+        if (is_first) {
+            rc = process_entity(impl, base_dir, *e_tbl, by_name, by_name,
+                                attach_parent, override_name, override_outer, &entity);
+            root = entity;
+            is_first = false;
+        } else {
+            rc = process_entity(impl, base_dir, *e_tbl, by_name, by_name,
+                                KE_ENTITY_INVALID, nullptr, nullptr, &entity);
+        }
+        if (rc != KE_OK) return rc;
+    }
+    if (out_root) *out_root = root;
     return KE_OK;
 }
 
@@ -504,19 +664,9 @@ ke_result load_scene_recursive(SceneLoaderImpl *impl, const std::string &path,
 
     // ── New `[[entity]]` array — component-driven path ──────────────────────
     if (const auto *entities = tbl["entity"].as_array()) {
-        std::unordered_map<std::string, ke_entity> by_name;
-        ke_entity root = KE_ENTITY_INVALID;
-        bool is_first = true;
-        for (const auto &n : *entities) {
-            const auto *e_tbl = n.as_table();
-            if (!e_tbl) continue;
-            ke_entity entity = KE_ENTITY_INVALID;
-            ke_result rc = process_entity(impl, *e_tbl, by_name, by_name, &entity);
-            if (rc != KE_OK) return rc;
-            if (is_first) { root = entity; is_first = false; }
-        }
-        if (out_root) *out_root = root;
-        return KE_OK;
+        return load_entity_scene_recursive(impl, path, attach_parent,
+                                            override_name,
+                                            override_entry, out_root);
     }
 
     const auto *nodes = tbl["node"].as_array();

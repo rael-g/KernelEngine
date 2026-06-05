@@ -34,4 +34,13 @@ public static class FrameworkBackends
     /// </summary>
     public static Func<IWorld, ulong, ISceneProperties> ScenePropertiesResolver { get; set; }
         = static (_, _) => EmptySceneProperties.Instance;
+
+    /// <summary>
+    /// Active resource manager (typed <c>ResourceManager</c>; opaque here because the type lives
+    /// in <c>KernelEngine.Framework</c> which Abstractions can't reference). Set by
+    /// <c>Application</c> when GPU resource creation is ready; read by Node subclasses
+    /// (MeshRenderer) that resolve scene-authored material colors during <see cref="Node.Start"/>
+    /// via a typed wrapper in the Framework assembly. <c>null</c> until init.
+    /// </summary>
+    public static object? Resources { get; set; }
 }

@@ -260,6 +260,9 @@ public class Application : IDisposable
                 Resources = new ResourceManager(factory, _meshCache, _materialCache, _textureCache);
                 // Give Tree access to ResourceManager for resource properties in auto-registration.
                 Tree.SetResourceManager(Resources);
+                // Phase 5.3: expose to MeshRenderer.Start so Material colors authored as
+                // [entity.properties] MaterialBaseColor can be resolved into a GPU handle.
+                FrameworkBackends.Resources = Resources;
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
