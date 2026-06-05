@@ -1181,11 +1181,24 @@ struct ke_mesh_render_system;
         ke_node_type_registry **out_registry);
 
 struct ke_world;
+    typedef ke_result (*ke_script_factory_func)(
+        void *ctx, ke_entity entity, const char *type_name);
+    typedef struct ke_scene_properties
+    {
+        const ke_variant_table_entry *entries;
+        uint32_t count;
+    } ke_scene_properties;
+
     typedef struct ke_scene_loader
     {
         void *handle;
 
         ke_result (*load)(struct ke_scene_loader *self, const char *path);
+
+        ke_result (*register_script_language)(struct ke_scene_loader *self,
+                                              const char *language,
+                                              ke_script_factory_func factory,
+                                              void *ctx);
 
         void (*destroy)(struct ke_scene_loader *self);
     } ke_scene_loader;

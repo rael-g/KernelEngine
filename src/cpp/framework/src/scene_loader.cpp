@@ -36,6 +36,15 @@ struct ScriptLanguage
     void                  *ctx;
 };
 
+// Per-entity bag of scene-file properties. The arena owns the strings (so the
+// component's variant pointers stay valid after the TOML tree is discarded) and
+// the entry array itself (whose .data() the component points at).
+struct PropertyArena
+{
+    std::deque<std::string>             strings; // stable .c_str()
+    std::vector<ke_variant_table_entry> entries; // stable .data() after fill is done
+};
+
 struct SceneLoaderImpl
 {
     ke_scene_loader            api{};
@@ -45,8 +54,12 @@ struct SceneLoaderImpl
     ke_node_type_registry     *registry  = nullptr;
     std::string                project_root; // empty = no res:// support; resolution is sibling-relative
     std::vector<ScriptLanguage> script_languages;
-    ke_scene_property_func     property_sink     = nullptr;
-    void                      *property_sink_ctx = nullptr;
+
+    // scene_properties bag — registered once at construction time, attached
+    // per entity with an [entity.properties] block. arenas[i] is the storage
+    // backing the i-th attachment; freed when the loader is destroyed.
+    ke_component_id                              scene_properties_cid = (ke_component_id)-1;
+    std::vector<std::unique_ptr<PropertyArena>>  arenas;
 };
 
 // ── TOML → ke_variant ────────────────────────────────────────────────────────
@@ -402,18 +415,45 @@ ke_result process_entity(SceneLoaderImpl *impl, const toml::table &entity_tbl,
         }
     }
 
-    // [entity.properties] — generic key/value bag the scripting binding stashes
-    // for Node subclasses to read in Start(). See §5b of the refactor plan: the
-    // bag is the no-reflection alternative to NodeTypeRegistrar.ApplyProperty.
-    if (impl->property_sink) {
-        if (auto props = entity_tbl["properties"].as_table()) {
-            for (auto &&[k, v] : *props) {
-                VariantArena arena;
-                ke_variant val = toml_to_variant(v, arena);
-                std::string key(k.str());
-                impl->property_sink(impl->property_sink_ctx, entity, key.c_str(), &val);
+    // [entity.properties] — generic key/value bag attached as the
+    // `scene_properties` component (option C of plan §5b). Bindings read the
+    // component the same way they read any other; no per-language callback.
+    if (auto props = entity_tbl["properties"].as_table()) {
+        auto arena = std::make_unique<PropertyArena>();
+        // Reserve to size so push_back below doesn't relocate .data() — the
+        // component holds entries.data() and must stay valid post-loop.
+        arena->entries.reserve(props->size());
+        VariantArena va; // borrows strings from the TOML tree for the variant
+                         // construction; we then copy each string into our arena
+                         // so the value survives after VariantArena dies.
+        for (auto &&[k, v] : *props) {
+            ke_variant val = toml_to_variant(v, va);
+            arena->strings.emplace_back(k.str());
+            const char *key = arena->strings.back().c_str();
+
+            // Strings need to be copied into the arena too — the variant's .s
+            // points into VariantArena which dies at the end of this scope.
+            if (val.type == KE_VARIANT_STRING && val.s) {
+                arena->strings.emplace_back(val.s);
+                val.s = arena->strings.back().c_str();
             }
+            // KE_VARIANT_TABLE points at VariantArena-owned storage too; we
+            // don't deep-copy tables into the bag for now. If a TOML inline
+            // table sneaks into [entity.properties] the binding would see a
+            // dangling pointer. Decision #4 of §5: tables are forbidden in
+            // the new format, so this is consistent.
+            if (val.type == KE_VARIANT_TABLE) val.t = nullptr;
+
+            arena->entries.push_back(ke_variant_table_entry{key, val});
         }
+
+        auto *bag = static_cast<ke_scene_properties *>(
+            ke_ecs_component_add(reg, entity, impl->scene_properties_cid));
+        if (bag) {
+            bag->entries = arena->entries.data();
+            bag->count   = (uint32_t)arena->entries.size();
+        }
+        impl->arenas.push_back(std::move(arena));
     }
 
     if (auto comps = entity_tbl["components"].as_table()) {
@@ -528,16 +568,6 @@ ke_result impl_register_script_language(ke_scene_loader *self, const char *langu
     return KE_OK;
 }
 
-ke_result impl_register_property_sink(ke_scene_loader *self,
-                                      ke_scene_property_func callback, void *ctx)
-{
-    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-    auto *impl = static_cast<SceneLoaderImpl *>(self->handle);
-    impl->property_sink     = callback;
-    impl->property_sink_ctx = ctx;
-    return KE_OK;
-}
-
 void impl_destroy(ke_scene_loader *self)
 {
     if (!self || !self->handle) return;
@@ -578,8 +608,16 @@ extern "C" ke_result ke_scene_loader_create(
     impl->api.handle                   = impl;
     impl->api.load                     = impl_load;
     impl->api.register_script_language = impl_register_script_language;
-    impl->api.register_property_sink   = impl_register_property_sink;
     impl->api.destroy                  = impl_destroy;
+
+    // Register the scene_properties bag component once at construction time
+    // so every [entity.properties] block lands as a real ECS component.
+    impl->scene_properties_cid = ke_ecs_component_register_v2(
+        impl->world->get_registry(impl->world),
+        KE_SCENE_PROPERTIES_COMPONENT_NAME,
+        sizeof(ke_scene_properties),
+        nullptr, 0); // No SceneLoader-writable fields — bindings read the
+                     // entries array directly via ke_ecs_component_get.
 
     *out_loader = &impl->api;
     return KE_OK;

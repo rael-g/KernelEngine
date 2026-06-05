@@ -614,38 +614,10 @@ type     = "Foo"
     fs::remove(path);
 }
 
-// ── Phase 5.2: [entity.properties] bag dispatch ─────────────────────────────
+// ── Phase 5.2: [entity.properties] → scene_properties component ─────────────
 
-namespace {
-struct PropCall {
-    ke_entity   entity;
-    std::string key;
-    ke_variant  value;
-    std::string string_copy;
-};
-struct PropCtx { std::vector<PropCall> calls; };
-
-ke_result RecordPropertySink(void *ctx, ke_entity e, const char *key, const ke_variant *v)
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_PropertiesBlock_AttachesSceneProperties)
 {
-    auto *c = static_cast<PropCtx *>(ctx);
-    PropCall pc;
-    pc.entity = e;
-    pc.key    = key ? std::string(key) : std::string();
-    pc.value  = *v;
-    if (v->type == KE_VARIANT_STRING && v->s) {
-        pc.string_copy = v->s;
-        pc.value.s = nullptr;
-    }
-    c->calls.push_back(std::move(pc));
-    return KE_OK;
-}
-}
-
-TEST_F(SceneLoaderEntityFormatTest, EntityFormat_PropertiesBlock_DispatchesEveryKey)
-{
-    PropCtx pctx;
-    ASSERT_EQ(loader->register_property_sink(loader, RecordPropertySink, &pctx), KE_OK);
-
     auto path = WriteTempSceneFile(R"(
 [[entity]]
 name = "HitSound"
@@ -659,29 +631,53 @@ AutoPlay = true
 )");
     ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
 
-    ASSERT_EQ(pctx.calls.size(), 3u);
-    // Order of TOML keys is insertion-order in tomlplusplus; we don't rely on it.
+    auto *reg = world->get_registry(world);
+    ke_component_meta meta{};
+    ASSERT_EQ(ke_ecs_component_lookup(reg, KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta), KE_OK);
+
+    ke_entity e = tree->find_node(tree, "HitSound");
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+    auto *bag = static_cast<ke_scene_properties *>(
+        ke_ecs_component_get(reg, e, meta.cid));
+    ASSERT_NE(bag, nullptr);
+    ASSERT_EQ(bag->count, 3u);
+
     bool sawPath = false, sawVolume = false, sawAuto = false;
-    for (auto &c : pctx.calls) {
-        if (c.key == "Path")     { sawPath = true;   EXPECT_EQ(c.string_copy, "assets/sounds/hit.wav"); }
-        if (c.key == "Volume")   { sawVolume = true; EXPECT_FLOAT_EQ((float)c.value.f, 0.5f); }
-        if (c.key == "AutoPlay") { sawAuto = true;   EXPECT_TRUE(c.value.b); }
+    for (uint32_t i = 0; i < bag->count; ++i) {
+        const auto &kv = bag->entries[i];
+        std::string k(kv.key);
+        if (k == "Path") {
+            sawPath = true;
+            EXPECT_EQ(kv.value.type, KE_VARIANT_STRING);
+            EXPECT_STREQ(kv.value.s, "assets/sounds/hit.wav");
+        } else if (k == "Volume") {
+            sawVolume = true;
+            EXPECT_EQ(kv.value.type, KE_VARIANT_FLOAT);
+            EXPECT_FLOAT_EQ((float)kv.value.f, 0.5f);
+        } else if (k == "AutoPlay") {
+            sawAuto = true;
+            EXPECT_EQ(kv.value.type, KE_VARIANT_BOOL);
+            EXPECT_TRUE(kv.value.b);
+        }
     }
     EXPECT_TRUE(sawPath && sawVolume && sawAuto);
     fs::remove(path);
 }
 
-TEST_F(SceneLoaderEntityFormatTest, EntityFormat_PropertiesBlock_NoSink_SilentlySkipped)
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_NoPropertiesBlock_NoSceneProperties)
 {
-    // No sink registered — properties parse but go nowhere; load still succeeds.
     auto path = WriteTempSceneFile(R"(
 [[entity]]
-name = "X"
-[entity.properties]
-Foo = 1
+name = "Plain"
 )");
     ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
-    EXPECT_NE(tree->find_node(tree, "X"), KE_ENTITY_INVALID);
+
+    auto *reg = world->get_registry(world);
+    ke_component_meta meta{};
+    ASSERT_EQ(ke_ecs_component_lookup(reg, KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta), KE_OK);
+
+    ke_entity e = tree->find_node(tree, "Plain");
+    EXPECT_EQ(ke_ecs_component_get(reg, e, meta.cid), nullptr);
     fs::remove(path);
 }
 

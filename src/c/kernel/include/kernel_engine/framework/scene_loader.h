@@ -42,13 +42,25 @@ extern "C"
     typedef ke_result (*ke_script_factory_func)(
         void *ctx, ke_entity entity, const char *type_name);
 
-    /// Callback fired once per (entity, key, value) parsed from an
-    /// `[entity.properties]` block. Bindings stash these into a per-entity
-    /// bag that Node subclasses query at Start time — see "C" of §5b in the
-    /// refactor plan. The `value` pointer is valid only for the duration of
-    /// the call (transient TOML arena); copy what you need to retain.
-    typedef ke_result (*ke_scene_property_func)(
-        void *ctx, ke_entity entity, const char *key, const ke_variant *value);
+    /// ECS component the SceneLoader attaches to every entity that has an
+    /// `[entity.properties]` block — the generic key/value bag chosen as
+    /// "option C" in §5b of the refactor plan. The component points into
+    /// loader-owned storage (the entries + string bytes live in an internal
+    /// arena released when ke_scene_loader.destroy() runs), so the loader
+    /// must outlive every entity that holds a scene_properties component.
+    ///
+    /// Bindings consume this the same way they consume any other component:
+    /// look up the cid via ke_ecs_component_lookup("scene_properties"), call
+    /// ke_ecs_component_get on the entity, walk the entries. A Lua game and a
+    /// C# game read the same bytes through the same API; no per-language
+    /// callback is involved.
+    typedef struct ke_scene_properties
+    {
+        const ke_variant_table_entry *entries; ///< borrowed; valid until loader.destroy()
+        uint32_t                      count;
+    } ke_scene_properties;
+
+#define KE_SCENE_PROPERTIES_COMPONENT_NAME "scene_properties"
 
     typedef struct ke_scene_loader
     {
@@ -70,16 +82,12 @@ extern "C"
                                               ke_script_factory_func factory,
                                               void *ctx);
 
-        /// Registers a single property-sink for `[entity.properties]` blocks.
-        /// The loader calls it once per (entity, key, value) triple. Bindings
-        /// stash the values into a managed bag the script wrapper reads at
-        /// Start. Re-registration replaces. Pass `callback = NULL` to clear.
-        ke_result (*register_property_sink)(struct ke_scene_loader *self,
-                                            ke_scene_property_func callback,
-                                            void *ctx);
-
         /// Releases resources owned by this loader. After destroy() the
-        /// pointer must not be used.
+        /// pointer must not be used, AND any `scene_properties` component the
+        /// loader wrote into the world becomes dangling (entries point into
+        /// loader-internal storage). Destroy the loader only after the world
+        /// has shut down (or after explicitly removing every scene_properties
+        /// component you no longer need).
         void (*destroy)(struct ke_scene_loader *self);
     } ke_scene_loader;
 
