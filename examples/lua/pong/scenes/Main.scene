@@ -1,0 +1,34 @@
+# Cube demo scene — drives the Lua pong bootstrap until the real Pong scenes
+# (Paddle/Ball/Wall/Scoreboard) come online. Three nodes: a directional sun, a
+# perspective camera, a rotated cube. Equivalent to the imperative setup we
+# used to do in main.lua before SceneLoader was wired through Lua.
+[scene]
+name    = "CubeDemo"
+version = 1
+
+[[node]]
+name = "Sun"
+type = "DirectionalLight"
+[node.properties]
+direction = [-0.4,  0.8, -0.4]
+color     = [ 1.0,  1.0,  0.95]
+intensity = 1.0
+
+[[node]]
+name = "Camera"
+type = "Camera"
+[node.transform]
+position = [0, 0, 5]
+[node.properties]
+fov_degrees = 60.0
+near        = 0.1
+far         = 100.0
+
+[[node]]
+name = "Cube"
+type = "Mesh"
+[node.transform]
+rotation_euler = [20, 35, 0]
+[node.properties]
+primitive = "cube"
+color     = [0.8, 0.3, 0.2, 1.0]
