@@ -473,6 +473,36 @@ Work this refactor flagged as belonging on the native side but did NOT execute
 
 ---
 
+## 7c. Remaining cleanup at branch close (Phase 5.6 partial)
+
+The big-ticket goal of the refactor — **delete the 310-line reflection-based
+`NodeTypeRegistrar`** — is done. C# Pong and Lua Pong both load through
+`[entity.script]` + `[entity.properties]`; the SceneLoader's dispatch goes
+through the script factory + scene_properties component path; the legacy
+`NodeTypeRegistrar.ResolveNodeType` reflection beast is replaced by a 30-line
+`NodeTypeResolver` (type-name lookup only). 514 tests green (255 kernel + 359
+C#) end-to-end, both pongs run.
+
+What still lives in the tree at branch close, deferred to a follow-up:
+
+1. **`INodeTypeRegistry` C# interface** + `NodeTypeRegistry.cs` native wrapper
+   stay referenced (Tree constructors, Application, IFrameworkBackendFactory)
+   even though no code path actually uses them anymore. Deleting them is a
+   pure cascade of signature changes — defer with the rest below.
+2. **Legacy `[[node]] type=…` path in `scene_loader.cpp`** still compiles and
+   runs (the C ABI `ke_node_type_registry` underneath it survives). The C++
+   `test_scene_loader` suite still has 15 `[[node]]` cases on it, so removing
+   the legacy path means migrating those tests too.
+3. **`ke_node_type_registry` / `ke_node_type` C ABI** stays in the kernel
+   framework headers, used only by the legacy [[node]] path above.
+4. **Lua bindings** still expose `ke_node_type_registry_*`; the Lua pong
+   doesn't touch them anymore (Phase 6-early already migrated), but the
+   regenerated bindings carry them.
+
+These four cleanup tasks are 100% mechanical and have no design risk — they
+just touch a lot of files. Picking them up in a focused follow-up branch keeps
+the diff reviewable and lets us re-merge `main` first.
+
 ## 8. Definition of done
 
 1. C# Pong builds + runs + scores the same way it does today on `main`.
