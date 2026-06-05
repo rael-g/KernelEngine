@@ -1,5 +1,6 @@
 # tomlplusplus is header-only in vcpkg — no CMake config, just an include dir.
 find_path(TOMLPLUSPLUS_INCLUDE_DIRS "toml++/toml.hpp" REQUIRED)
+find_package(glm CONFIG REQUIRED)
 
 add_library(ke_framework
     src/node_type_registry.c
@@ -11,9 +12,13 @@ add_library(ke_framework
     src/material_file.cpp
     src/asset_resolver.cpp
     src/resource_queue.cpp
+    src/camera_render_system.cpp
+    src/mesh_render_system.cpp
+    src/light_render_system.cpp
 )
 
 target_include_directories(ke_framework PRIVATE ${TOMLPLUSPLUS_INCLUDE_DIRS})
+target_link_libraries(ke_framework PRIVATE glm::glm)
 
 get_target_property(target_type ke_framework TYPE)
 if (target_type STREQUAL "STATIC_LIBRARY")
