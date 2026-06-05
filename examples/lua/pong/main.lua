@@ -30,9 +30,7 @@ local asset_sys_params_v = ffi.new("ke_system_params")
 framework.ke_mesh_asset_system_get_system_params(asset_sys, asset_sys_params_v)
 
 local loader_out = ffi.new("ke_scene_loader*[1]")
--- NULL node_type_registry is legal in the new path: pure [[entity]] files never
--- invoke it. The loader still accepts the parameter for backward compatibility.
-assert(framework.ke_scene_loader_create(alloc, world, tree, nil,
+assert(framework.ke_scene_loader_create(alloc, world, tree,
                                         nil, loader_out) == 0)
 local loader = loader_out[0]
 assert(loader.load(loader, script_dir .. "scenes/Main.scene") == 0)

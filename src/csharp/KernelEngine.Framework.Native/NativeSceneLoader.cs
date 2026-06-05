@@ -7,8 +7,8 @@ namespace KernelEngine.Framework;
 
 /// <summary>
 /// Managed wrapper over the native <c>ke_scene_loader</c> primitive. The C plugin handles
-/// TOML parsing, nested scene resolution, transforms, and property dispatch via
-/// <c>ke_node_type_registry</c> callbacks. The C# shell only owns the unmanaged handle and
+/// TOML parsing, nested scene resolution, transforms, component-field writes, and
+/// per-language script-factory dispatch. The C# shell only owns the unmanaged handle and
 /// presents the path-string ABI in a managed-friendly form.
 /// </summary>
 internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
@@ -38,7 +38,6 @@ internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
                     allocator.Native,
                     worldFw,
                     tree.NativePtr,
-                    null,                 // registry: dropped in Phase 5.6 (legacy node-type registry deleted)
                     (sbyte*)rootPtr,
                     &p).ToManaged());
         }

@@ -63,7 +63,6 @@ HEADERS = [
     "kernel_engine/framework/light_render_system.h",
     "kernel_engine/framework/mesh_asset_system.h",
     "kernel_engine/kernel/world/variant.h",
-    "kernel_engine/framework/node_type_registry.h",
     "kernel_engine/framework/scene_loader.h",
     "kernel_engine/render/bgfx/bgfx_render.h",
     "kernel_engine/window/glfw/glfw_window.h",

@@ -30,7 +30,6 @@
 --   kernel_engine/framework/light_render_system.h
 --   kernel_engine/framework/mesh_asset_system.h
 --   kernel_engine/kernel/world/variant.h
---   kernel_engine/framework/node_type_registry.h
 --   kernel_engine/framework/scene_loader.h
 --   kernel_engine/render/bgfx/bgfx_render.h
 --   kernel_engine/window/glfw/glfw_window.h
@@ -1139,46 +1138,6 @@ struct ke_mesh_render_system;
 
                      void ke_mesh_asset_system_get_system_params(
         ke_mesh_asset_system *system, ke_system_params *out_params);
-    struct ke_node_type_registry;
-
-    typedef ke_result (*ke_node_create_func)(
-        void *ctx, ke_entity entity, const char *name);
-
-    typedef ke_result (*ke_node_set_property_func)(
-        void *ctx, ke_entity entity, const char *key, const ke_variant *value);
-
-    typedef struct ke_node_type
-    {
-        const char *name;
-        void *ctx;
-        ke_node_create_func create;
-        ke_node_set_property_func set_property;
-    } ke_node_type;
-
-    typedef ke_result (*ke_node_type_lookup_miss_func)(
-        void *ctx, struct ke_node_type_registry *registry, const char *name);
-
-    typedef struct ke_node_type_registry
-    {
-        void *handle;
-
-        ke_result (*register_type)(struct ke_node_type_registry *self,
-                                   const ke_node_type *type);
-
-        ke_result (*lookup)(struct ke_node_type_registry *self,
-                            const char *name,
-                            const ke_node_type **out_type);
-
-        void (*set_lookup_miss)(struct ke_node_type_registry *self,
-                                ke_node_type_lookup_miss_func fn,
-                                void *ctx);
-
-        void (*destroy)(struct ke_node_type_registry *self);
-    } ke_node_type_registry;
-
-                     ke_result ke_node_type_registry_create(
-        ke_allocator *alloc,
-        ke_node_type_registry **out_registry);
 
 struct ke_world;
     typedef ke_result (*ke_script_factory_func)(
@@ -1206,7 +1165,6 @@ struct ke_world;
         ke_allocator *alloc,
         struct ke_world *world,
         ke_scene_tree *tree,
-        ke_node_type_registry *registry,
         const char *project_root,
         ke_scene_loader **out_loader);
 struct ke_window;
