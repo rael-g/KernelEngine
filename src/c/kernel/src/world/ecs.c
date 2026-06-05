@@ -13,6 +13,14 @@ typedef struct ke_component_type
     ke_array entities; // Entities that have this component
     ke_hash_map entity_to_index; // Maps ke_entity to index in 'data' and 'entities'
     size_t capacity;
+
+    // Field metadata (Phase 1 of the ECS-pure node refactor). `fields` is owned
+    // by the registry — allocated via the registry allocator on register_v2,
+    // freed in registry_destroy. NULL when registered via the legacy
+    // ke_ecs_component_register (no fields → component is opaque to the scene
+    // loader, only reachable through native code).
+    ke_component_field *fields;
+    uint32_t field_count;
 } ke_component_type;
 
 typedef struct ke_ecs_registry_internal
@@ -52,7 +60,8 @@ void ke_ecs_registry_destroy(ke_ecs_registry *registry)
     for (size_t i = 0; i < internal->component_types.size; ++i)
     {
         ke_component_type *type = (ke_component_type *)internal->component_types.data[i];
-        if (type->data) registry->allocator->free(registry->allocator, type->data);
+        if (type->data)   registry->allocator->free(registry->allocator, type->data);
+        if (type->fields) registry->allocator->free(registry->allocator, type->fields);
         ke_array_destroy(&type->entities);
         ke_hash_map_destroy(&type->entity_to_index);
         registry->allocator->free(registry->allocator, type);
@@ -81,11 +90,25 @@ void ke_ecs_entity_destroy(ke_ecs_registry *registry, ke_entity entity)
 
 ke_component_id ke_ecs_component_register(ke_ecs_registry *registry, const char *name, size_t size)
 {
-    if (!registry || !name) return (ke_component_id)-1;
+    return ke_ecs_component_register_v2(registry, name, size, NULL, 0);
+}
+
+ke_component_id ke_ecs_component_register_v2(
+    ke_ecs_registry           *registry,
+    const char                *name,
+    size_t                     size,
+    const ke_component_field  *fields,
+    uint32_t                   field_count)
+{
+    if (!registry || !name) return KE_COMPONENT_INVALID;
+    if (field_count > 0 && !fields) return KE_COMPONENT_INVALID;
 
     ke_ecs_registry_internal *internal = (ke_ecs_registry_internal *)registry->internal_data;
-    ke_component_type *type = (ke_component_type *)registry->allocator->alloc(registry->allocator, sizeof(ke_component_type), 0);
-    
+    ke_component_type *type = (ke_component_type *)registry->allocator->alloc(
+        registry->allocator, sizeof(ke_component_type), 0);
+    if (!type) return KE_COMPONENT_INVALID;
+
+    memset(type, 0, sizeof(*type));
     strncpy(type->name, name, sizeof(type->name) - 1);
     type->size = size;
     type->capacity = 32;
@@ -93,8 +116,95 @@ ke_component_id ke_ecs_component_register(ke_ecs_registry *registry, const char 
     ke_array_init(&type->entities, type->capacity, registry->allocator);
     ke_hash_map_init(&type->entity_to_index, type->capacity, registry->allocator);
 
+    if (field_count > 0) {
+        size_t fbytes = sizeof(ke_component_field) * field_count;
+        type->fields = (ke_component_field *)registry->allocator->alloc(
+            registry->allocator, fbytes, 0);
+        if (!type->fields) {
+            if (type->data) registry->allocator->free(registry->allocator, type->data);
+            ke_array_destroy(&type->entities);
+            ke_hash_map_destroy(&type->entity_to_index);
+            registry->allocator->free(registry->allocator, type);
+            return KE_COMPONENT_INVALID;
+        }
+        memcpy(type->fields, fields, fbytes);
+        type->field_count = field_count;
+    }
+
     ke_array_push(&internal->component_types, type);
     return (ke_component_id)(internal->component_types.size - 1);
+}
+
+ke_result ke_ecs_component_lookup(ke_ecs_registry *registry, const char *name,
+                                  ke_component_meta *out_meta)
+{
+    if (!registry || !name || !out_meta) return KE_ERROR_INVALID_ARGUMENT;
+    ke_ecs_registry_internal *internal = (ke_ecs_registry_internal *)registry->internal_data;
+    for (size_t i = 0; i < internal->component_types.size; ++i) {
+        ke_component_type *t = (ke_component_type *)internal->component_types.data[i];
+        if (strncmp(t->name, name, sizeof(t->name)) == 0) {
+            out_meta->cid         = (ke_component_id)i;
+            out_meta->size        = t->size;
+            out_meta->fields      = t->fields;
+            out_meta->field_count = t->field_count;
+            return KE_OK;
+        }
+    }
+    return KE_ERROR_NOT_FOUND;
+}
+
+// Decode a variant into a component field. The component pointer is already
+// resolved to the entity's slot; we only need offset + type compatibility.
+static ke_result write_variant_at_field(void *comp, const ke_component_field *f,
+                                        const ke_variant *v)
+{
+    void *dst = (uint8_t *)comp + f->offset;
+    if (f->type == v->type) {
+        switch (f->type) {
+            case KE_VARIANT_BOOL:   *(uint8_t  *)dst = v->b ? 1 : 0; return KE_OK;
+            case KE_VARIANT_INT:    *(int32_t  *)dst = (int32_t)v->i; return KE_OK;
+            case KE_VARIANT_FLOAT:  *(float    *)dst = (float)v->f; return KE_OK;
+            case KE_VARIANT_STRING: *(const char **)dst = v->s; return KE_OK;
+            case KE_VARIANT_VEC2:   memcpy(dst, &v->v2, sizeof(ke_vec2)); return KE_OK;
+            case KE_VARIANT_VEC3:   memcpy(dst, &v->v3, sizeof(ke_vec3)); return KE_OK;
+            case KE_VARIANT_VEC4:   memcpy(dst, &v->v4, sizeof(ke_vec4)); return KE_OK;
+            case KE_VARIANT_QUAT:   memcpy(dst, &v->q,  sizeof(ke_quat)); return KE_OK;
+            case KE_VARIANT_NULL:
+            case KE_VARIANT_TABLE:  return KE_ERROR_NOT_SUPPORTED;
+        }
+        return KE_ERROR_NOT_SUPPORTED;
+    }
+    // Single allowance: TOML int parsed for a float field.
+    if (f->type == KE_VARIANT_FLOAT && v->type == KE_VARIANT_INT) {
+        *(float *)dst = (float)v->i;
+        return KE_OK;
+    }
+    return KE_ERROR_INVALID_ARGUMENT;
+}
+
+ke_result ke_ecs_component_apply_variant(
+    ke_ecs_registry  *registry,
+    ke_entity         entity,
+    ke_component_id   cid,
+    const char       *field_name,
+    const ke_variant *value)
+{
+    if (!registry || entity == KE_ENTITY_INVALID || !field_name || !value)
+        return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_ecs_registry_internal *internal = (ke_ecs_registry_internal *)registry->internal_data;
+    if (cid >= internal->component_types.size) return KE_ERROR_NOT_FOUND;
+    ke_component_type *t = (ke_component_type *)internal->component_types.data[cid];
+
+    void *comp = ke_ecs_component_get(registry, entity, cid);
+    if (!comp) return KE_ERROR_NOT_FOUND;
+
+    for (uint32_t i = 0; i < t->field_count; ++i) {
+        if (strcmp(t->fields[i].name, field_name) == 0) {
+            return write_variant_at_field(comp, &t->fields[i], value);
+        }
+    }
+    return KE_ERROR_NOT_FOUND;
 }
 
 void *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity, ke_component_id component)

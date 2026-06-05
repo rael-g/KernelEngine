@@ -296,39 +296,39 @@ Each phase ends with a green build + Pong (C# *and* Lua) still rendering.
 
 ---
 
-## 5. Open design questions
+## 5. Design decisions (locked at session start)
 
-These should be settled in the first session of implementation, not left to
-discover mid-phase:
+1. **Wrapper materialisation timing in C#**: **explicit** via
+   `tree.WrapEntity<Paddle>(entity)`. The loader only fills components;
+   wrappers materialise when C# game code asks for one. Avoids creating GC
+   roots for entities that stay pure data (lights, camera, decorative meshes).
 
-1. **Wrapper materialisation timing in C#.** Do `Node` C# instances get created
-   immediately when the loader sees `[entity.script.cs]`, lazily on first
-   accessor call, or via an explicit `tree.WrapEntity<MeshNode>(e)`? Affects
-   when constructors run, what GC anchors exist, and what happens if the same
-   entity is wrapped twice.
+2. **`primitive` field lifetime**: **canonical** — asset system reads it and
+   leaves it in place. Costs ~32 bytes per mesh node; enables hot-reload and
+   keeps the field a self-describing source of truth.
 
-2. **`primitive` field lifetime.** Should the asset system clear the
-   `primitive` string after baking (so the field acts like a one-shot request)
-   or keep it as the canonical name (so a hot-reload can re-bake)? Hot-reload
-   matters more than the few bytes saved.
+3. **Hierarchy in the scene file**: **flat `parent = "X"` reference**.
+   Identical to today. Nested tables would break streaming loaders and add no
+   ergonomic win.
 
-3. **Hierarchy in the scene file.** Today nested `[[node]] parent="X"` is
-   supported. In `[[entity]]` form do we keep `parent = "X"` (sibling-ordered
-   resolution) or move to nested tables (clearer but breaks streaming loaders)?
+4. **`KE_VARIANT_TABLE` (inline TOML tables)**: **forbidden** in the new
+   format. Inline `Material { color=[...] }` was the root cause of bug 3c3bd92
+   (silent null materials). Each previously-inline payload becomes its own
+   component instead.
 
-4. **Variant `KE_VARIANT_TABLE`.** Inline TOML tables (used today for
-   `properties = { Color = [...], Shape = {...} }`) — do they map cleanly to a
-   component field, or do we forbid them in the new format? Forbidding is
-   simpler; allowing keeps backward compat for one specific Pong field.
+5. **Script attachment syntax**: **explicit `[entity.script]` block**:
+   ```toml
+   [entity.script]
+   language = "csharp"
+   type     = "Pong.Paddle"
+   ```
+   More verbose than `script = "csharp:Pong.Paddle"` but leaves room for
+   future per-script properties (`auto_start = false`, etc.).
 
-5. **Script attachment syntax.** The TOML way to say "this entity runs the
-   Paddle C# class" — `[entity.script.csharp] type = "Pong.Paddle"`, or a
-   shorter `script = "csharp:Pong.Paddle"`? Drives how language bindings
-   register script factories.
-
-6. **Component naming**. `mesh`, `directional_light`, `camera` — kebab-case,
-   snake_case, or PascalCase in TOML? Kernel structs are `ke_X_component`;
-   stripping `ke_` and `_component` gives `mesh`. Pick one convention now.
+6. **Component naming in TOML**: **snake_case**, derived from the C struct by
+   stripping the `ke_` prefix and `_component` suffix. `ke_mesh_component` →
+   `mesh`; `ke_directional_light_component` → `directional_light`. Matches the
+   kernel naming convention.
 
 ---
 
