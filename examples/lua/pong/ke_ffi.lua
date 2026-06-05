@@ -605,6 +605,8 @@ typedef struct ke_logger ke_logger;
         const char *name;
         ke_variant_type type;
         uint32_t offset;
+        uint32_t size;
+
     } ke_component_field;
 
     typedef uint64_t ke_entity;
@@ -1045,6 +1047,8 @@ struct ke_world;
     {
         ke_mesh_handle mesh;
         ke_material_handle material;
+        char primitive[32];
+        float color[4];
     } ke_mesh_component;
 
     typedef struct ke_mesh_render_system_params

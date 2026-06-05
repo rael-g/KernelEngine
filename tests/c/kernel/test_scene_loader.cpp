@@ -505,3 +505,52 @@ type = "TestNode"
     EXPECT_EQ(recorder.creates[0].name, "Player");
     fs::remove(path);
 }
+
+// ── Phase 3 integration: mesh-component-shaped fields ───────────────────────
+//
+// Validates that the new SceneLoader path handles a component with the same
+// shape as ke_mesh_component (string-buffer primitive + vec4 color), which is
+// what Phase 3 actually ships. The asset system itself (bake + create_mesh)
+// needs a live renderer and is exercised by the Lua pong demo, not here.
+
+namespace {
+struct MeshLikeComp {
+    uint32_t mesh_idx;
+    uint32_t material_idx;
+    char     primitive[32];
+    float    color[4];
+};
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_MeshLikeComponent_PrimitiveAndColorWritten)
+{
+    auto *reg = world->get_registry(world);
+    static const ke_component_field kMeshFields[] = {
+        {"primitive", KE_VARIANT_STRING, (uint32_t)offsetof(MeshLikeComp, primitive), 32},
+        {"color",     KE_VARIANT_VEC4,   (uint32_t)offsetof(MeshLikeComp, color),      0},
+    };
+    ke_component_id mesh_cid = ke_ecs_component_register_v2(
+        reg, "mesh_like", sizeof(MeshLikeComp),
+        kMeshFields, sizeof(kMeshFields) / sizeof(kMeshFields[0]));
+    ASSERT_NE(mesh_cid, KE_COMPONENT_INVALID);
+
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "Cube"
+[entity.components.mesh_like]
+primitive = "cube"
+color = [0.8, 0.3, 0.2, 1.0]
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+
+    ke_entity e = tree->find_node(tree, "Cube");
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+    auto *m = static_cast<MeshLikeComp *>(ke_ecs_component_get(reg, e, mesh_cid));
+    ASSERT_NE(m, nullptr);
+    EXPECT_STREQ(m->primitive, "cube"); // verifies the string-buffer copy path
+    EXPECT_FLOAT_EQ(m->color[0], 0.8f);
+    EXPECT_FLOAT_EQ(m->color[1], 0.3f);
+    EXPECT_FLOAT_EQ(m->color[2], 0.2f);
+    EXPECT_FLOAT_EQ(m->color[3], 1.0f);
+    fs::remove(path);
+}

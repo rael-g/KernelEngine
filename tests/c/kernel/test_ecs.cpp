@@ -363,6 +363,60 @@ TEST_F(EcsTest, ApplyVariant_AllSupportedTypes_WrittenAtCorrectOffsets) {
     EXPECT_STREQ(comp->label, "hello");
 }
 
+TEST_F(EcsTest, ApplyVariant_StringWithSize_CopiesIntoFixedBuffer) {
+    // Phase 3 of ECS-pure nodes: STRING field with size > 0 copies into a
+    // fixed buffer so the value survives the transient variant pointer.
+    struct BufComp { char primitive[8]; };
+    ke_component_field fields[] = {
+        {"primitive", KE_VARIANT_STRING, (uint32_t)offsetof(BufComp, primitive), 8},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "buf",
+                                                        sizeof(BufComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *c = (BufComp *)ke_ecs_component_add(reg, e, cid);
+
+    char source[] = "cube";
+    ke_variant v{}; v.type = KE_VARIANT_STRING; v.s = source;
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "primitive", &v), KE_OK);
+    std::memset(source, 'x', sizeof(source) - 1);
+    EXPECT_STREQ(c->primitive, "cube");
+}
+
+TEST_F(EcsTest, ApplyVariant_StringWithSize_TruncatesAndAlwaysTerminates) {
+    struct SmallBuf { char tag[4]; };
+    ke_component_field fields[] = {
+        {"tag", KE_VARIANT_STRING, (uint32_t)offsetof(SmallBuf, tag), 4},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "small",
+                                                        sizeof(SmallBuf),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *c = (SmallBuf *)ke_ecs_component_add(reg, e, cid);
+
+    ke_variant v{}; v.type = KE_VARIANT_STRING; v.s = "overflow";
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "tag", &v), KE_OK);
+    EXPECT_STREQ(c->tag, "ove"); // 3 chars + NUL fit the 4-byte buffer
+}
+
+TEST_F(EcsTest, ApplyVariant_StringWithZeroSize_StoresPointerVerbatim) {
+    // size == 0 keeps the Phase 1 behaviour: store the variant's pointer.
+    struct PtrComp { const char *label; };
+    ke_component_field fields[] = {
+        {"label", KE_VARIANT_STRING, (uint32_t)offsetof(PtrComp, label), 0},
+    };
+    ke_component_id cid = ke_ecs_component_register_v2(reg, "ptr",
+                                                        sizeof(PtrComp),
+                                                        fields, 1);
+    ke_entity e = ke_ecs_entity_create(reg);
+    auto *c = (PtrComp *)ke_ecs_component_add(reg, e, cid);
+
+    static const char *kHello = "hi";
+    ke_variant v{}; v.type = KE_VARIANT_STRING; v.s = kHello;
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "label", &v), KE_OK);
+    EXPECT_EQ(c->label, kHello);
+}
+
 TEST_F(EcsTest, ApplyVariant_IntToFloat_AllowedAndConverted) {
     ke_component_field fields[] = {
         {"f", KE_VARIANT_FLOAT, (uint32_t)offsetof(PhaseOneComp, f)},

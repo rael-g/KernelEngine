@@ -164,7 +164,22 @@ static ke_result write_variant_at_field(void *comp, const ke_component_field *f,
             case KE_VARIANT_BOOL:   *(uint8_t  *)dst = v->b ? 1 : 0; return KE_OK;
             case KE_VARIANT_INT:    *(int32_t  *)dst = (int32_t)v->i; return KE_OK;
             case KE_VARIANT_FLOAT:  *(float    *)dst = (float)v->f; return KE_OK;
-            case KE_VARIANT_STRING: *(const char **)dst = v->s; return KE_OK;
+            case KE_VARIANT_STRING:
+                if (f->size > 0) {
+                    // Copy into a fixed buffer so the value survives the variant's
+                    // transient string. Reserve one byte for the terminator.
+                    char *buf = (char *)dst;
+                    if (v->s) {
+                        size_t n = 0;
+                        while (v->s[n] && n + 1 < f->size) { buf[n] = v->s[n]; ++n; }
+                        buf[n] = '\0';
+                    } else {
+                        buf[0] = '\0';
+                    }
+                } else {
+                    *(const char **)dst = v->s;
+                }
+                return KE_OK;
             case KE_VARIANT_VEC2:   memcpy(dst, &v->v2, sizeof(ke_vec2)); return KE_OK;
             case KE_VARIANT_VEC3:   memcpy(dst, &v->v3, sizeof(ke_vec3)); return KE_OK;
             case KE_VARIANT_VEC4:   memcpy(dst, &v->v4, sizeof(ke_vec4)); return KE_OK;

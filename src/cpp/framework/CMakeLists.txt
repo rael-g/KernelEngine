@@ -15,6 +15,7 @@ add_library(ke_framework
     src/camera_render_system.cpp
     src/mesh_render_system.cpp
     src/light_render_system.cpp
+    src/mesh_asset_system.cpp
 )
 
 target_include_directories(ke_framework PRIVATE ${TOMLPLUSPLUS_INCLUDE_DIRS})

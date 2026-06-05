@@ -74,12 +74,18 @@ extern "C" ke_result ke_mesh_render_system_create(
     self->world         = params->world;
     self->allocator     = params->allocator;
     self->registry      = registry;
-    // Phase 2: register the mesh component under its short name so the new
-    // scene format can reference it. Mesh + material handles aren't directly
-    // settable from TOML — Phase 3 introduces a "primitive" string field that
-    // an asset system reads to bake + assign the handle.
+    // Phase 3 of ECS-pure nodes: the mesh component carries both resolved
+    // handles AND the bake-request fields. The SceneLoader writes primitive
+    // (string, copied into a 32-byte buffer so it survives the variant's
+    // transient pointer) and color (vec4 over the four sequential floats).
+    // ke_mesh_asset_system later reads those and fills the handles.
+    static const ke_component_field kMeshFields[] = {
+        {"primitive", KE_VARIANT_STRING, (uint32_t)offsetof(ke_mesh_component, primitive), 32},
+        {"color",     KE_VARIANT_VEC4,   (uint32_t)offsetof(ke_mesh_component, color),      0},
+    };
     self->mesh_cid      = ke_ecs_component_register_v2(
-        registry, "mesh", sizeof(ke_mesh_component), nullptr, 0);
+        registry, "mesh", sizeof(ke_mesh_component),
+        kMeshFields, sizeof(kMeshFields) / sizeof(kMeshFields[0]));
     self->transform_cid = params->world->transform_id(params->world);
     self->reads[0]      = self->mesh_cid;
     self->reads[1]      = self->transform_cid;

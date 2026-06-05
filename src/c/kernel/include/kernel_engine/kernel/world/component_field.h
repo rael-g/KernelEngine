@@ -29,6 +29,12 @@ extern "C"
         const char     *name;   ///< Property key in the TOML scene file.
         ke_variant_type type;   ///< Expected variant kind; must match (modulo INT→FLOAT).
         uint32_t        offset; ///< Byte offset into the component struct.
+        uint32_t        size;   ///< Storage size override; 0 = default per type. For
+                                ///< KE_VARIANT_STRING fields: 0 stores the variant's
+                                ///< pointer verbatim (caller manages lifetime); >0
+                                ///< copies up to size-1 bytes plus a NUL terminator
+                                ///< into a fixed buffer at the offset, so the value
+                                ///< survives independent of the variant's source.
     } ke_component_field;
 
 #ifdef __cplusplus
