@@ -41,6 +41,14 @@ public interface IInputActionReader<TEnum> where TEnum : struct, Enum
 /// </remarks>
 public static class InputActions
 {
+    /// <summary>
+    /// Backend factory delegate set by the registered native assembly (typically
+    /// <c>AddNativeFramework()</c>). Used by <see cref="InputActionMap{TEnum}"/>'s
+    /// parameterless constructor and by <see cref="LoadFromProject{TEnum}"/> so callers
+    /// don't have to wire <see cref="IFrameworkBackendFactory"/> manually.
+    /// </summary>
+    public static Func<IInputActionsBackend>? CreateBackend { get; set; }
+
     private static readonly Dictionary<Type, IInputActionMap> s_maps = new();
     private static readonly Dictionary<Type, object>          s_readers = new();
 
@@ -123,7 +131,14 @@ public static class InputActions
             throw new InvalidDataException($"[input] actions must start with 'res://'; got '{resPath}'.");
 
         var absolute = Path.Combine(AppContext.BaseDirectory, resPath[prefix.Length..]);
-        var map = InputActionsLoader.LoadFromFile<TEnum>(absolute);
+        if (!File.Exists(absolute))
+            throw new FileNotFoundException($"Input actions file not found: {absolute}", absolute);
+
+        var native = CreateBackend?.Invoke()
+            ?? throw new InvalidOperationException(
+                "No input-actions backend registered. Call services.AddNativeFramework() before LoadFromProject.");
+        native.Load(absolute);
+        var map = new InputActionMap<TEnum>(native);
         return Register(map);
     }
 

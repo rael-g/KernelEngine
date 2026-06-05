@@ -2,7 +2,19 @@ cmake_minimum_required(VERSION 3.15)
 
 project(kernel_engine LANGUAGES C CXX)
 
-include(cmake/Coverage.cmake)
+# ── Code coverage (source-based, Clang/LLVM) ─────────────────────────────────
+# When KE_COVERAGE=ON, every translation unit under src/ and tests/ is built
+# with -fprofile-instr-generate -fcoverage-mapping. New plugins/libraries are
+# instrumented automatically — no per-target opt-in. Drives scripts/coverage.py.
+option(KE_COVERAGE "Build with Clang source-based coverage instrumentation" OFF)
+if(KE_COVERAGE)
+    if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "KE_COVERAGE requires Clang (CMake sees ${CMAKE_CXX_COMPILER_ID}).")
+    endif()
+    message(STATUS "KE_COVERAGE enabled — instrumenting all src/ + tests/ targets.")
+    add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+    add_link_options(-fprofile-instr-generate)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,7 +26,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(src/c/kernel)
-add_subdirectory(src/cpp/dev_platform)
+add_subdirectory(src/cpp/framework)
 add_subdirectory(src/cpp/task_scheduler/enki)
 add_subdirectory(src/cpp/threading)
 add_subdirectory(src/cpp/window/contract)
@@ -42,10 +54,3 @@ add_subdirectory(tests/c/kernel)
 add_subdirectory(tests/cpp)
 
 include(cmake/CodeQuality.cmake)
-
-if(KE_COVERAGE)
-    enable_coverage(ke_kernel)
-    enable_coverage(ke_render_bgfx)
-    enable_coverage(ke_window_glfw)
-    enable_coverage(ke_shader_compiler_bgfx)
-endif()

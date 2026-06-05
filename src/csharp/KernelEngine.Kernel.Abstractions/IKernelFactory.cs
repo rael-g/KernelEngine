@@ -18,10 +18,12 @@ public interface IKernelFactory
     /// <summary>Creates a frame-sync ring with <paramref name="bufferCount"/> slots (caller's policy).</summary>
     IFrameSync CreateFrameSync(IAllocator allocator, int bufferCount);
 
-    /// <summary>Creates and starts a named kernel thread running <paramref name="action"/>. Disposing joins.</summary>
-    IKernelThread CreateThread(IAllocator allocator, string name, IDevPlatform? devPlatform, Action action);
-
-    /// <summary>Publishes <paramref name="name"/> as the calling thread's name (TLS + OS via DevPlatform).</summary>
+    /// <summary>
+    /// Publishes <paramref name="name"/> as the calling thread's name. Sets the cross-language
+    /// kernel TLS slot used by <c>ke_thread_assert_current</c>. The .NET runtime independently
+    /// propagates <see cref="Thread.Name"/> to the OS (Win32 SetThreadDescription /
+    /// pthread_setname_np) when the caller also sets it.
+    /// </summary>
     void SetCurrentThreadName(string name);
 
     /// <summary>Asserts the calling thread's name matches <paramref name="expected"/> (debug only; no-op in release).</summary>

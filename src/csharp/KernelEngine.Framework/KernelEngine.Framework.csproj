@@ -3,8 +3,10 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <!-- The Framework is a managed-only façade: pointers/unsafe are physically forbidden here.
-         All native interop lives below it (Kernel concretes / plugins). Do not flip to true. -->
+    <!-- Sugar layer. Physically guarded against pointer-pushing: the compiler refuses
+         every "unsafe" / pointer expression here. All native interaction is delegated
+         to the IXxxBackend implementations registered by AddNativeFramework() (in
+         KernelEngine.Framework.Native) or any equivalent backend assembly. -->
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
 
@@ -20,6 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="../KernelEngine.Framework.Abstractions/KernelEngine.Framework.Abstractions.csproj" />
+    <ProjectReference Include="../KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <ProjectReference Include="../KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
   </ItemGroup>
 

@@ -11,6 +11,7 @@
     "gtest",
     "enkits",
     "miniaudio",
+    "tomlplusplus",
     {
       "name": "bgfx",
       "features": [ "tools" ],

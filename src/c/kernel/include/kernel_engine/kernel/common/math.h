@@ -9,6 +9,11 @@ extern "C"
 {
 #endif
 
+    typedef struct ke_vec2
+    {
+        float x, y;
+    } ke_vec2;
+
     typedef struct ke_vec3
     {
         float x, y, z;

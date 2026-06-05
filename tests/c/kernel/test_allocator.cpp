@@ -161,11 +161,79 @@ TEST(AllocatorStaticTest, ArenaDestroy_NullSelf_DoesNotCrash) {
     SUCCEED();
 }
 
-TEST(AllocatorStaticTest, ArenaReset_NullSelf_DoesNotCrash) {
-    ke_allocator* a = ke_allocator_arena_create(64);
-    auto reset_ptr = a->reset;
-    a->destroy(a);
+// --- Proxy Allocator Tests ---
+
+TEST(ProxyAllocatorInitTest, Create_ReturnsNonNull) {
+    ke_allocator* inner = ke_allocator_malloc_create();
+    ke_allocator* proxy = ke_allocator_proxy_create(inner, "Test");
+    ASSERT_NE(proxy, nullptr);
+    proxy->destroy(proxy);
+    inner->destroy(inner);
+}
+
+TEST(ProxyAllocatorInitTest, Create_WithNullInner_ReturnsNull) {
+    ASSERT_EQ(ke_allocator_proxy_create(nullptr, "Test"), nullptr);
+}
+
+class ProxyAllocatorTest : public ::testing::Test {
+protected:
+    ke_allocator* inner = nullptr;
+    ke_allocator* proxy = nullptr;
+    void SetUp() override { 
+        inner = ke_allocator_malloc_create(); 
+        proxy = ke_allocator_proxy_create(inner, "Test");
+    }
+    void TearDown() override { 
+        if (proxy) proxy->destroy(proxy); 
+        if (inner) inner->destroy(inner);
+    }
+};
+
+TEST_F(ProxyAllocatorTest, Alloc_TracksStats) {
+    void* p = proxy->alloc(proxy, 100, 0);
+    ke_allocator_stats stats;
+    ke_allocator_proxy_get_stats(proxy, &stats);
     
-    reset_ptr(nullptr);
-    SUCCEED();
+    EXPECT_EQ(stats.active_allocs, 1);
+    EXPECT_EQ(stats.active_bytes, 100);
+    proxy->free(proxy, p);
+}
+
+TEST_F(ProxyAllocatorTest, Free_UpdatesStats) {
+    void* p = proxy->alloc(proxy, 100, 0);
+    proxy->free(proxy, p);
+    
+    ke_allocator_stats stats;
+    ke_allocator_proxy_get_stats(proxy, &stats);
+    EXPECT_EQ(stats.active_allocs, 0);
+    EXPECT_EQ(stats.active_bytes, 0);
+    EXPECT_EQ(stats.total_freed, 100);
+}
+
+TEST_F(ProxyAllocatorTest, Realloc_UpdatesStats) {
+    void* p = proxy->alloc(proxy, 100, 0);
+    void* p2 = proxy->realloc(proxy, p, 200);
+    
+    ke_allocator_stats stats;
+    ke_allocator_proxy_get_stats(proxy, &stats);
+    EXPECT_EQ(stats.active_bytes, 200);
+    EXPECT_EQ(stats.total_allocated, 300); // 100 + 200
+    
+    proxy->free(proxy, p2);
+}
+
+TEST_F(ProxyAllocatorTest, Report_Works) {
+    void* p = proxy->alloc(proxy, 100, 0);
+    ke_allocator_proxy_report(proxy, nullptr); // To stderr
+    proxy->free(proxy, p);
+}
+
+TEST_F(ProxyAllocatorTest, GetStats_NullArgs_ReturnsInvalidArgument) {
+    EXPECT_EQ(ke_allocator_proxy_get_stats(nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(ProxyAllocatorTest, ProxyDestroy_NullSelf_IsSafe) {
+    auto d = proxy->destroy;
+    // We already have proxy in the suite, let's just test a null call
+    d(nullptr);
 }

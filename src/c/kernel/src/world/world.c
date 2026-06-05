@@ -158,23 +158,41 @@ static ke_result world_add_system(ke_world *self, const ke_system_params *desc)
 
 // ── Built-in systems ─────────────────────────────────────────────────────────
 
-static void run_script_system(ke_world_impl *impl, float dt)
+static void run_script_system(ke_world_impl *impl, const struct ke_frame *frame)
 {
     ke_entity *entities;
     void      *data;
     size_t     count;
     ke_ecs_registry_query(impl->registry, impl->script_cid, &entities, &data, &count);
 
+    float dt = frame ? (float)frame->delta_time : 0.0f;
+    const ke_input_snapshot *input = frame ? frame->input : NULL;
+
     ke_script_component *scripts = (ke_script_component *)data;
+
+    // Pass 1: awake → start → input → update
     for (size_t i = 0; i < count; i++)
     {
         ke_script_component *s = &scripts[i];
-        if (!s->started)
+        if (s->state == KE_SCRIPT_STATE_FRESH)
         {
-            s->started = true;
+            s->state = KE_SCRIPT_STATE_AWOKE;
+            if (s->on_awake) s->on_awake(entities[i]);
+        }
+        if (s->state == KE_SCRIPT_STATE_AWOKE)
+        {
+            s->state = KE_SCRIPT_STATE_STARTED;
             if (s->on_start) s->on_start(entities[i]);
         }
+        if (s->on_input && input) s->on_input(entities[i], input);
         if (s->on_update) s->on_update(entities[i], dt);
+    }
+
+    // Pass 2: late_update (runs after every on_update in this frame)
+    for (size_t i = 0; i < count; i++)
+    {
+        ke_script_component *s = &scripts[i];
+        if (s->on_late_update) s->on_late_update(entities[i], dt);
     }
 }
 
@@ -185,27 +203,33 @@ static void update_transform_recursive(ke_world_impl *impl, ke_entity entity,
         impl->registry, entity, impl->transform_cid);
     ke_hierarchy_component *h = (ke_hierarchy_component *)ke_ecs_component_get(
         impl->registry, entity, impl->hierarchy_cid);
-    if (!t) return;
 
-    ke_mat4 local;
-    ke_mat4_from_transform(&local, &t->position, &t->rotation, &t->scale);
-
-    // System.Numerics.Matrix4x4 (and our ke_mat4 byte layout — translation at m[12..14]) is
-    // row-major / row-vector. Composition rule: world = local * parent (apply local first, then
-    // parent's transform). Doing `parent * local` works only when the parent is identity (e.g.
-    // top-level nodes under the Root) — every 2-deep hierarchy gets the child's translation
-    // multiplied by the parent's scale instead of added to the parent's translation.
-    if (parent_world)
-        ke_mat4_mul(&t->world_matrix, &local, parent_world);
-    else
-        t->world_matrix = local;
+    // Self's world transform — identity if there's no Transform (e.g. the
+    // scene tree's root entity). Children still need to be visited so their
+    // own Transform composes against the right ancestor matrix.
+    ke_mat4 self_world;
+    if (t) {
+        ke_mat4 local;
+        ke_mat4_from_transform(&local, &t->position, &t->rotation, &t->scale);
+        // System.Numerics.Matrix4x4 (and our ke_mat4 byte layout — translation
+        // at m[12..14]) is row-major / row-vector. Composition rule:
+        // world = local * parent. Doing `parent * local` only works when the
+        // parent is identity; every 2-deep hierarchy would otherwise get its
+        // translation multiplied by the parent's scale instead of added to it.
+        if (parent_world) ke_mat4_mul(&t->world_matrix, &local, parent_world);
+        else              t->world_matrix = local;
+        self_world = t->world_matrix;
+    } else if (parent_world) {
+        self_world = *parent_world;
+    } else {
+        for (int i = 0; i < 16; ++i) self_world.m[i] = (i % 5 == 0) ? 1.0f : 0.0f;
+    }
 
     if (!h) return;
     ke_entity child = h->first_child;
     while (child != KE_ENTITY_INVALID)
     {
-        update_transform_recursive(impl, child, &t->world_matrix);
-        // Find next sibling
+        update_transform_recursive(impl, child, &self_world);
         ke_hierarchy_component *ch = (ke_hierarchy_component *)ke_ecs_component_get(impl->registry, child, impl->hierarchy_cid);
         if (!ch) break;
         child = ch->next_sibling;
@@ -247,7 +271,7 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
     ke_world_impl *impl = (ke_world_impl *)self->handle;
     float dt = frame ? (float)frame->delta_time : 0.0f;
 
-    run_script_system(impl, dt);
+    run_script_system(impl, frame);
     update_transforms(impl);
 
     if (impl->waves_dirty) rebuild_waves(impl);
@@ -282,6 +306,19 @@ static ke_result world_update(ke_world *self, const struct ke_frame *frame)
         }
     }
 
+    return KE_OK;
+}
+
+// ── Script notify destroy ─────────────────────────────────────────────────────
+
+ke_result ke_world_notify_destroy(ke_world *world, ke_entity entity)
+{
+    if (!world || entity == 0) return KE_ERROR_INVALID_ARGUMENT;
+    ke_world_impl *impl = (ke_world_impl *)world->handle;
+    ke_script_component *s = (ke_script_component *)ke_ecs_component_get(
+        impl->registry, entity, impl->script_cid);
+    if (!s) return KE_OK; // entity has no script component — not an error
+    if (s->on_destroy) s->on_destroy(entity);
     return KE_OK;
 }
 

@@ -8,11 +8,21 @@ add_executable(test_ke_kernel
     test_logger.cpp
     test_hash.cpp
     test_array.cpp
+    test_node_type_registry.cpp
+    test_resource_cache.cpp
+    test_scene_tree.cpp
+    test_input_actions.cpp
+    test_scene_loader.cpp
+    test_mesh_shape.cpp
+    test_material_file.cpp
+    test_asset_resolver.cpp
+    test_resource_queue.cpp
 )
 
 
 target_link_libraries(test_ke_kernel PRIVATE
     ke_kernel
+    ke_framework
     GTest::gtest_main
 )
 
@@ -27,7 +37,3 @@ set_target_properties(test_ke_kernel PROPERTIES
 
 include(GoogleTest)
 gtest_discover_tests(test_ke_kernel)
-
-if(KE_COVERAGE)
-    enable_coverage(test_ke_kernel)
-endif()

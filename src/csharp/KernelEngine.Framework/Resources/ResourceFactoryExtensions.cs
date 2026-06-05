@@ -7,22 +7,19 @@ public static class ResourceFactoryExtensions
 {
     public static Task<MeshHandle> CreateMeshAsync(this IResourceFactory factory, Vertex[] vertices, ushort[] indices)
     {
-        if (factory is ResourceCommandFactory rcf)
-            return rcf.EnqueueAsync(ResourceCommandType.CreateMesh, (vertices, indices), val => new MeshHandle(val));
+        if (factory is IAsyncResourceFactory async) return async.CreateMeshAsync(vertices, indices);
         return Task.FromResult(factory.CreateMesh(vertices, indices));
     }
 
     public static Task<TextureHandle> CreateTextureAsync(this IResourceFactory factory, uint width, uint height, byte[] pixels)
     {
-        if (factory is ResourceCommandFactory rcf)
-            return rcf.EnqueueAsync(ResourceCommandType.CreateTexture, (width, height, pixels), val => new TextureHandle(val));
+        if (factory is IAsyncResourceFactory async) return async.CreateTextureAsync(width, height, pixels);
         return Task.FromResult(factory.CreateTexture(width, height, pixels));
     }
 
     public static Task<TextureHandle> CreateCubemapAsync(this IResourceFactory factory, uint faceSize, byte[] data)
     {
-        if (factory is ResourceCommandFactory rcf)
-            return rcf.EnqueueAsync(ResourceCommandType.CreateCubemap, (faceSize, data), val => new TextureHandle(val));
+        if (factory is IAsyncResourceFactory async) return async.CreateCubemapAsync(faceSize, data);
         return Task.FromResult(factory.CreateCubemap(faceSize, data));
     }
 
@@ -33,10 +30,8 @@ public static class ResourceFactoryExtensions
         float roughness = 0.5f,
         TextureHandle normalMapHandle = default)
     {
-        if (factory is ResourceCommandFactory rcf)
-            return rcf.EnqueueAsync(ResourceCommandType.CreateMaterial,
-                (color, textureHandle, metallic, roughness, normalMapHandle),
-                val => new MaterialHandle(val));
+        if (factory is IAsyncResourceFactory async)
+            return async.CreateMaterialAsync(color, textureHandle, metallic, roughness, normalMapHandle);
         return Task.FromResult(factory.CreateMaterial(color, textureHandle, metallic, roughness, normalMapHandle));
     }
 }

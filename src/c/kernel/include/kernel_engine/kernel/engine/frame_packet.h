@@ -3,6 +3,8 @@
 
 #include <kernel_engine/kernel/common/math.h>
 #include <kernel_engine/kernel/common/handles.h>
+#include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/render/light.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -110,6 +112,32 @@ extern "C" {
         uint32_t            ui_draw_capacity;
 
     } ke_frame_packet;
+
+    // ── Single-packet factory ─────────────────────────────────────────────────
+    //
+    // Allocates one ke_frame_packet plus the dynamic buffers it points to (draw,
+    // shadow draw, point lights, spot lights, UI quads), sized by the caller.
+    // Pairs with ke_frame_packet_destroy. Intended for single-threaded callers
+    // (Lua, editor tools, in-process tests) that don't need the ring buffer
+    // semantics of ke_frame_sync.
+
+    typedef struct ke_frame_packet_params
+    {
+        struct ke_allocator *allocator;
+        uint32_t             draw_capacity;        ///< max ke_draw_command per frame
+        uint32_t             shadow_draw_capacity; ///< max shadow ke_draw_command per frame
+        uint32_t             point_light_capacity;
+        uint32_t             spot_light_capacity;
+        uint32_t             ui_draw_capacity;
+    } ke_frame_packet_params;
+
+    KE_API ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
+                                            ke_frame_packet **out_packet);
+    KE_API void      ke_frame_packet_destroy(struct ke_allocator *allocator,
+                                             ke_frame_packet *packet);
+    /// Zeroes per-frame counts + booleans + shadow handle so the next tick starts
+    /// fresh, without freeing the dynamic buffers.
+    KE_API void      ke_frame_packet_reset(ke_frame_packet *packet);
 
 #ifdef __cplusplus
 }

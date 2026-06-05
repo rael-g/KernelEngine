@@ -3,7 +3,6 @@
 #include <kernel_engine/kernel/render/render.h>
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
-#include <kernel_engine/render/core/render_core_export.h>
 
 namespace kernel_engine::render::core
 {
@@ -14,7 +13,7 @@ class LightingManager;
 /**
  * @brief Implements Clustered Forward Rendering data structures and GPU passes.
  */
-class KE_RENDER_CORE_API ClusteredForward
+class ClusteredForward
 {
 public:
     ke_result SetupClustered(RenderContext& ctx, render::GpuProgramHandle& out_depth_prog, render::GpuProgramHandle& out_cull_prog);

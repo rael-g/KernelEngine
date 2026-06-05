@@ -14,9 +14,9 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Framework.Native/KernelEngine.Framework.Native.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.DevPlatform.Win32/KernelEngine.DevPlatform.Win32.csproj" Condition="'$(OS)' == 'Windows_NT'" />
   </ItemGroup>
 
 </Project>

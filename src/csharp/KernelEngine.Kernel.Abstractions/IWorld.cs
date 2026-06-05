@@ -28,11 +28,16 @@ public interface IWorld : IDisposable
 
     /// <summary>
     /// Registers managed per-frame callbacks for an entity, driven by the built-in C ScriptSystem.
-    /// <paramref name="onStart"/> runs once before the first update; <paramref name="onUpdate"/> runs
-    /// each frame with the delta time. The function-pointer plumbing is handled internally — callers
-    /// pass plain delegates and stay free of <c>unsafe</c>.
+    /// All parameters are optional — pass only the hooks the caller needs. The function-pointer
+    /// plumbing is handled internally; callers stay free of <c>unsafe</c>.
     /// </summary>
-    void RegisterScript(ulong entity, Action onStart, Action<float> onUpdate);
+    void RegisterScript(
+        ulong entity,
+        Action? onAwake      = null,
+        Action? onStart      = null,
+        Action<float>? onUpdate     = null,
+        Action<float>? onLateUpdate = null,
+        Action? onDestroy    = null);
 
     /// <summary>Removes previously-registered script callbacks for an entity (call on destruction).</summary>
     void UnregisterScript(ulong entity);

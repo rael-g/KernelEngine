@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 //   • Escape                       → quit
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()

@@ -7,7 +7,6 @@
 #include "gpu_types.hpp"
 #include <vector>
 
-#include <kernel_engine/render/core/render_core_export.h>
 
 namespace kernel_engine::render::core
 {
@@ -24,7 +23,7 @@ struct MeshEntry
 /**
  * @brief Manages GPU geometry resources using the HAL.
  */
-class KE_RENDER_CORE_API GeometryManager
+class GeometryManager
 {
 public:
     ke_result CreateMesh(RenderContext& ctx, const ke_vertex *verts, uint32_t vert_count,

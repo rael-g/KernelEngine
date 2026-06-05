@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 //   • Escape → quit
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger().AddConsoleSink(LogLevel.Info)
     .AddInput()
     .AddGlfwWindow(960, 540, "KernelEngine — 16 Physics Test (Space drops ball, R resets)")
@@ -42,7 +42,8 @@ app.OnReady = async (_) =>
 
     var floorMat = await app.Resources.CreateMaterialAsync(new Vector4(0.4f, 0.4f, 0.45f, 1), metallic: 0, roughness: 0.9f);
     var ballMat  = await app.Resources.CreateMaterialAsync(new Vector4(0.9f, 0.3f, 0.2f, 1), metallic: 0.1f, roughness: 0.4f);
-    var cubeMesh = await app.Resources.CreateMeshAsync(MeshShape.Cube());
+    var cubeShape = MeshShape.Cube();
+    var cubeMesh  = await app.Resources.CreateMeshAsync(cubeShape.Vertices, cubeShape.Indices);
 
     // Static floor: render + body.
     var floor = app.Tree.AddNode(new MeshRenderer { Mesh = cubeMesh, Material = floorMat }, "Floor");

@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+
 namespace kernel_engine::render::core
 {
 
@@ -81,9 +82,11 @@ private:
         bool owns_framebuffer = false;
     };
 
-    // Bridge passed as ke_render_pass_ctx.handle. One-per-thread (TLS) so two
-    // graphs running on different threads each see their own state; record
-    // callbacks must not retain the pointer past the callback's return.
+    // State threaded into the record callback via ke_render_pass_ctx.handle.
+    // Lifetime is exactly the callback's stack frame — Execute() declares one
+    // per pass per frame, so concurrent graphs on different threads are
+    // isolated by construction (no static/TLS storage required).
+    // Record callbacks must not retain this pointer past their return.
     struct Bridge
     {
         RenderGraphImpl* impl = nullptr;
@@ -112,9 +115,10 @@ private:
     ke_result ReleaseAllResources();
     ke_result RecompileTopology();
 
-    // Record-callback bridge: backend opens a ctx, the user's record function
-    // queries reads/writes through it, then we close.
-    ke_render_pass_ctx BuildPassCtx(Pass& pass);
+    // Record-callback bridge: backend opens a ctx wired to the caller's
+    // stack-resident Bridge, the user's record function queries reads/writes
+    // through it, then it goes out of scope when Execute moves on.
+    ke_render_pass_ctx BuildPassCtx(Bridge& bridge);
 
     CoreRenderer* renderer_ = nullptr;
     ke_allocator* allocator_ = nullptr;
@@ -128,11 +132,6 @@ private:
                                           // will drop this offset.
 
     ke_render_graph api_{};               // vtable handed to user code
-
-    // One TLS bridge per thread that calls Execute on this graph; reset per
-    // pass per frame. Stored on the impl (not the thread) so dtor cleanup
-    // happens naturally with the graph object.
-    static thread_local Bridge tls_bridge_;
 };
 
 } // namespace kernel_engine::render::core

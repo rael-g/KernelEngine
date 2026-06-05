@@ -30,10 +30,6 @@ target_include_directories(ke_render_bgfx PRIVATE
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
 )
 
-if(KE_COVERAGE)
-    enable_coverage(ke_render_bgfx)
-endif()
-
 install(TARGETS ke_render_bgfx
     EXPORT KernelEngineTargets
     RUNTIME DESTINATION bin

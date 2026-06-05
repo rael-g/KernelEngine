@@ -8,6 +8,6 @@ using KernelEngine.Physics.Box2D;
 using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Text.StbTrueType;
 
-var services = new ServiceCollection().AddKernel().AddLogger().AddConsoleSink().AddInput().AddProjectConfig().AddInputActions().AddGlfwWindow().AddBgfxRenderer().AddBox2D().AddMiniAudio().AddAudioFramework().AddTextStbTrueType();
+var services = new ServiceCollection().AddKernel().AddNativeFramework().AddLogger().AddConsoleSink().AddInput().AddProjectConfig().AddInputActions().AddGlfwWindow().AddBgfxRenderer().AddBox2D().AddMiniAudio().AddAudioFramework().AddTextStbTrueType();
 using var app = new Application();
 app.Run(services);

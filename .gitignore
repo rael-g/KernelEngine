@@ -1,5 +1,9 @@
 # Build artifacts for C++
 /build
+*.profraw
+*.profdata
+*.gcda
+*.gcno
 *.o
 *.obj
 *.exe

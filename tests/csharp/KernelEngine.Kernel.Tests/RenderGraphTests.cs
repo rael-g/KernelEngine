@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using KernelEngine.Kernel.Native;
 using Xunit;
 
@@ -50,8 +51,32 @@ public unsafe class RenderGraphTests
         return ke_result.KE_OK;
     }
 
+    [Fact]
+    public void RemovePass_returns_false_for_empty_name()
+    {
+        var native = BuildMockGraph();
+        var graph  = new RenderGraph(&native);
+        Assert.False(graph.RemovePass(""));
+    }
+
+    [Fact]
+    public void RemovePass_returns_false_when_not_found()
+    {
+        var native = BuildMockGraph();
+        g_mockRemovePassResult = ke_result.KE_ERROR_NOT_FOUND;
+        var graph  = new RenderGraph(&native);
+        try {
+            Assert.False(graph.RemovePass("unknown"));
+        } finally { g_mockRemovePassResult = ke_result.KE_OK; }
+    }
+
+    private static ke_result g_mockRemovePassResult = ke_result.KE_OK;
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockRemovePass(ke_render_graph* self, sbyte* name) { _removePassCalled++; return ke_result.KE_OK; }
+    private static ke_result MockRemovePass(ke_render_graph* self, sbyte* name) 
+    { 
+        _removePassCalled++; 
+        return g_mockRemovePassResult; 
+    }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_result MockCompile(ke_render_graph* self) { _compileCalled++; return ke_result.KE_OK; }
@@ -154,11 +179,48 @@ public unsafe class RenderGraphTests
     }
 
     [Fact]
-    public void AddPass_without_OnRecord_throws()
+    public void RenderPass_constructor_throws_on_invalid_name()
+    {
+        Assert.Throws<ArgumentException>(() => new RenderPass(""));
+        Assert.Throws<ArgumentException>(() => new RenderPass(null!));
+    }
+
+    [Fact]
+    public void BuildNativeParams_throws_if_already_attached()
+    {
+        var pass = new RenderPass("test").OnRecord(_ => { });
+        pass.BuildNativeParams(out _);
+        Assert.Throws<InvalidOperationException>(() => pass.BuildNativeParams(out _));
+        pass.Dispose();
+    }
+
+    [Fact]
+    public void RecordTrampoline_swallows_exception()
     {
         var native = BuildMockGraph();
         var graph  = new RenderGraph(&native);
-        var pass = new RenderPass("missing.callback");
-        Assert.Throws<InvalidOperationException>(() => graph.AddPass(pass));
+        var pass = new RenderPass("error.test").OnRecord(_ => throw new Exception("boom"));
+        graph.AddPass(pass);
+
+        var ctx = default(ke_render_pass_ctx);
+        // Should not throw
+        _lastRecord(&ctx, _lastUser);
+    }
+
+    [Fact]
+    public void RecordTrampoline_returns_on_null_user()
+    {
+        // Calling it via reflection since it's private static
+        var method = typeof(RenderPass).GetMethod("RecordTrampoline", BindingFlags.NonPublic | BindingFlags.Static);
+        // It has UnmanagedCallersOnly, but maybe I can Invoke it if I pass valid pointers?
+        // No, Invoke always fails on UnmanagedCallersOnly.
+        // But I can get the function pointer from the BuildNativeParams!
+        
+        var pass = new RenderPass("test").OnRecord(_ => { });
+        pass.BuildNativeParams(out var p);
+        
+        var record = (delegate* unmanaged[Cdecl]<ke_render_pass_ctx*, void*, void>)p.record;
+        record(null, null); // Should return immediately
+        pass.Dispose();
     }
 }

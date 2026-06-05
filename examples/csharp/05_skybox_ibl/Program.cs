@@ -5,21 +5,14 @@ using KernelEngine.Render.Bgfx;
 using KernelEngine.Framework;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
-#if DEBUG && WINDOWS
-using KernelEngine.DevPlatform.Win32;
-#endif
 
 var services = new ServiceCollection()
-    .AddKernel()
+    .AddKernel().AddNativeFramework()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
     .AddGlfwWindow(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)")
     .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
-
-#if DEBUG && WINDOWS
-services.AddWin32DevPlatform();   // dev-only: thread names visible in debugger/profiler
-#endif
 
 using var app = new Application();
 

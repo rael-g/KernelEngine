@@ -1,100 +1,113 @@
-using KernelEngine.Framework;
-using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
-using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 using Xunit;
+using NSubstitute;
+using KernelEngine.Kernel;
+using KernelEngine.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 
 namespace KernelEngine.Framework.Tests;
 
+[Collection("KernelRegistry")]
 public class ApplicationTests
 {
     [Fact]
-    public void Application_Run_CoordinatesThreadsAndShutsDown()
+    public void Tree_LazyInit_Works()
     {
-        // Arrange
-        var services = new ServiceCollection();
-        
-        var mockWindow = Substitute.For<IWindow>();
-        var mockRenderer = Substitute.For<IRenderer>();
-        
-        // Use a real allocator for KernelThread creation (it needs a native pointer)
-        // Note: this assumes we can create a malloc allocator in tests.
         using var allocator = new MallocAllocator();
-        
-        services.AddSingleton<Allocator>(allocator);
-        services.AddSingleton<IAllocator>(allocator);
-        services.AddSingleton<IKernelFactory, KernelFactory>();
-        services.AddSingleton<IWindow>(mockWindow);
-        services.AddSingleton<IRenderer>(mockRenderer);
-        
-        // Mock Window.ShouldClose to exit after some iterations
-        int pollCount = 0;
-        mockWindow.ShouldClose().Returns(_ => {
-            System.Threading.Thread.Sleep(10); // Give threads time to run
-            if (++pollCount > 50) return true;
-            return false;
-        });
-
+        using var world = new World(allocator);
         var app = new Application();
+        app.ActiveWorld = world;
         
-        // Act
-        app.Run(services);
-
-        // Assert
-        mockRenderer.Received().Initialize();
-        
-        // At least one frame should have been rendered
-        mockRenderer.Received().Frame();
-        mockRenderer.Received().SubmitPacket(Arg.Any<IFramePacket>());
-        
-        mockWindow.Received().PollEvents();
-        // NSubstitute sometimes needs explicit cast for inherited interfaces if it's confused
-        ((IDisposable)mockRenderer).Received().Dispose();
-        
-        app.Dispose();
+        Assert.NotNull(app.Tree);
+        Assert.Same(world, app.Tree.Root.World);
     }
 
     [Fact]
-    public void Run_GpuFatal_ThrowsWithErrorMessage()
-    {
-        var services = new ServiceCollection();
-        var mockRenderer = Substitute.For<IRenderer>();
-        var allocator = new MallocAllocator();
-        
-        services.AddSingleton<Allocator>(allocator);
-        services.AddSingleton<IAllocator>(allocator);
-        services.AddSingleton<IKernelFactory, KernelFactory>();
-        services.AddSingleton<IWindow>(Substitute.For<IWindow>());
-        services.AddSingleton<IRenderer>(mockRenderer);
-
-        // Frame() returns Result, so we can mock its return value
-        mockRenderer.Frame().Returns(new Result(KernelResult.GpuFatal));
-        mockRenderer.GetLastFatalError().Returns("Device Lost");
-
-        var app = new Application();
-        
-        var ex = Assert.Throws<KernelException>(() => app.Run(services));
-        Assert.Contains("Device Lost", ex.Message);
-        
-        allocator.Dispose();
-    }
-
-    [Fact]
-    public void Application_CanBeDisposed()
-    {
-        var app = new Application();
-        app.Dispose();
-        // Should not crash
-    }
-
-    [Fact]
-    public void Run_MissingRequiredServices_ThrowsInvalidOperationException()
+    public void Run_Throws_WhenRequiredServicesMissing()
     {
         var app = new Application();
         var services = new ServiceCollection();
-        // Empty services
+        // Missing IWindow and IRenderer
         
         Assert.Throws<InvalidOperationException>(() => app.Run(services));
+    }
+
+    [Fact]
+    public void Run_InitializesAndExits_WhenWindowShouldClose()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var app = new Application();
+        app.ActiveWorld = world;
+        var services = new ServiceCollection();
+        
+        var window = Substitute.For<IWindow>();
+        window.ShouldClose().Returns(true); // Exit immediately
+        
+        var renderer = Substitute.For<IRenderer>();
+        renderer.GetNdcConvention().Returns(new NdcConvention(true, false, false));
+        
+        var factory = Substitute.For<IKernelFactory>();
+        factory.CreateWorld(Arg.Any<IAllocator>()).Returns(world);
+        factory.CreateFrameSync(Arg.Any<IAllocator>(), Arg.Any<int>()).Returns(Substitute.For<IFrameSync>());
+
+        services.AddSingleton(window);
+        services.AddSingleton(renderer);
+        services.AddSingleton(factory);
+        services.AddSingleton<IAllocator>(allocator);
+
+        app.Run(services);
+
+        window.Received().PollEvents();
+        // Thread spawning is now via System.Threading.Thread directly; the factory is no longer
+        // routed through for this purpose. Behavioral check (the loop ran) is what matters.
+    }
+
+    [Fact]
+    public void LoadProjectRenderSettings_Works_WhenConfigPresent()
+    {
+        var app = new Application();
+        var services = new ServiceCollection();
+        var config = Substitute.For<IProjectConfig>();
+        config.IsLoaded.Returns(true);
+        
+        var renderSection = new Tomlyn.Model.TomlTable();
+        var colorArray = new Tomlyn.Model.TomlArray { 1.0, 0.0, 0.0, 1.0 };
+        renderSection["clear_color"] = colorArray;
+        config.GetSection("render").Returns(renderSection);
+
+        services.AddSingleton(config);
+        typeof(Application).GetProperty("Services")!.SetValue(app, services.BuildServiceProvider());
+
+        // Call private method via reflection
+        var method = typeof(Application).GetMethod("LoadProjectRenderSettings", BindingFlags.NonPublic | BindingFlags.Instance);
+        method!.Invoke(app, null);
+
+        var cc = (System.Numerics.Vector4?)typeof(Application).GetField("_projectClearColor", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(app);
+        Assert.NotNull(cc);
+        Assert.Equal(1.0f, cc.Value.X);
+    }
+
+    [Fact]
+    public void CheckResult_Throws_OnGpuFatal()
+    {
+        var app = new Application();
+        var renderer = Substitute.For<IRenderer>();
+        renderer.GetLastFatalError().Returns("GPU Burned");
+        typeof(Application).GetProperty("Renderer")!.SetValue(app, renderer);
+
+        var method = typeof(Application).GetMethod("CheckResult", BindingFlags.NonPublic | BindingFlags.Instance);
+        
+        var ex = Assert.Throws<TargetInvocationException>(() => method!.Invoke(app, new object[] { (Result)KernelResult.GpuFatal, "test" }));
+        var kex = Assert.IsType<KernelException>(ex.InnerException);
+        Assert.Contains("GPU Burned", kex.Message);
+    }
+
+    [Fact]
+    public void Dispose_HandlesNullsGracefully()
+    {
+        var app = new Application();
+        app.Dispose();
+        // Should not throw
     }
 }

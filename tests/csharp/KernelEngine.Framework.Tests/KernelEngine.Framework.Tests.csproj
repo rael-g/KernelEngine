@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework.Native\KernelEngine.Framework.Native.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
   </ItemGroup>
 

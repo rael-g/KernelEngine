@@ -24,8 +24,11 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/render/mesh.h
 ../../../c/kernel/include/kernel_engine/kernel/render/texture.h
 ../../../c/kernel/include/kernel_engine/kernel/world/components.h
+../../../c/kernel/include/kernel_engine/kernel/world/ke_ecs.h
+../../../c/kernel/include/kernel_engine/kernel/world/variant.h
 ../../../c/kernel/include/kernel_engine/kernel/world/world.h
 ../../../c/kernel/include/kernel_engine/kernel/engine/frame.h
+../../../c/kernel/include/kernel_engine/kernel/input/key.h
 ../../../c/kernel/include/kernel_engine/kernel/input/snapshot.h
 ../../../c/kernel/include/kernel_engine/kernel/input/event.h
 ../../../c/kernel/include/kernel_engine/kernel/input/input.h
@@ -34,11 +37,9 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/render/render_graph.h
 ../../../c/kernel/include/kernel_engine/kernel/render/shader_compiler.h
 ../../../c/kernel/include/kernel_engine/kernel/task_scheduler/task_scheduler.h
-../../../c/kernel/include/kernel_engine/kernel/threading/thread.h
-../../../c/kernel/include/kernel_engine/kernel/threading/semaphore.h
 ../../../c/kernel/include/kernel_engine/kernel/threading/frame_sync.h
+../../../c/kernel/include/kernel_engine/kernel/common/thread_name.h
 ../../../c/kernel/include/kernel_engine/kernel/window/window.h
-../../../c/kernel/include/kernel_engine/kernel/dev_platform/dev_platform.h
 ../../../c/kernel/include/kernel_engine/kernel/asset/mesh_data.h
 ../../../c/kernel/include/kernel_engine/kernel/asset/asset_loader.h
 ../../../c/kernel/include/kernel_engine/kernel/asset/image_loader.h

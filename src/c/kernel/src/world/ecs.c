@@ -1,4 +1,5 @@
 #include <kernel_engine/kernel/world/ecs.h>
+#include <kernel_engine/kernel/world/ke_ecs.h>
 #include <kernel_engine/kernel/common/array.h>
 #include <kernel_engine/kernel/common/hash_map.h>
 #include <stdlib.h>
@@ -193,4 +194,83 @@ void ke_ecs_registry_query(ke_ecs_registry *registry, ke_component_id component,
     *out_entities = (ke_entity *)type->entities.data;
     *out_data = type->data;
     *out_count = type->entities.size;
+}
+
+// ── ke_ecs vtable — sparse-set backend ───────────────────────────────────────
+
+typedef struct ke_ecs_sparse_impl
+{
+    ke_ecs           api;
+    ke_ecs_registry *registry;
+    ke_allocator    *allocator;
+} ke_ecs_sparse_impl;
+
+static ke_entity sparse_entity_create(ke_ecs *self)
+{
+    return ke_ecs_entity_create(((ke_ecs_sparse_impl *)self->handle)->registry);
+}
+
+static void sparse_entity_destroy(ke_ecs *self, ke_entity entity)
+{
+    ke_ecs_entity_destroy(((ke_ecs_sparse_impl *)self->handle)->registry, entity);
+}
+
+static ke_component_id sparse_component_register(ke_ecs *self, const char *name, size_t size)
+{
+    return ke_ecs_component_register(((ke_ecs_sparse_impl *)self->handle)->registry, name, size);
+}
+
+static void *sparse_component_add(ke_ecs *self, ke_entity entity, ke_component_id cid)
+{
+    return ke_ecs_component_add(((ke_ecs_sparse_impl *)self->handle)->registry, entity, cid);
+}
+
+static void sparse_component_remove(ke_ecs *self, ke_entity entity, ke_component_id cid)
+{
+    ke_ecs_component_remove(((ke_ecs_sparse_impl *)self->handle)->registry, entity, cid);
+}
+
+static void *sparse_component_get(ke_ecs *self, ke_entity entity, ke_component_id cid)
+{
+    return ke_ecs_component_get(((ke_ecs_sparse_impl *)self->handle)->registry, entity, cid);
+}
+
+static void sparse_query(ke_ecs *self, ke_component_id cid,
+                         ke_entity **out_entities, void **out_data, size_t *out_count)
+{
+    ke_ecs_registry_query(((ke_ecs_sparse_impl *)self->handle)->registry,
+                          cid, out_entities, out_data, out_count);
+}
+
+static void sparse_destroy(ke_ecs *self)
+{
+    ke_ecs_sparse_impl *impl = (ke_ecs_sparse_impl *)self->handle;
+    impl->allocator->free(impl->allocator, impl);
+}
+
+ke_result ke_ecs_sparse_set_create(ke_ecs_registry *registry,
+                                    ke_allocator    *alloc,
+                                    ke_ecs         **out_ecs)
+{
+    if (!registry || !alloc || !out_ecs) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_ecs_sparse_impl *impl = (ke_ecs_sparse_impl *)alloc->alloc(
+        alloc, sizeof(ke_ecs_sparse_impl), 0);
+    if (!impl) return KE_ERROR_OUT_OF_MEMORY;
+
+    impl->registry = registry;
+    impl->allocator = alloc;
+
+    impl->api.handle             = impl;
+    impl->api.entity_create      = sparse_entity_create;
+    impl->api.entity_destroy     = sparse_entity_destroy;
+    impl->api.component_register = sparse_component_register;
+    impl->api.component_add      = sparse_component_add;
+    impl->api.component_remove   = sparse_component_remove;
+    impl->api.component_get      = sparse_component_get;
+    impl->api.query              = sparse_query;
+    impl->api.destroy            = sparse_destroy;
+
+    *out_ecs = &impl->api;
+    return KE_OK;
 }

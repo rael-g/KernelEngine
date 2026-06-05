@@ -22,79 +22,84 @@ public class EcsRegistryTests
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
-        var id = reg.RegisterComponent<int>("TestComp");
-        Assert.NotEqual(uint.MaxValue, id);
+        var cid = reg.RegisterComponent<int>("int");
+        Assert.NotEqual(uint.MaxValue, cid);
     }
 
     [Fact]
-    public unsafe void AddComponent_ReturnsValidReference()
+    public void GetComponent_ReturnsEmptySpan_WhenMissing()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
         var entity = reg.CreateEntity();
-        var id = reg.RegisterComponent<int>("TestComp");
-        
-        ref int val = ref *reg.AddComponentRaw<int>(entity, id);
-        val = 42;
-        
-        Assert.Equal(42, val);
+        var cid = reg.RegisterComponent<int>("int");
+
+        var span = reg.GetComponent<int>(entity, cid);
+        Assert.True(span.IsEmpty);
     }
 
     [Fact]
-    public unsafe void GetComponent_ReturnsAddedValue()
+    public void AddComponentRaw_Works()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
         var entity = reg.CreateEntity();
-        var id = reg.RegisterComponent<int>("TestComp");
-        *reg.AddComponentRaw<int>(entity, id) = 123;
+        var cid = reg.RegisterComponent<int>("int");
+
+        unsafe {
+            int* ptr = reg.AddComponentRaw<int>(entity, cid);
+            Assert.True(ptr != null);
+            *ptr = 42;
+        }
         
-        int* ptr = reg.GetComponentRaw<int>(entity, id);
-        Assert.True(ptr != null);
+        Assert.Equal(42, reg.GetComponent<int>(entity, cid)[0]);
     }
 
     [Fact]
-    public unsafe void GetComponent_ReturnsCorrectValue()
+    public void GetComponentRaw_Works()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
         var entity = reg.CreateEntity();
-        var id = reg.RegisterComponent<int>("TestComp");
-        *reg.AddComponentRaw<int>(entity, id) = 123;
-        
-        int* ptr = reg.GetComponentRaw<int>(entity, id);
-        Assert.Equal(123, *ptr);
+        var cid = reg.RegisterComponent<int>("int");
+        reg.AddComponent<int>(entity, cid)[0] = 123;
+
+        unsafe {
+            int* ptr = reg.GetComponentRaw<int>(entity, cid);
+            Assert.True(ptr != null);
+            Assert.Equal(123, *ptr);
+        }
     }
 
     [Fact]
-    public unsafe void GetComponent_ReturnsNull_WhenNotPresent()
+    public void RemoveComponent_Works()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
         var entity = reg.CreateEntity();
-        var id = reg.RegisterComponent<int>("TestComp");
-        
-        int* ptr = reg.GetComponentRaw<int>(entity, id);
-        Assert.True(ptr == null);
+        var cid = reg.RegisterComponent<int>("int");
+        reg.AddComponent<int>(entity, cid);
+
+        Assert.True(reg.HasComponent(entity, cid));
+        reg.RemoveComponent(entity, cid);
+        Assert.False(reg.HasComponent(entity, cid));
     }
 
     [Fact]
-    public unsafe void RemoveComponent_MakesItNull()
+    public void HasComponent_ReturnsTrue_WhenPresent()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
         var entity = reg.CreateEntity();
-        var id = reg.RegisterComponent<int>("TestComp");
-        *reg.AddComponentRaw<int>(entity, id) = 1;
-        
-        reg.RemoveComponent(entity, id);
-        
-        Assert.True(reg.GetComponentRaw<int>(entity, id) == null);
+        var cid = reg.RegisterComponent<int>("int");
+        reg.AddComponent<int>(entity, cid);
+
+        Assert.True(reg.HasComponent(entity, cid));
     }
 
     [Fact]

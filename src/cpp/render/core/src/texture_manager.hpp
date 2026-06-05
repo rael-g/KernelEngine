@@ -5,7 +5,6 @@
 #include "gpu_types.hpp"
 #include <vector>
 
-#include <kernel_engine/render/core/render_core_export.h>
 
 namespace kernel_engine::render::core
 {
@@ -15,7 +14,7 @@ struct RenderContext;
 /**
  * @brief Manages GPU texture resources using the HAL.
  */
-class KE_RENDER_CORE_API TextureManager
+class TextureManager
 {
 public:
     ke_result CreateTextureRgba(RenderContext& ctx, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out);

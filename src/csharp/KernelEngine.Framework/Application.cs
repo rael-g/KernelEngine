@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework;
 
@@ -23,7 +24,6 @@ public class Application : IDisposable
     public IWindow Window { get; private set; } = null!;
     public IRenderer Renderer { get; private set; } = null!;
     public IInput? Input { get; private set; }
-    public IDevPlatform? DevPlatform { get; private set; }
 
     private IKernelFactory _kernelFactory = null!;
     private IProxyAllocator? _proxyAllocator;
@@ -34,7 +34,11 @@ public class Application : IDisposable
     private Tree? _scene;
 
     /// <summary>The Tree graph facade for <see cref="ActiveWorld"/>.</summary>
-    public Tree Tree => _scene ??= new Tree(ActiveWorld);
+    public Tree Tree => _scene ??= new Tree(
+        ActiveWorld,
+        FrameworkBackends.Required,
+        Services?.GetService<INodeTypeRegistry>(),
+        Services);
 
     /// <summary>
     /// Called once on ke.sim after ke.render is initialized and systems are registered.
@@ -65,7 +69,12 @@ public class Application : IDisposable
     private IInputBuffer _inputBuffer = null!;
     private readonly InputEventBuffer _eventBuffer = new();
     private readonly InputEvent[] _eventStaging = new InputEvent[256];
-    private readonly InputActionDispatcher _actionDispatcher = new();
+    private readonly List<InputActionEvent> _actionEventBuffer = new(32);
+    private IResourceCacheBackend? _meshCache;
+    private IResourceCacheBackend? _materialCache;
+    private IResourceCacheBackend? _textureCache;
+    private IAssetResolverBackend? _assetResolver;
+    private ISceneTree? _sceneTree;
 
     private System.Numerics.Vector4? _projectClearColor;
     private System.Numerics.Vector3? _projectAmbientLight;
@@ -93,10 +102,16 @@ public class Application : IDisposable
     }
 
     /// <summary>
-    /// Asks <see cref="DevPlatform"/> (when available) to publish the current thread's name to the OS,
-    /// making it visible in debuggers and profilers. No-op when DevPlatform is not registered.
+    /// Sets the calling thread's name on both the kernel-side TLS (for ke_thread_assert_current
+    /// from C plugins) and on the .NET runtime side (which since .NET 6 propagates the name to
+    /// the OS — Win32 SetThreadDescription / pthread_setname_np — making it visible in
+    /// debuggers and profilers).
     /// </summary>
-    private void SetOsThreadName(string name) => DevPlatform?.SetOsThreadName(name);
+    private static void SetThreadName(string name)
+    {
+        System.Threading.Thread.CurrentThread.Name = name;
+        KernelEngine.Kernel.KernelThread.SetCurrentName(name);
+    }
 
     public void Run(IServiceCollection serviceCollection)
     {
@@ -104,6 +119,10 @@ public class Application : IDisposable
         // ServiceProvider is built). The factories close over `this` and resolve to the live
         // instance — so node ctors that take Assets/ResourceManager via DI (e.g. Pong's
         // Scoreboard) just work without manual wiring.
+        serviceCollection.AddSingleton<IWorld>(_ => ActiveWorld
+            ?? throw new InvalidOperationException(
+                "IWorld is null — resolved before Application.Run finished initializing."));
+        serviceCollection.AddSingleton<ISceneTree>(_ => (ISceneTree)Tree);
         serviceCollection.AddSingleton(_ => Assets
             ?? throw new InvalidOperationException(
                 "Assets is null. Either no asset loader is registered (.AddStbImageLoader / .AddAssimpAssetLoader / .AddTextStbTrueType) or the service was resolved before sim init reached OnReady."));
@@ -131,12 +150,11 @@ public class Application : IDisposable
         Window      = Services.GetRequiredService<IWindow>();
         Input       = Services.GetService<IInput>();
         Renderer    = Services.GetRequiredService<IRenderer>();
-        DevPlatform = Services.GetService<IDevPlatform>(); // optional dev-only diagnostics
 
         ActiveWorld ??= _kernelFactory.CreateWorld(Allocator);
 
         _inputBuffer   = new InputBuffer();
-        _resourceQueue = new ResourceCommandQueue(_kernelFactory);
+        _resourceQueue = FrameworkBackends.Required.CreateResourceQueue();
 
         InitializeSystems();
 
@@ -150,12 +168,13 @@ public class Application : IDisposable
         Exception? renderException = null;
         Exception? simException    = null;
 
-        // OS-visible name for ke.main (TLS name was set at the top via SetCurrentName).
-        SetOsThreadName("ke.main");
+        // ke.main: kernel TLS + .NET name (which propagates to the OS on .NET 6+).
+        SetThreadName("ke.main");
 
         // ke.render: owns every renderer API call for the lifetime of the app.
-        using var renderThread = _kernelFactory.CreateThread(Allocator, "ke.render", DevPlatform, () =>
+        var renderThread = new System.Threading.Thread(() =>
         {
+            SetThreadName("ke.render");
             try
             {
                 Logger?.Info("Application", "ke.render: initializing renderer");
@@ -222,23 +241,43 @@ public class Application : IDisposable
             {
                 Renderer.Dispose();
             }
-        });
+        }) { Name = "ke.render", IsBackground = false };
+        renderThread.Start();
 
         // ke.sim: drives the world and records into FramePackets.
-        using var simThread = _kernelFactory.CreateThread(Allocator, "ke.sim", DevPlatform, () =>
+        var simThread = new System.Threading.Thread(() =>
         {
+            SetThreadName("ke.sim");
             try
             {
                 renderReady.Wait(); // wait for ke.render to finish Initialize()
                 if (_cts.IsCancellationRequested) return;
 
                 var factory = _resourceQueue.CreateFactory();
-                Resources = new ResourceManager(factory);
+                _meshCache     = FrameworkBackends.Required.CreateResourceCache();
+                _materialCache = FrameworkBackends.Required.CreateResourceCache();
+                _textureCache  = FrameworkBackends.Required.CreateResourceCache();
+                Resources = new ResourceManager(factory, _meshCache, _materialCache, _textureCache);
+                // Give Tree access to ResourceManager for resource properties in auto-registration.
+                Tree.SetResourceManager(Resources);
                 var modelLoader = Services.GetService<IAssetLoader>();
                 var imageLoader = Services.GetService<IImageLoader>();
                 var fontLoader  = Services.GetService<IFontLoader>();
+                // Asset resolver: maps res:// + absolute paths to typed CPU-side data via the
+                // native ke_asset_resolver plugin. The backend factory handles the image-loader
+                // pointer extraction internally — sugar layer never sees a ke_image_loader*.
+                _assetResolver = FrameworkBackends.Required.CreateAssetResolver(imageLoader, AppContext.BaseDirectory);
+                NodeTypeRegistrar.ActiveAssetResolver = _assetResolver;
+
                 if (modelLoader != null || imageLoader != null || fontLoader != null)
-                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources);
+                    Assets = new Assets(modelLoader, imageLoader, fontLoader, Resources, _textureCache, _assetResolver);
+
+                // Scene tree — Framework's Tree implements ISceneTree directly (S7).
+                _sceneTree = Tree;
+
+                // Register fallback so any Node subclass works in scene files without
+                // explicit registration. Built-in types are auto-registered on first AddNode<T>.
+                RegisterFrameworkNodeTypes();
 
                 // Auto-load action bindings (when a game enum was registered via .AddInputActions<T>()).
                 // After this, InputActions.Get<TEnum>() works from anywhere; no game code involved.
@@ -280,11 +319,12 @@ public class Application : IDisposable
                         if (events.Length > 0)
                             Tree.DispatchInput(events);
 
-                        // Action layer: evaluate every registered map against the current snapshot,
-                        // then dispatch derived InputActionEvents through the tree. Polling readers
-                        // (IInputActionReader<TEnum>) read the same updated state inside Update.
-                        var actionEvents = _actionDispatcher.Evaluate(input);
-                        Tree.DispatchInputActions(actionEvents);
+                        // Action layer: evaluate every registered map against the current snapshot.
+                        _actionEventBuffer.Clear();
+                        foreach (var map in InputActions.AllMaps)
+                            map.Evaluate(input, _actionEventBuffer);
+                        if (_actionEventBuffer.Count > 0)
+                            Tree.DispatchInputActions(_actionEventBuffer);
 
                         // Node lifecycle, in tree pre-order. Ordering relative to ECS systems:
                         //   Awake+Start (one-shot) → Update → ECS systems → LateUpdate
@@ -325,7 +365,8 @@ public class Application : IDisposable
                 // Signal ke.render to exit BeginRead if it's waiting (poison pill)
                 try { var p = frameSync.BeginWrite(); p.EndWrite(); } catch { }
             }
-        });
+        }) { Name = "ke.sim", IsBackground = false };
+        simThread.Start();
 
         NativeExceptionFilter.Register(Logger);
 
@@ -422,6 +463,55 @@ public class Application : IDisposable
         var absolute = Path.Combine(AppContext.BaseDirectory, relative);
         SceneLoader.LoadAsync(Tree, absolute, Resources, Services).GetAwaiter().GetResult();
         Logger?.Info("Application", $"Loaded default scene: {resPath}");
+    }
+
+    // ── Node type registration ────────────────────────────────────────────────
+
+    private void RegisterFrameworkNodeTypes()
+    {
+        var registry = Services.GetService<INodeTypeRegistry>();
+        if (registry is null) return;
+
+        var world    = ActiveWorld;
+        var services = Services;
+
+        // Fallback: any Node subclass in any loaded assembly works automatically via
+        // reflection — same behaviour as the legacy SceneLoader. Explicit Register<T> calls
+        // take priority (fast path); this covers everything else including user-defined types.
+        registry.SetFallback(
+            tryCreate: (typeName, entity, name) =>
+            {
+                var type = NodeTypeRegistrar.ResolveNodeType(typeName);
+                if (type is null) return false;
+                var node = (Node)(services is not null
+                    ? Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance(services, type)
+                    : Activator.CreateInstance(type)!);
+                node.Initialize(entity, world, name);
+                return true;
+            },
+            trySetProperty: (typeName, entity, key, value) =>
+            {
+                var node = Node.FromEntity(entity);
+                if (node is null) return false;
+                NodeTypeRegistrar.ApplyProperty(node, key, value, Resources);
+                return true;
+            });
+
+        // Built-in Framework node types — explicit fast path (skips assembly scan).
+        registry.Register<MeshRenderer>(ActiveWorld, Services, Resources);
+        registry.Register<Camera>(ActiveWorld, Services, Resources);
+        registry.Register<Camera2D>(ActiveWorld, Services, Resources);
+        registry.Register<DirectionalLight>(ActiveWorld, Services, Resources);
+        registry.Register<PointLight>(ActiveWorld, Services, Resources);
+        registry.Register<SpotLight>(ActiveWorld, Services, Resources);
+        registry.Register<Skybox>(ActiveWorld, Services, Resources);
+        registry.Register<Sprite2D>(ActiveWorld, Services, Resources);
+        registry.Register<Label>(ActiveWorld, Services, Resources);
+        if (Services.GetService<IPhysics2D>() is not null)
+        {
+            registry.Register<CollisionBody2D>(ActiveWorld, Services, Resources);
+            registry.Register<CollisionShape2D>(ActiveWorld, Services, Resources);
+        }
     }
 
     // ── Systems setup ─────────────────────────────────────────────────────────
@@ -615,8 +705,15 @@ public class Application : IDisposable
     public virtual void Dispose()
     {
         _cts.Dispose();
-        _scene?.DestroyAll();   // fire OnDestroy + IDisposable.Dispose on every live node
+        // Destroy all nodes via ISceneTree (Tree implements it directly — S7).
+        if (_sceneTree != null)
+            _sceneTree.DestroyAll();
+        else
+            _scene?.DestroyAll();
         ActiveWorld?.Dispose();
+        _meshCache?.Dispose();
+        _materialCache?.Dispose();
+        _textureCache?.Dispose();
 
         _proxyAllocator?.Report(Logger);
 

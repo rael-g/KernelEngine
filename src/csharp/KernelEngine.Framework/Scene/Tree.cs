@@ -10,17 +10,83 @@ namespace KernelEngine.Framework;
 /// Node/Tree are framework-level concepts; the ECS world itself knows only
 /// entities, components, and systems.
 /// </summary>
-public sealed class Tree
+public sealed class Tree : ISceneTree, IDisposable
 {
-    private readonly IWorld _world;
-    private readonly Node   _root;
+    private readonly IWorld              _world;
+    private readonly Node                _root;
+    private readonly INodeTypeRegistry?  _nodeTypeRegistry;
+    private readonly IServiceProvider?   _services;
+    private ResourceManager?             _resources; // set after ResourceManager is created
+    private readonly ISceneTreeBackend   _native;
 
-    public Tree(IWorld world)
+    private readonly HashSet<Type> _registeredTypes = [];
+
+    /// <summary>
+    /// Constructs a Tree on top of <paramref name="world"/> using the supplied scene-tree
+    /// backend. Backend creation lives in <c>KernelEngine.Framework.Native</c> — this
+    /// sugar layer accepts the interface so callers (or tests) can swap impls without
+    /// touching kernel pointers.
+    /// </summary>
+    public Tree(IWorld world,
+                ISceneTreeBackend  backend,
+                INodeTypeRegistry? nodeTypeRegistry = null,
+                IServiceProvider?  services         = null)
     {
-        _world = world;
-        var rootEntity = CreateEntityWithHierarchy("Root", KE_ENTITY_INVALID);
-        _root = new Node(rootEntity, world, "Root");
+        _world            = world;
+        _nodeTypeRegistry = nodeTypeRegistry;
+        _services         = services;
+        _native           = backend;
+        var rootEntity    = _native.Root;
+        AttachTransform(rootEntity);
+        _root             = new Node(rootEntity, world, "Root");
     }
+
+    /// <summary>
+    /// Convenience constructor that resolves the scene-tree backend from
+    /// <paramref name="backendFactory"/> at construction time.
+    /// </summary>
+    public Tree(IWorld world,
+                IFrameworkBackendFactory backendFactory,
+                INodeTypeRegistry?       nodeTypeRegistry = null,
+                IServiceProvider?        services         = null)
+        : this(world, backendFactory.CreateSceneTree(world), nodeTypeRegistry, services) { }
+
+    /// <summary>
+    /// Convenience constructor that pulls the scene-tree backend from the process-wide
+    /// <see cref="FrameworkBackends.Required"/>. Throws if no backend was registered.
+    /// </summary>
+    public Tree(IWorld world,
+                INodeTypeRegistry? nodeTypeRegistry = null,
+                IServiceProvider?  services         = null)
+        : this(world, FrameworkBackends.Required, nodeTypeRegistry, services) { }
+
+    public void Dispose() => _native.Dispose();
+
+    internal ISceneTreeBackend  NativeWrapper    => _native;
+    internal IWorld             World            => _world;
+    internal INodeTypeRegistry? NodeTypeRegistry => _nodeTypeRegistry;
+
+    private void AttachTransform(ulong entity)
+    {
+        var reg = _world.Registry;
+        if (reg.GetComponent<TransformComponent>(entity, _world.TransformComponentId).IsEmpty)
+        {
+            var t = reg.AddComponent<TransformComponent>(entity, _world.TransformComponentId);
+            t[0] = new TransformComponent
+            {
+                Position    = Vector3.Zero,
+                Rotation    = Quaternion.Identity,
+                Scale       = Vector3.One,
+                WorldMatrix = Matrix4x4.Identity,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Provides the <see cref="ResourceManager"/> for auto-registration of types that have
+    /// resource properties (<c>res://</c>). Set by Application after ResourceManager is created.
+    /// </summary>
+    internal void SetResourceManager(ResourceManager resources) => _resources = resources;
 
     private const ulong KE_ENTITY_INVALID = 0;
 
@@ -39,19 +105,8 @@ public sealed class Tree
     public Node? FindNode(string nameOrPath)
     {
         if (string.IsNullOrEmpty(nameOrPath)) return null;
-        if (nameOrPath.Contains('/')) return _root.GetNode(nameOrPath);
-        return FindRecursive(_root, nameOrPath);
-
-        static Node? FindRecursive(Node node, string name)
-        {
-            for (var c = node.FirstChild; c != null; c = c.NextSibling)
-            {
-                if (c.Name == name) return c;
-                var found = FindRecursive(c, name);
-                if (found != null) return found;
-            }
-            return null;
-        }
+        ulong entity = _native.FindNode(nameOrPath);
+        return entity == KE_ENTITY_INVALID ? null : Node.FromEntity(entity);
     }
 
     /// <summary>Typed convenience over <see cref="FindNode(string)"/>.</summary>
@@ -81,7 +136,7 @@ public sealed class Tree
     {
         var parentNode = parent ?? _root;
         var uniqueName = MakeUniqueChildName(parentNode, name);
-        var entity = CreateEntityWithHierarchy(uniqueName, parentNode.Entity);
+        var entity = _native.CreateNode(uniqueName, parentNode.Entity);
         return new Node(entity, _world, uniqueName);
     }
 
@@ -102,8 +157,14 @@ public sealed class Tree
         var parentNode = parent ?? _root;
         var requested  = name ?? node.Name;
         var uniqueName = MakeUniqueChildName(parentNode, requested);
-        var entity     = CreateEntityWithHierarchy(uniqueName, parentNode.Entity);
+        var entity = _native.CreateNode(uniqueName, parentNode.Entity);
         node.Initialize(entity, _world, uniqueName);
+
+        // Auto-register the type so scene files can reference it by name without
+        // explicit registration. First time only — subsequent adds of the same type are free.
+        if (_nodeTypeRegistry != null && _registeredTypes.Add(typeof(T)))
+            _nodeTypeRegistry.Register<T>(_world, _services, _resources);
+
         return node;
     }
 
@@ -189,8 +250,15 @@ public sealed class Tree
     public void DestroyNode(Node node)
     {
         TickDestroyRecursive(node);
+        UnregisterNodesRecursive(node);
+        _native.DestroyNode(node.Entity);
+    }
+
+    private static void UnregisterNodesRecursive(Node node)
+    {
+        for (var c = node.FirstChild; c != null; c = c.NextSibling)
+            UnregisterNodesRecursive(c);
         Node.Unregister(node.Entity);
-        DestroyEntityRecursive(node.Entity);
     }
 
     /// <summary>
@@ -233,99 +301,23 @@ public sealed class Tree
         for (var c = n.FirstChild; c != null; c = c.NextSibling) WalkDt(c, dt, visit);
     }
 
-    // ── Entity/hierarchy management ───────────────────────────────────────────
+    // ── ISceneTree ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Creates an ECS entity initialised with Transform, Hierarchy, and Name components,
-    /// and links it into the parent's child list.
-    /// </summary>
-    private ulong CreateEntityWithHierarchy(string name, ulong parent)
+    ulong ISceneTree.Root => _root.Entity;
+
+    ulong ISceneTree.CreateNode(string name, ulong parentEntity) =>
+        _native.CreateNode(name, parentEntity);
+
+    bool ISceneTree.DestroyNode(ulong entity)
     {
-        var reg    = _world.Registry;
-        var entity = reg.CreateEntity();
-
-        // Transform — default: origin, identity rotation, unit scale
-        var t = reg.AddComponent<TransformComponent>(entity, _world.TransformComponentId);
-        t[0] = new TransformComponent
-        {
-            Position    = Vector3.Zero,
-            Rotation    = Quaternion.Identity,
-            Scale       = Vector3.One,
-            WorldMatrix = Matrix4x4.Identity,
-        };
-
-        // Hierarchy — link to parent, no children yet
-        var h = reg.AddComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        h[0] = new HierarchyComponent { Parent = parent };
-
-        // Name
-        var n = reg.AddComponent<NameComponent>(entity, _world.NameComponentId);
-        SetName(ref n[0], name);
-
-        // Prepend entity into parent's child list (O(1) doubly-linked prepend)
-        if (parent != KE_ENTITY_INVALID)
-        {
-            var ph = reg.GetComponent<HierarchyComponent>(parent, _world.HierarchyComponentId);
-            if (!ph.IsEmpty)
-            {
-                h[0].NextSibling = ph[0].FirstChild;
-                if (ph[0].FirstChild != KE_ENTITY_INVALID)
-                {
-                    var sib = reg.GetComponent<HierarchyComponent>(ph[0].FirstChild, _world.HierarchyComponentId);
-                    if (!sib.IsEmpty) sib[0].PrevSibling = entity;
-                }
-                ph[0].FirstChild = entity;
-            }
-        }
-
-        return entity;
+        var node = Node.FromEntity(entity);
+        if (node == null) return false;
+        DestroyNode(node);
+        return true;
     }
 
-    /// <summary>Recursively destroys an entity and all its descendants, unlinking from parent.</summary>
-    private void DestroyEntityRecursive(ulong entity)
-    {
-        var reg = _world.Registry;
-        var h   = reg.GetComponent<HierarchyComponent>(entity, _world.HierarchyComponentId);
-        if (h.IsEmpty) return;
+    void ISceneTree.DestroyAll() => DestroyAll();
 
-        // Destroy children first (depth-first)
-        var child = h[0].FirstChild;
-        while (child != KE_ENTITY_INVALID)
-        {
-            var ch   = reg.GetComponent<HierarchyComponent>(child, _world.HierarchyComponentId);
-            var next = !ch.IsEmpty ? ch[0].NextSibling : KE_ENTITY_INVALID;
-            DestroyEntityRecursive(child);
-            child = next;
-        }
-
-        // Unlink from parent's child list
-        if (h[0].Parent != KE_ENTITY_INVALID)
-        {
-            var ph = reg.GetComponent<HierarchyComponent>(h[0].Parent, _world.HierarchyComponentId);
-            if (!ph.IsEmpty && ph[0].FirstChild == entity)
-                ph[0].FirstChild = h[0].NextSibling;
-
-            if (h[0].PrevSibling != KE_ENTITY_INVALID)
-            {
-                var ps = reg.GetComponent<HierarchyComponent>(h[0].PrevSibling, _world.HierarchyComponentId);
-                if (!ps.IsEmpty) ps[0].NextSibling = h[0].NextSibling;
-            }
-            if (h[0].NextSibling != KE_ENTITY_INVALID)
-            {
-                var ns = reg.GetComponent<HierarchyComponent>(h[0].NextSibling, _world.HierarchyComponentId);
-                if (!ns.IsEmpty) ns[0].PrevSibling = h[0].PrevSibling;
-            }
-        }
-
-        reg.DestroyEntity(entity);
-    }
-
-    private static void SetName(ref NameComponent comp, string name)
-    {
-        if (string.IsNullOrEmpty(name)) return;
-        var bytes = System.Text.Encoding.UTF8.GetBytes(name);
-        int len = Math.Min(bytes.Length, 63);
-        for (int i = 0; i < len; i++) comp.Name[i] = bytes[i];
-        comp.Name[len] = 0;
-    }
+    ulong ISceneTree.FindNode(string nameOrPath) =>
+        FindNode(nameOrPath)?.Entity ?? 0UL;
 }

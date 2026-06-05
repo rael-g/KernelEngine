@@ -5,7 +5,6 @@
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
-#include <kernel_engine/render/core/render_core_export.h>
 
 namespace kernel_engine::render::core
 {
@@ -26,7 +25,7 @@ struct MaterialEntry
 /**
  * @brief Manages light data and materials using the HAL.
  */
-class KE_RENDER_CORE_API LightingManager
+class LightingManager
 {
 public:
     ke_result SetDirectionalLight(const ke_directional_light *light);

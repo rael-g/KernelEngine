@@ -2,7 +2,6 @@
 
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
-#include <kernel_engine/render/core/render_core_export.h>
 #include "../src/geometry_manager.hpp"
 #include "../src/texture_manager.hpp"
 #include "../src/lighting_manager.hpp"
@@ -21,7 +20,7 @@ namespace kernel_engine::render::core
 /**
  * @brief High-level renderer service implementing the agnostic core logic.
  */
-class KE_RENDER_CORE_API CoreRenderer
+class CoreRenderer
 {
 public:
     explicit CoreRenderer(const render::GpuRendererParams& params); 
