@@ -18,11 +18,12 @@ public sealed unsafe class NativeFrameworkBackendFactory : IFrameworkBackendFact
 
     public ISceneLoaderBackend CreateSceneLoader(IWorld world,
                                                    ISceneTreeBackend tree,
-                                                   INodeTypeRegistry registry,
+                                                   INodeTypeRegistry? registry,
                                                    string projectRoot) =>
+        // registry is ignored — kept in the signature for one release so
+        // external callers still compile; deletion lands in a follow-up.
         new NativeSceneLoader(new MallocAllocator(), (World)world,
                               (NativeSceneTree)tree,
-                              (NodeTypeRegistry)registry,
                               projectRoot);
 
     public IResourceCacheBackend CreateResourceCache() =>

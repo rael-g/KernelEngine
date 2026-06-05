@@ -337,4 +337,7 @@ public class Node
     internal static void Unregister(ulong entity) => s_registry.Remove(entity);
 
     internal static void ClearRegistry() => s_registry.Clear();
+
+    /// <summary>Test-only helper: wipes the per-process wrapper registry.</summary>
+    public static void ClearRegistryForTests() => s_registry.Clear();
 }

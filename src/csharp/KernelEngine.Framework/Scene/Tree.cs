@@ -170,12 +170,9 @@ public sealed class Tree : ISceneTree, IDisposable
         var uniqueName = MakeUniqueChildName(parentNode, requested);
         var entity = _native.CreateNode(uniqueName, parentNode.Entity);
         node.Initialize(entity, _world, uniqueName);
-
-        // Auto-register the type so scene files can reference it by name without
-        // explicit registration. First time only — subsequent adds of the same type are free.
-        if (_nodeTypeRegistry != null && _registeredTypes.Add(typeof(T)))
-            _nodeTypeRegistry.Register<T>(_world, _services, _resources);
-
+        // Phase 5.6: the auto-register-T-against-the-node-type-registry block
+        // is gone with the registry itself; scenes now use [entity.script] and
+        // resolve types via NodeTypeResolver on demand.
         return node;
     }
 

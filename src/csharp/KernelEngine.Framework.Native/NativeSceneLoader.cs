@@ -24,7 +24,6 @@ internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
     public NativeSceneLoader(Allocator allocator,
                               World world,
                               NativeSceneTree tree,
-                              NodeTypeRegistry registry,
                               string? projectRoot)
     {
         ke_scene_loader* p;
@@ -39,7 +38,7 @@ internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
                     allocator.Native,
                     worldFw,
                     tree.NativePtr,
-                    registry.Native,
+                    null,                 // registry: dropped in Phase 5.6 (legacy node-type registry deleted)
                     (sbyte*)rootPtr,
                     &p).ToManaged());
         }
@@ -49,21 +48,27 @@ internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
     public void Load(string path)
     {
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
-        NodeTypeRegistry.PendingTrampolineException = null;
+        s_pendingException = null;
         ke_result result;
         fixed (byte* p = bytes)
         {
             result = _native->load(_native, (sbyte*)p);
         }
-        // A managed exception inside the create/set_property trampolines was captured
+        // A managed exception inside the script trampoline was captured
         // out-of-band; rethrow it now that the native stack has unwound.
-        if (NodeTypeRegistry.PendingTrampolineException is { } pending)
+        if (s_pendingException is { } pending)
         {
-            NodeTypeRegistry.PendingTrampolineException = null;
+            s_pendingException = null;
             throw pending;
         }
         KernelException.ThrowIfFailed(result.ToManaged());
     }
+
+    // Pending exception slot for any managed throw that occurs inside the
+    // ScriptTrampoline. Cleared at the start of every Load.
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void InitPendingException() => s_pendingException = null;
+    private static System.Exception? s_pendingException;
 
     public void RegisterScriptLanguage(string language, Func<ulong, string, bool> factory)
     {
@@ -101,9 +106,9 @@ internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
         }
         catch (Exception ex)
         {
-            // Surface managed exceptions like NodeTypeRegistry already does —
-            // store and rethrow once the native stack has unwound.
-            NodeTypeRegistry.PendingTrampolineException ??= ex;
+            // Surface managed exceptions: store and rethrow once the native
+            // stack has unwound (the C plugin can't propagate managed throws).
+            s_pendingException ??= ex;
         }
         return ke_result.KE_ERROR;
     }
