@@ -49,7 +49,7 @@ def _norm(p: str) -> str:
 LAYERS = [
     ("L1", "C kernel",      lambda p: _norm(p).startswith("src/c/kernel/")),
     ("L2", "C++ plugins",   lambda p: _norm(p).startswith("src/cpp/")),
-    ("L4", "C# framework",  lambda p: _norm(p).startswith("src/csharp/") and ".Native" not in p and "/Generated/" not in p),
+    ("L4", "C# framework",  lambda p: _norm(p).startswith("src/csharp/") and "/Generated/" not in _norm(p)),
 ]
 
 GAP_THRESHOLD_PCT   = 30.0
