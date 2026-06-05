@@ -203,27 +203,33 @@ static void update_transform_recursive(ke_world_impl *impl, ke_entity entity,
         impl->registry, entity, impl->transform_cid);
     ke_hierarchy_component *h = (ke_hierarchy_component *)ke_ecs_component_get(
         impl->registry, entity, impl->hierarchy_cid);
-    if (!t) return;
 
-    ke_mat4 local;
-    ke_mat4_from_transform(&local, &t->position, &t->rotation, &t->scale);
-
-    // System.Numerics.Matrix4x4 (and our ke_mat4 byte layout — translation at m[12..14]) is
-    // row-major / row-vector. Composition rule: world = local * parent (apply local first, then
-    // parent's transform). Doing `parent * local` works only when the parent is identity (e.g.
-    // top-level nodes under the Root) — every 2-deep hierarchy gets the child's translation
-    // multiplied by the parent's scale instead of added to the parent's translation.
-    if (parent_world)
-        ke_mat4_mul(&t->world_matrix, &local, parent_world);
-    else
-        t->world_matrix = local;
+    // Self's world transform — identity if there's no Transform (e.g. the
+    // scene tree's root entity). Children still need to be visited so their
+    // own Transform composes against the right ancestor matrix.
+    ke_mat4 self_world;
+    if (t) {
+        ke_mat4 local;
+        ke_mat4_from_transform(&local, &t->position, &t->rotation, &t->scale);
+        // System.Numerics.Matrix4x4 (and our ke_mat4 byte layout — translation
+        // at m[12..14]) is row-major / row-vector. Composition rule:
+        // world = local * parent. Doing `parent * local` only works when the
+        // parent is identity; every 2-deep hierarchy would otherwise get its
+        // translation multiplied by the parent's scale instead of added to it.
+        if (parent_world) ke_mat4_mul(&t->world_matrix, &local, parent_world);
+        else              t->world_matrix = local;
+        self_world = t->world_matrix;
+    } else if (parent_world) {
+        self_world = *parent_world;
+    } else {
+        for (int i = 0; i < 16; ++i) self_world.m[i] = (i % 5 == 0) ? 1.0f : 0.0f;
+    }
 
     if (!h) return;
     ke_entity child = h->first_child;
     while (child != KE_ENTITY_INVALID)
     {
-        update_transform_recursive(impl, child, &t->world_matrix);
-        // Find next sibling
+        update_transform_recursive(impl, child, &self_world);
         ke_hierarchy_component *ch = (ke_hierarchy_component *)ke_ecs_component_get(impl->registry, child, impl->hierarchy_cid);
         if (!ch) break;
         child = ch->next_sibling;
