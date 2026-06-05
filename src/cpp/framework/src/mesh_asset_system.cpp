@@ -100,15 +100,18 @@ static void mesh_asset_update(void *handle, ke_world * /*world*/, float /*dt*/,
 
         ke_mesh_component &c = comps[i];
 
-        if (c.primitive[0] != '\0' && c.mesh.idx == KE_HANDLE_NONE) {
+        // We use the processed_entities set (not mesh.idx) as the sentinel for
+        // "already baked" because ke_ecs_component_add zero-inits the struct,
+        // which makes mesh.idx == 0 (a legitimate handle for the built-in white
+        // mesh, not a "needs bake" marker).
+        if (c.primitive[0] != '\0') {
             ke_mesh_handle h = bake_or_get(self, c.primitive);
             if (h.idx != KE_HANDLE_NONE) c.mesh = h;
         }
 
-        // Material: only auto-create when the entity has no material yet AND
-        // the user supplied a non-transparent color (alpha=0 means "no
-        // material set"). Built-in white (handle 0) stays as the fallback.
-        if (c.material.idx == KE_HANDLE_NONE && c.color[3] > 0.0f) {
+        // Material: alpha == 0 means "no color was supplied" (zero-init result).
+        // Built-in white (handle 0) stays as the fallback in that case.
+        if (c.color[3] > 0.0f) {
             ke_material_handle m = make_material(self, c.color);
             if (m.idx != KE_HANDLE_NONE) c.material = m;
         }

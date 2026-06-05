@@ -299,6 +299,12 @@ ke_result process_node(SceneLoaderImpl *impl, const fs::path &base_dir,
         }
     }
 
+    if (!impl->registry) {
+        // Legacy [[node]] type=… requires a node-type registry to dispatch the
+        // creation callback. Pure [[entity]] scenes don't need one — give the
+        // caller a clear error when they mixed formats without wiring one up.
+        return KE_ERROR_NOT_INITIALIZED;
+    }
     const ke_node_type *node_type = nullptr;
     if (impl->registry->lookup(impl->registry, type->c_str(), &node_type) != KE_OK ||
         !node_type || !node_type->create) {
@@ -486,7 +492,11 @@ extern "C" ke_result ke_scene_loader_create(
     const char             *project_root,
     ke_scene_loader       **out_loader)
 {
-    if (!alloc || !world || !tree || !registry || !out_loader)
+    // `registry` is now optional — pure [[entity]]/components.<name> scenes
+    // never invoke it. Legacy [[node]] type=... scenes still need it; if a
+    // scene uses that path without a registry the loader returns KE_ERROR_*
+    // when it tries to resolve the type.
+    if (!alloc || !world || !tree || !out_loader)
         return KE_ERROR_INVALID_ARGUMENT;
 
     void *mem = alloc->alloc(alloc, sizeof(SceneLoaderImpl), alignof(SceneLoaderImpl));

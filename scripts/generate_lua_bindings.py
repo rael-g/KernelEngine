@@ -61,6 +61,7 @@ HEADERS = [
     "kernel_engine/framework/camera_render_system.h",
     "kernel_engine/framework/mesh_render_system.h",
     "kernel_engine/framework/light_render_system.h",
+    "kernel_engine/framework/mesh_asset_system.h",
     "kernel_engine/kernel/world/variant.h",
     "kernel_engine/framework/node_type_registry.h",
     "kernel_engine/framework/scene_loader.h",

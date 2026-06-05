@@ -28,6 +28,7 @@
 --   kernel_engine/framework/camera_render_system.h
 --   kernel_engine/framework/mesh_render_system.h
 --   kernel_engine/framework/light_render_system.h
+--   kernel_engine/framework/mesh_asset_system.h
 --   kernel_engine/kernel/world/variant.h
 --   kernel_engine/framework/node_type_registry.h
 --   kernel_engine/framework/scene_loader.h
@@ -1116,6 +1117,28 @@ struct ke_world;
 
                      void ke_light_render_system_get_system_params(
         ke_light_render_system *system, ke_system_params *out_params);
+struct ke_world;
+struct ke_render;
+struct ke_mesh_render_system;
+
+    typedef struct ke_mesh_asset_system_params
+    {
+        struct ke_world *world;
+        ke_allocator *allocator;
+        struct ke_render *render;
+        struct ke_mesh_render_system *mesh_system;
+    } ke_mesh_asset_system_params;
+
+    typedef struct ke_mesh_asset_system ke_mesh_asset_system;
+
+                     ke_result ke_mesh_asset_system_create(
+        const ke_mesh_asset_system_params *params,
+        ke_mesh_asset_system **out_system);
+
+                     void ke_mesh_asset_system_destroy(ke_mesh_asset_system *system);
+
+                     void ke_mesh_asset_system_get_system_params(
+        ke_mesh_asset_system *system, ke_system_params *out_params);
     struct ke_node_type_registry;
 
     typedef ke_result (*ke_node_create_func)(
