@@ -326,6 +326,77 @@ ke_result process_node(SceneLoaderImpl *impl, const fs::path &base_dir,
     return KE_OK;
 }
 
+// ── Component-driven (ECS-pure) path ────────────────────────────────────────
+//
+// Phase 2 of the ECS-pure-nodes refactor. Scene files that use the new
+// `[[entity]]` array opt into a component-driven loader: instead of looking
+// up a "node type" callback, we look up each `[entity.components.X]` table by
+// component name in the ECS registry and write its fields via
+// ke_ecs_component_apply_variant. Bindings ship zero per-type decoding code.
+//
+// Format detection: if the file's top-level array is named `entity`, this
+// path runs. The legacy `node` array still works in parallel until Phase 5.
+
+ke_result process_entity(SceneLoaderImpl *impl, const toml::table &entity_tbl,
+                         const std::unordered_map<std::string, ke_entity> &by_name,
+                         std::unordered_map<std::string, ke_entity> &out_by_name,
+                         ke_entity *out_entity)
+{
+    auto name = entity_tbl["name"].value<std::string>();
+    if (!name) return KE_ERROR_INVALID_ARGUMENT;
+
+    // Resolve parent (root unless an explicit `parent = "X"` references a
+    // sibling we've already created). Decision #3: flat string reference.
+    ke_entity parent = impl->tree->root(impl->tree);
+    if (auto parent_name = entity_tbl["parent"].value<std::string>()) {
+        auto it = by_name.find(*parent_name);
+        if (it == by_name.end()) return KE_ERROR_NOT_FOUND;
+        parent = it->second;
+    }
+
+    ke_entity entity = impl->tree->create_node(impl->tree, name->c_str(), parent);
+    if (entity == KE_ENTITY_INVALID) return KE_ERROR_OUT_OF_MEMORY;
+
+    auto *reg  = impl->world->get_registry(impl->world);
+    auto  tcid = impl->world->transform_id(impl->world);
+
+    if (auto xform = entity_tbl["transform"].as_table()) {
+        auto *t = static_cast<ke_transform_component *>(
+            ke_ecs_component_get(reg, entity, tcid));
+        if (t) apply_transform(*t, *xform);
+    }
+
+    if (auto comps = entity_tbl["components"].as_table()) {
+        for (auto &&[comp_key, comp_node] : *comps) {
+            const auto *comp_tbl = comp_node.as_table();
+            if (!comp_tbl) continue;
+
+            ke_component_meta meta{};
+            std::string comp_name(comp_key.str());
+            if (ke_ecs_component_lookup(reg, comp_name.c_str(), &meta) != KE_OK) {
+                // Unknown component name — warning here once we have logging.
+                continue;
+            }
+
+            ke_ecs_component_add(reg, entity, meta.cid);
+
+            for (auto &&[prop_key, prop_node] : *comp_tbl) {
+                VariantArena arena;
+                ke_variant val = toml_to_variant(prop_node, arena);
+                std::string prop_name(prop_key.str());
+                // Ignore the return code: unknown / mismatched fields shouldn't
+                // abort the whole load. Future: collect into a diagnostics list.
+                (void)ke_ecs_component_apply_variant(reg, entity, meta.cid,
+                                                    prop_name.c_str(), &val);
+            }
+        }
+    }
+
+    out_by_name.emplace(*name, entity);
+    if (out_entity) *out_entity = entity;
+    return KE_OK;
+}
+
 ke_result load_scene_recursive(SceneLoaderImpl *impl, const std::string &path,
                                ke_entity attach_parent,
                                const std::string *override_name,
@@ -340,6 +411,24 @@ ke_result load_scene_recursive(SceneLoaderImpl *impl, const std::string &path,
     }
 
     fs::path base_dir = fs::path(path).parent_path();
+
+    // ── New `[[entity]]` array — component-driven path ──────────────────────
+    if (const auto *entities = tbl["entity"].as_array()) {
+        std::unordered_map<std::string, ke_entity> by_name;
+        ke_entity root = KE_ENTITY_INVALID;
+        bool is_first = true;
+        for (const auto &n : *entities) {
+            const auto *e_tbl = n.as_table();
+            if (!e_tbl) continue;
+            ke_entity entity = KE_ENTITY_INVALID;
+            ke_result rc = process_entity(impl, *e_tbl, by_name, by_name, &entity);
+            if (rc != KE_OK) return rc;
+            if (is_first) { root = entity; is_first = false; }
+        }
+        if (out_root) *out_root = root;
+        return KE_OK;
+    }
+
     const auto *nodes = tbl["node"].as_array();
     if (!nodes) {
         if (out_root) *out_root = KE_ENTITY_INVALID;

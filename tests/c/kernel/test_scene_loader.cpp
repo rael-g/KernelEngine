@@ -352,3 +352,156 @@ position = [99.0, 0.0, 0.0]
     fs::remove(outer_path);
     fs::remove(child_path);
 }
+
+// ── Phase 2 of ECS-pure nodes: [[entity]] component-driven path ─────────────
+//
+// The loader detects the new format by the top-level array name (`entity` vs
+// `node`) and writes into components by field name, with zero per-binding
+// dispatch code. These tests register a synthetic component with field
+// descriptors, load a scene that uses [entity.components.<name>] tables, and
+// assert the values landed at the right offsets.
+
+namespace {
+struct DemoComp {
+    float    fov;
+    float    near_plane;
+    uint8_t  ortho;
+    ke_vec3  color;
+};
+}
+
+class SceneLoaderEntityFormatTest : public SceneLoaderTest
+{
+protected:
+    ke_component_id demo_cid = KE_COMPONENT_INVALID;
+
+    void SetUp() override
+    {
+        SceneLoaderTest::SetUp();
+        auto *reg = world->get_registry(world);
+        static const ke_component_field kFields[] = {
+            {"fov",   KE_VARIANT_FLOAT, (uint32_t)offsetof(DemoComp, fov)},
+            {"near",  KE_VARIANT_FLOAT, (uint32_t)offsetof(DemoComp, near_plane)},
+            {"ortho", KE_VARIANT_BOOL,  (uint32_t)offsetof(DemoComp, ortho)},
+            {"color", KE_VARIANT_VEC3,  (uint32_t)offsetof(DemoComp, color)},
+        };
+        demo_cid = ke_ecs_component_register_v2(
+            reg, "demo", sizeof(DemoComp), kFields,
+            sizeof(kFields) / sizeof(kFields[0]));
+        ASSERT_NE(demo_cid, KE_COMPONENT_INVALID);
+    }
+};
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_AttachesComponent_WritesFields)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "Cam"
+[entity.transform]
+position = [1, 2, 3]
+[entity.components.demo]
+fov = 1.5
+near = 0.1
+ortho = true
+color = [0.8, 0.3, 0.2]
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+
+    auto *reg  = world->get_registry(world);
+    auto  tcid = world->transform_id(world);
+    ke_entity e = tree->find_node(tree, "Cam");
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    auto *t = static_cast<ke_transform_component *>(ke_ecs_component_get(reg, e, tcid));
+    ASSERT_NE(t, nullptr);
+    EXPECT_FLOAT_EQ(t->position.x, 1.0f);
+    EXPECT_FLOAT_EQ(t->position.y, 2.0f);
+    EXPECT_FLOAT_EQ(t->position.z, 3.0f);
+
+    auto *d = static_cast<DemoComp *>(ke_ecs_component_get(reg, e, demo_cid));
+    ASSERT_NE(d, nullptr);
+    EXPECT_FLOAT_EQ(d->fov, 1.5f);
+    EXPECT_FLOAT_EQ(d->near_plane, 0.1f);
+    EXPECT_EQ(d->ortho, 1);
+    EXPECT_FLOAT_EQ(d->color.x, 0.8f);
+    EXPECT_FLOAT_EQ(d->color.y, 0.3f);
+    EXPECT_FLOAT_EQ(d->color.z, 0.2f);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_ParentReference_ResolvesByName)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "Parent"
+
+[[entity]]
+name = "Child"
+parent = "Parent"
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+
+    ke_entity parent = tree->find_node(tree, "Parent");
+    ke_entity child  = tree->find_node(tree, "Child");
+    ASSERT_NE(parent, KE_ENTITY_INVALID);
+    ASSERT_NE(child,  KE_ENTITY_INVALID);
+
+    auto *reg  = world->get_registry(world);
+    auto  hcid = world->hierarchy_id(world);
+    auto *h = static_cast<ke_hierarchy_component *>(ke_ecs_component_get(reg, child, hcid));
+    ASSERT_NE(h, nullptr);
+    EXPECT_EQ(h->parent, parent);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_UnknownComponentName_SkippedQuietly)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "E"
+[entity.components.demo]
+fov = 1.0
+[entity.components.nonexistent]
+anything = 42
+)");
+    // Unknown components are warnings (not yet logged), not failures.
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+
+    auto *reg = world->get_registry(world);
+    ke_entity e = tree->find_node(tree, "E");
+    auto *d = static_cast<DemoComp *>(ke_ecs_component_get(reg, e, demo_cid));
+    ASSERT_NE(d, nullptr);
+    EXPECT_FLOAT_EQ(d->fov, 1.0f);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_DoesNotInvokeLegacyNodeTypeCallbacks)
+{
+    // A pure [[entity]] file must never reach the node-type registry; old
+    // bindings can leave create/set_property pointers wired without effect.
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "Solo"
+[entity.components.demo]
+fov = 2.0
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    EXPECT_TRUE(recorder.creates.empty());
+    EXPECT_TRUE(recorder.sets.empty());
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderEntityFormatTest, LegacyFormat_StillWorks_UnchangedFromBefore)
+{
+    // Regression: the legacy [[node]] type=... path still dispatches through
+    // the node-type registry alongside the new component-driven code path.
+    auto path = WriteTempSceneFile(R"(
+[[node]]
+name = "Player"
+type = "TestNode"
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    ASSERT_EQ(recorder.creates.size(), 1u);
+    EXPECT_EQ(recorder.creates[0].name, "Player");
+    fs::remove(path);
+}

@@ -117,9 +117,34 @@ extern "C" ke_result ke_light_render_system_create(
     self->world         = params->world;
     self->allocator     = params->allocator;
     self->registry      = registry;
-    self->dir_cid       = ke_ecs_component_register(registry, "ke_directional_light_component", sizeof(ke_directional_light_component));
-    self->point_cid     = ke_ecs_component_register(registry, "ke_point_light_component",       sizeof(ke_point_light_component));
-    self->spot_cid      = ke_ecs_component_register(registry, "ke_spot_light_component",        sizeof(ke_spot_light_component));
+    // Phase 2 of ECS-pure nodes: register with field descriptors. Direction
+    // is a vec3 written verbatim over the three sequential float members
+    // (dir_x, dir_y, dir_z) — ke_vec3 is the same 12 bytes. Same trick for
+    // color over (r, g, b).
+    static const ke_component_field kDirFields[] = {
+        {"direction", KE_VARIANT_VEC3,  (uint32_t)offsetof(ke_directional_light_component, dir_x)},
+        {"color",     KE_VARIANT_VEC3,  (uint32_t)offsetof(ke_directional_light_component, r)},
+        {"intensity", KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_directional_light_component, intensity)},
+    };
+    static const ke_component_field kPointFields[] = {
+        {"radius",    KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_point_light_component, radius)},
+        {"color",     KE_VARIANT_VEC3,  (uint32_t)offsetof(ke_point_light_component, r)},
+        {"intensity", KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_point_light_component, intensity)},
+    };
+    static const ke_component_field kSpotFields[] = {
+        {"direction",   KE_VARIANT_VEC3,  (uint32_t)offsetof(ke_spot_light_component, dir_x)},
+        {"inner_angle", KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_spot_light_component, inner_angle)},
+        {"outer_angle", KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_spot_light_component, outer_angle)},
+        {"range",       KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_spot_light_component, range)},
+        {"color",       KE_VARIANT_VEC3,  (uint32_t)offsetof(ke_spot_light_component, r)},
+        {"intensity",   KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_spot_light_component, intensity)},
+    };
+    self->dir_cid   = ke_ecs_component_register_v2(registry, "directional_light",
+        sizeof(ke_directional_light_component), kDirFields,   sizeof(kDirFields)   / sizeof(kDirFields[0]));
+    self->point_cid = ke_ecs_component_register_v2(registry, "point_light",
+        sizeof(ke_point_light_component),       kPointFields, sizeof(kPointFields) / sizeof(kPointFields[0]));
+    self->spot_cid  = ke_ecs_component_register_v2(registry, "spot_light",
+        sizeof(ke_spot_light_component),        kSpotFields,  sizeof(kSpotFields)  / sizeof(kSpotFields[0]));
     self->transform_cid = params->world->transform_id(params->world);
     self->reads[0] = self->dir_cid;
     self->reads[1] = self->point_cid;

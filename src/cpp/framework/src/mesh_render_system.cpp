@@ -74,7 +74,12 @@ extern "C" ke_result ke_mesh_render_system_create(
     self->world         = params->world;
     self->allocator     = params->allocator;
     self->registry      = registry;
-    self->mesh_cid      = ke_ecs_component_register(registry, "ke_mesh_component", sizeof(ke_mesh_component));
+    // Phase 2: register the mesh component under its short name so the new
+    // scene format can reference it. Mesh + material handles aren't directly
+    // settable from TOML — Phase 3 introduces a "primitive" string field that
+    // an asset system reads to bake + assign the handle.
+    self->mesh_cid      = ke_ecs_component_register_v2(
+        registry, "mesh", sizeof(ke_mesh_component), nullptr, 0);
     self->transform_cid = params->world->transform_id(params->world);
     self->reads[0]      = self->mesh_cid;
     self->reads[1]      = self->transform_cid;

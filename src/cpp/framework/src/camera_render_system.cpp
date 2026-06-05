@@ -114,7 +114,20 @@ extern "C" ke_result ke_camera_render_system_create(
     self->world         = params->world;
     self->allocator     = params->allocator;
     self->registry      = registry;
-    self->camera_cid    = ke_ecs_component_register(registry, "ke_camera_component", sizeof(ke_camera_component));
+    // Phase 2 of ECS-pure nodes: register with field metadata so the new
+    // SceneLoader path can write into the component without per-binding code.
+    // Short snake_case name matches the [entity.components.camera] TOML key
+    // (design decision #6).
+    static const ke_component_field kCameraFields[] = {
+        {"fov",               KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_camera_component, fov)},
+        {"near",              KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_camera_component, near_plane)},
+        {"far",               KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_camera_component, far_plane)},
+        {"orthographic_size", KE_VARIANT_FLOAT, (uint32_t)offsetof(ke_camera_component, orthographic_size)},
+        {"orthographic",      KE_VARIANT_BOOL,  (uint32_t)offsetof(ke_camera_component, orthographic)},
+    };
+    self->camera_cid    = ke_ecs_component_register_v2(
+        registry, "camera", sizeof(ke_camera_component),
+        kCameraFields, sizeof(kCameraFields) / sizeof(kCameraFields[0]));
     self->transform_cid = params->world->transform_id(params->world);
     self->ndc_y_flip    = params->ndc_y_flip;
     self->ndc_zero_to_one_depth = params->ndc_zero_to_one_depth;

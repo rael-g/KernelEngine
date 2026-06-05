@@ -537,6 +537,76 @@ typedef struct ke_logger ke_logger;
 
            void ke_frame_packet_reset(ke_frame_packet *packet);
 
+    typedef enum ke_variant_type
+    {
+        KE_VARIANT_NULL = 0,
+        KE_VARIANT_BOOL = 1,
+        KE_VARIANT_INT = 2,
+        KE_VARIANT_FLOAT = 3,
+        KE_VARIANT_STRING = 4,
+        KE_VARIANT_VEC2 = 5,
+        KE_VARIANT_VEC3 = 6,
+        KE_VARIANT_VEC4 = 7,
+        KE_VARIANT_QUAT = 8,
+        KE_VARIANT_TABLE = 9,
+    } ke_variant_type;
+
+    struct ke_variant_table;
+    typedef struct ke_variant
+    {
+        ke_variant_type type;
+        union
+        {
+            _Bool b;
+            int64_t i;
+            double f;
+            const char *s;
+            ke_vec2 v2;
+            ke_vec3 v3;
+            ke_vec4 v4;
+            ke_quat q;
+            const struct ke_variant_table *t;
+        };
+    } ke_variant;
+    typedef struct ke_variant_table_entry
+    {
+        const char *key;
+        ke_variant value;
+    } ke_variant_table_entry;
+
+    typedef struct ke_variant_table
+    {
+        uint32_t count;
+        const ke_variant_table_entry *entries;
+    } ke_variant_table;
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    typedef struct ke_component_field
+    {
+        const char *name;
+        ke_variant_type type;
+        uint32_t offset;
+    } ke_component_field;
+
     typedef uint64_t ke_entity;
 
     typedef uint32_t ke_component_id;
@@ -557,6 +627,32 @@ typedef struct ke_logger ke_logger;
            void ke_ecs_entity_destroy(ke_ecs_registry *registry, ke_entity entity);
 
            ke_component_id ke_ecs_component_register(ke_ecs_registry *registry, const char *name, size_t size);
+
+           ke_component_id ke_ecs_component_register_v2(
+        ke_ecs_registry *registry,
+        const char *name,
+        size_t size,
+        const ke_component_field *fields,
+        uint32_t field_count);
+
+    typedef struct ke_component_meta
+    {
+        ke_component_id cid;
+        size_t size;
+        const ke_component_field *fields;
+        uint32_t field_count;
+    } ke_component_meta;
+
+           ke_result ke_ecs_component_lookup(
+        ke_ecs_registry *registry,
+        const char *name,
+        ke_component_meta *out_meta);
+           ke_result ke_ecs_component_apply_variant(
+        ke_ecs_registry *registry,
+        ke_entity entity,
+        ke_component_id cid,
+        const char *field_name,
+        const ke_variant *value);
 
            void *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity, ke_component_id component);
 
@@ -1016,68 +1112,6 @@ struct ke_world;
 
                      void ke_light_render_system_get_system_params(
         ke_light_render_system *system, ke_system_params *out_params);
-    typedef enum ke_variant_type
-    {
-        KE_VARIANT_NULL = 0,
-        KE_VARIANT_BOOL = 1,
-        KE_VARIANT_INT = 2,
-        KE_VARIANT_FLOAT = 3,
-        KE_VARIANT_STRING = 4,
-        KE_VARIANT_VEC2 = 5,
-        KE_VARIANT_VEC3 = 6,
-        KE_VARIANT_VEC4 = 7,
-        KE_VARIANT_QUAT = 8,
-        KE_VARIANT_TABLE = 9,
-    } ke_variant_type;
-
-    struct ke_variant_table;
-    typedef struct ke_variant
-    {
-        ke_variant_type type;
-        union
-        {
-            _Bool b;
-            int64_t i;
-            double f;
-            const char *s;
-            ke_vec2 v2;
-            ke_vec3 v3;
-            ke_vec4 v4;
-            ke_quat q;
-            const struct ke_variant_table *t;
-        };
-    } ke_variant;
-    typedef struct ke_variant_table_entry
-    {
-        const char *key;
-        ke_variant value;
-    } ke_variant_table_entry;
-
-    typedef struct ke_variant_table
-    {
-        uint32_t count;
-        const ke_variant_table_entry *entries;
-    } ke_variant_table;
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
     struct ke_node_type_registry;
 
     typedef ke_result (*ke_node_create_func)(
