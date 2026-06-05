@@ -30,6 +30,25 @@ public static class SceneLoader
         return Task.CompletedTask;
     }
 
+    // Walks every wrapped node, looks at its scene_properties bag, and creates
+    // a Material from MaterialBaseColor if the node hasn't already been given
+    // one programmatically. Runs during scene-load (before the sim loop) so
+    // the resource-queue → render-thread round-trip can complete without the
+    // sim/render deadlock that would hit if Start did this work itself.
+    private static void PreResolveMaterialsFromBag(Tree tree, ResourceManager resources)
+    {
+        var resolver = FrameworkBackends.ScenePropertiesResolver;
+        foreach (var node in Node.SnapshotRegistry())
+        {
+            if (node is not MeshRenderer mr || mr.Material is not null) continue;
+            if (mr.World is null) continue;
+            var props = resolver(mr.World, mr.Entity);
+            if (props.IsEmpty) continue;
+            if (!props.TryGetVector4("MaterialBaseColor", out var color)) continue;
+            mr.Material = resources.CreateMaterialAsync(color).GetAwaiter().GetResult();
+        }
+    }
+
     private static void RunLoad(Tree tree, string path, ResourceManager? resources, IServiceProvider? services)
     {
         var world  = tree.World;
@@ -67,9 +86,10 @@ public static class SceneLoader
                 });
         }
 
+        ISceneLoaderBackend? loader = null;
         try
         {
-            using var loader = backends.CreateSceneLoader(world, tree.NativeWrapper, registry, AppContext.BaseDirectory);
+            loader = backends.CreateSceneLoader(world, tree.NativeWrapper, registry, AppContext.BaseDirectory);
 
             // Phase 5.4 of ECS-pure nodes: register a C# script factory so the
             // loader can materialise wrapper instances for [entity.script]
@@ -87,9 +107,28 @@ public static class SceneLoader
             });
 
             loader.Load(path);
+
+            // Phase 5.4 deadlock fix: MeshRenderer.Start can't safely call
+            // ResourceManager.CreateMaterialAsync().GetResult() during the sim
+            // tick — the render thread is then waiting for a packet that the
+            // sim thread is trying to write, so the await never completes
+            // (legacy worked because NodeTypeRegistrar.ApplyProperty ran here,
+            // during OnReady, while the render thread was draining commands).
+            // Pre-resolve every MeshRenderer's MaterialBaseColor here so Start
+            // finds Material already set.
+            if (resources is not null)
+                PreResolveMaterialsFromBag(tree, resources);
+
+            // Phase 5.4 lifetime fix: scene_properties components point into the
+            // loader's per-entity arena. The loader has to outlive every entity
+            // that carries that component (i.e. its own world), so we transfer
+            // ownership to the Tree which disposes it at world shutdown.
+            tree._retainedLoaders.Add(loader);
+            loader = null;
         }
         finally
         {
+            loader?.Dispose(); // only fires if Load threw before we transferred
             if (ownsRegistry) registry.Dispose();
         }
     }

@@ -331,6 +331,9 @@ public class Node
 
     internal static Node? FromEntity(ulong entity) => s_registry.GetValueOrDefault(entity);
 
+    /// <summary>Engine-internal: snapshot of all currently-wrapped nodes (for post-scene-load passes).</summary>
+    internal static IReadOnlyCollection<Node> SnapshotRegistry() => s_registry.Values.ToArray();
+
     internal static void Unregister(ulong entity) => s_registry.Remove(entity);
 
     internal static void ClearRegistry() => s_registry.Clear();

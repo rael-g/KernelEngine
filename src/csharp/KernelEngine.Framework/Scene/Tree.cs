@@ -60,7 +60,18 @@ public sealed class Tree : ISceneTree, IDisposable
                 IServiceProvider?  services         = null)
         : this(world, FrameworkBackends.Required, nodeTypeRegistry, services) { }
 
-    public void Dispose() => _native.Dispose();
+    // Holds scene loaders that have written scene_properties components into the
+    // world — their per-loader arena owns the component's variant entry storage,
+    // so the loader must outlive every entity that holds a scene_properties
+    // component. Disposed alongside the tree.
+    internal readonly List<ISceneLoaderBackend> _retainedLoaders = new();
+
+    public void Dispose()
+    {
+        foreach (var l in _retainedLoaders) l.Dispose();
+        _retainedLoaders.Clear();
+        _native.Dispose();
+    }
 
     internal ISceneTreeBackend  NativeWrapper    => _native;
     internal IWorld             World            => _world;
