@@ -42,6 +42,14 @@ extern "C"
     typedef ke_result (*ke_script_factory_func)(
         void *ctx, ke_entity entity, const char *type_name);
 
+    /// Callback fired once per (entity, key, value) parsed from an
+    /// `[entity.properties]` block. Bindings stash these into a per-entity
+    /// bag that Node subclasses query at Start time — see "C" of §5b in the
+    /// refactor plan. The `value` pointer is valid only for the duration of
+    /// the call (transient TOML arena); copy what you need to retain.
+    typedef ke_result (*ke_scene_property_func)(
+        void *ctx, ke_entity entity, const char *key, const ke_variant *value);
+
     typedef struct ke_scene_loader
     {
         void *handle; // opaque; owned by the implementation
@@ -61,6 +69,14 @@ extern "C"
                                               const char *language,
                                               ke_script_factory_func factory,
                                               void *ctx);
+
+        /// Registers a single property-sink for `[entity.properties]` blocks.
+        /// The loader calls it once per (entity, key, value) triple. Bindings
+        /// stash the values into a managed bag the script wrapper reads at
+        /// Start. Re-registration replaces. Pass `callback = NULL` to clear.
+        ke_result (*register_property_sink)(struct ke_scene_loader *self,
+                                            ke_scene_property_func callback,
+                                            void *ctx);
 
         /// Releases resources owned by this loader. After destroy() the
         /// pointer must not be used.

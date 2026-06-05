@@ -361,6 +361,52 @@ So Phase 4 lands the minimum that unblocks Phase 5/6 without breaking C# Pong:
 
 ---
 
+## 5b. Scene-property authoring decision (Phase 5)
+
+User-defined `Node` subclasses (e.g. `Pong.Paddle`) carry scene-authored
+properties like `MoveAction = "PaddleLeftMove"`. The legacy path used
+reflection in `NodeTypeRegistrar.cs`. Deleting reflection without a
+replacement breaks scene authoring of arbitrary node classes. Considered three
+replacements (mirrors of Unity `[SerializeField]` / Godot `[Export]`):
+
+| Option | Per-class user burden | Compile-time safety | Runtime reflection | Engine cost |
+|---|---|---|---|---|
+| **A** — `[SceneProperty]` + source generator | annotation only | ✅ | none | high (separate .csproj) |
+| **B** — manual `SceneProperties.Register<T>(…)` | 1 line per property | ✅ | none | low |
+| **C** — generic `[entity.properties]` bag, `Properties.Get<T>("key")` in `Start()` | 1 line per property in `Start()` | ❌ (string keys) | none | low |
+
+**Decision (locked at session start of Phase 5)**: **C now, A later.**
+
+Reasoning: C closes this branch quickly without changing the public API surface
+that the future GUI/CLI editor will own. When the editor lands, source
+generators slot in on top of C without breaking the bag — `[SceneProperty]`
+properties auto-populate the same dictionary the bag exposes today. C is the
+short path; A is the long-term ergonomic target.
+
+The bag implementation:
+* `ke_scene_loader.register_properties_callback(callback, ctx)` — analogous
+  to `register_script_language`, called once per `(entity, key, value)`
+  parsed from `[entity.properties]`.
+* C# binding stashes everything into `Dictionary<entity, Dictionary<string,object>>`.
+* `Node.Properties` accessor on the C# side reads from that dictionary.
+* The 4 built-in `Node` types (`AudioPlayer`, `CollisionBody2D`,
+  `CollisionShape2D`, `Label`) refactor their `Start()` to pull from
+  `Properties.Get<T>(…)` instead of reflection-set fields.
+* After the load finishes the dictionary stays alive — the loader does not
+  forget — so dynamic property reads (game code that asks "what is my
+  Path?") work after Start too.
+
+Deferred to S8 (or whenever the GUI/CLI editor lands):
+
+* **Option A — `[SceneProperty]` + source generator.** Gives compile-time
+  safety, IDE autocomplete in property lookups, and removes the stringly-
+  typed `Properties.Get<T>("name")` call. Source generator (
+  `Microsoft.CodeAnalysis`) walks `[SceneProperty]`-annotated members on
+  every partial class derived from `Node`, generates a typed
+  `ApplyProperty(node, key, variant)` method, and registers it with the
+  engine at module init. The bag mechanism stays as the fallback for
+  late-bound properties (TOML keys the source generator didn't see).
+
 ## 7a. Native-opportunity backlog (discovered during Phase 4)
 
 Work this refactor flagged as belonging on the native side but did NOT execute

@@ -614,6 +614,77 @@ type     = "Foo"
     fs::remove(path);
 }
 
+// ── Phase 5.2: [entity.properties] bag dispatch ─────────────────────────────
+
+namespace {
+struct PropCall {
+    ke_entity   entity;
+    std::string key;
+    ke_variant  value;
+    std::string string_copy;
+};
+struct PropCtx { std::vector<PropCall> calls; };
+
+ke_result RecordPropertySink(void *ctx, ke_entity e, const char *key, const ke_variant *v)
+{
+    auto *c = static_cast<PropCtx *>(ctx);
+    PropCall pc;
+    pc.entity = e;
+    pc.key    = key ? std::string(key) : std::string();
+    pc.value  = *v;
+    if (v->type == KE_VARIANT_STRING && v->s) {
+        pc.string_copy = v->s;
+        pc.value.s = nullptr;
+    }
+    c->calls.push_back(std::move(pc));
+    return KE_OK;
+}
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_PropertiesBlock_DispatchesEveryKey)
+{
+    PropCtx pctx;
+    ASSERT_EQ(loader->register_property_sink(loader, RecordPropertySink, &pctx), KE_OK);
+
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "HitSound"
+[entity.script]
+language = "csharp"
+type     = "AudioPlayer"
+[entity.properties]
+Path     = "assets/sounds/hit.wav"
+Volume   = 0.5
+AutoPlay = true
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+
+    ASSERT_EQ(pctx.calls.size(), 3u);
+    // Order of TOML keys is insertion-order in tomlplusplus; we don't rely on it.
+    bool sawPath = false, sawVolume = false, sawAuto = false;
+    for (auto &c : pctx.calls) {
+        if (c.key == "Path")     { sawPath = true;   EXPECT_EQ(c.string_copy, "assets/sounds/hit.wav"); }
+        if (c.key == "Volume")   { sawVolume = true; EXPECT_FLOAT_EQ((float)c.value.f, 0.5f); }
+        if (c.key == "AutoPlay") { sawAuto = true;   EXPECT_TRUE(c.value.b); }
+    }
+    EXPECT_TRUE(sawPath && sawVolume && sawAuto);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_PropertiesBlock_NoSink_SilentlySkipped)
+{
+    // No sink registered — properties parse but go nowhere; load still succeeds.
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "X"
+[entity.properties]
+Foo = 1
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    EXPECT_NE(tree->find_node(tree, "X"), KE_ENTITY_INVALID);
+    fs::remove(path);
+}
+
 TEST_F(SceneLoaderEntityFormatTest, EntityFormat_ScriptBlock_ReRegisterReplaces)
 {
     ScriptCtx first_ctx, second_ctx;
