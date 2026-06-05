@@ -1126,6 +1126,29 @@ After all 5 blocks complete:
     1. Audit worker thread creation.
     2. Add `Thread.BeginThreadAffinity()` or relevant CLR attachment calls.
 
+#### [DEADLOCK-FREE] Concurrency by Construction — make cross-thread bugs unrepresentable
+- **Why**: The Pong tela-branca regression (2026-05-XX) was a `CreateMaterialAsync().GetAwaiter().GetResult()` inside `MeshRenderer.Start` — sim blocked on render while render waited for sim's frame packet. We fixed it by pre-resolving materials at load time, but that's discipline, not architecture. Nothing prevents the next contributor (including us) from chaining the same wait edge in a new feature. The doctrine is: **the engine must be a system where deadlocks and cross-thread data races are not in the alphabet** — not "easy to avoid", but impossible to express without writing something visibly named `Unsafe.*`.
+- **What**: Codify and enforce a three-pillar threading contract across the engine's threaded surface.
+    1. **Forward-only queues**: communication between the three named threads (`ke.main` → `ke.sim` → `ke.render`) is one-directional and snapshot-based. No thread holds a reference to the next thread's mutable state. Crossings happen via single-producer queues that transfer ownership of an immutable snapshot. Worker threads (enkiTS pool) are stateless leaves — `await Task` is legal there and only there.
+    2. **Phantom thread tokens**: `SimContext` and `RenderContext` are `ref struct`s. Sim-only methods take `in SimContext`; render-only methods take `in RenderContext`. The token's `internal` constructor is only callable from `Application`'s loop bodies. `ref struct` semantics make the tokens unstorable / uncapturable / unleakable. Calling a render-only method from sim becomes a compile error, not a runtime bug.
+    3. **API by absence**: sim-thread code has no field, no `Services.Resolve`, no static accessor that yields the concrete `IRenderer`. The only thing it can reach is `IRenderCommandQueue.Enqueue`. If you can't *name* the renderer in scope, you can't call into it — sync or otherwise.
+- **Acceptance**:
+    - Pillar 1: every cross-thread write goes through a typed queue+snapshot; there is zero `lock` / `Monitor` / `Mutex` shared between named threads. Documented in `docs/Reference/08 - Multithreading.md`.
+    - Pillar 2: `SimContext` and `RenderContext` exist; every public method on `Node`, `World`, `Renderer`, `ResourceManager` that runs on a specific thread takes the matching token; renaming `Update(float dt)` → `Update(in SimContext ctx, float dt)` is the migration.
+    - Pillar 3: `IRenderer` is not in the DI container slot reachable from a `SimContext` method. `ResourceManager.CreateMaterialAsync` / `CreateMeshAsync` / etc. return concrete handles synchronously (sentinel until render fulfills); no `Task` over a render-thread crossing.
+    - **Roslyn analyzer** flags `.Result`, `.GetAwaiter().GetResult()`, `.Wait()`, `Semaphore`, `Monitor.Enter`, `lock` inside any method taking `SimContext` or `RenderContext`. Escape hatches live in a `KernelEngine.Unsafe.*` namespace.
+    - The Pong deadlock is provably re-inexpressible: attempting to write `MeshRenderer.Start` with `CreateMaterialAsync().GetResult()` is a compile error.
+- **Steps**:
+    1. Pin the doctrine — write `docs/Reference/08 - Multithreading.md` § "Deadlock-Free by Construction" with the three pillars and the worker-vs-named-thread rule.
+    2. Define `SimContext` / `RenderContext` ref structs in `KernelEngine.Kernel`. Application fabricates them per frame.
+    3. Refactor `ResourceManager` so create-methods return synchronous handles (sentinel + render-fulfilled). Drop `Task<Material>` / `Task<Mesh>` from the cross-thread surface; keep `Task` only on disk-IO loaders (`IImageLoader.LoadAsync`, `IModelLoader.LoadAsync`) since those run on workers.
+    4. Walk every `Node` subclass and migrate `Update(float dt)` → `Update(in SimContext ctx, float dt)`. Same for `OnStart` / `LateUpdate`.
+    5. Remove `Application.Renderer` (or any path) from the sim-thread-reachable surface. Sim only sees `ISceneWriter` / `IRenderCommandQueue`.
+    6. Ship the Roslyn analyzer in a `KernelEngine.Analyzers` package referenced by every framework consumer csproj.
+    7. Bisect-test by reverting the Pong material-pre-resolve fix — the analyzer + types must reject the old `Start` body at compile time.
+- **Out of scope**: changes to the worker pool (enkiTS stays as-is); changes to bgfx multithread mode (orthogonal); changes to `KernelThread.AssertCurrent` debug assertions (those become a runtime backstop for the worker→named-thread direction, where types can't reach).
+- **Risk / cost**: high churn — every `Update` override in framework + examples + Pong needs its signature changed. Worth it: the entire category "concurrency bug" exits the engine's failure modes. Estimate: 1-2 sessions for pillars 1+3, +1 for the analyzer (Roslyn boilerplate), +1 for the full migration sweep.
+
 #### [N] Profiling & Trace Observability
 - **Why**: Diagnose frame spikes and wave imbalances without guesswork (Bug 1.15).
 - **What**: Per-thread ring buffer flushing to Chrome Trace JSON.
