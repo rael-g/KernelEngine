@@ -188,9 +188,18 @@ public sealed class Tree : ISceneTree, IDisposable
     /// entities and live in Node's static registry.
     /// </remarks>
     public T WrapEntity<T>(ulong entity) where T : Node, new()
+        => WrapEntity(new T(), entity);
+
+    /// <summary>
+    /// Same as <see cref="WrapEntity{T}(ulong)"/> but takes a pre-constructed instance,
+    /// so callers can use DI (<see cref="ActivatorUtilities"/>) to inject constructor
+    /// dependencies that the parameterless overload cannot supply.
+    /// </summary>
+    public T WrapEntity<T>(T node, ulong entity) where T : Node
     {
         if (entity == KE_ENTITY_INVALID)
             throw new ArgumentException("Cannot wrap KE_ENTITY_INVALID.", nameof(entity));
+        ArgumentNullException.ThrowIfNull(node);
 
         // Idempotent: re-wrapping the same entity returns the existing instance
         // when its concrete type matches.
@@ -201,7 +210,6 @@ public sealed class Tree : ISceneTree, IDisposable
         var nameComp = _world.Registry.GetComponent<NameComponent>(entity, _world.NameComponentId);
         var nameStr  = nameComp.IsEmpty ? typeof(T).Name : ReadName(ref nameComp[0]);
 
-        var node = new T();
         node.Initialize(entity, _world, nameStr);
         return node;
     }

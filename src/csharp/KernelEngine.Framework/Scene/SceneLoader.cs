@@ -70,6 +70,22 @@ public static class SceneLoader
         try
         {
             using var loader = backends.CreateSceneLoader(world, tree.NativeWrapper, registry, AppContext.BaseDirectory);
+
+            // Phase 5.4 of ECS-pure nodes: register a C# script factory so the
+            // loader can materialise wrapper instances for [entity.script]
+            // language="csharp" blocks. Mirrors the legacy NodeTypeRegistrar
+            // create callback but lives in the script-language API instead.
+            loader.RegisterScriptLanguage("csharp", (entity, typeName) =>
+            {
+                var type = NodeTypeRegistrar.ResolveNodeType(typeName);
+                if (type is null) return false;
+                var node = (Node)(services is not null
+                    ? ActivatorUtilities.CreateInstance(services, type)
+                    : Activator.CreateInstance(type)!);
+                tree.WrapEntity(node, entity);
+                return true;
+            });
+
             loader.Load(path);
         }
         finally

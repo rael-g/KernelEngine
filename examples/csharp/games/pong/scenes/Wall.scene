@@ -2,18 +2,30 @@
 name    = "Wall"
 version = 1
 
-[[node]]
+[[entity]]
 name = "Root"
-type = "StaticBody2D"
+[entity.script]
+language = "csharp"
+type     = "StaticBody2D"
 
-[[node]]
+[[entity]]
 name   = "Shape"
 parent = "Root"
-type   = "CollisionShape2D"
-properties = { Shape = { kind = "rectangle", half_extents = [8.0, 0.25] }, Restitution = 1.0 }
+[entity.script]
+language = "csharp"
+type     = "CollisionShape2D"
+[entity.properties]
+ShapeKind        = "rectangle"
+ShapeHalfExtents = [8.0, 0.25]
+Restitution      = 1.0
 
-[[node]]
+[[entity]]
 name   = "Visual"
 parent = "Root"
-type   = "Sprite2D"
-properties = { Mesh = "res://primitives/quad", Material = { base_color = [0.15, 0.15, 0.2, 1.0] }, Size = [16.0, 0.5] }
+[entity.script]
+language = "csharp"
+type     = "Sprite2D"
+[entity.properties]
+Mesh              = "res://primitives/quad"
+MaterialBaseColor = [0.15, 0.15, 0.2, 1.0]
+Size              = [16.0, 0.5]
