@@ -554,3 +554,81 @@ color = [0.8, 0.3, 0.2, 1.0]
     EXPECT_FLOAT_EQ(m->color[3], 1.0f);
     fs::remove(path);
 }
+
+// ── Phase 5.1: [entity.script] dispatches to a language factory ─────────────
+
+namespace {
+struct ScriptCall { ke_entity entity; std::string type_name; };
+struct ScriptCtx  { std::vector<ScriptCall> calls; };
+
+ke_result RecordScriptFactory(void *ctx, ke_entity e, const char *type_name)
+{
+    auto *c = static_cast<ScriptCtx *>(ctx);
+    c->calls.push_back({ e, type_name ? std::string(type_name) : std::string() });
+    return KE_OK;
+}
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_ScriptBlock_InvokesRegisteredFactory)
+{
+    ScriptCtx cs_ctx, lua_ctx;
+    ASSERT_EQ(loader->register_script_language(loader, "csharp", RecordScriptFactory, &cs_ctx),  KE_OK);
+    ASSERT_EQ(loader->register_script_language(loader, "lua",    RecordScriptFactory, &lua_ctx), KE_OK);
+
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "Paddle"
+[entity.script]
+language = "csharp"
+type     = "Pong.Paddle"
+
+[[entity]]
+name = "Bot"
+[entity.script]
+language = "lua"
+type     = "ai/bot"
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+
+    ASSERT_EQ(cs_ctx.calls.size(),  1u);
+    ASSERT_EQ(lua_ctx.calls.size(), 1u);
+    EXPECT_EQ(cs_ctx.calls[0].type_name,  "Pong.Paddle");
+    EXPECT_EQ(lua_ctx.calls[0].type_name, "ai/bot");
+    EXPECT_NE(cs_ctx.calls[0].entity, KE_ENTITY_INVALID);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_ScriptBlock_UnknownLanguage_SkippedQuietly)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "Ghost"
+[entity.script]
+language = "rust"
+type     = "Foo"
+)");
+    // No factory registered for "rust" — load still succeeds, entity exists,
+    // script attachment is silently skipped.
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    EXPECT_NE(tree->find_node(tree, "Ghost"), KE_ENTITY_INVALID);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderEntityFormatTest, EntityFormat_ScriptBlock_ReRegisterReplaces)
+{
+    ScriptCtx first_ctx, second_ctx;
+    ASSERT_EQ(loader->register_script_language(loader, "csharp", RecordScriptFactory, &first_ctx),  KE_OK);
+    ASSERT_EQ(loader->register_script_language(loader, "csharp", RecordScriptFactory, &second_ctx), KE_OK);
+
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "E"
+[entity.script]
+language = "csharp"
+type     = "T"
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    EXPECT_TRUE(first_ctx.calls.empty());
+    EXPECT_EQ(second_ctx.calls.size(), 1u);
+    fs::remove(path);
+}

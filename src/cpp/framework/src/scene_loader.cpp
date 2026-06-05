@@ -29,14 +29,22 @@ namespace
 
 constexpr float kPi = 3.14159265358979323846f;
 
+struct ScriptLanguage
+{
+    std::string            name;
+    ke_script_factory_func factory;
+    void                  *ctx;
+};
+
 struct SceneLoaderImpl
 {
-    ke_scene_loader        api{};
-    ke_allocator          *allocator   = nullptr;
-    ke_world              *world       = nullptr;
-    ke_scene_tree         *tree        = nullptr;
-    ke_node_type_registry *registry    = nullptr;
-    std::string            project_root; // empty = no res:// support; resolution is sibling-relative
+    ke_scene_loader            api{};
+    ke_allocator              *allocator = nullptr;
+    ke_world                  *world     = nullptr;
+    ke_scene_tree             *tree      = nullptr;
+    ke_node_type_registry     *registry  = nullptr;
+    std::string                project_root; // empty = no res:// support; resolution is sibling-relative
+    std::vector<ScriptLanguage> script_languages;
 };
 
 // ── TOML → ke_variant ────────────────────────────────────────────────────────
@@ -372,6 +380,26 @@ ke_result process_entity(SceneLoaderImpl *impl, const toml::table &entity_tbl,
         if (t) apply_transform(*t, *xform);
     }
 
+    // [entity.script] — invoke the language-specific factory if one is
+    // registered. Game scenes use this for entities backed by a wrapper
+    // class (e.g. C# Paddle subclass of KinematicBody2D). The factory does
+    // whatever the language needs to bind the wrapper to this entity.
+    if (auto script_tbl = entity_tbl["script"].as_table()) {
+        auto lang = (*script_tbl)["language"].value<std::string>();
+        auto type = (*script_tbl)["type"].value<std::string>();
+        if (lang && type) {
+            for (auto &sl : impl->script_languages) {
+                if (sl.name == *lang && sl.factory) {
+                    if (sl.factory(sl.ctx, entity, type->c_str()) != KE_OK) {
+                        // Don't abort the whole scene — log-and-skip semantics
+                        // match the unknown-component case below.
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     if (auto comps = entity_tbl["components"].as_table()) {
         for (auto &&[comp_key, comp_node] : *comps) {
             const auto *comp_tbl = comp_node.as_table();
@@ -471,6 +499,19 @@ ke_result impl_load(ke_scene_loader *self, const char *path)
     return load_scene_recursive(impl, path, KE_ENTITY_INVALID, nullptr, nullptr, nullptr);
 }
 
+ke_result impl_register_script_language(ke_scene_loader *self, const char *language,
+                                        ke_script_factory_func factory, void *ctx)
+{
+    if (!self || !self->handle || !language || !factory) return KE_ERROR_INVALID_ARGUMENT;
+    auto *impl = static_cast<SceneLoaderImpl *>(self->handle);
+    // Re-registration replaces (so tests / multiple init flows are idempotent).
+    for (auto &sl : impl->script_languages) {
+        if (sl.name == language) { sl.factory = factory; sl.ctx = ctx; return KE_OK; }
+    }
+    impl->script_languages.push_back({ language, factory, ctx });
+    return KE_OK;
+}
+
 void impl_destroy(ke_scene_loader *self)
 {
     if (!self || !self->handle) return;
@@ -508,9 +549,10 @@ extern "C" ke_result ke_scene_loader_create(
     impl->registry     = registry;
     if (project_root) impl->project_root = project_root;
 
-    impl->api.handle  = impl;
-    impl->api.load    = impl_load;
-    impl->api.destroy = impl_destroy;
+    impl->api.handle                   = impl;
+    impl->api.load                     = impl_load;
+    impl->api.register_script_language = impl_register_script_language;
+    impl->api.destroy                  = impl_destroy;
 
     *out_loader = &impl->api;
     return KE_OK;
