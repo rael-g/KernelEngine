@@ -154,4 +154,54 @@ public class TreeTests
             if (onInput()) evt.Consume();
         }
     }
+
+    // ── Phase 4 of ECS-pure nodes: tree.WrapEntity<T> ───────────────────────
+    //
+    // The component-driven SceneLoader (Phase 2) only writes data — it doesn't
+    // create C# wrapper instances. Game code calls WrapEntity for each entity
+    // it wants Update/OnInput hooks on. Matches design decision #1: wrappers
+    // materialise explicitly, not for every entity in the scene.
+
+    private class FakePaddle : Node { public int UpdateCalls; protected override void Update(float dt) => UpdateCalls++; }
+
+    [Fact]
+    public void WrapEntity_AssignsTypedWrapperToExistingEntity()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+
+        // Simulate the SceneLoader: create an entity through the native tree;
+        // no C# wrapper exists yet.
+        var raw = tree.NativeWrapper.CreateNode("Paddle", tree.Root.Entity);
+
+        var wrapper = tree.WrapEntity<FakePaddle>(raw);
+
+        Assert.Same(wrapper, Node.FromEntity(raw));
+        Assert.Equal(raw, wrapper.Entity);
+        Assert.Equal("Paddle", wrapper.Name);
+    }
+
+    [Fact]
+    public void WrapEntity_Idempotent_ReturnsExistingWrapper()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+
+        var raw = tree.NativeWrapper.CreateNode("Paddle", tree.Root.Entity);
+        var first  = tree.WrapEntity<FakePaddle>(raw);
+        var second = tree.WrapEntity<FakePaddle>(raw);
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void WrapEntity_InvalidEntity_Throws()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var tree = new Tree(world);
+
+        Assert.Throws<ArgumentException>(() => tree.WrapEntity<FakePaddle>(0UL));
+    }
 }

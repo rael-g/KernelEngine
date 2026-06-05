@@ -267,13 +267,30 @@ Each phase ends with a green build + Pong (C# *and* Lua) still rendering.
 - **Acceptance**: a TOML-only `[entity.components.mesh]` produces a rendered
   mesh without any binding code running.
 
-### Phase 4 — C# Node sugar refactor
+### Phase 4 — C# Tree.WrapEntity hook (scope revised)
 
-- `Node` constructor switches from `INodeTypeRegistry.Register` to direct
-  entity creation + `ScriptComponent` attachment.
-- `NodeTypeRegistrar.cs` slims down (target ~80 lines).
-- Pong scripts (`Paddle.cs`, `Ball.cs`, `Scoreboard.cs`) unchanged.
-- **Acceptance**: C# pong runs identically to today (visual + audio + scoring).
+The original plan called for slimming `NodeTypeRegistrar.cs` from 310 → ~80
+lines by switching `Node` to use `ScriptComponent`. Two discoveries during
+implementation forced a narrower scope:
+
+1. C# moved AWAY from `ScriptSystem` deliberately in commit `ca382e4` (May
+   2026) because the kernel iterates entities in ECS storage order while
+   `Tree.TickUpdate` walks pre-order — children-after-parents matters for
+   Pong's Scoreboard / Label hierarchy.
+2. `NodeTypeRegistrar` does much more than property dispatch (inline
+   Material, Shape2D, `res://` resolution). Most of that should be native
+   (see §7a) but migrating it would break C# Pong without the equivalent
+   native paths existing first.
+
+So Phase 4 lands the minimum that unblocks Phase 5/6 without breaking C# Pong:
+
+- `Tree.WrapEntity<T>(ulong entity)` materialises a typed C# wrapper on
+  demand for entities the SceneLoader created from the new component format
+  (decision #1 of §5).
+- Legacy `[[node]]` path and `NodeTypeRegistrar` stay untouched.
+- C# Pong runs unchanged.
+- **Acceptance**: `Tree.WrapEntity` tested; all 171 framework tests + 188
+  kernel tests + 20 config tests green.
 
 ### Phase 5 — Delete the old path
 
@@ -343,6 +360,58 @@ Each phase ends with a green build + Pong (C# *and* Lua) still rendering.
 | Deleted `NodeTypeRegistrar` re-enables a known bug from the pre-bbbfd9e era (inline materials) | medium | Phase 4 reuses the existing variant-table code path — only the registration mechanism changes, not variant decoding |
 
 ---
+
+## 7a. Native-opportunity backlog (discovered during Phase 4)
+
+Work this refactor flagged as belonging on the native side but did NOT execute
+(out of scope for this branch — added here so we don't lose them):
+
+1. **Inline `Material` resolution** — `NodeTypeRegistrar.BuildInlineMaterial{,FromDict}`
+   converts a TOML table `{ base_color = [...], metallic = 0.0, roughness = 0.5 }`
+   into a GPU material via `ResourceManager.CreateMaterialAsync`. The same
+   shape exists in C# Pong scenes (Paddle, Ball, Wall). Should become a native
+   asset system that observes a `material` component with `base_color` /
+   `metallic` / `roughness` fields and writes the resolved handle, mirroring
+   Phase 3's `ke_mesh_asset_system`.
+
+2. **Inline `Shape2D` resolution** — `NodeTypeRegistrar.BuildShape{,FromDict}`
+   produces `RectangleShape2D` / `CircleShape2D` from
+   `{ kind = "rectangle", half_extents = [...] }` and friends. Belongs as a
+   component variant (or two components: `shape_rectangle`, `shape_circle`)
+   that physics systems consume directly. Removes a C#-only TOML interpreter
+   from the data path.
+
+3. **`res://primitives/<name>` mesh resolution** — currently routed through
+   `IAssetResolverBackend.ResolveMesh` → C# `ResourceManager.CreateMeshAsync`.
+   Overlaps with Phase 3's primitive-name field. Picking one canonical path
+   (string field on `mesh` component, processed by `ke_mesh_asset_system`)
+   drops the resolver hop and the C#-side reflection that maps the property.
+
+4. **`res://*.material` file resolution** — `IAssetResolverBackend.ResolveMaterial`
+   reads a `[material]` TOML section into a `MaterialSpec` C# struct. The
+   parsing is already C++ (in `material_file.cpp`), but the spec returns to
+   C# only to be re-fed to `CreateMaterialAsync`. The whole loop should run
+   native: SceneLoader observes `material_path` string field → asset loader
+   parses → asset system creates handle.
+
+5. **`Tomlyn.Model.TomlArray → Vector2/3/4/Quaternion` conversion** —
+   `AsVector2/3/4/AsQuaternion`. The new scene loader already produces
+   `ke_vec*` variants directly; this fallback path exists for the legacy
+   C# scene loader and is dead code once Phase 5 lands.
+
+6. **Reflection-based property setting** — the whole `prop.SetValue(node, …)`
+   path in `ApplyProperty`. Replaced by `ke_ecs_component_apply_variant` for
+   plain types in Phase 1; remains live for advanced types listed above. Once
+   each advanced type has a native component representation, the reflection
+   path can be deleted along with `NodeTypeRegistrar`.
+
+7. **Pre-order tree-walk tick order** — `Tree.TickAwakeAndStart/Update/LateUpdate`
+   exists because the kernel `ScriptSystem` iterates entities in ECS storage
+   order, not parent-first tree order (commit `ca382e4`, May 2026). A future
+   `ke_script_system_v2` that walks the hierarchy in pre-order would let the
+   C# tree-walk dispatcher go away and the kernel become the single script
+   driver again — relevant if we want Lua scripts to participate in the same
+   ordering guarantees.
 
 ## 7. Out of scope (do not creep)
 

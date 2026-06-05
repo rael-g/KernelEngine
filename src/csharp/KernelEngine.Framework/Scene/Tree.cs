@@ -168,6 +168,54 @@ public sealed class Tree : ISceneTree, IDisposable
         return node;
     }
 
+    /// <summary>
+    /// Wraps an existing ECS entity (already created by the SceneLoader from a
+    /// component-driven <c>[[entity]]</c> file) with a C# <typeparamref name="T"/>
+    /// instance. Use this when migrating game code from the legacy
+    /// <c>[[node]] type="Paddle"</c> path — the loader creates entities and
+    /// writes their component fields, then the game asks the tree to materialise
+    /// a typed wrapper for the entities it wants to interact with from C#.
+    /// </summary>
+    /// <remarks>
+    /// Per the ECS-pure-nodes refactor's open decision #1, wrapping is explicit:
+    /// the loader doesn't auto-create C# instances for every entity, only data
+    /// is written into components. Game code calls WrapEntity for each entity
+    /// it wants Update/OnInput hooks on.
+    ///
+    /// The wrapper's <see cref="Node.Name"/> is read from the entity's name
+    /// component (set by the scene tree at create_node time). Returns the same
+    /// wrapper on repeated calls for the same entity — wrappers are 1:1 with
+    /// entities and live in Node's static registry.
+    /// </remarks>
+    public T WrapEntity<T>(ulong entity) where T : Node, new()
+    {
+        if (entity == KE_ENTITY_INVALID)
+            throw new ArgumentException("Cannot wrap KE_ENTITY_INVALID.", nameof(entity));
+
+        // Idempotent: re-wrapping the same entity returns the existing instance
+        // when its concrete type matches.
+        if (Node.FromEntity(entity) is T existing) return existing;
+
+        // The entity already has a Name component (added by scene_tree.create_node);
+        // reuse it so paths keep resolving against the scene file's chosen names.
+        var nameComp = _world.Registry.GetComponent<NameComponent>(entity, _world.NameComponentId);
+        var nameStr  = nameComp.IsEmpty ? typeof(T).Name : ReadName(ref nameComp[0]);
+
+        var node = new T();
+        node.Initialize(entity, _world, nameStr);
+        return node;
+    }
+
+    private static string ReadName(ref NameComponent c)
+    {
+        // InlineArray(64): read as Span<byte>, slice to the NUL terminator,
+        // decode as UTF-8. No unsafe — the Framework project enforces it.
+        var span = ((Span<byte>)c.Name);
+        int len = span.IndexOf((byte)0);
+        if (len < 0) len = span.Length;
+        return System.Text.Encoding.UTF8.GetString(span[..len]);
+    }
+
     private static string MakeUniqueChildName(Node parent, string requested)
     {
         if (!HasChildNamed(parent, requested)) return requested;
