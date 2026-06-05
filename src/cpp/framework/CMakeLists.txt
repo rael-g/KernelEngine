@@ -3,7 +3,6 @@ find_path(TOMLPLUSPLUS_INCLUDE_DIRS "toml++/toml.hpp" REQUIRED)
 find_package(glm CONFIG REQUIRED)
 
 add_library(ke_framework
-    src/node_type_registry.c
     src/resource_cache.c
     src/scene_tree.c
     src/input_actions.cpp

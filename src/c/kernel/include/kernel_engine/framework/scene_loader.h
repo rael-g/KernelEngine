@@ -2,10 +2,10 @@
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 
 #include <kernel_engine/framework/framework_export.h>
-#include <kernel_engine/framework/node_type_registry.h>
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/world/variant.h>
 struct ke_world;
 
 #ifdef __cplusplus
@@ -17,22 +17,24 @@ extern "C"
     //
     // Language-agnostic vtable for loading a `.scene.toml` file into a world.
     // The default plugin (src/cpp/framework/) uses tomlplusplus to parse and
-    // drives the supplied scene_tree + node_type_registry to instantiate nodes:
+    // drives the supplied scene_tree to instantiate ECS entities from a
+    // component-driven file:
     //
-    //     [[node]]
+    //     [[entity]]
     //     name   = "Player"
-    //     type   = "MeshNode"
-    //     parent = "World"        # optional; defaults to root
-    //     [node.transform]
+    //     parent = "World"                   # optional; defaults to root
+    //     [entity.script]
+    //     language = "csharp"                # one factory per language
+    //     type     = "Paddle"
+    //     [entity.transform]
     //     position       = [0, 1, 0]
     //     scale          = [1, 1, 1]
-    //     rotation_euler = [0, 90, 0]   # degrees; ZYX order
-    //     [node.properties]
-    //     mesh = "res://primitives/cube"
-    //
-    // Property values are forwarded to the node type's set_property callback
-    // as ke_variant — strings, ints, floats, bools, vec2/3/4, and quaternion
-    // (rotation_euler is converted to a quaternion before dispatch).
+    //     rotation_euler = [0, 90, 0]        # degrees; ZYX order
+    //     [entity.components.mesh]
+    //     primitive = "cube"
+    //     color     = [1, 1, 1, 1]
+    //     [entity.properties]                # free-form bag — see ke_scene_properties
+    //     MoveAction = "Up"
 
     /// Factory invoked by the loader when it sees `[entity.script]` on an
     /// entity. Bindings register one per language (csharp, lua, etc.); the
@@ -93,7 +95,7 @@ extern "C"
 
     // ── Factory ──────────────────────────────────────────────────────────────
 
-    /// Allocates a scene loader bound to the given world / tree / registry.
+    /// Allocates a scene loader bound to the given world / tree.
     /// The loader does NOT take ownership of the inputs; the caller keeps them
     /// alive across all load() invocations.
     ///
@@ -104,7 +106,6 @@ extern "C"
         ke_allocator           *alloc,
         struct ke_world        *world,
         ke_scene_tree          *tree,
-        ke_node_type_registry  *registry,
         const char             *project_root,
         ke_scene_loader       **out_loader);
 
