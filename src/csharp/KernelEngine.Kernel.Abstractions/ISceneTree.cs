@@ -24,8 +24,8 @@ public interface ISceneTree
     /// <summary>
     /// Creates a node as a child of <paramref name="parentEntity"/> (pass <c>Root</c> for top-level).
     /// Initialises Transform, Hierarchy, and Name components and links the entity into the hierarchy.
-    /// Returns the new entity ID. The caller is then responsible for calling
-    /// <see cref="INodeTypeRegistry.TryCreate"/> to bind the managed node object to the entity.
+    /// Returns the new entity ID. The caller may then attach additional components or wrap
+    /// the entity with a managed <c>Node</c> subclass via <c>Tree.WrapEntity</c>.
     /// </summary>
     ulong CreateNode(string name, ulong parentEntity);
 

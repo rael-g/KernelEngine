@@ -5,8 +5,8 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Concrete <see cref="IFrameworkBackendFactory"/> producing the C-plugin-backed implementations
 /// (<see cref="NativeInputActions"/>, <see cref="NativeSceneTree"/>, <see cref="NativeSceneLoader"/>,
-/// <see cref="NativeResourceCache"/>, <see cref="NativeAssetResolver"/>, <see cref="NativeResourceQueue"/>,
-/// <see cref="NodeTypeRegistry"/>). Registered via the <c>AddNativeFramework()</c> DI extension.
+/// <see cref="NativeResourceCache"/>, <see cref="NativeAssetResolver"/>, <see cref="NativeResourceQueue"/>).
+/// Registered via the <c>AddNativeFramework()</c> DI extension.
 /// </summary>
 public sealed unsafe class NativeFrameworkBackendFactory : IFrameworkBackendFactory
 {
@@ -18,10 +18,7 @@ public sealed unsafe class NativeFrameworkBackendFactory : IFrameworkBackendFact
 
     public ISceneLoaderBackend CreateSceneLoader(IWorld world,
                                                    ISceneTreeBackend tree,
-                                                   INodeTypeRegistry? registry,
                                                    string projectRoot) =>
-        // registry is ignored — kept in the signature for one release so
-        // external callers still compile; deletion lands in a follow-up.
         new NativeSceneLoader(new MallocAllocator(), (World)world,
                               (NativeSceneTree)tree,
                               projectRoot);
@@ -38,7 +35,4 @@ public sealed unsafe class NativeFrameworkBackendFactory : IFrameworkBackendFact
 
     public IResourceCommandQueue CreateResourceQueue() =>
         new NativeResourceQueue(new MallocAllocator());
-
-    public INodeTypeRegistry CreateNodeTypeRegistry() =>
-        new NodeTypeRegistry(new MallocAllocator());
 }

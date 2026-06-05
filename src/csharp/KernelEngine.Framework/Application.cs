@@ -37,7 +37,6 @@ public class Application : IDisposable
     public Tree Tree => _scene ??= new Tree(
         ActiveWorld,
         FrameworkBackends.Required,
-        Services?.GetService<INodeTypeRegistry>(),
         Services);
 
     /// <summary>
@@ -277,10 +276,6 @@ public class Application : IDisposable
                 // Scene tree — Framework's Tree implements ISceneTree directly (S7).
                 _sceneTree = Tree;
 
-                // Register fallback so any Node subclass works in scene files without
-                // explicit registration. Built-in types are auto-registered on first AddNode<T>.
-                RegisterFrameworkNodeTypes();
-
                 // Auto-load action bindings (when a game enum was registered via .AddInputActions<T>()).
                 // After this, InputActions.Get<TEnum>() works from anywhere; no game code involved.
                 Services.GetService<InputActions.IAutoLoader>()?.Load(this);
@@ -466,12 +461,6 @@ public class Application : IDisposable
         SceneLoader.LoadAsync(Tree, absolute, Resources, Services).GetAwaiter().GetResult();
         Logger?.Info("Application", $"Loaded default scene: {resPath}");
     }
-
-    // RegisterFrameworkNodeTypes was the legacy [[node]] dispatch wiring;
-    // deleted in Phase 5.6 of the ECS-pure-nodes refactor. Scene files now use
-    // [entity.script] which the SceneLoader resolves via NodeTypeResolver
-    // directly, with NO explicit per-type registration step.
-    private void RegisterFrameworkNodeTypes() { }
 
     // ── Systems setup ─────────────────────────────────────────────────────────
 

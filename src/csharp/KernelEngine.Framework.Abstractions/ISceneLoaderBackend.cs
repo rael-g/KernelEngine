@@ -1,8 +1,8 @@
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Backend contract for the scene loader (TOML parsing + nested-scene resolution + node
-/// instantiation through the registered <see cref="INodeTypeRegistry"/>). Sugar layer
+/// Backend contract for the scene loader (TOML parsing + nested-scene resolution +
+/// component-driven entity construction with per-language script factories). Sugar layer
 /// (<c>SceneLoader</c>) consumes this; the unsafe native wrapper lives in
 /// <c>KernelEngine.Framework.Native</c>.
 /// </summary>

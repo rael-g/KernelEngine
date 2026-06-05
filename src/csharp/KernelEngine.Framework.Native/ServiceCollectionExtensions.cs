@@ -15,7 +15,6 @@ public static class ServiceCollectionExtensions
     {
         var factory = new NativeFrameworkBackendFactory();
         services.AddSingleton<IFrameworkBackendFactory>(factory);
-        services.AddSingleton<INodeTypeRegistry>(_ => factory.CreateNodeTypeRegistry());
         FrameworkBackends.Default                  = factory;
         FrameworkBackends.ScenePropertiesResolver  = NativeSceneProperties.For;
         InputActions.CreateBackend                 = factory.CreateInputActions;

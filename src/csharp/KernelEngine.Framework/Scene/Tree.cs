@@ -14,12 +14,9 @@ public sealed class Tree : ISceneTree, IDisposable
 {
     private readonly IWorld              _world;
     private readonly Node                _root;
-    private readonly INodeTypeRegistry?  _nodeTypeRegistry;
     private readonly IServiceProvider?   _services;
     private ResourceManager?             _resources; // set after ResourceManager is created
     private readonly ISceneTreeBackend   _native;
-
-    private readonly HashSet<Type> _registeredTypes = [];
 
     /// <summary>
     /// Constructs a Tree on top of <paramref name="world"/> using the supplied scene-tree
@@ -29,11 +26,9 @@ public sealed class Tree : ISceneTree, IDisposable
     /// </summary>
     public Tree(IWorld world,
                 ISceneTreeBackend  backend,
-                INodeTypeRegistry? nodeTypeRegistry = null,
                 IServiceProvider?  services         = null)
     {
         _world            = world;
-        _nodeTypeRegistry = nodeTypeRegistry;
         _services         = services;
         _native           = backend;
         var rootEntity    = _native.Root;
@@ -47,18 +42,16 @@ public sealed class Tree : ISceneTree, IDisposable
     /// </summary>
     public Tree(IWorld world,
                 IFrameworkBackendFactory backendFactory,
-                INodeTypeRegistry?       nodeTypeRegistry = null,
                 IServiceProvider?        services         = null)
-        : this(world, backendFactory.CreateSceneTree(world), nodeTypeRegistry, services) { }
+        : this(world, backendFactory.CreateSceneTree(world), services) { }
 
     /// <summary>
     /// Convenience constructor that pulls the scene-tree backend from the process-wide
     /// <see cref="FrameworkBackends.Required"/>. Throws if no backend was registered.
     /// </summary>
     public Tree(IWorld world,
-                INodeTypeRegistry? nodeTypeRegistry = null,
                 IServiceProvider?  services         = null)
-        : this(world, FrameworkBackends.Required, nodeTypeRegistry, services) { }
+        : this(world, FrameworkBackends.Required, services) { }
 
     // Holds scene loaders that have written scene_properties components into the
     // world — their per-loader arena owns the component's variant entry storage,
@@ -75,7 +68,6 @@ public sealed class Tree : ISceneTree, IDisposable
 
     internal ISceneTreeBackend  NativeWrapper    => _native;
     internal IWorld             World            => _world;
-    internal INodeTypeRegistry? NodeTypeRegistry => _nodeTypeRegistry;
 
     private void AttachTransform(ulong entity)
     {

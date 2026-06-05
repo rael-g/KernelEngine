@@ -57,7 +57,7 @@ public static class SceneLoader
         ISceneLoaderBackend? loader = null;
         try
         {
-            loader = backends.CreateSceneLoader(world, tree.NativeWrapper, registry: null!, AppContext.BaseDirectory);
+            loader = backends.CreateSceneLoader(world, tree.NativeWrapper, AppContext.BaseDirectory);
 
             // The script factory resolves the C# type for every
             // [entity.script] language="csharp" block, constructs it via DI when
