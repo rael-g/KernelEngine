@@ -15,6 +15,14 @@ public interface IEcsRegistry
     /// <summary>Registers a component type and returns its stable component ID.</summary>
     uint RegisterComponent<T>(string name) where T : unmanaged;
 
+    /// <summary>
+    /// Resolves a previously-registered component by name. Returns <c>true</c> and writes the
+    /// cid into <paramref name="componentId"/> on success; returns <c>false</c> when no
+    /// component with that name is known. Bindings use this to discover engine-defined
+    /// components at runtime (e.g. the <c>scene_properties</c> bag the SceneLoader writes).
+    /// </summary>
+    bool TryLookupComponent(string name, out uint componentId);
+
     /// <summary>Adds (or returns existing) a component to <paramref name="entity"/>; the returned span has length 1.</summary>
     Span<T> AddComponent<T>(ulong entity, uint componentId) where T : unmanaged;
 

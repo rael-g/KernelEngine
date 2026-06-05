@@ -32,6 +32,24 @@ public sealed unsafe class EcsRegistry : IEcsRegistry
             return _native->component_register(_native, (sbyte*)namePtr, (nuint)sizeof(T));
     }
 
+    /// <inheritdoc/>
+    public bool TryLookupComponent(string name, out uint componentId)
+    {
+        var bytes = Encoding.UTF8.GetBytes(name + '\0');
+        ke_component_meta meta;
+        fixed (byte* namePtr = bytes)
+        {
+            var rc = _native->component_lookup(_native, (sbyte*)namePtr, &meta);
+            if (rc == ke_result.KE_OK)
+            {
+                componentId = meta.cid;
+                return true;
+            }
+        }
+        componentId = 0;
+        return false;
+    }
+
     // ── Component data ────────────────────────────────────────────────────────
 
     /// <inheritdoc cref="IEcsRegistry.AddComponent{T}"/>

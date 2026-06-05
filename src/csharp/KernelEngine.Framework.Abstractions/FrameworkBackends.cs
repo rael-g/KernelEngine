@@ -1,3 +1,5 @@
+using KernelEngine.Kernel;
+
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -23,4 +25,13 @@ public static class FrameworkBackends
         ?? throw new InvalidOperationException(
             "No framework backend registered. Call services.AddNativeFramework() during DI setup " +
             "(or set FrameworkBackends.Default explicitly for tests).");
+
+    /// <summary>
+    /// Resolves the <c>scene_properties</c> bag attached to an entity. Set by
+    /// <c>AddNativeFramework()</c>; defaults to returning <see cref="EmptySceneProperties.Instance"/>
+    /// (so <see cref="Node.Properties"/> stays usable in tests that don't bring up the backend).
+    /// The sugar layer's <c>Node.Properties</c> accessor calls this; nobody else should.
+    /// </summary>
+    public static Func<IWorld, ulong, ISceneProperties> ScenePropertiesResolver { get; set; }
+        = static (_, _) => EmptySceneProperties.Instance;
 }

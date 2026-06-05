@@ -345,6 +345,11 @@ static ke_component_id sparse_component_register(ke_ecs *self, const char *name,
     return ke_ecs_component_register(((ke_ecs_sparse_impl *)self->handle)->registry, name, size);
 }
 
+static ke_result sparse_component_lookup(ke_ecs *self, const char *name, ke_component_meta *out_meta)
+{
+    return ke_ecs_component_lookup(((ke_ecs_sparse_impl *)self->handle)->registry, name, out_meta);
+}
+
 static void *sparse_component_add(ke_ecs *self, ke_entity entity, ke_component_id cid)
 {
     return ke_ecs_component_add(((ke_ecs_sparse_impl *)self->handle)->registry, entity, cid);
@@ -390,6 +395,7 @@ ke_result ke_ecs_sparse_set_create(ke_ecs_registry *registry,
     impl->api.entity_create      = sparse_entity_create;
     impl->api.entity_destroy     = sparse_entity_destroy;
     impl->api.component_register = sparse_component_register;
+    impl->api.component_lookup   = sparse_component_lookup;
     impl->api.component_add      = sparse_component_add;
     impl->api.component_remove   = sparse_component_remove;
     impl->api.component_get      = sparse_component_get;
