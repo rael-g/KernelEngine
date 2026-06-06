@@ -4,6 +4,18 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 
 ---
 
+## 🚨 Next-session priority — completion audit sweep
+
+The Kanban has drifted out of sync with reality: multiple cards listed as parking-lot, planned, or in-flight have *already shipped* without anyone updating their status. Confirmed instances so far:
+
+- **[F.RC2] Render-graph + GPU-compute primitives** — listed in Parking Lot, but `src/c/kernel/include/kernel_engine/kernel/render/render_graph.h` (242 lines) + `src/cpp/render/core/src/render_graph_impl.hpp` (137 lines) are present and shipped. The card should move to Done.md and any dependent cards (`[UPSCALER-PREP]`, [F.RC2.Resume], [F.RC2.Cleanup]) need re-evaluation.
+- **OBS.4 — Bloom black screen** — flagged as broken in the OBS log, but may have been silently fixed during the post-process refactor. Verify before propagating "bloom is broken" in any future doc / response.
+- Likely more (B5.* cleanup cards, several F.A/F.B/F.C/F.D entries that were absorbed silently during the framework iterations).
+
+**Before any new feature work**: spend one session walking every card under "🎯 Next Up" + Parking Lot + OBS log against the actual codebase and either tick it ✅ done (move to Done.md) or confirm it's genuinely open. Stale Kanban entries cost more than the audit itself — they cause us to plan against fiction.
+
+---
+
 ## ⚠️ Architectural Principles (read before adding cards)
 
 1. **Public API lives ONLY in `src/c/kernel/include/`.** C++ plugins under `src/cpp/<plugin>/` expose exactly one public C function: `ke_<plugin>_create()`. All other headers in `<plugin>/include/` are for cross-target sharing within the plugin. Anything internal to one target goes in `src/`. *(Codified in CLAUDE.md.)*
@@ -58,6 +70,7 @@ Concrete capability gaps surfaced by Pong or earlier examples that are not physi
 | B6 | **Audio logical layer** | Bus mixer + clip pools + `.event` TOML. Beta-shippable game needs Music/SFX volume sliders at minimum. | [Chapter 23](Reference/23%20-%20Audio%20Logical%20Layer.md) |
 | B7 | **OBS.6 — Point/spot shadows** | Visual completeness; expected for "modern engine". | [OBS.6](#obs6-point--spot-lights-cast-no-shadows-feature-deferred--future) |
 | B8 | **Tracy profiler integration** | Helps every subsequent investigation. Tool, not a capability gap. | [B4.1](#b41-phase-n--tracy-profiler-integration) |
+| B10 | **LOD pipeline — meshoptimizer plugin + `LodGroupComponent` + selector system** | Asking a modeller to ship `mesh_lod0/1/2/3.fbx` by hand is 2010 workflow. Pipeline: wrap **zeux/meshoptimizer** (MIT, mature, used by everyone) as `KernelEngine.Asset.MeshOptimizer` plugin → at asset bake time, generate a LOD cascade per mesh (e.g. 100% / 50% / 25% / 12%); store the cascade in the baked asset. Runtime: `LodGroupComponent { Mesh[] cascade, float[] screenSizeThresholds }` + `LodSelectionSystem` picks which LOD to draw based on camera distance or screen-space size. Standard pattern across UE5 / Unity / Godot. Pre-req for any "open world" / large scene example. Independent of the Nanite-class research; that's a separate parking-lot consideration. | new |
 | B9 | **RenderDoc integration / capture hook** ⚠️ **do BEFORE any future render-related feature or refactor** | Today render bugs (OBS.4 bloom black screen, OBS.7 etc.) are debugged by guesswork + `printf`. RenderDoc captures a full frame's GPU state (every draw, every bound resource, every shader, every framebuffer) and lets us inspect it pixel-by-pixel — turns "why is the screen black" from a multi-hour bisect into minutes. Bgfx + Vulkan work with RenderDoc out-of-the-box; integration is mostly: document the workflow, add a debug-build hook for `RENDERDOC_API_1_x_x` programmatic captures (optional), keep PDB symbols intact. **Mandatory pre-req for**: any new render feature (deferred shading, depth prepass, point/spot shadows, clustered forward), any render refactor (view layout, post-process chain, backend swap), and any visual-regression debugging. Shipping render work without RenderDoc in the toolbox = paying the OBS.4-style debug tax every time. | new |
 
 ### Tier C — Physics + UI redesigns (do last)
