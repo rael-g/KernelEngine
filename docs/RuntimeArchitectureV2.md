@@ -741,7 +741,7 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 - [x] §3.4 factory signature documented — runtime accepts injected `ke_ecs*`; storage plugin (`KernelEngine.Ecs.Flecs`) is a separate factory
 - [x] §8 settled — Opção D (our scheduler, flecs storage-only with `FLECS_PIPELINE` off); evaluation of A/B/C/D recorded
 - [x] §13 alternatives revised — A/B/C rejected with explicit reasons; EnTT/gaia-ecs evaluated and parked as fallback
-- [x] §15 game script safety model locked — `ref struct View` (C#) + `ke_system_ctx` (universal C ABI) + 3-layer AOT enforcement; native/dynamic-language paths covered via debug-checked door; `ke_script_component` reshape spec'd
+- [x] §15 game script safety model locked — `ref struct View` (C#) + `ke_system_ctx` (universal C ABI) + 3-layer AOT enforcement; native/dynamic-language paths covered via debug-checked door; `ke_script_component` reshape spec'd; §15.10 Node fields are components (auto `<ClassName>_Data` via codegen; `[Local]` opt-out disables parallelism; non-POD without `[Local]` fails build)
 - [x] R2.5a — flecs 4.1.5 upgrade (commit `df48365`)
 - [ ] **R2.5b — Plugin split**: move flecs helpers to `src/c/ecs/flecs/`; create `src/c/runtime/` for our scheduler; rebuild flecs CMake target with pipeline addons stripped; rewrite headers; split C# projects (`KernelEngine.Runtime` + `KernelEngine.Ecs.Flecs`)
 - [ ] **R2.5c — Scheduler core**: wave builder, dispatcher, phase loop, defer queue, fixed timestep accumulator; unit + integration tests
@@ -984,3 +984,91 @@ The internal `ScriptSystem` (engine-provided, walks all entities with `ke_script
 **Default for scripts that don't declare access**: `exclusive = true` flag on the script component. Scheduler treats the ScriptSystem as a single wave entry that conflicts with everything — runs alone, safe by default. Devs (or codegen) populate the access lists when they want their scripts to parallelize with engine systems.
 
 **C# `View` layered over native ctx**: the `ref struct View` is the C# wrapper around `ke_system_ctx*`. Every `view.Transform.Position = ...` lowers to `ke_system_ctx_get_mut(ctx, CID_TRANSFORM, this.Entity)->Position = ...` underneath. The ref struct adds compile-time enforcement; the underlying call still goes through the debug-checked door.
+
+### 15.10 Node fields are components (everything is component, by default)
+
+The doctrine "all game state lives in the ECS" extends to Node and NodeBehavior subclass fields. **Every declared field on a Node/NodeBehavior subclass becomes part of an auto-generated `<ClassName>_Data` component**; the codegen rewrites field accesses to route through the View. The dev's experience is Unity-like (declare fields, use them as fields); the runtime sees ECS data.
+
+```csharp
+public partial class Paddle : Node {
+    public float Speed = 5f;
+    public Color Color = Color.Red;
+    private int  _score = 0;
+
+    public override void OnUpdate(float dt, View view) {
+        view.Transform.Position.X += Speed * dt;
+        view.Material.Tint = Color;
+        if (BallCrossedGoal()) _score++;
+    }
+}
+```
+
+Codegen emits the equivalent of:
+
+```csharp
+internal struct Paddle_Data {
+    public float Speed;
+    public Color Color;
+    public int   _score;
+}
+
+// Spawn helper attaches the component on entity creation
+public static Paddle Spawn(Scene scene, /* init */) {
+    var e = scene.Spawn();
+    scene.Attach(e, new Paddle_Data { Speed = 5f, Color = Color.Red, _score = 0 });
+    return Paddle.For(e);
+}
+
+// Field accessors route to the component
+public partial class Paddle {
+    public ref float Speed  => ref _view.Get<Paddle_Data>().Speed;
+    public ref Color Color  => ref _view.Get<Paddle_Data>().Color;
+    public ref int   _score => ref _view.Get<Paddle_Data>()._score;
+}
+```
+
+**Performance note**: codegen takes the ref to `<ClassName>_Data` **once per OnUpdate invocation** and reuses via local ref — one ECS lookup per frame per node, not one per field access. Comparable cost to Unity's `transform.position` indirection.
+
+#### Consequences ride for free
+
+| Concern | How it works |
+|---|---|
+| **Serialization (save / load)** | Components serialize uniformly; saving the game = serializing the world; loading = deserializing into a fresh world; Node instances re-created as wrappers when needed. Zero per-class serialization code. |
+| **Hot reload** | State lives in ECS, not in the C# instance heap. Recompile, rebind class metadata, data continues where it was. |
+| **Networking** | Replicating `Paddle_Data` over the wire replicates Paddles. State-is-component is the same primitive Bevy networking uses. |
+| **Determinism** | No hidden heap state → same `Paddle_Data` + same input = same output. Replay viable. |
+| **Editor inspection** | Editor reads/writes `Paddle_Data` directly via the ECS API. No reflection over Node instances needed. |
+
+#### Edge case — fields that *can't* be components
+
+Some state genuinely doesn't fit in a POD component:
+```csharp
+private List<EnemyTarget> _nearbyEnemies;     // heap, recomputed each frame
+private TaskCompletionSource _asyncWaiter;    // async coordination
+private MemoryStream _ioBuffer;               // transient IO
+```
+
+For these, the codegen requires explicit opt-out:
+
+```csharp
+[Local] private List<EnemyTarget> _nearbyEnemies;
+```
+
+`[Local]` fields are stored **on the C# Node instance heap**, not in the ECS. Consequences:
+- They don't serialize (save/load skips them).
+- They don't replicate (networking ignores them).
+- They **disqualify the Node's `OnUpdate` from parallel scheduling** — analyzer marks the system as `exclusive = true` if any code path reads or writes `[Local]` state, because a heap field could be touched from multiple threads if the Node ever existed on multiple entities or in any extension context.
+
+The dev makes the trade consciously: heap state ↔ no parallelization, vs component state ↔ free parallelization.
+
+#### Codegen safety rule
+
+A non-`[Local]` field with a non-POD type (anything containing references — `List<T>`, `string` longer than inlined, `Task`, delegate types) **fails the build**:
+
+> `error KE0042: 'Paddle.Spawn' field type 'List<EnemyTarget>' is not POD; cannot live in a generated _Data component. Either move the data to value-type form, or mark the field with [Local] to keep it on the instance heap (disables parallel scheduling).`
+
+Forces the dev to declare intent. Silent acceptance of non-POD state into a component would break serialization or replication invisibly; the build refusal makes the cost explicit upfront.
+
+#### NodeBehavior follows the same rule
+
+The `NodeBehavior` pattern (§15.3) already treats its fields as a component (`<Behavior>_Data`). §15.10 generalizes that doctrine to **all** Node subclasses, not just NodeBehaviors. The mental model is unified: **every class that descends from Node IS a component-bearing entity**, codegen-mediated. Whether you call it a "Node subclass" (long-lived entity, has lifetime, has OnUpdate) or a "NodeBehavior" (attached/detached effect, has its own data) is a naming convenience — under the hood, both are codegen-generated component + system pairs.
