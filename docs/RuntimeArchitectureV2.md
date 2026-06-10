@@ -234,12 +234,13 @@ typedef struct ke_system_params {
     const ke_system_id *runs_before;
     uint32_t            runs_before_count;
 
+    bool   exclusive;                 // when true, runs in own wave (conflicts with all)
     void  *user_data;
-    void (*execute)(ke_runtime *runtime, void *user_data, float dt);
+    void (*execute)(ke_system_ctx *ctx, void *user_data, float dt);
 } ke_system_params;
 ```
 
-System functions are plain C function pointers — same `[UnmanagedCallersOnly]` bridge pattern we already use for script callbacks. The execute callback gets the runtime pointer (for `get_world` / `get_resource` queries) and a `dt`.
+System functions are plain C function pointers — same `[UnmanagedCallersOnly]` bridge pattern we already use for script callbacks. The execute callback gets a `ke_system_ctx*` (the doorway defined in §15.8) — **the only path to component memory inside the system body**. The `dt` is the timestep. Note: the spike (R1/R2) used `(ke_runtime*, void*, float)`; that shape is superseded by §15.8 and migrates during R2.5c.
 
 ### 3.4 Factory
 
@@ -643,11 +644,13 @@ Reorganize the C source layout to match the new doctrine:
 ### Phase R2.5c — Scheduler core in pure C
 
 Implement `src/c/runtime/src/scheduler/`:
+- `system_ctx.c` — `ke_system_ctx` impl per §15.8 (stack-allocated, debug-checked access door) (~120 LoC)
 - `wave_builder.c` — R/W conflict grouping (~150 LoC)
-- `dispatcher.c` — enki dispatch + wave barrier + defer flush (~120 LoC)
+- `dispatcher.c` — enki dispatch + wave barrier + defer flush; builds `ke_system_ctx` per callback (~120 LoC)
 - `phase_loop.c` — phase orchestration + fixed-timestep accumulator (~180 LoC)
 - `defer_queue.c` — per-wave command queue applied through `ke_ecs*` (~150 LoC)
 - `timestep.c` — Glenn Fiedler accumulator (~50 LoC)
+- **Migrate the execute signature** `(ke_runtime*, void*, float)` → `(ke_system_ctx*, void*, float)` across runtime headers + C# binding + existing tests/example
 
 Tests:
 - Wave builder: synthetic system sets with known conflict patterns → expected wave layout
@@ -738,6 +741,7 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 - [x] §3.4 factory signature documented — runtime accepts injected `ke_ecs*`; storage plugin (`KernelEngine.Ecs.Flecs`) is a separate factory
 - [x] §8 settled — Opção D (our scheduler, flecs storage-only with `FLECS_PIPELINE` off); evaluation of A/B/C/D recorded
 - [x] §13 alternatives revised — A/B/C rejected with explicit reasons; EnTT/gaia-ecs evaluated and parked as fallback
+- [x] §15 game script safety model locked — `ref struct View` (C#) + `ke_system_ctx` (universal C ABI) + 3-layer AOT enforcement; native/dynamic-language paths covered via debug-checked door; `ke_script_component` reshape spec'd
 - [x] R2.5a — flecs 4.1.5 upgrade (commit `df48365`)
 - [ ] **R2.5b — Plugin split**: move flecs helpers to `src/c/ecs/flecs/`; create `src/c/runtime/` for our scheduler; rebuild flecs CMake target with pipeline addons stripped; rewrite headers; split C# projects (`KernelEngine.Runtime` + `KernelEngine.Ecs.Flecs`)
 - [ ] **R2.5c — Scheduler core**: wave builder, dispatcher, phase loop, defer queue, fixed timestep accumulator; unit + integration tests
@@ -882,3 +886,101 @@ Beyond the analyzer (§15.5), the framework also ships an MSBuild `.targets` fil
 Plus a runtime sanity check at engine init that throws `EngineConfigurationException` if `RuntimeFeature.IsDynamicCodeSupported` is true in release config — catches escapes from someone who bypassed both the analyzer and the MSBuild target.
 
 Three layers: analyzer (IDE-time), MSBuild (build-time), runtime (startup). Each layer is independent; bypassing all three would require active malice.
+
+### 15.8 Native + dynamic-language safety — `ke_system_ctx` at the C ABI
+
+§15.1-15.7 cover the C# script layer. The same physical safety must hold for every other consumer of `ke_runtime`: native plugins (C/C++), Lua scripts, Python bindings, future Rust bindings, and the legacy `ke_script_component` callback path. The mechanism is the same — **a single API doorway to component memory, checked at the doorway** — only the per-language sugar above it differs.
+
+The doorway is `ke_system_ctx*`. Inside a system callback, `ke_system_ctx*` is the **only** way to read or mutate component state. Every other handle to `ke_ecs*` is opaque to the system body.
+
+```c
+typedef struct ke_system_ctx ke_system_ctx;  // opaque
+
+// Read access — debug build asserts cid is in ctx's declared reads (or writes).
+const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity_t e);
+
+// Write access — debug build asserts cid is in ctx's declared writes.
+void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity_t e);
+
+// Query — same access checks, applied to every cid in the list.
+ke_query_iter ke_system_ctx_query(ke_system_ctx *ctx,
+                                  const ke_component_id *cids,
+                                  uint32_t                count);
+
+// Deferred mutations — enqueued, applied at the next wave barrier.
+ke_entity_t ke_system_ctx_spawn  (ke_system_ctx *ctx);
+void        ke_system_ctx_attach (ke_system_ctx *ctx, ke_entity_t e, ke_component_id cid, const void *data);
+void        ke_system_ctx_detach (ke_system_ctx *ctx, ke_entity_t e, ke_component_id cid);
+void        ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity_t e);
+
+// Resources — same access checks against declared resource set.
+void *ke_system_ctx_resource(ke_system_ctx *ctx, ke_resource_handle h);
+```
+
+**System callback signature** (replaces the earlier `(ke_runtime*, void*, float)` shape from the R1 spike):
+
+```c
+typedef void (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt);
+```
+
+The ctx is **stack-allocated by the scheduler** before invoking the callback, lives only for the duration of that one call, and is destroyed when the callback returns. Storing the ctx pointer in a global / field / closure is undefined behavior — in debug builds the scheduler tags ctx instances with a sentinel and asserts a fresh sentinel on every API call, catching stale-pointer use.
+
+**Debug check** (zero overhead in release):
+
+```c
+void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity_t e) {
+#ifndef NDEBUG
+    if (!access_list_contains_write(ctx->writes, ctx->write_count, cid)) {
+        ke_logger_error(ctx->logger,
+            "system '%s' accessed component %u as MUT but did not declare write access. "
+            "Add { .cid = %u, .access = KE_ACCESS_WRITE } to ke_system_params.access_list.",
+            ctx->system_name, cid, cid);
+        ke_debug_break();
+    }
+#endif
+    return ke_ecs_get_mut(ctx->ecs, e, cid);
+}
+```
+
+In release, the check is elided by the preprocessor; the function inlines to a direct `ke_ecs_get_mut` call. **Zero runtime cost in shipping binaries.**
+
+#### Per-language enforcement matrix
+
+| Caller | Compile-time guarantee | Runtime check (debug) |
+|---|---|---|
+| **C# game script** (Node, NodeBehavior) | full — `ref struct View` + analyzer (§15.1, §15.5) | redundant but harmless |
+| **C# engine code** (Framework internals) | none | check fires |
+| **Native plugin** (engine dev writing C/C++) | none — engine devs are trusted | check fires |
+| **Lua / Python / dynamic binding** | none | check fires |
+| **Native script** (`ke_script_component`) | none | check fires (§15.9) |
+
+The safety lives in the API, not in the language. Languages with more expressive type systems (C# `ref struct`) add **compile-time enforcement** on top — bonus, not prerequisite. Languages without (C, Lua, Python) get **runtime enforcement in debug** — sufficient because the API is the only door, and the door checks.
+
+### 15.9 `ke_script_component` reshape
+
+Today's `ke_script_component` carries function-pointer callbacks that receive only `ke_entity_t` and have no path to component state except via globals (`ke_ecs* g_ecs;`) or implementation-private wrappers — the C# Node bridge currently does the latter. This is the same hole §15.1 closes for C#, replayed at the C kernel level.
+
+**New shape**:
+
+```c
+typedef struct ke_script_component {
+    bool started;
+
+    void (*on_start)(ke_system_ctx *ctx, ke_entity_t entity);
+    void (*on_update)(ke_system_ctx *ctx, ke_entity_t entity, float dt);
+
+    // Declared access — read by the scheduler when building the ctx for this system.
+    const ke_component_access *access_list;
+    uint32_t                   access_count;
+    const ke_resource_handle  *resource_reads;
+    uint32_t                   resource_read_count;
+    const ke_resource_handle  *resource_writes;
+    uint32_t                   resource_write_count;
+} ke_script_component;
+```
+
+The internal `ScriptSystem` (engine-provided, walks all entities with `ke_script_component` each tick) builds one ctx per script callback before invocation. The ctx inherits the script's declared `access_list`, so the same debug-time checks apply uniformly to scripted entities.
+
+**Default for scripts that don't declare access**: `exclusive = true` flag on the script component. Scheduler treats the ScriptSystem as a single wave entry that conflicts with everything — runs alone, safe by default. Devs (or codegen) populate the access lists when they want their scripts to parallelize with engine systems.
+
+**C# `View` layered over native ctx**: the `ref struct View` is the C# wrapper around `ke_system_ctx*`. Every `view.Transform.Position = ...` lowers to `ke_system_ctx_get_mut(ctx, CID_TRANSFORM, this.Entity)->Position = ...` underneath. The ref struct adds compile-time enforcement; the underlying call still goes through the debug-checked door.
