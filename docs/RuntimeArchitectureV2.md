@@ -747,4 +747,138 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 - [ ] **R6 — Examples 02-15 migrated incrementally**
 - [ ] **R7 — `Application.cs` deletion** (after every consumer migrated)
 
-**This doc is the contract.** §3 vtable + Module/System/Phase shape are locked; §8 doctrine pivoted to Opção D after the harmonia/singleton evaluation and is now the current contract. Impl drift away from any locked section is a bug in the impl, not in the doc.
+**This doc is the contract.** §3 vtable + Module/System/Phase shape are locked; §8 doctrine pivoted to Opção D after the harmonia/singleton evaluation and is now the current contract. §15 game script safety model is locked at design level; impl evolves manually-first → codegen-second per §15.6. Impl drift away from any locked section is a bug in the impl, not in the doc.
+
+---
+
+## 15. Game script safety model — NodeBehavior + ref struct View + analyzer-enforced funnel
+
+The script layer (Node subclasses + NodeBehaviors written by game devs) is **the** consumer of the runtime's parallel scheduling. For the scheduler to auto-parallelize scripts safely, the static analyzer must be able to determine the exact R/W set of every script callback. That guarantee is only complete if reflection, unsafe pointer munging, and runtime-typed component access are physically banned in script code. This section locks the doctrine.
+
+### 15.1 The funnel — `ref struct View`
+
+All component / resource access in script code goes through a **`ref struct View`** passed as a parameter to script callbacks. Because `ref struct` cannot:
+- Be a field of any class or struct
+- Be captured by a lambda or local function
+- Cross an `await` or `yield` boundary
+- Be boxed (assigned to `object`)
+- Escape the stack frame in any form
+
+…the C# compiler **physically enforces** that the access handle never reaches code the analyzer hasn't seen. No discipline required — the build fails.
+
+```csharp
+public class Paddle : Node {
+    public override void OnUpdate(float dt, View view) {
+        view.Velocity.X = view.Input.GetAxis("Move") * 5f;
+        view.Transform.Position.Y += view.Velocity.Y * dt;
+    }
+}
+```
+
+The View is generated per-class by the codegen (§15.6) — exposes only the components/resources declared by the class via `[ComponentAccess<T>]` attributes (or inferred by the analyzer).
+
+### 15.2 Banned APIs in script code
+
+The analyzer rejects (severity per §15.5):
+- `System.Reflection.*` (including `Type.GetField`, `GetCustomAttribute`, etc.)
+- `unsafe` keyword
+- `[DllImport]` / P/Invoke
+- `dynamic` keyword
+- Dynamic-ID overloads of ECS API (only generic methods like `GetComponent<T>()` allowed; never `GetComponent(typeId)`)
+- Open-generic recursive patterns the analyzer can't monomorphize
+
+These are not enforced on engine/framework code — only on assemblies marked as script code (e.g. via `[assembly: KernelEngineScriptAssembly]`).
+
+### 15.3 The `NodeBehavior` pattern — replacing capability methods
+
+Earlier drafts proposed framework-provided "capability methods" (`view.MoveOverTime`, `view.FlashColor`, etc.). Rejected — ad-infinitum framework responsibility, ticket-treadmill maintenance.
+
+**The doctrine**: the framework ships ONE syntactic surface for "behavior with state that ticks over time" — `NodeBehavior`. Codegen transforms it into component + system invisibly. Devs write game-specific behaviors infinitely without ever typing `[Component]` or `[System]`.
+
+```csharp
+public partial class JumpEffect : NodeBehavior {
+    public float TimeLeft;
+    public Vector3 Velocity;
+    
+    public void Run(View view, float dt) {
+        TimeLeft -= dt;
+        view.Transform.Position += Velocity * dt;
+        if (TimeLeft <= 0) Finish();
+    }
+}
+
+// Usage in any Node:
+view.Attach(new JumpEffect { TimeLeft = 0.3f, Velocity = new(0, 5, 0) });
+```
+
+Codegen emits:
+- A POD component (`JumpEffect_Data`) holding the public fields
+- A system (`JumpEffect_Tick`) querying all entities with that component and invoking `Run`
+- `View.Attach<JumpEffect>(...)` / `View.Detach<JumpEffect>()` extensions
+- The R/W metadata for the system, inferred from `Run`'s body via §15.4
+
+Framework ships: `NodeBehavior` base class (~30 LoC) + the codegen + 3 canonical examples (`Timer`, `Tween`, `Delay`) in the Reference docs. Community/games extend the pattern endlessly — framework code doesn't grow.
+
+### 15.4 R/W inference from script bodies
+
+The analyzer scans the body of every `OnUpdate(float, View)` and every `NodeBehavior.Run(View, float)`. For each method, it identifies every component/resource access through the View parameter and aggregates into reads/writes sets.
+
+Inferable confidently (all cases):
+- `view.GetComponent<T>()` / `view.GetMut<T>()` → read/write T
+- `view.Query<T>()` / `view.QueryMut<T>()` → read/write T (across entities)
+- Generated property accesses on the View → component access (View is a typed surface)
+- Resource access via `view.Resource<T>()` → read T resource
+- Branches and loops: union of all reachable branches (conservative but correct)
+- Calls into other analyzed methods: trace into callee, union into caller's set
+- Monomorphized generic calls: specialize per call site
+
+Fall back to **exclusive system** (no parallelism) when the analyzer can't prove safety:
+- Open-generic call sites with no concrete instantiation in scope
+- (No other cases — §15.2 bans the remaining holes)
+
+The analyzer never produces a false-positive parallel marking. The funnel guarantees that what the analyzer doesn't see cannot exist.
+
+### 15.5 Severity-adjustable enforcement — Roslyn analyzer that reads MSBuild
+
+The analyzer reads the consuming project's `<PublishAot>` MSBuild property via `AnalyzerConfigOptionsProvider.GlobalOptions.TryGetValue("build_property.PublishAot", ...)` at compilation start. Severity flips:
+
+- **`PublishAot != "true"` (debug-mode JIT)**: violations of §15.2 emit **warning** (yellow squiggle in IDE). Build passes. Dev iterating gets immediate feedback without the AOT slowdown.
+- **`PublishAot == "true"` (release-mode AOT)**: same violations emit **error** (red squiggle). Build fails.
+
+Escape hatch (debug-only): `<KernelEngineAllowJit>true</KernelEngineAllowJit>` in csproj suppresses the JIT warnings entirely for devs who know what they're doing. Not available in release configuration.
+
+### 15.6 Implementation order — manual first, codegen later
+
+The doctrine is locked at design level; the impl ships in two phases to validate the concept end-to-end before paying the codegen cost.
+
+**Phase 1 — manual surface (validates the runtime + ECS path)**:
+
+- `NodeBehavior` base class exists
+- Devs write per-behavior **`partial`** class that declares the `_Data` component, the `_Tick` system, and the `View` extension methods by hand
+- Mechanical boilerplate (~30-50 LoC per behavior) but exercises every layer of the funnel and proves the parallelization works
+- One or two examples in the test suite exercise this manually
+
+**Phase 2 — codegen (eliminates the boilerplate)**:
+
+- Roslyn source generator + analyzer ship
+- The manual classes from Phase 1 get their boilerplate deleted; codegen takes over
+- Analyzer severity-flipping per §15.5 enabled
+- Tests already exist (from Phase 1) — codegen output must match manual hand-rolled output
+
+Phase 2 is **a single multi-session focused effort** (estimated 6-10 sessions for production-quality codegen + analyzer). Worth doing once the runtime + ECS + script funnel are proven to actually parallelize correctly on real workloads.
+
+### 15.7 AOT enforcement at build time (defense in depth)
+
+Beyond the analyzer (§15.5), the framework also ships an MSBuild `.targets` file that fails the build in release configuration without AOT — defense against analyzer-bypass attempts:
+
+```xml
+<Target Name="_KernelEngineEnforceAot" BeforeTargets="Build"
+        Condition="'$(Configuration)' == 'Release'">
+  <Error Condition="'$(PublishAot)' != 'true' AND '$(KernelEngineAllowJit)' != 'true'"
+         Text="KernelEngine release builds require &lt;PublishAot&gt;true&lt;/PublishAot&gt;..." />
+</Target>
+```
+
+Plus a runtime sanity check at engine init that throws `EngineConfigurationException` if `RuntimeFeature.IsDynamicCodeSupported` is true in release config — catches escapes from someone who bypassed both the analyzer and the MSBuild target.
+
+Three layers: analyzer (IDE-time), MSBuild (build-time), runtime (startup). Each layer is independent; bypassing all three would require active malice.
