@@ -282,6 +282,174 @@ TEST_F(RuntimeSpike, DebugCheck_ExclusiveBypassesValidation)
     EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
 }
 
+// ── Wave builder (R/W conflict grouping) ────────────────────────────────────
+//
+// These tests don't need the RuntimeSpike fixture — they exercise the pure
+// wave builder function directly. Easier to isolate algorithmic correctness
+// from runtime state.
+
+namespace wave_test {
+
+ke_runtime_system_params make_system(const ke_component_access *list, uint32_t count, bool exclusive = false)
+{
+    ke_runtime_system_params s{};
+    s.name         = "Synthetic";
+    s.phase        = KE_PHASE_UPDATE;
+    s.access_list  = list;
+    s.access_count = count;
+    s.exclusive    = exclusive;
+    s.execute      = [](ke_system_ctx *, void *, float) {};
+    return s;
+}
+
+}  // namespace wave_test
+
+TEST(WaveBuilder, Empty_NoWaves)
+{
+    uint32_t assignments[4] = {99, 99, 99, 99};
+    uint32_t wave_count = 99;
+    ke_runtime_debug_compute_waves(nullptr, 0, assignments, &wave_count);
+    EXPECT_EQ(wave_count, 0u);
+}
+
+TEST(WaveBuilder, SingleSystem_OneWave)
+{
+    ke_component_access acc[] = {{1u, KE_ACCESS_WRITE}};
+    auto s = wave_test::make_system(acc, 1);
+
+    uint32_t assignments[1] = {99};
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(&s, 1, assignments, &wave_count);
+
+    EXPECT_EQ(wave_count, 1u);
+    EXPECT_EQ(assignments[0], 0u);
+}
+
+TEST(WaveBuilder, DisjointWrites_SameWave)
+{
+    ke_component_access a[] = {{1u, KE_ACCESS_WRITE}};
+    ke_component_access b[] = {{2u, KE_ACCESS_WRITE}};
+    ke_runtime_system_params sys[] = {
+        wave_test::make_system(a, 1),
+        wave_test::make_system(b, 1),
+    };
+
+    uint32_t assignments[2] = {99, 99};
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(sys, 2, assignments, &wave_count);
+
+    EXPECT_EQ(wave_count, 1u);
+    EXPECT_EQ(assignments[0], 0u);
+    EXPECT_EQ(assignments[1], 0u);
+}
+
+TEST(WaveBuilder, WriteWriteSameCid_DistinctWaves)
+{
+    ke_component_access a[] = {{1u, KE_ACCESS_WRITE}};
+    ke_component_access b[] = {{1u, KE_ACCESS_WRITE}};
+    ke_runtime_system_params sys[] = {
+        wave_test::make_system(a, 1),
+        wave_test::make_system(b, 1),
+    };
+
+    uint32_t assignments[2] = {99, 99};
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(sys, 2, assignments, &wave_count);
+
+    EXPECT_EQ(wave_count, 2u);
+    EXPECT_EQ(assignments[0], 0u);
+    EXPECT_EQ(assignments[1], 1u);
+}
+
+TEST(WaveBuilder, WriteReadSameCid_DistinctWaves)
+{
+    ke_component_access a[] = {{5u, KE_ACCESS_WRITE}};
+    ke_component_access b[] = {{5u, KE_ACCESS_READ}};
+    ke_runtime_system_params sys[] = {
+        wave_test::make_system(a, 1),
+        wave_test::make_system(b, 1),
+    };
+
+    uint32_t assignments[2] = {99, 99};
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(sys, 2, assignments, &wave_count);
+
+    EXPECT_EQ(wave_count, 2u);
+}
+
+TEST(WaveBuilder, ReadReadSameCid_SameWave)
+{
+    ke_component_access a[] = {{7u, KE_ACCESS_READ}};
+    ke_component_access b[] = {{7u, KE_ACCESS_READ}};
+    ke_runtime_system_params sys[] = {
+        wave_test::make_system(a, 1),
+        wave_test::make_system(b, 1),
+    };
+
+    uint32_t assignments[2] = {99, 99};
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(sys, 2, assignments, &wave_count);
+
+    EXPECT_EQ(wave_count, 1u);
+    EXPECT_EQ(assignments[0], 0u);
+    EXPECT_EQ(assignments[1], 0u);
+}
+
+TEST(WaveBuilder, ExclusiveSystem_AlwaysAlone)
+{
+    // Three systems, none conflict. Middle one is exclusive → forces split.
+    ke_component_access a[] = {{1u, KE_ACCESS_READ}};
+    ke_component_access b[] = {{2u, KE_ACCESS_READ}};
+    ke_component_access c[] = {{3u, KE_ACCESS_READ}};
+    ke_runtime_system_params sys[] = {
+        wave_test::make_system(a, 1),
+        wave_test::make_system(b, 1, /*exclusive=*/true),
+        wave_test::make_system(c, 1),
+    };
+
+    uint32_t assignments[3] = {99, 99, 99};
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(sys, 3, assignments, &wave_count);
+
+    EXPECT_EQ(wave_count, 3u);
+    EXPECT_EQ(assignments[0], 0u);
+    EXPECT_EQ(assignments[1], 1u);
+    EXPECT_EQ(assignments[2], 2u);
+}
+
+TEST(WaveBuilder, ChainOfConflicts_GreedyGrouping)
+{
+    // A writes T, B reads T → conflict. C writes U (disjoint from A, B) → can
+    // join A's wave (no conflict with A). D reads U → conflicts with C, but C
+    // is in wave 0 now... let's verify the actual greedy behavior.
+    //
+    // Registration order:
+    //   sys[0] A: writes T
+    //   sys[1] B: reads T   → conflicts with A → wave 1
+    //   sys[2] C: writes U  → wave 1 has B (reads T), no conflict → joins wave 1
+    //   sys[3] D: reads U   → conflicts with C in wave 1 → wave 2
+    ke_component_access a[] = {{1u, KE_ACCESS_WRITE}};
+    ke_component_access b[] = {{1u, KE_ACCESS_READ}};
+    ke_component_access c[] = {{2u, KE_ACCESS_WRITE}};
+    ke_component_access d[] = {{2u, KE_ACCESS_READ}};
+    ke_runtime_system_params sys[] = {
+        wave_test::make_system(a, 1),
+        wave_test::make_system(b, 1),
+        wave_test::make_system(c, 1),
+        wave_test::make_system(d, 1),
+    };
+
+    uint32_t assignments[4] = {99, 99, 99, 99};
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(sys, 4, assignments, &wave_count);
+
+    EXPECT_EQ(wave_count, 3u);
+    EXPECT_EQ(assignments[0], 0u);
+    EXPECT_EQ(assignments[1], 1u);
+    EXPECT_EQ(assignments[2], 1u);
+    EXPECT_EQ(assignments[3], 2u);
+}
+
 TEST_F(RuntimeSpike, DebugCheck_ReadAccessAlsoSatisfiesGetCall)
 {
     ke_system_ctx_reset_check_failures();

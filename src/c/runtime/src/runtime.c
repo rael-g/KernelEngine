@@ -77,6 +77,100 @@ void ke_system_ctx_reset_check_failures(void)
 #endif
 }
 
+// ── Wave builder (Bevy-style R/W conflict grouping) ────────────────────────
+//
+// Walks systems in registration order, greedily packing them into the current
+// wave until a conflict forces a barrier. Two systems conflict iff they share
+// at least one component cid where at least one declares WRITE.
+
+static bool systems_conflict(const ke_runtime_system_params *a,
+                              const ke_runtime_system_params *b)
+{
+    for (uint32_t i = 0; i < a->access_count; i++)
+    {
+        ke_component_id  cid_a = a->access_list[i].cid;
+        ke_access        acc_a = a->access_list[i].access;
+        bool             a_writes = (acc_a & KE_ACCESS_WRITE) != 0;
+        for (uint32_t j = 0; j < b->access_count; j++)
+        {
+            if (b->access_list[j].cid != cid_a) continue;
+            bool b_writes = (b->access_list[j].access & KE_ACCESS_WRITE) != 0;
+            if (a_writes || b_writes) return true;  // W/W or W/R conflict
+        }
+    }
+    return false;
+}
+
+void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
+                                     uint32_t                        system_count,
+                                     uint32_t                       *out_wave_assignments,
+                                     uint32_t                       *out_wave_count)
+{
+    if (!out_wave_count) return;
+    *out_wave_count = 0;
+    if (system_count == 0) return;
+    if (!systems || !out_wave_assignments) return;
+
+    uint32_t current_wave = 0;
+    out_wave_assignments[0] = 0;
+
+    // Track which systems belong to the current wave so we can check new
+    // candidates against the whole set (any pair-wise conflict closes the wave).
+    uint32_t wave_start = 0;  // first system index in current wave
+
+    for (uint32_t i = 0; i < system_count; i++)
+    {
+        if (i == 0)
+        {
+            // System 0 lands in wave 0. If it's exclusive, close wave 0 so
+            // the next system starts wave 1.
+            out_wave_assignments[0] = 0;
+            if (systems[0].exclusive)
+            {
+                // Already on its own; nothing else to do — next iteration
+                // will see no compatible wave to join.
+            }
+            continue;
+        }
+
+        bool open_new = false;
+
+        if (systems[i].exclusive)
+        {
+            open_new = true;
+        }
+        else
+        {
+            // Conflict with any system in the current wave?
+            for (uint32_t j = wave_start; j < i; j++)
+            {
+                if (out_wave_assignments[j] != current_wave) continue;
+                if (systems[j].exclusive)
+                {
+                    // Should not happen — exclusive systems sit alone — but
+                    // guard anyway: conflict.
+                    open_new = true;
+                    break;
+                }
+                if (systems_conflict(&systems[i], &systems[j]))
+                {
+                    open_new = true;
+                    break;
+                }
+            }
+        }
+
+        if (open_new)
+        {
+            current_wave++;
+            wave_start = i;
+        }
+        out_wave_assignments[i] = current_wave;
+    }
+
+    *out_wave_count = current_wave + 1;
+}
+
 void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
 {
     if (!ctx || !ctx->ecs) return NULL;
@@ -231,27 +325,55 @@ static ke_result runtime_register_system(ke_runtime                     *self,
     return KE_OK;
 }
 
-// Walk every system whose phase matches and execute it with the given dt.
-// Naïve wave layout for the prototype: each system is its own wave (R/W
-// grouping + parallel dispatch arrive in R2.5c-final wave builder). The
-// per-system ke_system_ctx is rebuilt before each callback so the debug
-// access checks see the right declared access_list / exclusive flag.
+// Prototype limit: per-phase systems are buffered on the stack. 256 systems
+// per phase covers anything sane for the spike; R2.5c-final uses ke_array.
+#define KE_RUNTIME_MAX_SYSTEMS_PER_PHASE 256
+
+// Filter systems by phase, compute wave layout, run wave-by-wave. Execution
+// inside a wave is still serial (no enki yet) — but the wave STRUCTURE is
+// already correct, so swapping the inner loop for enki dispatch in R2.5c-final
+// gives parallelism without refactoring the orchestration.
 static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
 {
+    if (h->state.system_count == 0) return;
+
+    uint32_t phase_indices[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
+    ke_runtime_system_params phase_params[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
+    uint32_t phase_count = 0;
     for (size_t si = 0; si < h->state.system_count; si++)
     {
         registered_system *rs = &h->state.systems[si];
         if (rs->params.phase != phase) continue;
         if (!rs->params.execute) continue;
+        if (phase_count >= KE_RUNTIME_MAX_SYSTEMS_PER_PHASE) break;
+        phase_indices[phase_count] = (uint32_t)si;
+        phase_params[phase_count]  = rs->params;
+        phase_count++;
+    }
+    if (phase_count == 0) return;
 
-        ke_system_ctx ctx;
-        ctx.ecs          = h->state.ecs;
-        ctx.access_list  = rs->params.access_list;
-        ctx.access_count = rs->params.access_count;
-        ctx.exclusive    = rs->params.exclusive;
-        ctx.system_name  = rs->params.name;
+    uint32_t wave_assignments[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
+    uint32_t wave_count = 0;
+    ke_runtime_debug_compute_waves(phase_params, phase_count,
+                                    wave_assignments, &wave_count);
 
-        rs->params.execute(&ctx, rs->params.user_data, dt);
+    for (uint32_t w = 0; w < wave_count; w++)
+    {
+        for (uint32_t k = 0; k < phase_count; k++)
+        {
+            if (wave_assignments[k] != w) continue;
+            registered_system *rs = &h->state.systems[phase_indices[k]];
+
+            ke_system_ctx ctx;
+            ctx.ecs          = h->state.ecs;
+            ctx.access_list  = rs->params.access_list;
+            ctx.access_count = rs->params.access_count;
+            ctx.exclusive    = rs->params.exclusive;
+            ctx.system_name  = rs->params.name;
+
+            rs->params.execute(&ctx, rs->params.user_data, dt);
+        }
+        // R2.5c-final: wave barrier (enki wait_for_wave + defer queue flush).
     }
 }
 

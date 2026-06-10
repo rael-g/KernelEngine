@@ -10,6 +10,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
+#include <kernel_engine/kernel/runtime/runtime.h>
 #include <kernel_engine/kernel/world/ecs.h>
 
 #include <stddef.h>
@@ -39,6 +40,24 @@ KE_API const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke
 /// Resettable via ke_system_ctx_reset_check_failures.
 KE_API uint32_t ke_system_ctx_check_failures(void);
 KE_API void     ke_system_ctx_reset_check_failures(void);
+
+// ── Wave builder (R/W conflict grouping, Bevy-style) ────────────────────────
+
+/// Computes a parallel wave layout for the given systems. Greedy walk in
+/// registration order: each system joins the current wave if its declared
+/// access doesn't conflict with anything already there; otherwise it starts a
+/// new wave. Exclusive systems always sit alone in a wave.
+///
+/// `out_wave_assignments` must point to an array of at least `system_count`
+/// `uint32_t`s. After the call, `out_wave_assignments[i]` holds the wave
+/// index (0-based) for system i. Wave count is written to `*out_wave_count`.
+///
+/// Two systems conflict iff they share at least one component cid where at
+/// least one of them declares WRITE access (write/write or write/read).
+KE_API void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
+                                            uint32_t                        system_count,
+                                            uint32_t                       *out_wave_assignments,
+                                            uint32_t                       *out_wave_count);
 
 /// Single-component query: fills out_entities + out_data + out_count with the
 /// matched packed arrays. Multi-component query + With/Without filters arrive
