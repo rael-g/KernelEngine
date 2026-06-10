@@ -3,10 +3,11 @@
 // image loading pipeline of its choice.
 
 #include <kernel_engine/framework/material_file.h>
-
 #include <toml++/toml.hpp>
-
 #include <cstring>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace
 {
@@ -47,11 +48,13 @@ extern "C" ke_result ke_material_file_parse(const char *path, ke_material_spec *
     out_spec->albedo_path[0] = '\0';
     out_spec->normal_path[0] = '\0';
 
+    if (!fs::exists(path)) return KE_ERROR_NOT_FOUND;
+
     toml::table tbl;
     try {
         tbl = toml::parse_file(path);
     } catch (const toml::parse_error &) {
-        return KE_ERROR_NOT_FOUND;
+        return KE_ERROR_IO;
     }
 
     const auto *mat_tbl = tbl["material"].as_table();
