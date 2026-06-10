@@ -9,7 +9,6 @@
 // Spike-scope state. Real impl grows alongside R2+.
 typedef struct registered_system {
     ke_runtime_system_params params;
-    ecs_entity_t     flecs_entity;
 } registered_system;
 
 typedef struct flecs_runtime_state {
@@ -28,18 +27,6 @@ typedef struct flecs_runtime_handle {
     ke_runtime           api;
     flecs_runtime_state  state;
 } flecs_runtime_handle;
-
-// ── System callback bridge ──────────────────────────────────────────────────
-// flecs invokes ecs_iter_t-shaped callbacks; we translate into our vtable
-// signature (ke_runtime*, user_data, dt).
-
-static void system_trampoline(ecs_iter_t *it)
-{
-    registered_system *rs = (registered_system *)it->ctx;
-    flecs_runtime_handle *h = (flecs_runtime_handle *)ecs_get_ctx(it->world);
-    if (!h || !rs || !rs->params.execute) return;
-    rs->params.execute(&h->api, rs->params.user_data, it->delta_time);
-}
 
 // ── Vtable impls ────────────────────────────────────────────────────────────
 
@@ -86,30 +73,10 @@ static ke_result flecs_register_system(ke_runtime *self,
     registered_system *rs = &h->state.systems[h->state.system_count++];
     rs->params = *p;
 
-    // Map phase to flecs's built-in phase entities. The spike honors only
-    // Update; richer phase mapping arrives in R2 when FixedUpdate / Extract
-    // get their own flecs pipeline stages.
-    ecs_entity_t flecs_phase = EcsOnUpdate;
-    switch (p->phase) {
-        case KE_PHASE_PRE_UPDATE:  flecs_phase = EcsPreUpdate;  break;
-        case KE_PHASE_UPDATE:      flecs_phase = EcsOnUpdate;   break;
-        case KE_PHASE_POST_UPDATE: flecs_phase = EcsPostUpdate; break;
-        default:                   flecs_phase = EcsOnUpdate;   break;
-    }
-
-    // Compose the system entity in plain C99 (no `ecs_entity()` / `ecs_ids()`
-    // helper macros — flecs ships them but they resolve to compound literals
-    // that clang in our C99 mode rejects). The raw API is unambiguous.
-    // ecs_entity_desc_t::add is a fixed-size in-struct array, written in place.
-    ecs_entity_desc_t edesc = {0};
-    edesc.name   = p->name;
-    edesc.add[0] = ecs_pair(EcsDependsOn, flecs_phase);
-
-    ecs_system_desc_t desc = {0};
-    desc.entity   = ecs_entity_init(h->state.world, &edesc);
-    desc.callback = system_trampoline;
-    desc.ctx      = rs;
-    rs->flecs_entity = ecs_system_init(h->state.world, &desc);
+    // Systems are NOT registered with flecs's pipeline (FLECS_PIPELINE off in
+    // future builds). Our scheduler iterates the catalog and dispatches; flecs
+    // is storage-only. Phase honored in tick(); R/W metadata + parallel waves
+    // arrive with the real scheduler core in R2.5c.
 
     ke_system_id id = ++h->state.next_system_id;
     if (out_id) *out_id = id;
@@ -120,7 +87,29 @@ static ke_result flecs_tick(ke_runtime *self, float dt)
 {
     if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
     flecs_runtime_handle *h = (flecs_runtime_handle *)self->handle;
-    return ecs_progress(h->state.world, dt) ? KE_OK : KE_OK;
+
+    // Transitional sequential scheduler — walks phases in order, runs every
+    // system whose phase matches, no parallelism yet. Replaced by the real
+    // wave-dispatch scheduler in R2.5c. Tests for register/tick/destroy
+    // semantics keep passing through this stub.
+    static const ke_phase phase_order[] = {
+        KE_PHASE_PRE_UPDATE,
+        KE_PHASE_FIXED_UPDATE,
+        KE_PHASE_UPDATE,
+        KE_PHASE_POST_UPDATE,
+        KE_PHASE_EXTRACT,
+    };
+    for (size_t pi = 0; pi < sizeof(phase_order) / sizeof(phase_order[0]); pi++) {
+        ke_phase phase = phase_order[pi];
+        for (size_t si = 0; si < h->state.system_count; si++) {
+            registered_system *rs = &h->state.systems[si];
+            if (rs->params.phase != phase) continue;
+            if (rs->params.execute) {
+                rs->params.execute(self, rs->params.user_data, dt);
+            }
+        }
+    }
+    return KE_OK;
 }
 
 static void flecs_destroy(ke_runtime *self)
@@ -155,9 +144,6 @@ ke_result ke_runtime_flecs_create(ke_allocator *alloc,
         alloc->free(alloc, h);
         return KE_ERROR_NOT_INITIALIZED;
     }
-
-    // Stash the handle on the world so the trampoline can recover the runtime.
-    ecs_set_ctx(h->state.world, h, NULL);
 
     h->api.handle          = h;
     h->api.register_module = flecs_register_module;
