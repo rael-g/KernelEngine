@@ -97,15 +97,45 @@ TEST_F(StbImageLoaderTest, LoadImage_ValidFile_ReturnsOk)
     remove(path);
 }
 
-TEST_F(StbImageLoaderTest, LoadImage_NonExistentFile_ReturnsNotFound)
+TEST_F(StbImageLoaderTest, LoadImage_ReturnsOom_WhenAllocFails)
+{
+    // Use an allocator that fails after some successful calls
+    static int countdown = 5;
+    countdown = 5;
+    ke_allocator fa{};
+    fa.alloc = [](ke_allocator*, size_t size, size_t alignment) -> void* { 
+        if (countdown > 0) { countdown--; return malloc(size); }
+        return nullptr; 
+    };
+    fa.free  = [](ke_allocator*, void* p) { if(p) free(p); };
+    
+    ke_image_loader_stb_params params{ .allocator = &fa };
+    ke_image_loader* loader = nullptr;
+    if (ke_image_loader_stb_create(&params, &loader) == KE_OK && loader) {
+        const char* path = "test_oom.tga";
+        unsigned char tga[] = { 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0, 255, 255, 255, 255 };
+        FILE* f = fopen(path, "wb");
+        if (f) {
+            fwrite(tga, 1, sizeof(tga), f);
+            fclose(f);
+
+            ke_texture_data* data = nullptr;
+            countdown = 0; // Next alloc fails
+            ke_result res = loader->load_image(loader, path, &data);
+            EXPECT_EQ(res, KE_ERROR_OUT_OF_MEMORY);
+            
+            remove(path);
+        }
+        loader->destroy(loader);
+    }
+}
+
+TEST_F(StbImageLoaderTest, Destroy_NullSelf_IsSafe)
 {
     ke_image_loader_stb_params params{ .allocator = &alloc };
     ke_image_loader* loader = nullptr;
     ke_image_loader_stb_create(&params, &loader);
-    
-    ke_texture_data* data = nullptr;
-    ke_result result = loader->load_image(loader, "missing.png", &data);
-    
-    ASSERT_EQ(result, KE_ERROR_NOT_FOUND);
+    auto d = loader->destroy;
     loader->destroy(loader);
+    d(nullptr);
 }

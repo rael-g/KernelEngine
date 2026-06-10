@@ -52,5 +52,6 @@ add_subdirectory(examples/c/04_shader_compile)
 enable_testing()
 add_subdirectory(tests/c/kernel)
 add_subdirectory(tests/cpp)
+add_subdirectory(tests/integration/cpp)
 
 include(cmake/CodeQuality.cmake)

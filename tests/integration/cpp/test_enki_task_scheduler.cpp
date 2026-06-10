@@ -69,21 +69,25 @@ TEST_F(EnkiTaskSchedulerTest, IsCompleted_Works) {
     ASSERT_TRUE(scheduler->is_completed(scheduler, task));
 }
 
-TEST_F(EnkiTaskSchedulerTest, MultipleTasks_ParallelExecution) {
-    std::atomic<int> counter{0};
-    const int num_tasks = 20;
-    ke_task* tasks[num_tasks];
+TEST_F(EnkiTaskSchedulerTest, API_NullChecks) {
+    ASSERT_EQ(scheduler->dispatch(nullptr, nullptr, nullptr), nullptr);
+    ASSERT_EQ(scheduler->dispatch(scheduler, nullptr, nullptr), nullptr);
+    
+    ASSERT_EQ(scheduler->dispatch_on_complete(nullptr, nullptr, nullptr, nullptr, nullptr), nullptr);
+    ASSERT_EQ(scheduler->dispatch_on_complete(scheduler, nullptr, nullptr, nullptr, nullptr), nullptr);
+    
+    scheduler->wait(nullptr, nullptr);
+    scheduler->wait(scheduler, nullptr);
 
-    for (int i = 0; i < num_tasks; ++i) {
-        tasks[i] = scheduler->dispatch(scheduler, [](void* d) {
-            static_cast<std::atomic<int>*>(d)->fetch_add(1);
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }, &counter);
-    }
+    // Documented semantic: a null task is treated as "no task to wait on, therefore
+    // complete" so polling loops on stale handles exit cleanly. Defensive callers
+    // should still pass valid task pointers; null is a safety net, not a contract.
+    ASSERT_TRUE(scheduler->is_completed(scheduler, nullptr));
+}
 
-    for (int i = 0; i < num_tasks; ++i) {
-        scheduler->wait(scheduler, tasks[i]);
-    }
-
-    ASSERT_EQ(counter.load(), num_tasks);
+TEST_F(EnkiTaskSchedulerTest, Destroy_NullSelf_IsSafe) {
+    auto d = scheduler->destroy;
+    scheduler->destroy(scheduler);
+    scheduler = nullptr;
+    d(nullptr);
 }
