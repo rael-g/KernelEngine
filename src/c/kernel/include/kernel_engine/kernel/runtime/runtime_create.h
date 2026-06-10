@@ -14,7 +14,15 @@ extern "C" {
 #endif
 
 typedef struct ke_runtime_params {
-    int reserved;  // empty for the spike; expanded with phase config + logger in R2.5c
+    // Fixed timestep for KE_PHASE_FIXED_UPDATE. The runtime accumulates real
+    // elapsed dt across tick() calls and runs FIXED_UPDATE 0..N times per tick
+    // to catch up at this constant rate. Default (when 0) = 1/60s.
+    float fixed_dt;
+
+    // Maximum accumulator value to prevent "spiral of death" when frame time
+    // exceeds catch-up budget. Default (when 0) = 0.25s — 15 fixed steps at 1/60.
+    // Excess dt above this cap is discarded silently.
+    float fixed_dt_max_accum;
 } ke_runtime_params;
 
 KE_API ke_result ke_runtime_create(ke_allocator           *alloc,

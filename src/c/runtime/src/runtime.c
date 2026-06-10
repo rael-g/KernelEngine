@@ -100,6 +100,13 @@ typedef struct runtime_state
 
     uint64_t next_module_id;
     uint64_t next_system_id;
+
+    // Fixed-timestep accumulator (Glenn Fiedler "Fix Your Timestep!"). dt
+    // collected from tick() builds up here; FIXED_UPDATE drains it at fixed_dt
+    // per pass until below threshold.
+    float fixed_dt;
+    float fixed_dt_max_accum;
+    float fixed_accumulator;
 } runtime_state;
 
 typedef struct runtime_handle
@@ -156,38 +163,55 @@ static ke_result runtime_register_system(ke_runtime                     *self,
     return KE_OK;
 }
 
-static ke_result runtime_tick(ke_runtime *self, float dt)
+// Walk every system whose phase matches and execute it with the given dt.
+// Naïve wave layout for the prototype: each system is its own wave (R/W
+// grouping + parallel dispatch arrive in R2.5c-final wave builder).
+static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
 {
-    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-    runtime_handle *h = (runtime_handle *)self->handle;
-
-    // Naïve wave layout for the prototype: each system is its own wave (i.e.
-    // exclusive). Wave builder + R/W grouping arrive in R2.5c-final.
-    // ctx lives on this stack frame — the funnel rule is honored because the
-    // ctx pointer never escapes the runtime_tick scope.
     ke_system_ctx ctx;
     ctx.ecs = h->state.ecs;
 
-    static const ke_phase phase_order[] = {
-        KE_PHASE_PRE_UPDATE,
-        KE_PHASE_FIXED_UPDATE,
-        KE_PHASE_UPDATE,
-        KE_PHASE_POST_UPDATE,
-        KE_PHASE_EXTRACT,
-    };
-    for (size_t pi = 0; pi < sizeof(phase_order) / sizeof(phase_order[0]); pi++)
+    for (size_t si = 0; si < h->state.system_count; si++)
     {
-        ke_phase phase = phase_order[pi];
-        for (size_t si = 0; si < h->state.system_count; si++)
+        registered_system *rs = &h->state.systems[si];
+        if (rs->params.phase != phase) continue;
+        if (rs->params.execute)
         {
-            registered_system *rs = &h->state.systems[si];
-            if (rs->params.phase != phase) continue;
-            if (rs->params.execute)
-            {
-                rs->params.execute(&ctx, rs->params.user_data, dt);
-            }
+            rs->params.execute(&ctx, rs->params.user_data, dt);
         }
     }
+}
+
+static ke_result runtime_tick(ke_runtime *self, float dt)
+{
+    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    if (dt < 0.0f) return KE_ERROR_INVALID_ARGUMENT;
+    runtime_handle *h = (runtime_handle *)self->handle;
+
+    runtime_run_phase(h, KE_PHASE_PRE_UPDATE, dt);
+
+    // Fixed-timestep accumulator (Glenn Fiedler). Build up the accumulator
+    // from real elapsed dt, drain it at fixed_dt per pass. The dt the system
+    // sees is always the stable fixed_dt — physics integrators stay sane even
+    // when the host frame rate jitters.
+    h->state.fixed_accumulator += dt;
+    if (h->state.fixed_accumulator > h->state.fixed_dt_max_accum)
+    {
+        // Spiral-of-death guard: cap the accumulator at the configured max.
+        // Excess time is discarded — simulation falls behind wall clock by
+        // intention rather than freezing the host with a runaway catch-up loop.
+        h->state.fixed_accumulator = h->state.fixed_dt_max_accum;
+    }
+    while (h->state.fixed_accumulator >= h->state.fixed_dt)
+    {
+        runtime_run_phase(h, KE_PHASE_FIXED_UPDATE, h->state.fixed_dt);
+        h->state.fixed_accumulator -= h->state.fixed_dt;
+    }
+
+    runtime_run_phase(h, KE_PHASE_UPDATE,      dt);
+    runtime_run_phase(h, KE_PHASE_POST_UPDATE, dt);
+    runtime_run_phase(h, KE_PHASE_EXTRACT,     dt);
+
     return KE_OK;
 }
 
@@ -210,7 +234,6 @@ ke_result ke_runtime_create(ke_allocator            *alloc,
                              const ke_runtime_params *params,
                              ke_runtime             **out_runtime)
 {
-    (void)params;
     if (!alloc || !ecs || !out_runtime) return KE_ERROR_INVALID_ARGUMENT;
 
     runtime_handle *h = (runtime_handle *)alloc->alloc(
@@ -220,6 +243,12 @@ ke_result ke_runtime_create(ke_allocator            *alloc,
 
     h->state.allocator = alloc;
     h->state.ecs       = ecs;
+
+    // Fixed-timestep config: caller-provided or default. 0 in either field
+    // means "use the default" so {0} params get a sane 60Hz physics tick out
+    // of the box.
+    h->state.fixed_dt           = (params && params->fixed_dt           > 0.0f) ? params->fixed_dt           : (1.0f / 60.0f);
+    h->state.fixed_dt_max_accum = (params && params->fixed_dt_max_accum > 0.0f) ? params->fixed_dt_max_accum : 0.25f;
 
     h->api.handle          = h;
     h->api.register_module = runtime_register_module;

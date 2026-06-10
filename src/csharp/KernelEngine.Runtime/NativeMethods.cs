@@ -20,9 +20,11 @@ internal static unsafe partial class NativeMethods
 
 /// <summary>
 /// Layout-compatible mirror of the C <c>ke_runtime_params</c> struct.
-/// One <c>int</c> reserved field; expanded with phase config + logger in R2.5c.
+/// Both fields default to zero → runtime uses the C defaults (1/60s timestep,
+/// 0.25s max accumulator).
 /// </summary>
 internal struct ke_runtime_params
 {
-    public int reserved;
+    public float fixed_dt;
+    public float fixed_dt_max_accum;
 }

@@ -122,3 +122,97 @@ TEST_F(RuntimeSpike, Create_RejectsNullEcs)
               KE_ERROR_INVALID_ARGUMENT);
     EXPECT_EQ(rt, nullptr);
 }
+
+TEST_F(RuntimeSpike, FixedUpdate_AccumulatesAtFixedRate)
+{
+    std::atomic<int> fixed_ticks{0};
+    std::atomic<int> update_ticks{0};
+
+    ke_runtime_system_params fx{};
+    fx.name    = "FixedCounter";
+    fx.phase   = KE_PHASE_FIXED_UPDATE;
+    fx.user_data = &fixed_ticks;
+    fx.execute = [](ke_system_ctx *, void *ud, float) {
+        static_cast<std::atomic<int> *>(ud)->fetch_add(1);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+
+    ke_runtime_system_params up{};
+    up.name    = "UpdateCounter";
+    up.phase   = KE_PHASE_UPDATE;
+    up.user_data = &update_ticks;
+    up.execute = [](ke_system_ctx *, void *ud, float) {
+        static_cast<std::atomic<int> *>(ud)->fetch_add(1);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &up, nullptr), KE_OK);
+
+    // Default fixed_dt = 1/60. Tick at 1/60 ten times: each tick contributes
+    // exactly one fixed step.
+    for (int i = 0; i < 10; ++i)
+        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    EXPECT_EQ(update_ticks.load(), 10);
+    EXPECT_EQ(fixed_ticks.load(), 10);
+}
+
+TEST_F(RuntimeSpike, FixedUpdate_LargeFrame_CatchesUp)
+{
+    std::atomic<int> fixed_ticks{0};
+    ke_runtime_system_params fx{};
+    fx.name    = "FixedCounter";
+    fx.phase   = KE_PHASE_FIXED_UPDATE;
+    fx.user_data = &fixed_ticks;
+    fx.execute = [](ke_system_ctx *, void *ud, float) {
+        static_cast<std::atomic<int> *>(ud)->fetch_add(1);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+
+    // Default fixed_dt = 1/60. One tick of 5/60s feeds 5 fixed steps.
+    ASSERT_EQ(runtime->tick(runtime, 5.0f / 60.0f), KE_OK);
+    EXPECT_EQ(fixed_ticks.load(), 5);
+}
+
+TEST_F(RuntimeSpike, FixedUpdate_SmallFrame_NoStep)
+{
+    std::atomic<int> fixed_ticks{0};
+    ke_runtime_system_params fx{};
+    fx.name    = "FixedCounter";
+    fx.phase   = KE_PHASE_FIXED_UPDATE;
+    fx.user_data = &fixed_ticks;
+    fx.execute = [](ke_system_ctx *, void *ud, float) {
+        static_cast<std::atomic<int> *>(ud)->fetch_add(1);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+
+    // Tick at 1/120 → below fixed_dt threshold. After one tick, accumulator
+    // holds (1/120) and no fixed step fires. Two ticks brings accumulator to
+    // 2/120 = 1/60 → one fixed step fires.
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 120.0f), KE_OK);
+    EXPECT_EQ(fixed_ticks.load(), 0);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 120.0f), KE_OK);
+    EXPECT_EQ(fixed_ticks.load(), 1);
+}
+
+TEST_F(RuntimeSpike, FixedUpdate_SpiralOfDeathGuarded)
+{
+    std::atomic<int> fixed_ticks{0};
+    ke_runtime_system_params fx{};
+    fx.name    = "FixedCounter";
+    fx.phase   = KE_PHASE_FIXED_UPDATE;
+    fx.user_data = &fixed_ticks;
+    fx.execute = [](ke_system_ctx *, void *ud, float) {
+        static_cast<std::atomic<int> *>(ud)->fetch_add(1);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+
+    // Default max accum = 0.25s = 15 fixed steps at 1/60. A 1.0s pause must
+    // be capped: fixed_ticks should NOT be 60.
+    ASSERT_EQ(runtime->tick(runtime, 1.0f), KE_OK);
+    EXPECT_LE(fixed_ticks.load(), 15);
+    EXPECT_GE(fixed_ticks.load(), 14);  // floor(0.25 / (1/60))
+}
+
+TEST_F(RuntimeSpike, Tick_RejectsNegativeDt)
+{
+    EXPECT_EQ(runtime->tick(runtime, -1.0f), KE_ERROR_INVALID_ARGUMENT);
+}
