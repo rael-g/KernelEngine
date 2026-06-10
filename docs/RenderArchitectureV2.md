@@ -681,7 +681,61 @@ Discussion, revision, until both sides agree.
 
 ---
 
-## 11. What V2 explicitly does NOT change (non-goals)
+## 11. Culling architecture — render-graph passes, not a dedicated pipeline
+
+Culling is **not** a hardcoded pipeline stage. It's a **set of optional render-graph passes** that consume the full extracted entity list and produce filtered lists for downstream draws. Game composes the culling chain that fits its scene. Engine ships the two basic flavors; everything else is opt-in or user-authored.
+
+### 11.1 The flow
+
+```
+EXTRACT PHASE (sim-side):
+    publish ALL potentially-renderable entities to frame packet —
+    no filtering. (mesh handle, material handle, world transform,
+    world AABB, lod_group_id, layer_mask, ...)
+
+RENDER GRAPH (passes, composable):
+    ┌─ FrustumCullPass          (engine built-in)
+    │      input:  full entity list + camera frustum
+    │      output: visible_list_a
+    │      first impl: CPU SIMD on render thread (~5-10 ns / entity)
+    │      G7+ impl: compute shader variant for huge scenes
+    │
+    ├─ OcclusionCullPass        (engine built-in — Hi-Z based)
+    │      input:  visible_list_a + Hi-Z mipchain (from prev frame depth)
+    │      output: visible_list_b
+    │      compute shader; ~50 µs for ~100K entities on a mid GPU
+    │
+    ├─ [USER PASSES — opt-in]
+    │      PortalCullPass, RoomCullPass, custom LOD selector, ...
+    │      User registers between built-ins or replaces them entirely.
+    │
+    └─ DrawPass(es)             (consume final visible list)
+```
+
+### 11.2 Why this matters architecturally
+
+1. **Composable** — simple game registers only `FrustumCullPass`. Open-world game adds `OcclusionCullPass`. Level-based game with line-of-sight tricks (Quake-style PVS, portal culling) adds its own pass between built-ins and Draw. **Engine doesn't pick the combination**; render graph wires whatever's registered.
+
+2. **Hi-Z is shared infrastructure** — the depth pyramid that `OcclusionCullPass` consumes is the same pyramid that TAA, SSAO, SSR consume. Built once at the start of the frame's depth-aware passes; cached for the rest. Pass authoring sees it as a graph dependency, not a special case.
+
+3. **GPU-driven culling is the same architecture, just bigger** — when `[F.RC1]` GPU instancing lands, `OcclusionCullPass` evolves: instead of emitting a CPU list, it emits an **indirect draw buffer** that downstream draws consume. Same node in the render graph; different output buffer kind. No architectural rework.
+
+4. **Mods/users extend without forking** — same doctrine as everything else: layered abstractions + register, never replace. A game-specific cull strategy ships as another plugin's render-graph pass.
+
+### 11.3 What the engine ships
+
+- **`FrustumCullPass`** — AABB-vs-6-planes, CPU SIMD first impl (~50-100 LoC + helpers). Cheap, debuggable, runs on render thread. Compute variant added in G7+ when actually needed (the CPU one is good up to ~10K visible entities).
+- **`OcclusionCullPass`** — Hi-Z + AABB-to-screen reprojection. ~300 LoC + one compute shader. References: Frostbite "Practical Order-Independent Transparency" depth-buffer paper, Ubisoft Anvil GDC slides on Hi-Z occlusion. Both well-documented; we wrap the patterns, not invent them.
+
+### 11.4 What the engine does NOT ship
+
+- **Portal culling, PVS, antiportals, etc.** — game-specific. User implements as their own render-graph pass.
+- **Voxel-based occlusion**, **scene-graph cell culling**, **destructible-aware culling** — same. Plug, don't beg the engine.
+- **Per-light culling** — already covered by clustered forward shading (`[F.RC3]` shipped). Different concern from per-mesh culling discussed here.
+
+---
+
+## 12. What V2 explicitly does NOT change (non-goals)
 
 - **`ke_render` vtable** stays mostly as-is at L7. Modern renderer implements the same vtable; game code calling `renderer->submit_mesh()` doesn't care which renderer is wired.
 - **`Material` / `Mesh` / `Texture` C# wrappers** stay. Refcounting, handle types, etc. preserved.
@@ -691,7 +745,7 @@ Discussion, revision, until both sides agree.
 
 ---
 
-## 12. Open questions (lock during the relevant phase)
+## 13. Open questions (lock during the relevant phase)
 
 1. **wgpu-native vs direct Vulkan** for the first Modern backend impl. Recommendation: wgpu-native; revisit if a capability is missing. Decision deadline: start of G4.
 2. **Disk PSO cache location**: per-user (`~/.cache/kernelengine/`) or per-project (`./build/cache/`)? Probably per-user keyed by project + engine version. Lock during G6.
@@ -703,7 +757,7 @@ Discussion, revision, until both sides agree.
 
 ---
 
-## 13. Alternatives considered
+## 14. Alternatives considered
 
 - **Keep bgfx, refactor in place** — rejected. bgfx's high-level API actively hides the control we need; staying means continuing to lie that the engine uses Vulkan when it uses OpenGL-shaped Vulkan. Refactoring in place fights every example simultaneously.
 - **Switch to The Forge** — was a candidate when we needed "AAA capabilities now". With Modern V2 + wgpu-native, **The Forge is no longer on the table**. wgpu covers PC (Vulkan/D3D12/Metal) + mobile (Vulkan/Metal) + web (WebGPU); the only thing it lacks today is RT pipelines, which we don't need until M5+. When the engine outgrows wgpu (real consumer demands hardware RT, mesh shaders, or capability wgpu doesn't expose), the layered architecture from §2 lets us write our **own** second backend instead of importing an external library — by then the engine is mature, the contracts are stable, and the trade-off of bringing in someone else's render abstraction (Apache 2.0 attribution, larger binary, opinionated state model) costs more than it saves. **The Forge card retired**. Long-term backend evolution stays in-house.
@@ -712,7 +766,7 @@ Discussion, revision, until both sides agree.
 
 ---
 
-## 14. Status & next actions
+## 15. Status & next actions
 
 - [ ] User reviews this doc + `RuntimeArchitectureV2.md` together (they're a pair).
 - [ ] Lock the §4 C ABI signatures. Anything ambiguous gets pinned before G1.
