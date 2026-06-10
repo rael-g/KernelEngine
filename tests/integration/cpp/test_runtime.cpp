@@ -4,8 +4,11 @@
 #include <kernel_engine/kernel/runtime/system_ctx.h>
 #include <kernel_engine/kernel/world/ke_ecs.h>
 #include <kernel_engine/kernel/world/ke_ecs_flecs.h>
+#include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
 
 #include <atomic>
+#include <set>
+#include <thread>
 
 namespace {
 
@@ -38,21 +41,25 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
 // - ke_runtime_create(ecs) builds the scheduler (in-house, sequential for now).
 class RuntimeSpike : public ::testing::Test {
 protected:
-    ke_allocator *allocator = nullptr;
-    ke_ecs       *ecs       = nullptr;
-    ke_runtime   *runtime   = nullptr;
+    ke_allocator      *allocator      = nullptr;
+    ke_task_scheduler *task_scheduler = nullptr;
+    ke_ecs            *ecs            = nullptr;
+    ke_runtime        *runtime        = nullptr;
 
     void SetUp() override
     {
         allocator = ke_allocator_malloc_create();
         ASSERT_NE(allocator, nullptr);
 
+        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler), KE_OK);
+        ASSERT_NE(task_scheduler, nullptr);
+
         ke_ecs_flecs_params ecs_params{};
         ASSERT_EQ(ke_ecs_flecs_create(allocator, &ecs_params, &ecs), KE_OK);
         ASSERT_NE(ecs, nullptr);
 
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(allocator, ecs, &rt_params, &runtime), KE_OK);
+        ASSERT_EQ(ke_runtime_create(allocator, ecs, task_scheduler, &rt_params, &runtime), KE_OK);
         ASSERT_NE(runtime, nullptr);
     }
 
@@ -60,6 +67,7 @@ protected:
     {
         if (runtime) runtime->destroy(runtime);
         if (ecs) ecs->destroy(ecs);
+        if (task_scheduler) task_scheduler->destroy(task_scheduler);
     }
 };
 
@@ -119,9 +127,139 @@ TEST_F(RuntimeSpike, Create_RejectsNullEcs)
 {
     ke_runtime_params rt_params{};
     ke_runtime *rt = nullptr;
-    EXPECT_EQ(ke_runtime_create(allocator, nullptr, &rt_params, &rt),
+    EXPECT_EQ(ke_runtime_create(allocator, nullptr, task_scheduler, &rt_params, &rt),
               KE_ERROR_INVALID_ARGUMENT);
     EXPECT_EQ(rt, nullptr);
+}
+
+TEST_F(RuntimeSpike, Create_RejectsNullTaskScheduler)
+{
+    ke_runtime_params rt_params{};
+    ke_runtime *rt = nullptr;
+    EXPECT_EQ(ke_runtime_create(allocator, ecs, nullptr, &rt_params, &rt),
+              KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(rt, nullptr);
+}
+
+// ── Parallel execution via enki dispatcher ──────────────────────────────────
+
+namespace {
+struct ParallelProbe {
+    std::mutex             mu;
+    std::set<std::thread::id> thread_ids;
+    std::atomic<int>          total_calls{0};
+};
+}
+
+TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
+{
+    // Two systems with completely disjoint access — same wave by the wave
+    // builder, so enki dispatches them concurrently. Each records the thread
+    // id it ran on; the union over many ticks should span multiple workers.
+    ParallelProbe probe;
+
+    ke_component_access acc_a[] = {{1u, KE_ACCESS_WRITE}};
+    ke_component_access acc_b[] = {{2u, KE_ACCESS_WRITE}};
+
+    auto worker = [](ke_system_ctx *, void *ud, float) {
+        auto *p = static_cast<ParallelProbe *>(ud);
+        // A small busy-wait so the two systems overlap in real time. Pure
+        // dispatch without overlap could land on the same worker even with
+        // multiple threads available.
+        auto start = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(5)) { /* spin */ }
+        {
+            std::lock_guard<std::mutex> lk(p->mu);
+            p->thread_ids.insert(std::this_thread::get_id());
+        }
+        p->total_calls.fetch_add(1);
+    };
+
+    ke_runtime_system_params sa{};
+    sa.name         = "SysA";
+    sa.phase        = KE_PHASE_UPDATE;
+    sa.access_list  = acc_a;
+    sa.access_count = 1;
+    sa.user_data    = &probe;
+    sa.execute      = worker;
+    ASSERT_EQ(runtime->register_system(runtime, &sa, nullptr), KE_OK);
+
+    ke_runtime_system_params sb{};
+    sb.name         = "SysB";
+    sb.phase        = KE_PHASE_UPDATE;
+    sb.access_list  = acc_b;
+    sb.access_count = 1;
+    sb.user_data    = &probe;
+    sb.execute      = worker;
+    ASSERT_EQ(runtime->register_system(runtime, &sb, nullptr), KE_OK);
+
+    // 20 ticks * 2 systems = 40 calls. Across these we should observe at
+    // least 2 distinct worker thread ids if dispatch is genuinely parallel.
+    for (int i = 0; i < 20; ++i)
+        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    EXPECT_EQ(probe.total_calls.load(), 40);
+    EXPECT_GE(probe.thread_ids.size(), 2u)
+        << "Expected at least 2 distinct worker threads; saw "
+        << probe.thread_ids.size();
+}
+
+TEST_F(RuntimeSpike, ParallelDispatch_ConflictingSystemsSerialized)
+{
+    // Two systems writing the same component — wave builder splits them into
+    // separate waves, so they run sequentially. Verify execution_order rather
+    // than thread parallelism.
+    std::vector<int> order;
+    std::mutex       mu;
+
+    ke_component_access acc[] = {{42u, KE_ACCESS_WRITE}};
+
+    auto make_tagger = [](ke_runtime_system_params &s, const char *name, int tag,
+                           std::vector<int> *out_order, std::mutex *out_mu,
+                           ke_component_access *acc_list)
+    {
+        s.name         = name;
+        s.phase        = KE_PHASE_UPDATE;
+        s.access_list  = acc_list;
+        s.access_count = 1;
+        static thread_local int                                 g_tag;
+        static thread_local std::vector<int> *                   g_order;
+        static thread_local std::mutex *                          g_mu;
+        g_tag   = tag;
+        g_order = out_order;
+        g_mu    = out_mu;
+    };
+
+    // Use struct-bound state instead of thread_local trickery.
+    struct Tagger { std::vector<int> *order; std::mutex *mu; int tag; };
+    Tagger tag1{&order, &mu, 1};
+    Tagger tag2{&order, &mu, 2};
+
+    auto record = [](ke_system_ctx *, void *ud, float) {
+        auto *t = static_cast<Tagger *>(ud);
+        std::lock_guard<std::mutex> lk(*t->mu);
+        t->order->push_back(t->tag);
+    };
+
+    (void)make_tagger;  // suppress unused capture helper
+
+    ke_runtime_system_params s1{};
+    s1.name = "Writer1"; s1.phase = KE_PHASE_UPDATE; s1.access_list = acc; s1.access_count = 1;
+    s1.user_data = &tag1; s1.execute = record;
+    ASSERT_EQ(runtime->register_system(runtime, &s1, nullptr), KE_OK);
+
+    ke_runtime_system_params s2{};
+    s2.name = "Writer2"; s2.phase = KE_PHASE_UPDATE; s2.access_list = acc; s2.access_count = 1;
+    s2.user_data = &tag2; s2.execute = record;
+    ASSERT_EQ(runtime->register_system(runtime, &s2, nullptr), KE_OK);
+
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    // Wave builder ensures Writer1 (wave 0) completes before Writer2 (wave 1)
+    // starts — defer flush sits between them. So order MUST be [1, 2].
+    ASSERT_EQ(order.size(), 2u);
+    EXPECT_EQ(order[0], 1);
+    EXPECT_EQ(order[1], 2);
 }
 
 TEST_F(RuntimeSpike, FixedUpdate_AccumulatesAtFixedRate)

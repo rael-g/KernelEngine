@@ -14,6 +14,7 @@ internal static unsafe partial class NativeMethods
     internal static extern ke_result runtime_create(
         ke_allocator*       alloc,
         ke_ecs*             ecs,
+        ke_task_scheduler*  task_scheduler,
         ke_runtime_params*  @params,
         ke_runtime**        out_runtime);
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 using KernelEngine.Runtime;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,8 +22,18 @@ using var sp = services.BuildServiceProvider();
 var window    = sp.GetRequiredService<IWindow>();
 var allocator = sp.GetRequiredService<Allocator>();
 
-using var ecs     = new FlecsEcs(allocator);
-using var runtime = new Runtime(allocator, ecs);
+KernelEngine.Kernel.TaskScheduler taskScheduler;
+unsafe {
+    ke_task_scheduler* nativeScheduler;
+    KernelException.ThrowIfFailed(
+        KernelEngine.TaskScheduler.Enki.Native.NativeMethods
+            .task_scheduler_enki_create(allocator.Native, &nativeScheduler).ToManaged());
+    taskScheduler = new KernelEngine.Kernel.TaskScheduler(nativeScheduler);
+}
+using (taskScheduler)
+using (var ecs     = new FlecsEcs(allocator))
+using (var runtime = new Runtime(allocator, ecs, taskScheduler))
+{
 
 // WindowModule — registers the OS poll in PreUpdate so input + close events
 // reach the host before any Update system runs. Wraps the existing GLFW plugin;
@@ -67,3 +78,5 @@ while (!window.ShouldClose())
 }
 
 Console.WriteLine("[00_runtime_minimal] Exited cleanly.");
+
+}  // end using(taskScheduler/ecs/runtime)

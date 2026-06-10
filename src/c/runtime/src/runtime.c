@@ -349,8 +349,9 @@ typedef struct registered_system
 
 typedef struct runtime_state
 {
-    ke_allocator *allocator;
-    ke_ecs       *ecs;
+    ke_allocator      *allocator;
+    ke_ecs            *ecs;             // borrowed
+    ke_task_scheduler *task_scheduler;  // borrowed
 
     registered_system *systems;
     size_t             system_count;
@@ -365,10 +366,6 @@ typedef struct runtime_state
     float fixed_dt;
     float fixed_dt_max_accum;
     float fixed_accumulator;
-
-    // Defer queue — commands enqueued from system bodies via ke_system_ctx_*
-    // get flushed at the next wave barrier. One queue per runtime instance.
-    defer_queue defer;
 } runtime_state;
 
 typedef struct runtime_handle
@@ -429,10 +426,32 @@ static ke_result runtime_register_system(ke_runtime                     *self,
 // per phase covers anything sane for the spike; R2.5c-final uses ke_array.
 #define KE_RUNTIME_MAX_SYSTEMS_PER_PHASE 256
 
-// Filter systems by phase, compute wave layout, run wave-by-wave. Execution
-// inside a wave is still serial (no enki yet) — but the wave STRUCTURE is
-// already correct, so swapping the inner loop for enki dispatch in R2.5c-final
-// gives parallelism without refactoring the orchestration.
+// Per-task package — one per dispatched system. Holds the ke_system_ctx (so
+// the worker thread reads its access metadata locally) and a private defer
+// queue so concurrent systems in the same wave never race on a shared buffer.
+// Flushed at the wave barrier in registration order — within a wave the
+// systems are disjoint by access, so flush ordering between them is
+// observably equivalent.
+typedef struct task_pkg
+{
+    ke_system_ctx ctx;
+    void        (*execute)(ke_system_ctx *, void *, float);
+    void         *user_data;
+    float         dt;
+    defer_queue   defer;
+} task_pkg;
+
+static void task_pkg_run(void *data)
+{
+    task_pkg *pkg = (task_pkg *)data;
+    pkg->ctx.defer = &pkg->defer;
+    pkg->execute(&pkg->ctx, pkg->user_data, pkg->dt);
+}
+
+// Filter systems by phase, compute wave layout, dispatch wave-by-wave via the
+// shared task scheduler. Each system's ke_system_ctx + defer queue lives in a
+// task_pkg on this stack frame; the worker thread reads them concurrently with
+// any other wave system. wait_for_wave joins all workers before barrier flush.
 static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
 {
     if (h->state.system_count == 0) return;
@@ -457,26 +476,48 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
     ke_runtime_debug_compute_waves(phase_params, phase_count,
                                     wave_assignments, &wave_count);
 
+    task_pkg pkgs[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
+    ke_task *tasks[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
+
     for (uint32_t w = 0; w < wave_count; w++)
     {
+        uint32_t wave_size = 0;
+
         for (uint32_t k = 0; k < phase_count; k++)
         {
             if (wave_assignments[k] != w) continue;
             registered_system *rs = &h->state.systems[phase_indices[k]];
 
-            ke_system_ctx ctx;
-            ctx.ecs          = h->state.ecs;
-            ctx.access_list  = rs->params.access_list;
-            ctx.access_count = rs->params.access_count;
-            ctx.exclusive    = rs->params.exclusive;
-            ctx.system_name  = rs->params.name;
-            ctx.defer        = &h->state.defer;
+            task_pkg *pkg          = &pkgs[wave_size];
+            pkg->ctx.ecs           = h->state.ecs;
+            pkg->ctx.access_list   = rs->params.access_list;
+            pkg->ctx.access_count  = rs->params.access_count;
+            pkg->ctx.exclusive     = rs->params.exclusive;
+            pkg->ctx.system_name   = rs->params.name;
+            pkg->ctx.defer         = NULL;  // task_pkg_run binds to &pkg->defer
+            pkg->execute           = rs->params.execute;
+            pkg->user_data         = rs->params.user_data;
+            pkg->dt                = dt;
+            pkg->defer.cmds        = NULL;
+            pkg->defer.count       = 0;
+            pkg->defer.capacity    = 0;
+            pkg->defer.allocator   = h->state.allocator;
 
-            rs->params.execute(&ctx, rs->params.user_data, dt);
+            tasks[wave_size] = h->state.task_scheduler->dispatch(
+                h->state.task_scheduler, task_pkg_run, pkg);
+            wave_size++;
         }
-        // Wave barrier: flush every command enqueued by systems in this wave.
-        // R2.5c-final: enki wait_for_wave joins here before the flush.
-        defer_flush(&h->state.defer, h->state.ecs);
+
+        // Wave barrier: join every worker, then flush each system's defer
+        // queue in registration order. Defer flushes touch ke_ecs serially
+        // through the same thread that drove the tick — no race.
+        for (uint32_t t = 0; t < wave_size; t++)
+        {
+            h->state.task_scheduler->wait(h->state.task_scheduler, tasks[t]);
+            defer_flush(&pkgs[t].defer, h->state.ecs);
+            if (pkgs[t].defer.cmds)
+                h->state.allocator->free(h->state.allocator, pkgs[t].defer.cmds);
+        }
     }
 }
 
@@ -518,31 +559,32 @@ static void runtime_destroy(ke_runtime *self)
     if (!self || !self->handle) return;
     runtime_handle *h = (runtime_handle *)self->handle;
 
-    if (h->state.systems)    h->state.allocator->free(h->state.allocator, h->state.systems);
-    if (h->state.defer.cmds) h->state.allocator->free(h->state.allocator, h->state.defer.cmds);
+    if (h->state.systems) h->state.allocator->free(h->state.allocator, h->state.systems);
+    // Per-task defer queues are stack-allocated; freed at the wave barrier.
 
     ke_allocator *alloc = h->state.allocator;
     alloc->free(alloc, h);
-    // h->state.ecs is borrowed — NOT destroyed here.
+    // h->state.ecs and h->state.task_scheduler are borrowed — NOT destroyed here.
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 ke_result ke_runtime_create(ke_allocator            *alloc,
                              ke_ecs                  *ecs,
+                             ke_task_scheduler       *task_scheduler,
                              const ke_runtime_params *params,
                              ke_runtime             **out_runtime)
 {
-    if (!alloc || !ecs || !out_runtime) return KE_ERROR_INVALID_ARGUMENT;
+    if (!alloc || !ecs || !task_scheduler || !out_runtime) return KE_ERROR_INVALID_ARGUMENT;
 
     runtime_handle *h = (runtime_handle *)alloc->alloc(
         alloc, sizeof(runtime_handle), alignof(runtime_handle));
     if (!h) return KE_ERROR_OUT_OF_MEMORY;
     memset(h, 0, sizeof(*h));
 
-    h->state.allocator       = alloc;
-    h->state.ecs             = ecs;
-    h->state.defer.allocator = alloc;
+    h->state.allocator      = alloc;
+    h->state.ecs            = ecs;
+    h->state.task_scheduler = task_scheduler;
 
     // Fixed-timestep config: caller-provided or default. 0 in either field
     // means "use the default" so {0} params get a sane 60Hz physics tick out

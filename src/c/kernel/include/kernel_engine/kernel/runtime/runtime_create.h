@@ -7,6 +7,7 @@
 
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/runtime/runtime.h>
+#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
 #include <kernel_engine/kernel/world/ke_ecs.h>
 
 #ifdef __cplusplus
@@ -25,10 +26,11 @@ typedef struct ke_runtime_params {
     float fixed_dt_max_accum;
 } ke_runtime_params;
 
-KE_API ke_result ke_runtime_create(ke_allocator           *alloc,
-                                    ke_ecs                 *ecs,
+KE_API ke_result ke_runtime_create(ke_allocator            *alloc,
+                                    ke_ecs                  *ecs,
+                                    ke_task_scheduler       *task_scheduler,
                                     const ke_runtime_params *params,
-                                    ke_runtime            **out_runtime);
+                                    ke_runtime             **out_runtime);
 
 #ifdef __cplusplus
 }

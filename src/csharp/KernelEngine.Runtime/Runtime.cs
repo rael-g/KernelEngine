@@ -16,8 +16,9 @@ namespace KernelEngine.Runtime;
 public sealed unsafe class Runtime : IRuntime
 {
     private ke_runtime* _native;
-    private readonly Allocator _allocator;
-    private readonly FlecsEcs  _ecs;  // not owned; consumer disposes separately
+    private readonly Allocator      _allocator;
+    private readonly FlecsEcs       _ecs;             // not owned; consumer disposes separately
+    private readonly KernelEngine.Kernel.TaskScheduler  _taskScheduler;   // not owned
 
     private readonly List<GCHandle> _moduleHandles = new();
     private readonly List<GCHandle> _systemHandles = new();
@@ -68,16 +69,19 @@ public sealed unsafe class Runtime : IRuntime
         public required Action<IRuntime, float> Execute { get; init; }
     }
 
-    public Runtime(Allocator allocator, FlecsEcs ecs)
+    public Runtime(Allocator allocator, FlecsEcs ecs, KernelEngine.Kernel.TaskScheduler taskScheduler)
     {
         ArgumentNullException.ThrowIfNull(allocator);
         ArgumentNullException.ThrowIfNull(ecs);
-        _allocator = allocator;
-        _ecs = ecs;
+        ArgumentNullException.ThrowIfNull(taskScheduler);
+        _allocator     = allocator;
+        _ecs           = ecs;
+        _taskScheduler = taskScheduler;
 
         ke_runtime_params @params = default;
         ke_runtime* rt;
-        var rc = NativeMethods.runtime_create(allocator.Native, ecs.Native, &@params, &rt);
+        var rc = NativeMethods.runtime_create(
+            allocator.Native, ecs.Native, taskScheduler.Native, &@params, &rt);
         if (rc != ke_result.KE_OK)
             throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
         _native = rt;
