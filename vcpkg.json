@@ -18,5 +18,8 @@
       "features": [ "tools" ],
       "host": true
     }
+  ],
+  "overrides": [
+    { "name": "flecs", "version": "4.1.5" }
   ]
 }
