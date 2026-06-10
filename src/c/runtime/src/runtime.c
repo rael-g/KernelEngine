@@ -1,14 +1,88 @@
 #include <kernel_engine/kernel/runtime/runtime_create.h>
+#include <kernel_engine/kernel/runtime/system_ctx.h>
 
 #include <stdalign.h>
 #include <stdlib.h>
 #include <string.h>
 
-// In-house scheduler. Accepts ke_ecs* borrowed at construction; never owns
-// storage. Today: sequential phase walk over the system catalog (transitional
-// stub from R2.5b step 1). R2.5c replaces with Bevy-style parallel waves +
-// enki dispatch + per-wave defer queue + fixed-timestep accumulator, all
-// gated by ke_system_ctx (§15.8).
+// In-house scheduler — prototype stage of R2.5c.
+//
+// What's wired (validates the architectural shape end-to-end):
+// - ke_system_ctx is the only door to component memory inside an execute call
+// - Execute signature is (ke_system_ctx*, void*, float) — the ke_runtime* path
+//   from the spike is gone
+// - Sequential phase walk, one system at a time, no real waves yet
+//
+// What's stubbed (R2.5c-final):
+// - Real R/W conflict analysis + parallel waves (Bevy algorithm)
+// - enki-backed dispatcher with wave barrier
+// - Defer queue + per-wave flush
+// - Fixed-timestep accumulator (Glenn Fiedler)
+// - Debug access-list checks in ke_system_ctx (#ifndef NDEBUG)
+
+// ── ke_system_ctx — public type defined here (impl-private layout) ──────────
+
+struct ke_system_ctx
+{
+    ke_ecs *ecs;  // borrowed; alive while the system runs
+};
+
+void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
+{
+    if (!ctx || !ctx->ecs) return NULL;
+    return ctx->ecs->component_get(ctx->ecs, entity, cid);
+}
+
+const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
+{
+    if (!ctx || !ctx->ecs) return NULL;
+    return ctx->ecs->component_get(ctx->ecs, entity, cid);
+}
+
+void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
+                          ke_entity **out_entities, void **out_data, size_t *out_count)
+{
+    if (out_entities) *out_entities = NULL;
+    if (out_data)     *out_data     = NULL;
+    if (out_count)    *out_count    = 0;
+    if (!ctx || !ctx->ecs) return;
+    ctx->ecs->query(ctx->ecs, cid, out_entities, out_data, out_count);
+}
+
+ke_result ke_system_ctx_spawn(ke_system_ctx *ctx, ke_entity *out_entity)
+{
+    (void)ctx;
+    (void)out_entity;
+    return KE_ERROR_NOT_INITIALIZED;  // R2.5c-final wires the defer queue
+}
+
+ke_result ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
+                                ke_component_id cid, const void *data, size_t size)
+{
+    (void)ctx;
+    (void)entity;
+    (void)cid;
+    (void)data;
+    (void)size;
+    return KE_ERROR_NOT_INITIALIZED;
+}
+
+ke_result ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_component_id cid)
+{
+    (void)ctx;
+    (void)entity;
+    (void)cid;
+    return KE_ERROR_NOT_INITIALIZED;
+}
+
+ke_result ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity)
+{
+    (void)ctx;
+    (void)entity;
+    return KE_ERROR_NOT_INITIALIZED;
+}
+
+// ── Runtime state ───────────────────────────────────────────────────────────
 
 typedef struct registered_system
 {
@@ -18,7 +92,7 @@ typedef struct registered_system
 typedef struct runtime_state
 {
     ke_allocator *allocator;
-    ke_ecs       *ecs;  // borrowed; lifetime owned by the caller
+    ke_ecs       *ecs;
 
     registered_system *systems;
     size_t             system_count;
@@ -87,6 +161,13 @@ static ke_result runtime_tick(ke_runtime *self, float dt)
     if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
     runtime_handle *h = (runtime_handle *)self->handle;
 
+    // Naïve wave layout for the prototype: each system is its own wave (i.e.
+    // exclusive). Wave builder + R/W grouping arrive in R2.5c-final.
+    // ctx lives on this stack frame — the funnel rule is honored because the
+    // ctx pointer never escapes the runtime_tick scope.
+    ke_system_ctx ctx;
+    ctx.ecs = h->state.ecs;
+
     static const ke_phase phase_order[] = {
         KE_PHASE_PRE_UPDATE,
         KE_PHASE_FIXED_UPDATE,
@@ -103,7 +184,7 @@ static ke_result runtime_tick(ke_runtime *self, float dt)
             if (rs->params.phase != phase) continue;
             if (rs->params.execute)
             {
-                rs->params.execute(self, rs->params.user_data, dt);
+                rs->params.execute(&ctx, rs->params.user_data, dt);
             }
         }
     }
@@ -119,8 +200,7 @@ static void runtime_destroy(ke_runtime *self)
 
     ke_allocator *alloc = h->state.allocator;
     alloc->free(alloc, h);
-    // h->state.ecs is borrowed — NOT destroyed here. The caller arranges
-    // ke_ecs->destroy() lifetime separately.
+    // h->state.ecs is borrowed — NOT destroyed here.
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────

@@ -15,7 +15,8 @@ extern "C" {
 // stack and that the vtable shape is workable. Full surface (resources,
 // extract phase, run-after/before deps, snapshot peek) lands in R2+.
 
-typedef struct ke_runtime ke_runtime;
+typedef struct ke_runtime    ke_runtime;
+typedef struct ke_system_ctx ke_system_ctx;
 
 typedef uint64_t ke_module_id;
 typedef uint64_t ke_system_id;
@@ -41,7 +42,10 @@ typedef struct ke_runtime_system_params {
     const char *name;
     ke_phase    phase;
     void       *user_data;
-    void      (*execute)(ke_runtime *runtime, void *user_data, float dt);
+    // Execute callback. ctx is the ONLY door to component memory inside the
+    // system body — see kernel/runtime/system_ctx.h. Stack-allocated by the
+    // scheduler; valid only for this call.
+    void (*execute)(ke_system_ctx *ctx, void *user_data, float dt);
 } ke_runtime_system_params;
 
 typedef struct ke_runtime {

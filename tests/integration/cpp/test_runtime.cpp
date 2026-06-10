@@ -22,7 +22,7 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
     sys.name      = "TickCounter";
     sys.phase     = KE_PHASE_UPDATE;
     sys.user_data = user_data;
-    sys.execute   = [](ke_runtime *, void *ud, float) {
+    sys.execute   = [](ke_system_ctx *, void *ud, float) {
         static_cast<ModuleCtx *>(ud)->system_ticks.fetch_add(1, std::memory_order_relaxed);
     };
 
