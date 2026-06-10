@@ -3,7 +3,9 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/world/ecs.h>  // ke_component_id
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -31,6 +33,18 @@ typedef enum ke_phase {
     KE_PHASE_SHUTDOWN     = 6,
 } ke_phase;
 
+// R/W access kind a system declares for each component it touches. Bitmask
+// so a single component can be marked READ|WRITE.
+typedef enum ke_access {
+    KE_ACCESS_READ  = 1 << 0,
+    KE_ACCESS_WRITE = 1 << 1,
+} ke_access;
+
+typedef struct ke_component_access {
+    ke_component_id cid;
+    ke_access       access;
+} ke_component_access;
+
 typedef struct ke_runtime_module_params {
     const char *name;
     void       *user_data;
@@ -41,7 +55,20 @@ typedef struct ke_runtime_module_params {
 typedef struct ke_runtime_system_params {
     const char *name;
     ke_phase    phase;
-    void       *user_data;
+
+    // Declared component access for parallel scheduling. The wave builder
+    // groups systems with disjoint access into the same parallel wave; the
+    // debug-mode ke_system_ctx checks every memory access against this list.
+    // Null/zero is equivalent to `exclusive = true` (no parallelism, but safe).
+    const ke_component_access *access_list;
+    uint32_t                   access_count;
+
+    // When true, system runs in its own wave and conflicts with everything.
+    // Use for opaque code paths (script bodies, editor commands, etc.) where
+    // declared access can't be enforced.
+    bool exclusive;
+
+    void *user_data;
     // Execute callback. ctx is the ONLY door to component memory inside the
     // system body — see kernel/runtime/system_ctx.h. Stack-allocated by the
     // scheduler; valid only for this call.

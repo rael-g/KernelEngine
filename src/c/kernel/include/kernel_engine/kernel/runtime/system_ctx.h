@@ -22,14 +22,23 @@ typedef struct ke_system_ctx ke_system_ctx;
 
 // ── Component access through the funnel ─────────────────────────────────────
 
-/// Returns a writable pointer to entity's component. In debug (R2.5c-final),
-/// asserts cid is in the system's declared writes; in this prototype, direct
-/// pass-through to ke_ecs.
+/// Returns a writable pointer to entity's component. In debug builds, validates
+/// that the system declared WRITE access to cid; on violation, logs to stderr,
+/// bumps the failure counter (queryable via ke_system_ctx_check_failures), and
+/// returns NULL. Exclusive systems bypass the check (they conflict with
+/// everything by design). Release builds elide the check entirely.
+/// R2.5c-final flips the violation to abort() instead of log-and-return-NULL.
 KE_API void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity);
 
 /// Returns a read-only pointer to entity's component. Same checking story as
-/// _get_mut, against the declared reads set.
+/// _get_mut, against READ or WRITE in the declared list (writes imply read).
 KE_API const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity);
+
+/// Test/debug introspection: the number of access-list violations recorded
+/// since process start by debug-mode checks. Always returns 0 in release.
+/// Resettable via ke_system_ctx_reset_check_failures.
+KE_API uint32_t ke_system_ctx_check_failures(void);
+KE_API void     ke_system_ctx_reset_check_failures(void);
 
 /// Single-component query: fills out_entities + out_data + out_count with the
 /// matched packed arrays. Multi-component query + With/Without filters arrive

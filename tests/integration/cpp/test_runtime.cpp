@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <kernel_engine/kernel/runtime/runtime_create.h>
+#include <kernel_engine/kernel/runtime/system_ctx.h>
 #include <kernel_engine/kernel/world/ke_ecs.h>
 #include <kernel_engine/kernel/world/ke_ecs_flecs.h>
 
@@ -215,4 +216,90 @@ TEST_F(RuntimeSpike, FixedUpdate_SpiralOfDeathGuarded)
 TEST_F(RuntimeSpike, Tick_RejectsNegativeDt)
 {
     EXPECT_EQ(runtime->tick(runtime, -1.0f), KE_ERROR_INVALID_ARGUMENT);
+}
+
+// ── Debug access checks ─────────────────────────────────────────────────────
+
+TEST_F(RuntimeSpike, DebugCheck_FiresWhenSystemMutatesUndeclaredComponent)
+{
+    ke_system_ctx_reset_check_failures();
+
+    // Register a system that declares NO access, tries to mutate component 7.
+    ke_runtime_system_params sys{};
+    sys.name    = "Misbehaving";
+    sys.phase   = KE_PHASE_UPDATE;
+    sys.execute = [](ke_system_ctx *ctx, void *, float) {
+        void *p = ke_system_ctx_get_mut(ctx, 7u, 1u);
+        EXPECT_EQ(p, nullptr);  // check denied + returned NULL
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    EXPECT_GE(ke_system_ctx_check_failures(), 1u);
+}
+
+TEST_F(RuntimeSpike, DebugCheck_PassesWhenAccessDeclared)
+{
+    ke_system_ctx_reset_check_failures();
+
+    ke_component_access access[] = {{7u, KE_ACCESS_WRITE}};
+    ke_runtime_system_params sys{};
+    sys.name         = "Declared";
+    sys.phase        = KE_PHASE_UPDATE;
+    sys.access_list  = access;
+    sys.access_count = 1;
+    sys.execute = [](ke_system_ctx *ctx, void *, float) {
+        // Storage stubs in the prototype: get_mut may return NULL because
+        // ke_ecs_flecs doesn't actually carry component 7 — what we care about
+        // here is that the DEBUG CHECK doesn't fire (no failure recorded).
+        (void)ke_system_ctx_get_mut(ctx, 7u, 1u);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
+}
+
+TEST_F(RuntimeSpike, DebugCheck_ExclusiveBypassesValidation)
+{
+    ke_system_ctx_reset_check_failures();
+
+    ke_runtime_system_params sys{};
+    sys.name      = "Exclusive";
+    sys.phase     = KE_PHASE_UPDATE;
+    sys.exclusive = true;  // bypass — opaque code path
+    sys.execute = [](ke_system_ctx *ctx, void *, float) {
+        // Even with no access_list, exclusive systems get through.
+        (void)ke_system_ctx_get_mut(ctx, 7u, 1u);
+        (void)ke_system_ctx_get(ctx, 8u, 2u);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
+}
+
+TEST_F(RuntimeSpike, DebugCheck_ReadAccessAlsoSatisfiesGetCall)
+{
+    ke_system_ctx_reset_check_failures();
+
+    ke_component_access access[] = {{9u, KE_ACCESS_READ}};
+    ke_runtime_system_params sys{};
+    sys.name         = "Reader";
+    sys.phase        = KE_PHASE_UPDATE;
+    sys.access_list  = access;
+    sys.access_count = 1;
+    sys.execute = [](ke_system_ctx *ctx, void *, float) {
+        (void)ke_system_ctx_get(ctx, 9u, 1u);    // declared READ → ok
+        const void *bad = ke_system_ctx_get(ctx, 10u, 1u);  // undeclared → check fires
+        EXPECT_EQ(bad, nullptr);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    EXPECT_GE(ke_system_ctx_check_failures(), 1u);
 }

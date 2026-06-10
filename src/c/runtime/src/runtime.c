@@ -2,6 +2,7 @@
 #include <kernel_engine/kernel/runtime/system_ctx.h>
 
 #include <stdalign.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -24,18 +25,85 @@
 
 struct ke_system_ctx
 {
-    ke_ecs *ecs;  // borrowed; alive while the system runs
+    ke_ecs                    *ecs;          // borrowed; alive while the system runs
+    const ke_component_access *access_list;  // borrowed from the system's params
+    uint32_t                   access_count;
+    bool                       exclusive;
+    const char                *system_name;  // for diagnostics
 };
+
+// Debug-only check infrastructure. Compiled in only when NDEBUG is undefined;
+// release builds get zero overhead. R2.5c-final flips violations from
+// log-and-continue to abort() — for now we surface failures via a counter so
+// tests can assert without crashing the process.
+#ifndef NDEBUG
+static uint32_t s_check_failures = 0;
+
+static bool access_list_contains(const ke_component_access *list, uint32_t n,
+                                  ke_component_id cid, ke_access required)
+{
+    for (uint32_t i = 0; i < n; i++)
+    {
+        if (list[i].cid == cid && (list[i].access & required) == required)
+            return true;
+    }
+    return false;
+}
+
+static void log_violation(const char *system_name, ke_component_id cid, const char *kind)
+{
+    fprintf(stderr,
+            "[ke_system_ctx] system '%s' accessed component %u (%s) without declared "
+            "access; add a ke_component_access entry to ke_runtime_system_params.access_list "
+            "or set .exclusive=true if the system intentionally bypasses parallelization.\n",
+            system_name ? system_name : "<unnamed>", cid, kind);
+    s_check_failures++;
+}
+#endif
+
+uint32_t ke_system_ctx_check_failures(void)
+{
+#ifndef NDEBUG
+    return s_check_failures;
+#else
+    return 0;
+#endif
+}
+
+void ke_system_ctx_reset_check_failures(void)
+{
+#ifndef NDEBUG
+    s_check_failures = 0;
+#endif
+}
 
 void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
 {
     if (!ctx || !ctx->ecs) return NULL;
+#ifndef NDEBUG
+    if (!ctx->exclusive &&
+        !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
+    {
+        log_violation(ctx->system_name, cid, "MUT");
+        return NULL;
+    }
+#endif
     return ctx->ecs->component_get(ctx->ecs, entity, cid);
 }
 
 const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
 {
     if (!ctx || !ctx->ecs) return NULL;
+#ifndef NDEBUG
+    // Read OR write declaration covers a read access.
+    if (!ctx->exclusive &&
+        !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_READ) &&
+        !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
+    {
+        log_violation(ctx->system_name, cid, "GET");
+        return NULL;
+    }
+#endif
     return ctx->ecs->component_get(ctx->ecs, entity, cid);
 }
 
@@ -165,20 +233,25 @@ static ke_result runtime_register_system(ke_runtime                     *self,
 
 // Walk every system whose phase matches and execute it with the given dt.
 // Naïve wave layout for the prototype: each system is its own wave (R/W
-// grouping + parallel dispatch arrive in R2.5c-final wave builder).
+// grouping + parallel dispatch arrive in R2.5c-final wave builder). The
+// per-system ke_system_ctx is rebuilt before each callback so the debug
+// access checks see the right declared access_list / exclusive flag.
 static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
 {
-    ke_system_ctx ctx;
-    ctx.ecs = h->state.ecs;
-
     for (size_t si = 0; si < h->state.system_count; si++)
     {
         registered_system *rs = &h->state.systems[si];
         if (rs->params.phase != phase) continue;
-        if (rs->params.execute)
-        {
-            rs->params.execute(&ctx, rs->params.user_data, dt);
-        }
+        if (!rs->params.execute) continue;
+
+        ke_system_ctx ctx;
+        ctx.ecs          = h->state.ecs;
+        ctx.access_list  = rs->params.access_list;
+        ctx.access_count = rs->params.access_count;
+        ctx.exclusive    = rs->params.exclusive;
+        ctx.system_name  = rs->params.name;
+
+        rs->params.execute(&ctx, rs->params.user_data, dt);
     }
 }
 
