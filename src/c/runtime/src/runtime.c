@@ -23,6 +23,33 @@
 
 // ── ke_system_ctx — public type defined here (impl-private layout) ──────────
 
+// Per-tick defer queue. Lives on the runtime; pointers from ctx route here.
+// Cleared between waves after flushing. Simple variant-tagged record array;
+// real impl uses a typed command buffer with per-attach payload arena.
+
+typedef enum defer_kind {
+    DEFER_SPAWN   = 1,
+    DEFER_ATTACH  = 2,
+    DEFER_DETACH  = 3,
+    DEFER_DESPAWN = 4,
+} defer_kind;
+
+typedef struct defer_command {
+    defer_kind     kind;
+    ke_entity      entity;        // SPAWN: filled at flush with new id
+    ke_entity     *spawn_out;     // SPAWN: writeback slot caller provided
+    ke_component_id cid;          // ATTACH/DETACH
+    const void    *attach_data;   // ATTACH: payload pointer (caller owns lifetime until flush)
+    size_t         attach_size;
+} defer_command;
+
+typedef struct defer_queue {
+    defer_command *cmds;
+    size_t         count;
+    size_t         capacity;
+    ke_allocator  *allocator;
+} defer_queue;
+
 struct ke_system_ctx
 {
     ke_ecs                    *ecs;          // borrowed; alive while the system runs
@@ -30,6 +57,7 @@ struct ke_system_ctx
     uint32_t                   access_count;
     bool                       exclusive;
     const char                *system_name;  // for diagnostics
+    defer_queue               *defer;        // borrowed from the runtime
 };
 
 // Debug-only check infrastructure. Compiled in only when NDEBUG is undefined;
@@ -211,38 +239,106 @@ void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
     ctx->ecs->query(ctx->ecs, cid, out_entities, out_data, out_count);
 }
 
+// Grow defer queue capacity by doubling. Returns false on OOM.
+static bool defer_reserve(defer_queue *q, size_t needed)
+{
+    if (needed <= q->capacity) return true;
+    size_t new_cap = q->capacity ? q->capacity * 2 : 16;
+    while (new_cap < needed) new_cap *= 2;
+    defer_command *buf = (defer_command *)q->allocator->alloc(
+        q->allocator, sizeof(defer_command) * new_cap, alignof(defer_command));
+    if (!buf) return false;
+    if (q->cmds)
+    {
+        memcpy(buf, q->cmds, sizeof(defer_command) * q->count);
+        q->allocator->free(q->allocator, q->cmds);
+    }
+    q->cmds     = buf;
+    q->capacity = new_cap;
+    return true;
+}
+
 ke_result ke_system_ctx_spawn(ke_system_ctx *ctx, ke_entity *out_entity)
 {
-    (void)ctx;
-    (void)out_entity;
-    return KE_ERROR_NOT_INITIALIZED;  // R2.5c-final wires the defer queue
+    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    cmd->kind      = DEFER_SPAWN;
+    cmd->spawn_out = out_entity;
+    return KE_OK;
 }
 
 ke_result ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                                 ke_component_id cid, const void *data, size_t size)
 {
-    (void)ctx;
-    (void)entity;
-    (void)cid;
-    (void)data;
-    (void)size;
-    return KE_ERROR_NOT_INITIALIZED;
+    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    cmd->kind        = DEFER_ATTACH;
+    cmd->entity      = entity;
+    cmd->cid         = cid;
+    cmd->attach_data = data;
+    cmd->attach_size = size;
+    return KE_OK;
 }
 
 ke_result ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_component_id cid)
 {
-    (void)ctx;
-    (void)entity;
-    (void)cid;
-    return KE_ERROR_NOT_INITIALIZED;
+    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    cmd->kind   = DEFER_DETACH;
+    cmd->entity = entity;
+    cmd->cid    = cid;
+    return KE_OK;
 }
 
 ke_result ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity)
 {
-    (void)ctx;
-    (void)entity;
-    return KE_ERROR_NOT_INITIALIZED;
+    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    cmd->kind   = DEFER_DESPAWN;
+    cmd->entity = entity;
+    return KE_OK;
 }
+
+// Apply every queued command in registration order, route through the ke_ecs
+// vtable. Increments the debug counter so tests can assert on flush volume.
+static uint32_t s_defer_applied_total = 0;
+
+static void defer_flush(defer_queue *q, ke_ecs *ecs)
+{
+    for (size_t i = 0; i < q->count; i++)
+    {
+        defer_command *cmd = &q->cmds[i];
+        switch (cmd->kind)
+        {
+        case DEFER_SPAWN: {
+            ke_entity e = ecs->entity_create(ecs);
+            if (cmd->spawn_out) *cmd->spawn_out = e;
+            break;
+        }
+        case DEFER_ATTACH: {
+            void *slot = ecs->component_add(ecs, cmd->entity, cmd->cid);
+            if (slot && cmd->attach_data && cmd->attach_size > 0)
+                memcpy(slot, cmd->attach_data, cmd->attach_size);
+            break;
+        }
+        case DEFER_DETACH:
+            ecs->component_remove(ecs, cmd->entity, cmd->cid);
+            break;
+        case DEFER_DESPAWN:
+            ecs->entity_destroy(ecs, cmd->entity);
+            break;
+        }
+        s_defer_applied_total++;
+    }
+    q->count = 0;  // drain — capacity retained for reuse next wave
+}
+
+uint32_t ke_system_ctx_defer_applied_count(void) { return s_defer_applied_total; }
+void     ke_system_ctx_reset_defer_applied(void) { s_defer_applied_total = 0; }
 
 // ── Runtime state ───────────────────────────────────────────────────────────
 
@@ -269,6 +365,10 @@ typedef struct runtime_state
     float fixed_dt;
     float fixed_dt_max_accum;
     float fixed_accumulator;
+
+    // Defer queue — commands enqueued from system bodies via ke_system_ctx_*
+    // get flushed at the next wave barrier. One queue per runtime instance.
+    defer_queue defer;
 } runtime_state;
 
 typedef struct runtime_handle
@@ -370,10 +470,13 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             ctx.access_count = rs->params.access_count;
             ctx.exclusive    = rs->params.exclusive;
             ctx.system_name  = rs->params.name;
+            ctx.defer        = &h->state.defer;
 
             rs->params.execute(&ctx, rs->params.user_data, dt);
         }
-        // R2.5c-final: wave barrier (enki wait_for_wave + defer queue flush).
+        // Wave barrier: flush every command enqueued by systems in this wave.
+        // R2.5c-final: enki wait_for_wave joins here before the flush.
+        defer_flush(&h->state.defer, h->state.ecs);
     }
 }
 
@@ -415,7 +518,8 @@ static void runtime_destroy(ke_runtime *self)
     if (!self || !self->handle) return;
     runtime_handle *h = (runtime_handle *)self->handle;
 
-    if (h->state.systems) h->state.allocator->free(h->state.allocator, h->state.systems);
+    if (h->state.systems)    h->state.allocator->free(h->state.allocator, h->state.systems);
+    if (h->state.defer.cmds) h->state.allocator->free(h->state.allocator, h->state.defer.cmds);
 
     ke_allocator *alloc = h->state.allocator;
     alloc->free(alloc, h);
@@ -436,8 +540,9 @@ ke_result ke_runtime_create(ke_allocator            *alloc,
     if (!h) return KE_ERROR_OUT_OF_MEMORY;
     memset(h, 0, sizeof(*h));
 
-    h->state.allocator = alloc;
-    h->state.ecs       = ecs;
+    h->state.allocator       = alloc;
+    h->state.ecs             = ecs;
+    h->state.defer.allocator = alloc;
 
     // Fixed-timestep config: caller-provided or default. 0 in either field
     // means "use the default" so {0} params get a sane 60Hz physics tick out

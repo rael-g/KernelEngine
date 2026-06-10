@@ -450,6 +450,74 @@ TEST(WaveBuilder, ChainOfConflicts_GreedyGrouping)
     EXPECT_EQ(assignments[3], 2u);
 }
 
+// ── Defer queue ─────────────────────────────────────────────────────────────
+
+TEST_F(RuntimeSpike, DeferSpawn_AppliedAtWaveBarrier)
+{
+    ke_system_ctx_reset_defer_applied();
+
+    int spawn_calls = 0;
+    ke_runtime_system_params sys{};
+    sys.name      = "Spawner";
+    sys.phase     = KE_PHASE_UPDATE;
+    sys.exclusive = true;
+    sys.user_data = &spawn_calls;
+    sys.execute   = [](ke_system_ctx *ctx, void *ud, float) {
+        auto *count = static_cast<int *>(ud);
+        ke_entity e1 = 0, e2 = 0, e3 = 0;
+        EXPECT_EQ(ke_system_ctx_spawn(ctx, &e1), KE_OK);
+        EXPECT_EQ(ke_system_ctx_spawn(ctx, &e2), KE_OK);
+        EXPECT_EQ(ke_system_ctx_spawn(ctx, &e3), KE_OK);
+        (*count)++;
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    EXPECT_EQ(spawn_calls, 1);
+    EXPECT_EQ(ke_system_ctx_defer_applied_count(), 3u);
+}
+
+TEST_F(RuntimeSpike, DeferAttachDetachDespawn_AppliedAtBarrier)
+{
+    ke_system_ctx_reset_defer_applied();
+
+    char payload = 'X';
+    ke_runtime_system_params sys{};
+    sys.name      = "Mutator";
+    sys.phase     = KE_PHASE_UPDATE;
+    sys.exclusive = true;
+    sys.user_data = &payload;
+    sys.execute   = [](ke_system_ctx *ctx, void *ud, float) {
+        EXPECT_EQ(ke_system_ctx_attach(ctx, 42u, 5u, ud, 1), KE_OK);
+        EXPECT_EQ(ke_system_ctx_detach(ctx, 42u, 5u), KE_OK);
+        EXPECT_EQ(ke_system_ctx_despawn(ctx, 42u), KE_OK);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    EXPECT_EQ(ke_system_ctx_defer_applied_count(), 3u);
+}
+
+TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
+{
+    ke_system_ctx_reset_defer_applied();
+
+    ke_runtime_system_params sys{};
+    sys.name      = "RepeatSpawner";
+    sys.phase     = KE_PHASE_UPDATE;
+    sys.exclusive = true;
+    sys.execute   = [](ke_system_ctx *ctx, void *, float) {
+        ke_entity e = 0;
+        ke_system_ctx_spawn(ctx, &e);
+    };
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+
+    for (int i = 0; i < 5; ++i)
+        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+
+    EXPECT_EQ(ke_system_ctx_defer_applied_count(), 5u);  // exactly 1 per tick, drains every wave
+}
+
 TEST_F(RuntimeSpike, DebugCheck_ReadAccessAlsoSatisfiesGetCall)
 {
     ke_system_ctx_reset_check_failures();

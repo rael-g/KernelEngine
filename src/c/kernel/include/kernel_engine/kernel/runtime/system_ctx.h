@@ -41,6 +41,12 @@ KE_API const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke
 KE_API uint32_t ke_system_ctx_check_failures(void);
 KE_API void     ke_system_ctx_reset_check_failures(void);
 
+/// Test/debug introspection: the total number of deferred commands applied at
+/// wave barriers since the counter was last reset. Spans every runtime in the
+/// process. Resettable via ke_system_ctx_reset_defer_applied.
+KE_API uint32_t ke_system_ctx_defer_applied_count(void);
+KE_API void     ke_system_ctx_reset_defer_applied(void);
+
 // ── Wave builder (R/W conflict grouping, Bevy-style) ────────────────────────
 
 /// Computes a parallel wave layout for the given systems. Greedy walk in
