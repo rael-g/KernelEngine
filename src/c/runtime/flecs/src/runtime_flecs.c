@@ -98,13 +98,12 @@ static ke_result flecs_register_system(ke_runtime *self,
     }
 
     // Compose the system entity in plain C99 (no `ecs_entity()` / `ecs_ids()`
-    // helper macros — clang in C99 mode rejects their compound literals).
-    // flecs 4 changed `ecs_entity_desc_t::add` from a fixed in-struct array to
-    // a zero-terminated `const ecs_id_t *`, so we point at a local buffer.
-    ecs_id_t add_ids[2] = { ecs_pair(EcsDependsOn, flecs_phase), 0 };
+    // helper macros — flecs ships them but they resolve to compound literals
+    // that clang in our C99 mode rejects). The raw API is unambiguous.
+    // ecs_entity_desc_t::add is a fixed-size in-struct array, written in place.
     ecs_entity_desc_t edesc = {0};
-    edesc.name = p->name;
-    edesc.add  = add_ids;
+    edesc.name   = p->name;
+    edesc.add[0] = ecs_pair(EcsDependsOn, flecs_phase);
 
     ecs_system_desc_t desc = {0};
     desc.entity   = ecs_entity_init(h->state.world, &edesc);
