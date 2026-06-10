@@ -8,7 +8,7 @@
 
 // Spike-scope state. Real impl grows alongside R2+.
 typedef struct registered_system {
-    ke_system_params params;
+    ke_runtime_system_params params;
     ecs_entity_t     flecs_entity;
 } registered_system;
 
@@ -44,7 +44,7 @@ static void system_trampoline(ecs_iter_t *it)
 // ── Vtable impls ────────────────────────────────────────────────────────────
 
 static ke_result flecs_register_module(ke_runtime *self,
-                                       const ke_module_params *p,
+                                       const ke_runtime_module_params *p,
                                        ke_module_id *out_id)
 {
     if (!self || !self->handle || !p || !p->on_load) return KE_ERROR_INVALID_ARGUMENT;
@@ -62,7 +62,7 @@ static ke_result flecs_register_module(ke_runtime *self,
 }
 
 static ke_result flecs_register_system(ke_runtime *self,
-                                       const ke_system_params *p,
+                                       const ke_runtime_system_params *p,
                                        ke_system_id *out_id)
 {
     if (!self || !self->handle || !p || !p->execute) return KE_ERROR_INVALID_ARGUMENT;

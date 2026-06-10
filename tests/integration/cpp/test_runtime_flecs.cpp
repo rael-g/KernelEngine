@@ -16,7 +16,7 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
     auto *ctx = static_cast<ModuleCtx *>(user_data);
     ctx->load_calls.fetch_add(1, std::memory_order_relaxed);
 
-    ke_system_params sys{};
+    ke_runtime_system_params sys{};
     sys.name      = "TickCounter";
     sys.phase     = KE_PHASE_UPDATE;
     sys.user_data = user_data;
@@ -60,7 +60,7 @@ TEST_F(RuntimeFlecsSpike, Create_Tick_Destroy_NoSystems)
 TEST_F(RuntimeFlecsSpike, RegisterModule_Calls_OnLoad_Once)
 {
     ModuleCtx ctx;
-    ke_module_params mod{};
+    ke_runtime_module_params mod{};
     mod.name      = "TestModule";
     mod.user_data = &ctx;
     mod.on_load   = test_module_on_load;
@@ -74,7 +74,7 @@ TEST_F(RuntimeFlecsSpike, RegisterModule_Calls_OnLoad_Once)
 TEST_F(RuntimeFlecsSpike, RegisteredSystem_FiresOncePerTick)
 {
     ModuleCtx ctx;
-    ke_module_params mod{};
+    ke_runtime_module_params mod{};
     mod.name      = "TickModule";
     mod.user_data = &ctx;
     mod.on_load   = test_module_on_load;
@@ -96,7 +96,7 @@ TEST_F(RuntimeFlecsSpike, RegisterModule_NullParams_Rejected)
 
 TEST_F(RuntimeFlecsSpike, RegisterSystem_NullExecute_Rejected)
 {
-    ke_system_params sys{};
+    ke_runtime_system_params sys{};
     sys.name  = "Bad";
     sys.phase = KE_PHASE_UPDATE;
     // sys.execute deliberately null

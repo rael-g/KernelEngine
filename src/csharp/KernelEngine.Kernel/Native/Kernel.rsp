@@ -47,6 +47,7 @@ ke_kernel
 ../../../c/kernel/include/kernel_engine/kernel/audio/audio.h
 ../../../c/kernel/include/kernel_engine/kernel/physics/physics_2d.h
 ../../../c/kernel/include/kernel_engine/kernel/text/font.h
+../../../c/kernel/include/kernel_engine/kernel/runtime/runtime.h
 --methodClassName
 NativeMethods
 --prefixStrip

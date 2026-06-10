@@ -37,6 +37,7 @@
     <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
+    <Project Path="src/csharp/KernelEngine.Runtime.Flecs/KernelEngine.Runtime.Flecs.csproj" />
     <Project Path="src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
     <Project Path="src/csharp/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
     <Project Path="src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
@@ -45,5 +46,6 @@
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Framework.Tests/KernelEngine.Framework.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
+    <Project Path="tests/csharp/KernelEngine.Runtime.Flecs.Tests/KernelEngine.Runtime.Flecs.Tests.csproj" />
   </Folder>
 </Solution>
