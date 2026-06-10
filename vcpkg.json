@@ -12,6 +12,7 @@
     "enkits",
     "miniaudio",
     "tomlplusplus",
+    "flecs",
     {
       "name": "bgfx",
       "features": [ "tools" ],
