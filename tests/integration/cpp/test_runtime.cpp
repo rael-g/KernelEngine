@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
-#include <kernel_engine/runtime/flecs/runtime_flecs.h>
+#include <kernel_engine/kernel/runtime/runtime_create.h>
+#include <kernel_engine/kernel/world/ke_ecs.h>
 
 #include <atomic>
 
@@ -30,9 +31,13 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
 
 }  // namespace
 
-class RuntimeFlecsSpike : public ::testing::Test {
+// RuntimeSpike covers the split runtime + ECS plugin pair:
+// - ke_ecs_flecs_create() builds the storage (flecs world behind ke_ecs).
+// - ke_runtime_create(ecs) builds the scheduler (in-house, sequential for now).
+class RuntimeSpike : public ::testing::Test {
 protected:
     ke_allocator *allocator = nullptr;
+    ke_ecs       *ecs       = nullptr;
     ke_runtime   *runtime   = nullptr;
 
     void SetUp() override
@@ -40,24 +45,28 @@ protected:
         allocator = ke_allocator_malloc_create();
         ASSERT_NE(allocator, nullptr);
 
-        ke_runtime_flecs_params params{};
-        ASSERT_EQ(ke_runtime_flecs_create(allocator, &params, &runtime), KE_OK);
+        ke_ecs_flecs_params ecs_params{};
+        ASSERT_EQ(ke_ecs_flecs_create(allocator, &ecs_params, &ecs), KE_OK);
+        ASSERT_NE(ecs, nullptr);
+
+        ke_runtime_params rt_params{};
+        ASSERT_EQ(ke_runtime_create(allocator, ecs, &rt_params, &runtime), KE_OK);
         ASSERT_NE(runtime, nullptr);
     }
 
     void TearDown() override
     {
         if (runtime) runtime->destroy(runtime);
-        // allocator is a singleton; nothing to do
+        if (ecs) ecs->destroy(ecs);
     }
 };
 
-TEST_F(RuntimeFlecsSpike, Create_Tick_Destroy_NoSystems)
+TEST_F(RuntimeSpike, Create_Tick_Destroy_NoSystems)
 {
     EXPECT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
 }
 
-TEST_F(RuntimeFlecsSpike, RegisterModule_Calls_OnLoad_Once)
+TEST_F(RuntimeSpike, RegisterModule_Calls_OnLoad_Once)
 {
     ModuleCtx ctx;
     ke_runtime_module_params mod{};
@@ -71,7 +80,7 @@ TEST_F(RuntimeFlecsSpike, RegisterModule_Calls_OnLoad_Once)
     EXPECT_EQ(ctx.load_calls.load(), 1);
 }
 
-TEST_F(RuntimeFlecsSpike, RegisteredSystem_FiresOncePerTick)
+TEST_F(RuntimeSpike, RegisteredSystem_FiresOncePerTick)
 {
     ModuleCtx ctx;
     ke_runtime_module_params mod{};
@@ -88,13 +97,13 @@ TEST_F(RuntimeFlecsSpike, RegisteredSystem_FiresOncePerTick)
     EXPECT_EQ(ctx.system_ticks.load(), 10);
 }
 
-TEST_F(RuntimeFlecsSpike, RegisterModule_NullParams_Rejected)
+TEST_F(RuntimeSpike, RegisterModule_NullParams_Rejected)
 {
     EXPECT_EQ(runtime->register_module(runtime, nullptr, nullptr),
               KE_ERROR_INVALID_ARGUMENT);
 }
 
-TEST_F(RuntimeFlecsSpike, RegisterSystem_NullExecute_Rejected)
+TEST_F(RuntimeSpike, RegisterSystem_NullExecute_Rejected)
 {
     ke_runtime_system_params sys{};
     sys.name  = "Bad";
@@ -102,4 +111,13 @@ TEST_F(RuntimeFlecsSpike, RegisterSystem_NullExecute_Rejected)
     // sys.execute deliberately null
     EXPECT_EQ(runtime->register_system(runtime, &sys, nullptr),
               KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(RuntimeSpike, Create_RejectsNullEcs)
+{
+    ke_runtime_params rt_params{};
+    ke_runtime *rt = nullptr;
+    EXPECT_EQ(ke_runtime_create(allocator, nullptr, &rt_params, &rt),
+              KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(rt, nullptr);
 }

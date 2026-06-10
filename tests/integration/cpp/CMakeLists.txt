@@ -17,7 +17,7 @@ add_executable(test_integration_cpp
     test_miniaudio_audio.cpp
     test_box2d_physics.cpp
     test_stb_font.cpp
-    test_runtime_flecs.cpp
+    test_runtime.cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
@@ -53,7 +53,8 @@ target_link_libraries(test_integration_cpp PRIVATE
     ke_physics_2d_box2d
     ke_text_stb_truetype
     ke_framework
-    ke_runtime_flecs
+    ke_runtime
+    ke_ecs_flecs
     ke_kernel
     GTest::gtest_main
     GTest::gmock
