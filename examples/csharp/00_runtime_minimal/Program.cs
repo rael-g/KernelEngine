@@ -1,6 +1,7 @@
 using System.Diagnostics;
+using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
-using KernelEngine.Runtime.Flecs;
+using KernelEngine.Runtime;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +21,8 @@ using var sp = services.BuildServiceProvider();
 var window    = sp.GetRequiredService<IWindow>();
 var allocator = sp.GetRequiredService<Allocator>();
 
-using var runtime = new FlecsRuntime(allocator);
+using var ecs     = new FlecsEcs(allocator);
+using var runtime = new Runtime(allocator, ecs);
 
 // WindowModule — registers the OS poll in PreUpdate so input + close events
 // reach the host before any Update system runs. Wraps the existing GLFW plugin;

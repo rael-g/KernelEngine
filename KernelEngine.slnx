@@ -50,5 +50,6 @@
     <Project Path="tests/csharp/KernelEngine.Framework.Tests/KernelEngine.Framework.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Runtime.Flecs.Tests/KernelEngine.Runtime.Flecs.Tests.csproj" />
+    <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
   </Folder>
 </Solution>
