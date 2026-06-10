@@ -29,8 +29,18 @@ public class Application : IDisposable
     private IProxyAllocator? _proxyAllocator;
 
     /// <summary>The current simulation world (ECS). Engine-internal — game code uses <see cref="Tree"/>.</summary>
-    internal IWorld ActiveWorld { get; set; } = null!;
+    internal IWorld ActiveWorld
+    {
+        get => _world;
+        set
+        {
+            if (_world == value) return;
+            _world = value;
+            _scene = null; // Invalidate cached tree façade
+        }
+    }
 
+    private IWorld _world = null!;
     private Tree? _scene;
 
     /// <summary>The Tree graph facade for <see cref="ActiveWorld"/>.</summary>
