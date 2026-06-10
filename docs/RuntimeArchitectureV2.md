@@ -3,12 +3,13 @@
 **Status**:
 - §3 (C ABI contract) — vtable shape, Module/System lifecycle, Phase enum locked.
 - §4–§15 — Locked at design level.
-- **Architectural shape (settled after R2 retrospective)**:
-  - `ke_runtime` and `ke_ecs` are **separate, focused contracts** (interface segregation). Neither implies the other.
-  - A single plugin CAN satisfy multiple contracts when the underlying technology pairs them naturally (composition). **`KernelEngine.Runtime.Flecs` satisfies BOTH `ke_runtime` AND `ke_ecs`** because flecs's storage and scheduler are tightly co-designed and benefit from sharing internal state. The C# DI registers the same instance under both interfaces; the consumer asking for `IRuntime` and the consumer asking for `IEcs` don't know they're the same object.
-  - This pattern is the integrated model used by Bevy / Unity DOTS / UE5 Mass / flecs itself, which all couple scheduler + storage in the same impl for performance reasons documented in §8.
-  - A future `KernelEngine.Runtime.Simple` (separate plugin, not built now) can be added for the case where a game wants ECS impl flexibility — it would consume an externally-provided `ke_ecs*`. Until that case surfaces, flecs is the only runtime we build.
-- R1/R2 commits (`b58b21f`, `87001a0`, `e3fba2a`) validated the C ABI shape and the binding pattern. The work continues from there.
+- **Architectural shape (settled after R2.5 storage/scheduler separation discussion)**:
+  - `ke_runtime` and `ke_ecs` are **separate, focused contracts**. Different plugins satisfy each; runtime never owns storage.
+  - **`ke_runtime` (scheduler + orchestration) is our code.** Bevy-style parallel waves from declared R/W metadata, dispatch through `ke_task_scheduler*` (enkiTS), barriers per wave, deferred command queue, fixed-timestep accumulator. No third-party scheduler.
+  - **`ke_ecs` (storage + queries) is satisfied by `KernelEngine.Ecs.Flecs`** — a thin C ABI wrapper over flecs's storage half. flecs is compiled with `FLECS_PIPELINE` / `FLECS_SYSTEM` / `FLECS_TIMER` disabled — the scheduler code physically isn't in the binary.
+  - **No process-global state.** flecs's `ecs_os_api` is not modified. N runtimes per process are valid; each owns its own flecs world.
+  - The runtime plugin depends on `ke_ecs*` injected via factory (the "simple runtime accepts external ECS" pattern from earlier drafts — now the real shape, not a hypothetical alternative).
+- R1/R2 commits (`b58b21f`, `87001a0`, `e3fba2a`, `df48365`) validated the C ABI shape, the binding pattern, and the flecs 4.1.5 upgrade. The plugin layout pivots from R2.5 onward to reflect the storage/scheduler split.
 **Audience**: Engine maintainer + future plugin authors (renderer / physics / audio / scripting).
 **Companion doc**: [`RenderArchitectureV2.md`](RenderArchitectureV2.md).
 
@@ -25,11 +26,18 @@ The engine is currently a **set of APIs without a brain**. The C kernel exposes 
 
 **This document defines `ke_runtime`** — a C-ABI contract for a scheduler-centric runtime. A runtime owns the simulation orchestration: schedules systems with dependency ordering, dispatches work to the shared `ke_task_scheduler` worker pool, and extracts a frame snapshot for the render thread. The host becomes a **declarative wiring layer**: it instantiates modules and starts the runtime. The runtime runs the game.
 
-**Design principle — contracts are focused, implementations compose**: `ke_runtime` only declares scheduler/orchestration concerns. `ke_ecs` only declares storage/query concerns. Consumers depend on the narrowest contract they need (ISP — interface segregation). **Implementations are free to satisfy multiple contracts in one plugin** when the underlying tech pairs them — like flecs does. This isn't a doctrine violation; it's the standard "one class, multiple interfaces" pattern at the C ABI level. The consumer asking for `IRuntime` doesn't know — and shouldn't care — that the same instance also satisfies `IEcs`.
+**Design principle — focused contracts, no mandatory marriage**: `ke_runtime` declares scheduler/orchestration. `ke_ecs` declares storage/query. Runtime depends on `ke_ecs*` injected at construction; it never owns storage. This keeps both replaceable: a future custom ECS (different storage model) drops in without touching the runtime; a future custom scheduler (different parallelism strategy) drops in without touching the ECS.
 
-First implementation: **`KernelEngine.Runtime.Flecs`** — single plugin DLL satisfying both `ke_runtime` AND `ke_ecs`. Uses flecs's pipeline as the scheduler and flecs's world as the storage, sharing internal state. Algorithm and ergonomics inspired by Bevy (declared access sets + dep-graph + parallel waves + deferred commands + fixed timestep) — flecs already implements all of it; we wire the C ABI surface to it. Worker dispatch routed through `ke_task_scheduler` so the engine-wide enkiTS pool stays unified.
+**The implementations we build**:
 
-Future possibility (built when justified, not before): **`KernelEngine.Runtime.Simple`** — a small in-house scheduler that consumes an externally-provided `ke_ecs*`. Exists for the case where a game wants ECS impl flexibility (custom storage, non-flecs ECS via plugin). Not on the immediate roadmap.
+- **`KernelEngine.Runtime`** (`src/c/runtime/`) — the runtime. Algorithm: Bevy-style scheduler — phases run in order; within a phase, systems group into parallel waves by R/W conflict; each wave dispatches through `ke_task_scheduler*` (enkiTS); barrier per wave; deferred command queue flushed at wave boundaries; fixed-timestep accumulator for `FixedUpdate`. Pure orchestration code; no third-party scheduler embedded.
+- **`KernelEngine.Ecs.Flecs`** (`src/c/ecs/flecs/`) — the storage. Thin C ABI wrapper over flecs's storage half. flecs is built with `FLECS_PIPELINE` / `FLECS_SYSTEM` / `FLECS_TIMER` disabled — the scheduler addons aren't compiled in. We use flecs purely for: archetype storage, component lifecycle, query matching, iteration, hierarchies (parent/child), pairs/relationships, observers (`OnAdd`/`OnRemove`/`OnSet`).
+
+Why this split (full rationale in §8):
+
+- flecs's storage is excellent and gives us hierarchies + pairs + observers for free — irreplaceable today.
+- flecs's scheduler injection points (`ecs_os_api`) are process-global, not per-instance — incompatible with the kernel's freedom-first doctrine of per-instance components.
+- Writing our own scheduler isn't a sacrifice; it's the path that makes the runtime + ECS contracts genuinely independent. Anyone replacing flecs (with EnTT, gaia, or a custom sparse-set ECS) only swaps the storage plugin — the scheduler keeps working.
 
 ---
 
@@ -73,7 +81,7 @@ The scheduler uses read/write sets to infer parallelism (two systems with disjoi
 
 ### 2.4 Scheduler
 
-The runtime-internal component that decides system execution order each tick. Schedules across the engine-wide thread pool (enkiTS — see §6).
+The runtime-internal component that decides system execution order each tick. Bevy-style algorithm, dispatches through the engine-wide enkiTS pool (see §6, §8).
 
 The scheduler runs **phases** in fixed order:
 - `Startup` (once)
@@ -86,7 +94,9 @@ The scheduler runs **phases** in fixed order:
 
 `FixedUpdate` runs at a deterministic timestep (default 1/60s) regardless of frame rate. The runtime accumulates real elapsed time and runs `FixedUpdate` 0, 1, or N times per `tick()` to catch up. Standard pattern across Unity / Godot / Bevy; mandatory for stable physics (Box2D `world->Step(fixed_dt)`).
 
-Within a phase, systems run in parallel modulo their read/write conflicts. Between phases, all systems of the current phase complete before the next phase starts (phase barrier).
+Within a phase the scheduler computes **parallel waves**: a greedy walk over registered systems (in declaration order) grouping mutually-compatible systems into the same wave. Two systems are compatible iff their declared component-access sets don't conflict (no write-write, no write-read on the same component, no overlap of declared resource writes). Wave execution: enqueue one enkiTS task per system in the wave, barrier on completion, flush deferred commands accumulated by systems in the wave, advance to next wave. Between phases, all waves of the current phase complete before the next phase starts.
+
+Systems without declared R/W metadata are treated as **exclusive** (their own wave, alone). Safe conservative default — they don't break parallelism for declaring neighbors; they just don't benefit from it.
 
 ### 2.5 Resource
 
@@ -233,39 +243,44 @@ System functions are plain C function pointers — same `[UnmanagedCallersOnly]`
 
 ### 3.4 Factory
 
-Each runtime impl exposes its own `_create()`. **The factory signature is impl-specific** because different runtimes have different construction needs. The vtable return type (`ke_runtime*`) is uniform; how you get there isn't.
+The runtime is a single plugin; the ECS is a separate plugin. Each has its own factory. The runtime factory accepts a `ke_ecs*` borrowed from the storage plugin — that's how the two contracts compose at runtime without coupling at the type level.
 
-**flecs (integrated runtime + ECS)**:
-
-```c
-// In src/c/kernel/include/kernel_engine/runtime/flecs/runtime_flecs.h
-KE_API ke_result ke_runtime_flecs_create(
-    ke_allocator                  *alloc,
-    ke_task_scheduler             *task_scheduler,  // borrowed; the shared pool
-    const ke_runtime_flecs_params *params,
-    ke_runtime                   **out_runtime);
-
-// The same plugin exposes the ECS view of the same instance:
-KE_API ke_ecs * ke_runtime_flecs_get_ecs(ke_runtime *runtime);
-```
-
-flecs owns its storage internally — the caller doesn't supply a `ke_ecs*`. Consumers needing the ECS view query `ke_runtime_flecs_get_ecs(runtime)` (or in C#, ask DI for `IEcs` which resolves to the same instance the `IRuntime` resolution returned).
-
-**Hypothetical future simple (decoupled runtime + external ECS)**:
+**Runtime factory** (lives in `src/c/runtime/include/kernel_engine/kernel/runtime/runtime_create.h`):
 
 ```c
-// In src/c/kernel/include/kernel_engine/runtime/simple/runtime_simple.h
-KE_API ke_result ke_runtime_simple_create(
-    ke_allocator                   *alloc,
-    ke_ecs                         *ecs,            // borrowed; consumer provides
-    ke_task_scheduler              *task_scheduler, // borrowed
-    const ke_runtime_simple_params *params,
-    ke_runtime                    **out_runtime);
+KE_API ke_result ke_runtime_create(
+    ke_allocator             *alloc,
+    ke_ecs                   *ecs,             // borrowed; storage plugin provides
+    ke_task_scheduler        *task_scheduler,  // borrowed; enki plugin provides
+    const ke_runtime_params  *params,
+    ke_runtime              **out_runtime);
 ```
 
-A `simple` runtime accepts any `ke_ecs*` because it doesn't own storage. **Not built now**; documented here so the eventual contract is unambiguous.
+`ke_runtime_params` carries phase configuration (fixed timestep dt, max accumulator catch-up, custom phase list if any), logger pointer, and other knobs. Empty `{0}` is valid (sane defaults).
 
-**Common doctrine across all impls**: the runtime never destroys borrowed dependencies on shutdown. `task_scheduler` outlives every runtime that consumed it; same for any externally-provided `ke_ecs*`.
+**ECS factory** (lives in `src/c/ecs/flecs/include/kernel_engine/kernel/ecs/flecs/ecs_flecs_create.h`):
+
+```c
+KE_API ke_result ke_ecs_flecs_create(
+    ke_allocator              *alloc,
+    const ke_ecs_flecs_params *params,
+    ke_ecs                   **out_ecs);
+```
+
+The flecs ECS plugin owns its own `ecs_world_t` internally. The caller hands it to the runtime via `ke_runtime_create(..., ecs, ...)`. Anyone else (asset loader, scene tree, ad-hoc queries) can also hold the same `ke_ecs*` — there's no exclusivity.
+
+**C# DI registration** (typical host):
+
+```csharp
+services.AddKernel()
+        .AddEnkiTaskScheduler()
+        .AddFlecsEcs()
+        .AddRuntime();
+```
+
+Each `Add*` resolves the previous dependencies and registers the next one. The runtime's DI registration depends on `IEcs` and `ITaskScheduler` being registered first; DI throws if not. Composition is explicit, not magical.
+
+**Common doctrine across all factories**: borrowed dependencies (`ke_ecs*`, `ke_task_scheduler*`, `ke_allocator*`) outlive every consumer. Lifetime contract: the host arranges destruction in reverse order — runtime first, then ECS, then task scheduler, then allocator.
 
 ### 3.5 C# sugar layer — Bevy-style systems via source generator
 
@@ -448,7 +463,7 @@ runtime.Run();
 
 `ke.main` (window/input polling) is folded into `ke.sim`. GLFW poll runs at the top of each tick before the scheduler dispatches.
 
-**Worker pool**: single shared `ke_task_scheduler` (enkiTS). The runtime tells flecs (or any other impl) to use this pool via `ecs_set_threads()` or equivalent.
+**Worker pool**: single shared `ke_task_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly to it — no other thread machinery is created anywhere. flecs is built without its pipeline addon (`FLECS_PIPELINE` off), so flecs's threading API is not even compiled in. Other engine subsystems (asset loading, PSO compile, audio mixing) dispatch to the same pool. One pool, one source of parallelism.
 
 **Synchronization at the sim/render boundary**: the runtime owns `ke_frame_packet` as a registered resource. The Extract phase writes it; immediately after Extract completes, the runtime signals the render thread (semaphore inside `ke_runtime`). Render reads via `peek_frame_packet()`, runs its pipeline, signals back when done. **No frame-sync object on the host side** — the runtime owns the handshake.
 
@@ -469,71 +484,110 @@ The frame packet ABI stays compatible with what we have today (`ke_frame_packet`
 
 ---
 
-## 8. Scheduler + threading doctrine — flecs 4 with enkiTS pool injection
+## 8. Scheduler + threading doctrine — our scheduler, flecs storage-only
 
-### 8.1 Why flecs (not in-house from scratch)
+### 8.1 The decision (and what got rejected)
 
-flecs's scheduler is **co-designed with its archetype storage** and benefits from sharing internal state. Specifically:
+We evaluated four ways to wire ECS + scheduling + pool:
 
-- **Archetype-aware system scheduling** — flecs knows which archetypes each query touches; reorders execution within a wave to maximize cache reuse. A generic external scheduler with opaque access sets can't replicate this.
-- **Query inference** — flecs query terms carry read/write annotations; the scheduler reads them to build the conflict graph. No second source of truth (no chance for an external `access_list` to drift from the actual query).
-- **Mature parallel scheduler** — handles dep ordering, conflict detection, wave dispatch, deferred command queue, fixed timestep accumulator. We'd be writing all this from scratch and chasing flecs's bugs for years.
-- **Bevy / Unity DOTS / UE5 Mass all integrate storage + scheduler** — for the reasons above. The integration is the win, not a compromise.
+- **(A) flecs pipeline + `ecs_os_api` bridge to enki**. flecs runs its scheduler; the global `ecs_os_api.task_new_/task_join_` slots are overridden to dispatch through enki. Pool unified. **Rejected**: `ecs_os_api` is process-global, not per-world — forces a "1 flecs runtime per process" constraint we don't want; the thread-shaped flecs API doesn't compose cleanly with a task-shaped pool (heap-alloc fake handles per task); the calling thread blocks cluelessly in `task_join_` instead of work-stealing on the shared pool. Singleton dialect carried forever.
+- **(B) flecs pipeline single-threaded, enki for everything else**. Disable flecs parallelism; engine subsystems use enki explicitly. **Rejected**: capitulates on ECS parallelism for the wrong reason.
+- **(C) Oversubscription**: flecs spawns N pthreads, enki has M workers, OS arbitrates. **Rejected**: obviously bad.
+- **(D) Our scheduler, flecs storage-only**. Build with `FLECS_PIPELINE` off. Use flecs purely for archetype storage, queries, iteration, hierarchies, pairs, observers. Write our own Bevy-style scheduler in C that dispatches through `ke_task_scheduler*` (enki). **Chosen.**
 
-Because both `ke_runtime` and `ke_ecs` are valid concerns and flecs satisfies both natively, **the `KernelEngine.Runtime.Flecs` plugin satisfies both `ke_runtime` and `ke_ecs` contracts from a single shared instance** (§1, §3.4). This is interface segregation at the contract level (each interface focused) + composition at the impl level (one class implements multiple interfaces) — the standard pattern, applied to C ABI plugins.
+Why D won on the harmonia axis: A buys high internal flecs↔flecs harmony (gift work — beautiful) but pays low external harmony forever (a flecs dialect island inside an engine that's otherwise ke-shaped). D builds external harmony (runtime ↔ ECS ↔ rest-of-engine all in the same idiom) and accepts lower internal harmony (we built the seam between scheduler and storage instead of inheriting it). External harmony travels with every subsystem we add; internal flecs↔flecs harmony stays trapped inside the flecs corner. We chose the harmony that scales.
 
-### 8.2 Bevy-style ergonomics — the C# sugar layer (§3.5)
+### 8.2 The scheduler we build
 
-What Bevy gives Rust developers via type inference (`Query<&mut T, &U>` → write T, read U) we give C# developers via a Roslyn source generator (`Query<Mut<T>, U>` + the access list emitted automatically). The C ABI keeps the explicit `access_list` field because dynamic-language bindings (Lua, Python) can't infer. So:
+Pure-C in `src/c/runtime/src/scheduler/`. ~600-800 LoC across:
 
-- **C# game devs**: write Bevy-style systems, never see `access_list`
-- **Lua / other dynamic bindings**: declare access explicitly through their respective sugar
-- **C ABI**: explicit, always — it's the lowest common denominator surface
+- **wave_builder.c** — greedy R/W conflict grouping. Given an ordered list of systems with declared `(reads, writes)` sets, emit a list of waves (each wave = list of mutually compatible systems). Bevy's algorithm, no magic.
+- **dispatcher.c** — wave execution: enqueue one enki task per system in the wave (each task calls `system->execute(runtime, user_data, dt)`), block on `enki_wait_for_wave()`, flush deferred commands, advance.
+- **phase_loop.c** — Startup once, then per-tick PreUpdate → FixedUpdate ×N (accumulator) → Update → PostUpdate → Extract. Shutdown on destroy. Each phase: walk waves, dispatch, barrier.
+- **defer_queue.c** — per-wave command queue. Systems running in parallel mutate via this queue (`spawn`, `add_component`, `remove_component`, `destroy_entity`). Queue applied serially at wave barrier through the `ke_ecs*` C ABI.
+- **timestep.c** — Glenn Fiedler's "Fix Your Timestep" accumulator for `FixedUpdate`.
 
-### 8.3 Pool unification — flecs 4 with `ecs_set_task_threads` + enkiTS
+R/W metadata declaration is **explicit at registration** — same shape flecs C requires (`.inout = EcsIn` per query term). The scheduler reads `ke_system_params.access_list`. Systems that don't declare access are marked exclusive (their own wave, single-threaded).
 
-flecs 3.x manages its own internal worker pool with no public hook to inject a custom dispatcher. That would mean two parallel pools coexisting (flecs threads + our enkiTS pool), each idle during the other's work.
+### 8.3 What flecs does for us (storage-only)
 
-**flecs 4.x ships `ecs_set_task_threads()`** — a public API that injects a custom task dispatcher. The flecs pipeline still does all its scheduling magic (archetype awareness, conflict graph, wave selection), then **delegates parallel execution to whatever dispatcher we provide**. We wire that dispatcher to our `ke_task_scheduler*` (enkiTS-backed). Result: **single engine-wide pool**.
+flecs is compiled with these `#define` flags removed: `FLECS_PIPELINE`, `FLECS_SYSTEM`, `FLECS_TIMER`. The scheduler code physically isn't linked. What remains:
 
-The composition story stays clean:
-- `KernelEngine.Runtime.Flecs` satisfies `ke_runtime` + `ke_ecs` — flecs is good at both
-- `KernelEngine.TaskScheduler.Enki` satisfies `ke_task_scheduler` — enkiTS is good at it
-- Inside the flecs plugin, an internal bridge converts flecs's task-thread callbacks into `ke_task_scheduler` dispatches — pool unified without forcing flecs into the role of a generic task scheduler
+| Capability | Provided by flecs | Used by |
+|---|---|---|
+| Archetype storage (SoA per archetype) | core | every component access |
+| Entity ID + generation | core | every entity reference |
+| Component lifecycle (add/remove triggers archetype migration) | core | runtime + game code |
+| Query matching (find archetypes containing `{A,B,C}`) | core | system execute bodies |
+| Query iteration (yield packed slices) | core | system execute bodies |
+| Hierarchies (parent/child via `EcsChildOf`) | core | scene tree |
+| Pairs / relationships (e.g. `(Likes, Bob)`) | core | future gameplay (AI, inventory, factions) |
+| Observers (`OnAdd`, `OnRemove`, `OnSet`) | core | resource lifecycle, scene tree, render dirty flags |
 
-**Why not make flecs implement `ke_task_scheduler` too?** flecs's worker pool is designed for system execution (needs a world, an iterator, a query). Forcing it to dispatch arbitrary work items (asset decode, PSO compile, audio mixing) would require an adapter that creates dummy worlds per dispatch — fighting flecs's design for the sake of a "one plugin satisfies everything" purity that isn't a goal. Composition allows multiple-interface impls; it doesn't *mandate* them when the underlying tech doesn't pair naturally. enkiTS exists, is mature, is already wrapped behind `ke_task_scheduler`. Keep it.
+flecs's scheduling, pipeline, system framework, timing: **gone from the binary.** Saves ~50KB, removes ~30 public symbols we'd otherwise have to discipline ourselves not to call.
 
-### 8.4 What runs where (the actual threading story)
+### 8.4 Pool unification (no bridge, no global state)
+
+There is no bridge. There is no `ecs_os_api` modification. The scheduler dispatches directly to enki:
+
+```c
+for (size_t i = 0; i < wave->system_count; i++) {
+    ke_task_scheduler_task_t t = {
+        .fn   = run_system_trampoline,
+        .arg  = wave->systems[i],
+    };
+    enki_handles[i] = task_scheduler->add(task_scheduler, &t);
+}
+task_scheduler->wait_for_all(task_scheduler, enki_handles, wave->system_count);
+```
+
+flecs (without pipeline) never creates a thread. enki is the only source of parallelism in the engine. Adding a second runtime instance in the same process is just creating a second `ke_runtime*` with its own `ke_ecs*` — no conflict, no shared state, no caveat.
+
+### 8.5 Bevy-style C# ergonomics — the codegen path
+
+What Bevy gives Rust devs via type inference (`Query<&mut T, &U>` → write T, read U), C# devs get via a Roslyn source generator that parses `Query<Mut<T>, Read<U>>` parameters and emits the `access_list` at compile time. The C ABI keeps the explicit `access_list` because dynamic bindings (Lua, Python) can't infer.
+
+Three paths to `access_list` in C#, in increasing ergonomics:
+
+1. **Manual declaration at register** — `RegisterSystem(new SystemParams { Reads = [...], Writes = [...], Execute = ... })`. Verbose. Identical to flecs C verbosity. Works without any codegen.
+2. **Reflection at register** — inspect lambda/method generic parameters via `MethodInfo`. Tens of milliseconds at startup; zero runtime cost. Works without codegen.
+3. **Source generator** (recommended once usage scales) — `[System(Phase.Update)] static void Foo(Query<Mut<T>>, Res<U>, ...) { ... }`. Codegen reads the parameter types, emits the descriptor + analyzer warnings on conflict. Same ergonomics Bevy users have.
+
+Path 1 unblocks development immediately. Path 3 lands when system count makes manual lists painful. Codegen is **ergonomic enhancement, not a prerequisite** — the scheduler runs on whatever `access_list` it receives, regardless of how it was produced.
+
+### 8.6 What runs where (the actual threading story)
 
 ```
-ke.sim thread (the only thread driving the runtime)
+ke.sim thread (drives the runtime tick loop)
 │
-├── runtime.tick() called once per frame
+├── runtime.tick(dt)
 │    │
-│    ├── flecs pipeline.run()
-│    │    ├── computes wave structure (archetype-aware)
-│    │    ├── for each wave: calls our task_thread dispatcher
-│    │    │    └── enqueues N task entries on ke_task_scheduler (enkiTS)
-│    │    └── enkiTS workers execute the systems in parallel
+│    ├── for each phase in [PreUpdate, FixedUpdate×N, Update, PostUpdate, Extract]:
+│    │    │
+│    │    ├── waves = compute_waves(systems_in_phase)
+│    │    │
+│    │    └── for each wave:
+│    │         ├── enki.add_task(system) for each system in wave   ◄── parallel here
+│    │         ├── enki.wait_for_wave()
+│    │         └── ecs.apply_deferred(wave.defer_queue)
 │    │
-│    └── frame packet is ready for ke.render
+│    └── frame packet ready
 │
-└── (between ticks: asset loaders, PSO compile, audio mixing,
-     and other engine work also dispatch to ke_task_scheduler — same pool)
+└── (between ticks: asset loaders, audio mixing, PSO compile etc.
+     also dispatch directly to ke_task_scheduler — same enki pool)
 
 ke.render thread
 └── consumes frame packet, drives the renderer
 ```
 
-One pool, used by everything. ke.sim doesn't manage threads; it tells flecs to tick, flecs delegates to the pool. Other engine subsystems use the pool directly.
+One pool, used by everything. flecs (storage-only) never sees a thread. The scheduler is small, transparent, ours.
 
-### 8.5 References worth pillaging
+### 8.7 References worth pillaging
 
-- **Bevy ECS source** — `bevy_ecs/src/schedule/` modules. The algorithmic shape (dep graph + parallel waves + deferred commands) is the conceptual model we want flecs to implement on our behalf. Useful for understanding what flecs is doing internally and what to expect from the C# sugar layer.
-- **flecs 4 docs** — `ecs_set_task_threads()` documentation, task-threads example. Required reading before wiring the bridge.
-- **flecs 4 migration notes** — API changes from 3.2.x to 4.x. Most are renames; a few are semantic shifts. Walk through carefully when adapting our binding.
-- **Stride Engine (C#)** — `SchedulerProcessor.cs` — analogue C# implementation of declared-access + dispatch. Less directly useful now that flecs handles the scheduling, but a good reference for the C# wrapper shape.
-- **Sebastian Aaltonen's writeups** — high-level job system patterns. Background reading; doesn't affect the wiring directly.
+- **Bevy ECS source** — `bevy_ecs/src/schedule/` modules: `executor/multi_threaded.rs` for the wave dispatcher; `graph.rs` for the dep graph; `condition.rs` for run conditions. Algorithmic shape directly transferable to our C scheduler.
+- **flecs 4 docs** — `ecs_query_*`, `ecs_iter_*`, `ecs_emit` (for triggering observers manually if we ever need to). Storage-side reading.
+- **Glenn Fiedler — "Fix Your Timestep"** — canonical reference for the FixedUpdate accumulator in §8.2's `timestep.c`.
+- **Sebastian Aaltonen's job system writeups** — background reading on cache-aware task partitioning; informs how we shape `wave_builder.c`'s system ordering.
 
 ---
 
@@ -565,20 +619,43 @@ The current `ke_ecs` sparse-set + `Application.cs` orchestration stays alive thr
 Write the contract above as actual C headers. No impl yet. Review with user. Lock when both sides happy.
 
 ### Phase R1 — flecs spike ✅ (commit `b58b21f`)
-Stood up `src/c/runtime/flecs/` with `ke_runtime_flecs_create()` wrapping flecs's pipeline. 5 integration tests proved the vtable shape (register_module + register_system + tick + destroy). **Outcome**: vtable shape validated. **Hidden cost surfaced**: flecs scheduler can't be decoupled from flecs storage; see §8.1 for the architectural finding that ended this path.
+Stood up `src/c/runtime/flecs/` (early layout — to be reorganized in R2.5) with `ke_runtime_flecs_create()` wrapping flecs's pipeline. 5 integration tests proved the vtable shape (register_module + register_system + tick + destroy). **Outcome**: vtable shape validated. The spike used flecs's pipeline; that approach was replaced after the §8.1 evaluation.
 
 ### Phase R2 — `KernelEngine.Runtime.Flecs` C# binding ✅ (commits `87001a0`, `e3fba2a`)
 ClangSharp bindings + `FlecsRuntime` C# wrapper + 8 C# integration tests + `00_runtime_minimal` example (R3-A) opening a GLFW window driven by the runtime. **Outcome**: ABI crosses to managed cleanly; trampoline pattern works; host-driven frame loop with runtime tick works end-to-end.
 
-### Phase R2.5 — flecs 4 upgrade + ke_ecs surface expansion + pool unification
+### Phase R2.5a — flecs 4.1.5 upgrade ✅ (commit `df48365`)
+Bumped vcpkg to flecs 4.1.5 via `overrides`. Single API break adapted (`ecs_entity_desc_t::add` array→pointer). All R1/R2 tests stayed green. Upgrade is sunk cost we paid before the storage/scheduler split decision, but it's reusable: 4.x is where we want to live anyway.
 
-Three intertwined pieces of work driven by the §8 doctrine settlement:
+### Phase R2.5b — Split plugins: runtime vs ECS
 
-1. **Upgrade flecs 3.2.11 → 4.1.5 in `vcpkg.json`**. Walk the binding for breaking changes (mostly renames in 3→4; should be a contained morning).
-2. **Wire `ecs_set_task_threads()` to dispatch through `ke_task_scheduler*`** — internal bridge in `runtime_flecs.c` that converts flecs task-thread callbacks into enkiTS task enqueues. The runtime factory takes a `ke_task_scheduler*` and installs the bridge during init. Pool unification lands.
-3. **Expand `ke_ecs` contract** with multi-component query + filter (`With`/`Without`) APIs. Wire `ke_ecs_flecs_get_ecs(runtime)` (or equivalent getter) so the same plugin satisfies `ke_ecs` from the same flecs world. C# `FlecsRuntime` class implements both `IRuntime` and `IEcs`; DI registers the same instance under both interfaces (the composition pattern from §1).
+Reorganize the C source layout to match the new doctrine:
 
-All R1/R2 commits (`b58b21f`, `87001a0`, `e3fba2a`) stay; we evolve from there. Tests stay green throughout (small batches, one piece at a time). Estimated: 1.5-2 sessions total.
+- **Move**: `src/c/runtime/flecs/` storage helpers → `src/c/ecs/flecs/`
+- **Create**: `src/c/runtime/` for our own pure-C scheduler (no flecs dep)
+- **Rebuild**: flecs as a CMake target with `FLECS_PIPELINE`, `FLECS_SYSTEM`, `FLECS_TIMER` `#define`s **removed**. Compile-time strip of the scheduler addons.
+- **Rewrite headers**:
+  - `kernel_engine/kernel/runtime/runtime.h` — runtime vtable + factory (`ke_runtime_create`)
+  - `kernel_engine/kernel/ecs/ecs.h` — expanded `ke_ecs` contract (multi-component query, With/Without filters, observers, hierarchies)
+  - `kernel_engine/kernel/ecs/flecs/ecs_flecs_create.h` — `ke_ecs_flecs_create()`
+- **C# side**: `KernelEngine.Runtime` + `KernelEngine.Ecs.Flecs` as separate projects. DI registers them independently. The R3-A example wires both.
+
+### Phase R2.5c — Scheduler core in pure C
+
+Implement `src/c/runtime/src/scheduler/`:
+- `wave_builder.c` — R/W conflict grouping (~150 LoC)
+- `dispatcher.c` — enki dispatch + wave barrier + defer flush (~120 LoC)
+- `phase_loop.c` — phase orchestration + fixed-timestep accumulator (~180 LoC)
+- `defer_queue.c` — per-wave command queue applied through `ke_ecs*` (~150 LoC)
+- `timestep.c` — Glenn Fiedler accumulator (~50 LoC)
+
+Tests:
+- Wave builder: synthetic system sets with known conflict patterns → expected wave layout
+- Dispatcher: N systems in parallel run in N≤workers threads (measured via thread-id set)
+- Defer queue: spawn+add+remove ordering preserved at barrier flush
+- Fixed-timestep: accumulator catch-up, no drift over 60s
+
+Estimated: 4-5 sessions for R2.5b + R2.5c combined.
 
 ### Phase R3 — First real consumer: a minimal example (NOT Pong yet)
 Port `01_window_scene` to use the runtime. Window module, render module (still wrapping old `KernelEngine.Render.Bgfx`), one example-specific module. Old `Application.cs` is bypassed entirely for this example. **Both worlds coexist**: `01_window_scene` uses runtime; other examples still use Application.cs.
@@ -597,7 +674,9 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 
 ### Migration risk gates
 - After R1: ABI shape is sound. ✅
-- After R2.5: flecs 4 builds + ke_ecs surface expanded + pool unified via `ecs_set_task_threads`. All R1/R2 integration tests stay green; new tests cover the multi-contract DI pattern (same instance under `IRuntime` and `IEcs`). Hard gate before R3.
+- After R2.5a: flecs 4.1.5 builds + tests stay green. ✅
+- After R2.5b: plugins split cleanly; runtime depends only on `ke_ecs*` + `ke_task_scheduler*` (no flecs symbol leakage); flecs compiled without pipeline addons; build smaller.
+- After R2.5c: scheduler runs parallel waves on enki; defer queue applies correctly; fixed timestep doesn't drift; all unit tests + R1/R2 integration tests green. **Hard gate before R3.**
 - After R3: contract proves it can host a real frame with renderer + window. If shape is wrong, revise the doc and try again before going deeper.
 - After R5: Pong runs end-to-end identical visually + behaviorally. Hard gate.
 
@@ -609,7 +688,7 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 2. **Resource ownership** — who owns the bytes behind `ke_resource_handle`? Runtime, or allocator passed in? Probably runtime, with allocator hint. Lock in during R1.
 3. **Cross-runtime portability of modules** — if a Module is written against the ABI, does it work on any `ke_runtime` impl + any `ke_ecs` impl? Yes by design: modules only see the contract surface. **But**: modules using `ke_ecs_flecs`-specific features (observers, prefabs, relationships, rich query terms) won't run on sparse-set. **Doctrine**: modules that need those features explicitly require a richer `ke_ecs` impl in their dependency list (analogous to how a render module today requires `ke_render`); they don't pretend to be portable.
 4. **Render world separation** — currently the doc says render is NOT a separate runtime (it's a pipeline consuming the snapshot). Bevy uses a separate "sub-app" world. Lock the simpler "pipeline-only" approach unless a real use case demands sub-app.
-5. **`ke_ecs` improvements** — multi-component queries (`query<T1, T2>`), entity generations (stale-ID detection), basic filters (With/Without). Land in the `ke_ecs` contract so every impl (sparse-set, future flecs storage) exposes them uniformly. Sparse-set impl gets the minimum to support `ke_runtime_simple`; richer features ride on `ke_ecs_flecs` if/when it ships. **Decision**: land in contract, not impl-specific — doctrine "kernel = building blocks" stays honest.
+5. **`ke_ecs` surface expansion** — multi-component queries (`query<T1, T2>`), entity generations (stale-ID detection), filters (`With`/`Without`), observers (`OnAdd`/`OnRemove`/`OnSet`), hierarchies (parent/child queries). Lands in the `ke_ecs` contract during R2.5b so every impl exposes the same surface. `KernelEngine.Ecs.Flecs` forwards to flecs's native primitives; the hand-rolled sparse-set impl in `src/c/kernel/` either grows to match or accepts a "low-tier alternative" label (some calls return `KE_ERROR_NOT_SUPPORTED`).
 6. **Lua/scripting integration** — how does a Lua script declare a Module? Probably a builtin `LuaScriptModule` that the runtime registers; Lua scripts then register systems through that bridge. Deferred to post-R5.
 7. **Variadic queries in the C# source generator** — `Query<T1, T2, T3, T4, ...>` is unbounded in arity. Approaches: (a) generate `Query<T1>` through `Query<T16>` overloads (closest to how Bevy 0.x handled it before const generics); (b) use C# `ITuple` + boxing (slow); (c) emit per-method-call specialized query types in the generator (most flexible, more codegen). Lock during R2 once the source generator stub exists.
 
@@ -626,12 +705,24 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 
 ## 13. Alternatives considered
 
-- **In-house scheduler (`ke_runtime_simple`) instead of using flecs's** — write our own scheduler in C following the Bevy algorithm; consume any `ke_ecs*`. **Considered and deferred**: real engines (Bevy, Unity DOTS, UE5 Mass, flecs) all integrate scheduler + storage for archetype-aware optimization. We'd be reinventing flecs's mature scheduler and losing the integration benefit. May be revisited in M3+ if a game genuinely needs an ECS impl that flecs can't host. For now, `ke_runtime_flecs` covers everything we plan to ship.
-- **Forcing flecs to satisfy `ke_task_scheduler` too** — would unify everything in one plugin. Rejected: flecs's worker pool is designed for ECS system dispatch (needs a world + iterator + query), not generic compute. Wrapping it for asset/PSO/audio work needs ugly adapter code (dummy worlds per dispatch). Composition allows multi-contract impls; it doesn't *force* them when the tech doesn't pair naturally. enkiTS stays as `ke_task_scheduler`.
-- **Stay on flecs 3.2.11 with two coexisting pools** — works today (R1/R2 already do this implicitly). Rejected: pool unification is a real win for cache locality + tracing/profiling clarity, and flecs 4 makes it cheap (one API call).
-- **entt** (C++, header-only, no scheduler) — would force us to write the scheduler ourselves AND lose flecs's relationships/observers/prefabs. Rejected.
-- **Bevy ECS as a copy target** — Rust, doesn't transfer directly. The ergonomic concepts (§3.5 source generator, deferred commands, fixed timestep, SystemSet) are what we copy, not the code.
-- **Don't have a runtime at all; keep `Application.cs`** — that's the current state. The doc exists because that state has failed the simplicity test for a >1-binding engine.
+**Scheduling integration with flecs** (the central question — full evaluation in §8.1):
+
+- **(A) flecs pipeline + `ecs_os_api` bridge to enki**. Override `task_new_/task_join_` globally so flecs's parallel dispatch routes through enki. **Rejected**: `ecs_os_api` is process-global; introduces "1 flecs runtime per process" constraint and a permanent thread-shaped/task-shaped impedance mismatch. The flecs dialect contaminates the runtime corner of the engine forever.
+- **(B) flecs single-threaded; enki explicitly for everything else**. **Rejected**: surrenders ECS parallelism by choice. The wave model we want is achievable without surrendering anything.
+- **(C) Two pools (flecs threads + enki workers, OS arbitrates)**. **Rejected**: oversubscription.
+- **(D) Our scheduler, flecs storage-only**. **Chosen.** Buys external harmony (engine reads as one engine) at the cost of writing the wave dispatcher ourselves. flecs `FLECS_PIPELINE` addon disabled, scheduler code physically not compiled.
+
+**ECS storage choice** (evaluated after the scheduler decision narrowed scope to "storage only"):
+
+- **EnTT** (C++17, header-only, MIT, AAA-track-record — Minecraft, O3DE). Storage-only by design (best architectural fit). Rejected for now: C++ template-heavy → per-component wrap shim required for our C ABI surface (~real friction every time a component is added); no native parent/child hierarchies (scene tree would be rebuilt on top); no pairs/relationships (closes a door we want open). **Credible fallback if flecs ever bites us.**
+- **gaia-ecs** (C++20, header-only, MIT, modern challenger). Same C ABI friction as EnTT, plus smaller community + bus-factor 1. **Reassess in ~2 years** when track record builds.
+- **Hand-rolled sparse-set ECS** (the one already in `src/c/kernel/`). Lacks hierarchies, observers, queries beyond single-component. Stays alive only as a low-tier alternative impl of `ke_ecs` for those who want zero-dep storage.
+
+**Other rejected paths**:
+
+- **Forcing flecs to satisfy `ke_task_scheduler` too** — flecs's pool is designed for ECS dispatch, not generic compute. Adapter would need dummy worlds per dispatch. enkiTS stays as `ke_task_scheduler`.
+- **Bevy ECS as a direct copy** — Rust, doesn't transfer. The algorithmic shape (declared access + waves + deferred + fixed timestep + source-gen ergonomics) is what we copy; the code stays in Rust.
+- **Don't have a runtime; keep `Application.cs`** — that's the current state. The doc exists because that state has failed the simplicity test for a >1-binding engine.
 - **External job library besides enkiTS** (Intel TBB, Marl, NVIDIA Hwloc) — enkiTS is already in the engine, already wrapped, already mature. No reason to swap.
 
 ---
@@ -644,13 +735,16 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 - [x] R2: C# bindings via ClangSharp + `FlecsRuntime` wrapper + 8 managed tests (commits `87001a0`, `e3fba2a`)
 - [x] R2 extra: `00_runtime_minimal` example proving GLFW window + tick loop run end-to-end (commit `e3fba2a`)
 - [x] Companion doc: [`RenderArchitectureV2.md`](RenderArchitectureV2.md)
-- [x] §3.4 factory signature documented — impl-specific construction; flecs creates ECS internally, hypothetical simple consumes external
-- [x] §8 settled — flecs 4 satisfies `ke_runtime` + `ke_ecs` via composition; `ecs_set_task_threads` injects enkiTS dispatcher; pool unified
-- [ ] **R2.5 — flecs 4 upgrade + ke_ecs surface expansion + pool unification**: (a) bump `vcpkg.json` to flecs 4.1.5; adapt binding to 4.x API. (b) wire `ecs_set_task_threads` to dispatch through `ke_task_scheduler*`. (c) expand `ke_ecs` contract with multi-component query + filters; expose `ke_runtime_flecs_get_ecs(runtime)`; `FlecsRuntime` C# class implements both `IRuntime` and `IEcs`. All tests stay green.
+- [x] §3.4 factory signature documented — runtime accepts injected `ke_ecs*`; storage plugin (`KernelEngine.Ecs.Flecs`) is a separate factory
+- [x] §8 settled — Opção D (our scheduler, flecs storage-only with `FLECS_PIPELINE` off); evaluation of A/B/C/D recorded
+- [x] §13 alternatives revised — A/B/C rejected with explicit reasons; EnTT/gaia-ecs evaluated and parked as fallback
+- [x] R2.5a — flecs 4.1.5 upgrade (commit `df48365`)
+- [ ] **R2.5b — Plugin split**: move flecs helpers to `src/c/ecs/flecs/`; create `src/c/runtime/` for our scheduler; rebuild flecs CMake target with pipeline addons stripped; rewrite headers; split C# projects (`KernelEngine.Runtime` + `KernelEngine.Ecs.Flecs`)
+- [ ] **R2.5c — Scheduler core**: wave builder, dispatcher, phase loop, defer queue, fixed timestep accumulator; unit + integration tests
 - [ ] **R3 — First real example consumer (`01_window_scene` ported to runtime)**
 - [ ] **R4 — Render module shim wrapping the current `KernelEngine.Render.Bgfx`** (so any example can opt into runtime keeping the current renderer)
 - [ ] **R5 — Pong migrated to runtime** (hard gate: identical visual + behavioral)
 - [ ] **R6 — Examples 02-15 migrated incrementally**
 - [ ] **R7 — `Application.cs` deletion** (after every consumer migrated)
 
-**This doc is the contract.** §3 vtable + Module/System/Phase shape are locked; the factory signature and §8 doctrine were revised after R2 retrospective and are now the current contract. Impl drift away from any locked section is a bug in the impl, not in the doc.
+**This doc is the contract.** §3 vtable + Module/System/Phase shape are locked; §8 doctrine pivoted to Opção D after the harmonia/singleton evaluation and is now the current contract. Impl drift away from any locked section is a bug in the impl, not in the doc.
