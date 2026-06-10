@@ -159,18 +159,21 @@ extern "C"
             alloc, buffer_count, draw_capacity, point_capacity, spot_capacity);
         h->vtable.handle = h;
         h->vtable.begin_write = [](ke_frame_sync *self) -> ke_frame_packet * {
+            if (!self) return nullptr;
             return reinterpret_cast<KeFrameSyncHandle *>(self)->impl->BeginWrite();
         };
         h->vtable.end_write = [](ke_frame_sync *self) {
-            reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndWrite();
+            if (self) reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndWrite();
         };
         h->vtable.begin_read = [](ke_frame_sync *self) -> ke_frame_packet * {
+            if (!self) return nullptr;
             return reinterpret_cast<KeFrameSyncHandle *>(self)->impl->BeginRead();
         };
         h->vtable.end_read = [](ke_frame_sync *self) {
-            reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndRead();
+            if (self) reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndRead();
         };
         h->vtable.destroy = [](ke_frame_sync *self, ke_allocator *a) {
+            if (!self || !a) return;
             auto *hh = reinterpret_cast<KeFrameSyncHandle *>(self);
             hh->impl->~KeFrameSync();
             a->free(a, hh->impl);

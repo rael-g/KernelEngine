@@ -383,49 +383,49 @@ GpuUniformHandle BgfxGpuDevice::CreateUniform(const char* name, GpuUniformType t
 void BgfxGpuDevice::DestroyShader(GpuShaderHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::ShaderHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::ShaderHandle{handle});
 }
 
 void BgfxGpuDevice::DestroyProgram(GpuProgramHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::ProgramHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::ProgramHandle{handle});
 }
 
 void BgfxGpuDevice::DestroyUniform(GpuUniformHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::UniformHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::UniformHandle{handle});
 }
 
 void BgfxGpuDevice::DestroyTexture(GpuTextureHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::TextureHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::TextureHandle{handle});
 }
 
 void BgfxGpuDevice::DestroyFrameBuffer(GpuFrameBufferHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::FrameBufferHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::FrameBufferHandle{handle});
 }
 
 void BgfxGpuDevice::DestroyVertexBuffer(GpuVertexBufferHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::VertexBufferHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::VertexBufferHandle{handle});
 }
 
 void BgfxGpuDevice::DestroyIndexBuffer(GpuIndexBufferHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::IndexBufferHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::IndexBufferHandle{handle});
 }
 
 void BgfxGpuDevice::DestroyDynamicIndexBuffer(GpuDynamicIndexBufferHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::destroy(::bgfx::DynamicIndexBufferHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::destroy(::bgfx::DynamicIndexBufferHandle{handle});
 }
 
 void BgfxGpuDevice::SetState(GpuStateFlags state, uint32_t rgba)
@@ -443,49 +443,50 @@ void BgfxGpuDevice::SetTransform(const void* mtx, uint16_t num)
 void BgfxGpuDevice::SetUniform(GpuUniformHandle handle, const void* value, uint16_t num)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setUniform(::bgfx::UniformHandle{handle}, value, num);
+    if (handle != kGpuInvalidHandle) ::bgfx::setUniform(::bgfx::UniformHandle{handle}, value, num);
 }
 
 void BgfxGpuDevice::SetTexture(uint8_t stage, GpuUniformHandle sampler, GpuTextureHandle handle, uint32_t flags)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setTexture(stage, ::bgfx::UniformHandle{sampler}, ::bgfx::TextureHandle{handle}, flags);
+    if (sampler != kGpuInvalidHandle && handle != kGpuInvalidHandle)
+        ::bgfx::setTexture(stage, ::bgfx::UniformHandle{sampler}, ::bgfx::TextureHandle{handle}, flags);
 }
 
 void BgfxGpuDevice::SetVertexBuffer(uint8_t stream, GpuVertexBufferHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setVertexBuffer(stream, ::bgfx::VertexBufferHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::setVertexBuffer(stream, ::bgfx::VertexBufferHandle{handle});
 }
 
 void BgfxGpuDevice::SetIndexBufferStatic(GpuIndexBufferHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::setIndexBuffer(::bgfx::IndexBufferHandle{handle});
 }
 
 void BgfxGpuDevice::SetIndexBufferDynamic(GpuDynamicIndexBufferHandle handle)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setIndexBuffer(::bgfx::DynamicIndexBufferHandle{handle});
+    if (handle != kGpuInvalidHandle) ::bgfx::setIndexBuffer(::bgfx::DynamicIndexBufferHandle{handle});
 }
 
 void BgfxGpuDevice::SetBuffer(uint8_t stage, GpuDynamicIndexBufferHandle handle, GpuAccess access)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::setBuffer(stage, ::bgfx::DynamicIndexBufferHandle{handle}, ToBgfx(access));
+    if (handle != kGpuInvalidHandle) ::bgfx::setBuffer(stage, ::bgfx::DynamicIndexBufferHandle{handle}, ToBgfx(access));
 }
 
 void BgfxGpuDevice::Submit(uint16_t id, GpuProgramHandle program, uint32_t depth, bool preserveState)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::submit(id, ::bgfx::ProgramHandle{program}, depth, preserveState);
+    if (program != kGpuInvalidHandle) ::bgfx::submit(id, ::bgfx::ProgramHandle{program}, depth, preserveState);
 }
 
 void BgfxGpuDevice::Dispatch(uint16_t id, GpuProgramHandle program, uint32_t x, uint32_t y, uint32_t z)
 {
     ke_thread_assert_current("ke.render");
-    ::bgfx::dispatch(id, ::bgfx::ProgramHandle{program}, x, y, z);
+    if (program != kGpuInvalidHandle) ::bgfx::dispatch(id, ::bgfx::ProgramHandle{program}, x, y, z);
 }
 
 void BgfxGpuDevice::SetPaletteColor(uint8_t index, float r, float g, float b, float a)

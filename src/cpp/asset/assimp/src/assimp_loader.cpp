@@ -37,6 +37,7 @@ AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
                                 const char *path,
                                 ke_load_model_complete_func on_complete,
                                 void *user_data) -> ke_task * {
+        if (!self || !self->handle) return nullptr;
         return static_cast<AssimpLoader *>(self->handle)->LoadModelAsync(
             scheduler, path, on_complete, user_data);
     };

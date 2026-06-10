@@ -46,6 +46,10 @@ typedef struct ke_arena
 
 static void *arena_alloc(ke_allocator *self, size_t size, size_t alignment)
 {
+    if (!self || size == 0)
+    {
+        return NULL;
+    }
     ke_arena *arena = (ke_arena *)self->handle;
     if (!arena || !arena->buffer)
     {
@@ -151,7 +155,10 @@ typedef struct alloc_header
 
 static void *proxy_alloc(ke_allocator *self, size_t size, size_t alignment)
 {
+    if (!self || !self->handle) return NULL;
     proxy_impl *impl = (proxy_impl *)self->handle;
+    if (!impl->inner) return NULL;
+    
     size_t total_size = size + sizeof(alloc_header);
     
     uint8_t *ptr = (uint8_t *)impl->inner->alloc(impl->inner, total_size, alignment);

@@ -40,10 +40,12 @@ EnkiTaskScheduler::EnkiTaskScheduler(ke_allocator* alloc) : allocator_(alloc) {
     };
 
     api_.dispatch = [](ke_task_scheduler* self, ke_task_func func, void* data) -> ke_task* {
+        if (!self || !self->handle || !func) return nullptr;
         return self->dispatch_on_complete(self, func, data, nullptr, nullptr);
     };
 
     api_.dispatch_on_complete = [](ke_task_scheduler* self, ke_task_func func, void* data, ke_task_on_complete_func on_complete, void* user_data) -> ke_task* {
+        if (!self || !self->handle || !func) return nullptr;
         auto* internal = static_cast<EnkiTaskScheduler*>(self->handle);
         auto* scheduler = static_cast<::enki::TaskScheduler*>(internal->scheduler_ptr_);
         

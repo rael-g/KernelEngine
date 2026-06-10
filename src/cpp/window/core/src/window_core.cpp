@@ -9,27 +9,33 @@ WindowCore::WindowCore()
     std::memset(&api_struct_, 0, sizeof(api_struct_));
     api_struct_.handle = this;
     api_struct_.destroy = [](ke_window* self) {
+        if (!self) return;
         auto* core = static_cast<WindowCore*>(self->handle);
         delete core;
     };
     api_struct_.on_initialize = [](ke_window* self) {
+        if (!self) return KE_ERROR_INVALID_ARGUMENT;
         auto* core = static_cast<WindowCore*>(self->handle);
         // Initialization usually happens via WindowCore::Initialize() directly
         // but we can call it here if we store config.
         return KE_OK;
     };
     api_struct_.on_shutdown = [](ke_window* self) {
+        if (!self) return KE_ERROR_INVALID_ARGUMENT;
         static_cast<WindowCore*>(self->handle)->Shutdown();
         return KE_OK;
     };
     api_struct_.should_close = [](ke_window* self) {
+        if (!self) return (ke_bool)1;
         return static_cast<WindowCore*>(self->handle)->ShouldClose() ? (ke_bool)1 : (ke_bool)0;
     };
     api_struct_.poll_events = [](ke_window* self) {
+        if (!self) return KE_ERROR_INVALID_ARGUMENT;
         static_cast<WindowCore*>(self->handle)->PollEvents();
         return KE_OK;
     };
     api_struct_.get_size = [](ke_window* self, int32_t* w, int32_t* h) {
+        if (!self) return KE_ERROR_INVALID_ARGUMENT;
         uint32_t uw, uh;
         auto res = static_cast<WindowCore*>(self->handle)->GetSize(&uw, &uh);
         if (w) *w = (int32_t)uw;
@@ -37,6 +43,7 @@ WindowCore::WindowCore()
         return res;
     };
     api_struct_.get_native_handle = [](ke_window* self) {
+        if (!self) return (void*)nullptr;
         return static_cast<WindowCore*>(self->handle)->GetNativeHandle();
     };
 }
