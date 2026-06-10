@@ -28,7 +28,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 add_subdirectory(src/c/kernel)
 add_subdirectory(src/cpp/framework)
 add_subdirectory(src/cpp/task_scheduler/enki)
-add_subdirectory(src/c/runtime/flecs)  # legacy spike plugin — delete in R2.5b stage C
 add_subdirectory(src/c/runtime)
 add_subdirectory(src/c/ecs/flecs)
 add_subdirectory(src/cpp/threading)
