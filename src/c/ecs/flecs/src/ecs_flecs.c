@@ -1,4 +1,4 @@
-#include <kernel_engine/kernel/world/ke_ecs.h>
+#include <kernel_engine/kernel/world/ke_ecs_flecs.h>
 
 #include <flecs.h>
 

@@ -89,20 +89,10 @@ extern "C"
                                                ke_allocator    *alloc,
                                                ke_ecs         **out_ecs);
 
-    typedef struct ke_ecs_flecs_params
-    {
-        int reserved;  // empty for the spike; expanded as the surface grows
-    } ke_ecs_flecs_params;
-
-    /// Creates a ke_ecs vtable backed by an internally-owned flecs world.
-    /// Ownership: the caller owns the returned ke_ecs*; call ke_ecs->destroy() when done.
-    /// The underlying flecs world is created at ke_ecs_flecs_create() and destroyed by
-    /// ke_ecs->destroy(). The flecs build used by this impl strips FLECS_PIPELINE /
-    /// FLECS_SYSTEM / FLECS_TIMER addons — flecs is used as storage + queries + observers
-    /// only; the scheduler is the in-house ke_runtime (kernel/runtime/runtime_create.h).
-    KE_API ke_result ke_ecs_flecs_create(ke_allocator              *alloc,
-                                          const ke_ecs_flecs_params *params,
-                                          ke_ecs                   **out_ecs);
+    // ke_ecs_flecs_create lives in a sibling header (ke_ecs_flecs.h) so the
+    // ClangSharp binding for the flecs plugin can be generated against its own
+    // file with libraryPath = ke_ecs_flecs, while Kernel.rsp keeps libraryPath
+    // = ke_kernel for ke_ecs_sparse_set_create.
 
 #ifdef __cplusplus
 }
