@@ -12,7 +12,7 @@ The current renderer (`KernelEngine.Render.Bgfx` + `Render.Core`) is **functiona
 
 1. **`GpuDevice` API is OpenGL/DX11-era stateful** — `SetState` / `SetUniform` / `Submit` per draw. The control bgfx gives us over Vulkan memory + barriers is *literally not used* because the abstraction above it pretends GL exists.
 2. **Hundreds of direct `gpu_device->` calls scattered across `core_renderer.cpp`** — any change to the device API breaks 500 sites at once. Swapping the device is a 3-month project.
-3. **No PSO management** — bgfx hides pipeline state objects entirely. When we move to a backend that exposes them (WebGPU-style), we'll either copy Godot's mistake (synchronous compile on first use → "Compiling Shaders" screen) or design it right. We need to design it right *now*, before the problem exists.
+3. **No PSO management** — bgfx hides pipeline state objects entirely. When we move to a backend that exposes them (WebGPU-style), we'll either copy Godot's mistake (lazy compile + runtime stalls forever) or design the **three-mechanism solution** (ubershader fallback + build-time manifest + per-machine disk cache — see §6). The mechanisms compose; copying just one (cache without manifest, or manifest without ubershader) leaves the player with stutters. We need to design all three *now*, before the problem exists.
 4. **Shader pipeline is bgfx `.sc`** — a preprocessor over GLSL. No modules, no generics, no interfaces. Slang exists; Slang is the future; the migration has to happen at some point.
 5. **No mid-level abstractions** — the renderer is "high-level features call the low-level device directly". There's no `RenderPass` / `ComputePass` / `MaterialBinding` layer to absorb backend changes.
 
@@ -315,56 +315,223 @@ Owns PSO lifecycle. Detailed in §6.
 
 ---
 
-## 6. PSO architecture — async compile with placeholder (avoids "Compiling Shaders" screen)
+## 6. PSO architecture — three mechanisms working together
 
-The user identified this correctly as a Godot mistake to avoid. Our design:
+The Godot mistake worth understanding precisely: it isn't that they "forgot" to cache PSOs; it's that their architecture allows **runtime shader generation via script**, and PSO state spreads across forward/shadow/gbuffer/depth-prepass passes without explicit declaration. Without manifest constraints, the engine cannot enumerate "all PSOs this game will need" at build time → can only compile lazily → first time each combination is hit → 100ms-2s stall → player sees hitches everywhere.
 
-### 6.1 Compile flow
+Our doctrine is the inverse, and it is the central design constraint of the renderer:
+
+> **The set of PSOs a game needs MUST be statically derivable from the project. The engine refuses runtime shader generation.**
+
+This is the trade-off Unreal made (knowingly) and Godot didn't (the architecture grew before PSOs existed in GL ES). It's what separates "smooth shipped game" from "stutters everywhere".
+
+What this means for game-dev flexibility — exactly what's allowed:
+
+✅ Write any Slang shader, any vertex layout, any blend mode, any depth state
+✅ Have thousands of materials authored in source / scene files / CLI
+✅ Swap materials between objects dynamically (PSO already exists for either)
+✅ Use advanced shading (clearcoat, sheen, hair, subsurface, custom passes)
+✅ Modders can ship new materials — one-time compile per new material per machine
+
+❌ Build shader source as a string at runtime and compile it
+❌ Permute PSO state (blend, depth, formats) based on runtime conditions
+
+In practice 99% of game devs never hit the constraint — nobody concatenates shader strings at runtime outside tech demos. The 1% who do can opt-in to Mechanism 1 below with documented performance warning.
+
+With that doctrine in place, **three independent mechanisms** make PSO compilation invisible to the player. They are NOT the same thing; conflating them is what makes most engine PSO docs hand-wavy.
+
+### Mechanism 1 — Ubershader fallback (runtime safety net)
+
+When a PSO miss happens at draw time, the renderer **does not stall**. Instead:
+
+1. Look up the request in the ubershader compatibility map
+2. **Ubershader-compatible** (PBR forward, shadow caster, depth prepass, basic compute): render with the ubershader pipeline — a single large precompiled PSO that handles ~95% of common cases via dynamic branches and uniform-driven feature toggles. Visually nearly identical to the specialized PSO; ~10-20% slower per draw due to branchier shader.
+3. **Not ubershader-compatible** (tessellation, mesh shader, RT pipeline, custom user passes): render with a **magenta placeholder PSO** — same vertex layout, fragment outputs `vec4(1, 0, 1, 1)`. Obviously wrong, debuggable, never silent.
+4. In both cases: enqueue background compile on the worker pool.
+5. Next frame: if compile finished, swap to real PSO. No further fallback needed.
+
+**Ubershader vs magenta — when each fires**:
+
+| Material type | Fallback | Player notices? |
+|---|---|---|
+| Standard PBR forward | Ubershader | No (looks identical, slightly slower for 1-2 frames) |
+| Shadow casting | Ubershader | No |
+| User shader (clearcoat / sheen / SSS) | Ubershader | Barely (effect missing for 1-2 frames) |
+| Hair (Marschner) | Magenta | Yes (this is rare enough to flag) |
+| Custom user pass | Magenta | Yes |
+
+The ubershader itself is a build-time artifact: a Slang program parameterized over a large but fixed feature set, compiled into ONE PSO at build time, ships with the game. It exists precisely so Mechanism 1 has a real fallback for the common case.
+
+This is what Godot 4.4+ is implementing — they got to the right answer, just late. UE5 has had ubershader fallback for years.
+
+**Doctrine**: ubershader is the *expected* fallback in dev iteration (modder content too). Magenta is the *debug visible* fallback that signals "something exotic happened that wasn't predicted". A shipped release game should never show magenta — Mechanism 2 catches everything ubershader can't cover.
+
+### Mechanism 2 — Build-time PSO manifest (the doctrine made concrete)
+
+Before the game ships, the engine extracts the complete PSO set from the project declaration. The CLI command `ke build manifest` walks the project and emits a manifest.
+
+**What the CLI walks**:
+- All `.material` files referenced anywhere in scenes / code / Project
+- The set of passes each material participates in (declared per material via metadata, or defaulted per shader type — `IMaterial` → ForwardLit + Shadow + DepthPrepass; `IPostEffect` → fullscreen; etc.)
+- All vertex layouts used (engine-defined: Static, Skinned, etc., plus user-declared layouts)
+- Render-target formats used by each pass (engine-declared per pass — `ForwardLit` uses `RGBA16F + D32F`)
+- Variant flags (quality level, has-normal-map, etc., if any)
+
+**The cartesian product** of (material × pass × vertex-layout × variant) → unique PSO keys.
+
+**Manifest format** (TOML, deterministic, shippable):
+```toml
+[[pso]]
+key = "water+forward_lit+static+v0"
+shader_module = "shaders/water.slang"
+entry_point_vs = "VertexMain"
+entry_point_fs = "FragmentMain"
+pass = "ForwardLit"
+vertex_layout = "Static"
+color_formats = ["RGBA16F"]
+depth_format = "D32F"
+blend = "Opaque"
+depth = "TestLE_WriteOn"
+primitive = "TriangleList"
+sample_count = 1
+
+[[pso]]
+key = "water+shadow_caster+static+v0"
+shader_module = "shaders/water.slang"
+entry_point_vs = "VertexMain"
+pass = "ShadowCaster"
+# ... etc
+
+# Typical project: 50 materials × 4 passes × 2 vertex layouts × 1 variant = 400 PSOs
+```
+
+**Generated**, never written by hand. Lives in the project at `build/psos.manifest`. Regenerated on `ke build` whenever any material / scene / project file changes.
+
+**Game ships the manifest**: it's part of the install package. Player's machine reads it on first launch.
+
+**Refusing runtime shader generation isn't punitive — it's the trade that enables this manifest existing.** A game that needs runtime shader gen explicitly disables the manifest constraint per material and accepts Mechanism 1 fallbacks permanently for those materials.
+
+### Mechanism 3 — Per-machine disk cache (PSO bytecode storage)
+
+PSO compilation output is **driver-specific bytecode**. NVIDIA 555 compiled PSOs don't work on NVIDIA 556. RTX 4090 PSOs don't work on RTX 3060. Windows PSOs don't work on Linux. So compilation must happen on the player's machine, once per (driver version × GPU × OS) combination.
+
+**Cache location**: `~/.cache/kernelengine/<game_id>/<engine_version>/<driver_hash>/` (Windows: `%LOCALAPPDATA%\KernelEngine\<game_id>\<engine_version>\<driver_hash>\`).
+**Cache contents**: one binary file per PSO key, named by the key's hash. Bytecode blob + minimal metadata for validation.
+**Driver hash**: hash of `(GPU vendor, GPU device, driver version, OS, OS version)`. Recomputed each boot; mismatch invalidates the cache.
+
+**First launch flow** (per machine):
+```
+1. Read manifest (Mechanism 2)
+2. Compute driver_hash
+3. Check disk cache for current driver_hash
+4. For PSOs missing from disk cache:
+       Show "Optimizing for your system (1/750)" UI
+       Compile on worker pool (8-16 threads simultaneous)
+       Write bytecode to disk as each completes
+5. All compiled → done. Splash screen complete.
+   Game starts. Zero PSO compilation will happen in gameplay.
+```
+
+Typical timing: 750 PSOs × ~500ms each / 8-thread pool = **~45 seconds, one time per install + driver-update**.
+
+**Subsequent launches**:
+```
+1. Read manifest
+2. driver_hash matches → all PSOs already on disk
+3. Lazy load from disk as the renderer requests them (microseconds each — memcpy + device->create_pipeline from bytecode)
+4. Zero compilation. Zero stalls.
+```
+
+**Driver update detection**: `driver_hash` mismatch → re-run first-launch flow. Game shows splash again, user understands why ("Driver updated, re-optimizing").
+
+**Engine update**: `engine_version` is part of the cache path → fresh cache for new engine version. Players who update the engine see the splash once.
+
+### How the three mechanisms compose
 
 ```
-material.request_pipeline(state_key)
-        ↓
-PipelineCache.lookup(state_key)
-        ↓
-   ┌─── hit ───→ return cached ke_gpu_pipeline
-   │
-   └─── miss ──→ enqueue compile job to worker
-                 return PLACEHOLDER pipeline (default magenta material,
-                       depth-correct, no specialization)
-                 next-frame poll: if compile finished, swap to real
-
-Worker thread:
-    Slang reflection → emit backend bytecode → device->create_render_pipeline()
-    → store in cache (RAM + disk persistent SQLite)
-    → fire ready signal
+┌──────────────────────────────────────────────────────────────────────┐
+│  BUILD-TIME (developer machine — `ke build`)                         │
+│                                                                      │
+│   project → walk materials + passes + layouts →                      │
+│   compute cartesian product → emit psos.manifest                     │
+│   (Mechanism 2 — runs whenever materials/passes change)              │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               ↓ manifest ships in game install
+┌──────────────────────────────────────────────────────────────────────┐
+│  FIRST LAUNCH (per machine × engine_version × driver_hash)           │
+│                                                                      │
+│   read manifest → spawn worker pool →                                │
+│   compile every PSO not already on disk → write bytecode →           │
+│   "Optimizing 750/750... done"                                       │
+│   (Mechanism 3 — runs once per install + driver update)              │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               ↓ steady state
+┌──────────────────────────────────────────────────────────────────────┐
+│  GAMEPLAY — every frame, every draw                                  │
+│                                                                      │
+│   PSO requested by mid-level helper:                                 │
+│     ├─ in RAM cache? (already loaded this session)                   │
+│     │      → return (microseconds)                                   │
+│     ├─ in disk cache? (compiled previously)                          │
+│     │      → mmap + device->create_pipeline_from_blob (1ms)          │
+│     │      → cache in RAM, return                                    │
+│     └─ neither (RARE post-release; common in dev iteration):         │
+│         ├─ ubershader compatible? → use ubershader, compile bg       │
+│         └─ exotic? → magenta placeholder, compile bg                 │
+│   (Mechanism 1 — backstop, never the primary path in shipped game)   │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.2 What's cached
+Each mechanism owns a distinct concern:
 
-`state_key` = `hash(shader_module_id, vertex_layout, blend_state, depth_state, render_target_formats, primitive_topology, sample_count)`. Everything that influences PSO compilation.
+| Mechanism | Owns | Runs when | Scope |
+|---|---|---|---|
+| 1 — Ubershader / magenta fallback | The "we don't stall, ever" guarantee | Every draw that misses cache | Per draw |
+| 2 — Build-time manifest | The "we know what PSOs we need" knowledge | Every `ke build` | Per project, per build |
+| 3 — Per-machine disk cache | The "actually compiled bytecode" storage | First launch, driver update | Per machine, per engine_ver, per driver |
 
-Two cache tiers:
-- **RAM**: lifetime of process. `unordered_map<uint64_t, ke_gpu_pipeline>`.
-- **Disk**: persisted across runs. Stored as backend-bytecode blobs in a SQLite DB or per-PSO files under `~/.cache/kernelengine/pso/<engine_version>/`. On startup, RAM cache populated lazily from disk.
+### 6.4 Operational modes
 
-### 6.3 Placeholder pipeline
+**Dev iteration** (Pong loop, debug build, `dotnet watch`):
+- Manifest may not exist yet (or is stale)
+- Disk cache exists but is partial
+- Mechanism 1 carries the load: PSO misses fallback to ubershader, compile in background, swap next frame
+- Hot reload of `.slang` files invalidates affected PSO cache entries → next request recompiles
+- Goal: never break the dev iteration loop
 
-A single global PSO compiled at engine init: vertex shader passes positions through, fragment shader outputs `vec4(1, 0, 1, 1)` (magenta), depth-tested correctly. Renders the geometry in a visually-distinct way without crashing. Game runs at full speed; missing materials appear pink for milliseconds until real PSO arrives.
+**Beta / playtest builds**:
+- Manifest is generated and shipped
+- First-time playtesters experience one first-launch compile (~45s)
+- Mechanism 1 catches any manifest gaps (logged as warnings — "this PSO wasn't in the manifest, you may have missed declaring a material somewhere")
 
-This is **the** trade-off the user wanted: the player sees a brief pink flash instead of a 30-second freeze. Players forgive flashes. Players uninstall over freezes.
+**Shipped release**:
+- Manifest is complete (gaps fixed during beta)
+- First launch on every player machine compiles manifest → disk cache
+- Mechanism 1 only fires for modder content / runtime-opt-in dynamic materials
+- Goal: zero unexpected stalls in gameplay, ever
 
-### 6.4 Pre-warming (release builds)
+### 6.5 Cache invalidation
 
-For shipped games, the game author can pre-warm the disk cache at install time or first launch:
-- The game declares "required PSOs" via a manifest (or we collect them during a dev "PSO trace" mode)
-- On first launch, a background job compiles all of them before the title screen
-- Subsequent launches read from disk → zero compile overhead, zero placeholder visible
+| Event | Result |
+|---|---|
+| Edit a `.slang` file (dev) | RAM cache: invalidate every PSO referencing it. Disk cache: invalidate only if hash of compiled bytecode changed. |
+| Driver update (player) | `driver_hash` mismatch → fresh first-launch flow |
+| Engine version update (player) | Cache directory changes (`<engine_ver>` in path) → fresh first-launch flow |
+| Game update (new materials in patch) | Manifest changes; new PSOs missing from disk → compile on next launch (much smaller than first-launch — only the diff) |
+| Mod installs new material | Manifest unchanged; PSO miss at runtime → Mechanism 1 fallback + background compile, then add to disk cache for future launches |
 
-This is how UE5 / Unreal Engine handle the same problem in shipped titles.
+### 6.6 Implementation breakdown (each mechanism is its own project)
 
-### 6.5 Hot reload
+These ship in sequence, not as one card:
 
-When a `.slang` file changes on disk (dev mode), the PSO cache invalidates every entry referencing that shader module → next request triggers recompile. Game-running shader edits work transparently. See `[HOT-RELOAD]` parking-lot card.
+| Phase | Mechanism | Scope | Effort |
+|---|---|---|---|
+| Initial G6 | Mechanism 1 (ubershader + magenta) | Make dev iteration painless. Ubershader covers PBR forward + shadow + depth prepass. Magenta for the rest. | ~3-4 sessions |
+| G6+1 | Mechanism 3 (disk cache + driver hash) | Bytecode persists across launches. Compile on first launch. RAM cache layer in front. | ~2 sessions |
+| G6+2 | Mechanism 2 (build-time manifest) | `ke build manifest` CLI verb. Walks materials, emits TOML manifest. First-launch compile pass driven by manifest. | ~3-4 sessions |
+| G6+3 | Polish — manifest coverage metrics, "compile budget" reporting per build, driver-update UX | ~1-2 sessions |
+
+Mechanism 1 alone is enough to ship M1-M2 engine demos. Mechanism 3 is needed before any non-trivial game (PSO count grows fast). Mechanism 2 is needed before shipping any release game.
 
 ---
 
@@ -470,10 +637,31 @@ Discussion, revision, until both sides agree.
 - Port render-graph passes to use L5 (already device-agnostic from G2).
 - Now `example_01_window_scene` opts into Modern via DI. Both renderers selectable.
 
-### Phase G6 — PSO cache + async placeholder (2-3 sessions)
-- `PipelineCache` with placeholder behavior shipped.
-- Disk persistence (SQLite or per-file).
-- Hot reload via filesystem watch on `.slang` files.
+### Phase G6 — PSO Mechanism 1: ubershader + magenta fallback (3-4 sessions)
+- `PipelineCache` skeleton (RAM only, no disk yet).
+- Build the ubershader: a Slang program parameterized over the common-case feature set (PBR forward + shadow + depth prepass). Compiles into one large PSO at engine init.
+- Ubershader compatibility map: given a PSO request, decide whether the ubershader can cover it.
+- Magenta placeholder PSO compiled at engine init for the exotic-request path.
+- Background compile via worker pool: PSO miss → return fallback PSO + enqueue compile → next frame swap.
+- Hot reload via filesystem watch on `.slang` files invalidates RAM cache entries.
+- Goal: dev iteration (Pong loop, hot-reload, examples) never stalls regardless of cache state.
+
+### Phase G6.1 — PSO Mechanism 3: disk cache + driver hash (2 sessions)
+- Compute `driver_hash` at boot (GPU vendor/device, driver version, OS).
+- Cache directory: `<localappdata>/KernelEngine/<game_id>/<engine_ver>/<driver_hash>/`.
+- Lazy load: PSO request → RAM miss → disk lookup → device->create_pipeline_from_blob → RAM cache → return.
+- Compile success → write bytecode to disk.
+- Cache invalidation on driver_hash change.
+- Goal: second launch onward, zero compilation in steady state.
+
+### Phase G6.2 — PSO Mechanism 2: build-time manifest (3-4 sessions)
+- `ke build manifest` CLI verb (extends existing CLI from B4 / P2).
+- Walks all materials referenced in scenes / Project / code.
+- Computes cartesian product (material × pass × vertex layout × variant) → PSO keys.
+- Emits `build/psos.manifest` (TOML).
+- First-launch flow: read manifest, compile every PSO into disk cache, splash UI "Optimizing 750/750".
+- Manifest coverage metric: compares manifest entries against PSOs requested by examples → reports missing entries as warnings (these would have been Mechanism 1 fallbacks in release).
+- Goal: shippable release builds with zero unexpected stalls.
 
 ### Phase G7 — Feature parity sweep (open-ended)
 - Port one feature at a time to Modern: PBR materials, shadow mapping, IBL, tone mapping, post-processing chain, etc.
