@@ -51,6 +51,26 @@ static inline ke_result ke_array_push(ke_array *arr, void *value)
     return KE_OK;
 }
 
+/// @brief Removes and returns the last element of the array.
+static inline void *ke_array_pop(ke_array *arr)
+{
+    if (!arr || arr->size == 0)
+    {
+        return NULL;
+    }
+    return arr->data[--arr->size];
+}
+
+/// @brief Clears the array without freeing the memory.
+static inline void ke_array_clear(ke_array *arr)
+{
+    if (!arr)
+    {
+        return;
+    }
+    arr->size = 0;
+}
+
 /// @brief Destroys the array.
 static inline void ke_array_destroy(ke_array *arr)
 {
