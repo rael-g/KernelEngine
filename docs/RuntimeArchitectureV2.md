@@ -1,8 +1,10 @@
 # Runtime Architecture V2 — `ke_runtime` Contract Design
 
-**Status**: Draft for discussion. No code lands until this doc reaches "Accepted".
+**Status**:
+- §3 (C ABI contract) — **Accepted (2026-06-XX)** after R1 spike validation (commit `b58b21f`). Vtable shape, Module/System lifecycle, Phase enum, and `register_*` signatures are locked.
+- §4–§14 — Locked at design level; impl details revisable per phase as R2+ surfaces new constraints. Open questions in §11 still apply.
 **Audience**: Engine maintainer + future plugin authors (renderer / physics / audio / scripting).
-**Companion doc**: `RenderArchitectureV2.md` (planned next).
+**Companion doc**: [`RenderArchitectureV2.md`](RenderArchitectureV2.md).
 
 ---
 
@@ -87,7 +89,14 @@ Systems request resources by type, get a typed handle. Read/write contention on 
 
 ---
 
-## 3. C ABI — `ke_runtime` contract
+## 3. C ABI — `ke_runtime` contract  *(Accepted, locked)*
+
+> **Ratification note (2026-06-XX, R1 spike)**: a minimal subset of the surface below (`register_module`, `register_system` for `KE_PHASE_UPDATE`, `tick`, `destroy`) was implemented in `src/c/runtime/flecs/` and exercised end-to-end by 5 integration tests (commit `b58b21f`). The vtable shape, struct-by-`params` pattern, and Module/System lifecycle were validated against flecs's actual API; no rework of the contract surfaced. Resources, full phase pipelines (FixedUpdate / Extract / Startup / Shutdown), and dependency ordering (`runs_after` / `runs_before`) are locked at design level and expected to land cleanly in R2+.
+
+> **Spike findings worth carrying forward** (for the future agent who continues the impl):
+> - flecs's `ecs_entity(world, {...})` / `ecs_ids(...)` macros expand to compound literals that our clang's C99 mode rejects. Use the raw `ecs_entity_init` / `ecs_system_init` API and write directly into `ecs_entity_desc_t::add[i]`.
+> - `alignof` in C requires `<stdalign.h>`.
+> - `KE_ERROR_INVALID_STATE` does not exist in `error.h`. R1 used `KE_ERROR_NOT_INITIALIZED`; consider adding `INVALID_STATE` if a clearer slot is needed later.
 
 Lives at `src/c/kernel/include/kernel_engine/kernel/runtime/runtime.h`.
 
@@ -537,9 +546,15 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 
 ## 14. Status & next actions
 
-- [ ] User reviews this doc
-- [ ] Lock the C ABI signatures (§3) — anything ambiguous gets pinned before R1
-- [ ] R1: flecs build spike (1-2 sessions)
-- [ ] Companion doc: `RenderArchitectureV2.md`
+- [x] User reviews this doc
+- [x] Lock the C ABI signatures (§3) — ratified after R1 validation
+- [x] R1: flecs build spike (commit `b58b21f`, 1 session — minimal vtable subset, 5 integration tests green)
+- [x] Companion doc: [`RenderArchitectureV2.md`](RenderArchitectureV2.md)
+- [ ] **R2 — C# bindings via ClangSharp + minimal `IRuntime` wrapper + first managed integration test**
+- [ ] **R3 — First real example consumer (`01_window_scene` ported to runtime)**
+- [ ] **R4 — Render module shim wrapping the current `KernelEngine.Render.Bgfx`** (so any example can opt into runtime keeping the current renderer)
+- [ ] **R5 — Pong migrated to runtime** (hard gate: identical visual + behavioral)
+- [ ] **R6 — Examples 02-15 migrated incrementally**
+- [ ] **R7 — `Application.cs` deletion** (after every consumer migrated)
 
-**This doc is the contract.** When R1 ships, every word in §3 and §4 should match the code or this doc gets revised.
+**This doc is the contract.** §3 is locked; impl drift away from §3 is a bug in the impl, not in the doc.
