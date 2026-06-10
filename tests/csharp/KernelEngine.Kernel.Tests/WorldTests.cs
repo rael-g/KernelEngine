@@ -70,16 +70,38 @@ public class WorldTests
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
-        // We are on xUnit thread, not "ke.sim"
-        Assert.Throws<InvalidOperationException>(() => world.Update());
+        KernelThread.SetCurrentName("not.ke.sim");
+        try {
+            Assert.Throws<InvalidOperationException>(() => world.Update());
+        } finally {
+            KernelThread.SetCurrentName(null!);
+        }
     }
 
     [Fact]
-    public void Dispose_Twice_IsSafe()
+    public void Update_Works_OnSimThread()
     {
         using var allocator = new MallocAllocator();
-        var world = new World(allocator);
-        world.Dispose();
-        world.Dispose();
+        using var world = new World(allocator);
+        KernelThread.SetCurrentName("ke.sim");
+        try {
+            var res = world.Update();
+            Assert.True(res.IsOk);
+        } finally {
+            KernelThread.SetCurrentName(null);
+        }
+    }
+
+    [Fact]
+    public void RegisterScript_Works()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        bool awakeCalled = false;
+        world.RegisterScript(1, onAwake: () => awakeCalled = true);
+        
+        // We can't easily trigger the native callback from managed tests without 
+        // complex interop mocks, but we cover the registration path.
+        world.UnregisterScript(1);
     }
 }

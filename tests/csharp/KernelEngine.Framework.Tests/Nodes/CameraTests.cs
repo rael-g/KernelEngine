@@ -29,19 +29,42 @@ public class CameraTests
     }
 
     [Fact]
-    public void Properties_WorkBeforeStart()
+    public void Properties_WorkBeforeStart_Fov()
     {
         var camera = new Camera();
         camera.Fov = 90f;
-        camera.Near = 1f;
-        camera.Far = 100f;
-        camera.OrthographicSize = 10f;
-        camera.Orthographic = true;
-
         Assert.Equal(90f, camera.Fov);
+    }
+
+    [Fact]
+    public void Properties_WorkBeforeStart_Near()
+    {
+        var camera = new Camera();
+        camera.Near = 1f;
         Assert.Equal(1f, camera.Near);
+    }
+
+    [Fact]
+    public void Properties_WorkBeforeStart_Far()
+    {
+        var camera = new Camera();
+        camera.Far = 100f;
         Assert.Equal(100f, camera.Far);
+    }
+
+    [Fact]
+    public void Properties_WorkBeforeStart_OrthographicSize()
+    {
+        var camera = new Camera();
+        camera.OrthographicSize = 10f;
         Assert.Equal(10f, camera.OrthographicSize);
+    }
+
+    [Fact]
+    public void Properties_WorkBeforeStart_Orthographic()
+    {
+        var camera = new Camera();
+        camera.Orthographic = true;
         Assert.True(camera.Orthographic);
     }
 
@@ -57,8 +80,7 @@ public class CameraTests
         camera.Fov = 90f;
         camera.Initialize(1, world, "camera");
 
-        var startMethod = typeof(Node).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        startMethod!.Invoke(camera, null);
+        camera.TickAwakeAndStart();
 
         var slot = registry.GetComponent<CameraComponent>(1, 10u);
         Assert.Equal(90f * MathF.PI / 180f, slot[0].Fov, 5);
@@ -77,12 +99,30 @@ public class CameraTests
     }
 
     [Fact]
-    public void Camera2D_SetsDefaults()
+    public void Camera2D_SetsDefaults_Orthographic()
     {
         var camera = new Camera2D();
         Assert.True(camera.Orthographic);
+    }
+
+    [Fact]
+    public void Camera2D_SetsDefaults_OrthographicSize()
+    {
+        var camera = new Camera2D();
         Assert.Equal(5f, camera.OrthographicSize);
+    }
+
+    [Fact]
+    public void Camera2D_SetsDefaults_Near()
+    {
+        var camera = new Camera2D();
         Assert.Equal(0.1f, camera.Near);
+    }
+
+    [Fact]
+    public void Camera2D_SetsDefaults_Far()
+    {
+        var camera = new Camera2D();
         Assert.Equal(100f, camera.Far);
     }
 
@@ -97,8 +137,7 @@ public class CameraTests
         var camera = new Camera2D();
         camera.Initialize(1, world, "camera");
 
-        var startMethod = typeof(Node).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        startMethod!.Invoke(camera, null);
+        camera.TickAwakeAndStart();
 
         Assert.Equal(10f, camera.LocalTransform.Position.Z);
     }

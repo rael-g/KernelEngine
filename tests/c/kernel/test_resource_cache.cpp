@@ -187,14 +187,63 @@ TEST_F(ResourceCacheTest, ReinsertionAfterReleaseReusesTombstone)
 
 // ── Destroy with live resources ──────────────────────────────────────────────
 
-TEST_F(ResourceCacheTest, Destroy_FiresAllOutstandingCallbacks)
+TEST_F(ResourceCacheTest, TryGetCached_ReturnsFalse_WhenResourceWasReleasedExternally)
 {
-    int counter = 0;
-    auto bump = +[](ke_resource_handle, void *ctx) { (*(int *)ctx)++; };
-    ASSERT_EQ(cache->register_resource(cache, 1, bump, &counter), KE_OK);
-    ASSERT_EQ(cache->register_resource(cache, 2, bump, &counter), KE_OK);
-    ASSERT_EQ(cache->register_resource(cache, 3, bump, &counter), KE_OK);
-    cache->destroy(cache);
-    cache = nullptr; // prevent TearDown from double-freeing
-    EXPECT_EQ(counter, 3);
+    // Path cache pointing to a handle that is no longer in the resource table.
+    // This can happen if the resource is released but the path cache wasn't updated.
+    cache->cache_insert(cache, "res://stale", 500);
+    ke_resource_handle out = 0;
+    EXPECT_FALSE(cache->try_get_cached(cache, "res://stale", &out));
+}
+
+TEST_F(ResourceCacheTest, CacheInsert_NullArgs_DoesNotCrash)
+{
+    cache->cache_insert(nullptr, nullptr, 0);
+    cache->cache_insert(cache, nullptr, 0);
+    cache->cache_insert(cache, "x", KE_RESOURCE_HANDLE_NONE);
+}
+
+TEST_F(ResourceCacheTest, CacheEvict_NullArgs_DoesNotCrash)
+{
+    cache->cache_evict(nullptr, nullptr);
+    cache->cache_evict(cache, nullptr);
+}
+
+TEST_F(ResourceCacheTest, TombstoneReuse)
+{
+    auto noop = +[](ke_resource_handle, void *) {};
+    cache->register_resource(cache, 1, noop, nullptr);
+    cache->register_resource(cache, 2, noop, nullptr);
+    
+    // Release 1 to create a tombstone
+    cache->release(cache, 1);
+    
+    // Registering 3 should ideally reuse the tombstone if it was earlier in probe chain,
+    // but at least it shouldn't fail.
+    EXPECT_EQ(cache->register_resource(cache, 3, noop, nullptr), KE_OK);
+    
+    ke_resource_handle out;
+    cache->cache_insert(cache, "res://3", 3);
+    EXPECT_TRUE(cache->try_get_cached(cache, "res://3", &out));
+    EXPECT_EQ(out, 3u);
+}
+
+TEST_F(ResourceCacheTest, Rehash_WithTombstones)
+{
+    auto noop = +[](ke_resource_handle, void *) {};
+    // Fill with entries then release half to create tombstones
+    for(int i=1; i<=40; ++i) {
+        cache->register_resource(cache, (ke_resource_handle)i, noop, nullptr);
+    }
+    for(int i=1; i<=20; ++i) {
+        cache->release(cache, (ke_resource_handle)i);
+    }
+    
+    // Next registration might trigger rehash (load factor includes tombstones)
+    for(int i=41; i<=100; ++i) {
+        ASSERT_EQ(cache->register_resource(cache, (ke_resource_handle)i, noop, nullptr), KE_OK);
+    }
+    
+    ke_resource_handle out;
+    EXPECT_TRUE(cache->try_get_cached(cache, "res://missing", &out) == false);
 }

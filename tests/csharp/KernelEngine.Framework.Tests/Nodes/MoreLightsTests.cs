@@ -30,7 +30,7 @@ public class MoreLightsTests
     }
 
     [Fact]
-    public void PointLight_SyncsAfterStart()
+    public void PointLight_SyncsAfterStart_Radius()
     {
         var world = Substitute.For<IWorld>();
         world.Registry.Returns(new FakeRegistry());
@@ -39,19 +39,32 @@ public class MoreLightsTests
         var light = new PointLight();
         light.Initialize(1, world, "light");
         
-        var startMethod = typeof(Node).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        startMethod!.Invoke(light, null);
+        light.TickAwakeAndStart();
 
         light.Radius = 50f;
-        light.Intensity = 2f;
-
         var slot = world.Registry.GetComponent<PointLightComponent>(1, 10u);
         Assert.Equal(50f, slot[0].Radius);
+    }
+
+    [Fact]
+    public void PointLight_SyncsAfterStart_Intensity()
+    {
+        var world = Substitute.For<IWorld>();
+        world.Registry.Returns(new FakeRegistry());
+        world.GetOrRegisterComponentId<PointLightComponent>("PointLightComponent").Returns(10u);
+
+        var light = new PointLight();
+        light.Initialize(1, world, "light");
+        
+        light.TickAwakeAndStart();
+
+        light.Intensity = 2f;
+        var slot = world.Registry.GetComponent<PointLightComponent>(1, 10u);
         Assert.Equal(2f, slot[0].Intensity);
     }
 
     [Fact]
-    public void SpotLight_SyncsAfterStart()
+    public void SpotLight_SyncsAfterStart_InnerAngle()
     {
         var world = Substitute.For<IWorld>();
         world.Registry.Returns(new FakeRegistry());
@@ -60,14 +73,27 @@ public class MoreLightsTests
         var light = new SpotLight();
         light.Initialize(1, world, "light");
         
-        var startMethod = typeof(Node).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        startMethod!.Invoke(light, null);
+        light.TickAwakeAndStart();
 
         light.InnerAngleDegrees = 15f;
-        light.OuterAngleDegrees = 30f;
-
         var slot = world.Registry.GetComponent<SpotLightComponent>(1, 10u);
         Assert.Equal(15f * MathF.PI / 180f, slot[0].InnerAngle, 5);
+    }
+
+    [Fact]
+    public void SpotLight_SyncsAfterStart_OuterAngle()
+    {
+        var world = Substitute.For<IWorld>();
+        world.Registry.Returns(new FakeRegistry());
+        world.GetOrRegisterComponentId<SpotLightComponent>("SpotLightComponent").Returns(10u);
+
+        var light = new SpotLight();
+        light.Initialize(1, world, "light");
+        
+        light.TickAwakeAndStart();
+
+        light.OuterAngleDegrees = 30f;
+        var slot = world.Registry.GetComponent<SpotLightComponent>(1, 10u);
         Assert.Equal(30f * MathF.PI / 180f, slot[0].OuterAngle, 5);
     }
 }

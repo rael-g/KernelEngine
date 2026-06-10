@@ -30,20 +30,31 @@ public class DirectionalLightTests
     }
 
     [Fact]
-    public void Properties_WorkBeforeStart()
+    public void Properties_WorkBeforeStart_Direction()
     {
         var light = new DirectionalLight();
         light.Direction = Vector3.UnitX;
-        light.Color = Vector3.Zero;
-        light.Intensity = 5f;
-
         Assert.Equal(Vector3.UnitX, light.Direction);
+    }
+
+    [Fact]
+    public void Properties_WorkBeforeStart_Color()
+    {
+        var light = new DirectionalLight();
+        light.Color = Vector3.Zero;
         Assert.Equal(Vector3.Zero, light.Color);
+    }
+
+    [Fact]
+    public void Properties_WorkBeforeStart_Intensity()
+    {
+        var light = new DirectionalLight();
+        light.Intensity = 5f;
         Assert.Equal(5f, light.Intensity);
     }
 
     [Fact]
-    public void Properties_SyncAfterStart()
+    public void Properties_SyncAfterStart_Direction()
     {
         var world = Substitute.For<IWorld>();
         world.Registry.Returns(new FakeRegistry());
@@ -52,14 +63,27 @@ public class DirectionalLightTests
         var light = new DirectionalLight();
         light.Initialize(1, world, "light");
         
-        var startMethod = typeof(Node).GetMethod("Start", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        startMethod!.Invoke(light, null);
+        light.TickAwakeAndStart();
 
         light.Direction = Vector3.UnitZ;
-        light.Intensity = 10f;
-
         var slot = world.Registry.GetComponent<LightComponent>(1, 10u);
         Assert.Equal(1f, slot[0].DirZ);
+    }
+
+    [Fact]
+    public void Properties_SyncAfterStart_Intensity()
+    {
+        var world = Substitute.For<IWorld>();
+        world.Registry.Returns(new FakeRegistry());
+        world.GetOrRegisterComponentId<LightComponent>("LightComponent").Returns(10u);
+
+        var light = new DirectionalLight();
+        light.Initialize(1, world, "light");
+        
+        light.TickAwakeAndStart();
+
+        light.Intensity = 10f;
+        var slot = world.Registry.GetComponent<LightComponent>(1, 10u);
         Assert.Equal(10f, slot[0].Intensity);
     }
 }

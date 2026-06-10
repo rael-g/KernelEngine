@@ -182,13 +182,16 @@ public unsafe class RendererTests
         mock->begin_shadow_pass = &MockBeginShadowPass;
         mock->submit_mesh_shadow = &MockSubmitMeshShadow;
         mock->end_shadow_pass = &MockEndShadowPass;
-        mock->set_orthographic = &MockSetOrthographic;
+        mock->set_orthographic = &MockSetSetOrthographic;
         mock->set_ambient_light = &MockSetAmbientLight;
         mock->destroy_texture = &MockDestroyTexture;
         mock->destroy_material = &MockDestroyMaterial;
         mock->get_render_graph = &MockGetRenderGraph;
         return mock;
     }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static ke_result MockSetSetOrthographic(ke_render* self, byte e) { return ke_result.KE_OK; }
 
     [Fact]
     public void Initialize_CallsMock()
@@ -601,7 +604,45 @@ public unsafe class RendererTests
     }
 
     [Fact]
-    public void SubmitPacket_CallsMock()
+    public void FramePacket_AddPointLight_RespectsCapacity()
+    {
+        var nativePacket = new ke_frame_packet {
+            point_light_capacity = 1,
+            point_lights = (ke_point_light*)NativeMemory.Alloc(1, (nuint)sizeof(ke_point_light))
+        };
+        var packet = new FramePacket(&nativePacket, null, true);
+
+        var light = new PointLightData { Radius = 10f, Intensity = 1f };
+        packet.AddPointLight(light);
+        Assert.Equal(1u, nativePacket.point_light_count);
+
+        packet.AddPointLight(light); // Should be ignored
+        Assert.Equal(1u, nativePacket.point_light_count);
+
+        NativeMemory.Free(nativePacket.point_lights);
+    }
+
+    [Fact]
+    public void FramePacket_AddSpotLight_RespectsCapacity()
+    {
+        var nativePacket = new ke_frame_packet {
+            spot_light_capacity = 1,
+            spot_lights = (ke_spot_light*)NativeMemory.Alloc(1, (nuint)sizeof(ke_spot_light))
+        };
+        var packet = new FramePacket(&nativePacket, null, true);
+
+        var light = new SpotLightData { Range = 10f, Intensity = 1f };
+        packet.AddSpotLight(light);
+        Assert.Equal(1u, nativePacket.spot_light_count);
+
+        packet.AddSpotLight(light); // Should be ignored
+        Assert.Equal(1u, nativePacket.spot_light_count);
+
+        NativeMemory.Free(nativePacket.spot_lights);
+    }
+
+    [Fact]
+    public void SubmitPacket_ReturnsOk()
     {
         var mock = CreateMock();
         using (var renderer = new Renderer(mock))

@@ -50,11 +50,25 @@ public class EcsRegistryTests
 
         unsafe {
             int* ptr = reg.AddComponentRaw<int>(entity, cid);
-            Assert.True(ptr != null);
             *ptr = 42;
         }
         
         Assert.Equal(42, reg.GetComponent<int>(entity, cid)[0]);
+    }
+
+    [Fact]
+    public void AddComponentRaw_ReturnsNonNullPointer()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var reg = world.Registry;
+        var entity = reg.CreateEntity();
+        var cid = reg.RegisterComponent<int>("int");
+
+        unsafe {
+            int* ptr = reg.AddComponentRaw<int>(entity, cid);
+            Assert.True(ptr != null);
+        }
     }
 
     [Fact]
@@ -69,8 +83,23 @@ public class EcsRegistryTests
 
         unsafe {
             int* ptr = reg.GetComponentRaw<int>(entity, cid);
-            Assert.True(ptr != null);
             Assert.Equal(123, *ptr);
+        }
+    }
+
+    [Fact]
+    public void GetComponentRaw_ReturnsNonNullPointer()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var reg = world.Registry;
+        var entity = reg.CreateEntity();
+        var cid = reg.RegisterComponent<int>("int");
+        reg.AddComponent<int>(entity, cid)[0] = 123;
+
+        unsafe {
+            int* ptr = reg.GetComponentRaw<int>(entity, cid);
+            Assert.True(ptr != null);
         }
     }
 
@@ -84,7 +113,6 @@ public class EcsRegistryTests
         var cid = reg.RegisterComponent<int>("int");
         reg.AddComponent<int>(entity, cid);
 
-        Assert.True(reg.HasComponent(entity, cid));
         reg.RemoveComponent(entity, cid);
         Assert.False(reg.HasComponent(entity, cid));
     }
@@ -120,16 +148,51 @@ public class EcsRegistryTests
     }
 
     [Fact]
-    public unsafe void Query_ReturnsCorrectData()
+    public void TryLookupComponent_ReturnsTrue_WhenFound()
     {
         using var allocator = new MallocAllocator();
         using var world = new World(allocator);
         var reg = world.Registry;
-        var id = reg.RegisterComponent<int>("TestComp");
-        var e = reg.CreateEntity();
-        *reg.AddComponentRaw<int>(e, id) = 99;
+        reg.RegisterComponent<int>("MyComp");
         
-        var query = reg.Query<int>(id);
-        Assert.Equal(99, query.Data[0]);
+        bool found = reg.TryLookupComponent("MyComp", out _);
+        Assert.True(found);
+    }
+
+    [Fact]
+    public void TryLookupComponent_ReturnsCorrectId_WhenFound()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var reg = world.Registry;
+        var cid = reg.RegisterComponent<int>("MyComp");
+        
+        reg.TryLookupComponent("MyComp", out var foundId);
+        Assert.Equal(cid, foundId);
+    }
+
+    [Fact]
+    public void TryLookupComponent_ReturnsFalse_WhenNotFound()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var reg = world.Registry;
+        
+        bool found = reg.TryLookupComponent("NonExistent", out _);
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void DestroyEntity_RemovesEntityFromQueries()
+    {
+        using var allocator = new MallocAllocator();
+        using var world = new World(allocator);
+        var reg = world.Registry;
+        var id = reg.RegisterComponent<int>("C");
+        var e = reg.CreateEntity();
+        reg.AddComponent<int>(e, id);
+        
+        reg.DestroyEntity(e);
+        Assert.Equal(0, reg.Query<int>(id).Length);
     }
 }

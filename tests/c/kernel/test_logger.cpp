@@ -174,6 +174,25 @@ TEST_F(LoggerTest, ConsoleSink_NullTagAndMessage_DoesNotCrash) {
     SUCCEED();
 }
 
+static void mock_sink_destroy(ke_logger_sink* self) {
+    int* count = (int*)self->handle;
+    (*count)++;
+}
+
+TEST_F(LoggerTest, Destroy_CallsSinkDestroy) {
+    int destroy_count = 0;
+    ke_logger_sink sink;
+    sink.handle = &destroy_count;
+    sink.log = nullptr;
+    sink.destroy = mock_sink_destroy;
+    
+    logger->add_sink(logger, sink);
+    logger->destroy(logger);
+    logger = nullptr;
+    
+    ASSERT_EQ(destroy_count, 1);
+}
+
 // --- Helper Tests ---
 
 TEST(LoggerHelperTest, LevelToString_ValidLevels) {

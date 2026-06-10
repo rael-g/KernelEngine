@@ -110,39 +110,123 @@ public unsafe class RenderGraphTests
     // ── Tests ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AddPass_marshals_name_type_and_resource_lists_to_native()
+    public void AddPass_CallsNativeAddPass()
     {
         var native = BuildMockGraph();
-        var graph  = new RenderGraph(&native);
-        var pass = new RenderPass("user.fxaa")
-            .WithType(PassType.Fullscreen)
-            .Reads("backbuffer_final")
-            .Writes("screen_post_fxaa")
-            .OnRecord(_ => { /* no-op */ });
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("test").OnRecord(_ => { });
 
         graph.AddPass(pass);
 
         Assert.Equal(1, _addPassCalled);
+    }
+
+    [Fact]
+    public void AddPass_MarshalsNameCorrectly()
+    {
+        var native = BuildMockGraph();
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("user.fxaa").OnRecord(_ => { });
+
+        graph.AddPass(pass);
+
         Assert.Equal("user.fxaa", _lastPassName);
+    }
+
+    [Fact]
+    public void AddPass_MarshalsTypeCorrectly()
+    {
+        var native = BuildMockGraph();
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("test")
+            .WithType(PassType.Fullscreen)
+            .OnRecord(_ => { });
+
+        graph.AddPass(pass);
+
         Assert.Equal(ke_pass_type.KE_PASS_FULLSCREEN, _lastPassType);
-        Assert.Equal(1, _lastReadsCount);
+    }
+
+    [Fact]
+    public void AddPass_MarshalsReadsCountCorrectly()
+    {
+        var native = BuildMockGraph();
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("test")
+            .Reads("r1")
+            .Reads("r2")
+            .OnRecord(_ => { });
+
+        graph.AddPass(pass);
+
+        Assert.Equal(2, _lastReadsCount);
+    }
+
+    [Fact]
+    public void AddPass_MarshalsWritesCountCorrectly()
+    {
+        var native = BuildMockGraph();
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("test")
+            .Writes("w1")
+            .OnRecord(_ => { });
+
+        graph.AddPass(pass);
+
         Assert.Equal(1, _lastWritesCount);
+    }
+
+    [Fact]
+    public void AddPass_MarshalsResourceNameCorrectly()
+    {
+        var native = BuildMockGraph();
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("test")
+            .Reads("backbuffer_final")
+            .OnRecord(_ => { });
+
+        graph.AddPass(pass);
+
         Assert.Equal("backbuffer_final", _lastReadName);
     }
 
     [Fact]
-    public void RemovePass_disposes_and_drops_matching_wrapper()
+    public void RemovePass_ReturnsTrue_WhenSuccessful()
     {
         var native = BuildMockGraph();
-        var graph  = new RenderGraph(&native);
+        var graph = new RenderGraph(&native);
         var pass = new RenderPass("temp").OnRecord(_ => { });
         graph.AddPass(pass);
 
         Assert.True(graph.RemovePass("temp"));
+    }
+
+    [Fact]
+    public void RemovePass_CallsNativeRemovePass()
+    {
+        var native = BuildMockGraph();
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("temp").OnRecord(_ => { });
+        graph.AddPass(pass);
+
+        graph.RemovePass("temp");
+
         Assert.Equal(1, _removePassCalled);
+    }
+
+    [Fact]
+    public void RemovePass_AllowsReaddingPassWithSameName()
+    {
+        var native = BuildMockGraph();
+        var graph = new RenderGraph(&native);
+        var pass = new RenderPass("temp").OnRecord(_ => { });
+        graph.AddPass(pass);
+        graph.RemovePass("temp");
+
         // Re-adding the same pass would fail if Dispose() hadn't released the prior GCHandle.
         var pass2 = new RenderPass("temp").OnRecord(_ => { });
         graph.AddPass(pass2);
+        
         Assert.Equal(2, _addPassCalled);
     }
 

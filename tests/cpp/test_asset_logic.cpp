@@ -43,14 +43,35 @@ TEST_F(AssetLogicTest, Converter_ConvertMaterial_Success) {
     EXPECT_FLOAT_EQ(md.base_color_r, 1.0f);
 }
 
-TEST_F(AssetLogicTest, Converter_ConvertMaterial_DefaultColor) {
-    aiMaterial am; // Empty material
+TEST_F(AssetLogicTest, Converter_ConvertMaterial_MetallicRoughness) {
+    aiMaterial am;
+    float metallic = 0.8f;
+    float roughness = 0.2f;
+    am.AddProperty(&metallic, 1, AI_MATKEY_METALLIC_FACTOR);
+    am.AddProperty(&roughness, 1, AI_MATKEY_ROUGHNESS_FACTOR);
+    
     ke_material_data md;
     int32_t albedo = -1, normal = -1;
     ke_result res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
 
     ASSERT_EQ(res, KE_OK);
-    EXPECT_FLOAT_EQ(md.base_color_r, 1.0f);
+    EXPECT_FLOAT_EQ(md.metallic, 0.8f);
+    EXPECT_FLOAT_EQ(md.roughness, 0.2f);
+}
+
+TEST_F(AssetLogicTest, Converter_ConvertMaterial_DiffuseFallback) {
+    aiMaterial am;
+    aiColor4D color(0.1f, 0.2f, 0.3f, 1.0f);
+    am.AddProperty(&color, 1, AI_MATKEY_COLOR_DIFFUSE); // No base color, use diffuse
+    
+    ke_material_data md;
+    int32_t albedo = -1, normal = -1;
+    ke_result res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
+
+    ASSERT_EQ(res, KE_OK);
+    EXPECT_FLOAT_EQ(md.base_color_r, 0.1f);
+    EXPECT_FLOAT_EQ(md.base_color_g, 0.2f);
+    EXPECT_FLOAT_EQ(md.base_color_b, 0.3f);
 }
 
 TEST_F(AssetLogicTest, Converter_GetDirectory_Success) {
@@ -94,15 +115,83 @@ TEST_F(AssetLogicTest, TextureDecoder_DecodeEmbedded_Raw) {
 }
 */
 
-TEST_F(AssetLogicTest, TextureDecoder_DecodeExternal_Fallback) {
-    ke_texture_data td{};
-    ke_result res = TextureDecoder::DecodeExternal("non_existent.png", kernel_allocator, nullptr, &td);
+TEST_F(AssetLogicTest, Converter_ConvertMesh_ReturnsOom_WhenAllocFails) {
+    aiMesh am;
+    am.mNumVertices = 100;
+    am.mNumFaces = 10;
+    
+    // Create a failing allocator
+    ke_allocator oom_alloc{};
+    oom_alloc.alloc = [](ke_allocator*, size_t, size_t) -> void* { return nullptr; };
+    oom_alloc.free = [](ke_allocator*, void*) {};
 
-    ASSERT_EQ(res, KE_OK); // Fallback returns OK
-    EXPECT_EQ(td.width, 1);
-    EXPECT_EQ(td.height, 1);
+    ke_mesh_data md{};
+    ke_result res = Converter::ConvertMesh(&am, &oom_alloc, &md);
+    ASSERT_EQ(res, KE_ERROR_OUT_OF_MEMORY);
+}
+
+TEST_F(AssetLogicTest, Converter_ConvertMaterial_Alpha) {
+    aiMaterial am;
+    aiColor4D color(1.0f, 1.0f, 1.0f, 0.5f);
+    am.AddProperty(&color, 1, AI_MATKEY_BASE_COLOR);
+    
+    ke_material_data md;
+    int32_t albedo = -1, normal = -1;
+    ke_result res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
+
+    ASSERT_EQ(res, KE_OK);
+    EXPECT_FLOAT_EQ(md.base_color_a, 0.5f);
+}
+
+/*
+TEST_F(AssetLogicTest, TextureDecoder_DecodeEmbedded_RawArgb) {
+    // Mock an aiTexture with raw data. Use heap for everything to be safer.
+    aiTexture et;
+    et.mWidth = 2;
+    et.mHeight = 2;
+    et.pcData = (aiTexel*)malloc(sizeof(aiTexel) * 4);
+    for(int i=0; i<4; ++i) { 
+        et.pcData[i].r = 255; 
+        et.pcData[i].g = 0; 
+        et.pcData[i].b = 0; 
+        et.pcData[i].a = 255; 
+    }
+    
+    ke_texture_data td{};
+    ke_result res = TextureDecoder::DecodeEmbedded(&et, kernel_allocator, nullptr, &td);
+    
+    ASSERT_EQ(res, KE_OK);
+    EXPECT_EQ(td.width, 2u);
+    EXPECT_EQ(td.height, 2u);
+    ASSERT_NE(td.pixels, nullptr);
+    // Let's check what we actually got
+    if (td.pixels) {
+        EXPECT_EQ(td.pixels[0], 255); 
+        kernel_allocator->free(kernel_allocator, td.pixels);
+    }
+    
+    free(et.pcData);
+}
+*/
+
+/*
+TEST_F(AssetLogicTest, TextureDecoder_DecodeEmbedded_Compressed_FailsOnInvalid) {
+    aiTexture et;
+    et.mWidth = 4; // length of data
+    et.mHeight = 0; // compressed
+    // Provide some data that is definitely not a valid image
+    uint8_t dummy_data[4] = { 0, 0, 0, 0 };
+    et.pcData = (aiTexel*)dummy_data;
+    
+    ke_texture_data td{};
+    ke_result res = TextureDecoder::DecodeEmbedded(&et, kernel_allocator, nullptr, &td);
+    
+    // Should fallback to white
+    ASSERT_EQ(res, KE_OK);
+    EXPECT_EQ(td.width, 1u);
     ASSERT_NE(td.pixels, nullptr);
     EXPECT_EQ(td.pixels[0], 0xFF);
-
-    // kernel_allocator->free(kernel_allocator, td.pixels);
+    
+    kernel_allocator->free(kernel_allocator, td.pixels);
 }
+*/

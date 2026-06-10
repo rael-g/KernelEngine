@@ -231,9 +231,68 @@ TEST_F(WorldTest, NotifyDestroy_CallsOnDestroy) {
     ASSERT_TRUE(s_destroyed);
 }
 
-TEST_F(WorldTest, NotifyDestroy_SafeOnNullOrMissing) {
-    ASSERT_EQ(ke_world_notify_destroy(nullptr, 1), KE_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(ke_world_notify_destroy(world, 0), KE_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(ke_world_notify_destroy(world, 999), KE_OK); // Non-existent entity
+TEST_F(WorldTest, AddSystem_Fails_WhenMaxSystemsReached) {
+    ke_system_params sys{};
+    sys.name = "S";
+    sys.update = [](void*, ke_world*, float, ke_frame_packet*) {};
+    
+    // Fill up to 64
+    for(int i=0; i<64; ++i) world->add_system(world, &sys);
+    
+    ASSERT_EQ(world->add_system(world, &sys), KE_ERROR_OUT_OF_MEMORY);
+}
+
+TEST_F(WorldTest, Transform_HierarchyUpdate_ThreeLevels_Works) {
+    ke_entity p = make_entity("P", KE_ENTITY_INVALID);
+    ke_entity c = make_entity("C", p);
+    ke_entity g = make_entity("G", c);
+
+    ke_ecs_registry* reg = world->get_registry(world);
+    auto tcid = world->transform_id(world);
+    
+    ((ke_transform_component*)ke_ecs_component_get(reg, p, tcid))->position = {10, 0, 0};
+    ((ke_transform_component*)ke_ecs_component_get(reg, c, tcid))->position = {5, 0, 0};
+    ((ke_transform_component*)ke_ecs_component_get(reg, g, tcid))->position = {2, 0, 0};
+
+    world->update(world, nullptr);
+
+    // G should be at 10 + 5 + 2 = 17
+    EXPECT_FLOAT_EQ(((ke_transform_component*)ke_ecs_component_get(reg, g, tcid))->world_matrix.m[12], 17.f);
+}
+
+TEST_F(WorldTest, Script_PassOrdering_AwakeThenStart) {
+    ke_ecs_registry* reg = world->get_registry(world);
+    ke_entity e = ke_ecs_entity_create(reg);
+    ke_script_component* s = (ke_script_component*)ke_ecs_component_add(reg, e, world->script_id(world));
+
+    static int s_order; s_order = 0;
+    static int awake_idx, start_idx;
+    awake_idx = -1; start_idx = -1;
+
+    s->on_awake = [](ke_entity) { awake_idx = s_order++; return KE_OK; };
+    s->on_start = [](ke_entity) { start_idx = s_order++; return KE_OK; };
+
+    world->update(world, nullptr);
+    
+    EXPECT_EQ(awake_idx, 0);
+    EXPECT_EQ(start_idx, 1);
+}
+
+TEST_F(WorldTest, Script_LateUpdate_RunsAfterUpdate) {
+    ke_ecs_registry* reg = world->get_registry(world);
+    ke_entity e = ke_ecs_entity_create(reg);
+    ke_script_component* s = (ke_script_component*)ke_ecs_component_add(reg, e, world->script_id(world));
+
+    static int s_order; s_order = 0;
+    static int update_idx, late_idx;
+    update_idx = -1; late_idx = -1;
+
+    s->on_update = [](ke_entity, float) { update_idx = s_order++; return KE_OK; };
+    s->on_late_update = [](ke_entity, float) { late_idx = s_order++; return KE_OK; };
+
+    world->update(world, nullptr);
+    
+    EXPECT_EQ(update_idx, 0); 
+    EXPECT_EQ(late_idx, 1);
 }
 

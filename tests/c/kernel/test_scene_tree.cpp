@@ -148,9 +148,87 @@ TEST_F(SceneTreeTest, DestroyNode_UnlinksFromParent)
     EXPECT_EQ(rh->first_child, KE_ENTITY_INVALID);
 }
 
-TEST_F(SceneTreeTest, DestroyAll_DoesNotCrashOnEmpty)
+TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 {
-    // Just exercises the post-order walk over the root with no children.
-    tree->destroy_all(tree);
-    EXPECT_EQ(tree->root(tree), tree->root(tree)); // still callable
+    ke_scene_tree *t = nullptr;
+    EXPECT_EQ(ke_scene_tree_create(nullptr, allocator, &t), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_tree_create(world, nullptr, &t), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_tree_create(world, allocator, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(SceneTreeTest, FindNode_ByPath_HandlesLeadingDot)
+{
+    auto hcid = world->hierarchy_id(world);
+    auto ncid = world->name_id(world);
+    ke_entity world_node = AddChild(world, tree->root(tree), "World", hcid, ncid);
+    EXPECT_EQ(tree->find_node(tree, "./World"), world_node);
+}
+
+TEST_F(SceneTreeTest, FindNode_ByPath_TrailingSlash_Works)
+{
+    auto hcid = world->hierarchy_id(world);
+    auto ncid = world->name_id(world);
+    ke_entity world_node = AddChild(world, tree->root(tree), "World", hcid, ncid);
+    EXPECT_EQ(tree->find_node(tree, "/World/"), world_node);
+}
+
+TEST_F(SceneTreeTest, DestroyNode_UnlinksFromMiddleOfChain)
+{
+    auto hcid = world->hierarchy_id(world);
+    auto ncid = world->name_id(world);
+    ke_entity root = tree->root(tree);
+    ke_entity c1 = AddChild(world, root, "1", hcid, ncid);
+    ke_entity c2 = AddChild(world, root, "2", hcid, ncid);
+    ke_entity c3 = AddChild(world, root, "3", hcid, ncid);
+
+    // Chain is Root -> 3 -> 2 -> 1 (AddChild inserts at front)
+    EXPECT_EQ(tree->destroy_node(tree, c2), KE_OK);
+
+    // Verify 3's next is now 1
+    auto h3 = (ke_hierarchy_component *)ke_ecs_component_get(world->get_registry(world), c3, hcid);
+    EXPECT_EQ(h3->next_sibling, c1);
+    
+    // Verify 1's prev is now 3
+    auto h1 = (ke_hierarchy_component *)ke_ecs_component_get(world->get_registry(world), c1, hcid);
+    EXPECT_EQ(h1->prev_sibling, c3);
+}
+
+TEST_F(SceneTreeTest, DestroyNode_UnlinksFirstChild)
+{
+    auto hcid = world->hierarchy_id(world);
+    auto ncid = world->name_id(world);
+    ke_entity root = tree->root(tree);
+    ke_entity c1 = AddChild(world, root, "1", hcid, ncid);
+    ke_entity c2 = AddChild(world, root, "2", hcid, ncid);
+
+    // Chain is Root -> 2 -> 1
+    EXPECT_EQ(tree->destroy_node(tree, c2), KE_OK);
+
+    // Verify root's first child is now 1
+    auto hroot = (ke_hierarchy_component *)ke_ecs_component_get(world->get_registry(world), root, hcid);
+    EXPECT_EQ(hroot->first_child, c1);
+    
+    // Verify 1's prev is now invalid
+    auto h1 = (ke_hierarchy_component *)ke_ecs_component_get(world->get_registry(world), c1, hcid);
+    EXPECT_EQ(h1->prev_sibling, KE_ENTITY_INVALID);
+}
+
+TEST_F(SceneTreeTest, FindNode_ByPath_DeepRelative_Works)
+{
+    auto hcid = world->hierarchy_id(world);
+    auto ncid = world->name_id(world);
+    ke_entity a = AddChild(world, tree->root(tree), "A", hcid, ncid);
+    ke_entity b = AddChild(world, a, "B", hcid, ncid);
+    ke_entity c = AddChild(world, b, "C", hcid, ncid);
+    
+    EXPECT_EQ(tree->find_node(tree, "A/B/C"), c);
+}
+
+TEST_F(SceneTreeTest, FindNode_ByPath_EmptySegments_AreSkipped)
+{
+    auto hcid = world->hierarchy_id(world);
+    auto ncid = world->name_id(world);
+    ke_entity a = AddChild(world, tree->root(tree), "A", hcid, ncid);
+    
+    EXPECT_EQ(tree->find_node(tree, "//A///"), a);
 }

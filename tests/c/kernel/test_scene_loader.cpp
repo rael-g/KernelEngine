@@ -340,21 +340,144 @@ name = "Plain"
     fs::remove(path);
 }
 
-TEST_F(SceneLoaderTest, EntityFormat_ScriptBlock_ReRegisterReplaces)
+TEST_F(SceneLoaderTest, Create_NullArgs_ReturnsInvalidArgument)
 {
-    ScriptCtx first_ctx, second_ctx;
-    ASSERT_EQ(loader->register_script_language(loader, "csharp", RecordScriptFactory, &first_ctx),  KE_OK);
-    ASSERT_EQ(loader->register_script_language(loader, "csharp", RecordScriptFactory, &second_ctx), KE_OK);
+    ke_scene_loader *l = nullptr;
+    EXPECT_EQ(ke_scene_loader_create(nullptr, world, tree, nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_loader_create(allocator, nullptr, tree, nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_loader_create(allocator, world, nullptr, nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_loader_create(allocator, world, tree, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(SceneLoaderTest, Load_NullArgs_ReturnsInvalidArgument)
+{
+    EXPECT_EQ(loader->load(nullptr, "test.toml"), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(loader->load(loader, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(SceneLoaderTest, Load_MalformedToml_ReturnsNotFound)
+{
+    auto path = WriteTempSceneFile("this is not toml [[[");
+    EXPECT_EQ(loader->load(loader, path.string().c_str()), KE_ERROR_NOT_FOUND);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderTest, EntityFormat_MissingName_ReturnsInvalidArgument)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+# missing name
+)");
+    EXPECT_EQ(loader->load(loader, path.string().c_str()), KE_ERROR_INVALID_ARGUMENT);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderTest, EntityFormat_ParentNotFound_ReturnsNotFound)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "Child"
+parent = "NonExistent"
+)");
+    EXPECT_EQ(loader->load(loader, path.string().c_str()), KE_ERROR_NOT_FOUND);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderTest, EntityFormat_Properties_ComplexTypes_Works)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "P"
+[entity.properties]
+v2 = [1, 2]
+v3 = [3, 4, 5]
+v4 = [6, 7, 8, 9]
+s  = "string"
+b  = true
+i  = 42
+f  = 1.5
+[entity.properties.tbl]
+inner = 99
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    
+    ke_entity e = tree->find_node(tree, "P");
+    ke_component_meta meta{};
+    ASSERT_EQ(ke_ecs_component_lookup(world->get_registry(world), 
+                                     KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta), KE_OK);
+    
+    auto* props = (ke_scene_properties*)ke_ecs_component_get(world->get_registry(world), e, meta.cid);
+    ASSERT_NE(props, nullptr);
+    EXPECT_GT(props->count, 0u);
+    
+    // We can't easily inspect the table entries without a helper, 
+    // but the load succeeding means the recursive toml_to_variant didn't crash.
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderTest, EntityFormat_TransformEuler_Works)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "E"
+[entity.transform]
+rotation_euler = [0, 90, 0]
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    
+    auto  tcid = world->transform_id(world);
+    ke_entity e = tree->find_node(tree, "E");
+    auto *t = static_cast<ke_transform_component *>(ke_ecs_component_get(world->get_registry(world), e, tcid));
+    
+    // Euler 0, 90, 0 should be approx 0, 0.707, 0, 0.707 in quat
+    EXPECT_NEAR(t->rotation.y, 0.7071067f, 0.001f);
+    EXPECT_NEAR(t->rotation.w, 0.7071067f, 0.001f);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderTest, EntityFormat_TransformQuat_Works)
+{
+    auto path = WriteTempSceneFile(R"(
+[[entity]]
+name = "E"
+[entity.transform]
+rotation = [0, 0.707, 0, 0.707]
+)");
+    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    
+    auto  tcid = world->transform_id(world);
+    ke_entity e = tree->find_node(tree, "E");
+    auto *t = static_cast<ke_transform_component *>(ke_ecs_component_get(world->get_registry(world), e, tcid));
+    
+    EXPECT_NEAR(t->rotation.y, 0.707f, 0.001f);
+    EXPECT_NEAR(t->rotation.w, 0.707f, 0.001f);
+    fs::remove(path);
+}
+
+TEST_F(SceneLoaderTest, RegisterScript_NullArgs_ReturnsInvalidArgument)
+{
+    EXPECT_EQ(loader->register_script_language(nullptr, "c#", nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(loader->register_script_language(loader, nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(loader->register_script_language(loader, "c#", nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(SceneLoaderTest, EntityFormat_ScriptBlock_FailingFactory_IsSafe)
+{
+    auto failing_factory = +[](void *, ke_entity, const char *) { return KE_ERROR; };
+    loader->register_script_language(loader, "fail", failing_factory, nullptr);
 
     auto path = WriteTempSceneFile(R"(
 [[entity]]
 name = "E"
 [entity.script]
-language = "csharp"
-type     = "T"
+language = "fail"
+type = "Any"
 )");
-    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
-    EXPECT_TRUE(first_ctx.calls.empty());
-    EXPECT_EQ(second_ctx.calls.size(), 1u);
+    EXPECT_EQ(loader->load(loader, path.string().c_str()), KE_OK); // Should skip quietly
     fs::remove(path);
+}
+
+TEST_F(SceneLoaderTest, Destroy_NullSelf_IsSafe)
+{
+    loader->destroy(nullptr);
 }

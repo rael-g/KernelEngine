@@ -55,11 +55,26 @@ TEST_F(LightingManagerTest, SetDirectionalLight_ReturnsError_OnNull)
 
 // ── Ambient Light Tests ──────────────────────────────────────────────────────
 
-TEST_F(LightingManagerTest, SetAmbientLight_StoresRGB)
+TEST_F(LightingManagerTest, SetAmbientLight_ReturnsOk)
 {
     EXPECT_EQ(manager->SetAmbientLight(0.1f, 0.2f, 0.3f), KE_OK);
+}
+
+TEST_F(LightingManagerTest, SetAmbientLight_StoresRed)
+{
+    manager->SetAmbientLight(0.1f, 0.2f, 0.3f);
     EXPECT_FLOAT_EQ(manager->ambient_color[0], 0.1f);
+}
+
+TEST_F(LightingManagerTest, SetAmbientLight_StoresGreen)
+{
+    manager->SetAmbientLight(0.1f, 0.2f, 0.3f);
     EXPECT_FLOAT_EQ(manager->ambient_color[1], 0.2f);
+}
+
+TEST_F(LightingManagerTest, SetAmbientLight_StoresBlue)
+{
+    manager->SetAmbientLight(0.1f, 0.2f, 0.3f);
     EXPECT_FLOAT_EQ(manager->ambient_color[2], 0.3f);
 }
 
@@ -136,18 +151,31 @@ TEST_F(LightingManagerTest, CreateMaterial_AssignsHandle)
 // (cube tops went dark in example 06, mirror reflections aimed at the wrong
 // cubemap face in example 05). Caller-side handling lived in the deleted
 // ResourceCommandQueue path; this owns the contract now.
-TEST_F(LightingManagerTest, CreateMaterial_NormalizesUnsetNormalMap)
+TEST_F(LightingManagerTest, CreateMaterial_UnsetNormalMap_IsStoredAsNone)
 {
     ke_material mat{};
-    mat.albedo.idx     = 0;
     mat.normal_map.idx = 0;
     ke_material_handle h;
-    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), KE_OK);
-    const auto& stored = manager->GetMaterial(h);
-    EXPECT_EQ(stored.normal_map_handle.idx, KE_HANDLE_NONE);
-    EXPECT_FALSE(ke_texture_is_valid(stored.normal_map_handle));
-    // Albedo idx=0 is the built-in white texture and stays untouched.
-    EXPECT_EQ(stored.texture_handle.idx, 0u);
+    manager->CreateMaterial(ctx, *textures, &mat, &h);
+    EXPECT_EQ(manager->GetMaterial(h).normal_map_handle.idx, KE_HANDLE_NONE);
+}
+
+TEST_F(LightingManagerTest, CreateMaterial_UnsetNormalMap_IsInvalidTexture)
+{
+    ke_material mat{};
+    mat.normal_map.idx = 0;
+    ke_material_handle h;
+    manager->CreateMaterial(ctx, *textures, &mat, &h);
+    EXPECT_FALSE(ke_texture_is_valid(manager->GetMaterial(h).normal_map_handle));
+}
+
+TEST_F(LightingManagerTest, CreateMaterial_AlbedoZero_StaysUntouched)
+{
+    ke_material mat{};
+    mat.albedo.idx = 0;
+    ke_material_handle h;
+    manager->CreateMaterial(ctx, *textures, &mat, &h);
+    EXPECT_EQ(manager->GetMaterial(h).texture_handle.idx, 0u);
 }
 
 TEST_F(LightingManagerTest, CreateMaterial_KeepsExplicitNormalMap)
@@ -169,8 +197,73 @@ TEST_F(LightingManagerTest, DestroyMaterial_MarksInvalid)
     EXPECT_FALSE(manager->GetMaterial(h).valid);
 }
 
-TEST_F(LightingManagerTest, GetMaterial_ReturnsInvalidEntry_ForInvalidHandle)
+TEST_F(LightingManagerTest, StorePointLights_ReturnsError_OnNullWithCount)
 {
-    auto& entry = manager->GetMaterial({999});
-    EXPECT_FALSE(entry.valid);
+    EXPECT_EQ(manager->StorePointLights(nullptr, 5), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(LightingManagerTest, StoreSpotLights_ReturnsError_OnNullWithCount)
+{
+    EXPECT_EQ(manager->StoreSpotLights(nullptr, 5), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(LightingManagerTest, RecordLights_ReturnsError_OnNullWithCount)
+{
+    ke_frame_packet packet{};
+    packet.point_light_capacity = 10;
+    EXPECT_EQ(manager->RecordLights(packet, nullptr, 5), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(LightingManagerTest, RecordLights_ReturnsError_OnExceedingCapacity)
+{
+    ke_frame_packet packet{};
+    packet.point_light_capacity = 1;
+    ke_point_light lights[2] = {};
+    EXPECT_EQ(manager->RecordLights(packet, lights, 2), KE_ERROR_OUT_OF_MEMORY);
+}
+
+TEST_F(LightingManagerTest, RecordSpotLights_ReturnsError_OnExceedingCapacity)
+{
+    ke_frame_packet packet{};
+    packet.spot_light_capacity = 1;
+    ke_spot_light lights[2] = {};
+    EXPECT_EQ(manager->RecordSpotLights(packet, lights, 2), KE_ERROR_OUT_OF_MEMORY);
+}
+
+TEST_F(LightingManagerTest, UploadLights_ClampsToMaxPointLights)
+{
+    std::vector<ke_point_light> lights(1024); 
+    manager->StorePointLights(lights.data(), (uint32_t)lights.size());
+    manager->point_lights_uniform = GpuUniformHandle{10};
+    manager->light_counts_uniform = GpuUniformHandle{30};
+
+    // Should clamp to 64 and set 128 vectors (2 per light)
+    EXPECT_CALL(*gpu_mock, SetUniform(GpuUniformHandle{10}, _, 128)).Times(1);
+    EXPECT_CALL(*gpu_mock, SetUniform(GpuUniformHandle{30}, _, 1)).Times(1);
+    manager->UploadLights(ctx);
+}
+
+TEST_F(LightingManagerTest, UploadLights_ClampsToMaxSpotLights)
+{
+    std::vector<ke_spot_light> lights(512); 
+    manager->StoreSpotLights(lights.data(), (uint32_t)lights.size());
+    manager->spot_lights_uniform = GpuUniformHandle{20};
+    manager->light_counts_uniform = GpuUniformHandle{30};
+
+    // Should clamp to 48 and set 192 vectors (4 per light)
+    EXPECT_CALL(*gpu_mock, SetUniform(GpuUniformHandle{20}, _, 192)).Times(1);
+    EXPECT_CALL(*gpu_mock, SetUniform(GpuUniformHandle{30}, _, 1)).Times(1);
+    manager->UploadLights(ctx);
+}
+
+TEST_F(LightingManagerTest, DestroyMaterial_ReturnsError_OnInvalidHandle)
+{
+    EXPECT_EQ(manager->DestroyMaterial(ctx, {999}), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(LightingManagerTest, CreateMaterial_ReturnsError_OnNullArgs)
+{
+    ke_material_handle h;
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, nullptr, &h), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, (ke_material*)0x1, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }

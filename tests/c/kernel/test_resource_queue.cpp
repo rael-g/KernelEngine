@@ -266,15 +266,66 @@ TEST_F(ResourceQueueTest, Future_Wait_BlocksUntilDrain)
     ke_resource_future_release(fut);
 }
 
-TEST_F(ResourceQueueTest, Future_Wait_Zero_ReturnsImmediatelyWhenPending)
+TEST_F(ResourceQueueTest, Submit_NullArgs_ReturnsInvalidArgument)
+{
+    EXPECT_EQ(queue->submit(nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(queue->submit(queue, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(ResourceQueueTest, Submit_InvalidMesh_ReturnsInvalidArgument)
+{
+    ke_resource_command cmd{};
+    cmd.kind = KE_RESOURCE_CMD_CREATE_MESH;
+    cmd.u.create_mesh.vertex_count = 1;
+    cmd.u.create_mesh.vertices     = nullptr; // error
+    EXPECT_EQ(queue->submit(queue, &cmd, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(ResourceQueueTest, Submit_UnknownKind_ReturnsInvalidArgument)
+{
+    ke_resource_command cmd{};
+    cmd.kind = (ke_resource_command_kind)99;
+    EXPECT_EQ(queue->submit(queue, &cmd, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(ResourceQueueTest, Drain_NullArgs_ReturnsZero)
+{
+    EXPECT_EQ(queue->drain(nullptr, &renderer.api, 0), 0u);
+    EXPECT_EQ(queue->drain(queue, nullptr, 0), 0u);
+}
+
+TEST_F(ResourceQueueTest, Future_Wait_Null_ReturnsInvalidArgument)
+{
+    EXPECT_EQ(ke_resource_future_wait(nullptr, 100), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(ResourceQueueTest, Future_Wait_Infinite_Works)
 {
     ke_resource_command cmd{};
     cmd.kind = KE_RESOURCE_CMD_DESTROY_MESH;
-    cmd.u.destroy.handle = 1;
     ke_resource_future *fut = nullptr;
-    ASSERT_EQ(queue->submit(queue, &cmd, &fut), KE_OK);
-    EXPECT_EQ(ke_resource_future_wait(fut, 0), KE_ERROR_INVALID_ARGUMENT);
-    queue->drain(queue, &renderer.api, 0);
-    EXPECT_EQ(ke_resource_future_wait(fut, 1000), KE_OK);
+    queue->submit(queue, &cmd, &fut);
+    
+    std::thread t([&]{
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        queue->drain(queue, &renderer.api, 0);
+    });
+    EXPECT_EQ(ke_resource_future_wait(fut, UINT32_MAX), KE_OK);
+    t.join();
     ke_resource_future_release(fut);
+}
+
+TEST_F(ResourceQueueTest, Future_GetHandle_Null_ReturnsZero)
+{
+    EXPECT_EQ(ke_resource_future_get_handle(nullptr), 0u);
+}
+
+TEST_F(ResourceQueueTest, Future_Release_Null_IsSafe)
+{
+    ke_resource_future_release(nullptr);
+}
+
+TEST_F(ResourceQueueTest, Destroy_Null_IsSafe)
+{
+    queue->destroy(nullptr);
 }

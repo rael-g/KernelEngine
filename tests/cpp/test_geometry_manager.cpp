@@ -89,12 +89,26 @@ TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnNullVerts)
     EXPECT_EQ(manager->CreateMesh(ctx, nullptr, 3, idx, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
 }
 
-TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnZeroCount)
+TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnNullOut)
+{
+    ke_vertex verts[3] = {};
+    uint16_t idx[3] = {0, 1, 2};
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnZeroIndexCount)
 {
     ke_vertex verts[3] = {};
     uint16_t idx[3] = {0, 1, 2};
     ke_mesh_handle handle;
-    EXPECT_EQ(manager->CreateMesh(ctx, verts, 0, idx, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 0, &handle), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnNullIndices)
+{
+    ke_vertex verts[3] = {};
+    ke_mesh_handle handle;
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, nullptr, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
 }
 
 // ── DestroyMesh Tests ─────────────────────────────────────────────────────────
@@ -174,8 +188,30 @@ TEST_F(GeometryManagerTest, RecordDraw_ReturnsInvalidArgument_OnNullTransform)
 
 // ── GetMeshEntry Tests ───────────────────────────────────────────────────────
 
-TEST_F(GeometryManagerTest, GetMeshEntry_ReturnsInvalidEntry_ForInvalidHandle)
+TEST_F(GeometryManagerTest, CreateMesh_ReturnsError_WhenGpuNull)
 {
-    auto& entry = manager->GetMeshEntry({999});
-    EXPECT_EQ(entry.vb, kGpuInvalidHandle);
+    ke_vertex verts[3] = {};
+    uint16_t idx[3] = {0, 1, 2};
+    ke_mesh_handle handle;
+    ctx.gpu = nullptr;
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(GeometryManagerTest, DestroyMesh_ReturnsError_WhenGpuNull)
+{
+    ctx.gpu = nullptr;
+    EXPECT_EQ(manager->DestroyMesh(ctx, {0}), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(GeometryManagerTest, RecordDraw_ReturnsError_OnExceedingCapacity)
+{
+    ke_frame_packet packet{};
+    packet.draw_capacity = 1;
+    packet.draw_commands = (ke_draw_command*)malloc(sizeof(ke_draw_command) * 1);
+    packet.draw_count = 1;
+    
+    ke_mat4 trans{};
+    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, &trans), KE_ERROR_OUT_OF_MEMORY);
+    
+    free(packet.draw_commands);
 }

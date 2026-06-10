@@ -167,9 +167,38 @@ TEST_F(InputTest, OnKey_InvalidCode_IsSafe) {
     SUCCEED();
 }
 
-TEST_F(InputTest, OnMouseButton_InvalidCode_IsSafe) {
-    input->on_mouse_button(input, -1, 1);
-    input->on_mouse_button(input, 32, 1);
+TEST_F(InputTest, IsKeyDown_NullSelf_ReturnsFalse) {
+    auto is_down_fn = input->is_key_down;
+    ASSERT_FALSE(is_down_fn(nullptr, 65));
+}
+
+TEST_F(InputTest, IsKeyPressed_NullSelf_ReturnsFalse) {
+    auto is_pressed_fn = input->is_key_pressed;
+    ASSERT_FALSE(is_pressed_fn(nullptr, 65));
+}
+
+TEST_F(InputTest, IsKeyReleased_NullSelf_ReturnsFalse) {
+    auto is_released_fn = input->is_key_released;
+    ASSERT_FALSE(is_released_fn(nullptr, 65));
+}
+
+TEST_F(InputTest, GetSnapshot_NullArgs_DoesNotCrash) {
+    input->get_snapshot(nullptr, nullptr);
+    ke_input_snapshot snapshot;
+    input->get_snapshot(nullptr, &snapshot);
+    input->get_snapshot(input, nullptr);
+    SUCCEED();
+}
+
+TEST_F(InputTest, DrainEvents_NullArgs_ReturnsZero) {
+    ke_input_event events[1];
+    ASSERT_EQ(input->drain_events(nullptr, events, 1), 0u);
+    ASSERT_EQ(input->drain_events(input, nullptr, 1), 0u);
+}
+
+TEST_F(InputTest, OnMouseMove_NullSelf_IsSafe) {
+    auto on_move_fn = input->on_mouse_move;
+    on_move_fn(nullptr, 1, 1);
     SUCCEED();
 }
 

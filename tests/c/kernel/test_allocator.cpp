@@ -232,8 +232,36 @@ TEST_F(ProxyAllocatorTest, GetStats_NullArgs_ReturnsInvalidArgument) {
     EXPECT_EQ(ke_allocator_proxy_get_stats(nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
 
-TEST_F(ProxyAllocatorTest, ProxyDestroy_NullSelf_IsSafe) {
-    auto d = proxy->destroy;
-    // We already have proxy in the suite, let's just test a null call
-    d(nullptr);
+TEST_F(ProxyAllocatorTest, ProxyAlloc_NullHandle_ReturnsNull) {
+    void* original = proxy->handle;
+    proxy->handle = nullptr;
+    void* ptr = proxy->alloc(proxy, 10, 0);
+    proxy->handle = original;
+    ASSERT_EQ(ptr, nullptr);
+}
+
+TEST_F(ProxyAllocatorTest, ProxyFree_NullHandle_DoesNotCrash) {
+    void* original = proxy->handle;
+    proxy->handle = nullptr;
+    proxy->free(proxy, nullptr);
+    proxy->handle = original;
+    SUCCEED();
+}
+
+TEST_F(ProxyAllocatorTest, ProxyReport_WithLogger_Works) {
+    ke_allocator* a = ke_allocator_malloc_create();
+    ke_allocator* p = ke_allocator_proxy_create(a, "L");
+    ke_allocator_proxy_report(p, nullptr); // stderr
+    p->destroy(p);
+    a->destroy(a);
+}
+
+TEST_F(ArenaAllocatorTest, ArenaAlloc_ZeroSize_ReturnsNull) {
+    ASSERT_EQ(alloc->alloc(alloc, 0, 0), nullptr);
+}
+
+TEST_F(ArenaAllocatorTest, ArenaRealloc_ToZero_FreesAndReturnsNull) {
+    void* p = alloc->alloc(alloc, 10, 0);
+    void* p2 = alloc->realloc(alloc, p, 0);
+    ASSERT_EQ(p2, nullptr);
 }

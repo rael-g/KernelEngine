@@ -44,10 +44,31 @@ TEST_F(ThreadingTest, FrameSync_Handoff)
     sync->destroy(sync, &alloc);
 }
 
+TEST_F(ThreadingTest, FrameSync_NullChecks) {
+    ke_frame_sync *s = nullptr;
+    ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &s);
+    
+    ASSERT_EQ(s->begin_write(nullptr), nullptr);
+    s->end_write(nullptr);
+    ASSERT_EQ(s->begin_read(nullptr), nullptr);
+    s->end_read(nullptr);
+    
+    s->destroy(nullptr, &alloc);
+    s->destroy(s, nullptr);
+    s->destroy(s, &alloc);
+}
+
+TEST(ThreadingInitTest, Create_NullArgs_ReturnsInvalidArgument) {
+    ke_allocator a{};
+    ke_frame_sync *s = nullptr;
+    ASSERT_EQ(ke_frame_sync_std_create(nullptr, 2, 1, 1, 1, &s), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_frame_sync_std_create(&a, 2, 1, 1, 1, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
 TEST_F(ThreadingTest, FrameSync_Blocking)
 {
     ke_frame_sync *sync = nullptr;
-    ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &sync);
+    ke_frame_sync_std_create(&alloc, 2, 1, 1, 1, &sync);
 
     sync->begin_write(sync);
     sync->end_write(sync);

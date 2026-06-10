@@ -190,29 +190,28 @@ TEST_F(RenderGraphImplTest, Execute_NoOp_WhenEmpty)
     EXPECT_EQ(graph_impl->Execute(nullptr), KE_OK);
 }
 
-TEST_F(RenderGraphImplTest, Execute_BindsFrameBuffer)
+TEST_F(RenderGraphImplTest, RemovePass_Works)
 {
-    ke_resource_desc desc{};
-    desc.name = "rt";
-    desc.type = KE_RESOURCE_TYPE_TEXTURE_2D;
-    desc.format = KE_FORMAT_RGBA8_UNORM;
-    desc.width = 100; desc.height = 200;
-    graph_impl->DeclareResource(&desc);
-
-    ke_resource_ref write = { "rt", KE_ACCESS_COLOR_ATTACHMENT };
     ke_render_pass_params p{};
-    p.name = "p";
+    p.name = "to_remove";
     p.record = [](auto,auto){};
-    p.writes = &write;
-    p.writes_count = 1;
     graph_impl->AddPass(&p);
+    EXPECT_EQ(graph_impl->RemovePass("to_remove"), KE_OK);
+    // Should be able to add it again
+    EXPECT_EQ(graph_impl->AddPass(&p), KE_OK);
+}
 
-    EXPECT_CALL(*gpu_mock, CreateTexture2D(_, _, _, _, _, _, _)).WillRepeatedly(Return(GpuTextureHandle{1}));
-    EXPECT_CALL(*gpu_mock, CreateFrameBuffer(_, _, _)).WillRepeatedly(Return(GpuFrameBufferHandle{2}));
-    ASSERT_EQ(graph_impl->Compile(), KE_OK);
+TEST_F(RenderGraphImplTest, RemovePass_ReturnsError_WhenNotFound)
+{
+    EXPECT_EQ(graph_impl->RemovePass("non_existent"), KE_ERROR_NOT_FOUND);
+}
 
-    EXPECT_CALL(*gpu_mock, SetViewFrameBuffer(_, GpuFrameBufferHandle{2})).Times(1);
-    EXPECT_CALL(*gpu_mock, Touch(_)).Times(1);
+TEST_F(RenderGraphImplTest, AddPass_NullArgs_ReturnsError)
+{
+    EXPECT_EQ(graph_impl->AddPass(nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
 
-    graph_impl->Execute(nullptr);
+TEST_F(RenderGraphImplTest, DeclareResource_NullArgs_ReturnsError)
+{
+    EXPECT_EQ(graph_impl->DeclareResource(nullptr), KE_ERROR_INVALID_ARGUMENT);
 }

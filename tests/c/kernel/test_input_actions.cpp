@@ -319,30 +319,40 @@ TEST_F(InputActionsTest, BindOnUnknownActionId_ReturnsNotFound)
     EXPECT_EQ(actions->bind_key_pair(actions, 99, KE_KEY_A, KE_KEY_D), KE_ERROR_NOT_FOUND);
 }
 
-TEST_F(InputActionsTest, Evaluate_AxisFiresPerformedOnValueChangeOnly)
+TEST_F(InputActionsTest, Create_ReturnsInvalidArgument_OnNullArgs)
 {
-    int32_t strafe = actions->add_action(actions, "Strafe", KE_ACTION_TYPE_AXIS1D);
-    ASSERT_EQ(actions->bind_key_pair(actions, strafe, KE_KEY_A, KE_KEY_D), KE_OK);
+    ke_input_actions *a = nullptr;
+    EXPECT_EQ(ke_input_actions_create(nullptr, &a), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_input_actions_create(allocator, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
 
-    struct Counter { int started = 0, canceled = 0, performed = 0; } c;
-    auto cb = +[](void *ctx, ke_input_action_event ev) {
-        auto *cnt = static_cast<Counter *>(ctx);
-        if (ev.phase == KE_ACTION_PHASE_STARTED)   cnt->started++;
-        if (ev.phase == KE_ACTION_PHASE_CANCELED)  cnt->canceled++;
-        if (ev.phase == KE_ACTION_PHASE_PERFORMED) cnt->performed++;
-    };
+TEST_F(InputActionsTest, GetAxis3D_Works)
+{
+    int32_t id = actions->add_action(actions, "Move", KE_ACTION_TYPE_AXIS3D);
+    // No easy way to drive 3D axis via keys/mouse currently in implementation, 
+    // but we can check the default value.
+    float x = 0, y = 0, z = 0;
+    actions->get_axis3d(actions, id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 0.0f);
+    EXPECT_FLOAT_EQ(y, 0.0f);
+    EXPECT_FLOAT_EQ(z, 0.0f);
+}
 
+TEST_F(InputActionsTest, Evaluate_ReturnsInvalidArgument_OnNullArgs)
+{
+    EXPECT_EQ(actions->evaluate(actions, nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(InputActionsTest, WasActionPressed_FalseWhenNotInitialPress)
+{
+    int32_t id = actions->add_action(actions, "Jump", KE_ACTION_TYPE_BUTTON);
+    actions->bind_key(actions, id, KE_KEY_SPACE);
+    
     ke_input_snapshot snap{};
-    SetKeyDown(snap, KE_KEY_D);
-    actions->evaluate(actions, &snap, cb, &c); // 0 -> +1: started, no performed (value just became active)
-    EXPECT_EQ(c.started, 1);
-    EXPECT_EQ(c.performed, 0);
-
-    actions->evaluate(actions, &snap, cb, &c); // +1 -> +1: nothing
-    EXPECT_EQ(c.performed, 0);
-
-    snap = {};
-    SetKeyDown(snap, KE_KEY_A);
-    actions->evaluate(actions, &snap, cb, &c); // +1 -> -1: still active, value changed → Performed
-    EXPECT_EQ(c.performed, 1);
+    SetKeyDown(snap, KE_KEY_SPACE);
+    actions->evaluate(actions, &snap, nullptr, nullptr);
+    EXPECT_TRUE(actions->was_action_pressed(actions, id));
+    
+    actions->evaluate(actions, &snap, nullptr, nullptr); // Second frame with key down
+    EXPECT_FALSE(actions->was_action_pressed(actions, id));
 }

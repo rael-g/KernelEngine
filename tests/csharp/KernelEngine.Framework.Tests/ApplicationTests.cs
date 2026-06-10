@@ -5,11 +5,17 @@ using KernelEngine.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 
+using KernelEngine.Framework.Native;
+
 namespace KernelEngine.Framework.Tests;
 
 [Collection("KernelRegistry")]
 public class ApplicationTests
 {
+    public ApplicationTests()
+    {
+        FrameworkBackends.Default ??= new NativeFrameworkBackendFactory();
+    }
     [Fact]
     public void Tree_LazyInit_Works()
     {
@@ -59,8 +65,6 @@ public class ApplicationTests
         app.Run(services);
 
         window.Received().PollEvents();
-        // Thread spawning is now via System.Threading.Thread directly; the factory is no longer
-        // routed through for this purpose. Behavioral check (the loop ran) is what matters.
     }
 
     [Fact]
@@ -101,6 +105,24 @@ public class ApplicationTests
         var ex = Assert.Throws<TargetInvocationException>(() => method!.Invoke(app, new object[] { (Result)KernelResult.GpuFatal, "test" }));
         var kex = Assert.IsType<KernelException>(ex.InnerException);
         Assert.Contains("GPU Burned", kex.Message);
+    }
+
+    [Fact]
+    public void ActiveWorld_Set_UpdatesTree()
+    {
+        using var allocator = new MallocAllocator();
+        using var world1 = new World(allocator);
+        using var world2 = new World(allocator);
+        var app = new Application();
+        
+        app.ActiveWorld = world1;
+        var tree1 = app.Tree;
+        
+        app.ActiveWorld = world2;
+        var tree2 = app.Tree;
+        
+        Assert.NotSame(tree1, tree2);
+        Assert.Same(world2, tree2.Root.World);
     }
 
     [Fact]

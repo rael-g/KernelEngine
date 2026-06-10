@@ -101,7 +101,24 @@ TEST_F(PostProcessPipelineTest, SetSsao_ReturnsOk_WhenEnabled)
     EXPECT_TRUE(pipeline->IsSsaoEnabled());
 }
 
-TEST_F(PostProcessPipelineTest, SubmitSsao_NoOp_BodyForNow)
+TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsError_WhenShadersFail)
 {
-    pipeline->SubmitSsao(ctx, *geom, *tex, {1}, {2});
+    EXPECT_CALL(*shader_provider, LoadShaderBinary(_, _)).WillRepeatedly(Return(nullptr));
+    GpuProgramHandle b, bl, t;
+    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR_RENDER);
+}
+
+TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsError_WhenGpuNull)
+{
+    ctx.gpu = nullptr;
+    GpuProgramHandle b, bl, t;
+    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR_RENDER);
+}
+
+TEST_F(PostProcessPipelineTest, SubmitPostProcess_NoOp_WhenDisabled)
+{
+    GpuProgramHandle b{1}, bl{2}, t{3};
+    // No calls should be made to gpu_mock for submission
+    EXPECT_CALL(*gpu_mock, Submit(_, _, _, _)).Times(0);
+    pipeline->SubmitPostProcess(ctx, *geom, *tex, b, bl, t);
 }

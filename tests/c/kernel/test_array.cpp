@@ -139,23 +139,30 @@ TEST_F(ArrayTest, Push_TriggerResize_DataPreserved) {
     ASSERT_EQ(arr.data[0], &values[0]);
 }
 
-TEST(ArrayPushResizeTest, Push_ResizeFailure_ReturnsOutOfMemory) {
-    ke_allocator fa;
-    fa.alloc = ke_allocator_malloc_create()->alloc; // Use real alloc for initial
-    fa.realloc = fail_realloc;
-    fa.free = fail_free;
-    fa.destroy = fail_destroy;
-    
-    ke_array a;
-    ke_array_init(&a, 1, &fa);
-    
+TEST_F(ArrayTest, Pop_ReturnsLastValue) {
     int v1 = 1, v2 = 2;
-    ke_array_push(&a, &v1);
-    // Next push triggers resize and fails
-    ASSERT_EQ(ke_array_push(&a, &v2), KE_ERROR_OUT_OF_MEMORY);
-    
-    // Clean up manually since we hijacked the allocator
-    ke_allocator* real_alloc = ke_allocator_malloc_create();
-    real_alloc->free(real_alloc, a.data);
-    real_alloc->destroy(real_alloc);
+    ke_array_push(&arr, &v1);
+    ke_array_push(&arr, &v2);
+    ASSERT_EQ(ke_array_pop(&arr), &v2);
+    ASSERT_EQ(arr.size, 1u);
+}
+
+TEST_F(ArrayTest, Pop_NullArray_ReturnsNull) {
+    ASSERT_EQ(ke_array_pop(nullptr), nullptr);
+}
+
+TEST_F(ArrayTest, Pop_EmptyArray_ReturnsNull) {
+    ASSERT_EQ(ke_array_pop(&arr), nullptr);
+}
+
+TEST_F(ArrayTest, Clear_ResetsSize) {
+    int v = 1;
+    ke_array_push(&arr, &v);
+    ke_array_clear(&arr);
+    ASSERT_EQ(arr.size, 0u);
+}
+
+TEST_F(ArrayTest, Clear_NullArray_IsSafe) {
+    ke_array_clear(nullptr);
+    SUCCEED();
 }

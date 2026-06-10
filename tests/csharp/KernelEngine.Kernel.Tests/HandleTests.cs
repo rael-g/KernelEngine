@@ -9,6 +9,11 @@ public class HandleTests
     public void MeshHandle_None_IsInvalid()
     {
         Assert.False(MeshHandle.None.IsValid);
+    }
+
+    [Fact]
+    public void MeshHandle_None_HasMaxValue()
+    {
         Assert.Equal(uint.MaxValue, MeshHandle.None.Value);
     }
 
@@ -16,6 +21,11 @@ public class HandleTests
     public void TextureHandle_White_IsValid()
     {
         Assert.True(TextureHandle.White.IsValid);
+    }
+
+    [Fact]
+    public void TextureHandle_White_HasZeroValue()
+    {
         Assert.Equal(0u, TextureHandle.White.Value);
     }
 
@@ -24,6 +34,12 @@ public class HandleTests
     {
         var handle = new MaterialHandle(123);
         Assert.True(handle.IsValid);
+    }
+
+    [Fact]
+    public void MaterialHandle_Custom_HasCorrectValue()
+    {
+        var handle = new MaterialHandle(123);
         Assert.Equal(123u, handle.Value);
     }
 

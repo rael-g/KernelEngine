@@ -144,15 +144,41 @@ public class Physics2DTests
     }
 
     [Fact]
-    public unsafe void CreateBody_CallsNative()
+    public unsafe void CreateBody_MarshalsTypeCorrectly()
     {
         var native = CreateMockNative();
         var physics = new Physics2D(native);
-        LastResult = ke_result.KE_OK;
-        var handle = physics.CreateBody(BodyType2D.Dynamic, new Vector2(1, 2));
+        physics.CreateBody(BodyType2D.Dynamic, Vector2.Zero);
         Assert.Equal(ke_body_type_2d.KE_BODY_TYPE_DYNAMIC, LastBodyType);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void CreateBody_MarshalsPositionXCorrectly()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        physics.CreateBody(BodyType2D.Static, new Vector2(1, 0));
         Assert.Equal(1, LastPosition.X);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void CreateBody_MarshalsPositionYCorrectly()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        physics.CreateBody(BodyType2D.Static, new Vector2(0, 2));
         Assert.Equal(2, LastPosition.Y);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void CreateBody_ReturnsHandleFromNative()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        var handle = physics.CreateBody(BodyType2D.Static, Vector2.Zero);
         Assert.Equal(42u, handle.Value);
         NativeMemory.Free(native);
     }
@@ -200,50 +226,113 @@ public class Physics2DTests
     }
 
     [Fact]
-    public unsafe void GetBodyState_CallsNative()
+    public unsafe void GetBodyState_CallsNativeWithCorrectId()
     {
         var native = CreateMockNative();
         var physics = new Physics2D(native);
-        var state = physics.GetBodyState(new BodyHandle2D(123));
+        physics.GetBodyState(new BodyHandle2D(123));
         Assert.Equal(123u, LastBodyId);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void GetBodyState_ReturnsCorrectPositionX()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        var state = physics.GetBodyState(new BodyHandle2D(1));
         Assert.Equal(10, state.Position.X);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void GetBodyState_ReturnsCorrectPositionY()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        var state = physics.GetBodyState(new BodyHandle2D(1));
         Assert.Equal(20, state.Position.Y);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void GetBodyState_ReturnsCorrectAngle()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        var state = physics.GetBodyState(new BodyHandle2D(1));
         Assert.Equal(0.5f, state.Angle);
         NativeMemory.Free(native);
     }
 
     [Fact]
-    public unsafe void SetBodyPosition_CallsNative()
+    public unsafe void SetBodyPosition_CallsNativeWithCorrectId()
     {
         var native = CreateMockNative();
         var physics = new Physics2D(native);
-        physics.SetBodyPosition(new BodyHandle2D(123), new Vector2(1, 2), 0.5f);
+        physics.SetBodyPosition(new BodyHandle2D(123), Vector2.Zero, 0);
         Assert.Equal(123u, LastBodyId);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void SetBodyPosition_MarshalsPositionCorrectly()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        physics.SetBodyPosition(new BodyHandle2D(1), new Vector2(1, 2), 0);
         Assert.Equal(1, LastPosition.X);
         Assert.Equal(2, LastPosition.Y);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void SetBodyPosition_MarshalsAngleCorrectly()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        physics.SetBodyPosition(new BodyHandle2D(1), Vector2.Zero, 0.5f);
         Assert.Equal(0.5f, LastAngle);
         NativeMemory.Free(native);
     }
 
     [Fact]
-    public unsafe void SetBodyVelocity_CallsNative()
+    public unsafe void SetBodyVelocity_CallsNativeWithCorrectId()
     {
         var native = CreateMockNative();
         var physics = new Physics2D(native);
-        physics.SetBodyVelocity(new BodyHandle2D(123), new Vector2(1, 2));
+        physics.SetBodyVelocity(new BodyHandle2D(123), Vector2.Zero);
         Assert.Equal(123u, LastBodyId);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void SetBodyVelocity_MarshalsVelocityCorrectly()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        physics.SetBodyVelocity(new BodyHandle2D(1), new Vector2(1, 2));
         Assert.Equal(1, LastVelocity.X);
         Assert.Equal(2, LastVelocity.Y);
         NativeMemory.Free(native);
     }
 
     [Fact]
-    public unsafe void ApplyImpulse_CallsNative()
+    public unsafe void ApplyImpulse_CallsNativeWithCorrectId()
     {
         var native = CreateMockNative();
         var physics = new Physics2D(native);
-        physics.ApplyImpulse(new BodyHandle2D(123), new Vector2(1, 2));
+        physics.ApplyImpulse(new BodyHandle2D(123), Vector2.Zero);
         Assert.Equal(123u, LastBodyId);
+        NativeMemory.Free(native);
+    }
+
+    [Fact]
+    public unsafe void ApplyImpulse_MarshalsImpulseCorrectly()
+    {
+        var native = CreateMockNative();
+        var physics = new Physics2D(native);
+        physics.ApplyImpulse(new BodyHandle2D(1), new Vector2(1, 2));
         Assert.Equal(1, LastImpulse.X);
         Assert.Equal(2, LastImpulse.Y);
         NativeMemory.Free(native);

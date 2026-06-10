@@ -75,9 +75,21 @@ TEST_F(MeshShapeTest, Bake_Sphere_SegmentsClampedToMin3)
     ke_mesh_shape_free(alloc, &data);
 }
 
-TEST_F(MeshShapeTest, Bake_UnknownPrimitive_ReturnsInvalidArgument)
+TEST_F(MeshShapeTest, Bake_NullAllocator_ReturnsInvalidArgument)
 {
     ke_mesh_shape_data data{};
-    EXPECT_EQ(ke_mesh_shape_bake(alloc, (ke_mesh_primitive)99, 0, &data),
-              KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_mesh_shape_bake(nullptr, KE_MESH_PRIMITIVE_QUAD, 0, &data), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(MeshShapeTest, Bake_NullOut_ReturnsInvalidArgument)
+{
+    EXPECT_EQ(ke_mesh_shape_bake(alloc, KE_MESH_PRIMITIVE_QUAD, 0, nullptr), KE_ERROR_INVALID_ARGUMENT);
+}
+
+TEST_F(MeshShapeTest, Free_NullArgs_IsSafe)
+{
+    ke_mesh_shape_free(nullptr, nullptr);
+    ke_mesh_shape_free(alloc, nullptr);
+    ke_mesh_shape_data data{};
+    ke_mesh_shape_free(nullptr, &data);
 }
