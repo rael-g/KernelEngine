@@ -47,6 +47,8 @@ public sealed class Tree
     /// Registers a node in the tree: creates an entity, binds the node to it,
     /// and lets the subclass materialize its components.
     /// </summary>
+    private readonly Dictionary<string, Node> _byName = new(StringComparer.Ordinal);
+
     public T AddNode<T>(T node, string name = "", Node? parent = null) where T : Node
     {
         if (node.IsBound)
@@ -59,7 +61,49 @@ public sealed class Tree
         node.Name = name;
         node.BindToTree(this, entity);
         parent?.AttachChild(node);
+        if (!string.IsNullOrEmpty(name)) _byName[name] = node;
         return node;
+    }
+
+    /// <summary>
+    /// First phase used by <see cref="SceneLoader"/>: assigns the entity +
+    /// name + parent slot, but does NOT yet invoke the subclass's OnBind.
+    /// The loader then applies scene-file properties and finishes binding via
+    /// <see cref="CompleteAddNode"/>.
+    /// </summary>
+    internal void PreAddNode(Node node, string name, Node? parent)
+    {
+        if (node.IsBound)
+            throw new InvalidOperationException($"Node '{node.Name}' is already added to a tree.");
+        if (parent is not null && parent.Tree != this)
+            throw new InvalidOperationException(
+                $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different tree.");
+
+        var entity = Ecs.CreateEntity();
+        node.Name = name;
+        node.PreBind(this, entity);
+        parent?.AttachChild(node);
+        if (!string.IsNullOrEmpty(name)) _byName[name] = node;
+    }
+
+    internal void CompleteAddNode(Node node) => node.CompleteBind();
+
+    /// <summary>
+    /// Finds a node by its name. First-match wins when multiple nodes share a
+    /// name — game code that relies on Find should keep names unique. Returns
+    /// null when no match exists; the typed overload throws if the type
+    /// doesn't match so the caller gets a clear failure at the first read.
+    /// </summary>
+    public Node? Find(string name) => _byName.TryGetValue(name, out var n) ? n : null;
+
+    public T? Find<T>(string name) where T : Node
+    {
+        var node = Find(name);
+        if (node is null) return null;
+        if (node is not T typed)
+            throw new InvalidOperationException(
+                $"Node '{name}' is a {node.GetType().Name}, not {typeof(T).Name}.");
+        return typed;
     }
 
     /// <summary>
@@ -71,6 +115,7 @@ public sealed class Tree
     public void DestroyNode(Node node)
     {
         if (!node.IsBound || node.Tree != this) return;
+        if (!string.IsNullOrEmpty(node.Name)) _byName.Remove(node.Name);
         // Walk children first so the whole subtree leaves the tree atomically.
         // Snapshot the list because DestroyNode mutates _children via DetachChild.
         var kids = node.Children.ToArray();

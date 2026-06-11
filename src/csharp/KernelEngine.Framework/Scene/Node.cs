@@ -109,18 +109,39 @@ public abstract class Node
 
     internal void BindToTree(Tree tree, ulong entity)
     {
+        PreBind(tree, entity);
+        CompleteBind();
+    }
+
+    /// <summary>
+    /// First phase of binding: assigns the tree + entity + pre-bind transform.
+    /// Used by the <see cref="Framework.SceneLoader"/> so it can apply scene
+    /// properties (which may overwrite the pre-bind transform) BEFORE the
+    /// subclass's <see cref="OnBind"/> runs and reads the final state.
+    /// </summary>
+    internal void PreBind(Tree tree, ulong entity)
+    {
         Tree   = tree;
         Entity = entity;
-        // Sync the pre-bind transform into the ECS before subclass hooks.
         tree.Set(entity, _transform);
-        OnBind(tree);
+    }
 
-        // Reflection allowed only at bind time (engine-side, not script-side)
-        // to detect override once and cache the flag.
+    /// <summary>
+    /// Second phase of binding: re-syncs the (possibly mutated) transform,
+    /// calls the subclass's <see cref="OnBind"/>, then detects the behavior
+    /// override + registers the node with the tree's per-tick walks.
+    /// </summary>
+    internal void CompleteBind()
+    {
+        // Properties applied between PreBind and here may have mutated _transform;
+        // re-sync so OnBind reads the final pose.
+        Tree!.Set(Entity, _transform);
+        OnBind(Tree);
+
         var m = GetType().GetMethod(nameof(OnUpdate),
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
         HasBehavior = m != null && m.DeclaringType != typeof(Node);
 
-        if (HasBehavior) tree.RegisterBehavior(this);
+        if (HasBehavior) Tree!.RegisterBehavior(this);
     }
 }

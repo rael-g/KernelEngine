@@ -46,8 +46,19 @@ public sealed class SceneLoader
         var text = File.ReadAllText(path);
         var doc  = Toml.ToModel(text);
 
-        if (!doc.TryGetValue("entity", out var entitiesRaw) || entitiesRaw is not TomlArray entities)
-            return;
+        // [[entity]] arrays of tables surface as TomlTableArray in Tomlyn — not
+        // TomlArray. Handle both for robustness across versions.
+        List<TomlTable>? entities = null;
+        if (doc.TryGetValue("entity", out var entitiesRaw))
+        {
+            entities = entitiesRaw switch
+            {
+                TomlTableArray tta => tta.Cast<TomlTable>().ToList(),
+                TomlArray      ta  => ta.OfType<TomlTable>().ToList(),
+                _ => null,
+            };
+        }
+        if (entities is null) return;
 
         // Two-pass: instantiate every entity first (so parent references resolve
         // even when declared above their parent in the file), then attach to
@@ -55,9 +66,8 @@ public sealed class SceneLoader
         var instances = new List<(Node Node, TomlTable Entry)>(entities.Count);
         var byName    = new Dictionary<string, Node>(StringComparer.Ordinal);
 
-        foreach (var entry in entities)
+        foreach (var entity in entities)
         {
-            if (entry is not TomlTable entity) continue;
             var name = entity.TryGetValue("name", out var n) ? n as string : null;
             if (string.IsNullOrEmpty(name)) continue;
 
@@ -75,17 +85,24 @@ public sealed class SceneLoader
 
         foreach (var (node, entry) in instances)
         {
-            var name   = (string)entry["name"];
+            var name = (string)entry["name"];
             Node? parent = null;
             if (entry.TryGetValue("parent", out var p) && p is string parentName
                 && byName.TryGetValue(parentName, out var found))
             {
                 parent = found;
             }
-            tree.AddNode(node, name, parent);
 
+            // Two-phase bind: assign entity + identity first, then apply scene
+            // properties (which may set Position/Scale/Rotation + script
+            // properties like MoveAction), then trigger the subclass OnBind so
+            // it sees the final state. AddNode's single-phase shape is fine
+            // for hand-wired code that sets properties via object initializer
+            // before the call.
+            tree.PreAddNode(node, name, parent);
             if (entry.TryGetValue("properties", out var propsRaw) && propsRaw is TomlTable props)
                 ApplyProperties(node, props);
+            tree.CompleteAddNode(node);
         }
     }
 
