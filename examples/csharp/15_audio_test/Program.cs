@@ -1,5 +1,5 @@
 using KernelEngine.Audio.MiniAudio;
-using KernelEngine.Framework;
+using KernelEngine.Framework.Legacy;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Window.Glfw;

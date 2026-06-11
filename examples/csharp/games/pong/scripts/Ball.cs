@@ -1,5 +1,5 @@
 using System.Numerics;
-using KernelEngine.Framework;
+using KernelEngine.Framework.Legacy;
 using KernelEngine.Kernel;
 
 namespace Pong;

@@ -15,7 +15,6 @@
     <Project Path="examples/csharp/09_many_lights/09_many_lights.csproj" />
     <Project Path="examples/csharp/10_hdr_bloom/10_hdr_bloom.csproj" />
     <Project Path="examples/csharp/11_ssao/11_ssao.csproj" />
-    <Project Path="examples/csharp/12_asset_loading/12_asset_loading.csproj" />
     <Project Path="examples/csharp/13_full_scene/13_full_scene.csproj" />
     <Project Path="examples/csharp/14_ui_quad/14_ui_quad.csproj" />
     <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
@@ -33,9 +32,9 @@
     <Project Path="src/csharp/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj" />
     <Project Path="src/csharp/KernelEngine.Cli/KernelEngine.Cli.csproj" />
     <Project Path="src/csharp/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
-    <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
-    <Project Path="src/csharp/KernelEngine.Framework.Abstractions/KernelEngine.Framework.Abstractions.csproj" />
-    <Project Path="src/csharp/KernelEngine.Framework.Native/KernelEngine.Framework.Native.csproj" />
+    <Project Path="src/csharp/KernelEngine.Framework.Legacy/KernelEngine.Framework.Legacy.csproj" />
+    <Project Path="src/csharp/KernelEngine.Framework.Legacy.Abstractions/KernelEngine.Framework.Legacy.Abstractions.csproj" />
+    <Project Path="src/csharp/KernelEngine.Framework.Legacy.Native/KernelEngine.Framework.Legacy.Native.csproj" />
     <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
@@ -47,7 +46,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
-    <Project Path="tests/csharp/KernelEngine.Framework.Tests/KernelEngine.Framework.Tests.csproj" />
+    <Project Path="tests/csharp/KernelEngine.Framework.Legacy.Tests/KernelEngine.Framework.Legacy.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
   </Folder>

@@ -19,7 +19,7 @@
          Framework references only Abstractions (not Kernel), so it gets no InternalsVisibleTo.
          Tests keep it for white-box assertions. -->
     <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
-    <InternalsVisibleTo Include="KernelEngine.Framework.Tests" />
+    <InternalsVisibleTo Include="KernelEngine.Framework.Legacy.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Kernel;
 using KernelEngine.Configuration;
-using KernelEngine.Framework;
+using KernelEngine.Framework.Legacy;
 using KernelEngine.Window.Glfw;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Physics.Box2D;

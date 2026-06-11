@@ -1,7 +1,7 @@
 using System.Numerics;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework;
+using KernelEngine.Framework.Legacy;
 using KernelEngine.Window.Glfw;
 using KernelEngine.Asset.Assimp;
 using KernelEngine.TaskScheduler.Enki;
