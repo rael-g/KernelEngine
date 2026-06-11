@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,7 +32,35 @@ public static class RuntimeStartup
         {
             runtime.RegisterModule(module.Name, rt => module.OnLoad(rt, services));
         }
+
+        // Remember the load order so UnloadModules can reverse it. Weak ref
+        // means we don't keep the runtime alive past its natural lifetime.
+        s_loadOrder.AddOrUpdate(runtime, ordered);
     }
+
+    /// <summary>
+    /// Calls <see cref="IRuntimeModule.OnUnload"/> on every module previously
+    /// loaded via <see cref="LoadModules"/>, in reverse order. Modules that own
+    /// thread-affine resources (renderer, audio device, etc.) are expected to
+    /// dispatch their disposal to the correct worker in OnUnload; the runtime
+    /// only fires the callback synchronously on the calling thread.
+    /// </summary>
+    /// <remarks>
+    /// Idempotent — calling twice runs OnUnload once. Game code should call
+    /// this after the tick loop and before <c>IServiceProvider.Dispose</c>;
+    /// disposing services without unloading risks thread-affinity violations
+    /// on native resources created by pinned systems.
+    /// </remarks>
+    public static void UnloadModules(this IRuntime runtime, IServiceProvider services)
+    {
+        if (!s_loadOrder.TryGetValue(runtime, out var ordered)) return;
+        s_loadOrder.Remove(runtime);
+
+        for (int i = ordered.Count - 1; i >= 0; i--)
+            ordered[i].OnUnload(runtime, services);
+    }
+
+    private static readonly ConditionalWeakTable<IRuntime, List<IRuntimeModule>> s_loadOrder = new();
 
     private static List<IRuntimeModule> TopoSort(List<IRuntimeModule> modules)
     {

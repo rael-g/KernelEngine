@@ -106,4 +106,27 @@ public sealed class BgfxRenderModule : IRuntimeModule
             }
         }, pinnedThread: RenderWorker);
     }
+
+    public void OnUnload(IRuntime runtime, IServiceProvider services)
+    {
+        // bgfx destroy MUST run on the same worker that called bgfx::init (the
+        // render worker), so dispatch the renderer's IDisposable.Dispose there
+        // and block until it completes. Skipping this would either trip the
+        // ke.render affinity assertion on the main thread or — worse, if the
+        // assertion were removed — corrupt bgfx's internal state on shutdown.
+        var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var renderer  = services.GetRequiredService<IRenderer>();
+
+        var done = new System.Threading.ManualResetEventSlim(false);
+        Exception? err = null;
+        scheduler.DispatchPinned(RenderWorker, () =>
+        {
+            try   { (renderer as IDisposable)?.Dispose(); }
+            catch (Exception ex) { err = ex; }
+            finally { done.Set(); }
+        });
+        done.Wait();
+        if (err != null)
+            throw new InvalidOperationException("Bgfx renderer Dispose failed", err);
+    }
 }

@@ -50,6 +50,20 @@ public sealed class SceneRenderModule : IRuntimeModule
         // Force resolution so components are registered up front, before
         // SceneModule callbacks try to spawn nodes.
         _ = services.GetRequiredService<ComponentRegistry>();
-        _ = services.GetRequiredService<Tree>();
+        var tree = services.GetRequiredService<Tree>();
+
+        // BehaviorSystem — calls Node.OnUpdate for every bound node that
+        // overrode it. Runs in Update phase (before Extract, so behaviors
+        // mutate transforms/component state that contributors then read).
+        // Pinned to the render worker for now because Tree mutations route
+        // through EcsAdapter and the storage layer isn't yet free-threaded.
+        runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, dt) =>
+        {
+            var view      = new View(tree, dt);
+            var behaviors = tree.Behaviors;
+            // Index loop avoids enumerator allocation on the hot path.
+            for (int i = 0; i < behaviors.Count; i++)
+                behaviors[i].OnUpdate(in view);
+        }, pinnedThread: 1);
     }
 }

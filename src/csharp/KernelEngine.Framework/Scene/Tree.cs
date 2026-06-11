@@ -13,6 +13,13 @@ public sealed class Tree
     internal EcsAdapter        Ecs        { get; }
     internal ComponentRegistry Components { get; }
 
+    // Bound nodes that overrode OnUpdate. BehaviorSystem iterates this list
+    // each tick. Built during Tree.AddNode and never written from the tick
+    // path (no spawning from inside OnUpdate yet).
+    private readonly List<Node> _behaviors = new();
+    internal IReadOnlyList<Node> Behaviors => _behaviors;
+    internal void RegisterBehavior(Node node) => _behaviors.Add(node);
+
     /// <summary>
     /// Direct access to the renderer for creating GPU resources (textures,
     /// materials, meshes). Setup callbacks run on the render worker, so calls

@@ -47,6 +47,28 @@ public abstract class Node
     /// </summary>
     protected internal abstract void OnBind(Tree tree);
 
+    /// <summary>
+    /// Called every simulation tick on bound nodes. Default is a no-op so
+    /// only nodes that need per-frame logic pay the virtual-call cost
+    /// (BehaviorSystem skips nodes whose OnUpdate is the base method via the
+    /// <see cref="HasBehavior"/> flag computed at first bind).
+    /// </summary>
+    /// <remarks>
+    /// Mutating state through <see cref="View"/> or this node's own properties
+    /// is the only sanctioned way to drive simulation. Reaching into ECS
+    /// internals or calling native APIs from inside this method violates the
+    /// script-safety doctrine (the analyzer enforces the static rules; the
+    /// View funnel enforces the runtime ones).
+    /// </remarks>
+    protected internal virtual void OnUpdate(in View view) { }
+
+    /// <summary>
+    /// True if the subclass overrode <see cref="OnUpdate"/>. Computed once at
+    /// bind so BehaviorSystem can iterate only the entities that actually have
+    /// per-frame logic instead of every node in the tree.
+    /// </summary>
+    internal bool HasBehavior { get; private set; }
+
     internal void BindToTree(Tree tree, ulong entity)
     {
         Tree   = tree;
@@ -54,5 +76,13 @@ public abstract class Node
         // Sync the pre-bind transform into the ECS before subclass hooks.
         tree.SetTransform(entity, _transform);
         OnBind(tree);
+
+        // Reflection allowed only at bind time (engine-side, not script-side)
+        // to detect override once and cache the flag.
+        var m = GetType().GetMethod(nameof(OnUpdate),
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+        HasBehavior = m != null && m.DeclaringType != typeof(Node);
+
+        if (HasBehavior) tree.RegisterBehavior(this);
     }
 }

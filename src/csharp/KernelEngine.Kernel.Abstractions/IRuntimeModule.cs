@@ -43,4 +43,20 @@ public interface IRuntimeModule
     /// Register systems, components, and resources here.
     /// </summary>
     void OnLoad(IRuntime runtime, IServiceProvider services);
+
+    /// <summary>
+    /// Symmetric teardown hook. Called once during <c>runtime.UnloadModules</c>
+    /// in REVERSE registration order — last-loaded module unloads first. Use
+    /// this to release resources that <see cref="OnLoad"/> acquired, especially
+    /// those with thread affinity (e.g. dispatch the release to the worker the
+    /// resource was created on).
+    /// </summary>
+    /// <remarks>
+    /// Default is a no-op so modules without teardown needs don't pay the
+    /// ceremony. Modules that own thread-affine native handles (renderer
+    /// destroy on bgfx-init thread, audio device close on its mixer thread,
+    /// etc.) MUST override to dispatch their disposal to the right worker —
+    /// the runtime calls OnUnload on the main thread.
+    /// </remarks>
+    void OnUnload(IRuntime runtime, IServiceProvider services) { }
 }

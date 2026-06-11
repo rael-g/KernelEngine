@@ -74,4 +74,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
+runtime.UnloadModules(sp);
+
 Console.WriteLine("[02_textured_quad] Exited cleanly.");
