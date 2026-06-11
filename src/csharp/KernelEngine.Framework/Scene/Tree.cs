@@ -65,4 +65,7 @@ public sealed class Tree
 
     internal void SetDirectionalLight(ulong entity, in DirectionalLightComponent value)
         => Ecs.Add(entity, Components.DirectionalLightCid, value);
+
+    internal void SetSkybox(ulong entity, in SkyboxComponent value)
+        => Ecs.Add(entity, Components.SkyboxCid, value);
 }

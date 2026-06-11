@@ -43,6 +43,11 @@ public sealed class SceneRenderModule : IRuntimeModule
             new MeshContributor(
                 sp.GetRequiredService<EcsAdapter>(),
                 sp.GetRequiredService<ComponentRegistry>()));
+
+        services.AddSingleton<IFrameContributor, SkyboxContributor>(sp =>
+            new SkyboxContributor(
+                sp.GetRequiredService<EcsAdapter>(),
+                sp.GetRequiredService<ComponentRegistry>()));
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
@@ -50,16 +55,20 @@ public sealed class SceneRenderModule : IRuntimeModule
         // Force resolution so components are registered up front, before
         // SceneModule callbacks try to spawn nodes.
         _ = services.GetRequiredService<ComponentRegistry>();
-        var tree = services.GetRequiredService<Tree>();
+        var tree  = services.GetRequiredService<Tree>();
+        var input = services.GetService<IInput>(); // optional — only if .AddInput() was called
 
         // BehaviorSystem — calls Node.OnUpdate for every bound node that
         // overrode it. Runs in Update phase (before Extract, so behaviors
         // mutate transforms/component state that contributors then read).
         // Pinned to the render worker for now because Tree mutations route
-        // through EcsAdapter and the storage layer isn't yet free-threaded.
+        // through EcsAdapter and the storage layer isn't yet free-threaded;
+        // ticking Input here too keeps Update + reads on a single worker.
         runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, dt) =>
         {
-            var view      = new View(tree, dt);
+            input?.Update();
+            var reader    = (input as Input)?.CaptureSnapshot();
+            var view      = new View(tree, dt, reader);
             var behaviors = tree.Behaviors;
             // Index loop avoids enumerator allocation on the hot path.
             for (int i = 0; i < behaviors.Count; i++)

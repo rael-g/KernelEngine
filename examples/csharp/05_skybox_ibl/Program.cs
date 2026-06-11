@@ -1,113 +1,137 @@
-using System.Numerics;
 using System.Diagnostics;
+using System.Numerics;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework.Legacy;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// 05_skybox_ibl — procedural cubemap as both the visible skybox and the IBL
+// environment for a metallic quad. A free-look camera (arrow keys to rotate,
+// WASD/Shift/Ctrl to translate) lets you fly around to see the cubemap from
+// every face and watch the IBL response on the metal surface.
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
-
-using var app = new Application();
-
-int entityCount = 0;
-
-app.OnReady = (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 05_skybox_ibl");
-    Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
-    Console.WriteLine("[KernelEngine] Features: skybox_cubemap, ibl_env_map, pbr_ggx, orbiting_camera");
-
-    // Procedural cubemap — one solid color per face
-    uint faceSize = 64;
-    byte[] cubeData = new byte[faceSize * faceSize * 4 * 6];
-    (byte R, byte G, byte B)[] colors =
-    [
-        (255, 0,   0),   // +X Red
-        (0,   255, 255), // -X Cyan
-        (0,   255, 0),   // +Y Green
-        (255, 0,   255), // -Y Magenta
-        (0,   0,   255), // +Z Blue
-        (255, 255, 0),   // -Z Yellow
-    ];
-    for (int f = 0; f < 6; f++)
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.05f, 0.05f, 0.05f, 1.0f)))
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new SceneModule(tree =>
     {
-        int off = f * (int)(faceSize * faceSize * 4);
-        for (int i = 0; i < faceSize * faceSize; i++)
+        Console.WriteLine("[KernelEngine] Example: 05_skybox_ibl");
+        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Features: skybox_cubemap, ibl_env_map, pbr_ggx, freelook_camera");
+
+        // ACES tonemapping is stateful on the renderer; setting it once at
+        // scene setup is enough — the legacy example called it per-frame
+        // defensively, but the underlying state survives.
+        tree.Renderer.SetTonemapping(true, 1.0f, 2.2f);
+
+        // Procedural cubemap — one solid color per face for face identification.
+        const uint faceSize = 64;
+        var cubeData = new byte[faceSize * faceSize * 4 * 6];
+        (byte R, byte G, byte B)[] colors =
+        [
+            (255, 0,   0),   // +X Red
+            (0,   255, 255), // -X Cyan
+            (0,   255, 0),   // +Y Green
+            (255, 0,   255), // -Y Magenta
+            (0,   0,   255), // +Z Blue
+            (255, 255, 0),   // -Z Yellow
+        ];
+        for (int f = 0; f < 6; f++)
         {
-            cubeData[off + i * 4 + 0] = colors[f].R;
-            cubeData[off + i * 4 + 1] = colors[f].G;
-            cubeData[off + i * 4 + 2] = colors[f].B;
-            cubeData[off + i * 4 + 3] = 255;
+            int off = f * (int)(faceSize * faceSize * 4);
+            for (int i = 0; i < faceSize * faceSize; i++)
+            {
+                cubeData[off + i * 4 + 0] = colors[f].R;
+                cubeData[off + i * 4 + 1] = colors[f].G;
+                cubeData[off + i * 4 + 2] = colors[f].B;
+                cubeData[off + i * 4 + 3] = 255;
+            }
         }
-    }
 
-    var cubeHandle = resources.CreateCubemap(faceSize, cubeData);
-    Console.WriteLine($"[KernelEngine] Cubemap: handle={cubeHandle} faceSize={faceSize}");
+        var cubemap = tree.Renderer.CreateCubemap(faceSize, cubeData).Value;
+        Console.WriteLine($"[KernelEngine] Cubemap: handle={cubemap.Value} faceSize={faceSize}");
 
-    app.Tree.AddNode(new Skybox { CubemapHandle = cubeHandle }, "Skybox");
-    entityCount++;
+        tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
-    var mirrorMat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.8f, roughness: 0.1f);
-    app.Tree.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
-    entityCount++;
+        var mirrorMat = tree.Renderer.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f).Value;
+        tree.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
 
-    app.Tree.AddNode(new DirectionalLight
-    {
-        Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
-        Intensity = 1.5f,
-    }, "Sun");
-    entityCount++;
+        tree.AddNode(new DirectionalLight
+        {
+            Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
+            Intensity = 1.5f,
+        }, "Sun");
 
-    var cam = app.Tree.AddNode(new FreeLookNode { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
-    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
-    entityCount++;
-    return Task.CompletedTask;
-};
+        var cam = tree.AddNode(new FreeLook { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
+    }));
 
-Stopwatch sw = Stopwatch.StartNew();
+using var sp = services.BuildServiceProvider();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
+
+runtime.LoadModules(sp);
+
+Console.WriteLine("[05_skybox_ibl] Loop running. Arrows = look, WASD = move, Shift/Ctrl = up/down. Close window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
 int frameCount = 0;
+double fpsWindowStart = 0;
 
-app.OnUpdate = (tree, input) =>
+while (!window.ShouldClose())
 {
-    tree.SetTonemapping(true, 1.0f, 2.2f);
-    tree.ClearColor(0.05f, 0.05f, 0.05f, 1f);
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
 
     frameCount++;
-    if (sw.Elapsed.TotalSeconds >= 5.0)
+    if (now - fpsWindowStart >= 5.0)
     {
-        double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Entities: {entityCount}  Lights: 0p 0s 1d");
-        frameCount = 0;
-        sw.Restart();
+        double fps = frameCount / (now - fpsWindowStart);
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: 0p 0s 1d");
+        frameCount     = 0;
+        fpsWindowStart = now;
     }
-};
+}
 
-app.Run(services);
+runtime.UnloadModules(sp);
+
+Console.WriteLine("[05_skybox_ibl] Exited cleanly.");
 
 // ── FreeLook camera — arrow keys: look, WASD: move, Shift/Ctrl: fly ──────────
 
-sealed class FreeLookNode : Camera
+sealed class FreeLook : Camera
 {
-    private float _speed     = 8.0f;
-    private float _rotateDeg = 90.0f;
-    private float _pitch     = 0f;
-    private float _yaw       = 0f;
+    private const float MoveSpeed   = 8.0f;
+    private const float RotateDeg   = 90.0f;
 
-    protected override void Update(float dt)
+    private float _pitch;
+    private float _yaw;
+
+    protected override void OnUpdate(in View view)
     {
-        var input = InputContext.Current;
+        float dt = view.DeltaTime;
 
-        if (input.IsKeyDown(262)) _yaw   -= _rotateDeg * dt; // Right arrow
-        if (input.IsKeyDown(263)) _yaw   += _rotateDeg * dt; // Left arrow
-        if (input.IsKeyDown(265)) _pitch += _rotateDeg * dt; // Up arrow
-        if (input.IsKeyDown(264)) _pitch -= _rotateDeg * dt; // Down arrow
+        if (view.IsKeyDown(262)) _yaw   -= RotateDeg * dt; // Right arrow
+        if (view.IsKeyDown(263)) _yaw   += RotateDeg * dt; // Left arrow
+        if (view.IsKeyDown(265)) _pitch += RotateDeg * dt; // Up arrow
+        if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt; // Down arrow
         _pitch = Math.Clamp(_pitch, -89f, 89f);
 
         var rot     = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
@@ -115,17 +139,17 @@ sealed class FreeLookNode : Camera
         var right   = Vector3.Transform( Vector3.UnitX, rot);
 
         var move = Vector3.Zero;
-        if (input.IsKeyDown(87))  move += forward;  // W
-        if (input.IsKeyDown(83))  move -= forward;  // S
-        if (input.IsKeyDown(65))  move -= right;    // A
-        if (input.IsKeyDown(68))  move += right;    // D
-        if (input.IsKeyDown(340)) move += Vector3.UnitY; // Left Shift
-        if (input.IsKeyDown(341)) move -= Vector3.UnitY; // Left Ctrl
-        if (move != Vector3.Zero) move   = Vector3.Normalize(move);
+        if (view.IsKeyDown(87))  move += forward;        // W
+        if (view.IsKeyDown(83))  move -= forward;        // S
+        if (view.IsKeyDown(65))  move -= right;          // A
+        if (view.IsKeyDown(68))  move += right;          // D
+        if (view.IsKeyDown(340)) move += Vector3.UnitY;  // Left Shift
+        if (view.IsKeyDown(341)) move -= Vector3.UnitY;  // Left Ctrl
+        if (move != Vector3.Zero) move = Vector3.Normalize(move);
 
         LocalTransform = LocalTransform with
         {
-            Position = LocalTransform.Position + move * _speed * dt,
+            Position = LocalTransform.Position + move * MoveSpeed * dt,
             Rotation = rot,
         };
     }

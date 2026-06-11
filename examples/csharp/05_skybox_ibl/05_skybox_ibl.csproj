@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -8,15 +8,14 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
-    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
-  </PropertyGroup>
-
   <ItemGroup>
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Framework.Legacy/KernelEngine.Framework.Legacy.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Framework.Legacy.Native/KernelEngine.Framework.Legacy.Native.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
   </ItemGroup>
 
 </Project>

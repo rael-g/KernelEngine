@@ -5,7 +5,7 @@ namespace KernelEngine.Framework;
 /// is read from <see cref="Node.LocalTransform"/> (so the camera moves by
 /// updating its transform like any other node).
 /// </summary>
-public sealed class Camera : Node
+public class Camera : Node
 {
     public float Fov  { get; set; } = 60f;
     public float Near { get; set; } = 0.1f;

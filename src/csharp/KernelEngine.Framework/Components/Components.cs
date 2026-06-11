@@ -51,3 +51,9 @@ public struct DirectionalLightComponent
     public float   Intensity;
     public Vector3 Ambient;
 }
+
+/// <summary>Skybox cubemap. First entity with this drives the scene's skybox.</summary>
+public struct SkyboxComponent
+{
+    public TextureHandle CubemapHandle;
+}

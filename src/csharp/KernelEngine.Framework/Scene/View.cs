@@ -1,3 +1,5 @@
+using KernelEngine.Kernel;
+
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -26,9 +28,19 @@ public readonly ref struct View
     /// access is escape-hatch territory and won't survive the codegen path.</summary>
     public Tree Tree { get; }
 
-    internal View(Tree tree, float deltaTime)
+    private readonly IInputReader? _input;
+
+    /// <summary>
+    /// True if the given key was held down when input was last sampled (just
+    /// before this tick). Returns false when no input service is registered.
+    /// Key codes follow the GLFW convention (e.g. 87='W', 262=Right Arrow).
+    /// </summary>
+    public bool IsKeyDown(int key) => _input?.IsKeyDown(key) ?? false;
+
+    internal View(Tree tree, float deltaTime, IInputReader? input)
     {
         Tree      = tree;
         DeltaTime = deltaTime;
+        _input    = input;
     }
 }

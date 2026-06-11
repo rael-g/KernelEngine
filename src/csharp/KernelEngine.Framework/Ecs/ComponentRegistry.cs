@@ -10,6 +10,7 @@ public sealed class ComponentRegistry
     public uint MeshRendererCid     { get; }
     public uint CameraCid           { get; }
     public uint DirectionalLightCid { get; }
+    public uint SkyboxCid           { get; }
 
     internal ComponentRegistry(EcsAdapter ecs)
     {
@@ -17,5 +18,6 @@ public sealed class ComponentRegistry
         MeshRendererCid     = ecs.Register<MeshRendererComponent>("MeshRenderer");
         CameraCid           = ecs.Register<CameraComponent>("Camera");
         DirectionalLightCid = ecs.Register<DirectionalLightComponent>("DirectionalLight");
+        SkyboxCid           = ecs.Register<SkyboxComponent>("Skybox");
     }
 }
