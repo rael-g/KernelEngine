@@ -10,12 +10,23 @@ namespace KernelEngine.Window.Glfw;
 /// </summary>
 public sealed class GlfwWindowModule : IRuntimeModule
 {
-    private readonly int    _width;
-    private readonly int    _height;
-    private readonly string _title;
+    private readonly int?    _width;
+    private readonly int?    _height;
+    private readonly string? _title;
 
     public string Name => "Glfw.Window";
 
+    /// <summary>
+    /// Reads window settings from the Project file's <c>[runtime.window]</c>
+    /// section (width / height / title / fullscreen). Falls back to
+    /// <see cref="WindowOptions"/> defaults if the section / file is absent.
+    /// </summary>
+    public GlfwWindowModule() { }
+
+    /// <summary>
+    /// Inline overrides — equivalent to the no-arg ctor + <c>.Configure&lt;WindowOptions&gt;(...)</c>.
+    /// Useful for examples that don't ship a Project file.
+    /// </summary>
     public GlfwWindowModule(int width, int height, string title)
     {
         _width  = width;
@@ -25,8 +36,10 @@ public sealed class GlfwWindowModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
-        // Reuse the existing extension — keeps the GLFW init logic centralized.
-        services.AddGlfwWindow(_width, _height, _title);
+        if (_width is { } w && _height is { } h && _title is { } t)
+            services.AddGlfwWindow(w, h, t);
+        else
+            services.AddGlfwWindow();
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)

@@ -1,0 +1,26 @@
+# Pong input bindings — edited via engine editor/CLI (eventually).
+# Action names must match values in PongAction enum (Program.cs).
+
+[action.PaddleLeftMove]
+type = "Axis1D"
+bindings = [
+    { kind = "key_pair", negative = "S", positive = "W" },
+]
+
+[action.PaddleRightMove]
+type = "Axis1D"
+bindings = [
+    { kind = "key_pair", negative = "Down", positive = "Up" },
+]
+
+[action.Launch]
+type = "Button"
+bindings = [
+    { kind = "key", key = "Space" },
+]
+
+[action.Quit]
+type = "Button"
+bindings = [
+    { kind = "key", key = "Escape" },
+]

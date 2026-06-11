@@ -11,30 +11,31 @@ namespace Pong;
 /// </summary>
 public sealed class Ball : MeshRenderer
 {
-    const int   KeySpace      = 32;
-    const int   KeyEscape     = 256;
-    const float InitialSpeed  = 6f;
+    const float InitialSpeed   = 6f;
     const float GoalLineMargin = 0.5f;
 
-    private readonly Tree           _tree;
-    private readonly IPhysics2D     _physics;
-    private readonly IAudio         _audio;
-    private readonly SoundHandle    _hit;
-    private readonly SoundHandle    _score;
-    private readonly Scoreboard     _board;
-    private readonly MaterialHandle _mat;
+    private readonly Tree                        _tree;
+    private readonly IPhysics2D                  _physics;
+    private readonly IInputActionMap<PongAction> _actions;
+    private readonly IAudio                      _audio;
+    private readonly SoundHandle                 _hit;
+    private readonly SoundHandle                 _score;
+    private readonly Scoreboard                  _board;
+    private readonly MaterialHandle              _mat;
 
     private BodyHandle2D _body;
     private Vector2      _lastVelocity;
     private bool         _awaitingLaunch = true;
-    private bool         _prevSpace;
-    private bool         _prevEsc;
+    private bool         _prevLaunch;
+    private bool         _prevQuit;
 
-    public Ball(Tree tree, IPhysics2D physics, MaterialHandle mat,
-                IAudio audio, SoundHandle hit, SoundHandle score, Scoreboard board)
+    public Ball(Tree tree, IPhysics2D physics, IInputActionMap<PongAction> actions,
+                MaterialHandle mat, IAudio audio, SoundHandle hit, SoundHandle score,
+                Scoreboard board)
     {
         _tree    = tree;
         _physics = physics;
+        _actions = actions;
         _mat     = mat;
         _audio   = audio;
         _hit     = hit;
@@ -64,12 +65,12 @@ public sealed class Ball : MeshRenderer
             Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, state.Angle),
         };
 
-        bool space = view.IsKeyDown(KeySpace);
-        bool esc   = view.IsKeyDown(KeyEscape);
-        if (esc && !_prevEsc) Environment.Exit(0);
-        if (space && !_prevSpace && _awaitingLaunch) Launch();
-        _prevSpace = space;
-        _prevEsc   = esc;
+        bool launch = _actions.IsPressed(PongAction.Launch, in view);
+        bool quit   = _actions.IsPressed(PongAction.Quit,   in view);
+        if (quit   && !_prevQuit)                          Environment.Exit(0);
+        if (launch && !_prevLaunch && _awaitingLaunch)     Launch();
+        _prevLaunch = launch;
+        _prevQuit   = quit;
 
         if (_awaitingLaunch) return;
 

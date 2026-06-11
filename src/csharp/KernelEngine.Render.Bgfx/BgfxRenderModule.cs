@@ -1,6 +1,8 @@
+using KernelEngine.Configuration;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace KernelEngine.Render.Bgfx;
 
@@ -23,12 +25,20 @@ public sealed class BgfxRenderModule : IRuntimeModule
 {
     private const uint RenderWorker = 1;
 
-    private readonly string _shaderPath;
-    private readonly bool   _vsync;
+    private readonly string? _shaderPath;
+    private readonly bool    _vsync;
     private readonly (float r, float g, float b, float a)? _defaultClearColor;
 
     public string Name => "Bgfx.Render";
 
+    /// <summary>
+    /// Reads renderer settings from Project's <c>[runtime.renderer]</c> +
+    /// <c>[render]</c> sections (shader path / vsync / clear color). Falls
+    /// back to POCO defaults when sections are missing.
+    /// </summary>
+    public BgfxRenderModule() { }
+
+    /// <summary>Inline overrides — useful when a Project file isn't shipped.</summary>
     public BgfxRenderModule(string shaderPath, bool vsync = true,
                             (float r, float g, float b, float a)? clearColor = null)
     {
@@ -39,7 +49,12 @@ public sealed class BgfxRenderModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
-        services.AddBgfxRenderer(_shaderPath, _vsync);
+        if (_shaderPath is { } sp)
+            services.AddBgfxRenderer(sp, _vsync);
+        else
+            services.AddBgfxRenderer();
+
+        services.AddProjectConfigSection<RenderOptions>("render");
         services.AddSingleton<IFrameSync>(sp =>
             sp.GetRequiredService<IKernelFactory>()
               .CreateFrameSync(sp.GetRequiredService<Allocator>(), bufferCount: 2));
@@ -78,12 +93,24 @@ public sealed class BgfxRenderModule : IRuntimeModule
         var frameSync    = services.GetRequiredService<IFrameSync>();
         var contributors = services.GetServices<IFrameContributor>().ToArray();
 
+        // Resolve clear color now: inline ctor value wins; otherwise fall back
+        // to the Project file's [render] section; otherwise stay null (the
+        // renderer's existing clear color is left untouched).
+        var resolvedClearColor = _defaultClearColor;
+        if (resolvedClearColor is null)
+        {
+            var renderOpts = services.GetService<IOptions<RenderOptions>>()?.Value;
+            var arr        = renderOpts?.ClearColor;
+            if (arr is { Length: >= 4 })
+                resolvedClearColor = (arr[0], arr[1], arr[2], arr[3]);
+        }
+
         runtime.RegisterSystem("Bgfx.RenderFrame", RuntimePhase.Extract, (_, _) =>
         {
             var packet = frameSync.BeginWrite();
             try
             {
-                if (_defaultClearColor is { } c)
+                if (resolvedClearColor is { } c)
                     packet.SetClearColor(c.r, c.g, c.b, c.a);
 
                 foreach (var contributor in contributors)
