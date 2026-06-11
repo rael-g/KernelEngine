@@ -8,9 +8,10 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// R6 migration: 02_textured_quad — procedural checkerboard texture on the
-// built-in quad, lit by one directional + ambient light. Uses runtime + new
-// framework modules end-to-end. No Application.cs.
+// 02_textured_quad — procedural checkerboard texture on the built-in quad,
+// lit by one directional + ambient light. Same Tree.AddNode shape as the
+// legacy example; under the hood every node is an ECS entity + components,
+// and render contributors stream them into the per-frame packet.
 
 var services = new ServiceCollection()
     .AddKernel()
@@ -24,15 +25,8 @@ var services = new ServiceCollection()
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.05f, 0.05f, 1.0f)))
-    .Add<IRuntimeModule>(new CameraModule { Position = new(0, 0, 3) })
-    .Add<IRuntimeModule>(new LightModule
-    {
-        Direction = new(0.2f, 1f, 0.5f),
-        Color     = Vector3.One,
-        Intensity = 1f,
-        Ambient   = new(0.2f, 0.2f, 0.2f),
-    })
-    .Add<IRuntimeModule>(new StaticMeshModule(renderer =>
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new SceneModule(tree =>
     {
         // Procedural 128×128 checkerboard, 16-pixel squares.
         const uint width  = 128;
@@ -46,10 +40,21 @@ var services = new ServiceCollection()
             int  i = (y * (int)width + x) * 4;
             pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v; pixels[i + 3] = 255;
         }
+        var tex = tree.Renderer.CreateTexture(width, height, pixels).Value;
+        var mat = tree.Renderer.CreateMaterial(Vector4.One, textureHandle: tex).Value;
 
-        var tex = renderer.CreateTexture(width, height, pixels).Value;
-        var mat = renderer.CreateMaterial(Vector4.One, textureHandle: tex).Value;
-        return (Mesh: default, Material: mat);  // default mesh handle = built-in quad
+        tree.AddNode(new DirectionalLight
+        {
+            Direction = new(0.2f, 1f, 0.5f),
+            Color     = Vector3.One,
+            Intensity = 1f,
+            Ambient   = new(0.2f, 0.2f, 0.2f),
+        }, "Sun");
+
+        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
+
+        tree.AddNode(new MeshRenderer { MaterialHandle = mat }, "Quad");
     }));
 
 using var sp = services.BuildServiceProvider();

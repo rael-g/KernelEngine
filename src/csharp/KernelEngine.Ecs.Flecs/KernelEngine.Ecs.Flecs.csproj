@@ -21,6 +21,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="KernelEngine.Runtime" />
     <InternalsVisibleTo Include="KernelEngine.Runtime.Tests" />
+    <InternalsVisibleTo Include="KernelEngine.Framework" />
   </ItemGroup>
 
   <ItemGroup>

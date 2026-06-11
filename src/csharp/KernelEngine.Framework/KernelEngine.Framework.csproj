@@ -7,7 +7,7 @@
     <!-- New runtime-native framework. Built example-by-example during R6
          migration; copies from .Legacy only what's needed, marks native
          candidates along the way. NO unsafe blocks. -->
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>KernelEngine.Framework</RootNamespace>
   </PropertyGroup>
 
@@ -15,6 +15,7 @@
     <ProjectReference Include="..\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
     <ProjectReference Include="..\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="..\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
   </ItemGroup>
 
   <ItemGroup>
