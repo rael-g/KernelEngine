@@ -20,6 +20,30 @@ public abstract class Node
     /// <summary>True after AddNode binds this node to an entity.</summary>
     public bool IsBound => Tree != null;
 
+    /// <summary>
+    /// Optional parent node — set when this node was added via
+    /// <see cref="Framework.Tree.AddNode{T}(T, string, Node?)"/> with a non-null
+    /// parent. Null for top-level nodes. The relationship is purely structural
+    /// today (for scene-file <c>parent = "X"</c> grouping and path lookup);
+    /// world-transform cascading is a future addition.
+    /// </summary>
+    public Node? Parent { get; private set; }
+
+    private readonly List<Node> _children = new();
+    public IReadOnlyList<Node> Children => _children;
+
+    internal void AttachChild(Node child)
+    {
+        child.Parent = this;
+        _children.Add(child);
+    }
+
+    internal void DetachChild(Node child)
+    {
+        child.Parent = null;
+        _children.Remove(child);
+    }
+
     // ── Transform (always present on every node) ────────────────────────────
     //
     // Backing field is used pre-bind. After bind, the setter writes through to

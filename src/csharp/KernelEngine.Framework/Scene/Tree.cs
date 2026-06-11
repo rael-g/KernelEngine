@@ -47,13 +47,18 @@ public sealed class Tree
     /// Registers a node in the tree: creates an entity, binds the node to it,
     /// and lets the subclass materialize its components.
     /// </summary>
-    public T AddNode<T>(T node, string name = "") where T : Node
+    public T AddNode<T>(T node, string name = "", Node? parent = null) where T : Node
     {
         if (node.IsBound)
             throw new InvalidOperationException($"Node '{node.Name}' is already added to a tree.");
+        if (parent is not null && parent.Tree != this)
+            throw new InvalidOperationException(
+                $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different tree.");
+
         var entity = Ecs.CreateEntity();
         node.Name = name;
         node.BindToTree(this, entity);
+        parent?.AttachChild(node);
         return node;
     }
 
@@ -66,6 +71,13 @@ public sealed class Tree
     public void DestroyNode(Node node)
     {
         if (!node.IsBound || node.Tree != this) return;
+        // Walk children first so the whole subtree leaves the tree atomically.
+        // Snapshot the list because DestroyNode mutates _children via DetachChild.
+        var kids = node.Children.ToArray();
+        for (int i = 0; i < kids.Length; i++) DestroyNode(kids[i]);
+
+        node.Parent?.DetachChild(node);
+
         if (node.HasBehavior) _behaviors.Remove(node);
         if (node is Label l)  _labels.Remove(l);
         Ecs.EntityDestroy(node.Entity);
