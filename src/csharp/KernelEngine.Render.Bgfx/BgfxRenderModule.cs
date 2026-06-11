@@ -1,36 +1,48 @@
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Render.Bgfx;
 
 /// <summary>
-/// bgfx renderer as an <see cref="IRuntimeModule"/>. Pins worker 1 as the
-/// "ke.render" thread, runs <c>Initialize</c> on it during OnLoad, then
-/// registers <c>ClearColor</c> + <c>Frame</c> as pinned-to-worker-1 systems.
-/// The runtime never knows what bgfx is — it sees opaque pinned systems.
+/// bgfx renderer as an <see cref="IRuntimeModule"/>. Owns the FrameSync ring,
+/// drives a full per-tick packet pipeline (BeginWrite → contributors fill →
+/// EndWrite → BeginRead → SubmitPacket → Frame → EndRead). Pins everything to
+/// worker 1, which is named "ke.render" at OnLoad time so bgfx's affinity
+/// assertions pass.
 /// </summary>
+/// <remarks>
+/// TECH DEBT: the packet pipeline is here because the native renderer's
+/// <c>submit_mesh</c> / per-state setters are stubs (see
+/// <see cref="IFrameContributor"/> remarks). When the renderer is rewritten to
+/// accumulate state per-call, this module collapses to direct setters and the
+/// FrameSync + contributors machinery goes away. Game code never sees the
+/// packet — only framework modules talk to it.
+/// </remarks>
 public sealed class BgfxRenderModule : IRuntimeModule
 {
-    /// <summary>Worker id that becomes "ke.render". Worker 1 is the first dedicated worker; bgfx is single-threaded so one worker is enough.</summary>
     private const uint RenderWorker = 1;
 
     private readonly string _shaderPath;
     private readonly bool   _vsync;
-    private readonly (float r, float g, float b, float a)? _clearColor;
+    private readonly (float r, float g, float b, float a)? _defaultClearColor;
 
     public string Name => "Bgfx.Render";
 
     public BgfxRenderModule(string shaderPath, bool vsync = true,
                             (float r, float g, float b, float a)? clearColor = null)
     {
-        _shaderPath = shaderPath;
-        _vsync      = vsync;
-        _clearColor = clearColor;
+        _shaderPath        = shaderPath;
+        _vsync             = vsync;
+        _defaultClearColor = clearColor;
     }
 
     public void Configure(IServiceCollection services)
     {
         services.AddBgfxRenderer(_shaderPath, _vsync);
+        services.AddSingleton<IFrameSync>(sp =>
+            sp.GetRequiredService<IKernelFactory>()
+              .CreateFrameSync(sp.GetRequiredService<Allocator>(), bufferCount: 2));
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
@@ -38,15 +50,12 @@ public sealed class BgfxRenderModule : IRuntimeModule
         var scheduler = services.GetRequiredService<ITaskScheduler>();
         if (scheduler.NumWorkers < RenderWorker)
             throw new InvalidOperationException(
-                $"BgfxRenderModule needs at least {RenderWorker} worker thread(s); scheduler has {scheduler.NumWorkers}.");
+                $"BgfxRenderModule needs at least {RenderWorker} worker(s); scheduler has {scheduler.NumWorkers}.");
 
-        // Step 1: name worker 1 as "ke.render" via a fire-and-forget pinned task.
-        // bgfx's Initialize + Frame assertions check the current thread name; once
-        // named, every pinned-to-worker-1 dispatch lands on a thread named "ke.render".
+        // Name worker 1 "ke.render" so bgfx affinity assertions pass.
         scheduler.DispatchPinned(RenderWorker, () => KernelThread.SetCurrentName("ke.render"));
 
-        // Step 2: Initialize the renderer on worker 1 and wait synchronously
-        // (Initialize must finish before Frame/ClearColor systems register).
+        // Initialize renderer synchronously on the render worker.
         var initDone = new System.Threading.ManualResetEventSlim(false);
         Exception? initError = null;
         scheduler.DispatchPinned(RenderWorker, () =>
@@ -59,21 +68,42 @@ public sealed class BgfxRenderModule : IRuntimeModule
         if (initError != null)
             throw new InvalidOperationException("Bgfx renderer Initialize failed", initError);
 
-        // Step 3: register the per-frame render systems, pinned to the same worker.
-        // ClearColor in Update (before Extract); Frame in Extract (last phase).
-        var renderer = services.GetRequiredService<IRenderer>();
+        // Full per-tick render pipeline runs in Extract phase, pinned. Order:
+        //   1. Open packet (BeginWrite).
+        //   2. Default clear color (module config).
+        //   3. Resolve every IFrameContributor and let it write its per-frame data.
+        //   4. Close packet (EndWrite).
+        //   5. Swap to reader side (BeginRead), SubmitPacket, Frame, EndRead.
+        var renderer     = services.GetRequiredService<IRenderer>();
+        var frameSync    = services.GetRequiredService<IFrameSync>();
+        var contributors = services.GetServices<IFrameContributor>().ToArray();
 
-        if (_clearColor is { } c)
+        runtime.RegisterSystem("Bgfx.RenderFrame", RuntimePhase.Extract, (_, _) =>
         {
-            runtime.RegisterSystem("Bgfx.ClearColor", RuntimePhase.Update, (_, _) =>
+            var packet = frameSync.BeginWrite();
+            try
             {
-                renderer.ClearColor(c.r, c.g, c.b, c.a);
-            }, pinnedThread: RenderWorker);
-        }
+                if (_defaultClearColor is { } c)
+                    packet.SetClearColor(c.r, c.g, c.b, c.a);
 
-        runtime.RegisterSystem("Bgfx.Frame", RuntimePhase.Extract, (_, _) =>
-        {
-            renderer.Frame();
+                foreach (var contributor in contributors)
+                    contributor.Contribute(packet);
+            }
+            finally
+            {
+                packet.EndWrite();
+            }
+
+            var readPacket = frameSync.BeginRead();
+            try
+            {
+                renderer.SubmitPacket(readPacket);
+                renderer.Frame();
+            }
+            finally
+            {
+                readPacket.EndRead();
+            }
         }, pinnedThread: RenderWorker);
     }
 }

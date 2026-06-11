@@ -5,14 +5,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Sets a directional light + ambient color on the renderer once during OnLoad,
-/// on the render worker. First port from .Legacy DirectionalLight node — multi-light
-/// + per-frame light updates come with later examples (point/spot).
+/// Contributes a single directional light + ambient color to every frame packet.
+/// First port from .Legacy DirectionalLight node — multi-light (point/spot)
+/// support lands as later examples need it.
 /// </summary>
-public sealed class LightModule : IRuntimeModule
+public sealed class LightModule : IRuntimeModule, IFrameContributor
 {
-    private const uint RenderWorker = 1;
-
     public Vector3 Direction { get; init; } = new(0.2f, 1f, 0.5f);
     public Vector3 Color     { get; init; } = Vector3.One;
     public float   Intensity { get; init; } = 1f;
@@ -20,27 +18,18 @@ public sealed class LightModule : IRuntimeModule
 
     public string Name => "Light";
 
-    public void OnLoad(IRuntime runtime, IServiceProvider services)
+    public void Configure(IServiceCollection services) => services.AddSingleton<IFrameContributor>(this);
+
+    public void OnLoad(IRuntime runtime, IServiceProvider services) { /* no-op */ }
+
+    public void Contribute(IFramePacket packet)
     {
-        var scheduler = services.GetRequiredService<ITaskScheduler>();
-        var renderer  = services.GetRequiredService<IRenderer>();
-
-        var done = new System.Threading.ManualResetEventSlim(false);
-        Exception? err = null;
-
-        scheduler.DispatchPinned(RenderWorker, () =>
+        packet.SetAmbientLight(Ambient.X, Ambient.Y, Ambient.Z);
+        packet.SetDirectionalLight(new DirectionalLightData
         {
-            try
-            {
-                var dir = Vector3.Normalize(Direction);
-                renderer.SetDirectionalLight(dir.X, dir.Y, dir.Z, Color.X, Color.Y, Color.Z, Intensity);
-                renderer.SetAmbientLight(Ambient.X, Ambient.Y, Ambient.Z);
-            }
-            catch (Exception ex) { err = ex; }
-            finally { done.Set(); }
+            Direction = Vector3.Normalize(Direction),
+            Color     = Color,
+            Intensity = Intensity,
         });
-
-        done.Wait();
-        if (err != null) throw new InvalidOperationException($"{Name} setup failed", err);
     }
 }
