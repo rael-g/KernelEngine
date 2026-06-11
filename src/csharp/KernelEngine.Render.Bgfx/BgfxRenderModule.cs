@@ -42,20 +42,13 @@ public sealed class BgfxRenderModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
+        // Initialize on the host thread (which must be named 'ke.render' so the
+        // bgfx affinity assertion passes). R3-mini hosts call ClearColor + Frame
+        // directly in their tick loop; the runtime scheduler does NOT dispatch
+        // render systems yet because they'd land on enki workers, violating
+        // bgfx's thread-affinity contract. R4 will introduce a 'host-thread
+        // system' phase that solves this cleanly.
         var renderer = services.GetRequiredService<IRenderer>();
         renderer.Initialize();
-
-        if (_clearColor is { } c)
-        {
-            runtime.RegisterSystem("Bgfx.ClearColor", RuntimePhase.Update, (_, _) =>
-            {
-                renderer.ClearColor(c.r, c.g, c.b, c.a);
-            });
-        }
-
-        runtime.RegisterSystem("Bgfx.Frame", RuntimePhase.Extract, (_, _) =>
-        {
-            renderer.Frame();
-        });
     }
 }

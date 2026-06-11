@@ -129,6 +129,13 @@ public sealed unsafe class Runtime : IRuntime
                           &ModuleLoadTrampoline;
 
             var rc = _native->register_module(_native, &p, &id);
+            // Surface any exception captured by the trampoline so the caller
+            // gets the real stack trace, not just KE_ERROR.
+            Exception? trampolineEx;
+            lock (s_excLock) { trampolineEx = s_pendingException; s_pendingException = null; }
+            if (trampolineEx != null)
+                throw new InvalidOperationException(
+                    $"Module '{name}' OnLoad threw", trampolineEx);
             CheckResult(rc, nameof(RegisterModule));
         }
         return id;

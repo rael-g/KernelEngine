@@ -24,8 +24,16 @@ var services = new ServiceCollection()
         clearColor: (0.15f, 0.20f, 0.35f, 1.0f)));   // dark blue
 
 using var sp = services.BuildServiceProvider();
+
+// Single-threaded R3-mini: the host thread doubles as ke.render so bgfx's
+// thread-affinity check during Initialize() / ClearColor() / Frame() passes.
+// A proper multi-threaded setup (R4) dedicates a render thread + introduces a
+// "host-thread phase" in the runtime so render systems run there automatically.
+KernelEngine.Kernel.KernelThread.SetCurrentName("ke.render");
+
 var window   = sp.GetRequiredService<IWindow>();
 var runtime  = sp.GetRequiredService<IRuntime>();
+var renderer = sp.GetRequiredService<IRenderer>();
 
 runtime.LoadModules(sp);
 
@@ -38,6 +46,11 @@ while (!window.ShouldClose())
     double now = sw.Elapsed.TotalSeconds;
     runtime.Tick((float)(now - prev));
     prev = now;
+
+    // Render calls live on the host thread until R4. The module-registered
+    // Initialize already ran during LoadModules.
+    renderer.ClearColor(0.15f, 0.20f, 0.35f, 1.0f);
+    renderer.Frame();
 }
 
 Console.WriteLine("[01_runtime_clear_color] Exited cleanly.");
