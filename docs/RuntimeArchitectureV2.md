@@ -755,9 +755,9 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
    - `309f4b1` defer queue functional — spawn/attach/detach/despawn enqueue + flush at wave barrier
    - `4ca2ea8` enki dispatcher real — `ke_task_scheduler*` injected in factory; per-task ke_system_ctx + local defer queue; parallel within wave + barrier sync
    - 29/29 C++ tests green (18 RuntimeSpike + 8 WaveBuilder + 3 defer queue), 9/9 C# tests green, `00_runtime_minimal` example wires enki + flecs + runtime
-- [ ] **R2.5d — Polish before merge** (does not block functionality; tracked as Kanban A14):
-   - Strip flecs addons via vendored amalgamated source (FLECS_PIPELINE/SYSTEM/TIMER not compiled; smaller binary + doctrine purity). Requires moving flecs out of vcpkg port into `extern/flecs/` with custom CMake target.
-   - ClangSharp regen — replace the manual patch of `ke_runtime_system_params.cs` and the hand-rolled `NativeMethods.cs` in `KernelEngine.Runtime`/`KernelEngine.Ecs.Flecs` with auto-generated bindings (new `.rsp` files + `python scripts/generate_bindings.py`).
+- [~] **R2.5d — Polish before merge** (does not block functionality; tracked as Kanban A14):
+   - [ ] Strip flecs addons via vendored amalgamated source (FLECS_PIPELINE/SYSTEM/TIMER not compiled; smaller binary + doctrine purity). Requires moving flecs out of vcpkg port into `extern/flecs/` with custom CMake target.
+   - [x] **ClangSharp regen done (commit `820f316`)** — `Runtime.rsp` + `EcsFlecs.rsp` added under each project's `Native/`; hand-rolled `NativeMethods.cs` files deleted; the `ke_runtime_system_params.cs` manual patch is gone (Kernel.rsp regen picks up the new fields cleanly); `GlobalUsings.cs` per project pulls in `KernelEngine.Kernel.Native` for shared types; exception slot moved from `[ThreadStatic]` to lock + static since enki dispatcher runs trampolines on worker threads.
 - [ ] **R3 — First real example consumer (`01_window_scene` ported to runtime)**
 - [ ] **R4 — Render module shim wrapping the current `KernelEngine.Render.Bgfx`** (so any example can opt into runtime keeping the current renderer)
 - [ ] **R5 — Pong migrated to runtime** (hard gate: identical visual + behavioral)
