@@ -24,7 +24,12 @@ public static class ServiceCollectionExtensions
                 };
                 ke_asset_loader* native;
                 KernelException.ThrowIfFailed(Native.NativeMethods.asset_loader_assimp_create(&@params, &native).ToManaged());
-                return new AssetLoader(native, sp.GetRequiredService<KernelEngine.Kernel.TaskScheduler>());
+                // Async loading uses the kernel scheduler; resolve via the
+                // interface so any ITaskScheduler impl (EnkiTaskScheduler,
+                // future alternatives) works. The concrete base class is
+                // KernelEngine.Kernel.TaskScheduler which both impls inherit.
+                var scheduler = (KernelEngine.Kernel.TaskScheduler)sp.GetRequiredService<ITaskScheduler>();
+                return new AssetLoader(native, scheduler);
             }
         });
 
