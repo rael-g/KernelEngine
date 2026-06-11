@@ -1085,3 +1085,98 @@ Forces the dev to declare intent. Silent acceptance of non-POD state into a comp
 #### NodeBehavior follows the same rule
 
 The `NodeBehavior` pattern (§15.3) already treats its fields as a component (`<Behavior>_Data`). §15.10 generalizes that doctrine to **all** Node subclasses, not just NodeBehaviors. The mental model is unified: **every class that descends from Node IS a component-bearing entity**, codegen-mediated. Whether you call it a "Node subclass" (long-lived entity, has lifetime, has OnUpdate) or a "NodeBehavior" (attached/detached effect, has its own data) is a naming convenience — under the hood, both are codegen-generated component + system pairs.
+
+---
+
+## 16. Future doctrine: component snapshot for sim/render pipelining
+
+Locked at design level 2026-06-10; impl deferred to R6-R7 (post Pong migration, when frame budget shows the need). This section records WHY we picked the shape, so future implementation doesn't re-litigate.
+
+### 16.1 The problem
+
+R4 (in progress) delivers unified scheduling: render passes are systems, scheduler dispatches via pinned worker, single world, zero locks in app code. But sim and render alternate within a tick — no pipelining. On heavy scenes capped at vsync, this leaves ~15-30% of CPU budget unused vs an engine that runs sim N+1 in parallel with render N.
+
+Pipelining requires SOME form of state separation: sim N+1 cannot mutate what render N is reading. The question is what shape that separation takes.
+
+### 16.2 Options evaluated
+
+| | A) Separate worlds (Bevy) | B) Component snapshot | C) Frame packet | D) Deferred writes |
+|---|---|---|---|---|
+| State separation | full Render World | per-component back buffer | dedicated buffer | scheduler-tracked deferral |
+| Single world | ❌ | ✅ | ✅ | ✅ |
+| Render-as-system | ✅ | ✅ | ❌ (packet consumers) | ✅ |
+| Unified R/W metadata | partial | ✅ | ❌ | ✅ |
+| Memory cost | full render-relevant subset | per-component, sparse | fixed packet schema | deferred-writes buffer |
+| Deadlock risk | low | low | low | high |
+| Locks in app | zero | zero | zero | zero |
+| Impl cost | extending ECS conceptually | extending ECS contract (`KE_COMPONENT_DOUBLE_BUFFERED`) | maintain packet schema | sophisticated scheduler tracking |
+| Frame packet pattern (current) | replaces | replaces | preserves | replaces |
+
+**Chosen: Option B with inference.**
+
+### 16.3 The proposal — component snapshot via ke_ecs extension
+
+Components flagged double-buffered get a back buffer in the storage layer. Phase boundaries (or explicit barriers) swap the buffers atomically. Render systems read snapshot; sim systems read/write live. No separate world; no explicit extract copy step.
+
+```c
+// ke_ecs contract addition (R6+):
+typedef enum ke_component_flags {
+    KE_COMPONENT_NONE             = 0,
+    KE_COMPONENT_DOUBLE_BUFFERED  = 1 << 0,
+} ke_component_flags;
+
+ke_component_id (*component_register_v3)(struct ke_ecs *self,
+                                          const char        *name,
+                                          size_t             element_size,
+                                          ke_component_flags flags);
+
+// Atomic snapshot swap at phase boundary (called by scheduler):
+void (*swap_snapshots)(struct ke_ecs *self);
+```
+
+The flecs impl behind this: each double-buffered component becomes two internal flecs components (`X_live` + `X_snap`). Swap rotates an index. Reads from render phase route to `X_snap`; reads from sim phases route to `X_live`. R/W metadata in `ke_runtime_system_params.access_list` becomes phase-aware: same `KE_ACCESS_READ` on Transform reads live in sim phases, snapshot in render phases.
+
+### 16.4 Inference, not manual marking
+
+Game devs must not be required to mark components. Inference:
+
+```
+at runtime startup:
+    for each registered system with phase ∈ {EXTRACT, RENDER_*}:
+        for each cid in system.access_list:
+            mark cid as KE_COMPONENT_DOUBLE_BUFFERED
+
+components never accessed by render-phase systems: stay single-buffered, zero overhead.
+```
+
+The marking is observable but automatic. Escape hatch: `[NoDoubleBuffer]` attribute on a component forces single-buffer even if a render system touches it (rare; degrades to sim/render sharing). Inversely, `[ForceDoubleBuffer]` forces double-buffer if the dev knows future render systems will need it. Both are escape hatches, not the rule.
+
+### 16.5 Cost analysis
+
+**Memory**: best case — only components accessed by render systems are duplicated, sparse. Worst case (all components accessed) — equals Bevy's Render World cost (subset of Main duplicated). Never worse than Bevy; usually less.
+
+**Cache**: snapshot lives adjacent to live; when render reads, the snapshot likely shares cache lines with the sim writer's recent traffic from frame N-1. Frame packet would force a separate allocation.
+
+**Impl**: 2-3 sessions of focused work on the `ke_ecs` contract + flecs wrapper. Inference (~1 session). Migrating existing render code to use phase-aware reads (~1 session). Total: 4-5 sessions when undertaken.
+
+### 16.6 What R4 commits to today
+
+R4 ships:
+- Pinned worker for render-thread-affine systems
+- Render passes as systems with R/W metadata
+- Unified `wave_builder` algorithm across sim + render passes
+- Single world, no snapshot, no pipelining
+
+R4 explicitly does NOT block pipelining. The `ke_ecs` extension in R6+ slots in without R4 refactor: existing render systems start reading snapshot transparently once inference kicks in, sim systems continue writing live as before.
+
+### 16.7 What we considered and rejected
+
+- **Separate Render World (Bevy)** — rejected: violates single-world principle. State extraction step adds latency + complexity without per-component memory savings.
+- **Frame packet (the pre-discussion design)** — rejected: breaks scheduler unification. Render passes become packet consumers with a different access language; render_graph stays as a parallel algorithm to wave_builder.
+- **Deferred-write tracking** — rejected: deferred queue can balloon arbitrarily; deadlock risk if sim waits on resource render holds.
+
+### 16.8 Where this is tracked
+
+- Memory: `project_render_pipelining_decision.md`
+- Kanban: parking lot `[RENDER-PIPELINING]` (R6-R7 timing)
+- This doc remains the canonical design source.
