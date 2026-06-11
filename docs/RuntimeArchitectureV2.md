@@ -755,9 +755,9 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
    - `309f4b1` defer queue functional — spawn/attach/detach/despawn enqueue + flush at wave barrier
    - `4ca2ea8` enki dispatcher real — `ke_task_scheduler*` injected in factory; per-task ke_system_ctx + local defer queue; parallel within wave + barrier sync
    - 29/29 C++ tests green (18 RuntimeSpike + 8 WaveBuilder + 3 defer queue), 9/9 C# tests green, `00_runtime_minimal` example wires enki + flecs + runtime
-- [~] **R2.5d — Polish before merge** (does not block functionality; tracked as Kanban A14):
-   - [ ] Strip flecs addons via vendored amalgamated source (FLECS_PIPELINE/SYSTEM/TIMER not compiled; smaller binary + doctrine purity). Requires moving flecs out of vcpkg port into `extern/flecs/` with custom CMake target.
-   - [x] **ClangSharp regen done (commit `820f316`)** — `Runtime.rsp` + `EcsFlecs.rsp` added under each project's `Native/`; hand-rolled `NativeMethods.cs` files deleted; the `ke_runtime_system_params.cs` manual patch is gone (Kernel.rsp regen picks up the new fields cleanly); `GlobalUsings.cs` per project pulls in `KernelEngine.Kernel.Native` for shared types; exception slot moved from `[ThreadStatic]` to lock + static since enki dispatcher runs trampolines on worker threads.
+- [x] **R2.5d — Polish closed** (Kanban A14):
+   - [x] **ClangSharp regen (commit `820f316`)** — `Runtime.rsp` + `EcsFlecs.rsp` under each project's `Native/`; hand-rolled `NativeMethods.cs` deleted; manual patch on `ke_runtime_system_params.cs` gone (Kernel.rsp regen picks up new fields cleanly); `GlobalUsings.cs` per project pulls in `KernelEngine.Kernel.Native`; exception slot moved from `[ThreadStatic]` to lock+static (enki trampoline runs on worker threads).
+   - [x] **Strip flecs addons — dropped 2026-06-10**. Staying on vcpkg-supplied `flecs_static.lib`. Doctrine ("flecs is storage only") is enforced by our code not calling pipeline/system/timer symbols; physical strip is binary-size optimization, not behavior change. Linker DCE removes most unused code at link time. Re-open if binary size becomes a real concern.
 - [ ] **R3 — First real example consumer (`01_window_scene` ported to runtime)**
 - [ ] **R4 — Render module shim wrapping the current `KernelEngine.Render.Bgfx`** (so any example can opt into runtime keeping the current renderer)
 - [ ] **R5 — Pong migrated to runtime** (hard gate: identical visual + behavioral)
