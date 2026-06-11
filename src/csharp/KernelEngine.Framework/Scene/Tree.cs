@@ -57,6 +57,21 @@ public sealed class Tree
         return node;
     }
 
+    /// <summary>
+    /// Removes <paramref name="node"/> from the tree: detaches behaviors + labels
+    /// from the per-tick walks, deletes the ECS entity (which drops every
+    /// component attached to it), and clears the node's binding so it can't be
+    /// re-added accidentally. Idempotent on unbound nodes.
+    /// </summary>
+    public void DestroyNode(Node node)
+    {
+        if (!node.IsBound || node.Tree != this) return;
+        if (node.HasBehavior) _behaviors.Remove(node);
+        if (node is Label l)  _labels.Remove(l);
+        Ecs.EntityDestroy(node.Entity);
+        node.UnbindFromTree();
+    }
+
     // ── Generic component access ────────────────────────────────────────────
     //
     // Tree knows about entities + ECS plumbing; it does NOT know about each

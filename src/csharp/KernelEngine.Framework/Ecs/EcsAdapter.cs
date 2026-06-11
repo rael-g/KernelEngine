@@ -29,6 +29,8 @@ internal sealed unsafe class EcsAdapter
 
     public ulong CreateEntity() => _ecs->entity_create(_ecs);
 
+    public void EntityDestroy(ulong entity) => _ecs->entity_destroy(_ecs, entity);
+
     public void Add<T>(ulong entity, uint cid, in T value) where T : unmanaged
     {
         T* p = (T*)_ecs->component_add(_ecs, entity, cid);

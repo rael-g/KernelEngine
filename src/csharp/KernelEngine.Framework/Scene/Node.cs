@@ -73,6 +73,16 @@ public abstract class Node
     /// </summary>
     internal bool HasBehavior { get; private set; }
 
+    /// <summary>
+    /// Clears the binding so the node can no longer reach the tree. Called by
+    /// <see cref="Framework.Tree.DestroyNode"/>; not part of the public API.
+    /// </summary>
+    internal void UnbindFromTree()
+    {
+        Tree   = null;
+        Entity = 0;
+    }
+
     internal void BindToTree(Tree tree, ulong entity)
     {
         Tree   = tree;
