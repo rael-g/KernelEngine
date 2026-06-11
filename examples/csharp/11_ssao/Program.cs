@@ -1,102 +1,105 @@
-using System.Numerics;
 using System.Diagnostics;
+using System.Numerics;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework.Legacy;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 24-vertex unit cube (4 verts/face) with per-face normals — gives real occlusion for SSAO.
-static (Vertex[] verts, ushort[] idx) BuildCube()
-{
-    var v = new System.Collections.Generic.List<Vertex>(24);
-    void AddFace(Vector3 n, Vector3 t, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
-    {
-        v.Add(new Vertex { X=p0.X,Y=p0.Y,Z=p0.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=0,V=0, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
-        v.Add(new Vertex { X=p1.X,Y=p1.Y,Z=p1.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=1,V=0, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
-        v.Add(new Vertex { X=p2.X,Y=p2.Y,Z=p2.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=1,V=1, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
-        v.Add(new Vertex { X=p3.X,Y=p3.Y,Z=p3.Z, Nx=n.X,Ny=n.Y,Nz=n.Z, U=0,V=1, Tx=t.X,Ty=t.Y,Tz=t.Z,Tw=1 });
-    }
-    AddFace(new(1,0,0),  new(0,0,-1), new(0.5f,-0.5f,0.5f), new(0.5f,-0.5f,-0.5f), new(0.5f,0.5f,-0.5f), new(0.5f,0.5f,0.5f));
-    AddFace(new(-1,0,0), new(0,0,1),  new(-0.5f,-0.5f,-0.5f), new(-0.5f,-0.5f,0.5f), new(-0.5f,0.5f,0.5f), new(-0.5f,0.5f,-0.5f));
-    AddFace(new(0,1,0),  new(1,0,0),  new(-0.5f,0.5f,0.5f), new(0.5f,0.5f,0.5f), new(0.5f,0.5f,-0.5f), new(-0.5f,0.5f,-0.5f));
-    AddFace(new(0,-1,0), new(1,0,0),  new(-0.5f,-0.5f,-0.5f), new(0.5f,-0.5f,-0.5f), new(0.5f,-0.5f,0.5f), new(-0.5f,-0.5f,0.5f));
-    AddFace(new(0,0,1),  new(1,0,0),  new(-0.5f,-0.5f,0.5f), new(0.5f,-0.5f,0.5f), new(0.5f,0.5f,0.5f), new(-0.5f,0.5f,0.5f));
-    AddFace(new(0,0,-1), new(-1,0,0), new(0.5f,-0.5f,-0.5f), new(-0.5f,-0.5f,-0.5f), new(-0.5f,0.5f,-0.5f), new(0.5f,0.5f,-0.5f));
-    var idx = new ushort[36];
-    for (ushort f = 0; f < 6; f++) { ushort b=(ushort)(f*4); idx[f*6+0]=b; idx[f*6+1]=(ushort)(b+1); idx[f*6+2]=(ushort)(b+2); idx[f*6+3]=b; idx[f*6+4]=(ushort)(b+2); idx[f*6+5]=(ushort)(b+3); }
-    return (v.ToArray(), idx);
-}
+// 11_ssao — 7×4 cube wall on a floor. SSAO is requested via PostProcessModule
+// but the bgfx backend's SSAO path is currently a no-op (Kanban OBS.4/Z3), so
+// any contact darkening visible is from the directional light, not ambient
+// occlusion. The scene is kept for the moment it works.
 
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 11 SSAO")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
-
-using var app = new Application();
-
-app.OnReady = (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 11_ssao");
-    Console.WriteLine("[KernelEngine] Features: ssao, gbuffer_prepass");
-
-    // Camera
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    // The camera looks down its local -Z (no Camera.LookAt helper yet — framework gap).
-    // Orient it manually toward the cube wall for a 3/4 angle that frames wall + floor + SSAO.
-    var eye = new Vector3(6f, 5f, 9f);
-    var lookRot = Quaternion.CreateFromRotationMatrix(
-        Matrix4x4.CreateWorld(eye, Vector3.Normalize(new Vector3(0f, 2f, 0f) - eye), Vector3.UnitY));
-    cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
-
-    // Materials
-    var mat = resources.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), metallic: 0.0f, roughness: 0.5f);
-
-    // Directional light so surfaces are lit (without it the Tree is near-black and SSAO has
-    // nothing to darken). Direction is the vector toward the light source.
-    app.Tree.AddNode(
-        new DirectionalLight { Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)), Color = Vector3.One, Intensity = 4.0f },
-        "Sun");
-
-    // Real cube mesh — flat quads don't occlude each other, so SSAO needs actual geometry.
-    var (cubeVerts, cubeIdx) = BuildCube();
-    var cubeMesh = resources.CreateMesh(cubeVerts, cubeIdx);
-
-    // Floor. Default mesh is a quad in the XY plane (normal +Z); rotate -90° about X to lay it flat.
-    var floor = app.Tree.AddNode(new MeshRenderer { MaterialHandle = mat }, "Floor");
-    floor.LocalTransform = floor.LocalTransform with
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 11 SSAO"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.2f, 0.2f, 0.2f, 1.0f)))
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new ShadowModule(resolution: 1024, frustumSize: 20f, farPlane: 50f))
+    .Add<IRuntimeModule>(new PostProcessModule(
+        ssao: true, ssaoRadius: 0.5f, ssaoBias: 0.025f, ssaoStrength: 2.0f))
+    .Add<IRuntimeModule>(new SceneModule(tree =>
     {
-        Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
-        Scale = new Vector3(10f, 10f, 1f)
-    };
+        Console.WriteLine("[KernelEngine] Example: 11_ssao");
+        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Features: ssao (backend stub — see Kanban Z3)");
 
-    // Wall of cubes to see ambient occlusion in the contacts between them.
-    for (int x = -3; x <= 3; x += 1)
-    {
-        for (int y = 1; y <= 4; y += 1)
+        tree.AddNode(new AmbientLight { Color = new(0.3f, 0.3f, 0.3f) }, "Ambient");
+
+        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        var eye    = new Vector3(6f, 5f, 9f);
+        var target = new Vector3(0f, 2f, 0f);
+        var lookRot = Quaternion.CreateFromRotationMatrix(
+            Matrix4x4.CreateWorld(eye, Vector3.Normalize(target - eye), Vector3.UnitY));
+        cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
+
+        tree.AddNode(new DirectionalLight
         {
-            var n = app.Tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, $"Cube_{x}_{y}");
-            n.LocalTransform = n.LocalTransform with {
+            Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)),
+            Color     = Vector3.One,
+            Intensity = 4f,
+        }, "Sun");
+
+        var planeMesh = MeshPrimitives.Plane(tree.Renderer);
+        var cubeMesh  = MeshPrimitives.Cube(tree.Renderer);
+        var mat       = tree.Renderer.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), roughness: 0.5f).Value;
+
+        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = mat }, "Floor");
+        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(10f, 1f, 10f) };
+
+        for (int x = -3; x <= 3; x += 1)
+        for (int y =  1; y <= 4; y += 1)
+        {
+            var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, $"Cube_{x}_{y}");
+            n.LocalTransform = n.LocalTransform with
+            {
                 Position = new Vector3(x, y, 0f),
-                Scale = new Vector3(0.9f, 0.9f, 0.9f)
+                Scale    = new Vector3(0.9f, 0.9f, 0.9f),
             };
         }
-    }
-    return Task.CompletedTask;
-};
+    }));
 
-app.OnUpdate = (tree, input) =>
+using var sp = services.BuildServiceProvider();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
+
+runtime.LoadModules(sp);
+
+Console.WriteLine("[11_ssao] Loop running. Close the window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
+int frameCount = 0;
+double fpsWindowStart = 0;
+
+while (!window.ShouldClose())
 {
-    tree.ClearColor(0.2f, 0.2f, 0.2f, 1f);
-    tree.SetAmbientLight(0.3f, 0.3f, 0.3f);
-    // NOTE: SSAO is currently a NO-OP — PostProcessPipeline::SetupSsao is an unimplemented stub,
-    // so no ambient-occlusion is produced. Until it's implemented, the contact darkening visible
-    // here is the directional SHADOW MAP, not SSAO. (Tracked: Kanban OBS.4.)
-    tree.SetSsao(true, radius: 0.5f, bias: 0.025f, strength: 2.0f);
-};
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
 
-app.Run(services);
+    frameCount++;
+    if (now - fpsWindowStart >= 5.0)
+    {
+        double fps = frameCount / (now - fpsWindowStart);
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}");
+        frameCount     = 0;
+        fpsWindowStart = now;
+    }
+}
+
+runtime.UnloadModules(sp);
+
+Console.WriteLine("[11_ssao] Exited cleanly.");
