@@ -57,3 +57,17 @@ public struct SkyboxComponent
 {
     public TextureHandle CubemapHandle;
 }
+
+/// <summary>Point light parameters. Position comes from the entity's transform.</summary>
+public struct PointLightComponent
+{
+    public Vector3 Color;
+    public float   Intensity;
+    public float   Radius;
+}
+
+/// <summary>Scene-wide ambient light color. First entity wins.</summary>
+public struct AmbientLightComponent
+{
+    public Vector3 Color;
+}

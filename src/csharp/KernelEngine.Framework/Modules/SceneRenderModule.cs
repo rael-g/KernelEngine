@@ -34,8 +34,20 @@ public sealed class SceneRenderModule : IRuntimeModule
                 sp.GetRequiredService<ComponentRegistry>(),
                 sp.GetRequiredService<IWindow>()));
 
+        // Ambient runs FIRST so a directional light's Ambient field can
+        // overwrite the scene-wide ambient when both exist.
+        services.AddSingleton<IFrameContributor, AmbientLightContributor>(sp =>
+            new AmbientLightContributor(
+                sp.GetRequiredService<EcsAdapter>(),
+                sp.GetRequiredService<ComponentRegistry>()));
+
         services.AddSingleton<IFrameContributor, LightContributor>(sp =>
             new LightContributor(
+                sp.GetRequiredService<EcsAdapter>(),
+                sp.GetRequiredService<ComponentRegistry>()));
+
+        services.AddSingleton<IFrameContributor, PointLightContributor>(sp =>
+            new PointLightContributor(
                 sp.GetRequiredService<EcsAdapter>(),
                 sp.GetRequiredService<ComponentRegistry>()));
 

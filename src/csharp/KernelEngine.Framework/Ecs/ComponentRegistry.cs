@@ -11,6 +11,8 @@ public sealed class ComponentRegistry
     public uint CameraCid           { get; }
     public uint DirectionalLightCid { get; }
     public uint SkyboxCid           { get; }
+    public uint PointLightCid       { get; }
+    public uint AmbientLightCid     { get; }
 
     internal ComponentRegistry(EcsAdapter ecs)
     {
@@ -19,5 +21,7 @@ public sealed class ComponentRegistry
         CameraCid           = ecs.Register<CameraComponent>("Camera");
         DirectionalLightCid = ecs.Register<DirectionalLightComponent>("DirectionalLight");
         SkyboxCid           = ecs.Register<SkyboxComponent>("Skybox");
+        PointLightCid       = ecs.Register<PointLightComponent>("PointLight");
+        AmbientLightCid     = ecs.Register<AmbientLightComponent>("AmbientLight");
     }
 }

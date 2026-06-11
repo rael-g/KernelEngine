@@ -68,4 +68,10 @@ public sealed class Tree
 
     internal void SetSkybox(ulong entity, in SkyboxComponent value)
         => Ecs.Add(entity, Components.SkyboxCid, value);
+
+    internal void SetPointLight(ulong entity, in PointLightComponent value)
+        => Ecs.Add(entity, Components.PointLightCid, value);
+
+    internal void SetAmbientLight(ulong entity, in AmbientLightComponent value)
+        => Ecs.Add(entity, Components.AmbientLightCid, value);
 }
