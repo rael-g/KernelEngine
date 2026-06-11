@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
+using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Runtime;
 
@@ -35,13 +36,13 @@ public sealed unsafe class Runtime : IRuntime
         }
         catch (Exception ex)
         {
-            s_pendingException = ex;
+            lock (s_excLock) s_pendingException = ex;
             return ke_result.KE_ERROR;
         }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void SystemExecuteTrampoline(ke_runtime* rt, void* userData, float dt)
+    private static void SystemExecuteTrampoline(ke_system_ctx* ctx, void* userData, float dt)
     {
         try
         {
@@ -51,11 +52,17 @@ public sealed unsafe class Runtime : IRuntime
         }
         catch (Exception ex)
         {
-            s_pendingException = ex;
+            lock (s_excLock) s_pendingException = ex;
         }
     }
 
-    [ThreadStatic] private static Exception? s_pendingException;
+    // Exception propagation across the C ABI boundary. enki may dispatch the
+    // execute callback onto a worker thread, so we can't use [ThreadStatic] —
+    // Tick reads on the calling thread but the trampoline writes on a worker.
+    // Single static + lock is safe for the prototype; if multiple systems in
+    // the same wave throw, the last one wins (acceptable for now).
+    private static readonly object s_excLock = new();
+    private static Exception? s_pendingException;
 
     private sealed class ModuleEntry
     {
@@ -80,7 +87,7 @@ public sealed unsafe class Runtime : IRuntime
 
         ke_runtime_params @params = default;
         ke_runtime* rt;
-        var rc = NativeMethods.runtime_create(
+        var rc = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
             allocator.Native, ecs.Native, taskScheduler.Native, &@params, &rt);
         if (rc != ke_result.KE_OK)
             throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
@@ -131,7 +138,7 @@ public sealed unsafe class Runtime : IRuntime
             p.name      = (sbyte*)namePtr;
             p.phase     = (ke_phase)phase;
             p.user_data = (void*)GCHandle.ToIntPtr(handle);
-            p.execute   = (delegate* unmanaged[Cdecl]<ke_runtime*, void*, float, void>)
+            p.execute   = (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void>)
                           &SystemExecuteTrampoline;
 
             var rc = _native->register_system(_native, &p, &id);
@@ -143,13 +150,12 @@ public sealed unsafe class Runtime : IRuntime
     public void Tick(float dt)
     {
         ThrowIfDisposed();
-        s_pendingException = null;
+        lock (s_excLock) s_pendingException = null;
         var rc = _native->tick(_native, dt);
-        if (s_pendingException is { } ex)
-        {
-            s_pendingException = null;
+        Exception? ex;
+        lock (s_excLock) { ex = s_pendingException; s_pendingException = null; }
+        if (ex != null)
             throw new InvalidOperationException("System execution threw", ex);
-        }
         CheckResult(rc, nameof(Tick));
     }
 
