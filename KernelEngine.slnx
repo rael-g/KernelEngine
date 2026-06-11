@@ -24,6 +24,7 @@
   </Folder>
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />
+    <Project Path="examples/csharp/games/pong_legacy/pong_legacy.csproj" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">

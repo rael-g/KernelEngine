@@ -40,9 +40,36 @@ internal sealed class CameraContributor : IFrameContributor
         var size   = _window.GetSize().Value;
         var aspect = size.Height > 0 ? (float)size.Width / size.Height : 1f;
 
-        var view = Matrix4x4.CreateLookAt(transform.Position, Vector3.Zero, Vector3.UnitY);
-        var proj = Matrix4x4.CreatePerspectiveFieldOfView(
-            cam.FovDeg * MathF.PI / 180f, aspect, cam.Near, cam.Far);
+        // Camera looks down its local -Z (matches LookAt convention). When
+        // the node carries a rotation, derive forward + up from it so freelook
+        // / scripted cameras work; otherwise default to looking at origin
+        // along Y-up.
+        Vector3 forward, up;
+        if (transform.Rotation != Quaternion.Identity)
+        {
+            forward = Vector3.Transform(-Vector3.UnitZ, transform.Rotation);
+            up      = Vector3.Transform( Vector3.UnitY, transform.Rotation);
+        }
+        else
+        {
+            forward = Vector3.Normalize(-transform.Position);  // look at origin
+            if (forward.LengthSquared() < 1e-6f) forward = -Vector3.UnitZ;
+            up = Vector3.UnitY;
+        }
+        var view = Matrix4x4.CreateLookAt(transform.Position, transform.Position + forward, up);
+
+        Matrix4x4 proj;
+        if (cam.Orthographic)
+        {
+            float halfH = cam.OrthographicSize;
+            float halfW = halfH * aspect;
+            proj = Matrix4x4.CreateOrthographic(halfW * 2f, halfH * 2f, cam.Near, cam.Far);
+        }
+        else
+        {
+            proj = Matrix4x4.CreatePerspectiveFieldOfView(
+                cam.FovDeg * MathF.PI / 180f, aspect, cam.Near, cam.Far);
+        }
 
         packet.SetCamera(view, proj, transform.Position);
     }

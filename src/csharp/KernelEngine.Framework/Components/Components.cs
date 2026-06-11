@@ -41,6 +41,10 @@ public struct CameraComponent
     public float FovDeg;
     public float Near;
     public float Far;
+    /// <summary>When true the contributor builds an orthographic projection sized by <see cref="OrthographicSize"/> instead of perspective.</summary>
+    public bool  Orthographic;
+    /// <summary>Half the vertical extent in world units (ortho only).</summary>
+    public float OrthographicSize;
 }
 
 /// <summary>Single directional light + ambient. First entity wins (single-light pass).</summary>

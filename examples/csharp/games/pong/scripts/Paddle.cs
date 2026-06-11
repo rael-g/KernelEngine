@@ -1,42 +1,64 @@
 using System.Numerics;
-using KernelEngine.Framework.Legacy;
+using KernelEngine.Framework;
+using KernelEngine.Kernel;
 
 namespace Pong;
 
 /// <summary>
-/// The left or right paddle. Constructed by SceneLoader (DI-injected
-/// <see cref="IInputActionReader{TEnum}"/>); the <see cref="MoveAction"/> is set per-instance
-/// from the scene file (<c>PaddleLeftMove</c> / <c>PaddleRightMove</c>).
+/// Kinematic paddle. Position is owned by Box2D (the body); the node syncs
+/// its world transform from the body every frame, then sets a vertical
+/// velocity based on its two assigned key codes. Velocity is clamped at the
+/// playable boundaries to avoid 1-frame overshoot from position-clamping.
 /// </summary>
-public sealed class Paddle(IInputActionReader<PongAction> actions) : KinematicBody2D
+public sealed class Paddle : MeshRenderer
 {
     const float HalfH = 0.9f;
     const float Speed = 7f;
 
-    public PongAction MoveAction { get; set; }
+    private readonly IPhysics2D _physics;
+    private readonly Vector2    _initialPos;
+    private readonly int        _keyDown;
+    private readonly int        _keyUp;
 
-    protected override void Start()
+    private BodyHandle2D _body;
+
+    public Paddle(IPhysics2D physics, MaterialHandle mat, Vector2 initialPos, int keyDown, int keyUp)
     {
-        // New scene format ([entity.properties] MoveAction = "PaddleLeftMove"): parse the string
-        // into the enum. Legacy format already set MoveAction via reflection; the bag has no key
-        // and the parse fallback keeps the existing value.
-        var actionName = Properties.GetString("MoveAction", MoveAction.ToString());
-        if (Enum.TryParse<PongAction>(actionName, ignoreCase: true, out var parsed))
-            MoveAction = parsed;
-        base.Start();
+        _physics    = physics;
+        _initialPos = initialPos;
+        _keyDown    = keyDown;
+        _keyUp      = keyUp;
+        MaterialHandle = mat;
     }
 
-    protected override void Update(float dt)
+    protected override void OnBind(Tree tree)
     {
-        float vy = actions.GetActionAxis1D(MoveAction) * Speed;
+        LocalTransform = LocalTransform with
+        {
+            Position = new Vector3(_initialPos.X, _initialPos.Y, 0f),
+            Scale    = new Vector3(0.3f, 1.8f, 1f),
+        };
+        base.OnBind(tree);
 
-        // Velocity clamp at the boundaries — refuse motion that would leave the play area
-        // (avoids the 1-frame overshoot of position-clamping with a fixed-step physics loop).
-        var pos = Position;
+        _body = _physics.CreateBody(BodyType2D.Kinematic, _initialPos);
+        _physics.AddBoxFixture(_body, new Vector2(0.15f, HalfH), restitution: 1f);
+    }
+
+    protected override void OnUpdate(in View view)
+    {
+        var state = _physics.GetBodyState(_body);
+        LocalTransform = LocalTransform with
+        {
+            Position = new Vector3(state.Position.X, state.Position.Y, 0f),
+        };
+
+        float axis = (view.IsKeyDown(_keyUp) ? 1f : 0f) - (view.IsKeyDown(_keyDown) ? 1f : 0f);
+        float vy   = axis * Speed;
+
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
-        if (vy > 0 && pos.Y >= maxY) vy = 0;
-        if (vy < 0 && pos.Y <= -maxY) vy = 0;
+        if (vy > 0 && state.Position.Y >=  maxY) vy = 0;
+        if (vy < 0 && state.Position.Y <= -maxY) vy = 0;
 
-        LinearVelocity = new Vector2(0, vy);
+        _physics.SetBodyVelocity(_body, new Vector2(0f, vy));
     }
 }
