@@ -22,9 +22,9 @@ internal sealed class MeshContributor : IFrameContributor
     public void Contribute(IFramePacket packet)
     {
         var ecs          = _ecs;
-        var transformCid = _components.TransformCid;
+        var transformCid = _components.CidOf<TransformComponent>();
 
-        _ecs.Query<MeshRendererComponent>(_components.MeshRendererCid, (ulong entity, ref MeshRendererComponent mesh) =>
+        _ecs.Query<MeshRendererComponent>(_components.CidOf<MeshRendererComponent>(), (ulong entity, ref MeshRendererComponent mesh) =>
         {
             var world = Matrix4x4.Identity;
             if (ecs.TryGet<TransformComponent>(entity, transformCid, out var t))

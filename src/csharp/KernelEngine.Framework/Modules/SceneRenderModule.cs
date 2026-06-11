@@ -51,6 +51,11 @@ public sealed class SceneRenderModule : IRuntimeModule
                 sp.GetRequiredService<EcsAdapter>(),
                 sp.GetRequiredService<ComponentRegistry>()));
 
+        services.AddSingleton<IFrameContributor, SpotLightContributor>(sp =>
+            new SpotLightContributor(
+                sp.GetRequiredService<EcsAdapter>(),
+                sp.GetRequiredService<ComponentRegistry>()));
+
         services.AddSingleton<IFrameContributor, MeshContributor>(sp =>
             new MeshContributor(
                 sp.GetRequiredService<EcsAdapter>(),

@@ -27,7 +27,7 @@ internal sealed class CameraContributor : IFrameContributor
         ulong       camEntity = 0;
         CameraComponent cam   = default;
         bool        found     = false;
-        _ecs.Query<CameraComponent>(_components.CameraCid, (ulong e, ref CameraComponent c) =>
+        _ecs.Query<CameraComponent>(_components.CidOf<CameraComponent>(), (ulong e, ref CameraComponent c) =>
         {
             if (!found) { camEntity = e; cam = c; found = true; }
         });
@@ -35,7 +35,7 @@ internal sealed class CameraContributor : IFrameContributor
 
         // Pull world position from the camera's transform.
         var transform = TransformComponent.Identity;
-        _ecs.TryGet<TransformComponent>(camEntity, _components.TransformCid, out transform);
+        _ecs.TryGet<TransformComponent>(camEntity, _components.CidOf<TransformComponent>(), out transform);
 
         var size   = _window.GetSize().Value;
         var aspect = size.Height > 0 ? (float)size.Width / size.Height : 1f;

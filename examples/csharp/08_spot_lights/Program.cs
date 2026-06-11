@@ -1,108 +1,137 @@
-using System.Numerics;
 using System.Diagnostics;
+using System.Numerics;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework.Legacy;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// 08_spot_lights — three colored spot lights orbiting above a floor + grid of
+// cubes. Each spot's direction tracks the origin so the cones sweep across
+// the floor and cubes. Showcases the multi-spot-light path; SpotLight node
+// pairs with SpotLightComponent (position from transform, direction explicit).
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 08 Spot Lights")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
-
-using var app = new Application();
-
-app.OnReady = (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 08_spot_lights");
-    Console.WriteLine("[KernelEngine] Features: spot_lights, clustered_lighting");
-
-    // Camera
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
-
-    // Materials
-    var floorMat = resources.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), metallic: 0.0f, roughness: 0.8f);
-    var cubeMat = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
-
-    // Floor — the default mesh is a quad in the XY plane (normal +Z), so rotate -90° about X
-    // to lay it flat in the XZ plane with its normal pointing up. Scale X/Y (Y becomes depth Z
-    // after the rotation); the quad has no thickness so the old (20, 0.1, 20) made a thin strip.
-    var floor = app.Tree.AddNode(new MeshRenderer { MaterialHandle = floorMat }, "Floor");
-    floor.LocalTransform = floor.LocalTransform with
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 08 Spot Lights"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.01f, 0.01f, 0.01f, 1.0f)))
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new SceneModule(tree =>
     {
-        Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
-        Scale = new Vector3(30f, 30f, 1f),
-        Position = new Vector3(0f, 0f, 0f)
-    };
+        Console.WriteLine("[KernelEngine] Example: 08_spot_lights");
+        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Features: spot_lights, multi_light_accumulation, cone_falloff");
 
-    // Grid of cubes
-    for (int x = -4; x <= 4; x += 4)
-    {
+        tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
+
+        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
+
+        var planeMesh = MeshPrimitives.Plane(tree.Renderer);
+        var cubeMesh  = MeshPrimitives.Cube(tree.Renderer);
+
+        var floorMat = tree.Renderer.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f).Value;
+        var cubeMat  = tree.Renderer.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f).Value;
+
+        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(30f, 1f, 30f) };
+
+        for (int x = -4; x <= 4; x += 4)
         for (int z = -4; z <= 4; z += 4)
         {
-            var n = app.Tree.AddNode(new MeshRenderer { MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
+            var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, 1f, z) };
         }
+
+        tree.AddNode(new OrbitingSpot
+        {
+            Color         = new(1f, 0f, 0f),
+            Intensity     = 25f,
+            Range         = 60f,
+            InnerAngleDeg = 12f,
+            OuterAngleDeg = 25f,
+            Offset        = 0f,
+        }, "Spot_Red");
+
+        tree.AddNode(new OrbitingSpot
+        {
+            Color         = new(0f, 1f, 0f),
+            Intensity     = 25f,
+            Range         = 60f,
+            InnerAngleDeg = 12f,
+            OuterAngleDeg = 25f,
+            Offset        = MathF.PI * 2f / 3f,
+        }, "Spot_Green");
+
+        tree.AddNode(new OrbitingSpot
+        {
+            Color         = new(0f, 0f, 1f),
+            Intensity     = 25f,
+            Range         = 60f,
+            InnerAngleDeg = 12f,
+            OuterAngleDeg = 25f,
+            Offset        = MathF.PI * 4f / 3f,
+        }, "Spot_Blue");
+    }));
+
+using var sp = services.BuildServiceProvider();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
+
+runtime.LoadModules(sp);
+
+Console.WriteLine("[08_spot_lights] Loop running. Close the window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
+int frameCount = 0;
+double fpsWindowStart = 0;
+
+while (!window.ShouldClose())
+{
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
+
+    frameCount++;
+    if (now - fpsWindowStart >= 5.0)
+    {
+        double fps = frameCount / (now - fpsWindowStart);
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: 0p 3s 0d");
+        frameCount     = 0;
+        fpsWindowStart = now;
     }
+}
 
-    // Spot lights
-    app.Tree.AddNode(
-        new RotatingSpotLightNode { 
-            Color = new Vector3(1, 0, 0),
-            Intensity = 25.0f,
-            Range = 60f,
-            Offset = 0f
-        },
-        "Spot_Red");
+runtime.UnloadModules(sp);
 
-    app.Tree.AddNode(
-        new RotatingSpotLightNode { 
-            Color = new Vector3(0, 1, 0),
-            Intensity = 25.0f,
-            Range = 60f,
-            Offset = MathF.PI * 2f / 3f
-        },
-        "Spot_Green");
+Console.WriteLine("[08_spot_lights] Exited cleanly.");
 
-    app.Tree.AddNode(
-        new RotatingSpotLightNode { 
-            Color = new Vector3(0, 0, 1),
-            Intensity = 25.0f,
-            Range = 60f,
-            Offset = MathF.PI * 4f / 3f
-        },
-        "Spot_Blue");
-    return Task.CompletedTask;
-};
+// ── Orbiting spot light — position circles, direction points at the origin ───
 
-app.OnUpdate = (tree, input) =>
+sealed class OrbitingSpot : SpotLight
 {
-    tree.ClearColor(0.01f, 0.01f, 0.01f, 1f);
-    tree.SetAmbientLight(0.01f, 0.01f, 0.01f);
-};
-
-app.Run(services);
-
-// ── Rotating spot light ───────────────────────────────────────────────────────
-
-sealed class RotatingSpotLightNode : SpotLight
-{
-    public float Offset { get; init; } = 0.0f;
+    public float Offset { get; init; }
 
     private float _time;
 
-    protected override void Update(float dt)
+    protected override void OnUpdate(in View view)
     {
-        _time += dt;
-        float x = MathF.Cos(_time + Offset) * 8.0f;
-        float z = MathF.Sin(_time + Offset) * 8.0f;
-        LocalTransform = LocalTransform with { Position = new Vector3(x, 10.0f, z) };
+        _time += view.DeltaTime;
+        float x = MathF.Cos(_time + Offset) * 8f;
+        float z = MathF.Sin(_time + Offset) * 8f;
+        LocalTransform = LocalTransform with { Position = new Vector3(x, 10f, z) };
         Direction = Vector3.Normalize(-LocalTransform.Position);
     }
 }

@@ -44,7 +44,7 @@ internal sealed class ShadowContributor : IFrameContributor
         // First directional light wins; same single-light rule as LightContributor.
         DirectionalLightComponent dl = default;
         bool foundLight = false;
-        _ecs.Query<DirectionalLightComponent>(_components.DirectionalLightCid, (ulong _, ref DirectionalLightComponent l) =>
+        _ecs.Query<DirectionalLightComponent>(_components.CidOf<DirectionalLightComponent>(), (ulong _, ref DirectionalLightComponent l) =>
         {
             if (!foundLight) { dl = l; foundLight = true; }
         });
@@ -66,8 +66,8 @@ internal sealed class ShadowContributor : IFrameContributor
 
         // Emit shadow draw commands for every renderable mesh.
         var ecs          = _ecs;
-        var transformCid = _components.TransformCid;
-        _ecs.Query<MeshRendererComponent>(_components.MeshRendererCid, (ulong entity, ref MeshRendererComponent mesh) =>
+        var transformCid = _components.CidOf<TransformComponent>();
+        _ecs.Query<MeshRendererComponent>(_components.CidOf<MeshRendererComponent>(), (ulong entity, ref MeshRendererComponent mesh) =>
         {
             var world = Matrix4x4.Identity;
             if (ecs.TryGet<TransformComponent>(entity, transformCid, out var t))

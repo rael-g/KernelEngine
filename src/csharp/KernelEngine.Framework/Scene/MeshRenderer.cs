@@ -14,7 +14,7 @@ public sealed class MeshRenderer : Node
 
     protected internal override void OnBind(Tree tree)
     {
-        tree.SetMeshRenderer(Entity, new MeshRendererComponent
+        tree.Set(Entity, new MeshRendererComponent
         {
             Mesh     = MeshHandle,
             Material = MaterialHandle,

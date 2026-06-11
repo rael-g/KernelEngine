@@ -22,7 +22,7 @@ internal sealed class SkyboxContributor : IFrameContributor
     {
         SkyboxComponent sb = default;
         bool found = false;
-        _ecs.Query<SkyboxComponent>(_components.SkyboxCid, (ulong _, ref SkyboxComponent s) =>
+        _ecs.Query<SkyboxComponent>(_components.CidOf<SkyboxComponent>(), (ulong _, ref SkyboxComponent s) =>
         {
             if (!found) { sb = s; found = true; }
         });

@@ -23,9 +23,9 @@ internal sealed class PointLightContributor : IFrameContributor
     public void Contribute(IFramePacket packet)
     {
         var ecs          = _ecs;
-        var transformCid = _components.TransformCid;
+        var transformCid = _components.CidOf<TransformComponent>();
 
-        _ecs.Query<PointLightComponent>(_components.PointLightCid, (ulong entity, ref PointLightComponent pl) =>
+        _ecs.Query<PointLightComponent>(_components.CidOf<PointLightComponent>(), (ulong entity, ref PointLightComponent pl) =>
         {
             var position = Vector3.Zero;
             if (ecs.TryGet<TransformComponent>(entity, transformCid, out var t))

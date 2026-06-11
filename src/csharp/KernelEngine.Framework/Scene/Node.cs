@@ -30,11 +30,15 @@ public abstract class Node
 
     public TransformComponent LocalTransform
     {
-        get => IsBound ? Tree!.GetTransform(Entity) : _transform;
+        get
+        {
+            if (!IsBound) return _transform;
+            return Tree!.TryGet<TransformComponent>(Entity, out var v) ? v : TransformComponent.Identity;
+        }
         set
         {
             _transform = value;
-            if (IsBound) Tree!.SetTransform(Entity, value);
+            if (IsBound) Tree!.Set(Entity, value);
         }
     }
 
@@ -74,7 +78,7 @@ public abstract class Node
         Tree   = tree;
         Entity = entity;
         // Sync the pre-bind transform into the ECS before subclass hooks.
-        tree.SetTransform(entity, _transform);
+        tree.Set(entity, _transform);
         OnBind(tree);
 
         // Reflection allowed only at bind time (engine-side, not script-side)

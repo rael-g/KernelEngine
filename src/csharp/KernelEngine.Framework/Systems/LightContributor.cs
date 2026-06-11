@@ -22,7 +22,7 @@ internal sealed class LightContributor : IFrameContributor
     {
         DirectionalLightComponent dl = default;
         bool found = false;
-        _ecs.Query<DirectionalLightComponent>(_components.DirectionalLightCid, (ulong _, ref DirectionalLightComponent l) =>
+        _ecs.Query<DirectionalLightComponent>(_components.CidOf<DirectionalLightComponent>(), (ulong _, ref DirectionalLightComponent l) =>
         {
             if (!found) { dl = l; found = true; }
         });

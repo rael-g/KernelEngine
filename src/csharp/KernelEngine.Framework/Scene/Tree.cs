@@ -49,29 +49,17 @@ public sealed class Tree
         return node;
     }
 
-    // ── Component access helpers (used by Node subclasses) ──────────────────
+    // ── Generic component access ────────────────────────────────────────────
+    //
+    // Tree knows about entities + ECS plumbing; it does NOT know about each
+    // specific component type. Node subclasses call Set<T>/TryGet<T> with the
+    // component struct they own, and the cid is looked up once via the
+    // ComponentRegistry. Adding a new component type means adding a struct +
+    // registering it in ComponentRegistry — no edits to Tree.
 
-    internal void SetTransform(ulong entity, in TransformComponent value)
-        => Ecs.Add(entity, Components.TransformCid, value);
+    internal void Set<T>(ulong entity, in T value) where T : unmanaged
+        => Ecs.Add(entity, Components.CidOf<T>(), value);
 
-    internal TransformComponent GetTransform(ulong entity)
-        => Ecs.TryGet<TransformComponent>(entity, Components.TransformCid, out var v) ? v : TransformComponent.Identity;
-
-    internal void SetMeshRenderer(ulong entity, in MeshRendererComponent value)
-        => Ecs.Add(entity, Components.MeshRendererCid, value);
-
-    internal void SetCamera(ulong entity, in CameraComponent value)
-        => Ecs.Add(entity, Components.CameraCid, value);
-
-    internal void SetDirectionalLight(ulong entity, in DirectionalLightComponent value)
-        => Ecs.Add(entity, Components.DirectionalLightCid, value);
-
-    internal void SetSkybox(ulong entity, in SkyboxComponent value)
-        => Ecs.Add(entity, Components.SkyboxCid, value);
-
-    internal void SetPointLight(ulong entity, in PointLightComponent value)
-        => Ecs.Add(entity, Components.PointLightCid, value);
-
-    internal void SetAmbientLight(ulong entity, in AmbientLightComponent value)
-        => Ecs.Add(entity, Components.AmbientLightCid, value);
+    internal bool TryGet<T>(ulong entity, out T value) where T : unmanaged
+        => Ecs.TryGet(entity, Components.CidOf<T>(), out value);
 }

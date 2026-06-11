@@ -13,7 +13,7 @@ public class Camera : Node
 
     protected internal override void OnBind(Tree tree)
     {
-        tree.SetCamera(Entity, new CameraComponent
+        tree.Set(Entity, new CameraComponent
         {
             FovDeg = Fov,
             Near   = Near,

@@ -27,7 +27,7 @@ public class DirectionalLight : Node
     public float   Intensity { get => _state.Intensity; set { _state.Intensity = value; WriteIfBound(); } }
     public Vector3 Ambient   { get => _state.Ambient;   set { _state.Ambient   = value; WriteIfBound(); } }
 
-    private void WriteIfBound() { if (IsBound) Tree!.SetDirectionalLight(Entity, _state); }
+    private void WriteIfBound() { if (IsBound) Tree!.Set(Entity, _state); }
 
-    protected internal override void OnBind(Tree tree) => tree.SetDirectionalLight(Entity, _state);
+    protected internal override void OnBind(Tree tree) => tree.Set(Entity, _state);
 }

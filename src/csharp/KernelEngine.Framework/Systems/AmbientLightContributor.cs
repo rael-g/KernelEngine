@@ -23,7 +23,7 @@ internal sealed class AmbientLightContributor : IFrameContributor
     {
         AmbientLightComponent al = default;
         bool found = false;
-        _ecs.Query<AmbientLightComponent>(_components.AmbientLightCid, (ulong _, ref AmbientLightComponent a) =>
+        _ecs.Query<AmbientLightComponent>(_components.CidOf<AmbientLightComponent>(), (ulong _, ref AmbientLightComponent a) =>
         {
             if (!found) { al = a; found = true; }
         });

@@ -71,3 +71,14 @@ public struct AmbientLightComponent
 {
     public Vector3 Color;
 }
+
+/// <summary>Spot light parameters. Position comes from the entity's transform.</summary>
+public struct SpotLightComponent
+{
+    public Vector3 Direction;
+    public Vector3 Color;
+    public float   Intensity;
+    public float   Range;
+    public float   InnerAngleDeg;
+    public float   OuterAngleDeg;
+}
