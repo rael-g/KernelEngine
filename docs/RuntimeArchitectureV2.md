@@ -742,9 +742,22 @@ After all examples + games migrated. Old sparse-set ECS impl stays as alternativ
 - [x] §8 settled — Opção D (our scheduler, flecs storage-only with `FLECS_PIPELINE` off); evaluation of A/B/C/D recorded
 - [x] §13 alternatives revised — A/B/C rejected with explicit reasons; EnTT/gaia-ecs evaluated and parked as fallback
 - [x] §15 game script safety model locked — `ref struct View` (C#) + `ke_system_ctx` (universal C ABI) + 3-layer AOT enforcement; native/dynamic-language paths covered via debug-checked door; `ke_script_component` reshape spec'd; §15.10 Node fields are components (auto `<ClassName>_Data` via codegen; `[Local]` opt-out disables parallelism; non-POD without `[Local]` fails build)
-- [x] R2.5a — flecs 4.1.5 upgrade (commit `df48365`)
-- [ ] **R2.5b — Plugin split**: move flecs helpers to `src/c/ecs/flecs/`; create `src/c/runtime/` for our scheduler; rebuild flecs CMake target with pipeline addons stripped; rewrite headers; split C# projects (`KernelEngine.Runtime` + `KernelEngine.Ecs.Flecs`)
-- [ ] **R2.5c — Scheduler core**: wave builder, dispatcher, phase loop, defer queue, fixed timestep accumulator; unit + integration tests
+- [x] R2.5a — flecs 4.1.5 upgrade + revert to baseline 3.2.11 (override removed; Option D didn't need flecs 4-specific APIs)
+- [x] **R2.5b — Plugin split** done in 3 stages on branch `feat/runtime-v2`:
+   - Stage A `2ecc052` — create `src/c/ecs/flecs/` + `src/c/runtime/` plugins, legacy spike still present
+   - Stage B `0119ff5` + `d3be264` — `KernelEngine.Ecs.Flecs` + `KernelEngine.Runtime` C# projects (hand-rolled P/Invoke pending ClangSharp regen)
+   - Stage C `5058646` — delete legacy `src/c/runtime/flecs/` + old C# projects
+   - Header split `685985c` — `ke_ecs_flecs_create` moved to its own header so ClangSharp targets `libraryPath=ke_ecs_flecs` without leaking into Kernel.Native
+- [x] **R2.5c — Scheduler core** delivered as 5 focused commits:
+   - `9e30261` fixed-timestep accumulator (Glenn Fiedler) + spiral-of-death guard
+   - `3302e24` R/W metadata in `ke_runtime_system_params` (`access_list`/`exclusive`) + debug-mode `ke_system_ctx` access checks (log-and-counter mode; R2.5c-final flips to `abort()`)
+   - `a2ceff1` wave builder (Bevy-style greedy R/W conflict grouping) + 8 unit tests
+   - `309f4b1` defer queue functional — spawn/attach/detach/despawn enqueue + flush at wave barrier
+   - `4ca2ea8` enki dispatcher real — `ke_task_scheduler*` injected in factory; per-task ke_system_ctx + local defer queue; parallel within wave + barrier sync
+   - 29/29 C++ tests green (18 RuntimeSpike + 8 WaveBuilder + 3 defer queue), 9/9 C# tests green, `00_runtime_minimal` example wires enki + flecs + runtime
+- [ ] **R2.5d — Polish before merge** (does not block functionality; tracked as Kanban A14):
+   - Strip flecs addons via vendored amalgamated source (FLECS_PIPELINE/SYSTEM/TIMER not compiled; smaller binary + doctrine purity). Requires moving flecs out of vcpkg port into `extern/flecs/` with custom CMake target.
+   - ClangSharp regen — replace the manual patch of `ke_runtime_system_params.cs` and the hand-rolled `NativeMethods.cs` in `KernelEngine.Runtime`/`KernelEngine.Ecs.Flecs` with auto-generated bindings (new `.rsp` files + `python scripts/generate_bindings.py`).
 - [ ] **R3 — First real example consumer (`01_window_scene` ported to runtime)**
 - [ ] **R4 — Render module shim wrapping the current `KernelEngine.Render.Bgfx`** (so any example can opt into runtime keeping the current renderer)
 - [ ] **R5 — Pong migrated to runtime** (hard gate: identical visual + behavioral)
