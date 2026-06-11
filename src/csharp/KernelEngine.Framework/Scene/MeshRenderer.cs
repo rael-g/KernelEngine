@@ -7,7 +7,7 @@ namespace KernelEngine.Framework;
 /// built-in unit quad; <see cref="MaterialHandle"/> defaults to handle 0 =
 /// white. Game code typically sets at least <see cref="MaterialHandle"/>.
 /// </summary>
-public sealed class MeshRenderer : Node
+public class MeshRenderer : Node
 {
     public MeshHandle     MeshHandle     { get; set; } = default;
     public MaterialHandle MaterialHandle { get; set; } = default;
