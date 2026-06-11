@@ -1,43 +1,35 @@
 using System.Diagnostics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
 using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// R3-A: minimal proof that IRuntime hosts a real OS window + frame loop.
-// No renderer, no scene tree, no resources — just window pump driven by a
-// runtime system and timing driven by the host. Open question this answers:
-// can a runtime (flecs-backed) coexist with the existing GLFW plugin without
-// going through Application.cs? Answer below.
+// Uniform Add<> pattern in action: every infrastructure piece + every module
+// goes through the same verb. Headless variants drop modules they don't need;
+// the runtime never knows what's present.
 
 var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(800, 600, "KernelEngine — 00 Runtime Minimal");
+    .AddGlfwWindow(800, 600, "KernelEngine — 00 Runtime Minimal")
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>();
+// Future: .Add<IRuntimeModule>(new GlfwWindowModule(...)) once the module ships.
+// For this example we still wire window pump as a system inline below.
 
-using var sp = services.BuildServiceProvider();
-var window    = sp.GetRequiredService<IWindow>();
-var allocator = sp.GetRequiredService<Allocator>();
+using var sp     = services.BuildServiceProvider();
+var window       = sp.GetRequiredService<IWindow>();
+var runtime      = sp.GetRequiredService<IRuntime>();
 
-KernelEngine.Kernel.TaskScheduler taskScheduler;
-unsafe {
-    ke_task_scheduler* nativeScheduler;
-    KernelException.ThrowIfFailed(
-        KernelEngine.TaskScheduler.Enki.Native.NativeMethods
-            .task_scheduler_enki_create(allocator.Native, &nativeScheduler).ToManaged());
-    taskScheduler = new KernelEngine.Kernel.TaskScheduler(nativeScheduler);
-}
-using (taskScheduler)
-using (var ecs     = new FlecsEcs(allocator))
-using (var runtime = new Runtime(allocator, ecs, taskScheduler))
-{
+runtime.LoadModules(sp);  // no modules registered yet → no-op; ready for when they are
 
-// WindowModule — registers the OS poll in PreUpdate so input + close events
-// reach the host before any Update system runs. Wraps the existing GLFW plugin;
-// no rewrite needed.
+// WindowModule — registers the OS poll in PreUpdate. Future-fact: this whole
+// block becomes  `.Add<IRuntimeModule>(new GlfwWindowModule(...))`  when the
+// module class ships (commit 3 of the R3 saga).
 runtime.RegisterModule("Window", rt =>
 {
     rt.RegisterSystem("PollEvents", RuntimePhase.PreUpdate, (_, _) =>
@@ -46,9 +38,6 @@ runtime.RegisterModule("Window", rt =>
     });
 });
 
-// FpsCounter — host-side system registered directly (no module). Demonstrates
-// the runtime can drive arbitrary per-frame work; FPS prints to console every
-// 1s so the user sees the loop is alive without a renderer.
 var sw           = Stopwatch.StartNew();
 double lastPrint = 0;
 long   ticks     = 0;
@@ -66,9 +55,6 @@ runtime.RegisterSystem("FpsCounter", RuntimePhase.Update, (_, _) =>
 
 Console.WriteLine("[00_runtime_minimal] Loop running. Close the window to exit.");
 
-// Frame loop. The runtime owns its tick; the host owns the dt and the
-// while-should-not-close condition. R5+ will move the loop ownership inside
-// runtime.Run(cancel_token) once shutdown semantics get fleshed out.
 double prev = sw.Elapsed.TotalSeconds;
 while (!window.ShouldClose())
 {
@@ -78,5 +64,3 @@ while (!window.ShouldClose())
 }
 
 Console.WriteLine("[00_runtime_minimal] Exited cleanly.");
-
-}  // end using(taskScheduler/ecs/runtime)

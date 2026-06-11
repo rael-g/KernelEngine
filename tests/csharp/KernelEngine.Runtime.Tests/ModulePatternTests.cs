@@ -2,6 +2,7 @@ using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,18 +12,14 @@ namespace KernelEngine.Runtime.Tests;
 // at LoadModules time, topo-sort respects declared Dependencies.
 public class ModulePatternTests : IDisposable
 {
-    private readonly MallocAllocator _allocator = new();
-    private readonly KernelEngine.Kernel.TaskScheduler _taskScheduler;
-    private readonly FlecsEcs _ecs;
+    private readonly MallocAllocator   _allocator      = new();
+    private readonly EnkiTaskScheduler _taskScheduler;
+    private readonly FlecsEcs          _ecs;
 
-    public unsafe ModulePatternTests()
+    public ModulePatternTests()
     {
-        ke_task_scheduler* nativeScheduler;
-        var rc = KernelEngine.TaskScheduler.Enki.Native.NativeMethods
-            .task_scheduler_enki_create(_allocator.Native, &nativeScheduler);
-        if (rc != ke_result.KE_OK) throw new InvalidOperationException();
-        _taskScheduler = new KernelEngine.Kernel.TaskScheduler(nativeScheduler);
-        _ecs = new FlecsEcs(_allocator);
+        _taskScheduler = new EnkiTaskScheduler(_allocator);
+        _ecs           = new FlecsEcs(_allocator);
     }
 
     public void Dispose()

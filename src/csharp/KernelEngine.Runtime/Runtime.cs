@@ -17,9 +17,9 @@ namespace KernelEngine.Runtime;
 public sealed unsafe class Runtime : IRuntime
 {
     private ke_runtime* _native;
-    private readonly Allocator      _allocator;
-    private readonly FlecsEcs       _ecs;             // not owned; consumer disposes separately
-    private readonly KernelEngine.Kernel.TaskScheduler  _taskScheduler;   // not owned
+    private readonly Allocator                          _allocator;
+    private readonly IEcs                               _ecs;            // not owned; consumer disposes separately
+    private readonly KernelEngine.Kernel.TaskScheduler  _taskScheduler;  // not owned
 
     private readonly List<GCHandle> _moduleHandles = new();
     private readonly List<GCHandle> _systemHandles = new();
@@ -76,19 +76,33 @@ public sealed unsafe class Runtime : IRuntime
         public required Action<IRuntime, float> Execute { get; init; }
     }
 
-    public Runtime(Allocator allocator, FlecsEcs ecs, KernelEngine.Kernel.TaskScheduler taskScheduler)
+    public Runtime(Allocator allocator, IEcs ecs, ITaskScheduler taskScheduler)
     {
         ArgumentNullException.ThrowIfNull(allocator);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(taskScheduler);
+
+        // The runtime needs raw C ABI handles, not interfaces. For now we
+        // recognize the concrete wrappers shipped by the engine; future impls
+        // would either add their own native-handle protocol or wire through
+        // an internal contract. The cast is contained — it lives only here.
+        if (ecs is not FlecsEcs flecsEcs)
+            throw new ArgumentException(
+                $"Runtime currently requires {nameof(FlecsEcs)} as the {nameof(IEcs)} impl; got {ecs.GetType().Name}.",
+                nameof(ecs));
+        if (taskScheduler is not KernelEngine.Kernel.TaskScheduler tsConcrete)
+            throw new ArgumentException(
+                $"Runtime currently requires {nameof(KernelEngine.Kernel.TaskScheduler)} (or a subclass) as the {nameof(ITaskScheduler)} impl; got {taskScheduler.GetType().Name}.",
+                nameof(taskScheduler));
+
         _allocator     = allocator;
         _ecs           = ecs;
-        _taskScheduler = taskScheduler;
+        _taskScheduler = tsConcrete;
 
         ke_runtime_params @params = default;
         ke_runtime* rt;
         var rc = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
-            allocator.Native, ecs.Native, taskScheduler.Native, &@params, &rt);
+            allocator.Native, flecsEcs.Native, tsConcrete.Native, &@params, &rt);
         if (rc != ke_result.KE_OK)
             throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
         _native = rt;

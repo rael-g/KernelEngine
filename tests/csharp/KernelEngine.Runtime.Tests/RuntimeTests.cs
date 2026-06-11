@@ -2,6 +2,7 @@ using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using Xunit;
 
 namespace KernelEngine.Runtime.Tests;
@@ -10,18 +11,13 @@ namespace KernelEngine.Runtime.Tests;
 // Mirrors the C++ RuntimeSpike suite in tests/integration/cpp/test_runtime.cpp.
 public class RuntimeTests : IDisposable
 {
-    private readonly MallocAllocator _allocator = new();
-    private readonly KernelEngine.Kernel.TaskScheduler _taskScheduler;
-    private readonly FlecsEcs        _ecs;
+    private readonly MallocAllocator   _allocator      = new();
+    private readonly EnkiTaskScheduler _taskScheduler;
+    private readonly FlecsEcs          _ecs;
 
-    public unsafe RuntimeTests()
+    public RuntimeTests()
     {
-        ke_task_scheduler* nativeScheduler;
-        var rc = KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(
-            _allocator.Native, &nativeScheduler);
-        if (rc != ke_result.KE_OK)
-            throw new InvalidOperationException($"task_scheduler_enki_create failed: {rc}");
-        _taskScheduler = new KernelEngine.Kernel.TaskScheduler(nativeScheduler);
+        _taskScheduler = new EnkiTaskScheduler(_allocator);
         _ecs           = new FlecsEcs(_allocator);
     }
 

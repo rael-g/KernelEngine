@@ -12,7 +12,7 @@ namespace KernelEngine.Ecs.Flecs;
 /// query, etc.) are stubbed in the C plugin until R2.5c — this wrapper exposes only
 /// lifetime for now.
 /// </summary>
-public sealed unsafe class FlecsEcs : IDisposable
+public sealed unsafe class FlecsEcs : IEcs
 {
     private ke_ecs* _native;
     private readonly Allocator _allocator;

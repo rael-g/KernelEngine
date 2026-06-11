@@ -8,9 +8,12 @@ namespace KernelEngine.Kernel;
 /// Managed wrapper around <c>ke_task_scheduler</c>.
 /// Dispatches work items to a native thread pool and bridges them to awaitable <see cref="Task"/>s.
 /// </summary>
-public sealed unsafe class TaskScheduler : IDisposable
+public unsafe class TaskScheduler : ITaskScheduler
 {
     private ke_task_scheduler* _native;
+
+    /// <inheritdoc/>
+    void ITaskScheduler.Dispatch(Action action) => Dispatch(action);  // fire-and-forget
 
     /// <summary>Gets the underlying native pointer.</summary>
     public ke_task_scheduler* Native
