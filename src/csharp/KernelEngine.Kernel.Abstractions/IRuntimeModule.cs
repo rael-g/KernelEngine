@@ -38,7 +38,9 @@ public interface IRuntimeModule
     /// <summary>
     /// Required runtime participation. Called once at startup AFTER the runtime
     /// exists and dependencies are loaded. Maps to <c>ke_runtime_module_params.on_load</c>
-    /// at the C ABI level. Register systems, components, and resources here.
+    /// at the C ABI level (services parameter is C#-only sugar that lets the
+    /// module resolve dependencies it registered during Configure).
+    /// Register systems, components, and resources here.
     /// </summary>
-    void OnLoad(IRuntime runtime);
+    void OnLoad(IRuntime runtime, IServiceProvider services);
 }

@@ -29,7 +29,7 @@ public static class RuntimeStartup
         var ordered = TopoSort(modules);
         foreach (var module in ordered)
         {
-            runtime.RegisterModule(module.Name, rt => module.OnLoad(rt));
+            runtime.RegisterModule(module.Name, rt => module.OnLoad(rt, services));
         }
     }
 

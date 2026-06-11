@@ -6,38 +6,27 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// Uniform Add<> pattern in action: every infrastructure piece + every module
-// goes through the same verb. Headless variants drop modules they don't need;
-// the runtime never knows what's present.
+// Uniform Add<> pattern. Infrastructure (allocator/logger/ecs/scheduler/runtime)
+// + modules (window/render/etc.) go through one verb. Headless variants drop
+// modules they don't need; runtime never knows what's there.
 
 var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(800, 600, "KernelEngine — 00 Runtime Minimal")
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
-    .Add<IRuntime, Runtime>();
-// Future: .Add<IRuntimeModule>(new GlfwWindowModule(...)) once the module ships.
-// For this example we still wire window pump as a system inline below.
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "KernelEngine — 00 Runtime Minimal"));
 
-using var sp     = services.BuildServiceProvider();
-var window       = sp.GetRequiredService<IWindow>();
-var runtime      = sp.GetRequiredService<IRuntime>();
+using var sp = services.BuildServiceProvider();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
 
-runtime.LoadModules(sp);  // no modules registered yet → no-op; ready for when they are
+runtime.LoadModules(sp);
 
-// WindowModule — registers the OS poll in PreUpdate. Future-fact: this whole
-// block becomes  `.Add<IRuntimeModule>(new GlfwWindowModule(...))`  when the
-// module class ships (commit 3 of the R3 saga).
-runtime.RegisterModule("Window", rt =>
-{
-    rt.RegisterSystem("PollEvents", RuntimePhase.PreUpdate, (_, _) =>
-    {
-        window.PollEvents();
-    });
-});
-
+// FpsCounter — host-side system registered directly. Demonstrates that any
+// caller can talk to the runtime; modules aren't the only way.
 var sw           = Stopwatch.StartNew();
 double lastPrint = 0;
 long   ticks     = 0;

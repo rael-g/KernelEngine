@@ -41,7 +41,7 @@ public class ModulePatternTests : IDisposable
             services.AddSingleton<ITrackingService, TrackingService>();
         }
 
-        public void OnLoad(IRuntime runtime)
+        public void OnLoad(IRuntime runtime, IServiceProvider services)
         {
             OnLoadCalled = true;
             runtime.RegisterSystem("SimpleModuleTick", RuntimePhase.Update, (_, _) => TimesRegistered++);
@@ -88,7 +88,7 @@ public class ModulePatternTests : IDisposable
     {
         public List<string> Order { get; }
         public ModuleA(List<string> order) => Order = order;
-        public void OnLoad(IRuntime runtime) => Order.Add("A");
+        public void OnLoad(IRuntime runtime, IServiceProvider services) => Order.Add("A");
     }
 
     private sealed class ModuleB : IRuntimeModule
@@ -96,7 +96,7 @@ public class ModulePatternTests : IDisposable
         public List<string> Order { get; }
         public ModuleB(List<string> order) => Order = order;
         public IEnumerable<Type> Dependencies => new[] { typeof(ModuleA) };
-        public void OnLoad(IRuntime runtime) => Order.Add("B");
+        public void OnLoad(IRuntime runtime, IServiceProvider services) => Order.Add("B");
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public class ModulePatternTests : IDisposable
     private sealed class CyclicModule : IRuntimeModule
     {
         public IEnumerable<Type> Dependencies => new[] { typeof(CyclicModule) };
-        public void OnLoad(IRuntime runtime) { }
+        public void OnLoad(IRuntime runtime, IServiceProvider services) { }
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class ModulePatternTests : IDisposable
     private sealed class MissingDepModule : IRuntimeModule
     {
         public IEnumerable<Type> Dependencies => new[] { typeof(ModuleA) };
-        public void OnLoad(IRuntime runtime) { }
+        public void OnLoad(IRuntime runtime, IServiceProvider services) { }
     }
 
     [Fact]
