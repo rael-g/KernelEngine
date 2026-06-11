@@ -28,7 +28,30 @@ Technical roadmap for KernelEngine hardening, ECS refinement, and framework foun
 >
 > **Re-ordered after Pong retro (commit `8357944`)**: Pong shipped the first complete game and surfaced real ergonomic gaps. The new tier order is *(A) architectural debt → (B) non-physics/UI features → (C) physics+UI redesigns*. Items 1-5 of the original list (Project / scene / audio / physics MVP / Pong) are all ✅ done; what follows is what comes after.
 
+### Tier Z — Re-audit the 2026-06-08 "Done sweep" (do FIRST)
+
+The 2026-06-08 Done sweep ([`docs/Done.md` line 37+](Done.md)) folded ~30 items from `done-2.md` into Done without running the examples or tests that exercise them. Result discovered 2026-06-11 while migrating examples to the new Framework on `feat/runtime-v2`: items still alive in OBS bug catalog (OBS.4 — example 10 bloom black screen, OBS.4 — example 11 SSAO stub `PostProcessPipeline::SetupSsao` is empty / `Scene.SetSsao` no-op) are partially fixed (10 reportedly now runs per user; SSAO still broken per user). The sweep's optimism cost time: I just proposed *skipping* 10 because the memory said it was broken; user corrected that it isn't. The audit was a fiction in places.
+
+| # | Item | Why now | Detail |
+|---|---|---|---|
+| Z1 | **Re-audit every line of the 2026-06-08 Done sweep** | The sweep folded items without verifying. Each entry needs: (a) the named file/symbol still exists, (b) the example/test that proves it works currently passes (not "compiled", **runs and shows the intended output**), (c) any OBS-catalog cross-reference is updated (e.g. OBS.4 should be split: bloom → re-verify against current example 10; SSAO → keep as broken). Items that fail (b) move back into the Kanban with a re-verification card. Items that pass get a one-line note in Done explaining what was verified and how (`exemplo X roda visualmente OK`, `teste Y passa`, etc.). **Method**: walk Done.md sweeps `2026-06-08` and `2026-06-09` line by line; for each capability claim run the example or test; record outcome in-line. Mass moves back to Kanban are fine — better to over-revert than carry rot. | new — surfaced 2026-06-11 during R6 example migration |
+| Z2 | **OBS.4 bloom — re-verify against current main + new Framework** | User stated 2026-06-11 that example 10 runs (bloom no longer black-screen). Memory file `MEMORY.md` and Kanban OBS.4 entry still say broken. Either: bloom shader path got fixed in a commit between OBS.4 capture and now (find it, link it), or the visual output is wrong-but-not-black (bloom doesn't fire on the actual highlight). Run example 10 on `main` + on `feat/runtime-v2` (legacy form), record what is shown. Decide outcome: works → close OBS.4 bloom half; broken-differently → rewrite OBS.4 with current symptom. | new |
+| Z3 | **OBS.4 SSAO — confirmed still broken (user 2026-06-11)** | `PostProcessPipeline::SetupSsao` is empty; `Scene.SetSsao` is a silent no-op. Stays as a real broken-feature card; not part of Z1's re-verification scope (already known broken). Tracked here so it isn't lost under the OBS.4 umbrella when Z2 closes the bloom half. | confirmed |
+
 ### Tier V — V2 architecture refactors (months-long, parallel-build, old stays as fallback)
+
+Two large rewrites whose **architecture is locked but implementation is paced**. Both reuse existing code where it fits, build new modules alongside the current ones, and don't block beta features. The doctrine doc is the contract; implementation phases are sequenced inside each card.
+
+| # | Item | Status |
+|---|---|---|
+| V1 | **`[RUNTIME-V2]` — flecs-based runtime (`ke_runtime` C ABI, modules + systems + scheduler, sim/render snapshot extraction)** | Architecture doc: [`RuntimeArchitectureV2.md`](RuntimeArchitectureV2.md) (locked). Replaces `Application.cs` orchestration; modules declare components+systems; scheduler runs in parallel with read/write set enforcement; C# sugar via source generator (Bevy-style systems with `Query<Mut<T>>` / `Res<T>` / `[System(Phase.X)]`). 7 phases R0→R7. **Plugin lives at `src/c/runtime/flecs/` (new precedent for C-wrapper plugins).** Old sparse-set ECS continues to function during migration; deleted only after every example migrates. |
+| V2 | **`[RENDER-V2]` — layered renderer (`ke_gpu_device` WebGPU-style C ABI, mid-level helpers, async PSO architecture, Slang shaders)** | Architecture doc: [`RenderArchitectureV2.md`](RenderArchitectureV2.md) (locked). 7 layers (L1-L7); `ke_gpu_device` promoted to kernel; mid-level abstractions (`RenderPassBuilder`, `ComputePassHelper`, `ResourceUploader`, `MaterialBinding`, `CommandRecorder`, `PipelineCache`); **three-mechanism PSO architecture** (ubershader/magenta fallback + build-time manifest + per-machine disk cache); Slang as canonical shader source; first backend = wgpu-native. 9 phases G0→G8. **`KernelEngine.Render.Bgfx` stays as fallback until full parity reached.** **G2 (mid-level abstractions extracted in current code) is the most valuable single piece of work — pays off even if V2 never ships.** |
+
+**Pace expectations**: V1 may land before V2 lands fully — V2 phases G7+ can stretch over months. They don't block each other after the contracts lock. **Beta features (Tier B, C, P) take priority over V2 implementation work**; V1 implementation is a higher priority because Application.cs is genuinely painful.
+
+---
+
+
 
 Two large rewrites whose **architecture is locked but implementation is paced**. Both reuse existing code where it fits, build new modules alongside the current ones, and don't block beta features. The doctrine doc is the contract; implementation phases are sequenced inside each card.
 
