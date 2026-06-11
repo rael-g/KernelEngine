@@ -3,6 +3,7 @@
   <Folder Name="/examples/csharp/">
     <Project Path="examples/csharp/00_input_test/00_input_test.csproj" />
     <Project Path="examples/csharp/00_runtime_minimal/00_runtime_minimal.csproj" />
+    <Project Path="examples/csharp/01_runtime_clear_color/01_runtime_clear_color.csproj" />
     <Project Path="examples/csharp/01_window_scene/01_window_scene.csproj" />
     <Project Path="examples/csharp/02_textured_quad/02_textured_quad.csproj" />
     <Project Path="examples/csharp/03_pbr_directional/03_pbr_directional.csproj" />
