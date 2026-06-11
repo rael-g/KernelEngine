@@ -141,7 +141,8 @@ public sealed unsafe class Runtime : IRuntime
         return id;
     }
 
-    public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute)
+    public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
+                                 uint pinnedThread = 0)
     {
         ThrowIfDisposed();
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -156,11 +157,12 @@ public sealed unsafe class Runtime : IRuntime
         fixed (byte* namePtr = nameBytes)
         {
             ke_runtime_system_params p = default;
-            p.name      = (sbyte*)namePtr;
-            p.phase     = (ke_phase)phase;
-            p.user_data = (void*)GCHandle.ToIntPtr(handle);
-            p.execute   = (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void>)
-                          &SystemExecuteTrampoline;
+            p.name           = (sbyte*)namePtr;
+            p.phase          = (ke_phase)phase;
+            p.pinned_thread  = pinnedThread;
+            p.user_data      = (void*)GCHandle.ToIntPtr(handle);
+            p.execute        = (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void>)
+                                &SystemExecuteTrampoline;
 
             var rc = _native->register_system(_native, &p, &id);
             CheckResult(rc, nameof(RegisterSystem));

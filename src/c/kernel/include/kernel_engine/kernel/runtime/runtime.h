@@ -68,6 +68,13 @@ typedef struct ke_runtime_system_params {
     // declared access can't be enforced.
     bool exclusive;
 
+    // Pin this system to a specific scheduler worker. 0 = any worker (default,
+    // load-balanced). 1..N = the system runs only on that worker. Used for
+    // thread-affine work (e.g. bgfx render calls pinned to a worker named
+    // "ke.render" at startup). The scheduler routes via
+    // ke_task_scheduler.dispatch_pinned when pinned_thread > 0.
+    uint32_t pinned_thread;
+
     void *user_data;
     // Execute callback. ctx is the ONLY door to component memory inside the
     // system body — see kernel/runtime/system_ctx.h. Stack-allocated by the

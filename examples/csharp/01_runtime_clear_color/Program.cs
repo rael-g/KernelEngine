@@ -6,9 +6,10 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// R3-mini: window with a clear color, end-to-end via the runtime + module
-// pattern. No Application.cs. No Tree, no nodes, no scene. Just two modules
-// (window + renderer) that hand the runtime everything it needs.
+// R3-mini / R4: window with a clear color, end-to-end via the runtime + module
+// pattern. No Application.cs. No Tree, no nodes, no scene. No manual render
+// calls in the host — render systems are pinned to a worker the render module
+// names "ke.render", scheduler dispatches them every tick.
 
 var services = new ServiceCollection()
     .AddKernel()
@@ -21,19 +22,11 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
-        clearColor: (0.15f, 0.20f, 0.35f, 1.0f)));   // dark blue
+        clearColor: (0.15f, 0.20f, 0.35f, 1.0f)));
 
 using var sp = services.BuildServiceProvider();
-
-// Single-threaded R3-mini: the host thread doubles as ke.render so bgfx's
-// thread-affinity check during Initialize() / ClearColor() / Frame() passes.
-// A proper multi-threaded setup (R4) dedicates a render thread + introduces a
-// "host-thread phase" in the runtime so render systems run there automatically.
-KernelEngine.Kernel.KernelThread.SetCurrentName("ke.render");
-
 var window   = sp.GetRequiredService<IWindow>();
 var runtime  = sp.GetRequiredService<IRuntime>();
-var renderer = sp.GetRequiredService<IRenderer>();
 
 runtime.LoadModules(sp);
 
@@ -46,11 +39,6 @@ while (!window.ShouldClose())
     double now = sw.Elapsed.TotalSeconds;
     runtime.Tick((float)(now - prev));
     prev = now;
-
-    // Render calls live on the host thread until R4. The module-registered
-    // Initialize already ran during LoadModules.
-    renderer.ClearColor(0.15f, 0.20f, 0.35f, 1.0f);
-    renderer.Frame();
 }
 
 Console.WriteLine("[01_runtime_clear_color] Exited cleanly.");

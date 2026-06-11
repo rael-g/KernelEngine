@@ -503,8 +503,19 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->defer.capacity    = 0;
             pkg->defer.allocator   = h->state.allocator;
 
-            tasks[wave_size] = h->state.task_scheduler->dispatch(
-                h->state.task_scheduler, task_pkg_run, pkg);
+            // Route via dispatch_pinned when the system requested a specific
+            // worker; the regular dispatch load-balances across all workers.
+            if (rs->params.pinned_thread > 0)
+            {
+                tasks[wave_size] = h->state.task_scheduler->dispatch_pinned(
+                    h->state.task_scheduler, rs->params.pinned_thread,
+                    task_pkg_run, pkg);
+            }
+            else
+            {
+                tasks[wave_size] = h->state.task_scheduler->dispatch(
+                    h->state.task_scheduler, task_pkg_run, pkg);
+            }
             wave_size++;
         }
 

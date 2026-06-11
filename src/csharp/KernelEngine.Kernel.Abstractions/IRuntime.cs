@@ -24,10 +24,14 @@ public interface IRuntime : IDisposable
     /// <summary>
     /// Registers a system in the given scheduler <paramref name="phase"/>.
     /// <paramref name="execute"/> receives the runtime and the frame delta.
-    /// Read/write set declarations come with R3+ once consumers need them for
-    /// parallel scheduling.
     /// </summary>
-    ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute);
+    /// <param name="pinnedThread">
+    /// 0 = any worker (load-balanced, default). 1..N = pin to that specific
+    /// scheduler worker. Used for thread-affine systems (e.g. bgfx render
+    /// calls pinned to a worker the render module names "ke.render").
+    /// </param>
+    ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
+                          uint pinnedThread = 0);
 
     /// <summary>Drives one frame: PreUpdate → Update → PostUpdate (Extract / FixedUpdate land in R2+).</summary>
     void Tick(float dt);
