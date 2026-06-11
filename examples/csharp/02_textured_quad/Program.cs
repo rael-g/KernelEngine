@@ -1,90 +1,72 @@
 using System.Numerics;
-using System.Diagnostics;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework.Legacy;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// R6 migration: 02_textured_quad — procedural checkerboard texture on the
+// built-in quad, lit by one directional + ambient light. Uses runtime + new
+// framework modules end-to-end. No Application.cs.
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 02 Textured Quad")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
-
-using var app = new Application();
-
-int entityCount = 0;
-
-app.OnReady = (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 02_textured_quad");
-    Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
-    Console.WriteLine("[KernelEngine] Features: procedural_texture, albedo_material, uv_mapping");
-
-    // Generate checkerboard texture (128x128, 16 px squares)
-    const uint width  = 128;
-    const uint height = 128;
-    byte[] pixels = new byte[width * height * 4];
-    for (int y = 0; y < height; y++)
-    for (int x = 0; x < width;  x++)
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 02 Textured Quad"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.05f, 0.05f, 0.05f, 1.0f)))
+    .Add<IRuntimeModule>(new CameraModule { Position = new(0, 0, 3) })
+    .Add<IRuntimeModule>(new LightModule
     {
-        bool white = ((x / 16) + (y / 16)) % 2 == 0;
-        byte v = (byte)(white ? 255 : 64);
-        int  i = (y * (int)width + x) * 4;
-        pixels[i]     = v;
-        pixels[i + 1] = v;
-        pixels[i + 2] = v;
-        pixels[i + 3] = 255;
-    }
-
-    var texHandle = resources.CreateTexture(width, height, pixels);
-    Console.WriteLine($"[KernelEngine] Texture: handle={texHandle} width={width} height={height}");
-
-    var matHandle = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), albedo: texHandle);
-
-    app.Tree.AddNode(
-        new DirectionalLight
+        Direction = new(0.2f, 1f, 0.5f),
+        Color     = Vector3.One,
+        Intensity = 1f,
+        Ambient   = new(0.2f, 0.2f, 0.2f),
+    })
+    .Add<IRuntimeModule>(new StaticMeshModule(renderer =>
+    {
+        // Procedural 128×128 checkerboard, 16-pixel squares.
+        const uint width  = 128;
+        const uint height = 128;
+        var pixels = new byte[width * height * 4];
+        for (int y = 0; y < height; y++)
+        for (int x = 0; x < width;  x++)
         {
-            Direction = Vector3.Normalize(new(0.2f, 1f, 0.5f)),
-            Color     = Vector3.One,
-            Intensity = 1f,
-        },
-        "Sun");
-    entityCount++;
+            bool white = ((x / 16) + (y / 16)) % 2 == 0;
+            byte v = (byte)(white ? 255 : 64);
+            int  i = (y * (int)width + x) * 4;
+            pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v; pixels[i + 3] = 255;
+        }
 
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    cam.LocalTransform = cam.LocalTransform with
-    {
-        Position = new Vector3(0f, 0f, 3f),
-    };
-    entityCount++;
+        var tex = renderer.CreateTexture(width, height, pixels).Value;
+        var mat = renderer.CreateMaterial(Vector4.One, textureHandle: tex).Value;
+        return (Mesh: default, Material: mat);  // default mesh handle = built-in quad
+    }));
 
-    app.Tree.AddNode(
-        new MeshRenderer { MaterialHandle = matHandle },
-        "Quad");
-    entityCount++;
-    return Task.CompletedTask;
-};
+using var sp = services.BuildServiceProvider();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
 
-Stopwatch sw = Stopwatch.StartNew();
-int frameCount = 0;
+runtime.LoadModules(sp);
 
-app.OnUpdate = (tree, input) =>
+Console.WriteLine("[02_textured_quad] Loop running. Close the window to exit.");
+
+var sw = System.Diagnostics.Stopwatch.StartNew();
+double prev = sw.Elapsed.TotalSeconds;
+while (!window.ShouldClose())
 {
-    tree.ClearColor(0.05f, 0.05f, 0.05f, 1f);
+    double now = sw.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
+}
 
-    frameCount++;
-    if (sw.Elapsed.TotalSeconds >= 5.0)
-    {
-        double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Entities: {entityCount}  Lights: 0p 0s 1d");
-        frameCount = 0;
-        sw.Restart();
-    }
-};
-
-app.Run(services);
+Console.WriteLine("[02_textured_quad] Exited cleanly.");
