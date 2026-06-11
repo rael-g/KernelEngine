@@ -1,104 +1,126 @@
-using System.Numerics;
 using System.Diagnostics;
+using System.Numerics;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework.Legacy;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// 09_many_lights — stress test: 121-cube wall lit by 200 randomly moving
+// colored point lights. Tests the contributor's per-frame light loop and the
+// renderer's per-frame light cap (lights past the cap are dropped silently —
+// behavior we want visible at this scale).
+
+const int LightCount = 200;
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 09 Many Lights Stress Test")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
-
-using var app = new Application();
-
-int lightCount = 200;
-
-app.OnReady = (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 09_many_lights");
-    Console.WriteLine($"[KernelEngine] Features: {lightCount} point_lights, clustered_lighting");
-
-    // Camera
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 30f) };
-
-    // Materials
-    var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
-
-    // Wall of cubes
-    for (int x = -15; x <= 15; x += 3)
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 09 Many Lights Stress Test"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.01f, 0.01f, 0.01f, 1.0f)))
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new SceneModule(tree =>
     {
+        Console.WriteLine("[KernelEngine] Example: 09_many_lights");
+        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine($"[KernelEngine] Features: stress_test, {LightCount} point_lights");
+
+        tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
+
+        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 30f) };
+
+        var cubeMesh = MeshPrimitives.Cube(tree.Renderer);
+        var mat = tree.Renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+
+        // 11×11 cube wall facing the camera (z=0).
+        for (int x = -15; x <= 15; x += 3)
         for (int y = -15; y <= 15; y += 3)
         {
-            var n = app.Tree.AddNode(new MeshRenderer { MaterialHandle = mat }, $"Cube_{x}_{y}");
+            var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, $"Cube_{x}_{y}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, y, 0f) };
         }
-    }
 
-    // Random moving point lights
-    var rand = new Random(42);
-    for (int i = 0; i < lightCount; i++)
-    {
-        app.Tree.AddNode(
-            new RandomMovingLightNode { 
-                Color = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble()), 
-                Intensity = 2.0f + (float)rand.NextDouble() * 3.0f,
-                Speed = 0.5f + (float)rand.NextDouble() * 2.0f,
-                Radius = 5.0f + (float)rand.NextDouble() * 10.0f
-            },
-            $"Light_{i}");
-    }
-    return Task.CompletedTask;
-};
+        // Fixed-seed PRNG so the visual is deterministic across runs.
+        var rand = new Random(42);
+        for (int i = 0; i < LightCount; i++)
+        {
+            tree.AddNode(new RandomMovingLight(rand)
+            {
+                Color     = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble()),
+                Intensity = 2f + (float)rand.NextDouble() * 3f,
+                Radius    = 5f + (float)rand.NextDouble() * 10f,
+                Speed     = 0.5f + (float)rand.NextDouble() * 2f,
+            }, $"Light_{i}");
+        }
+    }));
 
-Stopwatch sw = Stopwatch.StartNew();
+using var sp = services.BuildServiceProvider();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
+
+runtime.LoadModules(sp);
+
+Console.WriteLine("[09_many_lights] Loop running. Close the window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
 int frameCount = 0;
+double fpsWindowStart = 0;
 
-app.OnUpdate = (tree, input) =>
+while (!window.ShouldClose())
 {
-    tree.ClearColor(0.01f, 0.01f, 0.01f, 1f);
-    tree.SetAmbientLight(0.01f, 0.01f, 0.01f);
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
 
     frameCount++;
-    if (sw.Elapsed.TotalSeconds >= 5.0)
+    if (now - fpsWindowStart >= 5.0)
     {
-        double fps = frameCount / sw.Elapsed.TotalSeconds;
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: {lightCount}");
-        frameCount = 0;
-        sw.Restart();
+        double fps = frameCount / (now - fpsWindowStart);
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: {LightCount}p 0s 0d");
+        frameCount     = 0;
+        fpsWindowStart = now;
     }
-};
+}
 
-app.Run(services);
+runtime.UnloadModules(sp);
 
-// ── Random moving point light ──────────────────────────────────────────────────
+Console.WriteLine("[09_many_lights] Exited cleanly.");
 
-sealed class RandomMovingLightNode : PointLight
+// ── Random moving point light — per-instance seed picked at construction ─────
+
+sealed class RandomMovingLight : PointLight
 {
-    public float Speed { get; init; } = 1.0f;
+    public float Speed { get; init; } = 1f;
 
+    private readonly Vector3 _seed;
     private float _time;
-    private Vector3 _seed;
 
-    protected override void Start()
+    public RandomMovingLight(Random rand)
     {
-        base.Start();
-        var rand = new Random(GetHashCode());
-        _seed = new Vector3((float)rand.NextDouble() * 100f, (float)rand.NextDouble() * 100f, (float)rand.NextDouble() * 100f);
+        _seed = new Vector3(
+            (float)rand.NextDouble() * 100f,
+            (float)rand.NextDouble() * 100f,
+            (float)rand.NextDouble() * 100f);
     }
 
-    protected override void Update(float dt)
+    protected override void OnUpdate(in View view)
     {
-        _time += dt * Speed;
-        float x = MathF.Sin(_time + _seed.X) * 15.0f;
-        float y = MathF.Cos(_time + _seed.Y) * 15.0f;
-        float z = MathF.Sin(_time * 0.7f + _seed.Z) * 5.0f + 5.0f;
+        _time += view.DeltaTime * Speed;
+        float x = MathF.Sin(_time + _seed.X) * 15f;
+        float y = MathF.Cos(_time + _seed.Y) * 15f;
+        float z = MathF.Sin(_time * 0.7f + _seed.Z) * 5f + 5f;
         LocalTransform = LocalTransform with { Position = new Vector3(x, y, z) };
     }
 }
