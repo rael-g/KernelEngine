@@ -65,6 +65,11 @@ public sealed class SceneRenderModule : IRuntimeModule
             new SkyboxContributor(
                 sp.GetRequiredService<EcsAdapter>(),
                 sp.GetRequiredService<ComponentRegistry>()));
+
+        services.AddSingleton<IFrameContributor, LabelContributor>(sp =>
+            new LabelContributor(
+                sp.GetRequiredService<Tree>(),
+                sp.GetRequiredService<IWindow>()));
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)

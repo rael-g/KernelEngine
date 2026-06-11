@@ -20,6 +20,14 @@ public sealed class Tree
     internal IReadOnlyList<Node> Behaviors => _behaviors;
     internal void RegisterBehavior(Node node) => _behaviors.Add(node);
 
+    // Labels live outside ECS because they carry managed references (Font,
+    // Text) that can't sit in unmanaged storage. Same registration shape as
+    // behaviors — populated during scene setup, iterated by LabelContributor
+    // every frame.
+    private readonly List<Label> _labels = new();
+    internal IReadOnlyList<Label> Labels => _labels;
+    internal void RegisterLabel(Label label) => _labels.Add(label);
+
     /// <summary>
     /// Direct access to the renderer for creating GPU resources (textures,
     /// materials, meshes). Setup callbacks run on the render worker, so calls
