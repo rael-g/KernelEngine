@@ -1180,3 +1180,76 @@ R4 explicitly does NOT block pipelining. The `ke_ecs` extension in R6+ slots in 
 - Memory: `project_render_pipelining_decision.md`
 - Kanban: parking lot `[RENDER-PIPELINING]` (R6-R7 timing)
 - This doc remains the canonical design source.
+
+---
+
+## 17. Pre-merge punch list (R6→main) — doctrine commitments
+
+The R6 work shipped Framework on top of the runtime + the first end-to-end Pong driven by data files. Reviewing the result surfaced four decisions that **must be committed BEFORE `feat/runtime-v2` merges into `main`**, because each one locks a contract that becomes hard to break after release. They are listed in the order they should be tackled.
+
+### 17.1 `Tree == World`
+
+**Decision**: a `Tree` owns a private `IEcs` instance. Multiple `Tree`s = multiple isolated worlds.
+
+**Today (broken)**: `Tree` wraps the singleton `IEcs` registered in DI. Every `Tree` ever created shares storage. There is no API path to a second world.
+
+**Why this matters**: the model the runtime ships into `main` IS the model game devs build against. If we ship "one Tree, one World, hidden" the second-world ceiling becomes invisible and someone discovers it months later when they want a UI tree, a replay overlay, a server-side authoritative world, splitscreen, or test fixtures with isolated state. The fix later is expensive because every contributor / behavior / scene loader implicitly assumed the singleton.
+
+**The shape we want**:
+- `Tree` constructor takes (or creates) its own `IEcs` instance.
+- `IEcs` is no longer a top-level DI singleton; it's owned per-Tree.
+- `SceneRenderModule` creates one `Tree` by default; advanced cases (UI overlay, split-screen) call `services.AddTree("ui")` and route systems to it.
+- Contributors / behavior loops parameterize over a specific `Tree` instead of pulling `IEcs` from DI.
+
+**Acceptance**: spawning two `Tree`s with the same component types produces two independent entity sets; destroying one doesn't affect the other; rendering iterates a named `Tree` (default = "main").
+
+**Reference**: the legacy framework had this fusion naturally (`ke_world` lived inside `Tree`); we lost it when the runtime promoted `ke_ecs` to a contract. The fix is restoring the legacy invariant on top of the new runtime, not reverting.
+
+### 17.2 Resources — first-class concept (slice that matters for the merge)
+
+**Decision**: Bevy-style Resources are part of the public contract — game-facing types and the §15 codegen target them.
+
+**Today (broken)**: managed/reference data (`Font`, shared `MaterialHandle`, `IAudio` handle bundles) lives wherever it lands — `PongResources` singleton holds shared materials; `MenuController` + `Scoreboard` create their own labels in `OnBind` because `Label` can't be a top-level scene entity (no DI-resolvable `Font`); `Ball` calls `Tree.Find<Scoreboard>` because there's no way to express "this script depends on that script" in scene data.
+
+**What we ship in this slice** (not the full §15 codegen — that comes later):
+- A `Resources` registry on the `Tree` (one per `Tree`, since 17.1).
+- `services.AddResource<T>(factory)` extension; resolved through `View.Resource<T>()` inside scripts.
+- Concrete first Resource: **`FontResources`** with a `Default` font + a `Register(name, path, size)` API. `Label` gains a `FontName : string` property the scene file can set (`FontName = "Default"`).
+- Concrete second Resource: **`MaterialResources`** (replaces `PongResources` ad-hoc class). Pong's `Main.scene` references material by name.
+- Cross-script references go through Resources too — `Scoreboard` is a Resource the `Ball` script declares as a dependency. Late `Tree.Find` is the escape hatch, not the API.
+
+**Acceptance**: in Pong, `Menu.scene` declares the `Title` + `Hint` Labels as top-level entities (no MenuController spawning them). `Main.scene` declares the Scoreboard's labels the same way. No `Tree.Find` calls remain in script code.
+
+**Defer to later**: §15 codegen that auto-promotes script properties to either components or resources based on their type. Today the wiring is manual but the contract is in place.
+
+### 17.3 Finish the module conversion (DI hygiene)
+
+**Decision**: every `services.AddX()` extension method that still exists outside an `IRuntimeModule` becomes an `IRuntimeModule`.
+
+**Today (broken)**: composition mixes two styles. Some things are extensions called inline (`AddKernel`, `AddLogger`, `AddConsoleSink`, `AddInput`, `AddBox2D`, `AddMiniAudio`, `AddTextStbTrueType`, `AddInputActions<T>`); others are modules (`new GlfwWindowModule()`, `new BgfxRenderModule()`, `new SceneRenderModule()`, `new ShadowModule()`, `new PostProcessModule()`, `new SceneRouterModule()`). Game devs see two patterns and have to guess which one anything is.
+
+**The shape we want**:
+- Every plugin (`Kernel`, `Logger`, `ConsoleSink`, `Input`, `Box2D`, `MiniAudio`, `StbTrueType`, …) ships an `IRuntimeModule` as its public DI entry.
+- `OnUnload` symmetric to `OnLoad` for everything that holds native handles.
+- `Dependencies` declared explicitly so the topo-sort orders them; no implicit "must be added in this order" rules.
+- The legacy extension methods stay around (mark `[Obsolete]`) but the README + every example shows the module-only composition style.
+
+**Acceptance**: a Pong / example `Program.cs` composition uses `IRuntimeModule` calls and only `IRuntimeModule` calls — no `.AddX()` extension survives in active examples.
+
+### 17.4 Pong showcase cleanup (the canonical first user)
+
+**Decision**: Pong as it stands in `feat/runtime-v2` is the showcase that ships with V1 merge. The hacks it carries become the workflow story new users learn from. Three concrete cleanups before merge.
+
+**a) `Ball.OnBind` ignores its scene-file `Position`** — the scene has `[entity.properties] Position = [0, 0]`; OnBind overwrites it with `Vector2.Zero` unconditionally. Even though the values happen to match today, the override pattern teaches the wrong rule. Either honor the scene value or remove the property from the scene file. The right move: honor the scene value (`Position` is what makes the spawn deterministic across scene reloads).
+
+**b) `Wall` conflates `transform.Scale` with physics half-extents** — the script reads `LocalTransform.Scale.X * 0.5f` as the body's half-width. That couples visual scale to collider size in a way nothing in the scene file expresses. Fix: split into a `PhysicsHalfExtents` property on the Wall script that the scene file sets explicitly; `Scale` stays purely visual.
+
+**c) `Tree.Find` late-binding** — Resolved by 17.2 (Scoreboard becomes a Resource the Ball declares as a dependency); the `Find` call disappears.
+
+### 17.5 What's NOT on this list (explicit non-goals for the merge)
+
+- §15 NodeBehavior + codegen — manual surface ships in V1; codegen comes in V2-era.
+- Tier Z6 (FramePacket bridge replacement + threading/FrameSync deletion) — that's V2-render territory; V1 merges with the bridge intact.
+- Render core breakup (PBR-as-plugin, L3-L7 doctrine) — V2-render.
+- Multi-window / multi-camera — not unblocked by 17.1, but not in scope.
+- `Tree.Find` as an API — kept as escape hatch even after 17.2 lands; just not used as the default.
