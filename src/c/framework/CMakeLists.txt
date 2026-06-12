@@ -1,5 +1,13 @@
 add_library(ke_framework
     src/world.c
+    src/asset_resolver.c
+    src/mesh_shape.c
+    third_party/tomlc99/toml.c
+)
+
+# tomlc99 (vendored) — see third_party/tomlc99/VENDOR.md
+target_include_directories(ke_framework PRIVATE
+    third_party/tomlc99
 )
 
 target_include_directories(ke_framework PUBLIC

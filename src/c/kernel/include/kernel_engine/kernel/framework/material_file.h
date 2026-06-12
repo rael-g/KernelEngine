@@ -1,10 +1,10 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_MATERIAL_FILE_H_
 #define KERNEL_ENGINE_FRAMEWORK_MATERIAL_FILE_H_
 
-// ke_material_file — parses `.material` TOML files declaratively. The C plugin
-// produces a fully-populated ke_material_spec; the caller (asset resolver or a
-// language binding) is responsible for uploading textures by path and building
-// the final renderer material handle.
+// ke_material_spec — POD describing the framework's opinionated material
+// schema. The schema itself is parsed from `.material` TOML files, but
+// parsing is internal to the framework plugin: external consumers reach the
+// result via ke_asset_resolver->resolve_material(path, &spec).
 //
 // Schema:
 //
@@ -15,16 +15,12 @@
 //     albedo     = "res://textures/foo.png" # optional
 //     normal     = "res://textures/bar.png" # optional
 
-#include <kernel_engine/kernel/framework/framework_export.h>
-#include <kernel_engine/kernel/common/error.h>
-#include <stdint.h>
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-    #define KE_MATERIAL_PATH_MAX 256
+#define KE_MATERIAL_PATH_MAX 256
 
     typedef struct ke_material_spec
     {
@@ -34,13 +30,6 @@ extern "C"
         char  albedo_path[KE_MATERIAL_PATH_MAX]; ///< empty = no albedo texture
         char  normal_path[KE_MATERIAL_PATH_MAX]; ///< empty = no normal map
     } ke_material_spec;
-
-    /// Parses a `.material` TOML file at <paramref name="path"/> into the supplied spec.
-    /// Defaults apply for missing keys. Returns KE_ERROR_NOT_FOUND on a missing/unparseable
-    /// file, KE_ERROR_INVALID_ARGUMENT on missing the `[material]` section.
-    KE_FRAMEWORK_API ke_result ke_material_file_parse(
-        const char       *path,
-        ke_material_spec *out_spec);
 
 #ifdef __cplusplus
 }

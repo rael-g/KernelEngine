@@ -1,8 +1,11 @@
 // ke_world impl — default framework aggregator. Owns ecs+runtime+scene_tree
 // transferred from host on create; cascades teardown in reverse order on destroy.
 
-#include <kernel_engine/framework/world_create.h>
+// scene_tree.h is included BEFORE world_create.h so that its transitive
+// `framework_export.h` define of KE_FRAMEWORK_API runs first; world_create.h's
+// own fallback definition then sees the macro already defined and skips it.
 #include <kernel_engine/kernel/framework/scene_tree.h>
+#include <kernel_engine/framework/world_create.h>
 
 #include <stddef.h>
 #include <string.h>
