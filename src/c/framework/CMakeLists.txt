@@ -4,6 +4,8 @@ add_library(ke_framework
     src/mesh_shape.c
     src/scene_tree.c
     src/input_actions.c
+    src/components_apply.c
+    src/scene_loader.c
     third_party/tomlc99/toml.c
 )
 

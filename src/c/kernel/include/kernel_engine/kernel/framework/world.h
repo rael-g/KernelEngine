@@ -19,7 +19,9 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/ecs/ecs.h>            // ke_component_id
 #include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/kernel/ecs/variant.h>        // ke_variant_table_entry
 #include <kernel_engine/kernel/runtime/runtime.h>
 
 #ifdef __cplusplus
@@ -30,6 +32,21 @@ extern "C"
     struct ke_task_scheduler;
     struct ke_scene_tree;
     struct ke_logger;
+
+    /// Per-component "apply" callback — translates a TOML-shaped entry list
+    /// (`name=value` pairs) into the raw component memory. Registered by the
+    /// framework at world construction for each built-in component (transform,
+    /// camera, mesh, lights, scene_properties) and by game code for user
+    /// components that want to be declarable in `.scene.toml` files. The
+    /// scene_loader queries the world's apply registry when it encounters a
+    /// `[entity.components.X]` block — apply lives in the framework, not in
+    /// the kernel ECS, because declarative deserialization is a framework
+    /// opinion (an ECS-pure alternative framework may not have a scene file
+    /// format at all).
+    typedef void (*ke_component_apply_fn)(
+        void                          *component,
+        const ke_variant_table_entry  *entries,
+        uint32_t                       count);
 
     typedef struct ke_world ke_world;
 
@@ -57,6 +74,20 @@ extern "C"
         /// Returns the borrowed scene_tree pointer the world owns, or NULL if the
         /// world was created without one (C-phase transitional).
         struct ke_scene_tree *(*scene_tree)(struct ke_world *self);
+
+        /// Registers a per-component apply callback. Replaces any previous
+        /// registration for the same cid. Returns KE_ERROR_OUT_OF_MEMORY if the
+        /// internal registry can't grow. Idempotent at the (cid, fn) level —
+        /// calling twice with the same pair is harmless.
+        ke_result (*register_component_apply)(struct ke_world      *self,
+                                              ke_component_id        cid,
+                                              ke_component_apply_fn  apply);
+
+        /// Resolves the apply callback for a cid. Returns NULL if no callback
+        /// is registered (the scene_loader skips such components silently,
+        /// matching the "unknown component name → skip" semantics).
+        ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
+                                                     ke_component_id  cid);
 
         /// Destroys the world and cascades teardown of owned pieces in reverse
         /// order: scene_tree → runtime → ecs. After this call `self` must not be used.

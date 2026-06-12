@@ -1,10 +1,9 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 
-#include <kernel_engine/kernel/framework/framework_export.h>
-#include <kernel_engine/kernel/framework/scene_tree.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/ecs/ecs.h>     // ke_entity
 #include <kernel_engine/kernel/ecs/variant.h>
 struct ke_world;
 
