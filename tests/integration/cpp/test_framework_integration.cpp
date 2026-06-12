@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/framework/input_actions.h>
-#include <kernel_engine/framework/scene_loader.h>
-#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/kernel/framework/input_actions.h>
+#include <kernel_engine/kernel/framework/scene_loader.h>
+#include <kernel_engine/kernel/framework/scene_tree.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/world.h>
 #include <filesystem>
@@ -64,8 +64,8 @@ scale = [2, 2, 2]
     fs::remove(path);
 }
 
-#include <kernel_engine/framework/camera_render_system.h>
-#include <kernel_engine/framework/light_render_system.h>
+#include <kernel_engine/kernel/framework/camera_render_system.h>
+#include <kernel_engine/kernel/framework/light_render_system.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
 
 TEST_F(FrameworkIntegrationTest, CameraSystem_Update_Works) {
@@ -101,7 +101,7 @@ TEST_F(FrameworkIntegrationTest, CameraSystem_Update_Works) {
     ke_camera_render_system_destroy(sys);
 }
 
-#include <kernel_engine/framework/mesh_shape.h>
+#include <kernel_engine/kernel/framework/mesh_shape.h>
 
 TEST_F(FrameworkIntegrationTest, MeshShape_Bake_ReturnsOom_WhenAllocFails) {
     ke_allocator fa{};
@@ -112,7 +112,7 @@ TEST_F(FrameworkIntegrationTest, MeshShape_Bake_ReturnsOom_WhenAllocFails) {
     EXPECT_EQ(ke_mesh_shape_bake(&fa, KE_MESH_PRIMITIVE_CUBE, 0, &data), KE_ERROR_OUT_OF_MEMORY);
 }
 
-#include <kernel_engine/framework/mesh_render_system.h>
+#include <kernel_engine/kernel/framework/mesh_render_system.h>
 
 TEST_F(FrameworkIntegrationTest, MeshRenderSystem_Update_Works) {
     ke_mesh_render_system_params params{};
@@ -151,8 +151,8 @@ TEST_F(FrameworkIntegrationTest, MeshRenderSystem_Update_Works) {
     ke_mesh_render_system_destroy(sys);
 }
 
-#include <kernel_engine/framework/mesh_asset_system.h>
-#include <kernel_engine/framework/mesh_render_system.h>
+#include <kernel_engine/kernel/framework/mesh_asset_system.h>
+#include <kernel_engine/kernel/framework/mesh_render_system.h>
 
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/render/material.h>

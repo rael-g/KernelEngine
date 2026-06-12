@@ -10,7 +10,7 @@
 //     is appended to packet->point_lights until capacity;
 //   * every spot light, same position rule, is appended to packet->spot_lights.
 
-#include <kernel_engine/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/ecs.h>

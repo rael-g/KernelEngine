@@ -2,7 +2,7 @@
 // GPU interaction. The output buffers are owned by the caller via the supplied
 // ke_allocator — pair every bake with a ke_mesh_shape_free.
 
-#include <kernel_engine/framework/mesh_shape.h>
+#include <kernel_engine/kernel/framework/mesh_shape.h>
 
 #include <cmath>
 #include <cstring>

@@ -13,7 +13,7 @@
 // Action ids are assigned in order of appearance (first action = 0, second = 1, …).
 // Callers cache them after load() via get_action_id() and reuse across frames.
 
-#include <kernel_engine/framework/input_actions.h>
+#include <kernel_engine/kernel/framework/input_actions.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/input/key.h>
 

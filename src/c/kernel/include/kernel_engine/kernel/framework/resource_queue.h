@@ -15,7 +15,7 @@
 // queue's internal allocator on submit; callers can immediately free their
 // own buffers.
 
-#include <kernel_engine/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/context/allocator.h>

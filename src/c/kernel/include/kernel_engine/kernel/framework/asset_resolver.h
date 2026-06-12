@@ -17,9 +17,9 @@
 // links them directly; bindings construct the loader, hand it over, and the
 // resolver dispatches based on file extension.
 
-#include <kernel_engine/framework/framework_export.h>
-#include <kernel_engine/framework/material_file.h>
-#include <kernel_engine/framework/mesh_shape.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/material_file.h>
+#include <kernel_engine/kernel/framework/mesh_shape.h>
 #include <kernel_engine/kernel/asset/image_loader.h>
 #include <kernel_engine/kernel/asset/mesh_data.h>
 #include <kernel_engine/kernel/common/error.h>

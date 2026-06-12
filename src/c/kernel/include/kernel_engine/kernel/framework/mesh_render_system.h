@@ -8,7 +8,7 @@
 // TransformComponent.world_matrix and appends one ke_draw_command per visible
 // mesh into ke_frame_packet.draw_commands (until capacity).
 
-#include <kernel_engine/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/common/handles.h>
 #include <kernel_engine/kernel/context/allocator.h>

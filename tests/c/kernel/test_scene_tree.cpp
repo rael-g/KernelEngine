@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/kernel/framework/scene_tree.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/world.h>
 #include <kernel_engine/kernel/world/components.h>

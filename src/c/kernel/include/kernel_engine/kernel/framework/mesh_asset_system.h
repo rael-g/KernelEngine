@@ -16,7 +16,7 @@
 // already lives on ke.render. A future commit may swap the direct calls for a
 // ResourceCommandQueue path so the system can run on ke.sim too.
 
-#include <kernel_engine/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/system.h>

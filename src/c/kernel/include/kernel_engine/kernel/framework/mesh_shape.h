@@ -10,7 +10,7 @@
 // successful ke_mesh_shape_bake with a ke_mesh_shape_free using the same
 // allocator.
 
-#include <kernel_engine/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/render/mesh.h>

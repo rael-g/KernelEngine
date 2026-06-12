@@ -8,7 +8,7 @@
 // Resource-string properties (`"res://..."`) are passed through verbatim as
 // KE_VARIANT_STRING — resolution is the consumer binding's job.
 
-#include <kernel_engine/framework/scene_loader.h>
+#include <kernel_engine/kernel/framework/scene_loader.h>
 #include <kernel_engine/kernel/common/math.h>
 #include <kernel_engine/kernel/world/components.h>
 #include <kernel_engine/kernel/world/variant.h>

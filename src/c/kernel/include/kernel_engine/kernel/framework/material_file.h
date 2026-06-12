@@ -15,7 +15,7 @@
 //     albedo     = "res://textures/foo.png" # optional
 //     normal     = "res://textures/bar.png" # optional
 
-#include <kernel_engine/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <stdint.h>
 

@@ -10,7 +10,7 @@
 // GLM in the active backend's NDC convention, then writes both into
 // ke_frame_packet.camera.
 
-#include <kernel_engine/framework/framework_export.h>
+#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/ecs.h>

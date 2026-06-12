@@ -2,7 +2,7 @@
 // kept as strings so the caller (asset resolver) can resolve them through the
 // image loading pipeline of its choice.
 
-#include <kernel_engine/framework/material_file.h>
+#include <kernel_engine/kernel/framework/material_file.h>
 #include <toml++/toml.hpp>
 #include <cstring>
 #include <filesystem>

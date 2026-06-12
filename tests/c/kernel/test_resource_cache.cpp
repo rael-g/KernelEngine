@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/framework/resource_cache.h>
+#include <kernel_engine/kernel/framework/resource_cache.h>
 #include <kernel_engine/kernel/context/allocator.h>
 
 // All tests share the malloc allocator; the cache claims to be single-threaded,
