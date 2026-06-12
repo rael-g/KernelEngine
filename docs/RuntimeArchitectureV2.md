@@ -1183,73 +1183,323 @@ R4 explicitly does NOT block pipelining. The `ke_ecs` extension in R6+ slots in 
 
 ---
 
-## 17. Pre-merge punch list (R6→main) — doctrine commitments
+## 17. V1 merge — architectural cleanup arc
 
-The R6 work shipped Framework on top of the runtime + the first end-to-end Pong driven by data files. Reviewing the result surfaced four decisions that **must be committed BEFORE `feat/runtime-v2` merges into `main`**, because each one locks a contract that becomes hard to break after release. They are listed in the order they should be tackled.
+### 17.0 Why this section was rewritten (2026-06-12)
 
-### 17.1 `Tree == World`
+The original §17 (12 Jun morning) was a 4-item punch list: Tree==World, Resources, module conversion, Pong cleanup. That list assumed a much smaller correction — preserving most of the R6 managed Framework and tightening four loose ends.
 
-**Decision**: a `Tree` owns a private `IEcs` instance. Multiple `Tree`s = multiple isolated worlds.
+The afternoon 2026-06-12 review (user-led) surfaced that the R6 work was structurally divergent from the project's established conventions in ways the 4-item list didn't capture. The actual state we have to fix before `feat/runtime-v2` merges:
 
-**Today (broken)**: `Tree` wraps the singleton `IEcs` registered in DI. Every `Tree` ever created shares storage. There is no API path to a second world.
+1. **An entire managed Framework was built from scratch** (`KernelEngine.Framework` C#) that **duplicates the in-progress native framework migration** (`src/c/kernel/include/kernel_engine/framework/` + `src/cpp/framework/`). The native side already has `ke_scene_tree`, `ke_scene_loader`, `ke_input_actions`, `ke_*_render_system`, `ke_resource_cache`, `ke_mesh_asset_system`, `ke_asset_resolver`. The managed Framework I built reimplements every one of those in pure C#, diverging in behavior.
+2. **The native framework plugin's `.cpp` files are bastardized**: STL everywhere (`std::mutex`, `std::condition_variable`, `std::vector`, `std::string`, `std::filesystem`, anonymous namespaces, `toml++` for parsing), reinvented synchronization primitives (a `Future` with `std::mutex` + `condition_variable` in `resource_queue.cpp`). Only `scene_tree.c` and `resource_cache.c` follow the C-plugin pattern; everything else is C++ in a `.cpp` pretending to be a C-ABI plugin.
+3. **Header layout violates the established plugin precedent.** Render's create header lives at `src/cpp/render/bgfx/include/kernel_engine/render/bgfx/bgfx_render.h` (plugin-include). Runtime's create header lives at `src/c/kernel/include/kernel_engine/kernel/runtime/runtime_create.h` (kernel-include — wrong). Flecs is in the same wrong place. Framework's headers are at `src/c/kernel/include/kernel_engine/framework/` (missing the `kernel/` segment that render uses).
+4. **Legacy `ke_world` + `ke_ecs_registry` + `ke_system` + `ke_variant` + `ke_component_field` are still in `kernel/world/`**, dead but not deleted. Native framework headers all still take `ke_world*` instead of the new `ke_ecs*`+`ke_runtime*` pair.
+5. **`InternalsVisibleTo` was added by R6 work** (`KernelEngine.Ecs.Flecs.csproj` exposes internals to Framework + Runtime + tests). The project's established pattern is `public ke_X* Native` (precedent: `Allocator.Native`). `InternalsVisibleTo` is banned.
+6. **`IntPtr NativeHandle` on `IEcs` and `IEcsFactory` were added to `Kernel.Abstractions`** during my §17.1 rush — both leak C-ABI / runtime-composition details into the language-agnostic contract layer.
 
-**Why this matters**: the model the runtime ships into `main` IS the model game devs build against. If we ship "one Tree, one World, hidden" the second-world ceiling becomes invisible and someone discovers it months later when they want a UI tree, a replay overlay, a server-side authoritative world, splitscreen, or test fixtures with isolated state. The fix later is expensive because every contributor / behavior / scene loader implicitly assumed the singleton.
+This section replaces the original 4-item punch list with the **full reconciliation plan** the V1 merge actually needs. The original items are folded into the larger plan; see §17.5.
 
-**The shape we want**:
-- `Tree` constructor takes (or creates) its own `IEcs` instance.
-- `IEcs` is no longer a top-level DI singleton; it's owned per-Tree.
-- `SceneRenderModule` creates one `Tree` by default; advanced cases (UI overlay, split-screen) call `services.AddTree("ui")` and route systems to it.
-- Contributors / behavior loops parameterize over a specific `Tree` instead of pulling `IEcs` from DI.
+The plan is bigger and slower than the morning version, but **the user explicitly accepted up to a year of delay if that's what doing this correctly costs**, because: this is not in production, and "make it ship now" produces architectural debt that ages the engine. The same shape that ships into `main` is the shape every future plugin author writes against — every shortcut here becomes a workaround they have to learn.
 
-**Acceptance**: spawning two `Tree`s with the same component types produces two independent entity sets; destroying one doesn't affect the other; rendering iterates a named `Tree` (default = "main").
+#### Critical context for the C rewrite: two sources, neither sufficient alone
 
-**Reference**: the legacy framework had this fusion naturally (`ke_world` lived inside `Tree`); we lost it when the runtime promoted `ke_ecs` to a contract. The fix is restoring the legacy invariant on top of the new runtime, not reverting.
+A trap to avoid (already caught by the user on 2026-06-12): when phase C rewrites the framework plugin in C, **the cpp framework alone is NOT a sufficient reference**. The cpp framework was built **before runtime V2 landed**. Its design decisions are centered on the now-deleted `ke_world` (legacy aggregator with sparse-set ECS + integrated tick), use the legacy `ke_system` model, and predate the phase-based runtime scheduler. Translating cpp → c 1:1 carries those pre-V2 decisions forward, which is exactly what we're trying to escape.
 
-### 17.2 Resources — first-class concept (slice that matters for the merge)
+The R6 managed Framework (`KernelEngine.Framework` C#, built during this session) is the OTHER reference. It was built **after runtime V2**, so its shape — how systems register with `ke_runtime`, how queries go through `ke_system_ctx`, how worlds isolate via per-instance ecs, how contributors order via phases — is V2-compatible. But it lacks lower-level mechanics the cpp side already has (path resolution rules for scene_loader, TOML schema details for input_actions, material file format, asset resolver heuristics, etc.) — things I never reimplemented managed because they're framework-internal mechanics, not user-facing API.
 
-**Decision**: Bevy-style Resources are part of the public contract — game-facing types and the §15 codegen target them.
+**The C rewrite synthesizes both sources, plus applies the doctrine (17.1) where neither source had it right.** Mechanics from cpp; runtime-V2 shape from managed; STL elimination + scheduler-based sync from the doctrine. Phase C's per-file plan must reference both sources explicitly so the synthesis is conscious, not accidental.
 
-**Today (broken)**: managed/reference data (`Font`, shared `MaterialHandle`, `IAudio` handle bundles) lives wherever it lands — `PongResources` singleton holds shared materials; `MenuController` + `Scoreboard` create their own labels in `OnBind` because `Label` can't be a top-level scene entity (no DI-resolvable `Font`); `Ball` calls `Tree.Find<Scoreboard>` because there's no way to express "this script depends on that script" in scene data.
+#### The native framework API itself may need revision
 
-**What we ship in this slice** (not the full §15 codegen — that comes later):
-- A `Resources` registry on the `Tree` (one per `Tree`, since 17.1).
-- `services.AddResource<T>(factory)` extension; resolved through `View.Resource<T>()` inside scripts.
-- Concrete first Resource: **`FontResources`** with a `Default` font + a `Register(name, path, size)` API. `Label` gains a `FontName : string` property the scene file can set (`FontName = "Default"`).
-- Concrete second Resource: **`MaterialResources`** (replaces `PongResources` ad-hoc class). Pong's `Main.scene` references material by name.
-- Cross-script references go through Resources too — `Scoreboard` is a Resource the `Ball` script declares as a dependency. Late `Tree.Find` is the escape hatch, not the API.
+A second trap: the native framework headers (scene_tree.h, scene_loader.h, the render_system.h family, input_actions.h, resource_cache.h, etc.) were designed against `ke_world*` (the legacy aggregator with sparse-set ECS + integrated tick + legacy system graph). Their vtable shapes, parameter lists, lifecycle hooks, and division of responsibilities ALL reflect that model. The user-stated point (2026-06-12): swapping `ke_world*` for `ke_ecs*` in a parameter list is the surface-level change; the contract design underneath may also need to change.
 
-**Acceptance**: in Pong, `Menu.scene` declares the `Title` + `Hint` Labels as top-level entities (no MenuController spawning them). `Main.scene` declares the Scoreboard's labels the same way. No `Tree.Find` calls remain in script code.
+Concrete examples of what may need revisiting (to confirm during B1):
+- `scene_tree.h` exposes `find_node` with path resolution. Path resolution might better live in a higher-level helper if scene_tree is supposed to be primitive-shaped; or stay where it is if precedent justifies. Open to revision.
+- `scene_loader.h` returns a loaded scene description as a passive structure today (inferred — to verify in audit). In the V2 model, scene loading might register systems directly with the runtime instead of returning data; or stay declarative. Open to revision.
+- `*_render_system.h` family had its register/dispatch shape designed around the legacy tick (one update method per frame). With phased runtime, each render system is registered into `RuntimePhase.Extract` (or similar) with a `(ke_system_ctx*, dt)` callback. The contract surface might collapse — possibly the `*_render_system.h` headers don't even need to exist as vtable contracts; they may become simple register helpers in the framework plugin's API.
+- `input_actions.h` may or may not need its current shape — depends on how it integrates with `ke_runtime` phases.
 
-**Defer to later**: §15 codegen that auto-promotes script properties to either components or resources based on their type. Today the wiring is manual but the contract is in place.
+Phase B1 is therefore not a mechanical "find/replace `ke_world*` with `ke_ecs*`" pass. It is a per-header contract review pass: for each header in `kernel/framework/`, decide what the V2-correct contract looks like, write it, then phase C builds the implementation against the revised contract.
 
-### 17.3 Finish the module conversion (DI hygiene)
+The contract review uses the same two sources as the implementation rewrite: the existing cpp/header pair (for what was needed pre-V2) + the R6 managed Framework (for what makes sense post-V2). Phase B1 lands the revised contracts; phase C lands the new implementations.
 
-**Decision**: every `services.AddX()` extension method that still exists outside an `IRuntimeModule` becomes an `IRuntimeModule`.
+### 17.1 Doctrine locked by this arc
 
-**Today (broken)**: composition mixes two styles. Some things are extensions called inline (`AddKernel`, `AddLogger`, `AddConsoleSink`, `AddInput`, `AddBox2D`, `AddMiniAudio`, `AddTextStbTrueType`, `AddInputActions<T>`); others are modules (`new GlfwWindowModule()`, `new BgfxRenderModule()`, `new SceneRenderModule()`, `new ShadowModule()`, `new PostProcessModule()`, `new SceneRouterModule()`). Game devs see two patterns and have to guess which one anything is.
+The decisions below are committed for V1 and don't change between phases. They drive the phase plan in §17.2.
 
-**The shape we want**:
-- Every plugin (`Kernel`, `Logger`, `ConsoleSink`, `Input`, `Box2D`, `MiniAudio`, `StbTrueType`, …) ships an `IRuntimeModule` as its public DI entry.
-- `OnUnload` symmetric to `OnLoad` for everything that holds native handles.
-- `Dependencies` declared explicitly so the topo-sort orders them; no implicit "must be added in this order" rules.
-- The legacy extension methods stay around (mark `[Obsolete]`) but the README + every example shows the module-only composition style.
+#### 17.1.1 World is a native concept, owned by the framework plugin
 
-**Acceptance**: a Pong / example `Program.cs` composition uses `IRuntimeModule` calls and only `IRuntimeModule` calls — no `.AddX()` extension survives in active examples.
+A "world" — the unit of isolation that holds an ECS storage instance, a runtime scheduler, and a scene tree — is a **native concept**, exposed as `ke_world` from the framework plugin (`src/c/framework/`). NOT the legacy `kernel/world/world.h` `ke_world` (which is deleted in B0); this is a new, smaller aggregator.
 
-### 17.4 Pong showcase cleanup (the canonical first user)
+Shape (subject to design refinement during B2):
+```c
+typedef struct ke_world ke_world;  // opaque
 
-**Decision**: Pong as it stands in `feat/runtime-v2` is the showcase that ships with V1 merge. The hacks it carries become the workflow story new users learn from. Three concrete cleanups before merge.
+ke_result ke_world_create(
+    ke_allocator      *alloc,
+    ke_task_scheduler *task_scheduler,
+    ke_ecs            *ecs,        // caller pre-creates with its chosen impl
+    ke_world         **out_world);
 
-**a) `Ball.OnBind` ignores its scene-file `Position`** — the scene has `[entity.properties] Position = [0, 0]`; OnBind overwrites it with `Vector2.Zero` unconditionally. Even though the values happen to match today, the override pattern teaches the wrong rule. Either honor the scene value or remove the property from the scene file. The right move: honor the scene value (`Position` is what makes the spawn deterministic across scene reloads).
+ke_ecs        *ke_world_ecs(ke_world *w);
+ke_runtime    *ke_world_runtime(ke_world *w);
+ke_scene_tree *ke_world_scene_tree(ke_world *w);
+void ke_world_destroy(ke_world *w);
+```
 
-**b) `Wall` conflates `transform.Scale` with physics half-extents** — the script reads `LocalTransform.Scale.X * 0.5f` as the body's half-width. That couples visual scale to collider size in a way nothing in the scene file expresses. Fix: split into a `PhysicsHalfExtents` property on the Wall script that the scene file sets explicitly; `Scale` stays purely visual.
+Why native: because every binding (C#, Lua, future LOLCODE etc.) wraps the same world. The aggregator can't live only in C# without each binding reimplementing it. It belongs to the engine's user-facing contract.
 
-**c) `Tree.Find` late-binding** — Resolved by 17.2 (Scoreboard becomes a Resource the Ball declares as a dependency); the `Find` call disappears.
+Multi-world: `ke_world_create` called N times. Each instance is independent. The task scheduler is shared across worlds (it's a kernel primitive).
 
-### 17.5 What's NOT on this list (explicit non-goals for the merge)
+#### 17.1.2 Runtime stays a standalone plugin; framework depends on it
 
-- §15 NodeBehavior + codegen — manual surface ships in V1; codegen comes in V2-era.
-- Tier Z6 (FramePacket bridge replacement + threading/FrameSync deletion) — that's V2-render territory; V1 merges with the bridge intact.
+`ke_runtime` (the system scheduler with phases + parallel waves + defer queue) remains a separate plugin at `src/c/runtime/`. Framework links it as a dependency. Rationale:
+
+- Runtime is genuinely useful without framework (minimal game loops, tests, future bindings that want to roll their own scene-graph).
+- Examples like `00_runtime_minimal` and `01_runtime_clear_color` validate runtime-without-framework. They survive the migration.
+- Keeping it separate enforces the layer boundary — framework can't reach into runtime internals.
+
+The note "runtime passa a compor framework" (user, 2026-06-12) is interpreted as *composition*, not physical merging: framework depends on runtime, framework's `ke_world_create` instantiates a runtime internally, but the runtime plugin's source stays in its own folder.
+
+#### 17.1.3 Header layout: plugin pattern enforced
+
+Established precedent (render's bgfx plugin):
+- **Contract** (vtable + types) lives in `src/c/kernel/include/kernel_engine/kernel/<domain>/`. Example: `kernel/render/render.h`.
+- **Plugin create** lives in `src/<plugin-path>/include/kernel_engine/<domain>/<plugin>/`. Example: `src/cpp/render/bgfx/include/kernel_engine/render/bgfx/bgfx_render.h`.
+
+Current violations that A1/A2 fix:
+- `src/c/kernel/include/kernel_engine/kernel/runtime/runtime_create.h` → `src/c/runtime/include/kernel_engine/runtime/runtime_create.h`.
+- `src/c/kernel/include/kernel_engine/kernel/world/ke_ecs_flecs.h` → `src/c/ecs/flecs/include/kernel_engine/world/ke_ecs_flecs.h`.
+- `src/c/kernel/include/kernel_engine/framework/*.h` → split per file:
+  - Contracts (vtable + types): `src/c/kernel/include/kernel_engine/kernel/framework/`.
+  - Plugin creates: `src/c/framework/include/kernel_engine/framework/`.
+
+Plugin domain folder convention: header path inside the plugin uses `kernel_engine/<domain>/[<plugin>]/`. The `<plugin>` segment is included when multiple plugins implement the same domain (render: bgfx today, wgpu/vulkan tomorrow). When a domain has only one plugin (today: flecs for ECS, in-house for runtime, framework itself), the `<plugin>` segment is omitted — `kernel_engine/runtime/runtime_create.h`, not `kernel_engine/runtime/in_house/runtime_create.h`.
+
+#### 17.1.4 Framework plugin is implemented in C, not C++
+
+Established precedent: `scene_tree.c` and `resource_cache.c` already exist as pure C in `src/cpp/framework/src/`. Every other file there is `.cpp` with STL idioms — that was a mistake by the previous implementer.
+
+Decision: rewrite every `.cpp` in framework as `.c`, **reusing the existing logic** (which is largely correct) but eliminating:
+- `std::mutex`, `std::condition_variable`, `std::thread`, `std::future` — replaced by scheduler primitives (see 17.1.6).
+- `std::vector`, `std::deque`, `std::string`, `std::filesystem` — replaced by `ke_allocator` + raw arrays + char buffers.
+- `toml++` — replaced by a C TOML library (choice deferred to phase C; tomlc99 is the leading candidate, MIT, single-file).
+- Anonymous namespaces — replaced by `static` functions.
+- `new` / `delete` — replaced by `ke_allocator`.
+
+Move to `src/c/framework/src/`. Drops `src/cpp/framework/` entirely.
+
+Why C: framework is a C-ABI plugin. Its public surface is C. Its implementation pretending to be C++ is gratuitous — it just makes the binary larger, harder to bind to other languages (Lua / future LOLCODE want C symbols, not C++ name-mangled ones, even if `extern "C"` works at the create boundary), and invites STL contagion across the codebase.
+
+#### 17.1.5 No `InternalsVisibleTo`
+
+Banned. Cross-binding access uses public `Native` pointers, precedent `Allocator.Native` (which is `public ke_allocator*`). Existing entries in `KernelEngine.Ecs.Flecs.csproj`, `KernelEngine.Runtime.csproj`, `KernelEngine.Kernel.csproj` are debt; each requires inspection of every internal member the friend was using, promotion to public, then removal of the entry. Phase E handles this.
+
+#### 17.1.6 No mutex / condvar / std::thread in framework — scheduler does sync
+
+`std::mutex` + `std::condition_variable` in `resource_queue.cpp` is the canonical wrong: it reinvented a Future on top of the standard library while the kernel ships `ke_task_scheduler` with `wait_for_task` already. Two replacement patterns suffice for everything the current code does:
+
+1. **Async completion (Future-like)**: submit the work as a task to `ke_task_scheduler`; caller polls or blocks via `ke_task_scheduler->wait_for_task(handle)`. Zero mutex.
+2. **Producer-consumer ordering**: register producer in phase N, consumer in phase N+1; the runtime guarantees barrier between phases. Zero queue synchronization.
+
+The threading rule applies to **every plugin written from now on**, not just framework. The existing kernel threading primitives (`ke_semaphore`, `ke_frame_sync`, `KeFrameSync`) are themselves slated for deletion in Z6 — the scheduler is the synchronization layer.
+
+#### 17.1.7 Managed naming: `World` (aggregator) + `SceneTree` (wrapper)
+
+C# Framework exposes:
+- **`World`** — wrapper of `ke_world*`. The user-facing aggregator. Owns `Ecs` + `Runtime` + `SceneTree` accessors. `public ke_world* Native` (precedent: `Allocator.Native`). Multi-world = `new World(...)` multiple times.
+- **`SceneTree`** — wrapper of `ke_scene_tree*`. The scene-graph API (`AddNode`, `DestroyNode`, `Find`, traversal). Lives inside a `World`; `world.SceneTree` exposes it.
+
+The class I wrote during R6 as `Tree` (managed scene-graph + per-tree ECS + behaviors + labels registry) is **deleted**. Its responsibilities go either to `SceneTree` (the parts that wrap `ke_scene_tree`) or to `World` (the parts that aggregate the world's pieces).
+
+"Tree==World" from the original §17.1 is reformulated: **World is the unit of isolation; SceneTree is the part of a World you talk to most**. Multi-world = multi-World. The earlier formulation "Tree owns its own IEcs" was correct in spirit but wrong in placement — that ownership is World's, not SceneTree's.
+
+### 17.2 Phase plan
+
+Each phase is one atomic commit (occasionally two if the diff is too big for one review), validated before the next starts. The user reviews and approves each phase boundary before proceeding.
+
+#### 17.2.A1 — Native framework headers under `kernel/framework/`
+
+Move `src/c/kernel/include/kernel_engine/framework/*.h` → `src/c/kernel/include/kernel_engine/kernel/framework/*.h`. Update every `#include` in native source and bindings. Keep `framework_export.h` (the dllexport macro is still needed because framework is a plugin); just move its location too.
+
+**Validation**: full native build green; existing native tests pass.
+
+#### 17.2.A2 — Plugin create headers move to plugin-include
+
+Three concurrent moves (one commit because they're symmetrical changes):
+- `src/c/kernel/include/kernel_engine/kernel/runtime/runtime_create.h` → `src/c/runtime/include/kernel_engine/runtime/runtime_create.h`. Update C# Runtime binding's clang-sharp .rsp.
+- `src/c/kernel/include/kernel_engine/kernel/world/ke_ecs_flecs.h` → `src/c/ecs/flecs/include/kernel_engine/world/ke_ecs_flecs.h`. Update C# Ecs.Flecs binding's .rsp.
+- `src/c/kernel/include/kernel_engine/kernel/framework/<header>.h` per file: split vtable+types (stays in `kernel/framework/`) from create function (moves to `src/c/framework/include/kernel_engine/framework/<x>_create.h`).
+
+For each moved create header, mirror in the corresponding C# binding's `.rsp` (precedent: bgfx_render binding `.rsp`).
+
+**Validation**: native build green, native tests pass, all C# bindings rebuild.
+
+#### 17.2.A3 — `KernelEngine.Runtime` csproj structure
+
+Decision deferred to this phase whether to (a) fold `KernelEngine.Runtime` into `KernelEngine.Framework` as a sub-namespace, or (b) keep it as a separate csproj that Framework depends on. The native side is "runtime is a separate plugin", so (b) mirrors more honestly. Lean (b) unless ergonomics suffer.
+
+ClangSharp regen for both Runtime + Framework + Ecs.Flecs bindings to pick up the new header locations.
+
+**Validation**: C# build green, examples 00_runtime_minimal + 01_runtime_clear_color still run.
+
+#### 17.2.B0 — Delete legacy `kernel/world/` AND rename the folder/namespace
+
+User-explicit safety constraint (2026-06-12): the new `ke_world` aggregator (B2) must NEVER coexist in the tree with the legacy `ke_world`. Even momentarily. The repo never holds two `world.h` files. Therefore B0 not only deletes the legacy symbols but **also renames the kernel folder + namespace away from the word "world"** so the future framework `world.h` lives in a different namespace from anything that ever existed in kernel.
+
+Rename target: `kernel/world/` → **`kernel/ecs/`**. Reflects what's left in the folder after deletions (the `ke_ecs` storage contract). The kernel side now has zero "world" reference; "world" exclusively becomes a framework concept (B2).
+
+Inventory pass on `src/c/kernel/include/kernel_engine/kernel/world/` + `src/c/kernel/src/world/`:
+
+| File | Status | Action |
+|---|---|---|
+| `ke_ecs.h` | New contract (alive) | **Move** to `kernel/ecs/ke_ecs.h`. Update every consumer's `#include`. |
+| `ke_ecs_flecs.h` | Plugin create (alive, wrong location) | Moved by A2 to `src/c/ecs/flecs/include/kernel_engine/world/ke_ecs_flecs.h`. Reconsider that destination too — if "world" is being purged from kernel, the plugin namespace also shifts to `kernel_engine/ecs/`. Update accordingly. |
+| `components.h` | TBD — inspect content | Audit: if it defines POD components shared across new framework, decide whether they live under `kernel/ecs/components.h` (storage-adjacent) or move into framework. If legacy registry fields, delete. |
+| `world.h` (legacy `ke_world`) | Dead | **Delete** |
+| `ecs.h` (legacy `ke_ecs_registry` sparse-set) | Dead | **Delete** |
+| `system.h` (legacy `ke_system`) | Dead | **Delete** |
+| `variant.h` (legacy `ke_variant`) | Dead | **Delete** |
+| `component_field.h` (legacy field descriptors) | Dead | **Delete** |
+| `src/c/kernel/src/world/ecs.c` (legacy impl, 407 lines) | Dead | **Delete** |
+| `src/c/kernel/src/world/world.c` (legacy impl, 372 lines) | Dead | **Delete** |
+| `src/c/kernel/src/world/` (folder, empty after deletes) | — | **Delete** folder; if `ke_ecs.h` impl survives somewhere on the kernel side it lives under `src/c/kernel/src/ecs/`. |
+
+Cascade: grep every consumer of `world.h`, `ecs.h` (legacy), `system.h`, `variant.h`, `component_field.h`. Native framework `.cpp` files DO consume them today (they all take `ke_world*`); they break temporarily. Bindings `.rsp` files that reference the renamed paths break. Both are accepted as expected breakage that B1 + the path-rename sweep fix.
+
+**Validation**: native build green AFTER B1 has rewritten the framework contracts against the renamed namespace. B0 alone is a build-broken intermediate state. In practice B0 + B1 land together as one commit (or two tightly sequenced commits where the second is "fix consumers").
+
+**Safety invariant after B0+B1 lands**: the string `ke_world` does NOT appear anywhere in the tree. When B2 reintroduces `ke_world` (as a NEW framework-plugin aggregator), the tree's only "world" is the new one. No accidental cross-pollination possible.
+
+#### 17.2.B1 — Contract review: native framework headers redesigned for V2
+
+NOT a parameter swap. Each header in `kernel/framework/` is reviewed end-to-end:
+
+For each header:
+1. Inspect the current contract (vtable methods, params, lifecycle).
+2. Cross-reference with the corresponding R6 managed equivalent (if I built one — e.g. my `SceneLoader.cs` against `scene_loader.h`).
+3. Cross-reference with how the existing cpp uses the contract internally (what it actually depends on vs. what's accidental).
+4. Apply the doctrine: opaque handles only; system registration through `ke_runtime`; component access through `ke_system_ctx`; no `ke_world` parameters because the new model has no ke_world struct (the new `ke_world` aggregator in framework plugin is just a holder; framework primitives like scene_tree don't depend on it).
+5. Write the revised contract.
+
+The redesign per header may keep the vtable shape, may narrow it, may widen it, may collapse the whole header into a register-helper if the V2 model makes the vtable unnecessary. Each decision is recorded in the commit message + a one-line entry in this section once the phase commits.
+
+Affected headers (the audit will find any I missed):
+- `scene_tree.h` — vtable likely stays close to current; create takes `ke_ecs*` instead of `ke_world*`; `destroy_all` lifecycle reviewed against tree teardown semantics in R6 managed.
+- `scene_loader.h` — review against R6 managed `SceneLoader`. Decide: returns passive scene description (legacy shape), or directly drives `ke_scene_tree` + registers systems (managed-style)? Open.
+- `*_render_system.h` family — strongly suspect these collapse to register-helpers (no opaque vtable, just `ke_camera_render_system_register(runtime, ecs)` etc.) because R6 managed contributors were stateless functions that read ECS + write packet, and that pattern doesn't need a vtable. To confirm.
+- `input_actions.h` — substantial existing impl (143 blocos). Review per-method whether actions are queried directly (current shape) or whether they fit into the runtime's input phase as system-injected resources.
+- `resource_cache.h`, `resource_queue.h` — review against R6 managed `PongResources`-style and the broader Resources concept (originally §17 morning point 2; now folded into the wrapper design).
+- `mesh_asset_system.h`, `asset_resolver.h`, `material_file.h`, `mesh_shape.h` — review against R6 managed `ModelExtensions.cs` and the asset-loading path that Pong + example 12 + 13 exercise.
+
+**Validation**: native build green after B1 + B2 + the start of C land together (the contracts change requires the new `ke_world` aggregator + at least one C impl to be useful).
+
+In practice B1 contracts are written first, B2 lands the aggregator, then C implementations roll out per file, with the native build broken until enough of C lands to satisfy the test suite.
+
+#### 17.2.B2 — New `ke_world` aggregator in framework plugin
+
+Introduce `src/c/framework/include/kernel_engine/framework/world.h` (contract — opaque `ke_world` + accessors) and the create header `src/c/framework/include/kernel_engine/framework/world_create.h` (or fold into `world.h` if precedent does the same). Impl: `src/c/framework/src/world.c` (pure C from day one).
+
+`ke_world_create` takes `(alloc, task_scheduler, ecs, &out_world)`. Internally creates the runtime + scene_tree on top of the ecs. Owns them.
+
+Add at least one native integration test that:
+- Creates two worlds in the same process.
+- Spawns an entity in each.
+- Confirms they don't see each other's entities.
+- Destroys one; the other keeps working.
+
+**Validation**: native test multi-world passes.
+
+#### 17.2.C — Framework plugin implementation in C, built against B1's revised contracts
+
+Each file in the new `src/c/framework/src/` is written from scratch (not translated from cpp), implementing the contract revised in B1, **synthesizing logic from three sources**:
+
+1. **The R6 managed file** (the V2-compatible shape — e.g. my `KernelEngine.Framework.SceneLoader.cs` against the new `scene_loader.h`).
+2. **The legacy cpp file in `src/cpp/framework/src/`** (lower-level mechanics — path resolution, TOML parsing details, file format specifics, etc.).
+3. **The doctrine** (17.1: no STL, no mutex, scheduler-based sync, `ke_allocator` for memory, public Native pattern, C-only).
+
+For each file, the plan documents:
+1. Which existing sources contribute what (managed shape vs cpp mechanics vs new doctrine pieces).
+2. STL/std elements being replaced and with what (the substitutions table from 17.1.4 + 17.1.6).
+3. TOML parser swap (where applicable): `toml++` → C TOML lib chosen at start of phase (tomlc99 leading candidate).
+4. Lifecycle hooks against the revised contract.
+5. Final destination: `src/c/framework/src/<name>.c`.
+
+Audit order (smallest to biggest, to build confidence):
+- `material_file.cpp` (7 blocos)
+- `asset_resolver.cpp` (~18 blocos)
+- `camera_render_system.cpp` (~18 blocos)
+- `mesh_render_system.cpp` (~13 blocos)
+- `mesh_asset_system.cpp` (~20 blocos)
+- `light_render_system.cpp` (~32 blocos)
+- `mesh_shape.cpp` (TBD)
+- `scene_loader.cpp` (~83 blocos — substantial)
+- `resource_queue.cpp` (mid-size, but has the std::mutex / Future to redesign first)
+- `input_actions.cpp` (~143 blocos — biggest, TOML-heavy)
+
+Each rewrite is a commit. Each commit validates the corresponding native test slice.
+
+`src/cpp/framework/` folder is deleted at the end of phase C.
+
+**Validation**: native build green, all native tests pass, the file `scene_tree.c` + `resource_cache.c` continue to work unchanged (precedent files that the rewrite mimics).
+
+#### 17.2.D — Managed wrappers replace R6-era managed implementations
+
+Order: smallest dependency cone first.
+
+- **D1**: `KernelEngine.Framework.World` wrapper of `ke_world*`. `KernelEngine.Framework.SceneTree` wrapper of `ke_scene_tree*`. Replaces my `Tree` class.
+- **D2**: `KernelEngine.Framework.SceneLoader` wrapper of `ke_scene_loader*`. Replaces my managed scene loader.
+- **D3**: `KernelEngine.Framework.InputActions` wrapper of `ke_input_actions*`. Replaces my managed `InputActionMap`.
+- **D4**: render system wrappers (`CameraRenderSystem`, `LightRenderSystem`, `MeshRenderSystem` — wrappers that register the native systems with the world's runtime). Replaces my `IFrameContributor` family.
+- **D5**: resource cache, mesh asset system, asset resolver, material file wrappers. Replaces my `ModelExtensions`, `PongResources`-style classes.
+
+Each replaces the corresponding R6-era managed class, validated end-to-end against the example suite (00–16 + Pong).
+
+After each Dn, the corresponding R6 managed file in `KernelEngine.Framework/` is deleted.
+
+**Validation per Dn**: examples + Pong continue to render and behave identically.
+
+#### 17.2.E — Cleanup the R6 abstractions mess
+
+- Delete `IEcsFactory` from `KernelEngine.Kernel.Abstractions`.
+- Delete `IntPtr NativeHandle` from `IEcs`.
+- Promote `FlecsEcs.Native` from internal to public (precedent: `Allocator.Native`).
+- Drop `InternalsVisibleTo` entries from `KernelEngine.Ecs.Flecs.csproj`, `KernelEngine.Runtime.csproj`, `KernelEngine.Kernel.csproj` (one inspection pass per entry: confirm no internal access remains).
+- Update examples 00–16 + Pong: stop registering `IEcsFactory`. Instead register `FlecsEcs` directly + create World composing it.
+
+**Validation**: full solution build, every example + Pong rebuilt and ran.
+
+#### 17.2.F — Font / Label native completion + final validation
+
+Font / Label have no native equivalent today. R6 shipped a managed `Font` + `Label` + `LabelContributor` because UI/text is debt on the native side.
+
+Per user direction (2026-06-12): Font/Label IS part of the runtime V2 task, but lands LAST within the arc. Concretely:
+- Native: `ke_font` + `ke_label` in framework plugin (or equivalent named scheme matching scene_tree precedent).
+- C# wrappers replace my managed Font/Label/LabelContributor.
+- Pong + example 14 + 15 + 16 keep working visually.
+
+Final validation pass: smoke visual every example + Pong. Full test suite. Native + C# coverage report. Merge-ready.
+
+### 17.3 Doctrine writeups (memory + global rules created during this arc)
+
+- `feedback_search_precedents_before_inventing.md` — top-of-mind project rule. Every structural decision starts with "find an existing example in the repo".
+- `feedback_no_internals_visible_to.md` — `InternalsVisibleTo` banned. Public `Native` pointer is the precedent.
+- `feedback_consult_legacy_before_rewriting.md` — preceded this arc, applies fully here.
+- `project_tree_equals_world_doctrine.md` — superseded by 17.1.1 + 17.1.7 in this section. Memory file kept as history.
+
+### 17.4 What was originally on the punch list (folded in)
+
+- **Original 17.1 Tree==World** → folded into 17.1.1 (native World) + 17.1.7 (managed naming).
+- **Original 17.2 Resources** → folded into D phases (Resources are how D4/D5 expose materials, fonts, cross-script refs).
+- **Original 17.3 Module conversion** → folded into the wrapper redesigns in D + E (composition style is uniform IRuntimeModule once wrappers settle).
+- **Original 17.4 Pong cleanup** (Ball.Position, Wall.Scale, Tree.Find) → folded into D-phase validation (the cleanups become bugs that show up when D wrappers replace the R6 versions, and the rewrite makes the right behavior natural).
+
+### 17.5 What's NOT in this merge arc (explicit non-goals)
+
+- §15 NodeBehavior codegen — manual surface ships in V1; codegen is post-merge.
+- Tier Z6 (FramePacket bridge replacement + threading/FrameSync deletion) — V2-render territory, lands after V1 merge.
 - Render core breakup (PBR-as-plugin, L3-L7 doctrine) — V2-render.
-- Multi-window / multi-camera — not unblocked by 17.1, but not in scope.
-- `Tree.Find` as an API — kept as escape hatch even after 17.2 lands; just not used as the default.
+- Multi-window / multi-camera — not unblocked by 17.1; deferred.
+- `Tree.Find` (now `SceneTree.Find`) — kept as escape hatch; not used as the default after D phases land.
+- Folder rename `kernel/world/` → `kernel/ecs/` — cosmetic, can defer post-merge.
