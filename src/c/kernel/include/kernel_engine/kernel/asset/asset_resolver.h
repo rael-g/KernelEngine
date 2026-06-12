@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_H_
-#define KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_H_
+#ifndef KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
+#define KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
 
 // ke_asset_resolver — maps res:// (and absolute) paths to typed CPU-side asset
 // data using injected loader plugins. Part of item 3 of the Tier S scripting
@@ -18,8 +18,8 @@
 // resolver dispatches based on file extension.
 
 #include <kernel_engine/kernel/framework/framework_export.h>
-#include <kernel_engine/kernel/framework/material_file.h>
-#include <kernel_engine/kernel/framework/mesh_shape.h>
+#include <kernel_engine/kernel/framework/material_file.h>  // TODO C-phase: drop framework dep; resolve_material moves out
+#include <kernel_engine/kernel/asset/mesh_shape.h>
 #include <kernel_engine/kernel/asset/image_loader.h>
 #include <kernel_engine/kernel/asset/mesh_data.h>
 #include <kernel_engine/kernel/common/error.h>

@@ -3,7 +3,7 @@
 // stb_image or any other concrete plugin); a future model-loader injection
 // will round out resolve_mesh for .gltf/.fbx/.obj files.
 
-#include <kernel_engine/kernel/framework/asset_resolver.h>
+#include <kernel_engine/kernel/asset/asset_resolver.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
 
 #include <algorithm>

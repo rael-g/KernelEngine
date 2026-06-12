@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/framework/asset_resolver.h>
+#include <kernel_engine/kernel/asset/asset_resolver.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/kernel/asset/image_loader.h>
 #include <kernel_engine/kernel/asset/mesh_data.h>

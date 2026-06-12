@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_MESH_SHAPE_H_
-#define KERNEL_ENGINE_FRAMEWORK_MESH_SHAPE_H_
+#ifndef KERNEL_ENGINE_ASSET_MESH_SHAPE_H_
+#define KERNEL_ENGINE_ASSET_MESH_SHAPE_H_
 
 // ke_mesh_shape — common mesh primitives baked as CPU-side vertex/index
 // buffers (Tier S — item 3 partial). Used by the asset resolver and by

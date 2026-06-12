@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_H_
-#define KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_H_
+#ifndef KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
+#define KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 
 // ke_resource_cache — language-agnostic resource lifecycle contract (Tier S — S6).
 //
@@ -10,7 +10,6 @@
 // Caching (path → handle) is also provided so multiple callers loading the same asset
 // (e.g. Pong and a Lua menu loading the same texture) share a single GPU upload.
 
-#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/context/types.h>

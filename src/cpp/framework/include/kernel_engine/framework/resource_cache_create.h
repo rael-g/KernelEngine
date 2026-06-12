@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_CREATE_H_
 
-#include <kernel_engine/kernel/framework/resource_cache.h>
+#include <kernel_engine/kernel/resource_cache/resource_cache.h>
 
 #ifdef __cplusplus
 extern "C"

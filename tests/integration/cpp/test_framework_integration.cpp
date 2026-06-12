@@ -106,7 +106,7 @@ TEST_F(FrameworkIntegrationTest, CameraSystem_Update_Works) {
     ke_camera_render_system_destroy(sys);
 }
 
-#include <kernel_engine/kernel/framework/mesh_shape.h>
+#include <kernel_engine/kernel/asset/mesh_shape.h>
 
 TEST_F(FrameworkIntegrationTest, MeshShape_Bake_ReturnsOom_WhenAllocFails) {
     ke_allocator fa{};

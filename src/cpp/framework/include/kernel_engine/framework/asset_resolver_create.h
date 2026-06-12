@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
 
-#include <kernel_engine/kernel/framework/asset_resolver.h>
+#include <kernel_engine/kernel/asset/asset_resolver.h>
 
 #ifdef __cplusplus
 extern "C"
