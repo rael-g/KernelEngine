@@ -1,8 +1,10 @@
 # Render Architecture V2 — utopian renderer layered on a WebGPU-style core
 
-**Status**: Draft for discussion. No production code lands until this doc reaches "Accepted".
+**Status**: Accepted at design level (2026-06). Implementation lands per §10's G-phase plan, parallel to the existing `KernelEngine.Render.Bgfx` renderer.
 **Audience**: Engine maintainer + future render plugin authors + game devs writing custom shaders/passes.
-**Companion doc**: [`RuntimeArchitectureV2.md`](RuntimeArchitectureV2.md) — defines `ke_runtime`, the scheduler that drives this renderer.
+**Companion doc**: [`RuntimeArchitectureV2.md`](RuntimeArchitectureV2.md) — defines `ke_runtime` (the scheduler), `ke_ecs` (storage), `ke_world` (framework aggregator), `components.h` (the component vocabulary the renderer reads), §16 (per-component snapshot pipelining), and §17 (the V1 merge arc that already deleted the LEGACY `*_render_system.cpp` extract path frame_packet relied on).
+
+**Integration model — the short version**: the renderer is a runtime **Module** that pins its passes to a worker named `ke.render` and reads `Camera`/`Light`/`Mesh` components straight from `ke_ecs` via `ke_system_ctx`. There is no extract phase that writes a frame packet; once R6 wires up the per-component snapshot back-buffer (§16 of the runtime doc), render passes read the snapshot side while sim writes the live side. Pre-R6 transitional state runs sim and render serially on the same world — no pipelining, no separate handoff buffer. Frame packet is **not part of the V2 contract**.
 
 ---
 
@@ -543,6 +545,8 @@ The change V2 brings: each render-graph pass is built using the **L5 mid-level h
 
 No render-graph API change. Pure internal refactor of pass implementations.
 
+**Integration with runtime**: each render-graph pass is registered as a runtime system (see §9) pinned to the `ke.render` worker. The pass reads its input from `ke_ecs` via `ke_system_ctx` (camera/light/mesh components by cid), the graph resolves attachment+barrier dependencies, the L5 helpers handle the device-side recording. Post-R6, those `ke_system_ctx` reads route to the per-component snapshot back buffer automatically (§16 of the runtime doc); pre-R6, they read the live storage and sim/render run serially.
+
 ---
 
 ## 8. Shader pipeline — Slang as canonical source
@@ -591,14 +595,53 @@ Engine's `ke_spatial.slang` declares the main entry point parameterized over `IM
 
 ## 9. Threading + runtime integration
 
-`KernelEngine.Render.Modern` is a **Module** in the V2 runtime sense (see [`RuntimeArchitectureV2.md`](RuntimeArchitectureV2.md)):
+`KernelEngine.Render.Modern` is a **runtime Module** (`IRuntimeModule` in C#, `ke_runtime_module_params` at the C ABI). The same shape `KernelEngine.Render.Bgfx` already uses today in `01_runtime_clear_color` and onward — the V2 renderer doesn't invent a new integration pattern; it slots into the one that's locked.
 
-- Registers components: `MeshComponent`, `MaterialComponent`, `CameraComponent`, `LightComponent`, etc. (likely sharing definitions with current `KernelEngine.Render.Bgfx` module).
-- Registers systems: `MeshRenderSystem`, `ShadowExtractSystem`, etc. — all in `KE_PHASE_EXTRACT`. They read sim state, write the `FramePacket` resource.
-- Owns the **render thread** internally. When the runtime fires the post-Extract signal, the render-thread side wakes, calls the L5/L6 stack, and submits.
-- Worker-thread work (asset upload, PSO compile, shader hot reload) goes through the shared `ke_task_scheduler` pool — same as everything else.
+### 9.1 What the render module does NOT own
 
-There is **no** sim-thread call into `ke_gpu_device`. Game code touches `Material`, `Mesh`, `Texture` (engine wrappers around handles, refcounted, sim-safe). Render thread touches the device. The boundary is the FramePacket.
+- **Component vocabulary**. `ke_camera_component`, `ke_directional_light_component`, `ke_point_light_component`, `ke_spot_light_component`, `ke_mesh_component` are declared in `kernel/framework/components.h` and registered in the ecs by the framework's `ke_world_create` (or by an alternative framework — anyone shipping their own). The renderer **reads** these components; it does not declare them.
+- **Entity lifecycle**. Scene tree owns entities (per `RuntimeArchitectureV2.md` §17.1). The renderer queries existing entities; it never spawns or destroys.
+- **Scheduling**. The runtime owns phase ordering, wave building, dispatch. The renderer declares its systems' phase + access list + thread pinning and lets the scheduler call back when it's time.
+- **A separate render thread of its own making**. There is no `std::thread` inside the render module. The scheduler's enki worker pool is the only source of parallelism in the engine (per `RuntimeArchitectureV2.md` §8.4). The render module pins its systems to a worker named `ke.render`, and that's the entirety of its threading contract.
+
+### 9.2 What the render module DOES own
+
+- **`ke_gpu_device` instance**. Created at module `on_load`, destroyed at `on_unload`. The Device + Queue + the PipelineCache + the ResourceUploader's staging ring live here. Lifetime = module lifetime.
+- **The render-graph passes** declared as runtime systems. Each pass is one `register_system` call with:
+  - `phase = KE_PHASE_UPDATE` (or `KE_PHASE_POST_UPDATE`; the renderer is the consumer-side phase, post-sim)
+  - `pinned_thread = <index-of-"ke.render">`
+  - `access_list` declaring the components it reads (Camera, Mesh, Light, etc. by cid)
+  - `execute` callback that records draws via the L5 helpers
+- **PSO compilation, shader hot reload, asset upload kickoff**. All dispatched to the shared `ke_task_scheduler` pool from inside pass execute bodies — same worker pool everything else uses.
+
+### 9.3 The component-snapshot boundary (R6+)
+
+The transition is locked in `RuntimeArchitectureV2.md` §16. Restated here because it's the central piece of how render integrates with sim:
+
+- Sim systems (game logic) run in `PreUpdate`/`Update`/`PostUpdate`. They write `Transform`, `Mesh`, `Camera`, `Light` components on the **live** side of the ecs storage.
+- Render systems run in `Update`/`PostUpdate` (post-R6, can also pipeline as `Extract`-equivalent). The scheduler infers from each render system's `access_list` that its component reads should route to the **snapshot** side (the double-buffered back copy).
+- At phase boundaries the scheduler atomically rotates the snapshot index. Sim N+1 writes the new live side while render N reads the new snapshot side. No lock, no copy step, no separate "frame packet" object.
+- Inference is automatic: any component touched by a render-phase system gets `KE_COMPONENT_DOUBLE_BUFFERED` set on registration. Components only sim reads/writes stay single-buffered (zero overhead). Escape hatches `[NoDoubleBuffer]` / `[ForceDoubleBuffer]` exist for the rare exception.
+- The L5 helpers don't care which side they're reading. They consume entity + cid via `ke_system_ctx_get` / `_get_mut`; the snapshot routing happens one layer below in the ecs vtable.
+
+### 9.4 Pre-R6 transitional state
+
+R4 (already-shipped runtime scheduler, current branch state) does NOT have the snapshot mechanism. Sim and render run serially: PreUpdate → Update → PostUpdate, with render-phase systems running on the same pinned worker but reading live storage. Single-threaded with respect to the sim/render boundary; the scheduler can still parallelize multiple render passes against each other within the same phase if their write sets are disjoint.
+
+This is functionally correct (render reads finalized sim state) but leaves performance on the table — sim cannot start frame N+1 while render is still on frame N. R6 lights up that pipelining by flipping the snapshot bits as described in §9.3, transparently to the render code written under §9.2.
+
+The corollary worth stating explicitly: **frame_packet does not exist in either state**. The LEGACY `*_render_system.cpp` extract-and-write-packet pattern was deleted in C-phase 4 of the runtime arc (`RuntimeArchitectureV2.md` §17.6.1) precisely because the snapshot model makes it redundant. Render passes read components directly; there is no intermediate per-frame snapshot object. The doc this section replaces previously called frame_packet "stable" — that claim is retracted (see §12).
+
+### 9.5 Hot reload + asset upload threading
+
+- **Shader hot reload**: a filesystem watcher (running on a scheduler worker — not its own thread) detects `.slang` changes, kicks Slang compilation on the same pool, invalidates the affected PSO RAM cache entries. Next render frame, the PSO request hits a miss → Mechanism 1 fallback per §6.
+- **Asset upload**: `ResourceUploader.enqueue_upload(buffer, data, size)` (§5.3) is called from any thread. The uploader's staging ring buffer is the synchronization point; copies into staging happen on whichever scheduler worker takes the queued task. The render-thread-pinned pass then issues the actual GPU copy command on the encoder.
+- **Background PSO compile**: same pool, same submit pattern. The dispatcher does not care which worker compiles the PSO; the result lands in the cache, and the next render frame's PSO lookup finds it.
+
+### 9.6 What game code touches
+
+- Game code touches `Material`, `Mesh`, `Texture` (managed wrappers around opaque handles, refcounted, sim-safe). Setting `meshNode.MeshHandle = ...` writes to `MeshComponent.mesh` in the ecs — that's a sim-side write, picked up next render frame via the snapshot.
+- Game code NEVER touches `ke_gpu_device`. The render-module-owned device handle stays inside `KernelEngine.Render.Modern`. Even custom user render passes (registered as game-side modules) declare component access lists and use the L5 helpers, not the device.
 
 ---
 
@@ -620,6 +663,7 @@ Discussion, revision, until both sides agree.
 - Refactor `core_renderer.cpp` so it has zero direct `gpu_device->` calls outside the abstractions.
 - Zero visual change. All examples + Pong + tests stay green.
 - **This is the most important refactor** — it turns the future device swap from a 3-month job into a contained one.
+- **State at start of G2**: the LEGACY `*_render_system.cpp` extract pipeline is already gone (`RuntimeArchitectureV2.md` §17.6.1 C-phase 4 deleted it). `core_renderer.cpp` no longer has a frame-packet consumer in the middle — it's already a self-contained module that reads ecs components and submits draws. G2's job is purely the L4/L5 abstraction extraction; the integration shape is settled.
 
 ### Phase G3 — `ke_gpu_device` promoted to kernel C ABI (1-2 sessions)
 - Move `gpu_device.hpp` (current C++ class) to `src/c/kernel/include/kernel_engine/kernel/render/gpu_device.h` as a C vtable struct.
@@ -688,29 +732,34 @@ Culling is **not** a hardcoded pipeline stage. It's a **set of optional render-g
 ### 11.1 The flow
 
 ```
-EXTRACT PHASE (sim-side):
-    publish ALL potentially-renderable entities to frame packet —
-    no filtering. (mesh handle, material handle, world transform,
-    world AABB, lod_group_id, layer_mask, ...)
+SIM PHASES (sim-side, no special "extract" — there is none):
+    write Transform, Mesh, Material, AABB, lod_group_id, layer_mask
+    components onto entities as game state. That's it.
 
-RENDER GRAPH (passes, composable):
+RENDER PHASE (pinned to ke.render worker, reads via snapshot post-R6):
     ┌─ FrustumCullPass          (engine built-in)
-    │      input:  full entity list + camera frustum
-    │      output: visible_list_a
-    │      first impl: CPU SIMD on render thread (~5-10 ns / entity)
+    │      access_list: Transform READ, MeshAabb READ, Camera READ;
+    │                   VisibleSet WRITE (resource — a flat array
+    │                   of visible entity IDs filled per camera)
+    │      first impl: CPU SIMD walking the snapshot Transform+AABB
+    │                  columns (~5-10 ns / entity)
     │      G7+ impl: compute shader variant for huge scenes
     │
     ├─ OcclusionCullPass        (engine built-in — Hi-Z based)
-    │      input:  visible_list_a + Hi-Z mipchain (from prev frame depth)
-    │      output: visible_list_b
+    │      access_list: VisibleSet READ/WRITE, Hi-Z texture binding
+    │                   (from prev frame depth)
     │      compute shader; ~50 µs for ~100K entities on a mid GPU
     │
     ├─ [USER PASSES — opt-in]
     │      PortalCullPass, RoomCullPass, custom LOD selector, ...
     │      User registers between built-ins or replaces them entirely.
     │
-    └─ DrawPass(es)             (consume final visible list)
+    └─ DrawPass(es)             (consume final VisibleSet + read
+                                 MeshComponent/MaterialComponent via
+                                 snapshot to issue draws)
 ```
+
+The thing that's gone vs the original draft: **no "publish all entities to frame packet" step**. There is no frame packet. Cull passes read the components they need straight from the ecs snapshot back-buffer (post-R6) or the live storage (pre-R6 transitional). The "full entity list" is a snapshot column iteration, not a per-frame copied list.
 
 ### 11.2 Why this matters architecturally
 
@@ -718,7 +767,7 @@ RENDER GRAPH (passes, composable):
 
 2. **Hi-Z is shared infrastructure** — the depth pyramid that `OcclusionCullPass` consumes is the same pyramid that TAA, SSAO, SSR consume. Built once at the start of the frame's depth-aware passes; cached for the rest. Pass authoring sees it as a graph dependency, not a special case.
 
-3. **GPU-driven culling is the same architecture, just bigger** — when `[F.RC1]` GPU instancing lands, `OcclusionCullPass` evolves: instead of emitting a CPU list, it emits an **indirect draw buffer** that downstream draws consume. Same node in the render graph; different output buffer kind. No architectural rework.
+3. **GPU-driven culling is the same architecture, just bigger** — when `[F.RC1]` GPU instancing lands, `OcclusionCullPass` evolves: instead of writing the `VisibleSet` resource as a CPU list, it writes an **indirect draw buffer** in GPU memory that downstream draws consume directly. Same node in the render graph; different output buffer kind. No architectural rework.
 
 4. **Mods/users extend without forking** — same doctrine as everything else: layered abstractions + register, never replace. A game-specific cull strategy ships as another plugin's render-graph pass.
 
@@ -737,11 +786,12 @@ RENDER GRAPH (passes, composable):
 
 ## 12. What V2 explicitly does NOT change (non-goals)
 
-- **`ke_render` vtable** stays mostly as-is at L7. Modern renderer implements the same vtable; game code calling `renderer->submit_mesh()` doesn't care which renderer is wired.
+- **`ke_render` vtable** stays mostly as-is at L7 for the imperative `submit_mesh`/`submit_skybox` slots game code calls (legacy entry points retained for compatibility). Modern renderer implements the same vtable so swap is transparent. The modern preferred path, however, is "set the component, let the render module's passes pick it up" — `submit_mesh` becomes an escape hatch, not the main road.
 - **`Material` / `Mesh` / `Texture` C# wrappers** stay. Refcounting, handle types, etc. preserved.
 - **Render graph contract** — already shipped, used as-is.
-- **Frame packet contract** — unchanged. The boundary is stable.
+- ~~Frame packet contract — unchanged. The boundary is stable.~~ → **Retracted**. Frame packet was the boundary in the original V2 draft; the runtime architecture work (`RuntimeArchitectureV2.md` §16, §17.6.1 C-phase 4) replaced it with per-component snapshot before this doc reached "Accepted". Modern renderer never reads or writes a frame packet object; it reads components via `ke_system_ctx` and the snapshot routing happens inside the ecs vtable.
 - **bgfx renderer** stays alive until full V2 parity. Not a single line touched during G3-G6.
+- **Component vocabulary** — Modern renderer does NOT redeclare `Camera`/`Light`/`Mesh` components. It reads the framework's definitions from `kernel/framework/components.h`, exactly like the Bgfx renderer does today. A different framework on top of this kernel can declare a different vocabulary; the Modern renderer's job is to read whatever the registered framework decides to ship.
 
 ---
 
@@ -768,9 +818,10 @@ RENDER GRAPH (passes, composable):
 
 ## 15. Status & next actions
 
-- [ ] User reviews this doc + `RuntimeArchitectureV2.md` together (they're a pair).
-- [ ] Lock the §4 C ABI signatures. Anything ambiguous gets pinned before G1.
-- [ ] **Sequence start with G1 (Slang spike)** — independent of the runtime work, can run in parallel with R1.
+- [x] User reviewed this doc + `RuntimeArchitectureV2.md` together (paired during the 2026-06 V1 merge arc).
+- [x] §9 + §11 + §12 reconciled with `RuntimeArchitectureV2.md` §16 (per-component snapshot) and §17.6 (LEGACY render systems deleted in C-phase 4, frame_packet abandoned). The boundary contract is component snapshot, not frame packet.
+- [ ] Lock §4 C ABI signatures. Anything ambiguous gets pinned before G1.
+- [ ] **Sequence start with G1 (Slang spike)** — independent of the runtime work, can run in parallel with the rest of the V1 merge arc.
 - [ ] G2 (extract mid-level abstractions in current code) is the most valuable single piece of work in this doc. Do it even if V2 never ships — it pays back the next time we touch the renderer for any reason.
 
-**This doc is the contract.** When G3 ships, every word in §3 + §4 + §5 should match the code or this doc gets revised.
+**This doc is the contract.** When G3 ships, every word in §3 + §4 + §5 should match the code or this doc gets revised. §9 + §11 + §12 are already aligned with the runtime contracts that landed in branch `feat/runtime-v2`; the Modern renderer slots in as a runtime Module on that foundation, no extra glue layer.
