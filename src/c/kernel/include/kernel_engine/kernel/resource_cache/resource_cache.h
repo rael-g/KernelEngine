@@ -1,20 +1,27 @@
 #ifndef KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 #define KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 
-// ke_resource_cache — language-agnostic resource lifecycle contract (Tier S — S6).
+// ke_resource_cache — generic T-erased refcount + path-keyed dedup cache.
 //
-// GPU resource handles are plain uint32_t values (ke_resource_handle). Any language binding
-// that creates a resource registers it here; other bindings (Lua, C++, C#) can then
-// retain/release the same resource through this contract without re-implementing ref-counting.
+// Each subsystem (mesh asset, font, audio buffers, shadow maps, ...) creates
+// its OWN cache instance with a `destroy_fn` matching the subsystem's resource
+// kind. The cache itself stores opaque uint32_t handles and never inspects
+// what they point to. Cross-thread access is the caller's responsibility —
+// the cache is single-threaded inside; subsystems that must dispatch from
+// other threads go through the task scheduler before touching it.
 //
-// Caching (path → handle) is also provided so multiple callers loading the same asset
-// (e.g. Pong and a Lua menu loading the same texture) share a single GPU upload.
+// Decisions vs. legacy framework version (locked B1 Tier 1):
+//   - destroy_fn is per-cache (set at create time), not per-register call.
+//   - cache_insert returns ke_result (errors on duplicate key) instead of
+//     silently overwriting.
+//   - Lives in the kernel domain (`kernel/resource_cache/`) rather than
+//     framework — this is a primitive, not a framework opinion.
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/context/types.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -25,8 +32,16 @@ extern "C"
 
 #define KE_RESOURCE_HANDLE_NONE UINT32_MAX
 
-    // Called when the reference count reaches zero; the implementation must free the GPU resource.
+    /// Per-cache destroy callback: called once per resource when its refcount
+    /// reaches zero (or once during destroy() for every still-live resource).
     typedef void (*ke_resource_destroy_func)(ke_resource_handle handle, void *ctx);
+
+    typedef struct ke_resource_cache_params
+    {
+        ke_allocator             *allocator;     ///< borrowed
+        ke_resource_destroy_func  destroy_fn;    ///< invoked on refcount → 0 (and on destroy of still-live entries); may be NULL
+        void                     *destroy_ctx;   ///< forwarded to destroy_fn unchanged
+    } ke_resource_cache_params;
 
     typedef struct ke_resource_cache
     {
@@ -34,17 +49,16 @@ extern "C"
 
         // ── Lifetime ──────────────────────────────────────────────────────────
 
-        /// Registers a new resource with refcount = 1. destroy_fn is called (on the renderer thread)
-        /// when the count reaches zero. Returns KE_ERROR_INVALID_ARGUMENT if handle == KE_RESOURCE_HANDLE_NONE.
+        /// Registers a new resource with refcount = 1. Returns KE_ERROR_INVALID_ARGUMENT
+        /// if handle == KE_RESOURCE_HANDLE_NONE or if already registered.
         ke_result (*register_resource)(struct ke_resource_cache *self,
-                                       ke_resource_handle         handle,
-                                       ke_resource_destroy_func   destroy_fn,
-                                       void                      *destroy_ctx);
+                                       ke_resource_handle         handle);
 
         /// Increments the reference count. Returns KE_ERROR_NOT_FOUND if the handle is unknown.
         ke_result (*retain)(struct ke_resource_cache *self, ke_resource_handle handle);
 
-        /// Decrements the reference count; fires destroy_fn when it reaches zero and removes the entry.
+        /// Decrements the reference count; fires the cache's destroy_fn when it reaches zero
+        /// and removes the entry.
         ke_result (*release)(struct ke_resource_cache *self, ke_resource_handle handle);
 
         // ── Path-keyed cache (dedup) ──────────────────────────────────────────
@@ -54,20 +68,28 @@ extern "C"
                                const char               *key,
                                ke_resource_handle       *out_handle);
 
-        /// Associates a handle with a string key for later dedup lookups.
-        void (*cache_insert)(struct ke_resource_cache *self,
-                             const char               *key,
-                             ke_resource_handle        handle);
+        /// Associates a handle with a string key for later dedup lookups. Returns
+        /// KE_ERROR_INVALID_ARGUMENT if the key is already mapped (callers should
+        /// try_get_cached first to detect intentional re-insertion).
+        ke_result (*cache_insert)(struct ke_resource_cache *self,
+                                  const char               *key,
+                                  ke_resource_handle        handle);
 
-        /// Removes a cached key (called automatically via the destroy hook when refcount → 0).
+        /// Removes a cached key (called automatically when refcount → 0).
         void (*cache_evict)(struct ke_resource_cache *self, const char *key);
 
         void (*destroy)(struct ke_resource_cache *self);
 
     } ke_resource_cache;
 
+    // ── Factory (kernel built-in) ─────────────────────────────────────────────
+
+    KE_API ke_result ke_resource_cache_create(
+        const ke_resource_cache_params *params,
+        ke_resource_cache             **out_cache);
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_RESOURCE_CACHE_H_
+#endif // KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_

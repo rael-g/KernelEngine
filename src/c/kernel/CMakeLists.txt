@@ -5,6 +5,7 @@ set(KERNEL_SOURCES
     src/logger/logger.c
     src/input/input.c
     src/ecs/ecs.c
+    src/resource_cache/resource_cache.c
     src/common/thread_name.c
     src/engine/frame_packet.c
 )

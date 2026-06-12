@@ -8,8 +8,8 @@ add_executable(test_ke_kernel
     test_hash.cpp
     test_array.cpp
     test_asset_resolver.cpp  # C-phase 1: re-enabled with new ke_framework plugin
+    test_resource_cache.cpp  # C-phase 2: re-enabled as kernel built-in
     # Framework-backed tests still disabled until C-phase reintroduces remaining impls:
-    #   test_resource_cache.cpp
     #   test_scene_tree.cpp
     #   test_input_actions.cpp
     #   test_scene_loader.cpp
