@@ -29,9 +29,6 @@ add_subdirectory(src/c/kernel)
 add_subdirectory(src/cpp/task_scheduler/enki)
 add_subdirectory(src/c/runtime)
 add_subdirectory(src/c/ecs/flecs)
-# New framework plugin (B2). Ships only ke_world_create today; the rest of the
-# framework surface (scene_tree, scene_loader, input_actions, render systems)
-# arrives during C-phase. Old src/cpp/framework/ stays deleted.
 add_subdirectory(src/c/framework)
 add_subdirectory(src/cpp/threading)
 add_subdirectory(src/cpp/window/contract)

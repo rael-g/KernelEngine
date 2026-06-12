@@ -15,7 +15,7 @@ extern "C"
     // ── Scene loader contract ────────────────────────────────────────────────
     //
     // Language-agnostic vtable for loading a `.scene.toml` file into a world.
-    // The default plugin (src/cpp/framework/) uses tomlplusplus to parse and
+    // The default plugin (src/c/framework/) uses tomlc99 (vendored) to parse and
     // drives the supplied scene_tree to instantiate ECS entities from a
     // component-driven file:
     //

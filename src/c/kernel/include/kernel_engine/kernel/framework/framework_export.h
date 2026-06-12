@@ -3,7 +3,7 @@
 
 // Symbol-visibility macro for ke_framework. Mirrors KE_API in the kernel —
 // each factory in the framework contract headers tags its declaration with
-// KE_FRAMEWORK_API so the single src/cpp/framework/ plugin DLL exports it.
+// KE_FRAMEWORK_API so the single src/c/framework/ plugin DLL exports it.
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 #define KE_FRAMEWORK_HELPER_EXPORT __declspec(dllexport)
