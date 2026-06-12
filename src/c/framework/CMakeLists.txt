@@ -2,6 +2,7 @@ add_library(ke_framework
     src/world.c
     src/asset_resolver.c
     src/mesh_shape.c
+    src/scene_tree.c
     third_party/tomlc99/toml.c
 )
 

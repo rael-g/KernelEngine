@@ -9,8 +9,8 @@ add_executable(test_ke_kernel
     test_array.cpp
     test_asset_resolver.cpp  # C-phase 1: re-enabled with new ke_framework plugin
     test_resource_cache.cpp  # C-phase 2: re-enabled as kernel built-in
+    test_scene_tree.cpp      # C-phase 3: re-enabled with new ecs-backed scene_tree
     # Framework-backed tests still disabled until C-phase reintroduces remaining impls:
-    #   test_scene_tree.cpp
     #   test_input_actions.cpp
     #   test_scene_loader.cpp
     #   test_mesh_shape.cpp    -- legacy header API gone; replaced by asset_resolver
@@ -22,6 +22,7 @@ add_executable(test_ke_kernel
 target_link_libraries(test_ke_kernel PRIVATE
     ke_kernel
     ke_framework
+    ke_ecs_flecs
     GTest::gtest_main
 )
 

@@ -3,22 +3,20 @@
 
 // ke_scene_tree — minimal language-agnostic scene graph contract (Tier S — S7).
 //
-// Only universal operations are promoted: root entity access, node destruction
-// (post-order: children before parents), and path-based node lookup.
+// Only universal operations are promoted: root entity access, node creation,
+// node destruction (post-order: children before parents), and path-based
+// node lookup. The framework's opinion about "every scene node has Transform
+// + Hierarchy + Name components" lives here.
 //
-// Lifecycle tick_* methods (awake/start/update/late_update) are intentionally
-// absent: native bindings (Lua, C++) drive lifecycle through the ke_script_component
-// callbacks dispatched by the C ScriptSystem (S1). The tick_* walks in Tree.cs are
-// C#-specific because they call Node.Tick* managed methods.
-//
-// The C# Framework provides CSharpSceneTree as the round-trip implementation.
-// A future C++ plugin could provide the same contract without managed overhead.
+// scene_tree owns the cids of its three components (transform/hierarchy/name),
+// registering them with the supplied ke_ecs at create time. Component PODs
+// are declared in kernel/framework/components.h; game code attaches/reads
+// them via ke_ecs->component_get/add.
 
-#include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/ecs/ecs.h>  // ke_entity
-struct ke_world;
+#include <kernel_engine/kernel/framework/components.h>
 
 #ifdef __cplusplus
 extern "C"
