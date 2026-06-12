@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_KERNEL_WORLD_KE_ECS_FLECS_H_
-#define KERNEL_ENGINE_KERNEL_WORLD_KE_ECS_FLECS_H_
+#ifndef KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
+#define KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 
 // ke_ecs_flecs — flecs-backed implementation of the ke_ecs contract.
 //
@@ -30,4 +30,4 @@ KE_API ke_result ke_ecs_flecs_create(ke_allocator              *alloc,
 }
 #endif
 
-#endif  // KERNEL_ENGINE_KERNEL_WORLD_KE_ECS_FLECS_H_
+#endif  // KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_

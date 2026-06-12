@@ -1,5 +1,7 @@
 #include <kernel_engine/kernel/framework/mesh_asset_system.h>
+#include <kernel_engine/framework/mesh_asset_system_create.h>
 #include <kernel_engine/kernel/framework/mesh_render_system.h>
+#include <kernel_engine/framework/mesh_render_system_create.h>
 #include <kernel_engine/kernel/framework/mesh_shape.h>
 #include <kernel_engine/kernel/world/world.h>
 #include <kernel_engine/kernel/render/render.h>

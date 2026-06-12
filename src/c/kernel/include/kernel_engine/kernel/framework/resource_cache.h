@@ -67,12 +67,6 @@ extern "C"
 
     } ke_resource_cache;
 
-    // ── Factory ───────────────────────────────────────────────────────────────
-
-    KE_FRAMEWORK_API ke_result ke_resource_cache_create(
-        ke_allocator       *alloc,
-        ke_resource_cache **out_cache);
-
 #ifdef __cplusplus
 }
 #endif

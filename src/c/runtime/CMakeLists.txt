@@ -4,7 +4,11 @@ add_library(ke_runtime
 
 target_include_directories(ke_runtime PUBLIC
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
+
+install(DIRECTORY include/ DESTINATION include)
 
 target_link_libraries(ke_runtime PUBLIC
     ke_kernel

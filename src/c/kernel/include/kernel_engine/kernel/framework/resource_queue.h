@@ -137,10 +137,6 @@ extern "C"
         void (*destroy)(struct ke_resource_queue *self);
     } ke_resource_queue;
 
-    KE_FRAMEWORK_API ke_result ke_resource_queue_create(
-        ke_allocator       *alloc,
-        ke_resource_queue **out);
-
 #ifdef __cplusplus
 }
 #endif

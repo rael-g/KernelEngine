@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/kernel/framework/scene_loader.h>
+#include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/kernel/framework/scene_tree.h>
+#include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/world/components.h>
 #include <kernel_engine/kernel/world/variant.h>

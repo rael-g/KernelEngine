@@ -1,5 +1,5 @@
-#ifndef KERNEL_ENGINE_KERNEL_RUNTIME_RUNTIME_CREATE_H_
-#define KERNEL_ENGINE_KERNEL_RUNTIME_RUNTIME_CREATE_H_
+#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
+#define KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
 
 // ke_runtime_create — the in-house scheduler.
 // Owns the system catalog + phase loop + (eventually) parallel wave dispatch.
@@ -36,4 +36,4 @@ KE_API ke_result ke_runtime_create(ke_allocator            *alloc,
 }
 #endif
 
-#endif  // KERNEL_ENGINE_KERNEL_RUNTIME_RUNTIME_CREATE_H_
+#endif  // KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_

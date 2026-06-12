@@ -17,8 +17,14 @@ add_library(ke_framework
     src/mesh_asset_system.cpp
 )
 
+target_include_directories(ke_framework PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
 target_include_directories(ke_framework PRIVATE ${TOMLPLUSPLUS_INCLUDE_DIRS})
 target_link_libraries(ke_framework PRIVATE glm::glm)
+
+install(DIRECTORY include/ DESTINATION include)
 
 get_target_property(target_type ke_framework TYPE)
 if (target_type STREQUAL "STATIC_LIBRARY")

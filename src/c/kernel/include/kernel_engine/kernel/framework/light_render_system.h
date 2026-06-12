@@ -50,17 +50,7 @@ extern "C"
         float intensity;
     } ke_spot_light_component;
 
-    typedef struct ke_light_render_system_params
-    {
-        struct ke_world *world;
-        ke_allocator    *allocator;
-    } ke_light_render_system_params;
-
     typedef struct ke_light_render_system ke_light_render_system;
-
-    KE_FRAMEWORK_API ke_result ke_light_render_system_create(
-        const ke_light_render_system_params *params,
-        ke_light_render_system             **out_system);
 
     KE_FRAMEWORK_API void ke_light_render_system_destroy(ke_light_render_system *system);
 

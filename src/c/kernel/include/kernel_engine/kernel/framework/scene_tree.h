@@ -57,13 +57,6 @@ extern "C"
 
     } ke_scene_tree;
 
-    // ── Factory ──────────────────────────────────────────────────────────────
-
-    KE_FRAMEWORK_API ke_result ke_scene_tree_create(
-        struct ke_world  *world,
-        ke_allocator     *alloc,
-        ke_scene_tree   **out_tree);
-
 #ifdef __cplusplus
 }
 #endif

@@ -14,6 +14,7 @@
 // Callers cache them after load() via get_action_id() and reuse across frames.
 
 #include <kernel_engine/kernel/framework/input_actions.h>
+#include <kernel_engine/framework/input_actions_create.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/input/key.h>
 

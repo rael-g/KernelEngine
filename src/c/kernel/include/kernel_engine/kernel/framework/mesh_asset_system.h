@@ -30,19 +30,7 @@ extern "C"
 {
 #endif
 
-    typedef struct ke_mesh_asset_system_params
-    {
-        struct ke_world             *world;
-        ke_allocator                *allocator;
-        struct ke_render            *render;
-        struct ke_mesh_render_system *mesh_system; ///< Source of the mesh component cid.
-    } ke_mesh_asset_system_params;
-
     typedef struct ke_mesh_asset_system ke_mesh_asset_system;
-
-    KE_FRAMEWORK_API ke_result ke_mesh_asset_system_create(
-        const ke_mesh_asset_system_params *params,
-        ke_mesh_asset_system             **out_system);
 
     KE_FRAMEWORK_API void ke_mesh_asset_system_destroy(ke_mesh_asset_system *system);
 

@@ -1,4 +1,5 @@
 #include <kernel_engine/kernel/framework/resource_cache.h>
+#include <kernel_engine/framework/resource_cache_create.h>
 #include <kernel_engine/kernel/common/hash.h>
 #include <string.h>
 #include <stdlib.h>

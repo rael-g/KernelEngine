@@ -139,12 +139,6 @@ extern "C"
         void (*destroy)(struct ke_input_actions *self);
     } ke_input_actions;
 
-    // ── Factory ──────────────────────────────────────────────────────────────
-
-    KE_FRAMEWORK_API ke_result ke_input_actions_create(
-        ke_allocator       *alloc,
-        ke_input_actions  **out_actions);
-
 #ifdef __cplusplus
 }
 #endif

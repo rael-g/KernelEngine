@@ -7,6 +7,7 @@
 // frees it (callers must release every future they receive).
 
 #include <kernel_engine/kernel/framework/resource_queue.h>
+#include <kernel_engine/framework/resource_queue_create.h>
 #include <kernel_engine/kernel/render/render.h>
 
 #include <condition_variable>
