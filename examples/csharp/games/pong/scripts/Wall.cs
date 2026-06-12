@@ -13,6 +13,8 @@ public sealed class Wall : MeshRenderer
     private readonly IPhysics2D    _physics;
     private readonly PongResources _resources;
 
+    private BodyHandle2D _body;
+
     public Wall(IPhysics2D physics, PongResources resources)
     {
         _physics   = physics;
@@ -27,7 +29,9 @@ public sealed class Wall : MeshRenderer
         var t      = LocalTransform;
         var pos    = new Vector2(t.Position.X, t.Position.Y);
         var halfEx = new Vector2(t.Scale.X * 0.5f, t.Scale.Y * 0.5f);
-        var body   = _physics.CreateBody(BodyType2D.Static, pos);
-        _physics.AddBoxFixture(body, halfEx, restitution: 1f);
+        _body  = _physics.CreateBody(BodyType2D.Static, pos);
+        _physics.AddBoxFixture(_body, halfEx, restitution: 1f);
     }
+
+    protected override void OnUnbind() => _physics.DestroyBody(_body);
 }

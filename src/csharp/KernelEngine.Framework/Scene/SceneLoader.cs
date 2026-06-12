@@ -43,27 +43,13 @@ public sealed class SceneLoader
 
     public void LoadInto(Tree tree, IServiceProvider services, string path)
     {
-        var text = File.ReadAllText(path);
-        var doc  = Toml.ToModel(text);
-
-        // [[entity]] arrays of tables surface as TomlTableArray in Tomlyn — not
-        // TomlArray. Handle both for robustness across versions.
-        List<TomlTable>? entities = null;
-        if (doc.TryGetValue("entity", out var entitiesRaw))
-        {
-            entities = entitiesRaw switch
-            {
-                TomlTableArray tta => tta.Cast<TomlTable>().ToList(),
-                TomlArray      ta  => ta.OfType<TomlTable>().ToList(),
-                _ => null,
-            };
-        }
+        var entities = ReadEntities(path);
         if (entities is null) return;
 
         // Two-pass: instantiate every entity first (so parent references resolve
         // even when declared above their parent in the file), then attach to
         // parents + populate properties.
-        var instances = new List<(Node Node, TomlTable Entry)>(entities.Count);
+        var instances = new List<(Node Node, TomlTable Entry, Dictionary<string, object?>? InheritedProps)>(entities.Count);
         var byName    = new Dictionary<string, Node>(StringComparer.Ordinal);
 
         foreach (var entity in entities)
@@ -71,19 +57,41 @@ public sealed class SceneLoader
             var name = entity.TryGetValue("name", out var n) ? n as string : null;
             if (string.IsNullOrEmpty(name)) continue;
 
-            var typeName = entity.TryGetValue("type", out var t) ? t as string : null;
+            // Entity points at a subscene file — load it as a template and pull
+            // the type (+ default properties) from its sole entity. Outer-level
+            // [entity.properties] then override those.
+            string? typeName = null;
+            Dictionary<string, object?>? inheritedProps = null;
+            if (entity.TryGetValue("scene", out var subRaw) && subRaw is string subPath)
+            {
+                var resolved      = ResolveScenePath(path, subPath);
+                var subEntities   = ReadEntities(resolved);
+                var template      = subEntities?.FirstOrDefault();
+                if (template is null)
+                    throw new InvalidOperationException(
+                        $"Subscene '{resolved}' has no [[entity]] entries.");
+                typeName       = template.TryGetValue("type", out var tt) ? tt as string : null;
+                inheritedProps = template.TryGetValue("properties", out var tp) && tp is TomlTable tpt
+                    ? tpt.ToDictionary(kv => kv.Key, kv => (object?)kv.Value)
+                    : null;
+            }
+            else if (entity.TryGetValue("type", out var t))
+            {
+                typeName = t as string;
+            }
+
             if (string.IsNullOrEmpty(typeName))
                 throw new InvalidOperationException(
-                    $"Scene entity '{name}' is missing 'type'.");
+                    $"Scene entity '{name}' is missing 'type' (and 'scene' didn't resolve).");
 
             var nodeType = _types.Resolve(typeName);
             var node     = (Node)ActivatorUtilities.CreateInstance(services, nodeType);
 
-            instances.Add((node, entity));
+            instances.Add((node, entity, inheritedProps));
             byName[name] = node;
         }
 
-        foreach (var (node, entry) in instances)
+        foreach (var (node, entry, inheritedProps) in instances)
         {
             var name = (string)entry["name"];
             Node? parent = null;
@@ -100,10 +108,53 @@ public sealed class SceneLoader
             // for hand-wired code that sets properties via object initializer
             // before the call.
             tree.PreAddNode(node, name, parent);
-            if (entry.TryGetValue("properties", out var propsRaw) && propsRaw is TomlTable props)
-                ApplyProperties(node, props);
+
+            // Apply subscene's template properties first (so they act as
+            // defaults), then the outer entity's properties (which win).
+            if (inheritedProps is not null)
+                ApplyProperties(node, inheritedProps);
+            if (entry.TryGetValue("properties", out var propsRaw) && propsRaw is TomlTable outerProps)
+                ApplyProperties(node, outerProps.ToDictionary(kv => kv.Key, kv => (object?)kv.Value));
+
             tree.CompleteAddNode(node);
         }
+    }
+
+    // ── Subscene plumbing ───────────────────────────────────────────────────
+
+    private static List<TomlTable>? ReadEntities(string path)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Scene file not found: {path}", path);
+        var text = File.ReadAllText(path);
+        var doc  = Toml.ToModel(text);
+
+        // [[entity]] arrays of tables surface as TomlTableArray in Tomlyn — not
+        // TomlArray. Handle both for robustness across versions.
+        if (!doc.TryGetValue("entity", out var entitiesRaw)) return null;
+        return entitiesRaw switch
+        {
+            TomlTableArray tta => tta.Cast<TomlTable>().ToList(),
+            TomlArray      ta  => ta.OfType<TomlTable>().ToList(),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Resolves a subscene reference. Accepts <c>res://scenes/X.scene</c>,
+    /// <c>scenes/X.scene</c>, or paths relative to the outer scene's directory.
+    /// </summary>
+    private static string ResolveScenePath(string outerPath, string subRef)
+    {
+        var s = subRef.StartsWith("res://", StringComparison.Ordinal)
+            ? subRef.Substring(6)
+            : subRef;
+        if (Path.IsPathRooted(s)) return s;
+        // res://X = relative to AppContext.BaseDirectory (the project root mirror).
+        if (subRef.StartsWith("res://", StringComparison.Ordinal))
+            return Path.Combine(AppContext.BaseDirectory, s);
+        // Plain relative path = sibling of the outer scene file.
+        return Path.Combine(Path.GetDirectoryName(outerPath) ?? AppContext.BaseDirectory, s);
     }
 
     // ── Property reflection ─────────────────────────────────────────────────
@@ -113,7 +164,7 @@ public sealed class SceneLoader
         "Position", "Scale", "Rotation",
     };
 
-    private static void ApplyProperties(Node node, TomlTable props)
+    private static void ApplyProperties(Node node, IReadOnlyDictionary<string, object?> props)
     {
         var nodeType = node.GetType();
 

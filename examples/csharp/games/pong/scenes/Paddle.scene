@@ -1,0 +1,7 @@
+[scene]
+name    = "Paddle"
+version = 2
+
+[[entity]]
+name = "Root"
+type = "Pong.Paddle"

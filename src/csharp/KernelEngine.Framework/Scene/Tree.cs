@@ -123,10 +123,25 @@ public sealed class Tree
 
         node.Parent?.DetachChild(node);
 
+        node.OnUnbind();  // script-owned resource cleanup (physics bodies, etc.)
+
         if (node.HasBehavior) _behaviors.Remove(node);
         if (node is Label l)  _labels.Remove(l);
         Ecs.EntityDestroy(node.Entity);
         node.UnbindFromTree();
+    }
+
+    /// <summary>
+    /// Destroys every node currently in the tree, in reverse-of-add order.
+    /// Used by <see cref="ISceneRouter"/> to flush a scene before loading the
+    /// next one.
+    /// </summary>
+    public void Clear()
+    {
+        // Snapshot top-level nodes (parent == null); DestroyNode recurses
+        // into children, so iterating roots is enough.
+        var roots = _byName.Values.Where(n => n.Parent is null).ToArray();
+        for (int i = 0; i < roots.Length; i++) DestroyNode(roots[i]);
     }
 
     // ── Generic component access ────────────────────────────────────────────

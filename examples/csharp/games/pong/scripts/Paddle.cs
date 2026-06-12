@@ -41,6 +41,8 @@ public sealed class Paddle : MeshRenderer
         _physics.AddBoxFixture(_body, new Vector2(0.15f, HalfH), restitution: 1f);
     }
 
+    protected override void OnUnbind() => _physics.DestroyBody(_body);
+
     protected override void OnUpdate(in View view)
     {
         var state = _physics.GetBodyState(_body);

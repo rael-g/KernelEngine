@@ -18,6 +18,7 @@ public sealed class Ball : MeshRenderer
     private readonly IInputActionMap<PongAction> _actions;
     private readonly IAudio                      _audio;
     private readonly PongResources               _resources;
+    private readonly ISceneRouter                _router;
 
     private BodyHandle2D _body;
     private Scoreboard?  _board;
@@ -26,12 +27,14 @@ public sealed class Ball : MeshRenderer
     private bool         _prevLaunch;
     private bool         _prevQuit;
 
-    public Ball(IPhysics2D physics, IInputActionMap<PongAction> actions, IAudio audio, PongResources resources)
+    public Ball(IPhysics2D physics, IInputActionMap<PongAction> actions, IAudio audio,
+                PongResources resources, ISceneRouter router)
     {
         _physics   = physics;
         _actions   = actions;
         _audio     = audio;
         _resources = resources;
+        _router    = router;
     }
 
     protected override void OnBind(Tree tree)
@@ -44,6 +47,8 @@ public sealed class Ball : MeshRenderer
         _physics.AddBoxFixture(_body, new Vector2(0.18f, 0.18f),
             density: 1f, friction: 0f, restitution: 1f);
     }
+
+    protected override void OnUnbind() => _physics.DestroyBody(_body);
 
     protected override void OnUpdate(in View view)
     {
@@ -66,7 +71,7 @@ public sealed class Ball : MeshRenderer
 
         bool launch = _actions.IsPressed(PongAction.Launch, in view);
         bool quit   = _actions.IsPressed(PongAction.Quit,   in view);
-        if (quit   && !_prevQuit)                      Environment.Exit(0);
+        if (quit   && !_prevQuit)                      _router.LoadScene("Menu");
         if (launch && !_prevLaunch && _awaitingLaunch) Launch();
         _prevLaunch = launch;
         _prevQuit   = quit;

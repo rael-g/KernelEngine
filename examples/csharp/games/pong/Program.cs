@@ -39,14 +39,11 @@ var services = new ServiceCollection()
     .AddNodeType<Ball>("Pong.Ball")
     .AddNodeType<Scoreboard>("Pong.Scoreboard")
     .AddNodeType<PhysicsDriver>("Pong.PhysicsDriver")
+    .AddNodeType<MenuController>("Pong.MenuController")
     // Shared materials + sounds; lazy-created on first resolution so the
-    // factory runs INSIDE the render-worker-pinned SceneModule callback.
+    // factory runs INSIDE the render-worker-pinned SceneRouterModule load.
     .AddSingleton<PongResources>()
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
-    {
-        var loader = sp.GetRequiredService<SceneLoader>();
-        loader.LoadInto(tree, sp, Path.Combine(AppContext.BaseDirectory, "scenes", "Main.scene"));
-    }));
+    .Add<IRuntimeModule>(new SceneRouterModule());  // initial scene comes from Project's default_scene
 
 using var sp = services.BuildServiceProvider();
 var window  = sp.GetRequiredService<IWindow>();

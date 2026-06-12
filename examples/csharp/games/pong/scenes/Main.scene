@@ -2,14 +2,12 @@
 name    = "Main"
 version = 2
 
-# Full-bright scene-wide ambient so unlit-feeling materials land at face value.
 [[entity]]
 name = "Ambient"
 type = "AmbientLight"
 [entity.properties]
 Color = [1.0, 1.0, 1.0]
 
-# 2D orthographic camera looking down -Z from the +Z hemisphere.
 [[entity]]
 name = "Camera"
 type = "Camera"
@@ -20,46 +18,40 @@ Near             = 0.1
 Far              = 100.0
 Position         = [0.0, 0.0, 10.0]
 
-# Top + bottom walls (static bodies + dark quads). Wall script picks the
-# half-extents from this transform's Scale.
+# Walls — each entity composes Wall.scene; the outer Position wins, the
+# subscene's Scale = [16, 0.5, 1] passes through as the default.
 [[entity]]
-name = "WallTop"
-type = "Pong.Wall"
+name  = "WallTop"
+scene = "res://scenes/Wall.scene"
 [entity.properties]
 Position = [0.0,  4.5]
-Scale    = [16.0, 0.5, 1.0]
 
 [[entity]]
-name = "WallBottom"
-type = "Pong.Wall"
+name  = "WallBottom"
+scene = "res://scenes/Wall.scene"
 [entity.properties]
 Position = [0.0, -4.5]
-Scale    = [16.0, 0.5, 1.0]
 
-# Paddles — MoveAction is read from actions.input and matched to PongAction
-# members by name.
+# Paddles — Paddle.scene defines the type; per-instance Position +
+# MoveAction come from here.
 [[entity]]
-name = "PaddleLeft"
-type = "Pong.Paddle"
+name  = "PaddleLeft"
+scene = "res://scenes/Paddle.scene"
 [entity.properties]
 Position   = [-7.5, 0.0]
 MoveAction = "PaddleLeftMove"
 
 [[entity]]
-name = "PaddleRight"
-type = "Pong.Paddle"
+name  = "PaddleRight"
+scene = "res://scenes/Paddle.scene"
 [entity.properties]
 Position   = [7.5, 0.0]
 MoveAction = "PaddleRightMove"
 
-# Ball — spawns at origin; the script finds the Scoreboard by name on the
-# first frame and from there drives scoring + sound effects.
 [[entity]]
-name = "Ball"
-type = "Pong.Ball"
+name  = "Ball"
+scene = "res://scenes/Ball.scene"
 
-# Scoreboard — script creates 3 child labels in OnBind, using its own font
-# loaded from FontPath. Empty FontPath = the OS's default Arial.
 [[entity]]
 name = "Scoreboard"
 type = "Pong.Scoreboard"
@@ -67,8 +59,6 @@ type = "Pong.Scoreboard"
 FontPath = ""
 FontSize = 56.0
 
-# Drives the Box2D simulation. Registered LAST so it ticks AFTER paddles +
-# ball have set their velocities for this frame.
 [[entity]]
 name = "PhysicsDriver"
 type = "Pong.PhysicsDriver"

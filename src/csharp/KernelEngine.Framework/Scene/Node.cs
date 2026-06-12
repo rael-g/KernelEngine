@@ -91,6 +91,15 @@ public abstract class Node
     protected internal virtual void OnUpdate(in View view) { }
 
     /// <summary>
+    /// Called once when the node is being removed from the tree (manual
+    /// <see cref="Framework.Tree.DestroyNode"/> or scene swap). Scripts that
+    /// own external resources (physics bodies, audio voices, GPU handles
+    /// they created themselves) release them here. The base implementation
+    /// is a no-op.
+    /// </summary>
+    protected internal virtual void OnUnbind() { }
+
+    /// <summary>
     /// True if the subclass overrode <see cref="OnUpdate"/>. Computed once at
     /// bind so BehaviorSystem can iterate only the entities that actually have
     /// per-frame logic instead of every node in the tree.

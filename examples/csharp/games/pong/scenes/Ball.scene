@@ -1,0 +1,11 @@
+[scene]
+name    = "Ball"
+version = 2
+
+# Template scene used by Main.scene via [[entity]] scene = "res://scenes/Ball.scene".
+# A single entity here today — the Ball script owns its visual/physics state
+# internally (no Sprite2D/CollisionShape2D children). Properties below act
+# as defaults that the outer scene may override.
+[[entity]]
+name = "Root"
+type = "Pong.Ball"

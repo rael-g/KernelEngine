@@ -1,0 +1,11 @@
+[scene]
+name    = "Wall"
+version = 2
+
+# Template scene for the top + bottom walls. The half-extents come from
+# the outer entity's Scale property; restitution is fixed in code.
+[[entity]]
+name = "Root"
+type = "Pong.Wall"
+[entity.properties]
+Scale = [16.0, 0.5, 1.0]
