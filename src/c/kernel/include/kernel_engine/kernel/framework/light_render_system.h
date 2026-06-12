@@ -13,8 +13,8 @@
 #include <kernel_engine/kernel/framework/framework_export.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/world/ecs.h>
-#include <kernel_engine/kernel/world/system.h>
+#include <kernel_engine/kernel/ecs/ecs.h>
+#include <kernel_engine/kernel/ecs/system.h>
 
 struct ke_world;
 

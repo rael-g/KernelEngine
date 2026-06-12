@@ -16,7 +16,7 @@
 // KE_VARIANT_INT may target a KE_VARIANT_FLOAT field — TOML often parses
 // `60` as int when the user meant `60.0`).
 
-#include <kernel_engine/kernel/world/variant.h>
+#include <kernel_engine/kernel/ecs/variant.h>
 #include <stdint.h>
 
 #ifdef __cplusplus

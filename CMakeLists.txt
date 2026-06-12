@@ -26,7 +26,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(src/c/kernel)
-add_subdirectory(src/cpp/framework)
+# Framework plugin disabled in B0: depends on legacy ke_world removed this phase.
+# Re-enabled in C-phase after ke_world is reintroduced as framework-owned aggregator.
+# add_subdirectory(src/cpp/framework)
 add_subdirectory(src/cpp/task_scheduler/enki)
 add_subdirectory(src/c/runtime)
 add_subdirectory(src/c/ecs/flecs)
@@ -47,8 +49,10 @@ add_subdirectory(src/cpp/physics/box2d)
 add_subdirectory(src/cpp/text/stb_truetype)
 
 add_subdirectory(examples/c/01_minimal_log)
-add_subdirectory(examples/c/02_window_graphics)
-add_subdirectory(examples/c/03_input_scene)
+# 02_window_graphics + 03_input_scene depend on legacy ke_world, removed in B0.
+# Re-enable after C-phase rewrite reintroduces ke_world in framework plugin.
+# add_subdirectory(examples/c/02_window_graphics)
+# add_subdirectory(examples/c/03_input_scene)
 add_subdirectory(examples/c/04_shader_compile)
 
 enable_testing()

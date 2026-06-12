@@ -11,9 +11,9 @@
 #include <kernel_engine/kernel/framework/scene_loader.h>
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/kernel/common/math.h>
-#include <kernel_engine/kernel/world/components.h>
-#include <kernel_engine/kernel/world/variant.h>
-#include <kernel_engine/kernel/world/world.h>
+#include <kernel_engine/kernel/ecs/components.h>
+#include <kernel_engine/kernel/ecs/variant.h>
+#include <kernel_engine/kernel/ecs/world.h>
 
 #include <toml++/toml.hpp>
 

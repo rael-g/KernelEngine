@@ -4,9 +4,9 @@
 #include <kernel_engine/kernel/framework/scene_tree.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/world/components.h>
-#include <kernel_engine/kernel/world/variant.h>
-#include <kernel_engine/kernel/world/world.h>
+#include <kernel_engine/kernel/ecs/components.h>
+#include <kernel_engine/kernel/ecs/variant.h>
+#include <kernel_engine/kernel/ecs/world.h>
 
 #include <cmath>
 #include <cstdlib>

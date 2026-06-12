@@ -3,8 +3,8 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/world/component_field.h>
-#include <kernel_engine/kernel/world/variant.h>
+#include <kernel_engine/kernel/ecs/component_field.h>
+#include <kernel_engine/kernel/ecs/variant.h>
 #include <stdint.h>
 #include <stddef.h>
 

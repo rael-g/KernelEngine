@@ -11,7 +11,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/runtime/runtime.h>
-#include <kernel_engine/kernel/world/ecs.h>
+#include <kernel_engine/kernel/ecs/ecs.h>
 
 #include <stddef.h>
 

@@ -14,7 +14,7 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <kernel_engine/kernel/context/types.h>
-#include <kernel_engine/kernel/world/ecs.h>  // ke_entity, ke_component_id
+#include <kernel_engine/kernel/ecs/ecs.h>  // ke_entity, ke_component_id
 #include <stddef.h>
 
 #ifdef __cplusplus

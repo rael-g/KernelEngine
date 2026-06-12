@@ -5,7 +5,7 @@
 #include <kernel_engine/kernel/framework/scene_tree.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/world/variant.h>
+#include <kernel_engine/kernel/ecs/variant.h>
 struct ke_world;
 
 #ifdef __cplusplus

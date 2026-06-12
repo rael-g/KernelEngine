@@ -9,7 +9,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/world/ke_ecs.h>
+#include <kernel_engine/kernel/ecs/ke_ecs.h>
 
 #ifdef __cplusplus
 extern "C" {

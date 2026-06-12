@@ -2,7 +2,7 @@
 
 #include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/kernel/runtime/system_ctx.h>
-#include <kernel_engine/kernel/world/ke_ecs.h>
+#include <kernel_engine/kernel/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
 

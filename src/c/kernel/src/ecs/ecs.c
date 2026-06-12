@@ -1,5 +1,5 @@
-#include <kernel_engine/kernel/world/ecs.h>
-#include <kernel_engine/kernel/world/ke_ecs.h>
+#include <kernel_engine/kernel/ecs/ecs.h>
+#include <kernel_engine/kernel/ecs/ke_ecs.h>
 #include <kernel_engine/kernel/common/array.h>
 #include <kernel_engine/kernel/common/hash_map.h>
 #include <stdlib.h>

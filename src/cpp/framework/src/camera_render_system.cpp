@@ -1,7 +1,7 @@
 #include <kernel_engine/kernel/framework/camera_render_system.h>
 #include <kernel_engine/framework/camera_render_system_create.h>
-#include <kernel_engine/kernel/world/world.h>
-#include <kernel_engine/kernel/world/components.h>
+#include <kernel_engine/kernel/ecs/world.h>
+#include <kernel_engine/kernel/ecs/components.h>
 #include <kernel_engine/kernel/engine/frame_packet.h>
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE

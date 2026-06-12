@@ -3,7 +3,7 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/world/ecs.h>  // ke_component_id
+#include <kernel_engine/kernel/ecs/ecs.h>  // ke_component_id
 
 #include <stdbool.h>
 #include <stdint.h>

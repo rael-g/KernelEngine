@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/world/ecs.h>
-#include <kernel_engine/kernel/world/ke_ecs.h>
-#include <kernel_engine/kernel/world/variant.h>
-#include <kernel_engine/kernel/world/component_field.h>
+#include <kernel_engine/kernel/ecs/ecs.h>
+#include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/kernel/ecs/variant.h>
+#include <kernel_engine/kernel/ecs/component_field.h>
 #include <kernel_engine/kernel/context/allocator.h>
 #include <string.h>
 #include <stddef.h>
