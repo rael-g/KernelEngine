@@ -3,6 +3,7 @@ add_library(ke_framework
     src/asset_resolver.c
     src/mesh_shape.c
     src/scene_tree.c
+    src/input_actions.c
     third_party/tomlc99/toml.c
 )
 
