@@ -26,12 +26,13 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(src/c/kernel)
-# Framework plugin disabled in B0: depends on legacy ke_world removed this phase.
-# Re-enabled in C-phase after ke_world is reintroduced as framework-owned aggregator.
-# add_subdirectory(src/cpp/framework)
 add_subdirectory(src/cpp/task_scheduler/enki)
 add_subdirectory(src/c/runtime)
 add_subdirectory(src/c/ecs/flecs)
+# New framework plugin (B2). Ships only ke_world_create today; the rest of the
+# framework surface (scene_tree, scene_loader, input_actions, render systems)
+# arrives during C-phase. Old src/cpp/framework/ stays deleted.
+add_subdirectory(src/c/framework)
 add_subdirectory(src/cpp/threading)
 add_subdirectory(src/cpp/window/contract)
 add_subdirectory(src/cpp/window/core)
