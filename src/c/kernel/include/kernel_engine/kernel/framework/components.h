@@ -12,8 +12,9 @@
 // systems that read/write them live inside the framework plugin and are
 // registered with the runtime when the framework is wired up.
 
-#include <kernel_engine/kernel/common/math.h>  // ke_vec3, ke_quat, ke_mat4
-#include <kernel_engine/kernel/ecs/ecs.h>      // ke_entity, KE_ENTITY_INVALID
+#include <kernel_engine/kernel/common/handles.h>  // ke_mesh_handle, ke_material_handle
+#include <kernel_engine/kernel/common/math.h>     // ke_vec3, ke_quat, ke_mat4
+#include <kernel_engine/kernel/ecs/ecs.h>         // ke_entity, KE_ENTITY_INVALID
 
 #include <stdint.h>
 
@@ -56,6 +57,66 @@ extern "C"
 #define KE_COMPONENT_NAME_TRANSFORM "transform"
 #define KE_COMPONENT_NAME_HIERARCHY "hierarchy"
 #define KE_COMPONENT_NAME_NAME      "name"
+
+    // ── Render vocabulary ────────────────────────────────────────────────────
+    //
+    // Durable PODs that survive the deletion of the frame_packet extract path
+    // in R6+. The current LEGACY render systems that wrote these into a
+    // frame_packet have been removed; once R6 lands the per-component snapshot
+    // mechanism, the render plugin reads these directly from the back buffer.
+
+    typedef struct ke_camera_component
+    {
+        float   fov;
+        float   near_plane;
+        float   far_plane;
+        float   orthographic_size;
+        uint8_t orthographic; // 0 = perspective, non-zero = ortho
+    } ke_camera_component;
+
+    typedef struct ke_directional_light_component
+    {
+        float dir_x, dir_y, dir_z;
+        float r, g, b;
+        float intensity;
+    } ke_directional_light_component;
+
+    typedef struct ke_point_light_component
+    {
+        float radius;
+        float r, g, b;
+        float intensity;
+    } ke_point_light_component;
+
+    typedef struct ke_spot_light_component
+    {
+        float dir_x, dir_y, dir_z;
+        float inner_angle;
+        float outer_angle;
+        float range;
+        float r, g, b;
+        float intensity;
+    } ke_spot_light_component;
+
+    /// Carries both resolved render handles AND the bake-request fields the
+    /// SceneLoader writes from `[entity.components.mesh]`. The first frame an
+    /// entity is seen with primitive[0] != '\0' and mesh handle == HANDLE_NONE,
+    /// the framework's asset system bakes the primitive and assigns the handle
+    /// (dedup'd by name + color). primitive stays in place as the canonical
+    /// name so hot-reload re-bakes work.
+    typedef struct ke_mesh_component
+    {
+        ke_mesh_handle     mesh;          ///< Resolved render handle (HANDLE_NONE = pending bake)
+        ke_material_handle material;      ///< Resolved render handle (HANDLE_NONE = pending bake)
+        char               primitive[32]; ///< Bake request (snake_case primitive name)
+        float              color[4];      ///< RGBA tint; alpha = 0 means "no material set"
+    } ke_mesh_component;
+
+#define KE_COMPONENT_NAME_CAMERA            "camera"
+#define KE_COMPONENT_NAME_DIRECTIONAL_LIGHT "directional_light"
+#define KE_COMPONENT_NAME_POINT_LIGHT       "point_light"
+#define KE_COMPONENT_NAME_SPOT_LIGHT        "spot_light"
+#define KE_COMPONENT_NAME_MESH              "mesh"
 
 #ifdef __cplusplus
 }
