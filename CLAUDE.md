@@ -1,32 +1,27 @@
-# CLAUDE.md
+# KernelEngine
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+A microkernel game engine: a small ABI-stable C kernel surrounded by C++ plugin backends and a managed C# layer for game code.
 
-## Build commands
+> **Branch state — single source of truth for in-flight work**: see [`docs/RuntimeArchitectureV2.md`](docs/RuntimeArchitectureV2.md) §17.6 (execution log + current tree state + next phases). This file describes the engine doctrine and conventions; the runtime architecture doc describes what's been built and what's next.
 
-### C/C++ (CMake + vcpkg + Ninja + Clang)
+---
+
+## Build
+
+### Native (CMake + vcpkg + Ninja + Clang)
 
 ```bash
-# Configure
-cmake --preset win      # Windows
-cmake --preset linux    # Linux
-
-# Build
-cmake --build --preset win
-
-# Install (required for C# to find native DLLs)
-cmake --install build/win --prefix build/native
-
-# Run C/C++ tests
-ctest --preset win --output-on-failure
-
-# Run a C example
-./build/win/bin/01_minimal_log.exe
+cmake --preset win                                 # configure (Windows)
+cmake --preset linux                               # configure (Linux)
+cmake --build --preset win                         # build
+cmake --install build/win --prefix build/native    # install (required for C# to find native DLLs)
+ctest --preset win --output-on-failure             # native tests
+./build/win/bin/01_minimal_log.exe                 # run a C example
 ```
 
 Build output: `build/win/bin/` (executables + DLLs), `build/win/lib/`. C# expects native libraries at `build/native/bin/` (Windows).
 
-### C# (.NET 10)
+### Managed (.NET 10)
 
 ```bash
 dotnet build
@@ -36,177 +31,175 @@ dotnet test KernelEngine.slnx
 ### Scripts
 
 ```bash
-python scripts/compile_shaders.py   # compile all bgfx shaders to SPIR-V
-python scripts/generate_bindings.py # regenerate all C# P/Invoke bindings via ClangSharp
-python scripts/coverage.py          # C/C++ + C# tests with unified coverage report (Clang source-based + coverlet + reportgenerator). `clean` and `report` subcommands available.
+python scripts/compile_shaders.py    # compile all bgfx shaders to SPIR-V
+python scripts/generate_bindings.py  # regenerate all C# P/Invoke bindings via ClangSharp
+python scripts/coverage.py           # C/C++ + C# tests with unified coverage report (clean | report subcommands)
 ```
 
-Shaders compile to `src/cpp/render/bgfx/shaders/compiled/spirv/`. Bindings run `dotnet tool restore` from `src/csharp/` first, then process every `.rsp` file under `src/csharp/Native/`.
+Shaders compile to `src/cpp/render/bgfx/shaders/compiled/spirv/`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
-### Running examples after a native rebuild — never use `dotnet run --no-build`
+### Running examples after a native rebuild
 
-Native DLLs (`ke_*.dll`) are copied into each example's output via a `PreserveNewest` item in `NativeDependencies.targets`, but that copy only runs during a build. So after a `cmake --build` (new native code), `dotnet run --no-build` keeps the **stale** DLL already in `bin/Debug/net10.0/` and you silently run old C++ (Bug 1.42). Always run `dotnet run` / `dotnet build` (no `--no-build`) — the timestamp-based copy then refreshes the native DLL automatically.
+Never pass `--no-build` to `dotnet run` after a `cmake --build`. The native DLL copy step (a `PreserveNewest` item in `NativeDependencies.targets`) runs only during a build; `dotnet run --no-build` silently keeps the stale DLL already in `bin/Debug/net10.0/` and runs the old C++. Always use `dotnet run` / `dotnet build` (no `--no-build`); the timestamp-based copy then refreshes the native side automatically.
 
 ---
 
-## Architecture
+## Architecture — four layers
 
-KernelEngine is a microkernel game engine with four strict layers:
+```
+Layer 4 — C# managed (src/csharp/)          Game code, opinionated framework, wrappers
+Layer 3 — C# native bindings (.../Native/)  ClangSharp-generated P/Invoke
+Layer 2 — C++ plugins (src/cpp/, src/c/ecs/flecs, src/c/runtime, src/c/framework)
+Layer 1 — C kernel (src/c/kernel/)          ABI-stable contracts (vtables)
+```
 
-### Layer 1 — C Kernel (`src/c/kernel/`)
+### Layer 1 — C kernel (`src/c/kernel/`)
 
-Pure C, ABI-stable (`extern "C"`). All structs use vtable-style function pointers. Public headers under `include/kernel_engine/kernel/`, private impl under `src/`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped (struct of function pointers). Public headers under `include/kernel_engine/kernel/<domain>/`; private impl under `src/<domain>/`.
 
-Key types:
-- `ke_allocator` — explicit allocator, passed to every major component
+Stable types:
+- `ke_allocator` — explicit allocator vtable, passed to every major component (built-ins: `ke_allocator_malloc_create`, `ke_allocator_arena_create`)
 - `ke_logger` / `ke_logger_sink` — pluggable logging
-- `ke_world` — owns the ECS registry and system graph
-- `ke_ecs_registry` — sparse-set ECS; `ke_entity` is `uint64_t`
-- `ke_frame_packet` — per-frame snapshot written by ke.sim, read by ke.render
-- `ke_render` / `ke_window` — vtable interfaces for renderer and window backends
-- `ke_input_snapshot` — immutable input state passed across thread boundary
+- `ke_ecs` — language-agnostic ECS contract (entity lifetime + component storage + query). One implementation today: `KernelEngine.Ecs.Flecs` (flecs as storage-only, pipeline addons stripped).
+- `ke_runtime` — scheduler contract (phase loop + parallel waves + defer queue + fixed timestep). One implementation: in-house Bevy-style scheduler at `src/c/runtime/`.
+- `ke_system_ctx` — the only doorway to component memory inside a system body (R2.5c safety doctrine; see `docs/RuntimeArchitectureV2.md` §15).
+- `ke_render` / `ke_window` — vtable interfaces for renderer and window backends.
+- `ke_task_scheduler` — single shared worker pool (enkiTS impl) used by every parallel subsystem.
+- `ke_resource_cache` — generic refcount + path-keyed dedup primitive, kernel built-in (`src/c/kernel/src/resource_cache/`).
 
 CMake target: `ke_kernel` (alias `ke::kernel`).
 
-### Layer 2 — C++ plugins (`src/cpp/`)
+### Layer 2 — Plugins
 
-Each plugin is a shared library exposing a single C factory function:
-- `src/cpp/render/bgfx/` → `render_bgfx_create()` — bgfx renderer
-- `src/cpp/window/glfw/` → `ke_window_glfw_create()` — GLFW window
-- `src/cpp/render/bgfx_shader_compiler/` — shader compiler wrapper
-- `src/cpp/dev_platform/` — optional dev-only OS facilities (thread naming, future: crash handler, minidump)
-- `src/cpp/asset/assimp/` — Assimp mesh/texture loader
-- `src/cpp/threading/` — `KeFrameSync`, `KeSemaphore`, `KernelThread` (C++ impl of C threading API)
-- `src/cpp/task_scheduler/enki/` — enkiTS parallel task scheduler
+Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else the plugin exposes is a vtable returned by that factory.
 
-The bgfx plugin is internally split into sub-libraries (`render/core/`, `render/bgfx_device/`). `FrameSubmitter` consumes a `ke_frame_packet` and issues all draw calls.
+Active plugins:
+- `src/c/runtime/` → `ke_runtime_create` — scheduler
+- `src/c/ecs/flecs/` → `ke_ecs_flecs_create` — flecs-backed storage
+- `src/c/framework/` → `ke_world_create`, `ke_asset_resolver_create`, `ke_scene_tree_create`, `ke_scene_loader_create`, `ke_input_actions_create` — the engine's opinionated composition layer (vocabulary + scene file format + lifecycle aggregator)
+- `src/cpp/render/bgfx/` → `ke_render_bgfx_create` — bgfx renderer (the only renderer today; a V2 modern renderer is planned in `docs/RenderArchitectureV2.md`)
+- `src/cpp/window/glfw/` → `ke_window_glfw_create` — GLFW window
+- `src/cpp/asset/assimp/`, `src/cpp/asset/stb_image/` — asset loaders
+- `src/cpp/task_scheduler/enki/` → `ke_task_scheduler_enki_create` — enkiTS worker pool
+- `src/cpp/audio/miniaudio/`, `src/cpp/physics/box2d/`, `src/cpp/text/stb_truetype/` — domain backends
 
-#### **Layer boundary rule (non-negotiable)**
+Plugin vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `src/c/<plugin>/third_party/<lib>/` with a `VENDOR.md` recording upstream + license + sync date. Contained — never leaks to kernel or sibling plugins. Established precedent: tomlc99 inside `src/c/framework/third_party/tomlc99/`.
 
-- **`src/c/kernel/include/`** is the **sole** source of public engine API. Every interface, vtable, struct, enum, and function the engine exposes to consumers lives here. C ABI only.
-- Each `src/cpp/<plugin>/` exposes **one and only one** thing publicly: a C-ABI creation entry point (`ke_<plugin>_create()`) declared in a single small public header.
-- **All other headers under `src/cpp/<plugin>/`** (whether under `include/` or `src/`) are **implementation detail** — `.hpp` files with C++ classes, internal helpers, private state. **Consumers must never include them.**
-- If you find yourself wanting to expose a generic utility (thread naming, logging helper, math), it belongs in `src/c/kernel/`, not in a plugin's public header. Implement it in C (use C11 `_Thread_local` etc., not C++).
-- When auditing: any `.h` (not `.hpp`) under `src/cpp/<plugin>/include/` containing more than the create function is a violation. Surface it to the user before propagating the broken pattern.
+#### Layer boundary rule (non-negotiable)
+
+- `src/c/kernel/include/` is the **sole** source of public engine API. Every interface, vtable, struct, enum, and function the engine exposes lives here. C ABI only.
+- Each plugin (`src/c/<plugin>/`, `src/cpp/<plugin>/`) exposes exactly **one factory per factory header** in `<plugin>/include/kernel_engine/<domain>/[<plugin>/]<name>_create.h`. Everything else is implementation detail (`.hpp` / `.c` / `.cpp` files under `src/`).
+- Plugin contract headers in `kernel/<domain>/` declare vtable shapes **only** — no `KE_*_API` export macros, no plain function decls. Exports live exclusively in the plugin-side `_create.h` files. (Kernel built-ins are the only exception: kernel headers self-export by precedent — `ke_allocator_malloc_create` and `ke_resource_cache_create` are declared in their kernel-include contracts.)
+- If a "generic utility" feels like it wants to live in a plugin's public header, it belongs in `src/c/kernel/` instead. Implement in C (use C11 `_Thread_local`, etc., not C++).
 
 ### Layer 3 — C# native bindings (`src/csharp/Native/`)
 
-Auto-generated P/Invoke wrappers via ClangSharpPInvokeGenerator. **Never edit `Generated/` by hand.** Each plugin has a corresponding native project:
+Auto-generated P/Invoke wrappers via ClangSharpPInvokeGenerator. **Never edit `Generated/` by hand.** Each plugin gets a corresponding bindings csproj:
+
 - `KernelEngine.Kernel.Native` — wraps `ke_kernel`
-- `KernelEngine.Render.Bgfx.Native` — wraps bgfx render plugin
-- `KernelEngine.Window.Glfw.Native` — wraps GLFW window plugin
-- `KernelEngine.Asset.Assimp.Native` — wraps Assimp plugin
-- `KernelEngine.TaskScheduler.Enki.Native` / `KernelEngine.Threading.Native`
+- `KernelEngine.Runtime` — wraps `ke_runtime`
+- `KernelEngine.Ecs.Flecs` — wraps the flecs ECS plugin
+- `KernelEngine.Render.Bgfx.Native`, `KernelEngine.Window.Glfw.Native`, `KernelEngine.Asset.Assimp.Native`, `KernelEngine.TaskScheduler.Enki.Native`
 
 Regenerate with `python scripts/generate_bindings.py`. Each project has a `.rsp` file controlling which headers are processed and which types are excluded.
 
-### Layer 4 — C# managed layer (`src/csharp/`)
+### Layer 4 — C# managed (`src/csharp/`)
 
-**`KernelEngine.Kernel/`** — thin wrappers over native types. Key classes:
-- `Allocator` (abstract) → `MallocAllocator`, `ArenaAllocator`
-- `Logger`, `ILoggerSink`, `ConsoleSink`
-- `Window`, `Renderer`, `Input`
-- `World` — wraps `ke_world`; exposes `Scene`, `AddSystem(ISystem)`, `ActiveCamera`
-- `Scene` — `AddNode(string, parent?)`, `AddNode<T>(T, string, parent?)`
-- `Node` — ECS-backed, subclassable; `OnStart()`/`OnUpdate(float)` virtuals
-- `EcsRegistry`, `EcsQuery<T>` — component query (ref struct)
-- `FrameSync` — double-buffer ring between ke.sim (writer) and ke.render (reader)
-- `KernelThread` — named thread creation + `AssertCurrent(name)` for thread-affinity debug checks
-- `ISceneWriter` / `FramePacketSceneWriter` — frame-level commands safe to call from ke.sim
-- `IResourceFactory` / `ResourceCommandFactory` — GPU resource creation routed through `ResourceCommandQueue` to ke.render
-- `IInputReader` / `InputBuffer` — lock-free input snapshot exchange between ke.main and ke.sim
-- Typed handles: `MeshHandle`, `TextureHandle`, `MaterialHandle`, `ShadowMapHandle` — all use `uint.MaxValue` as the None sentinel; `0` is always a valid handle (built-in white texture)
+Thin wrappers expose the native vtables as managed types. Game code talks to these.
 
-**`KernelEngine.Framework/`** — high-level Framework. Key classes:
-- `Application` — orchestrates 3 threads (see threading model below)
-- Nodes: `MeshNode`, `CameraNode`, `LightNode`, `PointLightNode`, `SpotLightNode`, `SkyboxNode`
-- Systems: `MeshRenderSystem`, `CameraRenderSystem`, `LightRenderSystem`, `ShadowRenderSystem`, `SkyboxRenderSystem`
-
-**Plugin wrapper projects** (thin service registration only):
-- `KernelEngine.Render.Bgfx/` → `AddBgfxRenderer(shaderPath)`
-- `KernelEngine.Window.Glfw/` → `AddGlfwWindow(width, height, title)`
-- `KernelEngine.Asset.Assimp/` → asset loading helpers
-- `KernelEngine.Logging.Serilog/` → Serilog sink
-
----
-
-## Threading model
-
-`Application.Run()` owns three named threads:
-
-```
-ke.main   — GLFW PollEvents, Input.Update, InputBuffer.Produce
-ke.render — Renderer.Initialize, ResourceCommandQueue.Drain, SubmitPacket, Frame
-ke.sim    — World.Update, OnUpdate, FrameSync producer
-```
-
-`FrameSync` is a 2-slot ring buffer. ke.sim calls `BeginWrite`/`EndWrite`; ke.render calls `BeginRead`/`EndRead`. Both block on semaphores when no slot is available.
-
-`InputBuffer` is a lock-free single-slot exchange: ke.main produces, ke.sim consumes at the start of each `World.Update`.
-
-`ResourceCommandQueue` is a `ConcurrentQueue` drained by ke.render at the top of each frame, before reading the frame packet. `ResourceCommandFactory` enqueues commands and blocks ke.sim via `TaskCompletionSource<uint>` until ke.render returns the handle.
-
-Thread-affinity violations are caught at runtime in debug builds via `ke_thread_assert_current` (C/C++) and `KernelThread.AssertCurrent` (C#).
-
----
-
-## Game developer entry point
+The composition pattern (current target shape) — a runtime module host:
 
 ```csharp
 var services = new ServiceCollection()
     .AddKernel()
     .AddLogger().AddConsoleSink()
-    .AddInput()
-    .AddGlfwWindow(1280, 720, "Title")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "Title"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(shaderPath: ..., vsync: true));
 
-using var app = new Application();
+using var sp = services.BuildServiceProvider();
+var window  = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
+runtime.LoadModules(sp);
 
-app.OnReady = (IResourceFactory resources) => {
-    // called once on ke.sim after ke.render is initialized
-    var mesh = resources.CreateMesh(verts, indices);
-};
-
-app.OnUpdate = (ISceneWriter scene, IInputReader input) => {
-    // called every sim frame
-    scene.ClearColor(0.1f, 0.1f, 0.1f, 1f);
-    if (input.IsKeyDown(87)) { /* W */ }
-};
-
-app.Run(services);
+while (!window.ShouldClose()) {
+    runtime.Tick(dt);
+}
 ```
 
-**Do not call `app.Renderer` from `OnReady` or `OnUpdate`** — those run on ke.sim; bgfx APIs are ke.render-only.
+Game code becomes a runtime module too, registering its own components + systems via `IRuntimeModule.OnLoad(IRuntime)`. See `examples/csharp/01_runtime_clear_color/Program.cs` for the smallest working host.
+
+---
+
+## Threading model
+
+Two named workers exposed by the scheduler:
+
+```
+ke.sim    — runtime tick loop; runs every sim system + the window/input poll
+ke.render — pinned render-thread work; bgfx APIs are called here only
+```
+
+`ke.main` from the older Application.cs model is folded into `ke.sim`. There is no separate input thread; GLFW poll runs at the top of each tick before the scheduler dispatches.
+
+**Sim ↔ render boundary**: per-component snapshot via double-buffered ECS storage (locked design — `docs/RuntimeArchitectureV2.md` §16). Components touched by render-phase systems get `KE_COMPONENT_DOUBLE_BUFFERED` set automatically (inferred from system access lists). Phase boundaries rotate the snapshot index; sim N+1 writes the live side while render N reads the snapshot side. No lock, no per-frame copy, no frame-packet object — the old `ke_frame_packet` extract path was deleted in C-phase 4 of the runtime arc.
+
+**Pre-R6 transitional state**: snapshot mechanism is not yet wired (R6-R7). Sim and render run serially on the same world; render-phase systems just read live storage. Performance equivalent to the historical "1 thread for everything" model; correctness preserved. R6+ flips on pipelining transparently to render-side code.
+
+**Worker pool**: a single shared `ke_task_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly. Every parallel subsystem (asset loading, PSO compile, audio mixing, render dispatch) routes through the same pool. flecs is built without its pipeline addon, so flecs itself never spawns a thread.
 
 ---
 
 ## Coding conventions
 
 ### C / C++
-- **File extensions**: `.hpp`/`.cpp` for C++, `.h`/`.c` for C.
-- **Naming**: C++ — `PascalCase` types (Google C++ Style); C — `snake_case` with `ke_` prefix everywhere.
-- **Namespaces**: `kernel_engine::domain::subdomain`. Standard: `kernel_engine::render` for HAL contracts, `kernel_engine::render::core` for agnostic core, `kernel_engine::render::bgfx` for bgfx implementation. `using namespace` is forbidden in headers.
+- **Extensions**: `.h`/`.c` for C; `.hpp`/`.cpp` for C++.
+- **Naming**: C → `snake_case` with `ke_` prefix everywhere. C++ → `PascalCase` types (Google C++ Style).
+- **Namespaces (C++)**: `kernel_engine::<domain>::<subdomain>`. `using namespace` is forbidden in headers.
 - **Headers**: `#pragma once` always. Public API in `include/`; private impl headers next to `.cpp` files, never included externally.
 - **Formatting**: `BasedOnStyle: Microsoft` (`.clang-format` at root).
-- **Error handling**: return `ke_result`; no exceptions in the C layer. All callers must handle it.
-- **Memory**: every major component receives an explicit `ke_allocator*`. Raw pointers are non-owning unless documented.
-- **Naming (Structs)**: Standardize on `_params` suffix for structs that aggregate construction or registration parameters (parameter bags). NEVER use `_desc`, `_descriptor`, `_info`, or `_config`.
+- **Error handling**: C layer returns `ke_result`. No exceptions in C. All callers handle the result.
+- **Memory**: every major component receives an explicit `ke_allocator*`. Raw pointers are non-owning unless documented otherwise.
+- **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
+- **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
 ### C#
 - XML doc comments (`///`) on all `public` and `protected` members.
 - Generated bindings in `Generated/` — never edit manually.
+- `InternalsVisibleTo` is **banned**. Cross-binding access goes through public `Native` pointers, following the `Allocator.Native` precedent. Existing entries in `KernelEngine.Ecs.Flecs.csproj`, `KernelEngine.Runtime.csproj`, `KernelEngine.Kernel.csproj` are debt being cleaned up; new entries are rejected.
 
 ### Git / commits
 - Conventional Commits: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
-- 1 commit = 1 logical task. Never `git add .`; stage files selectively.
-- Commit message must be a single line. No multi-line body, no `Co-Authored-By`.
+- One commit per logical task. Stage files selectively — never `git add .`.
+- Commit messages are a single line. No multi-line body. No `Co-Authored-By` footer.
 
 ---
 
-## Key docs
+## Project rules
 
-- `docs/Reference/` — **consolidated engine reference** (12 chapters, arc42-style): what the engine is + will be, by domain (philosophy, layers, kernel, plugins, C# layers, framework, graphics, multithreading, assets, build, roadmap). Start at `docs/Reference/00 - Overview.md`. Supersedes the former `docs/Architecture/` vision docs.
-- `docs/EngineRoadmap.md` — **product roadmap (M1–M5)**. What the engine does at each milestone + recommended external libraries per feature category. Read first to understand the strategic direction.
-- `docs/Kanban.md` — **active and pending work**. Architectural principles at top; cards with Why/What/Acceptance/Steps; bug-to-card mapping at bottom.
-- `docs/Reference/12 - Architecture Backlog & Decisions.md` — **design rationale + bug catalog**. Detailed defect descriptions, target architecture, decisions log. NOT a status board.
-- `docs/Development/ProjectGuidelines.md` — **conventions and anti-patterns**. Plugin architecture, naming, header discipline, C# layer rules. The reference for code review.
+1. **Plugins implement vtables; contract headers declare them, factory headers create them, period.** No plain exported functions in plugin contract headers. The plugin's symbol surface to the rest of the engine is the factory function and the vtable methods it returns. Kernel built-ins are the only header path allowed to export plain symbols.
+
+2. **No `InternalsVisibleTo`.** See above. Use public `Native` pointers.
+
+3. **Search precedents before inventing.** The project is mature enough that almost every structural decision has an existing example. Before designing a new plugin layout, a new binding `.rsp`, a new CMakeLists structure, a new vtable split — find the closest existing case in the repo. Match the established pattern; if it's genuinely wrong, propose changing the pattern explicitly rather than diverging in parallel.
+
+4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
+
+5. **No mutex / condvar / `std::thread` in plugins.** The scheduler is the synchronization layer. Async completion uses `ke_task_scheduler->submit_to(thread, fn, ctx)` + `wait_for_task`. Producer-consumer ordering uses phase boundaries (register producer in phase N, consumer in phase N+1; the runtime guarantees the barrier). The legacy `ke_resource_queue` that reinvented a Future on `std::mutex` + `condition_variable` was deleted in C-phase 4.5 of the runtime arc.
+
+6. **Framework plugin is implemented in pure C.** `src/c/framework/` ships pure C only — no STL, no `new`/`delete`, no C++ standard library. tomlc99 (vendored) handles TOML parsing. The framework's public-facing surface is C-ABI vtable + factory functions, so C++ name-mangling at the implementation layer would only add friction for dynamic-language bindings (Lua, future Rust).
+
+---
+
+## Key documents
+
+| Doc | What it covers |
+|---|---|
+| [`docs/RuntimeArchitectureV2.md`](docs/RuntimeArchitectureV2.md) | The runtime contract (scheduler + ECS + module/system lifecycle + phase enum). §15 = script safety model. §16 = sim/render pipelining via component snapshot. §17 = V1 merge arc — **§17.6 is the live execution log + current branch state + next phases**. |
+| [`docs/RenderArchitectureV2.md`](docs/RenderArchitectureV2.md) | The future renderer design (`ke_gpu_device` WebGPU-style ABI, Slang shaders, three-mechanism PSO management, render-graph integration). Reconciled with runtime V2 (§9 integration, §11 culling, §12 non-goals). |
+| [`docs/EngineRoadmap.md`](docs/EngineRoadmap.md) | Product roadmap (M1–M5). What the engine does at each milestone + recommended external libraries per feature category. Read first to understand strategic direction. |
+| [`docs/Kanban.md`](docs/Kanban.md) | Active and pending work. Architectural principles at top; cards with Why/What/Acceptance/Steps. |
+| [`docs/Reference/`](docs/Reference/) | Consolidated engine reference (arc42-style chapters). Older snapshot of the architecture; runtime/render details have moved into the V2 docs above as those settled. |
+| [`docs/Development/ProjectGuidelines.md`](docs/Development/ProjectGuidelines.md) | Conventions and anti-patterns. Plugin architecture, naming, header discipline, C# layer rules. The reference for code review. |
