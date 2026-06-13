@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using KernelEngine.Ecs.Flecs.Native;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
@@ -31,11 +29,10 @@ public sealed unsafe class FlecsEcs : IEcs
     }
 
     /// <summary>
-    /// Borrowed pointer to the native ke_ecs vtable. Visible only to friend assemblies
-    /// (KernelEngine.Runtime, tests) — game code never sees this. The pointer is alive
-    /// until <see cref="Dispose"/> is called.
+    /// Borrowed pointer to the native ke_ecs vtable. The pointer is alive until
+    /// <see cref="Dispose"/> is called.
     /// </summary>
-    internal ke_ecs* Native => _native;
+    public ke_ecs* Native => _native;
 
     public void Dispose()
     {

@@ -15,11 +15,8 @@
   <Import Project="../NativeDependencies.targets" />
 
   <ItemGroup>
-    <!-- Native pointers are public on wrappers; plugin assemblies don't need internal access.
-         Framework references only Abstractions (not Kernel), so it gets no InternalsVisibleTo.
-         Tests keep it for white-box assertions. -->
+    <!-- ScriptBridge.ClearForTesting() is legitimately internal; tests need it for isolation. -->
     <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
-    <InternalsVisibleTo Include="KernelEngine.Framework.Legacy.Tests" />
   </ItemGroup>
 
   <ItemGroup>
