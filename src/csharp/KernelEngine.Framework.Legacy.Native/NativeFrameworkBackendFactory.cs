@@ -1,4 +1,5 @@
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework.Legacy;
 
@@ -14,14 +15,12 @@ public sealed unsafe class NativeFrameworkBackendFactory : IFrameworkBackendFact
         new NativeInputActions(new MallocAllocator());
 
     public ISceneTreeBackend CreateSceneTree(IWorld world) =>
-        new NativeSceneTree(((World)world).Native, new MallocAllocator());
+        throw new NotSupportedException("Legacy scene tree requires porting to runtime-v2 World.");
 
     public ISceneLoaderBackend CreateSceneLoader(IWorld world,
                                                    ISceneTreeBackend tree,
                                                    string projectRoot) =>
-        new NativeSceneLoader(new MallocAllocator(), (World)world,
-                              (NativeSceneTree)tree,
-                              projectRoot);
+        throw new NotSupportedException("Legacy scene loader requires porting to runtime-v2 World.");
 
     public IResourceCacheBackend CreateResourceCache() =>
         new NativeResourceCache(new MallocAllocator());
@@ -34,5 +33,5 @@ public sealed unsafe class NativeFrameworkBackendFactory : IFrameworkBackendFact
     }
 
     public IResourceCommandQueue CreateResourceQueue() =>
-        new NativeResourceQueue(new MallocAllocator());
+        throw new NotSupportedException("NativeResourceQueue was removed in C-phase 4.5.");
 }

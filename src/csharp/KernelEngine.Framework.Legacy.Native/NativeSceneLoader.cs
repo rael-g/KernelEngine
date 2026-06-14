@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using KernelEngine.Framework.Legacy.Native;
 using KernelEngine.Kernel;
+using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework.Legacy;
 
@@ -13,24 +14,19 @@ namespace KernelEngine.Framework.Legacy;
 /// </summary>
 internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
 {
-    // Per-language factory storage — the trampoline retrieves the closure via
-    // GCHandle from the loader-instance handle pointer. One trampoline serves
-    // every language; the loader's `ctx` discriminates which closure to call.
-    private record struct Registered(GCHandle Handle, Func<ulong, string, bool> Closure);
-    private readonly System.Collections.Generic.List<Registered> _scriptHandles = new();
+    private GCHandle _scriptHandle;
+    private Func<ulong, string, bool>? _scriptClosure;
 
     private ke_scene_loader* _native;
 
     public NativeSceneLoader(Allocator allocator,
-                              World world,
+                              ke_world* world,
                               NativeSceneTree tree,
                               string? projectRoot)
     {
         ke_scene_loader* p;
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
-        // ke_world is opaque to this plugin binding; cross-cast across Kernel.Native / Framework.Native
-        // generated identities (both reference the same C struct).
-        var worldFw = (KernelEngine.Framework.Legacy.Native.ke_world*)world.Native;
+        var worldFw = (KernelEngine.Framework.Legacy.Native.ke_world*)world;
         fixed (byte* rootPtr = rootBytes)
         {
             KernelException.ThrowIfFailed(
@@ -69,26 +65,18 @@ internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
     internal static void InitPendingException() => s_pendingException = null;
     private static System.Exception? s_pendingException;
 
-    public void RegisterScriptLanguage(string language, Func<ulong, string, bool> factory)
+    public void RegisterScriptFactory(Func<ulong, string, bool> factory)
     {
-        ArgumentNullException.ThrowIfNull(language);
         ArgumentNullException.ThrowIfNull(factory);
         if (_native is null) throw new ObjectDisposedException(nameof(NativeSceneLoader));
 
-        // Pin the closure under a GCHandle so the native side can call back into
-        // managed code (the ctx pointer is the handle). The handle is released in
-        // Dispose so each loader instance owns its closures' lifetime.
-        var gch = GCHandle.Alloc(factory);
-        _scriptHandles.Add(new Registered(gch, factory));
-        var ctx = GCHandle.ToIntPtr(gch);
+        if (_scriptHandle.IsAllocated) _scriptHandle.Free();
+        _scriptClosure = factory;
+        _scriptHandle  = GCHandle.Alloc(factory);
+        var ctx        = GCHandle.ToIntPtr(_scriptHandle);
 
-        var bytes = Encoding.UTF8.GetBytes(language + "\0");
-        fixed (byte* p = bytes)
-        {
-            var rc = _native->register_script_language(_native, (sbyte*)p,
-                &ScriptTrampoline, (void*)ctx);
-            KernelException.ThrowIfFailed(rc.ToManaged());
-        }
+        var rc = _native->register_script_factory(_native, &ScriptTrampoline, (void*)ctx);
+        KernelException.ThrowIfFailed(rc.ToManaged());
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -119,7 +107,6 @@ internal sealed unsafe class NativeSceneLoader : ISceneLoaderBackend
             _native->destroy(_native);
             _native = null;
         }
-        foreach (var r in _scriptHandles) r.Handle.Free();
-        _scriptHandles.Clear();
+        if (_scriptHandle.IsAllocated) _scriptHandle.Free();
     }
 }
