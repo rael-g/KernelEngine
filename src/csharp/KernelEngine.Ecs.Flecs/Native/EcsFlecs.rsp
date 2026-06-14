@@ -6,8 +6,10 @@ KernelEngine.Ecs.Flecs.Native
 ke_ecs_flecs
 --include-directory
 ../../../c/kernel/include
+--include-directory
+../../../c/ecs/flecs/include
 --file
-../../../c/kernel/include/kernel_engine/kernel/world/ke_ecs_flecs.h
+../../../c/ecs/flecs/include/kernel_engine/ecs/ke_ecs_flecs.h
 --methodClassName
 NativeMethods
 --prefixStrip
