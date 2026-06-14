@@ -9,7 +9,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>
 /// Parses a <c>.scene</c> TOML file and materializes its <c>[[entity]]</c>
-/// entries into <see cref="Node"/>s on the target <see cref="Tree"/>. Node
+/// entries into <see cref="Node"/>s on the target <see cref="NodeWorld"/>. Node
 /// classes resolve through <see cref="NodeTypeRegistry"/>; their constructor
 /// parameters are filled by the DI container; <c>[entity.properties]</c>
 /// values are reflected onto public settable properties.
@@ -20,7 +20,7 @@ public sealed class SceneLoader
 
     public SceneLoader(NodeTypeRegistry types) { _types = types; }
 
-    public void LoadInto(Tree tree, IServiceProvider services, string path)
+    public void LoadInto(NodeWorld tree, IServiceProvider services, string path)
     {
         var entities = ReadEntities(path);
         if (entities is null) return;

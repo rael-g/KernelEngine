@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
@@ -9,7 +9,7 @@ using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 14_ui_quad — UI overlay smoke test: three flat-color rectangles + three
+// 14_ui_quad â€” UI overlay smoke test: three flat-color rectangles + three
 // stb_truetype-backed Labels positioned via anchor + offset. Validates the
 // view 7 ortho pixel pass, the SubmitUiQuad path, and the Label / glyph atlas
 // pipeline end-to-end.
@@ -22,21 +22,23 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 14 UI Quad"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine â€” 14 UI Quad"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.10f, 0.12f, 0.16f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 14_ui_quad");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: ui_overlay_pass, labels, stb_truetype");
 
         var fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
         var loader   = sp.GetRequiredService<IFontLoader>();
-        var font     = Font.Load(tree.Renderer, loader, fontPath, pixelSize: 48f);
+        var font     = Font.Load(renderer, loader, fontPath, pixelSize: 48f);
         Console.WriteLine($"[KernelEngine] Font: {fontPath}, lineHeight={font.LineHeight:F1} ascent={font.Ascent:F1}");
 
         tree.AddNode(new Label
@@ -90,7 +92,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[14_ui_quad] Exited cleanly.");
 
-// ── Background quads emitted every frame ─────────────────────────────────────
+// â”€â”€ Background quads emitted every frame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class UiQuadContributor : IFrameContributor
 {

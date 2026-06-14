@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Asset.Assimp;
 using KernelEngine.Ecs.Flecs;
@@ -10,10 +10,10 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 13_full_scene — every stabilized feature in one scene: ground plane,
+// 13_full_scene â€” every stabilized feature in one scene: ground plane,
 // loaded model (Box.gltf), directional + ambient + 8 orbiting point lights,
 // shadows, ACES tonemapping, bloom. SSAO is requested but stays a no-op
-// (Kanban Z3 — bgfx SSAO path is empty).
+// (Kanban Z3 â€” bgfx SSAO path is empty).
 
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
@@ -25,11 +25,12 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 13 Full Scene"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 13 Full Scene"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.05f, 0.08f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new ShadowModule(resolution: 1024, frustumSize: 30f, farPlane: 60f))
     .Add<IRuntimeModule>(new PostProcessModule(
@@ -38,6 +39,7 @@ var services = new ServiceCollection()
         ssao:        true, ssaoRadius:          0.5f, ssaoBias:         0.025f, ssaoStrength: 1.5f))
     .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 13_full_scene");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: shadows, hdr, bloom, ssao*, model_loading, 8_orbiting_point_lights");
@@ -59,8 +61,8 @@ var services = new ServiceCollection()
         }, "Sun");
 
         // Floor: a Plane primitive (XZ, normal +Y) scaled out for a 50-unit ground.
-        var planeMesh = MeshPrimitives.Plane(tree.Renderer);
-        var floorMat  = tree.Renderer.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f).Value;
+        var planeMesh = MeshPrimitives.Plane(renderer);
+        var floorMat  = renderer.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f).Value;
         var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 1f, 50f) };
 
@@ -70,9 +72,9 @@ var services = new ServiceCollection()
             Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
             using var model = loader.LoadModel(modelPath);
             Console.WriteLine($"[KernelEngine] Model: {model.Meshes.Count} meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-            var meshNodes = tree.AddModel(model, rootName: "CenterBox");
+            var meshNodes = tree.AddModel(model, renderer, rootName: "CenterBox");
 
-            // Lift + scale the model. Flat hierarchy for now — apply per-node.
+            // Lift + scale the model. Flat hierarchy for now â€” apply per-node.
             for (int i = 0; i < meshNodes.Count; i++)
             {
                 meshNodes[i].LocalTransform = meshNodes[i].LocalTransform with
@@ -134,7 +136,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[13_full_scene] Exited cleanly.");
 
-// ── Orbiting point light — circles the origin at fixed height ────────────────
+// â”€â”€ Orbiting point light â€” circles the origin at fixed height â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class OrbitingLight : PointLight
 {

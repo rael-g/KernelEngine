@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,9 +9,9 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 09_many_lights — stress test: 121-cube wall lit by 200 randomly moving
+// 09_many_lights â€” stress test: 121-cube wall lit by 200 randomly moving
 // colored point lights. Tests the contributor's per-frame light loop and the
-// renderer's per-frame light cap (lights past the cap are dropped silently —
+// renderer's per-frame light cap (lights past the cap are dropped silently â€”
 // behavior we want visible at this scale).
 
 const int LightCount = 200;
@@ -23,14 +23,16 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 09 Many Lights Stress Test"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 09 Many Lights Stress Test"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.01f, 0.01f, 0.01f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 09_many_lights");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine($"[KernelEngine] Features: stress_test, {LightCount} point_lights");
@@ -40,10 +42,10 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 30f) };
 
-        var cubeMesh = MeshPrimitives.Cube(tree.Renderer);
-        var mat = tree.Renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+        var cubeMesh = MeshPrimitives.Cube(renderer);
+        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
 
-        // 11×11 cube wall facing the camera (z=0).
+        // 11Ã—11 cube wall facing the camera (z=0).
         for (int x = -15; x <= 15; x += 3)
         for (int y = -15; y <= 15; y += 3)
         {
@@ -98,7 +100,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[09_many_lights] Exited cleanly.");
 
-// ── Random moving point light — per-instance seed picked at construction ─────
+// â”€â”€ Random moving point light â€” per-instance seed picked at construction â”€â”€â”€â”€â”€
 
 sealed class RandomMovingLight : PointLight
 {

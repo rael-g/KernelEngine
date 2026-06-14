@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 06_shadow_map — directional shadow casting onto a floor plane. A red cube
+// 06_shadow_map â€” directional shadow casting onto a floor plane. A red cube
 // sits above a gray floor; the sun's azimuth sweeps over time so the cube's
 // shadow slides across the floor, making the shadow projection visible at a
 // glance.
@@ -21,24 +21,26 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 06 Shadow Map"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 06 Shadow Map"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.1f, 0.1f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new ShadowModule(resolution: 1024, frustumSize: 20f, farPlane: 50f))
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 06_shadow_map");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: shadow_map_directional, ortho_light_frustum, animated_sun");
 
-        var planeMesh = MeshPrimitives.Plane(tree.Renderer);
-        var cubeMesh  = MeshPrimitives.Cube(tree.Renderer);
+        var planeMesh = MeshPrimitives.Plane(renderer);
+        var cubeMesh  = MeshPrimitives.Cube(renderer);
 
-        var floorMat = tree.Renderer.CreateMaterial(new Vector4(0.5f, 0.5f, 0.5f, 1f), roughness: 0.8f).Value;
-        var redMat   = tree.Renderer.CreateMaterial(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f).Value;
+        var floorMat = renderer.CreateMaterial(new Vector4(0.5f, 0.5f, 0.5f, 1f), roughness: 0.8f).Value;
+        var redMat   = renderer.CreateMaterial(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f).Value;
 
         tree.AddNode(new AnimatedSun
         {
@@ -94,7 +96,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[06_shadow_map] Exited cleanly.");
 
-// ── Animated sun — direction sweeps in azimuth ───────────────────────────────
+// â”€â”€ Animated sun â€” direction sweeps in azimuth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class AnimatedSun : DirectionalLight
 {

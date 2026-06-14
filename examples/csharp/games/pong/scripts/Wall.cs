@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 
@@ -21,10 +21,10 @@ public sealed class Wall : MeshRenderer
         _resources = resources;
     }
 
-    protected override void OnBind(Tree tree)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
         MaterialHandle = _resources.WallMat;
-        base.OnBind(tree);
+        base.OnBind(nodeWorld);
 
         var t      = LocalTransform;
         var pos    = new Vector2(t.Position.X, t.Position.Y);

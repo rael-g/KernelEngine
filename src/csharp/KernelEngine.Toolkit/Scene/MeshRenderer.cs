@@ -12,6 +12,6 @@ public class MeshRenderer : Node
     public MeshHandle     MeshHandle     { get; set; }
     public MaterialHandle MaterialHandle { get; set; }
 
-    protected internal override void OnBind(Tree tree)
-        => tree.Set(Entity, new MeshRendererComponent { Mesh = MeshHandle, Material = MaterialHandle });
+    protected internal override void OnBind(NodeWorld nodeWorld)
+        => nodeWorld.Set(Entity, new MeshRendererComponent { Mesh = MeshHandle, Material = MaterialHandle });
 }

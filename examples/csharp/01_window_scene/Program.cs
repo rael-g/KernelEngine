@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 01_window_scene — a single orange quad spinning on the screen under a fixed
+// 01_window_scene â€” a single orange quad spinning on the screen under a fixed
 // directional light. Smallest possible scene that exercises window + renderer
 // + framework + a scripted node behavior.
 
@@ -20,15 +20,17 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 01 Window/Tree"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.15f, 0.15f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new PostProcessModule(tonemapping: true))
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 01_window_scene");
         Console.WriteLine("[KernelEngine] Features: window, renderer, single_quad, spinner_behavior");
 
@@ -42,7 +44,7 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
 
-        var orangeMat = tree.Renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f)).Value;
+        var orangeMat = renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f)).Value;
         tree.AddNode(new SpinningQuad { MaterialHandle = orangeMat }, "Spinner");
     }));
 
@@ -79,7 +81,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[01_window_scene] Exited cleanly.");
 
-// ── A MeshRenderer that spins around Y at 90 deg/s ───────────────────────────
+// â”€â”€ A MeshRenderer that spins around Y at 90 deg/s â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class SpinningQuad : MeshRenderer
 {

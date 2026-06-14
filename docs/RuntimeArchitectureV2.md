@@ -1560,12 +1560,158 @@ After F-phase (2026-06-13):
 
 10. **Node hierarchy design locked, impl deferred post-merge** — `Node` → `Node3D` / `Node2D` / `Canvas` / `Control` split is the correct architecture. `Node3D` carries `ke_transform_component`; `Node2D` carries `ke_transform2d_component` (xy + rot + scale, pixel/unit space); `Canvas` is a hierarchy boundary (no transform — breaks 3D/2D transform inheritance chain); `Control` carries `ke_ui_anchor_component`. Rules: Node3D inherits transform only from Node3D parents; Node2D only from Node2D parents; Canvas children can only be Control (scene_loader validates). "Node3D → Canvas → Node3D" is invalid hierarchy. **2.5D / Octopath / billboards use Node3D + billboard rendering flag, NOT Node2D** — 2.5D is 3D world space with sprite art; Node2D is for pure-2D pixel-space games. `ke_label_component` in `components.h` was rejected because: (a) Label is UI, not 3D scene vocabulary; (b) it would embed a raw `ke_font_data*` pointer in an ECS component instead of a font handle; (c) the entire concept is replaced when Canvas/Control lands. Font should be a resource with `ke_font_handle` (uint32_t, like `ke_mesh_handle`) when that milestone arrives.
 
-#### 17.6.5 Next step — merge to main
+#### 17.6.5 G-phase — migrate legacy managed classes to native wrappers
 
-All phases A through F are shipped. Branch is ready to merge.
+**Goal**: replace the Tomlyn-based `Tree`/`SceneLoader` stack in `KernelEngine.Toolkit` with native-backed equivalents, wire Pong as its own `IRuntimeModule`, and retire all reflection-driven property binding.
+
+**Invariants that must hold throughout G-phase (never relax these):**
+- `KernelEngine.Framework` knows ECS + Scene only — NEVER knows what a `Node` is.
+- `KernelEngine.Toolkit` is the sugar layer — `Node` lives here only.
+- No `InternalsVisibleTo`. Cross-layer access through public `Native` pointers.
+- No reflection in Node / script code.
+- No manual editing of `Generated/` files.
+- Entity creation always goes through `World.NativeSceneTree.CreateNode()`, never `IEcsAdapter.CreateEntity()` directly.
+- Render is a module — `World`, `IEcs`, `IRuntime`, `NodeWorld` never reference `IRenderer`.
+
+---
+
+##### G1 — NodeWorld replaces Tree in Toolkit (atomic commit)
+
+**What**: create `src/csharp/KernelEngine.Toolkit/Scene/NodeWorld.cs`. This is the Node-aware facade over `World` that replaces the legacy `Tree`.
+
+Constructor: `internal NodeWorld(World world, IEcsAdapter ecs, IComponentRegistry components)` — no `IRenderer`.
+
+Entity lifecycle: `world.NativeSceneTree.CreateNode(name, parentEntity)` for creation; `world.NativeSceneTree.DestroyNode(entity)` for destruction.
+
+Tracks managed Nodes:
+- `_behaviors: List<Node>` — nodes that override `OnUpdate`
+- `_labels: List<Label>` — managed label nodes
+- `_byName: Dictionary<string, Node>` — lookup by name
+
+Public API (mirror of legacy `Tree`):
+- `AddNode<T>(T node, string name, Node? parent)` — binds node, creates native entity, calls `OnBind`
+- `PreAddNode(Node, string, Node?)` / `CompleteAddNode(Node)` — two-phase bind used by SceneRouter
+- `Find(string)` / `Find<T>(string)`
+- `DestroyNode(Node)` — recursive, removes from `_behaviors`/`_labels`
+- `Clear()` — flush all root nodes
+- `Set<T>(ulong, T)` / `TryGet<T>(ulong, out T)` — via EcsAdapter + ComponentRegistry
+
+**Update `Node.cs`**: rename `Tree? Tree` → `NodeWorld? NodeWorld` (or alias). All `Tree!.Set/TryGet` calls route through `NodeWorld`. `OnBind(Tree)` → `OnBind(NodeWorld)`.
+
+**Update `SceneRenderModule.Configure`**: register `NodeWorld` instead of `Tree`:
+```csharp
+services.AddSingleton<NodeWorld>(sp =>
+    new NodeWorld(
+        sp.GetRequiredService<World>(),
+        sp.GetRequiredService<IEcsAdapter>(),
+        sp.GetRequiredService<IComponentRegistry>()));
+```
+
+**Update `LabelContributor`**: constructor takes `NodeWorld` instead of `Tree`.
+
+**Update `SceneRenderModule.OnLoad`**: resolve `NodeWorld`, pass its `Behaviors` to `BehaviorSystem`.
+
+**Validation**: `dotnet build` green. No functional change yet — existing behavior preserved.
+
+---
+
+##### G2 — NativeSceneLoader replaces Tomlyn SceneLoader + SceneRouter wired (atomic commit)
+
+**What**: `SceneRouter` stops calling `Tomlyn SceneLoader` and instead uses `NativeSceneLoader` (already implemented in `src/csharp/KernelEngine.Framework/Scene/NativeSceneLoader.cs`).
+
+**Script factory trampoline**: `NativeSceneLoader.RegisterScriptFactory(Func<ulong, string, bool>)` accepts a callback. The callback receives `(entity, typeName)`, looks up the `NodeTypeRegistry`, instantiates the `Node` via `ActivatorUtilities`, calls `NodeWorld.PreAddNode` then `CompleteAddNode`. The factory returns `true` on success.
+
+**Update `SceneRouter`**:
+```csharp
+// OLD:
+_loader.LoadInto(_tree, _services, path);
+
+// NEW:
+_nativeLoader.Load(path);  // ke_scene_loader->load fires script_factory per entity
+```
+
+The `NodeWorld` no longer has `PreAddNode`/`CompleteAddNode` called by the managed loader — the native C loader drives the lifecycle; the script factory trampoline is the only managed callback.
+
+**Delete** `Toolkit/Scene/SceneLoader.cs` (Tomlyn version).  
+**Remove** `<PackageReference Include="Tomlyn" .../>` from `KernelEngine.Toolkit.csproj`.
+
+**Update `SceneRenderModule`** (or new dedicated module): register `NativeSceneLoader` singleton + call `RegisterScriptFactory` after DI resolution.
+
+**Validation**: scene file with `type = "Camera"` (or any existing node type) loads without Tomlyn. Build + scene load green.
+
+---
+
+##### G3 — Pong becomes PongModule + paddle component (atomic commit)
+
+**What**: Pong registers its own component + apply callback at startup; scene files migrate from `[entity.properties]` to `[entity.components.paddle]`.
+
+**`PongModule : IRuntimeModule`** in `examples/csharp/games/pong/`:
+```csharp
+public sealed class PongModule : IRuntimeModule
+{
+    public string Name => "Pong";
+    public void Configure(IServiceCollection services) { }
+    public void OnLoad(IRuntime runtime, IServiceProvider services)
+    {
+        var world = services.GetRequiredService<World>();
+        var ecs   = services.GetRequiredService<IEcsAdapter>();
+        // register ke_paddle_component
+        // register apply callback via world.Native->register_component_apply(world.Native, cid, &ApplyPaddle)
+        // register systems: PaddleControlSystem, BallSystem, ScoreSystem, etc.
+    }
+}
+```
+
+**`ke_paddle_component`** (C struct declared in the pong example — NOT in `components.h`, game-specific):
+```c
+typedef struct { float pos_x; float pos_y; uint32_t move_action; } ke_paddle_component;
+```
+Or equivalent managed struct if declared on the C# side.
+
+**Apply callback**: `[UnmanagedCallersOnly]` static method reads `move_action` string entry from `ke_variant_table_entry[]`, looks it up in `InputActions`, stores the action ID.
+
+**Migrate scene files** (`Main.scene`, `Paddle.scene`):
+- `[entity.properties]` blocks → `[entity.components.paddle]` (for entities that have a paddle)
+- Camera, AmbientLight, Scoreboard: map to their respective component blocks
+
+**Update `Paddle.cs`**:
+- Remove `public PongAction MoveAction { get; set; }` (was set by reflection)
+- Add `OnBind(NodeWorld)` override: reads `ke_paddle_component` from ECS via `NodeWorld.TryGet<PaddleManagedComponent>(Entity, out var c)` and captures `c.MoveAction`
+
+**Validation**: Pong runs visually identical to before. Paddles respond to input, scoring works.
+
+---
+
+##### G4 — Final cleanup (atomic commit)
+
+- Rename `NativeSceneLoader` → `SceneLoader` (in Framework namespace — the "Native" prefix was temporary to coexist with the Tomlyn version, which is now gone).
+- Grep for any remaining `Tomlyn` references — should be zero.
+- Grep for any remaining `Tree` type references (not the abstract concept, the old concrete class) — should be zero.
+- Verify `ModelExtensions` or any other place that accepted `IRenderer` from a tree-level caller no longer does so.
+- Update XML doc comments on `NodeWorld`, `SceneRouter`, `FrameworkModule`, `SceneRenderModule`.
+
+**Validation**: `dotnet build` + `dotnet test KernelEngine.slnx` green. Pong runs.
+
+---
+
+##### G-phase design decisions (locked before coding)
+
+11. **NodeWorld does not expose IRenderer** — render is a module that adds its own systems + services to DI. The entity/scene layer (World, SceneTree, NodeWorld) has zero awareness of rendering.
+12. **Entity creation always through NativeSceneTree** — `World.NativeSceneTree.CreateNode(name, parentEntity)` is the sole entry point for entity creation in the Toolkit layer. `IEcsAdapter.CreateEntity()` is not called from `NodeWorld` directly.
+13. **Game programs are modules** — each game (Pong, etc.) implements `IRuntimeModule` and registers its own components (+ apply callbacks), systems, and node types in `OnLoad`. Initially manual; source gen is post-merge.
+14. **Apply callback is game's responsibility** — `[entity.components.X]` in a scene file routes through the apply registry. The game registers the apply callback for its own component type. The engine never reflects on game types.
+15. **`NativeSceneLoader` renamed `SceneLoader` at G4** — the "Native" prefix was a transitional name to coexist with the Tomlyn loader. Once the Tomlyn loader is deleted, the correct name is simply `SceneLoader`.
+16. **`PongResources` does not exist in the new model** — it was legacy. Game state (ball position, score, etc.) lives as ECS components accessed through systems.
+
+---
+
+#### 17.6.6 Next step — merge to main
+
+After G-phase:
 
 Pre-merge checklist:
-- [ ] Visual validation: examples 01–16 + Pong render correctly
+- [ ] G1–G4 committed and build green
+- [ ] Visual validation: Pong renders + plays correctly (only Pong validates Toolkit; examples 01–16 are legacy pre-Runtime-V2 and are not validators for the new model)
 - [ ] `dotnet test KernelEngine.slnx` green
 - [ ] `ctest --preset win` ≥ 518/520 (2 pre-existing RuntimeSpike failures acceptable)
 - [ ] Merge PR to `main`
@@ -1575,3 +1721,4 @@ Post-merge backlog (not blocking):
 - **`ke_font_handle`** as first-class resource handle (alongside `ke_mesh_handle`, `ke_material_handle`)
 - **Kanban A16** — opaque owner/borrow handle split (`ke_ecs` owner + `ke_ecs_view` borrow)
 - **Render V2** — `ke_gpu_device` WebGPU-style ABI (see `docs/RenderArchitectureV2.md`)
+- **Source gen for NodeBehavior** — replace manual `OnLoad` component registration with codegen (see §15.6)

@@ -1,4 +1,4 @@
-using KernelEngine.Audio.MiniAudio;
+﻿using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
@@ -35,6 +35,7 @@ var services = new ServiceCollection()
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.08f, 0.10f, 1.0f)))
+        .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
@@ -130,7 +131,7 @@ sealed class AudioController : Node
         _bass  = bass;
     }
 
-    protected override void OnBind(Tree tree) { /* nothing to materialize — this node only carries behavior */ }
+    protected override void OnBind(NodeWorld nodeWorld) { /* nothing to materialize — this node only carries behavior */ }
 
     protected override void OnUpdate(in View view)
     {

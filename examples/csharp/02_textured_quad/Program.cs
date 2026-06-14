@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
@@ -8,8 +8,8 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 02_textured_quad — procedural checkerboard texture on the built-in quad,
-// lit by one directional + ambient light. Same Tree.AddNode shape as the
+// 02_textured_quad â€” procedural checkerboard texture on the built-in quad,
+// lit by one directional + ambient light. Same tree.AddNode shape as the
 // legacy example; under the hood every node is an ECS entity + components,
 // and render contributors stream them into the per-frame packet.
 
@@ -20,15 +20,17 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 02 Textured Quad"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 02 Textured Quad"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.05f, 0.05f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
-        // Procedural 128×128 checkerboard, 16-pixel squares.
+        var renderer = sp.GetRequiredService<IRenderer>();
+        // Procedural 128Ã—128 checkerboard, 16-pixel squares.
         const uint width  = 128;
         const uint height = 128;
         var pixels = new byte[width * height * 4];
@@ -40,8 +42,8 @@ var services = new ServiceCollection()
             int  i = (y * (int)width + x) * 4;
             pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v; pixels[i + 3] = 255;
         }
-        var tex = tree.Renderer.CreateTexture(width, height, pixels).Value;
-        var mat = tree.Renderer.CreateMaterial(Vector4.One, textureHandle: tex).Value;
+        var tex = renderer.CreateTexture(width, height, pixels).Value;
+        var mat = renderer.CreateMaterial(Vector4.One, textureHandle: tex).Value;
 
         tree.AddNode(new DirectionalLight
         {

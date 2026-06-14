@@ -13,14 +13,16 @@ public static class ModelExtensions
     /// <summary>
     /// Uploads <paramref name="model"/>'s textures, materials, and meshes to
     /// the renderer, then adds one <see cref="MeshRenderer"/> node per sub-mesh
-    /// to <paramref name="tree"/>. Must be called from the render worker (i.e.
+    /// to <paramref name="nodeWorld"/>. Must be called from the render worker (i.e.
     /// inside a <c>SceneModule</c> setup callback) because GPU uploads are
     /// pinned to ke.render.
     /// </summary>
-    public static IReadOnlyList<MeshRenderer> AddModel(this Tree tree, IModel model, string rootName = "Model")
+    public static IReadOnlyList<MeshRenderer> AddModel(
+        this NodeWorld nodeWorld,
+        IModel model,
+        IRenderer renderer,
+        string rootName = "Model")
     {
-        var renderer = tree.Renderer;
-
         var textures = new TextureHandle[model.Textures.Count];
         for (int i = 0; i < model.Textures.Count; i++)
         {
@@ -49,7 +51,7 @@ public static class ModelExtensions
             var mesh     = renderer.CreateMesh(src.Vertices.ToArray(), src.Indices.ToArray()).Value;
             var material = src.MaterialIndex >= 0 ? materials[src.MaterialIndex] : default;
             var name     = string.IsNullOrEmpty(src.Name) ? $"{rootName}.Mesh_{i}" : $"{rootName}.{src.Name}";
-            nodes.Add(tree.AddNode(new MeshRenderer { MeshHandle = mesh, MaterialHandle = material }, name));
+            nodes.Add(nodeWorld.AddNode(new MeshRenderer { MeshHandle = mesh, MaterialHandle = material }, name));
         }
         return nodes;
     }

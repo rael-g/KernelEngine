@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 05_skybox_ibl — procedural cubemap as both the visible skybox and the IBL
+// 05_skybox_ibl â€” procedural cubemap as both the visible skybox and the IBL
 // environment for a metallic quad. A free-look camera (arrow keys to rotate,
 // WASD/Shift/Ctrl to translate) lets you fly around to see the cubemap from
 // every face and watch the IBL response on the metal surface.
@@ -22,24 +22,26 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 05 Skybox & IBL (FreeLook)"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.05f, 0.05f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 05_skybox_ibl");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: skybox_cubemap, ibl_env_map, pbr_ggx, freelook_camera");
 
         // ACES tonemapping is stateful on the renderer; setting it once at
-        // scene setup is enough — the legacy example called it per-frame
+        // scene setup is enough â€” the legacy example called it per-frame
         // defensively, but the underlying state survives.
-        tree.Renderer.SetTonemapping(true, 1.0f, 2.2f);
+        renderer.SetTonemapping(true, 1.0f, 2.2f);
 
-        // Procedural cubemap — one solid color per face for face identification.
+        // Procedural cubemap â€” one solid color per face for face identification.
         const uint faceSize = 64;
         var cubeData = new byte[faceSize * faceSize * 4 * 6];
         (byte R, byte G, byte B)[] colors =
@@ -63,12 +65,12 @@ var services = new ServiceCollection()
             }
         }
 
-        var cubemap = tree.Renderer.CreateCubemap(faceSize, cubeData).Value;
+        var cubemap = renderer.CreateCubemap(faceSize, cubeData).Value;
         Console.WriteLine($"[KernelEngine] Cubemap: handle={cubemap.Value} faceSize={faceSize}");
 
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
-        var mirrorMat = tree.Renderer.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f).Value;
+        var mirrorMat = renderer.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f).Value;
         tree.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
 
         tree.AddNode(new DirectionalLight
@@ -114,7 +116,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[05_skybox_ibl] Exited cleanly.");
 
-// ── FreeLook camera — arrow keys: look, WASD: move, Shift/Ctrl: fly ──────────
+// â”€â”€ FreeLook camera â€” arrow keys: look, WASD: move, Shift/Ctrl: fly â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class FreeLook : Camera
 {

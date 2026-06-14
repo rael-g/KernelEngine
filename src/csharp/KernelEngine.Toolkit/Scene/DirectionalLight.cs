@@ -3,8 +3,7 @@ using System.Numerics;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Directional light node + ambient. Init properties feed the per-frame light
-/// state the renderer consumes.
+/// Directional light node. Init properties feed the per-frame light state the renderer consumes.
 /// </summary>
 public class DirectionalLight : Node
 {
@@ -21,7 +20,7 @@ public class DirectionalLight : Node
     public float   Intensity { get => _state.Intensity; set { _state.Intensity = value; WriteIfBound(); } }
     public Vector3 Ambient   { get => _state.Ambient;   set { _state.Ambient   = value; WriteIfBound(); } }
 
-    private void WriteIfBound() { if (IsBound) Tree!.Set(Entity, _state); }
+    private void WriteIfBound() { if (IsBound) NodeWorld!.Set(Entity, _state); }
 
-    protected internal override void OnBind(Tree tree) => tree.Set(Entity, _state);
+    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.Set(Entity, _state);
 }

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 07_point_lights — 36-quad grid lit by four moving colored point lights, no
+// 07_point_lights â€” 36-quad grid lit by four moving colored point lights, no
 // directional light. Showcases the multi-point-light path: each PointLight
 // node is its own entity with PointLightComponent, the contributor packs them
 // into the per-frame packet up to the renderer's per-frame cap.
@@ -21,14 +21,16 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 07 Point Lights"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 07 Point Lights"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.02f, 0.02f, 0.02f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 07_point_lights");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: point_lights, multi_light_accumulation");
@@ -38,9 +40,9 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
 
-        var mat = tree.Renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
 
-        // Grid of quads at z=0, x,y ∈ {-5, -3, -1, 1, 3, 5}.
+        // Grid of quads at z=0, x,y âˆˆ {-5, -3, -1, 1, 3, 5}.
         for (int x = -5; x <= 5; x += 2)
         for (int y = -5; y <= 5; y += 2)
         {
@@ -94,7 +96,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[07_point_lights] Exited cleanly.");
 
-// ── Moving point light — orbits the origin with per-instance phase ───────────
+// â”€â”€ Moving point light â€” orbits the origin with per-instance phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class MovingPointLight : PointLight
 {

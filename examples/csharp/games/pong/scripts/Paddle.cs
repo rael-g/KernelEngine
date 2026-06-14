@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 
@@ -30,11 +30,11 @@ public sealed class Paddle : MeshRenderer
         _resources = resources;
     }
 
-    protected override void OnBind(Tree tree)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
         MaterialHandle = _resources.WhiteMat;
         LocalTransform = LocalTransform with { Scale = new Vector3(0.3f, 1.8f, 1f) };
-        base.OnBind(tree);
+        base.OnBind(nodeWorld);
 
         var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
         _body = _physics.CreateBody(BodyType2D.Kinematic, pos);

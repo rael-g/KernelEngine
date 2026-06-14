@@ -24,7 +24,7 @@ public class SpotLight : Node
     public float   InnerAngleDeg { get => _state.InnerAngleDeg; set { _state.InnerAngleDeg = value; WriteIfBound(); } }
     public float   OuterAngleDeg { get => _state.OuterAngleDeg; set { _state.OuterAngleDeg = value; WriteIfBound(); } }
 
-    private void WriteIfBound() { if (IsBound) Tree!.Set(Entity, _state); }
+    private void WriteIfBound() { if (IsBound) NodeWorld!.Set(Entity, _state); }
 
-    protected internal override void OnBind(Tree tree) => tree.Set(Entity, _state);
+    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.Set(Entity, _state);
 }

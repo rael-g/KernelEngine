@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\KernelEngine.Framework.Abstractions\KernelEngine.Framework.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />

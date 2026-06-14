@@ -19,5 +19,5 @@ public class Label : Node
     /// <summary>Pixel offset applied AFTER anchor positioning.</summary>
     public Vector2 Offset { get; set; } = Vector2.Zero;
 
-    protected internal override void OnBind(Tree tree) => tree.RegisterLabel(this);
+    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.RegisterLabel(this);
 }

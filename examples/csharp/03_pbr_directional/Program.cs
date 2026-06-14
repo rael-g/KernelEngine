@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 03_pbr_directional — three quads with different PBR materials lit by a
+// 03_pbr_directional â€” three quads with different PBR materials lit by a
 // directional light that orbits around them. Showcases the NodeBehavior
 // surface: the orbiting light is a Node subclass with an OnUpdate(View)
 // override; SceneRenderModule's BehaviorSystem ticks it every frame.
@@ -25,14 +25,16 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 03 PBR Directional"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 03 PBR Directional"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.05f, 0.05f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 03_pbr_directional");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: pbr_ggx, directional_light, orbiting_light");
@@ -47,9 +49,9 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 1.0f, 5.0f) };
 
-        var mat0 = tree.Renderer.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal0, roughness: rough0).Value;
-        var mat1 = tree.Renderer.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal1, roughness: rough1).Value;
-        var mat2 = tree.Renderer.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal2, roughness: rough2).Value;
+        var mat0 = renderer.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal0, roughness: rough0).Value;
+        var mat1 = renderer.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal1, roughness: rough1).Value;
+        var mat2 = renderer.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: metal2, roughness: rough2).Value;
 
         var n0 = tree.AddNode(new MeshRenderer { MaterialHandle = mat0 }, "QuadDielectric");
         n0.LocalTransform = n0.LocalTransform with { Position = new Vector3(-2f, 0f, 0f) };
@@ -93,7 +95,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[03_pbr_directional] Exited cleanly.");
 
-// ── Orbiting directional light ───────────────────────────────────────────────
+// â”€â”€ Orbiting directional light â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class OrbitingLight : DirectionalLight
 {

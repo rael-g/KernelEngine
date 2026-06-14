@@ -3,26 +3,26 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Base class for game-facing scene objects. A Node is the managed wrapper
 /// around an ECS entity. Game code instantiates subclasses with init properties
-/// (object-initializer syntax) and hands them to <see cref="Tree.AddNode"/>;
-/// AddNode creates the entity and asks the node to materialize its components.
+/// (object-initializer syntax) and hands them to <see cref="NodeWorld.AddNode"/>;
+/// AddNode creates the native entity and asks the node to materialize its components.
 /// </summary>
 public abstract class Node
 {
     /// <summary>ECS entity this node wraps. 0 before AddNode.</summary>
     public ulong Entity { get; private set; }
 
-    /// <summary>The tree that owns this node. Null before AddNode.</summary>
-    public Tree? Tree { get; private set; }
+    /// <summary>The world that owns this node. Null before AddNode.</summary>
+    public NodeWorld? NodeWorld { get; private set; }
 
     /// <summary>Display name (debug / lookups). Set by AddNode from its name parameter.</summary>
     public string Name { get; internal set; } = "";
 
     /// <summary>True after AddNode binds this node to an entity.</summary>
-    public bool IsBound => Tree != null;
+    public bool IsBound => NodeWorld != null;
 
     /// <summary>
     /// Optional parent node. Set when this node was added via
-    /// <see cref="Framework.Tree.AddNode{T}(T, string, Node?)"/> with a non-null parent.
+    /// <see cref="Framework.NodeWorld.AddNode{T}(T, string, Node?)"/> with a non-null parent.
     /// </summary>
     public Node? Parent { get; private set; }
 
@@ -50,23 +50,23 @@ public abstract class Node
         get
         {
             if (!IsBound) return _transform;
-            return Tree!.TryGet<TransformComponent>(Entity, out var v) ? v : TransformComponent.Identity;
+            return NodeWorld!.TryGet<TransformComponent>(Entity, out var v) ? v : TransformComponent.Identity;
         }
         set
         {
             _transform = value;
-            if (IsBound) Tree!.Set(Entity, value);
+            if (IsBound) NodeWorld!.Set(Entity, value);
         }
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Called once by <see cref="Tree.AddNode"/> after the entity has been
+    /// Called once by <see cref="NodeWorld.AddNode"/> after the entity has been
     /// created. Subclasses materialize their ECS components here from the
     /// properties the game code set via object-initializer syntax.
     /// </summary>
-    protected internal abstract void OnBind(Tree tree);
+    protected internal abstract void OnBind(NodeWorld nodeWorld);
 
     /// <summary>
     /// Called every simulation tick on bound nodes. Default is a no-op so
@@ -75,7 +75,7 @@ public abstract class Node
     protected internal virtual void OnUpdate(in View view) { }
 
     /// <summary>
-    /// Called once when the node is removed from the tree. Scripts that own
+    /// Called once when the node is removed from the world. Scripts that own
     /// external resources release them here. Base implementation is a no-op.
     /// </summary>
     protected internal virtual void OnUnbind() { }
@@ -86,29 +86,29 @@ public abstract class Node
     /// </summary>
     internal bool HasBehavior { get; private set; }
 
-    internal void UnbindFromTree()
+    internal void UnbindFromNodeWorld()
     {
-        Tree   = null;
-        Entity = 0;
+        NodeWorld = null;
+        Entity    = 0;
     }
 
-    internal void BindToTree(Tree tree, ulong entity)
+    internal void BindToNodeWorld(NodeWorld nodeWorld, ulong entity)
     {
-        PreBind(tree, entity);
+        PreBind(nodeWorld, entity);
         CompleteBind();
     }
 
-    internal void PreBind(Tree tree, ulong entity)
+    internal void PreBind(NodeWorld nodeWorld, ulong entity)
     {
-        Tree   = tree;
-        Entity = entity;
-        tree.Set(entity, _transform);
+        NodeWorld = nodeWorld;
+        Entity    = entity;
+        nodeWorld.Set(entity, _transform);
     }
 
     internal void CompleteBind()
     {
-        Tree!.Set(Entity, _transform);
-        OnBind(Tree);
+        NodeWorld!.Set(Entity, _transform);
+        OnBind(NodeWorld);
 
         var m = GetType().GetMethod(nameof(OnUpdate),
             System.Reflection.BindingFlags.Instance |
@@ -116,6 +116,6 @@ public abstract class Node
             System.Reflection.BindingFlags.Public);
         HasBehavior = m != null && m.DeclaringType != typeof(Node);
 
-        if (HasBehavior) Tree!.RegisterBehavior(this);
+        if (HasBehavior) NodeWorld!.RegisterBehavior(this);
     }
 }

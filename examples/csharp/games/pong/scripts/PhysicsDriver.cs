@@ -1,4 +1,4 @@
-using KernelEngine.Framework;
+﻿using KernelEngine.Framework;
 using KernelEngine.Kernel;
 
 namespace Pong;
@@ -14,7 +14,7 @@ public sealed class PhysicsDriver : Node
 
     public PhysicsDriver(IPhysics2D physics) { _physics = physics; }
 
-    protected override void OnBind(Tree tree) { }
+    protected override void OnBind(NodeWorld nodeWorld) { }
 
     protected override void OnUpdate(in View view) => _physics.Step(view.DeltaTime);
 }

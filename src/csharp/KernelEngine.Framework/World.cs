@@ -40,6 +40,14 @@ public sealed unsafe class World : IDisposable
     /// <summary>Raw scene tree pointer — valid for the lifetime of the owning SceneTree wrapper.</summary>
     public ke_scene_tree* NativeSceneTree => Native->scene_tree(_native);
 
+    private SceneTree? _sceneTree;
+
+    /// <summary>
+    /// Managed wrapper over the scene tree owned by this world.
+    /// Created once on first access; backed by <see cref="NativeSceneTree"/>.
+    /// </summary>
+    public SceneTree SceneTree => _sceneTree ??= new SceneTree(NativeSceneTree);
+
     /// <inheritdoc cref="IDisposable.Dispose"/>
     public void Dispose() => _native = null; // ecs/runtime destroyed by their own DI owners
 }

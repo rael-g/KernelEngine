@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Asset.Assimp;
 using KernelEngine.Ecs.Flecs;
@@ -10,7 +10,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 12_asset_loading — loads `assets/Box.gltf` via the Assimp plugin and uploads
+// 12_asset_loading â€” loads `assets/Box.gltf` via the Assimp plugin and uploads
 // its meshes/materials/textures through tree.AddModel(...) (which is the
 // new-Framework equivalent of the legacy Tree.Add(model, ...) one-liner).
 
@@ -24,16 +24,18 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 12 Asset Loading"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 12 Asset Loading"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.1f, 0.1f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new ShadowModule())
     .Add<IRuntimeModule>(new PostProcessModule(tonemapping: true))
     .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 12_asset_loading");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: assimp_loader, model_to_scene");
@@ -54,7 +56,7 @@ var services = new ServiceCollection()
         var loader = sp.GetRequiredService<IAssetLoader>();
         using var model = loader.LoadModel(modelPath);
         Console.WriteLine($"[KernelEngine] Model loaded: {model.Meshes.Count} sub-meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-        var nodes = tree.AddModel(model, rootName: "Box");
+        var nodes = tree.AddModel(model, renderer, rootName: "Box");
         Console.WriteLine($"[KernelEngine] Added {nodes.Count} mesh nodes to the scene.");
     }));
 

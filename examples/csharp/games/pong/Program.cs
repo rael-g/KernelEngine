@@ -1,4 +1,4 @@
-using KernelEngine.Audio.MiniAudio;
+﻿using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Configuration;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -32,6 +32,7 @@ var services = new ServiceCollection()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new BgfxRenderModule())
+        .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     // Pong scripts the SceneLoader will instantiate.
     .AddNodeType<Wall>("Pong.Wall")

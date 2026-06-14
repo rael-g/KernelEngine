@@ -12,8 +12,8 @@ public class Camera : Node
     public bool  Orthographic     { get; set; }
     public float OrthographicSize { get; set; } = 5f;
 
-    protected internal override void OnBind(Tree tree)
-        => tree.Set(Entity, new CameraComponent
+    protected internal override void OnBind(NodeWorld nodeWorld)
+        => nodeWorld.Set(Entity, new CameraComponent
         {
             FovDeg           = Fov,
             Near             = Near,

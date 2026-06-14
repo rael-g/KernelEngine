@@ -5,14 +5,14 @@ namespace KernelEngine.Framework;
 
 /// <summary>
 /// Wires the scene infrastructure: resolves the ECS adapter + component registry
-/// registered by <c>FrameworkModule</c>, creates the <see cref="Tree"/>, registers
-/// all render contributors, and installs the BehaviorSystem that drives per-node
-/// <see cref="Node.OnUpdate"/> callbacks each tick.
+/// registered by <c>FrameworkModule</c>, creates the <see cref="NodeWorld"/>,
+/// registers all render contributors, and installs the BehaviorSystem that drives
+/// per-node <see cref="Node.OnUpdate"/> callbacks each tick.
 /// </summary>
 /// <remarks>
 /// Add <c>FrameworkModule</c> before this module; it registers the
-/// <see cref="IEcsAdapter"/> and <see cref="IComponentRegistry"/> singletons that
-/// this module resolves from DI.
+/// <see cref="World"/>, <see cref="IEcsAdapter"/>, and <see cref="IComponentRegistry"/>
+/// singletons that this module resolves from DI.
 /// </remarks>
 public sealed class SceneRenderModule : IRuntimeModule
 {
@@ -20,11 +20,11 @@ public sealed class SceneRenderModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
-        services.AddSingleton<Tree>(sp =>
-            new Tree(
+        services.AddSingleton<NodeWorld>(sp =>
+            new NodeWorld(
+                sp.GetRequiredService<World>(),
                 sp.GetRequiredService<IEcsAdapter>(),
-                sp.GetRequiredService<IComponentRegistry>(),
-                sp.GetRequiredService<IRenderer>()));
+                sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, CameraContributor>(sp =>
             new CameraContributor(
@@ -64,22 +64,22 @@ public sealed class SceneRenderModule : IRuntimeModule
 
         services.AddSingleton<IFrameContributor, LabelContributor>(sp =>
             new LabelContributor(
-                sp.GetRequiredService<Tree>(),
+                sp.GetRequiredService<NodeWorld>(),
                 sp.GetRequiredService<IWindow>()));
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         _ = services.GetRequiredService<IComponentRegistry>();
-        var tree  = services.GetRequiredService<Tree>();
-        var input = services.GetService<IInput>();
+        var nodeWorld = services.GetRequiredService<NodeWorld>();
+        var input     = services.GetService<IInput>();
 
         runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, dt) =>
         {
             input?.Update();
             var reader    = (input as Input)?.CaptureSnapshot();
-            var view      = new View(tree, dt, reader);
-            var behaviors = tree.Behaviors;
+            var view      = new View(nodeWorld, dt, reader);
+            var behaviors = nodeWorld.Behaviors;
             for (int i = 0; i < behaviors.Count; i++)
                 behaviors[i].OnUpdate(in view);
         }, pinnedThread: 1);

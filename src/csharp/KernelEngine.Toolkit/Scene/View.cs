@@ -17,8 +17,8 @@ public readonly ref struct View
     /// <summary>Time since the previous tick, in seconds.</summary>
     public float DeltaTime { get; }
 
-    /// <summary>The tree this node belongs to. Use sparingly.</summary>
-    public Tree Tree { get; }
+    /// <summary>The node world this node belongs to.</summary>
+    public NodeWorld NodeWorld { get; }
 
     private readonly IInputReader? _input;
 
@@ -29,9 +29,9 @@ public readonly ref struct View
     /// </summary>
     public bool IsKeyDown(int key) => _input?.IsKeyDown(key) ?? false;
 
-    internal View(Tree tree, float deltaTime, IInputReader? input)
+    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input)
     {
-        Tree      = tree;
+        NodeWorld = nodeWorld;
         DeltaTime = deltaTime;
         _input    = input;
     }

@@ -5,18 +5,18 @@ namespace KernelEngine.Framework;
 
 internal sealed class LabelContributor : IFrameContributor
 {
-    private readonly Tree    _tree;
-    private readonly IWindow _window;
+    private readonly NodeWorld _nodeWorld;
+    private readonly IWindow   _window;
 
-    public LabelContributor(Tree tree, IWindow window)
+    public LabelContributor(NodeWorld nodeWorld, IWindow window)
     {
-        _tree   = tree;
-        _window = window;
+        _nodeWorld = nodeWorld;
+        _window    = window;
     }
 
     public void Contribute(IFramePacket packet)
     {
-        var labels = _tree.Labels;
+        var labels = _nodeWorld.Labels;
         if (labels.Count == 0) return;
 
         var sizeResult = _window.GetSize();

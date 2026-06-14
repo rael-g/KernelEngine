@@ -18,7 +18,7 @@ public class PointLight : Node
     public float   Intensity { get => _state.Intensity; set { _state.Intensity = value; WriteIfBound(); } }
     public float   Radius    { get => _state.Radius;    set { _state.Radius    = value; WriteIfBound(); } }
 
-    private void WriteIfBound() { if (IsBound) Tree!.Set(Entity, _state); }
+    private void WriteIfBound() { if (IsBound) NodeWorld!.Set(Entity, _state); }
 
-    protected internal override void OnBind(Tree tree) => tree.Set(Entity, _state);
+    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.Set(Entity, _state);
 }

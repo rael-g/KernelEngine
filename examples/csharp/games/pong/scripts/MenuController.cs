@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 
@@ -14,24 +14,27 @@ public sealed class MenuController : Node
     private readonly IInputActionMap<PongAction> _actions;
     private readonly ISceneRouter                _router;
     private readonly IFontLoader                 _fontLoader;
+    private readonly IRenderer                   _renderer;
 
     private Font? _font;
     private bool _prevLaunch;
     private bool _prevQuit;
 
-    public MenuController(IInputActionMap<PongAction> actions, ISceneRouter router, IFontLoader fontLoader)
+    public MenuController(IInputActionMap<PongAction> actions, ISceneRouter router, IFontLoader fontLoader,
+                          IRenderer renderer)
     {
         _actions    = actions;
         _router     = router;
         _fontLoader = fontLoader;
+        _renderer   = renderer;
     }
 
-    protected override void OnBind(Tree tree)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
         var fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
-        _font = Font.Load(tree.Renderer, _fontLoader, fontPath, pixelSize: 72f);
+        _font = Font.Load(_renderer, _fontLoader, fontPath, pixelSize: 72f);
 
-        tree.AddNode(new Label
+        nodeWorld.AddNode(new Label
         {
             Text   = "Pong",
             Font   = _font,
@@ -40,7 +43,7 @@ public sealed class MenuController : Node
             Offset = new Vector2(0f, 140f),
         }, "Title", parent: this);
 
-        tree.AddNode(new Label
+        nodeWorld.AddNode(new Label
         {
             Text   = "Press Space to start",
             Font   = _font,

@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 
@@ -12,6 +12,7 @@ namespace Pong;
 public sealed class Scoreboard : Node
 {
     private readonly IFontLoader _fontLoader;
+    private readonly IRenderer   _renderer;
 
     private Font?  _font;
     private Label? _left;
@@ -26,16 +27,20 @@ public sealed class Scoreboard : Node
     public int Right { get; private set; }
     public int Total => Left + Right;
 
-    public Scoreboard(IFontLoader fontLoader) { _fontLoader = fontLoader; }
+    public Scoreboard(IFontLoader fontLoader, IRenderer renderer)
+    {
+        _fontLoader = fontLoader;
+        _renderer   = renderer;
+    }
 
-    protected override void OnBind(Tree tree)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
         var path = string.IsNullOrEmpty(FontPath)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf")
             : FontPath;
-        _font = Font.Load(tree.Renderer, _fontLoader, path, pixelSize: FontSize);
+        _font = Font.Load(_renderer, _fontLoader, path, pixelSize: FontSize);
 
-        _left  = tree.AddNode(new Label
+        _left  = nodeWorld.AddNode(new Label
         {
             Text   = "0",
             Font   = _font,
@@ -44,7 +49,7 @@ public sealed class Scoreboard : Node
             Offset = new Vector2(0f, 60f),
         }, "ScoreLeft", parent: this);
 
-        _right = tree.AddNode(new Label
+        _right = nodeWorld.AddNode(new Label
         {
             Text   = "0",
             Font   = _font,
@@ -53,7 +58,7 @@ public sealed class Scoreboard : Node
             Offset = new Vector2(0f, 60f),
         }, "ScoreRight", parent: this);
 
-        _hint  = tree.AddNode(new Label
+        _hint  = nodeWorld.AddNode(new Label
         {
             Text   = "",
             Font   = _font,

@@ -1,4 +1,4 @@
-using KernelEngine.Ecs.Flecs;
+﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
@@ -29,6 +29,7 @@ var services = new ServiceCollection()
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.05f, 0.08f, 1.0f)))
+        .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new SceneModule(tree =>
     {
@@ -78,7 +79,7 @@ sealed class KeyEdgeListener : Node
 
     private readonly bool[] _prev = new bool[s_keys.Length];
 
-    protected override void OnBind(Tree tree) { }
+    protected override void OnBind(NodeWorld nodeWorld) { }
 
     protected override void OnUpdate(in View view)
     {

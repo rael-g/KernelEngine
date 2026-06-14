@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
@@ -34,9 +34,11 @@ var services = new ServiceCollection()
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.08f, 0.08f, 0.12f, 1.0f)))
+        .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 16_physics_test");
         Console.WriteLine("[KernelEngine] Features: box2d, dynamic_bodies, spawn_and_reset");
 
@@ -52,9 +54,9 @@ var services = new ServiceCollection()
             Intensity = 5f,
         }, "Sun");
 
-        var cubeMesh = MeshPrimitives.Cube(tree.Renderer);
-        var floorMat = tree.Renderer.CreateMaterial(new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f).Value;
-        var ballMat  = tree.Renderer.CreateMaterial(new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f).Value;
+        var cubeMesh = MeshPrimitives.Cube(renderer);
+        var floorMat = renderer.CreateMaterial(new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f).Value;
+        var ballMat  = renderer.CreateMaterial(new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f).Value;
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with
@@ -115,7 +117,7 @@ sealed class PhysicsScene : Node
         _ballMat  = ballMat;
     }
 
-    protected override void OnBind(Tree tree) { }
+    protected override void OnBind(NodeWorld nodeWorld) { }
 
     protected override void OnUpdate(in View view)
     {
@@ -152,7 +154,7 @@ sealed class PhysicsScene : Node
             for (int i = 0; i < _balls.Count; i++)
             {
                 _physics.DestroyBody(_balls[i].Body);
-                Tree!.DestroyNode(_balls[i].Node);
+                NodeWorld!.DestroyNode(_balls[i].Node);
             }
             _balls.Clear();
         }
@@ -166,7 +168,7 @@ sealed class PhysicsScene : Node
 
     private void Spawn(Vector2 at)
     {
-        var node = Tree!.AddNode(
+        var node = NodeWorld!.AddNode(
             new MeshRenderer { MeshHandle = _ballMesh, MaterialHandle = _ballMat },
             $"Ball_{_balls.Count}");
         node.LocalTransform = node.LocalTransform with { Position = new Vector3(at.X, at.Y, 0f) };

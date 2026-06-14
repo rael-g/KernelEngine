@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 04_normal_map — two quads side by side; the right one carries a procedural
+// 04_normal_map â€” two quads side by side; the right one carries a procedural
 // ripple normal map, the left has the same material without it. Highlights
 // how a tangent-space normal map perturbs the lighting compared to the flat
 // surface (look at the specular highlight as the static directional light
@@ -22,19 +22,21 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 04 Normal Map"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 04 Normal Map"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.05f, 0.05f, 0.05f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 04_normal_map");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: normal_map, tbn, tangent_space, pbr_ggx");
 
-        // Procedural ripple normal map (128×128) — each texel encodes a unit
+        // Procedural ripple normal map (128Ã—128) â€” each texel encodes a unit
         // normal in tangent space, mapped to RGB via N = (n + 1) / 2.
         const uint w = 128, h = 128;
         var pixels = new byte[w * h * 4];
@@ -53,11 +55,11 @@ var services = new ServiceCollection()
             pixels[i + 3] = 255;
         }
 
-        var nm = tree.Renderer.CreateTexture(w, h, pixels).Value;
+        var nm = renderer.CreateTexture(w, h, pixels).Value;
         Console.WriteLine($"[KernelEngine] NormalMap: handle={nm.Value} width={w} height={h}");
 
-        var matPlain  = tree.Renderer.CreateMaterial(Vector4.One, roughness: 0.3f).Value;
-        var matNormal = tree.Renderer.CreateMaterial(Vector4.One, roughness: 0.3f, normalMapHandle: nm).Value;
+        var matPlain  = renderer.CreateMaterial(Vector4.One, roughness: 0.3f).Value;
+        var matNormal = renderer.CreateMaterial(Vector4.One, roughness: 0.3f, normalMapHandle: nm).Value;
 
         tree.AddNode(
             new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },

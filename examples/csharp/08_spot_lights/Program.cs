@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 08_spot_lights — three colored spot lights orbiting above a floor + grid of
+// 08_spot_lights â€” three colored spot lights orbiting above a floor + grid of
 // cubes. Each spot's direction tracks the origin so the cones sweep across
 // the floor and cubes. Showcases the multi-spot-light path; SpotLight node
 // pairs with SpotLightComponent (position from transform, direction explicit).
@@ -21,14 +21,16 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 08 Spot Lights"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 08 Spot Lights"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.01f, 0.01f, 0.01f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 08_spot_lights");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: spot_lights, multi_light_accumulation, cone_falloff");
@@ -38,11 +40,11 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
 
-        var planeMesh = MeshPrimitives.Plane(tree.Renderer);
-        var cubeMesh  = MeshPrimitives.Cube(tree.Renderer);
+        var planeMesh = MeshPrimitives.Plane(renderer);
+        var cubeMesh  = MeshPrimitives.Cube(renderer);
 
-        var floorMat = tree.Renderer.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f).Value;
-        var cubeMat  = tree.Renderer.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f).Value;
+        var floorMat = renderer.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f).Value;
+        var cubeMat  = renderer.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f).Value;
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(30f, 1f, 30f) };
@@ -118,7 +120,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[08_spot_lights] Exited cleanly.");
 
-// ── Orbiting spot light — position circles, direction points at the origin ───
+// â”€â”€ Orbiting spot light â€” position circles, direction points at the origin â”€â”€â”€
 
 sealed class OrbitingSpot : SpotLight
 {

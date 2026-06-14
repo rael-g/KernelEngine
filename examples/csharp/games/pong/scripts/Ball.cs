@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 
@@ -37,11 +37,11 @@ public sealed class Ball : MeshRenderer
         _router    = router;
     }
 
-    protected override void OnBind(Tree tree)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
         MaterialHandle = _resources.WhiteMat;
         LocalTransform = LocalTransform with { Scale = new Vector3(0.36f, 0.36f, 1f) };
-        base.OnBind(tree);
+        base.OnBind(nodeWorld);
 
         _body = _physics.CreateBody(BodyType2D.Dynamic, Vector2.Zero);
         _physics.AddBoxFixture(_body, new Vector2(0.18f, 0.18f),
@@ -57,7 +57,7 @@ public sealed class Ball : MeshRenderer
             // Late-bind the scoreboard on first frame — the scene loader
             // instantiates entities in declaration order; by the time any
             // node ticks, every other node already exists on the tree.
-            _board = Tree!.Find<Scoreboard>("Scoreboard")
+            _board = NodeWorld!.Find<Scoreboard>("Scoreboard")
                 ?? throw new InvalidOperationException("Scene missing a 'Scoreboard' entity.");
             _board.ShowHint("Press Space to launch");
         }

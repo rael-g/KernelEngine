@@ -2,19 +2,19 @@ namespace KernelEngine.Framework;
 
 internal sealed class SceneRouter : ISceneRouter
 {
-    private readonly Tree             _tree;
-    private readonly SceneLoader      _loader;
+    private readonly NodeWorld    _nodeWorld;
+    private readonly SceneLoader  _loader;
     private readonly IServiceProvider _services;
 
     private string? _pendingLoad;
 
     public string? CurrentScene { get; private set; }
 
-    public SceneRouter(Tree tree, SceneLoader loader, IServiceProvider services)
+    public SceneRouter(NodeWorld nodeWorld, SceneLoader loader, IServiceProvider services)
     {
-        _tree     = tree;
-        _loader   = loader;
-        _services = services;
+        _nodeWorld = nodeWorld;
+        _loader    = loader;
+        _services  = services;
     }
 
     public void LoadScene(string name) => _pendingLoad = name;
@@ -24,9 +24,9 @@ internal sealed class SceneRouter : ISceneRouter
         var name = Interlocked.Exchange(ref _pendingLoad, null);
         if (name is null) return;
 
-        _tree.Clear();
+        _nodeWorld.Clear();
         var path = Path.Combine(AppContext.BaseDirectory, "scenes", $"{name}.scene");
-        _loader.LoadInto(_tree, _services, path);
+        _loader.LoadInto(_nodeWorld, _services, path);
         CurrentScene = name;
     }
 }

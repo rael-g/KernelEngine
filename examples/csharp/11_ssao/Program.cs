@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -9,7 +9,7 @@ using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// 11_ssao — 7×4 cube wall on a floor. SSAO is requested via PostProcessModule
+// 11_ssao â€” 7Ã—4 cube wall on a floor. SSAO is requested via PostProcessModule
 // but the bgfx backend's SSAO path is currently a no-op (Kanban OBS.4/Z3), so
 // any contact darkening visible is from the directional light, not ambient
 // occlusion. The scene is kept for the moment it works.
@@ -21,20 +21,22 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<ITaskScheduler, EnkiTaskScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 11 SSAO"))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 11 SSAO"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
         shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
         vsync:      true,
         clearColor: (0.2f, 0.2f, 0.2f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
     .Add<IRuntimeModule>(new ShadowModule(resolution: 1024, frustumSize: 20f, farPlane: 50f))
     .Add<IRuntimeModule>(new PostProcessModule(
         ssao: true, ssaoRadius: 0.5f, ssaoBias: 0.025f, ssaoStrength: 2.0f))
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
         Console.WriteLine("[KernelEngine] Example: 11_ssao");
         Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
-        Console.WriteLine("[KernelEngine] Features: ssao (backend stub — see Kanban Z3)");
+        Console.WriteLine("[KernelEngine] Features: ssao (backend stub â€” see Kanban Z3)");
 
         tree.AddNode(new AmbientLight { Color = new(0.3f, 0.3f, 0.3f) }, "Ambient");
 
@@ -52,9 +54,9 @@ var services = new ServiceCollection()
             Intensity = 4f,
         }, "Sun");
 
-        var planeMesh = MeshPrimitives.Plane(tree.Renderer);
-        var cubeMesh  = MeshPrimitives.Cube(tree.Renderer);
-        var mat       = tree.Renderer.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), roughness: 0.5f).Value;
+        var planeMesh = MeshPrimitives.Plane(renderer);
+        var cubeMesh  = MeshPrimitives.Cube(renderer);
+        var mat       = renderer.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), roughness: 0.5f).Value;
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = mat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(10f, 1f, 10f) };

@@ -13,8 +13,8 @@ public class Skybox : Node
     public TextureHandle CubemapHandle
     {
         get => _state.CubemapHandle;
-        set { _state.CubemapHandle = value; if (IsBound) Tree!.Set(Entity, _state); }
+        set { _state.CubemapHandle = value; if (IsBound) NodeWorld!.Set(Entity, _state); }
     }
 
-    protected internal override void OnBind(Tree tree) => tree.Set(Entity, _state);
+    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.Set(Entity, _state);
 }
