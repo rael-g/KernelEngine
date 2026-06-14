@@ -8,38 +8,25 @@ public unsafe partial struct ke_world
 {
     public void* handle;
 
-    [NativeTypeName("struct ke_allocator *")]
-    public ke_allocator* allocator;
+    [NativeTypeName("ke_ecs *(*)(struct ke_world *)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, ke_ecs*> ecs;
 
-    [NativeTypeName("struct ke_ecs_registry *")]
-    public ke_ecs_registry* registry;
+    [NativeTypeName("ke_runtime *(*)(struct ke_world *)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, ke_runtime*> runtime;
 
-    public void* internal_data;
+    [NativeTypeName("struct ke_scene_tree *(*)(struct ke_world *)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, ke_scene_tree*> scene_tree;
+
+    [NativeTypeName("ke_result (*)(struct ke_world *, ke_component_id, ke_component_apply_fn)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>, ke_result> register_component_apply;
+
+    [NativeTypeName("ke_component_apply_fn (*)(struct ke_world *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>> get_component_apply;
 
     [NativeTypeName("void (*)(struct ke_world *)")]
     public delegate* unmanaged[Cdecl]<ke_world*, void> destroy;
+}
 
-    [NativeTypeName("ke_result (*)(struct ke_world *, const struct ke_frame *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, ke_frame*, ke_result> update;
-
-    [NativeTypeName("struct ke_ecs_registry *(*)(struct ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, ke_ecs_registry*> get_registry;
-
-    [NativeTypeName("ke_result (*)(struct ke_world *, const ke_system_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, ke_system_params*, ke_result> add_system;
-
-    [NativeTypeName("uint32_t (*)(struct ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, uint> transform_id;
-
-    [NativeTypeName("uint32_t (*)(struct ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, uint> hierarchy_id;
-
-    [NativeTypeName("uint32_t (*)(struct ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, uint> name_id;
-
-    [NativeTypeName("uint32_t (*)(struct ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, uint> script_id;
-
-    [NativeTypeName("struct ke_task_scheduler *(*)(struct ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, ke_task_scheduler*> get_task_scheduler;
+public partial struct ke_world
+{
 }

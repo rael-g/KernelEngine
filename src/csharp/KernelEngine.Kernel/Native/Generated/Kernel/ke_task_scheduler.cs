@@ -1,9 +1,5 @@
 namespace KernelEngine.Kernel.Native;
 
-public partial struct ke_task_scheduler
-{
-}
-
 public unsafe partial struct ke_task_scheduler
 {
     public void* handle;
@@ -28,4 +24,8 @@ public unsafe partial struct ke_task_scheduler
 
     [NativeTypeName("uint32_t (*)(struct ke_task_scheduler *)")]
     public delegate* unmanaged[Cdecl]<ke_task_scheduler*, uint> get_num_workers;
+}
+
+public partial struct ke_task_scheduler
+{
 }

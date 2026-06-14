@@ -100,23 +100,14 @@ public static unsafe partial class NativeMethods
     [NativeTypeName("#define KE_COMPONENT_INVALID ((ke_component_id)-1)")]
     public const uint KE_COMPONENT_INVALID = unchecked((uint)(-1));
 
-    [NativeTypeName("#define KE_SCRIPT_STATE_FRESH 0")]
-    public const int KE_SCRIPT_STATE_FRESH = 0;
-
-    [NativeTypeName("#define KE_SCRIPT_STATE_AWOKE 1")]
-    public const int KE_SCRIPT_STATE_AWOKE = 1;
-
-    [NativeTypeName("#define KE_SCRIPT_STATE_STARTED 2")]
-    public const int KE_SCRIPT_STATE_STARTED = 2;
-
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_sparse_set_create", ExactSpelling = true)]
     public static extern ke_result ecs_sparse_set_create(ke_ecs_registry* registry, ke_allocator* alloc, ke_ecs** out_ecs);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_create", ExactSpelling = true)]
-    public static extern ke_result world_create([NativeTypeName("const ke_world_params *")] ke_world_params* @params, ke_world** out_world);
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_cache_create", ExactSpelling = true)]
+    public static extern ke_result resource_cache_create([NativeTypeName("const ke_resource_cache_params *")] ke_resource_cache_params* @params, ke_resource_cache** out_cache);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_notify_destroy", ExactSpelling = true)]
-    public static extern ke_result world_notify_destroy(ke_world* world, [NativeTypeName("ke_entity")] ulong entity);
+    [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
+    public const uint KE_RESOURCE_HANDLE_NONE = 0xffffffffU;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_create", ExactSpelling = true)]
     public static extern ke_result input_create([NativeTypeName("struct ke_allocator *")] ke_allocator* allocator, [NativeTypeName("struct ke_logger *")] ke_logger* logger, ke_input** out_input);
@@ -169,4 +160,34 @@ public static unsafe partial class NativeMethods
 
     [NativeTypeName("#define KE_ID_FONT_LOADER \"ke_font_loader\"")]
     public static ReadOnlySpan<byte> KE_ID_FONT_LOADER => "ke_font_loader"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_TRANSFORM \"transform\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_TRANSFORM => "transform"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_HIERARCHY \"hierarchy\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_HIERARCHY => "hierarchy"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_NAME \"name\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_NAME => "name"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_CAMERA \"camera\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_CAMERA => "camera"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_DIRECTIONAL_LIGHT \"directional_light\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_DIRECTIONAL_LIGHT => "directional_light"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_POINT_LIGHT \"point_light\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_POINT_LIGHT => "point_light"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_SPOT_LIGHT \"spot_light\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_SPOT_LIGHT => "spot_light"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_MESH \"mesh\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_MESH => "mesh"u8;
+
+    [NativeTypeName("#define KE_SCENE_PROPERTIES_COMPONENT_NAME \"scene_properties\"")]
+    public static ReadOnlySpan<byte> KE_SCENE_PROPERTIES_COMPONENT_NAME => "scene_properties"u8;
+
+    [NativeTypeName("#define KE_MATERIAL_PATH_MAX 256")]
+    public const int KE_MATERIAL_PATH_MAX = 256;
 }

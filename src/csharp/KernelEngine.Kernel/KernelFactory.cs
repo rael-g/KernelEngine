@@ -14,7 +14,7 @@ public sealed class KernelFactory : IKernelFactory
 
     /// <inheritdoc/>
     public IWorld CreateWorld(IAllocator allocator) =>
-        new World((Allocator)allocator);
+        throw new NotSupportedException("World creation has moved to KernelEngine.Framework. Use SceneRenderModule.");
 
     /// <inheritdoc/>
     public IFrameSync CreateFrameSync(IAllocator allocator, int bufferCount) =>
