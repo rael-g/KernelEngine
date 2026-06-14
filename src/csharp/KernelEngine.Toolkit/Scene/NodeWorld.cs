@@ -1,3 +1,5 @@
+using KernelEngine.Kernel;
+
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -9,13 +11,13 @@ namespace KernelEngine.Framework;
 /// </summary>
 public sealed class NodeWorld
 {
-    private readonly World               _world;
-    private readonly IEcsAdapter         _ecs;
-    private readonly IComponentRegistry  _components;
+    private readonly World              _world;
+    private readonly IEcsRegistry       _ecs;
+    private readonly IComponentRegistry _components;
 
-    private readonly List<Node>             _behaviors = new();
-    private readonly List<Label>            _labels    = new();
-    private readonly Dictionary<string, Node> _byName  = new(StringComparer.Ordinal);
+    private readonly List<Node>               _behaviors = new();
+    private readonly List<Label>              _labels    = new();
+    private readonly Dictionary<string, Node> _byName    = new(StringComparer.Ordinal);
 
     internal IReadOnlyList<Node>  Behaviors => _behaviors;
     internal IReadOnlyList<Label> Labels    => _labels;
@@ -23,7 +25,7 @@ public sealed class NodeWorld
     internal void RegisterBehavior(Node node) => _behaviors.Add(node);
     internal void RegisterLabel(Label label)  => _labels.Add(label);
 
-    internal NodeWorld(World world, IEcsAdapter ecs, IComponentRegistry components)
+    internal NodeWorld(World world, IEcsRegistry ecs, IComponentRegistry components)
     {
         _world      = world;
         _ecs        = ecs;
@@ -119,8 +121,16 @@ public sealed class NodeWorld
     // ── Generic component access ──────────────────────────────────────────────
 
     internal void Set<T>(ulong entity, in T value) where T : unmanaged
-        => _ecs.Add(entity, _components.CidOf<T>(), value);
+    {
+        var sp = _ecs.AddComponent<T>(entity, _components.CidOf<T>());
+        if (!sp.IsEmpty) sp[0] = value;
+    }
 
     internal bool TryGet<T>(ulong entity, out T value) where T : unmanaged
-        => _ecs.TryGet(entity, _components.CidOf<T>(), out value);
+    {
+        var sp = _ecs.GetComponent<T>(entity, _components.CidOf<T>());
+        if (sp.IsEmpty) { value = default; return false; }
+        value = sp[0];
+        return true;
+    }
 }

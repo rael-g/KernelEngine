@@ -42,7 +42,7 @@ public sealed class ShadowModule : IRuntimeModule
         services.AddSingleton(resources);
         services.AddSingleton<IFrameContributor, ShadowContributor>(sp =>
             new ShadowContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>(),
                 resources));
     }

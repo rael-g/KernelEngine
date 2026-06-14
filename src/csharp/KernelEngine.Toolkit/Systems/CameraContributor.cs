@@ -5,11 +5,11 @@ namespace KernelEngine.Framework;
 
 internal sealed class CameraContributor : IFrameContributor
 {
-    private readonly IEcsAdapter        _ecs;
+    private readonly IEcsRegistry       _ecs;
     private readonly IComponentRegistry _components;
     private readonly IWindow            _window;
 
-    public CameraContributor(IEcsAdapter ecs, IComponentRegistry components, IWindow window)
+    public CameraContributor(IEcsRegistry ecs, IComponentRegistry components, IWindow window)
     {
         _ecs        = ecs;
         _components = components;
@@ -18,17 +18,14 @@ internal sealed class CameraContributor : IFrameContributor
 
     public void Contribute(IFramePacket packet)
     {
-        ulong       camEntity = 0;
-        CameraComponent cam   = default;
-        bool        found     = false;
-        _ecs.Query<CameraComponent>(_components.CidOf<CameraComponent>(), (ulong e, ref CameraComponent c) =>
-        {
-            if (!found) { camEntity = e; cam = c; found = true; }
-        });
-        if (!found) return;
+        var camResult = _ecs.Query<CameraComponent>(_components.CidOf<CameraComponent>());
+        if (camResult.Length == 0) return;
+        var camEntity = camResult.Entities[0];
+        ref var cam   = ref camResult.Data[0];
 
         var transform = TransformComponent.Identity;
-        _ecs.TryGet<TransformComponent>(camEntity, _components.CidOf<TransformComponent>(), out transform);
+        var tsp = _ecs.GetComponent<TransformComponent>(camEntity, _components.CidOf<TransformComponent>());
+        if (!tsp.IsEmpty) transform = tsp[0];
 
         var size   = _window.GetSize().Value;
         var aspect = size.Height > 0 ? (float)size.Width / size.Height : 1f;

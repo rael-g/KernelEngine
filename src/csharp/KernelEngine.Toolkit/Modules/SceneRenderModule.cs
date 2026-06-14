@@ -23,43 +23,43 @@ public sealed class SceneRenderModule : IRuntimeModule
         services.AddSingleton<NodeWorld>(sp =>
             new NodeWorld(
                 sp.GetRequiredService<World>(),
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, CameraContributor>(sp =>
             new CameraContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>(),
                 sp.GetRequiredService<IWindow>()));
 
         services.AddSingleton<IFrameContributor, AmbientLightContributor>(sp =>
             new AmbientLightContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, LightContributor>(sp =>
             new LightContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, PointLightContributor>(sp =>
             new PointLightContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, SpotLightContributor>(sp =>
             new SpotLightContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, MeshContributor>(sp =>
             new MeshContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, SkyboxContributor>(sp =>
             new SkyboxContributor(
-                sp.GetRequiredService<IEcsAdapter>(),
+                sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>()));
 
         services.AddSingleton<IFrameContributor, LabelContributor>(sp =>

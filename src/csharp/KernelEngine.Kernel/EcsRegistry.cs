@@ -12,7 +12,8 @@ public sealed unsafe class EcsRegistry : IEcsRegistry
 {
     private readonly ke_ecs* _native;
 
-    internal EcsRegistry(ke_ecs* native) => _native = native;
+    /// <summary>Creates an EcsRegistry wrapping the given native ke_ecs pointer.</summary>
+    public EcsRegistry(ke_ecs* native) => _native = native;
 
     // ── Entity lifetime ───────────────────────────────────────────────────────
 

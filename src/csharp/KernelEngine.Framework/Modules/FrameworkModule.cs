@@ -5,8 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Creates the native <c>ke_world</c> aggregator and registers the ECS adapter +
-/// component registry as <see cref="IEcsAdapter"/> and <see cref="IComponentRegistry"/>
+/// Creates the native <c>ke_world</c> aggregator and registers the ECS registry +
+/// component registry as <see cref="IEcsRegistry"/> and <see cref="IComponentRegistry"/>
 /// so Toolkit's <c>SceneRenderModule</c> can resolve them without a direct
 /// dependency on this assembly.
 /// </summary>
@@ -38,15 +38,13 @@ public sealed class FrameworkModule : IRuntimeModule
             }
         });
 
-        services.AddSingleton<EcsAdapter>(sp =>
+        services.AddSingleton<IEcsRegistry>(sp =>
         {
-            unsafe { return new EcsAdapter(sp.GetRequiredService<World>().Ecs); }
+            unsafe { return new EcsRegistry(sp.GetRequiredService<World>().Ecs); }
         });
 
-        services.AddSingleton<IEcsAdapter>(sp => sp.GetRequiredService<EcsAdapter>());
-
         services.AddSingleton<ComponentRegistry>(sp =>
-            new ComponentRegistry(sp.GetRequiredService<EcsAdapter>()));
+            new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>()));
 
         services.AddSingleton<IComponentRegistry>(sp => sp.GetRequiredService<ComponentRegistry>());
     }

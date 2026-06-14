@@ -4,10 +4,10 @@ namespace KernelEngine.Framework;
 
 internal sealed class AmbientLightContributor : IFrameContributor
 {
-    private readonly IEcsAdapter        _ecs;
+    private readonly IEcsRegistry       _ecs;
     private readonly IComponentRegistry _components;
 
-    public AmbientLightContributor(IEcsAdapter ecs, IComponentRegistry components)
+    public AmbientLightContributor(IEcsRegistry ecs, IComponentRegistry components)
     {
         _ecs        = ecs;
         _components = components;
@@ -15,13 +15,9 @@ internal sealed class AmbientLightContributor : IFrameContributor
 
     public void Contribute(IFramePacket packet)
     {
-        AmbientLightComponent al = default;
-        bool found = false;
-        _ecs.Query<AmbientLightComponent>(_components.CidOf<AmbientLightComponent>(), (ulong _, ref AmbientLightComponent a) =>
-        {
-            if (!found) { al = a; found = true; }
-        });
-        if (!found) return;
+        var result = _ecs.Query<AmbientLightComponent>(_components.CidOf<AmbientLightComponent>());
+        if (result.Length == 0) return;
+        ref var al = ref result.Data[0];
         packet.SetAmbientLight(al.Color.X, al.Color.Y, al.Color.Z);
     }
 }

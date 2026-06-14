@@ -1,8 +1,7 @@
 using System.Text;
-using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 
-namespace KernelEngine.Framework;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Managed wrapper over the native <c>ke_scene_tree</c> vtable.

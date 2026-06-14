@@ -5,10 +5,10 @@ namespace KernelEngine.Framework;
 
 internal sealed class LightContributor : IFrameContributor
 {
-    private readonly IEcsAdapter        _ecs;
+    private readonly IEcsRegistry       _ecs;
     private readonly IComponentRegistry _components;
 
-    public LightContributor(IEcsAdapter ecs, IComponentRegistry components)
+    public LightContributor(IEcsRegistry ecs, IComponentRegistry components)
     {
         _ecs        = ecs;
         _components = components;
@@ -16,13 +16,9 @@ internal sealed class LightContributor : IFrameContributor
 
     public void Contribute(IFramePacket packet)
     {
-        DirectionalLightComponent dl = default;
-        bool found = false;
-        _ecs.Query<DirectionalLightComponent>(_components.CidOf<DirectionalLightComponent>(), (ulong _, ref DirectionalLightComponent l) =>
-        {
-            if (!found) { dl = l; found = true; }
-        });
-        if (!found) return;
+        var result = _ecs.Query<DirectionalLightComponent>(_components.CidOf<DirectionalLightComponent>());
+        if (result.Length == 0) return;
+        ref var dl = ref result.Data[0];
 
         packet.SetAmbientLight(dl.Ambient.X, dl.Ambient.Y, dl.Ambient.Z);
         packet.SetDirectionalLight(new DirectionalLightData

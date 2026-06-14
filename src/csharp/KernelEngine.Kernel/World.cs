@@ -1,19 +1,16 @@
-using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
-using KernelEngine.Framework.Native;
 
-namespace KernelEngine.Framework;
+namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Managed wrapper over the native <c>ke_world</c> vtable. Aggregates
-/// ECS storage, runtime scheduler, and scene tree behind the ke_world ABI;
-/// also registers the framework's built-in component apply callbacks.
+/// ECS storage, runtime scheduler, and scene tree behind the ke_world ABI.
 /// </summary>
 /// <remarks>
 /// World does NOT own the ecs/runtime/scene_tree it was given — per project
 /// doctrine, whoever creates owns. Those resources are destroyed by their own
 /// DI wrappers (FlecsEcs, Runtime, etc.). Only the ke_world_state allocation
-/// (~300 B) is leaked at shutdown, which the OS reclaims.
+/// is leaked at shutdown, which the OS reclaims.
 /// </remarks>
 public sealed unsafe class World : IDisposable
 {
@@ -29,7 +26,8 @@ public sealed unsafe class World : IDisposable
         }
     }
 
-    internal World(ke_world* native) => _native = native;
+    /// <summary>Creates a World wrapper around an already-created ke_world pointer.</summary>
+    public World(ke_world* native) => _native = native;
 
     /// <summary>Raw ECS storage pointer — valid for the lifetime of the owning IEcs wrapper.</summary>
     public ke_ecs* Ecs => Native->ecs(_native);

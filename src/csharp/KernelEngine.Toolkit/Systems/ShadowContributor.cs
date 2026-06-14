@@ -13,11 +13,11 @@ internal sealed class ShadowResources
 
 internal sealed class ShadowContributor : IFrameContributor
 {
-    private readonly IEcsAdapter        _ecs;
+    private readonly IEcsRegistry       _ecs;
     private readonly IComponentRegistry _components;
     private readonly ShadowResources    _resources;
 
-    public ShadowContributor(IEcsAdapter ecs, IComponentRegistry components, ShadowResources resources)
+    public ShadowContributor(IEcsRegistry ecs, IComponentRegistry components, ShadowResources resources)
     {
         _ecs        = ecs;
         _components = components;
@@ -29,13 +29,9 @@ internal sealed class ShadowContributor : IFrameContributor
         var map = _resources.Handle;
         if (map is null) return;
 
-        DirectionalLightComponent dl = default;
-        bool foundLight = false;
-        _ecs.Query<DirectionalLightComponent>(_components.CidOf<DirectionalLightComponent>(), (ulong _, ref DirectionalLightComponent l) =>
-        {
-            if (!foundLight) { dl = l; foundLight = true; }
-        });
-        if (!foundLight) return;
+        var lightResult = _ecs.Query<DirectionalLightComponent>(_components.CidOf<DirectionalLightComponent>());
+        if (lightResult.Length == 0) return;
+        ref var dl = ref lightResult.Data[0];
 
         var dir       = Vector3.Normalize(dl.Direction);
         var lightPos  = dir * (_resources.FarPlane * 0.5f);
@@ -47,14 +43,15 @@ internal sealed class ShadowContributor : IFrameContributor
         packet.SetShadow(map.Value, lightView, lightProj);
         packet.SetActiveShadowMap(map.Value);
 
-        var ecs          = _ecs;
         var transformCid = _components.CidOf<TransformComponent>();
-        _ecs.Query<MeshRendererComponent>(_components.CidOf<MeshRendererComponent>(), (ulong entity, ref MeshRendererComponent mesh) =>
+        var (entities, data) = _ecs.Query<MeshRendererComponent>(_components.CidOf<MeshRendererComponent>());
+        for (int i = 0; i < entities.Length; i++)
         {
+            ref var mesh = ref data[i];
             var world = Matrix4x4.Identity;
-            if (ecs.TryGet<TransformComponent>(entity, transformCid, out var t))
-                world = t.ToMatrix();
+            var tsp = _ecs.GetComponent<TransformComponent>(entities[i], transformCid);
+            if (!tsp.IsEmpty) world = tsp[0].ToMatrix();
             packet.AddShadowDrawCommand(mesh.Mesh, world);
-        });
+        }
     }
 }

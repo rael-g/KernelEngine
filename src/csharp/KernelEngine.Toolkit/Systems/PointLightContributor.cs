@@ -5,10 +5,10 @@ namespace KernelEngine.Framework;
 
 internal sealed class PointLightContributor : IFrameContributor
 {
-    private readonly IEcsAdapter        _ecs;
+    private readonly IEcsRegistry       _ecs;
     private readonly IComponentRegistry _components;
 
-    public PointLightContributor(IEcsAdapter ecs, IComponentRegistry components)
+    public PointLightContributor(IEcsRegistry ecs, IComponentRegistry components)
     {
         _ecs        = ecs;
         _components = components;
@@ -16,14 +16,14 @@ internal sealed class PointLightContributor : IFrameContributor
 
     public void Contribute(IFramePacket packet)
     {
-        var ecs          = _ecs;
         var transformCid = _components.CidOf<TransformComponent>();
-
-        _ecs.Query<PointLightComponent>(_components.CidOf<PointLightComponent>(), (ulong entity, ref PointLightComponent pl) =>
+        var (entities, data) = _ecs.Query<PointLightComponent>(_components.CidOf<PointLightComponent>());
+        for (int i = 0; i < entities.Length; i++)
         {
+            ref var pl = ref data[i];
             var position = Vector3.Zero;
-            if (ecs.TryGet<TransformComponent>(entity, transformCid, out var t))
-                position = t.Position;
+            var tsp = _ecs.GetComponent<TransformComponent>(entities[i], transformCid);
+            if (!tsp.IsEmpty) position = tsp[0].Position;
 
             packet.AddPointLight(new PointLightData
             {
@@ -32,6 +32,6 @@ internal sealed class PointLightContributor : IFrameContributor
                 Color     = pl.Color,
                 Intensity = pl.Intensity,
             });
-        });
+        }
     }
 }

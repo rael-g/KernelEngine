@@ -5,10 +5,10 @@ namespace KernelEngine.Framework;
 
 internal sealed class SpotLightContributor : IFrameContributor
 {
-    private readonly IEcsAdapter        _ecs;
+    private readonly IEcsRegistry       _ecs;
     private readonly IComponentRegistry _components;
 
-    public SpotLightContributor(IEcsAdapter ecs, IComponentRegistry components)
+    public SpotLightContributor(IEcsRegistry ecs, IComponentRegistry components)
     {
         _ecs        = ecs;
         _components = components;
@@ -16,14 +16,14 @@ internal sealed class SpotLightContributor : IFrameContributor
 
     public void Contribute(IFramePacket packet)
     {
-        var ecs          = _ecs;
         var transformCid = _components.CidOf<TransformComponent>();
-
-        _ecs.Query<SpotLightComponent>(_components.CidOf<SpotLightComponent>(), (ulong entity, ref SpotLightComponent sl) =>
+        var (entities, data) = _ecs.Query<SpotLightComponent>(_components.CidOf<SpotLightComponent>());
+        for (int i = 0; i < entities.Length; i++)
         {
+            ref var sl = ref data[i];
             var position = Vector3.Zero;
-            if (ecs.TryGet<TransformComponent>(entity, transformCid, out var t))
-                position = t.Position;
+            var tsp = _ecs.GetComponent<TransformComponent>(entities[i], transformCid);
+            if (!tsp.IsEmpty) position = tsp[0].Position;
 
             packet.AddSpotLight(new SpotLightData
             {
@@ -35,6 +35,6 @@ internal sealed class SpotLightContributor : IFrameContributor
                 Color      = sl.Color,
                 Intensity  = sl.Intensity,
             });
-        });
+        }
     }
 }
