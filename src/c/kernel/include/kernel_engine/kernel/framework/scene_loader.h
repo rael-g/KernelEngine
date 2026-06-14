@@ -22,9 +22,7 @@ extern "C"
     //     [[entity]]
     //     name   = "Player"
     //     parent = "World"                   # optional; defaults to root
-    //     [entity.script]
-    //     language = "csharp"                # one factory per language
-    //     type     = "Paddle"
+    //     type   = "Paddle"                  # dispatched to the registered script factory
     //     [entity.transform]
     //     position       = [0, 1, 0]
     //     scale          = [1, 1, 1]
@@ -34,12 +32,16 @@ extern "C"
     //     color     = [1, 1, 1, 1]
     //     [entity.properties]                # free-form bag — see ke_scene_properties
     //     MoveAction = "Up"
+    //
+    // Script language: one factory per game session — the host registers its
+    // factory once (C#, Lua, Python, …) and every `type` field in the scene
+    // dispatches to that factory. Games use a single scripting language; the
+    // loader doesn't need to know which one.
 
-    /// Factory invoked by the loader when it sees `[entity.script]` on an
-    /// entity. Bindings register one per language (csharp, lua, etc.); the
-    /// factory's job is to instantiate the wrapper for `type_name` and bind
-    /// it to `entity` (e.g. Tree.WrapEntity in C#, or attach a
-    /// ke_script_component in Lua). Return non-zero to signal a load failure.
+    /// Factory invoked by the loader when an entity has a `type` field. The
+    /// host registers exactly one factory (its scripting-language bridge);
+    /// the factory's job is to instantiate the wrapper for `type_name` and
+    /// bind it to `entity`. Return non-zero to signal a load failure.
     typedef ke_result (*ke_script_factory_func)(
         void *ctx, ke_entity entity, const char *type_name);
 
@@ -73,15 +75,14 @@ extern "C"
         /// KE_ERROR_NOT_FOUND on a missing/unparseable file.
         ke_result (*load)(struct ke_scene_loader *self, const char *path);
 
-        /// Registers a script factory for `language` (case-sensitive). When
-        /// the loader encounters `[entity.script] language = "<name>"` on an
-        /// entity, it calls the matching factory with the entity and the
-        /// `type` string. Returns KE_ERROR_INVALID_ARGUMENT if any argument is
-        /// NULL or the factory itself is NULL.
-        ke_result (*register_script_language)(struct ke_scene_loader *self,
-                                              const char *language,
-                                              ke_script_factory_func factory,
-                                              void *ctx);
+        /// Registers the single script factory for this loader. When the loader
+        /// encounters a `type` field on an entity it calls factory(ctx, entity,
+        /// type_name). Only one factory is active at a time; calling again
+        /// replaces the previous registration. Returns KE_ERROR_INVALID_ARGUMENT
+        /// if self or factory is NULL.
+        ke_result (*register_script_factory)(struct ke_scene_loader *self,
+                                             ke_script_factory_func factory,
+                                             void *ctx);
 
         /// Releases resources owned by this loader. After destroy() the
         /// pointer must not be used, AND any `scene_properties` component the

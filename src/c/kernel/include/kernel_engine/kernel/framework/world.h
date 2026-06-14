@@ -1,21 +1,22 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_H_
 #define KERNEL_ENGINE_FRAMEWORK_WORLD_H_
 
-// ke_world — framework-level aggregator: owns one ECS storage instance, one
-// runtime scheduler, one scene tree, plus per-world conventions (project_root
-// for asset_resolver). Multi-world is supported by creating N worlds in the
-// same process; each is fully isolated (per-world ecs, per-world runtime).
+// ke_world — framework-level aggregator: references one ECS storage instance,
+// one runtime scheduler, one scene tree, plus per-world conventions
+// (project_root for asset_resolver). Multi-world is supported by creating N
+// worlds in the same process; each has its own ecs + runtime + scene_tree.
 //
 // Created by the framework plugin via ke_world_create() (see
 // kernel_engine/framework/world_create.h). Other plugins / bindings may
 // ship alternative ke_world_create() implementations exporting a different
 // vtable shape (e.g. ECS-pure worlds without a scene tree).
 //
-// Ownership: world OWNS ecs + runtime + scene_tree (transferred from host on
-// create — host stops being responsible for destruction). world BORROWS
-// allocator + task_scheduler + logger (process-wide primitives the host
-// destroys after the world). `world->destroy(world)` cascades the owned
-// pieces in reverse-create order.
+// Ownership ("quem cria, owna"): world BORROWS ecs + runtime + scene_tree +
+// allocator + task_scheduler + logger. The host (or a language wrapper acting
+// as host) created those objects and remains responsible for destroying them.
+// `world->destroy(world)` frees only the world's own state (apply_registry +
+// the state/vtable allocation). Caller must destroy ecs, runtime, scene_tree
+// afterwards in reverse-create order.
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
@@ -54,9 +55,9 @@ extern "C"
     {
         ke_allocator             *allocator;       ///< borrowed
         struct ke_task_scheduler *task_scheduler;  ///< borrowed
-        ke_ecs                   *ecs;             ///< ownership transferred to world
-        ke_runtime               *runtime;         ///< ownership transferred to world
-        struct ke_scene_tree     *scene_tree;      ///< ownership transferred to world; NULL allowed until C-phase reintroduces scene_tree impl
+        ke_ecs                   *ecs;             ///< borrowed; caller destroys after world->destroy()
+        ke_runtime               *runtime;         ///< borrowed; caller destroys after world->destroy()
+        struct ke_scene_tree     *scene_tree;      ///< borrowed; NULL allowed; caller destroys after world->destroy()
         const char               *project_root;    ///< framework convention (asset_resolver); NULL = res:// disabled
         struct ke_logger         *logger;          ///< borrowed (optional)
     } ke_world_params;
@@ -89,8 +90,10 @@ extern "C"
         ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
                                                      ke_component_id  cid);
 
-        /// Destroys the world and cascades teardown of owned pieces in reverse
-        /// order: scene_tree → runtime → ecs. After this call `self` must not be used.
+        /// Destroys the world's own state (apply_registry + state block). Does NOT
+        /// destroy ecs, runtime, or scene_tree — those are borrowed; caller destroys
+        /// them in reverse-create order after this call. After this call `self` must
+        /// not be used.
         void (*destroy)(struct ke_world *self);
     };
 

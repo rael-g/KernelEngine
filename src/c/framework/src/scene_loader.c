@@ -29,13 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ── Script-language registry ────────────────────────────────────────────────
-
-typedef struct script_lang {
-    char                    name[32];
-    ke_script_factory_func  factory;
-    void                   *ctx;
-} script_lang;
+// ── Script factory (single slot) ────────────────────────────────────────────
 
 // ── Arena (per-loader, freed at destroy) ────────────────────────────────────
 //
@@ -52,18 +46,17 @@ typedef struct arena_chunk {
 } arena_chunk;
 
 typedef struct loader_state {
-    ke_scene_loader  api;
-    ke_allocator    *allocator;
-    struct ke_world *world;
-    char             project_root[512];
+    ke_scene_loader        api;
+    ke_allocator          *allocator;
+    struct ke_world       *world;
+    char                   project_root[512];
 
-    script_lang     *langs;
-    uint32_t         lang_count;
-    uint32_t         lang_capacity;
+    ke_script_factory_func script_factory;
+    void                  *script_ctx;
 
-    ke_component_id  scene_properties_cid;
+    ke_component_id        scene_properties_cid;
 
-    arena_chunk     *arena_head;
+    arena_chunk           *arena_head;
 } loader_state;
 
 // ── Arena ops ───────────────────────────────────────────────────────────────
@@ -236,17 +229,8 @@ static void resolve_path(const loader_state *s, const char *base_dir,
 
 // ── Script dispatch ────────────────────────────────────────────────────────
 
-static void dispatch_script(loader_state *s, ke_entity entity, toml_table_t *script_tbl) {
-    toml_datum_t lang = toml_string_in(script_tbl, "language");
-    toml_datum_t type = toml_string_in(script_tbl, "type");
-    if (!lang.ok || !type.ok) { if (lang.ok) free(lang.u.s); if (type.ok) free(type.u.s); return; }
-    for (uint32_t i = 0; i < s->lang_count; ++i) {
-        if (strcmp(s->langs[i].name, lang.u.s) == 0 && s->langs[i].factory) {
-            (void)s->langs[i].factory(s->langs[i].ctx, entity, type.u.s);
-            break;
-        }
-    }
-    free(lang.u.s); free(type.u.s);
+static void dispatch_script(loader_state *s, ke_entity entity, const char *type_name) {
+    if (s->script_factory) s->script_factory(s->script_ctx, entity, type_name);
 }
 
 // ── Properties bag ─────────────────────────────────────────────────────────
@@ -336,8 +320,8 @@ static void apply_outer_overrides(loader_state *s, ke_entity entity, toml_table_
     if (xt) apply_transform_block(s, entity, xt);
     toml_table_t *props = toml_table_in(outer, "properties");
     if (props) attach_properties(s, entity, props);
-    toml_table_t *script = toml_table_in(outer, "script");
-    if (script) dispatch_script(s, entity, script);
+    toml_datum_t type_d = toml_string_in(outer, "type");
+    if (type_d.ok) { dispatch_script(s, entity, type_d.u.s); free(type_d.u.s); }
     toml_table_t *comps = toml_table_in(outer, "components");
     if (comps) {
         for (int i = 0; ; ++i) {
@@ -409,8 +393,8 @@ static ke_result process_entity(loader_state *s, const char *base_dir,
     toml_table_t *xform_tbl = toml_table_in(entity_tbl, "transform");
     if (xform_tbl) apply_transform_block(s, entity, xform_tbl);
 
-    toml_table_t *script_tbl = toml_table_in(entity_tbl, "script");
-    if (script_tbl) dispatch_script(s, entity, script_tbl);
+    toml_datum_t type_d = toml_string_in(entity_tbl, "type");
+    if (type_d.ok) { dispatch_script(s, entity, type_d.u.s); free(type_d.u.s); }
 
     toml_table_t *props_tbl = toml_table_in(entity_tbl, "properties");
     if (props_tbl) attach_properties(s, entity, props_tbl);
@@ -495,36 +479,13 @@ static ke_result vt_load(ke_scene_loader *self, const char *path) {
     return load_scene_recursive(s, path, KE_ENTITY_INVALID, NULL, NULL, NULL);
 }
 
-static ke_result vt_register_script_language(ke_scene_loader *self,
-                                              const char *language,
-                                              ke_script_factory_func factory,
-                                              void *ctx) {
-    if (!self || !self->handle || !language || !factory) return KE_ERROR_INVALID_ARGUMENT;
+static ke_result vt_register_script_factory(ke_scene_loader *self,
+                                             ke_script_factory_func factory,
+                                             void *ctx) {
+    if (!self || !self->handle || !factory) return KE_ERROR_INVALID_ARGUMENT;
     loader_state *s = (loader_state *)self->handle;
-    // Replace-if-exists
-    for (uint32_t i = 0; i < s->lang_count; ++i) {
-        if (strcmp(s->langs[i].name, language) == 0) {
-            s->langs[i].factory = factory; s->langs[i].ctx = ctx; return KE_OK;
-        }
-    }
-    if (s->lang_count == s->lang_capacity) {
-        uint32_t cap = s->lang_capacity ? s->lang_capacity * 2 : 4;
-        script_lang *nb = (script_lang *)s->allocator->alloc(s->allocator, sizeof(script_lang) * cap, 8);
-        if (!nb) return KE_ERROR_OUT_OF_MEMORY;
-        if (s->langs) {
-            memcpy(nb, s->langs, sizeof(script_lang) * s->lang_count);
-            s->allocator->free(s->allocator, s->langs);
-        }
-        s->langs = nb;
-        s->lang_capacity = cap;
-    }
-    script_lang *sl = &s->langs[s->lang_count++];
-    size_t ln = strlen(language);
-    if (ln >= sizeof(sl->name)) ln = sizeof(sl->name) - 1;
-    memcpy(sl->name, language, ln);
-    sl->name[ln] = '\0';
-    sl->factory = factory;
-    sl->ctx = ctx;
+    s->script_factory = factory;
+    s->script_ctx     = ctx;
     return KE_OK;
 }
 
@@ -532,7 +493,6 @@ static void vt_destroy(ke_scene_loader *self) {
     if (!self || !self->handle) return;
     loader_state *s = (loader_state *)self->handle;
     arena_destroy(s);
-    if (s->langs) s->allocator->free(s->allocator, s->langs);
     ke_allocator *a = s->allocator;
     a->free(a, s);
 }
@@ -567,10 +527,10 @@ ke_result ke_scene_loader_create(ke_allocator *alloc, struct ke_world *world,
             e, KE_SCENE_PROPERTIES_COMPONENT_NAME, sizeof(ke_scene_properties));
     }
 
-    s->api.handle                   = s;
-    s->api.load                     = vt_load;
-    s->api.register_script_language = vt_register_script_language;
-    s->api.destroy                  = vt_destroy;
+    s->api.handle                  = s;
+    s->api.load                    = vt_load;
+    s->api.register_script_factory = vt_register_script_factory;
+    s->api.destroy                 = vt_destroy;
 
     *out_loader = &s->api;
     return KE_OK;

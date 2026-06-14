@@ -98,11 +98,8 @@ static void world_destroy(struct ke_world *self) {
     if (s) {
         if (s->apply_registry) s->allocator->free(s->allocator, s->apply_registry);
 
-        // Reverse-create order: scene_tree → runtime → ecs.
-        if (s->scene_tree) s->scene_tree->destroy(s->scene_tree);
-        if (s->runtime)    s->runtime->destroy(s->runtime);
-        if (s->ecs)        s->ecs->destroy(s->ecs);
-
+        // ecs, runtime, scene_tree are BORROWED — caller destroys them after world->destroy().
+        // "quem cria, owna": world did not create these; world must not destroy them.
         ke_allocator *a = s->allocator;
         a->free(a, s);
     }

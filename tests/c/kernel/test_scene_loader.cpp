@@ -63,7 +63,11 @@ protected:
     void TearDown() override
     {
         if (loader) loader->destroy(loader);
-        if (world) world->destroy(world);  // cascade scene_tree+runtime+ecs
+        if (world) world->destroy(world);
+        // world borrows ecs/runtime/scene_tree — caller destroys in reverse-create order.
+        if (tree) tree->destroy(tree);
+        if (runtime) runtime->destroy(runtime);
+        if (ecs) ecs->destroy(ecs);
         if (task_scheduler) task_scheduler->destroy(task_scheduler);
     }
 };
@@ -235,13 +239,11 @@ ke_result spy_factory(void *ctx, ke_entity entity, const char *type_name) {
 TEST_F(SceneLoaderTest, Script_FactoryReceivesEntityAndType)
 {
     ScriptCallSpy spy;
-    ASSERT_EQ(loader->register_script_language(loader, "csharp", spy_factory, &spy), KE_OK);
+    ASSERT_EQ(loader->register_script_factory(loader, spy_factory, &spy), KE_OK);
 
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Paddle"
-[entity.script]
-language = "csharp"
 type = "PaddleController"
 )");
     ASSERT_EQ(loader->load(loader, p.string().c_str()), KE_OK);
@@ -251,16 +253,14 @@ type = "PaddleController"
     EXPECT_EQ(spy.last_entity, tree->find_node(tree, "Paddle"));
 }
 
-TEST_F(SceneLoaderTest, Script_UnregisteredLanguage_SilentlyIgnored)
+TEST_F(SceneLoaderTest, Script_NoFactory_EntityStillCreated)
 {
+    // No factory registered — entity is created but script dispatch is a no-op.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Lone"
-[entity.script]
-language = "csharp"
 type = "Whatever"
 )");
-    // No factory registered for csharp.
     EXPECT_EQ(loader->load(loader, p.string().c_str()), KE_OK);
     EXPECT_NE(tree->find_node(tree, "Lone"), KE_ENTITY_INVALID);
 }
