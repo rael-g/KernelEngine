@@ -36,9 +36,13 @@ public sealed class Tree
     /// </summary>
     public IRenderer Renderer { get; }
 
-    internal Tree(EcsAdapter ecs, ComponentRegistry components, IRenderer renderer)
+    /// <summary>The native world aggregator that owns this tree's ECS and runtime.</summary>
+    public World World { get; }
+
+    internal unsafe Tree(World world, ComponentRegistry components, IRenderer renderer)
     {
-        Ecs        = ecs;
+        World      = world;
+        Ecs        = new EcsAdapter(world.Ecs);
         Components = components;
         Renderer   = renderer;
     }

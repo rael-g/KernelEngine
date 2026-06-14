@@ -1,5 +1,7 @@
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
+using KernelEngine.Runtime;
+using KernelEngine.Framework.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
@@ -16,15 +18,38 @@ public sealed class SceneRenderModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
+        // World wraps ke_world_create to get the vtable + built-in apply callbacks.
+        // Borrows ecs/runtime — per doctrine, whoever creates owns; FlecsEcs/Runtime
+        // DI singletons remain the true owners and call destroy() at DI disposal.
+        services.AddSingleton<World>(sp =>
+        {
+            var flecsEcs  = (FlecsEcs)sp.GetRequiredService<IEcs>();
+            var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
+            var alloc     = (Allocator)sp.GetRequiredService<IAllocator>();
+            unsafe
+            {
+                ke_world_params p = default;
+                p.allocator = alloc.Native;
+                p.ecs       = flecsEcs.Native;
+                p.runtime   = rtRuntime.Native;
+                ke_world* w;
+                KernelException.ThrowIfFailed(
+                    KernelEngine.Framework.Native.NativeMethods.world_create(&p, &w).ToManaged());
+                return new World(w);
+            }
+        });
+
         services.AddSingleton<EcsAdapter>(sp =>
-            new EcsAdapter((FlecsEcs)sp.GetRequiredService<IEcs>()));
+        {
+            unsafe { return new EcsAdapter(sp.GetRequiredService<World>().Ecs); }
+        });
 
         services.AddSingleton<ComponentRegistry>(sp =>
             new ComponentRegistry(sp.GetRequiredService<EcsAdapter>()));
 
         services.AddSingleton<Tree>(sp =>
             new Tree(
-                sp.GetRequiredService<EcsAdapter>(),
+                sp.GetRequiredService<World>(),
                 sp.GetRequiredService<ComponentRegistry>(),
                 sp.GetRequiredService<IRenderer>()));
 

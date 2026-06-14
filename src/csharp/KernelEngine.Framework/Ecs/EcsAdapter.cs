@@ -20,6 +20,11 @@ internal sealed unsafe class EcsAdapter
         _ecs = ecs.Native;
     }
 
+    internal EcsAdapter(ke_ecs* ptr)
+    {
+        _ecs = ptr;
+    }
+
     public uint Register<T>(string name) where T : unmanaged
     {
         var bytes = Encoding.UTF8.GetBytes(name + "\0");
