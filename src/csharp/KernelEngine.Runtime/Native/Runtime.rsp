@@ -6,8 +6,10 @@ KernelEngine.Runtime.Native
 ke_runtime
 --include-directory
 ../../../c/kernel/include
+--include-directory
+../../../c/runtime/include
 --file
-../../../c/kernel/include/kernel_engine/kernel/runtime/runtime_create.h
+../../../c/runtime/include/kernel_engine/runtime/runtime_create.h
 ../../../c/kernel/include/kernel_engine/kernel/runtime/system_ctx.h
 --methodClassName
 NativeMethods

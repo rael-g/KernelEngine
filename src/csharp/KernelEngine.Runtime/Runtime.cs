@@ -76,6 +76,9 @@ public sealed unsafe class Runtime : IRuntime
         public required Action<IRuntime, float> Execute { get; init; }
     }
 
+    /// <summary>Borrowed pointer to the native ke_runtime vtable. Valid until Dispose.</summary>
+    public ke_runtime* Native => _native;
+
     public Runtime(Allocator allocator, IEcs ecs, ITaskScheduler taskScheduler)
     {
         ArgumentNullException.ThrowIfNull(allocator);
