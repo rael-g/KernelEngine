@@ -31,23 +31,30 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// Optional image-loader plugin. Pass <see langword="null"/> to disable
     /// <see cref="ResolveTexture"/>; it will throw <see cref="KernelException"/> when called.
     /// </param>
+    /// <param name="fontLoader">
+    /// Optional font-loader plugin. Pass <see langword="null"/> to disable
+    /// <see cref="ResolveFont"/>; it will throw <see cref="KernelException"/> when called.
+    /// </param>
     /// <param name="projectRoot">
     /// Optional project root for <c>res://</c> resolution. Pass <see langword="null"/>
     /// to restrict to absolute and CWD-relative paths.
     /// </param>
-    public NativeAssetResolver(Allocator allocator, INativeImageLoader? imageLoader = null, string? projectRoot = null)
+    public NativeAssetResolver(Allocator allocator, INativeImageLoader? imageLoader = null,
+                               INativeFontLoader? fontLoader = null, string? projectRoot = null)
     {
         ArgumentNullException.ThrowIfNull(allocator);
 
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
         ke_asset_resolver* p;
-        ke_image_loader* loaderPtr = imageLoader is not null ? imageLoader.Native : null;
+        ke_image_loader* imagePtr = imageLoader is not null ? imageLoader.Native : null;
+        ke_font_loader*  fontPtr  = fontLoader  is not null ? fontLoader.Native  : null;
         fixed (byte* rootPtr = rootBytes)
         {
             KernelException.ThrowIfFailed(
                 KernelEngine.Framework.Native.NativeMethods.asset_resolver_create(
                     allocator.Native,
-                    loaderPtr,
+                    imagePtr,
+                    fontPtr,
                     (sbyte*)rootPtr,
                     &p).ToManaged());
         }
@@ -91,6 +98,35 @@ public sealed unsafe class NativeAssetResolver : IDisposable
             result = _native->resolve_mesh(_native, (sbyte*)p, &meshData);
         KernelException.ThrowIfFailed(result.ToManaged());
         return new ResolvedMeshData(_native, meshData);
+    }
+
+    /// <summary>
+    /// Resolves a font file path to a freshly-baked <see cref="ResolvedFontData"/> (atlas RGBA8
+    /// + glyph metrics). Caller owns the result and must dispose it.
+    /// </summary>
+    /// <param name="path">File path; <c>res://</c> prefix is expanded against the project root.</param>
+    /// <param name="pixelSize">Desired bake size in pixels.</param>
+    /// <param name="firstCodepoint">First Unicode codepoint to include (default 32 = space).</param>
+    /// <param name="codepointCount">Number of contiguous codepoints to bake (default 95).</param>
+    /// <param name="atlasSize">Square atlas dimension in pixels (default 512).</param>
+    /// <exception cref="KernelException">
+    /// File not found, unsupported format, or no font loader was injected.
+    /// </exception>
+    public ResolvedFontData ResolveFont(string path, float pixelSize,
+                                        uint firstCodepoint = 32, uint codepointCount = 95,
+                                        uint atlasSize = 512)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
+        var bytes = Encoding.UTF8.GetBytes(path + "\0");
+        ke_font_data* data;
+        ke_result result;
+        fixed (byte* p = bytes)
+            result = _native->resolve_font(_native, (sbyte*)p, pixelSize,
+                                           firstCodepoint, codepointCount, atlasSize, &data);
+        KernelException.ThrowIfFailed(result.ToManaged());
+        return new ResolvedFontData(_native, data);
     }
 
     /// <summary>
@@ -207,6 +243,64 @@ public sealed unsafe class ResolvedMeshData : IDisposable
         _disposed = true;
         fixed (ke_mesh_shape_data* p = &_data)
             _resolver->free_mesh(_resolver, p);
+    }
+}
+
+/// <summary>
+/// Owns a <see cref="ke_font_data"/> returned by <see cref="NativeAssetResolver.ResolveFont"/>.
+/// Freed via the resolver's <c>free_font</c> slot on dispose.
+/// </summary>
+public sealed unsafe class ResolvedFontData : IDisposable
+{
+    private ke_asset_resolver* _resolver;
+    private ke_font_data* _data;
+
+    internal ResolvedFontData(ke_asset_resolver* resolver, ke_font_data* data)
+    {
+        _resolver = resolver;
+        _data     = data;
+    }
+
+    /// <summary>Atlas RGBA8 pixel data. Valid only while this instance is not disposed.</summary>
+    public ReadOnlySpan<byte> AtlasRgba
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_data == null, this);
+            return new ReadOnlySpan<byte>(_data->atlas_rgba,
+                checked((int)(_data->atlas_width * _data->atlas_height * 4u)));
+        }
+    }
+
+    /// <summary>Atlas width in pixels.</summary>
+    public uint AtlasWidth  => _data != null ? _data->atlas_width  : 0u;
+
+    /// <summary>Atlas height in pixels.</summary>
+    public uint AtlasHeight => _data != null ? _data->atlas_height : 0u;
+
+    /// <summary>Recommended line spacing in pixels at the baked size.</summary>
+    public float LineHeight => _data != null ? _data->line_height : 0f;
+
+    /// <summary>Pixels above baseline to the top of the tallest baked glyph.</summary>
+    public float Ascent => _data != null ? _data->ascent : 0f;
+
+    /// <summary>Per-glyph layout + atlas-UV metrics. Valid only while this instance is not disposed.</summary>
+    public ReadOnlySpan<ke_glyph_metrics> Glyphs
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_data == null, this);
+            return new ReadOnlySpan<ke_glyph_metrics>(_data->glyphs,
+                checked((int)_data->glyph_count));
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        if (_data == null) return;
+        _resolver->free_font(_resolver, _data);
+        _data = null;
     }
 }
 

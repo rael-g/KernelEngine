@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Text;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel.Native;
@@ -6,12 +5,11 @@ using KernelEngine.Kernel.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Internal pointer-level wrapper around <see cref="FlecsEcs"/>. Framework
-/// code uses it to register components, spawn entities, attach + query
-/// components. Game code never sees this — it uses the higher-level
-/// <see cref="SceneBuilder"/> + render systems built on top.
+/// Pointer-level wrapper around <see cref="FlecsEcs"/>. Implements
+/// <see cref="IEcsAdapter"/> so Toolkit can depend on the interface without
+/// a direct reference to this assembly.
 /// </summary>
-internal sealed unsafe class EcsAdapter
+internal sealed unsafe class EcsAdapter : IEcsAdapter
 {
     private readonly ke_ecs* _ecs;
 
@@ -49,8 +47,6 @@ internal sealed unsafe class EcsAdapter
         value = *p;
         return true;
     }
-
-    public delegate void QueryAction<T>(ulong entity, ref T data) where T : unmanaged;
 
     public void Query<T>(uint cid, QueryAction<T> action) where T : unmanaged
     {

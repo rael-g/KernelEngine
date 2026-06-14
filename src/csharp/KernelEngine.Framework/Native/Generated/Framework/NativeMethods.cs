@@ -45,5 +45,5 @@ public static unsafe partial class NativeMethods
     public static extern ke_result input_actions_create(ke_allocator* alloc, ke_input_actions** out_actions);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_resolver_create", ExactSpelling = true)]
-    public static extern ke_result asset_resolver_create(ke_allocator* alloc, ke_image_loader* image_loader, [NativeTypeName("const char *")] sbyte* project_root, ke_asset_resolver** @out);
+    public static extern ke_result asset_resolver_create(ke_allocator* alloc, ke_image_loader* image_loader, ke_font_loader* font_loader, [NativeTypeName("const char *")] sbyte* project_root, ke_asset_resolver** @out);
 }

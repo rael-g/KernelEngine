@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -16,6 +16,7 @@
     <ProjectReference Include="../../../src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Toolkit/KernelEngine.Toolkit.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj" />
   </ItemGroup>
 

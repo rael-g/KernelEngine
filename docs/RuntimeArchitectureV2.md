@@ -1543,24 +1543,35 @@ These came up while executing the plan and are now locked. Recorded here so a fr
 
 #### 17.6.3 Current state — what's in the tree right now
 
-After C-phase 4.5:
+After F-phase (2026-06-13):
 
-- **Native build green** across kernel + runtime + flecs ecs + framework plugin + all other plugins.
-- **`src/c/framework/`** plugin contains: `world.c`, `asset_resolver.c`, `mesh_shape.c` (internal), `scene_tree.c`, plus `third_party/tomlc99/`. Two factory headers exported: `world_create.h`, `asset_resolver_create.h`, `scene_tree_create.h`. (Yes three — each is one symbol; that's still consistent with "one export per factory header".)
-- **`src/cpp/framework/`** contains only `input_actions.cpp` + `scene_loader.cpp` and their create headers. Both .cpp files are disabled (the parent CMakeLists has `# add_subdirectory(src/cpp/framework)` commented out from B0).
-- **`kernel/framework/`** kernel-include holds POD/contract surface: `components.h`, `scene_tree.h`, `scene_loader.h`, `input_actions.h`, `material_file.h` (POD), `world.h` (vtable), `framework_export.h`.
-- **`kernel/asset/`** holds the migrated primitives: `asset_resolver.h`, `mesh_shape.h` (POD), plus pre-existing `image_loader.h`, `mesh_data.h`, `asset_loader.h`.
-- **`kernel/resource_cache/`** is the new kernel domain with `resource_cache.h` (contract + factory; impl in `src/c/kernel/src/resource_cache/resource_cache.c`).
-- **Tests**: 5 RuntimeSpike failures are pre-existing (predate this arc); all others green. Asset resolver 17 cases, resource cache 19 cases, scene tree 19 cases, world B2 2 cases.
-- **Disabled in CMake** pending C-phase completion: framework integration test, 6 framework-backed tests in `tests/c/kernel/CMakeLists.txt` (input_actions, scene_loader, mesh_shape, material_file, resource_queue — the last two will be deleted, not re-enabled), examples 02/03 (depended on legacy world).
+- **Native build green** across all plugins. 518/520 tests passing; 2 RuntimeSpike failures are pre-existing (predate this arc).
+- **`src/c/framework/`** plugin contains: `world.c`, `asset_resolver.c`, `mesh_shape.c` (internal), `scene_tree.c`, `scene_loader.c`, `input_actions.c`, `components_apply.c`, plus `third_party/tomlc99/`. Factory headers: `world_create.h`, `asset_resolver_create.h`, `scene_tree_create.h`, `scene_loader_create.h`, `input_actions_create.h`. Fully C, no `src/cpp/framework/` remains.
+- **`ke_asset_resolver`** vtable gained `resolve_font` + `free_font` slots; `ke_asset_resolver_create` now accepts `ke_font_loader*` alongside `ke_image_loader*`. Font is a resource in the same domain as texture/mesh/material — no separate `ke_font` vtable.
+- **`kernel/framework/components.h`** holds the 3D scene vocabulary: transform, hierarchy, name, camera, lights, mesh. No UI components — `ke_label_component` was designed and rejected; see design decision #10.
+- **`kernel/asset/`**: `asset_resolver.h` (with font slots), `image_loader.h`, `mesh_shape.h`, `mesh_data.h`, `asset_loader.h`.
+- **`kernel/text/font.h`**: `ke_font_loader` vtable + `ke_font_data` / `ke_glyph_metrics` structs. No `ke_font` vtable — loader returns raw data, caller uploads atlas via `ke_render`.
+- **C# bindings**: all 14 `.rsp` files regenerated green. `KernelEngine.Framework.Legacy.Native` project deleted (was referencing pre-A1 header paths that no longer exist — F-phase sweep).
+- **C# wrappers**: `INativeFontLoader` interface + `FontLoader` implements it. `NativeAssetResolver` accepts `INativeFontLoader?`, new `ResolveFont(path, pixelSize, ...)` method returns `ResolvedFontData : IDisposable`.
+- **Label**: stays as managed C# (`Label : Node`, `LabelContributor`, `Font`) — **deliberate debt**. Native port rejected: the entire UI concept (Node3D/Node2D/Canvas/Control hierarchy) will be redesigned post-merge; any native `ke_label` created now would be discarded in that refactor. See design decision #10.
+- **C# solution build**: 0 errors, 0 warnings (CA warnings pre-existing and unrelated to this arc).
 
-#### 17.6.4 Next phases
+#### 17.6.4 Design decisions surfaced in F-phase (2026-06-13)
 
-- **C-phase 5** — port `input_actions` to pure C. Largest remaining cpp impl (~143 blocks). Reuses tomlc99 for `.input` TOML parsing. Vtable contract stays as-is per B1 Tier 1, plus the integration shift: `evaluate(snapshot, cb)` migrates to runtime-registered system in PreUpdate phase reading the `Input` resource. Re-enables `test_input_actions.cpp`.
-- **C-phase 6** — port `scene_loader` to pure C. ~83 blocks. Reuses tomlc99 (shared dep, no new vendoring). Takes `ke_world*` (B2 aggregator) in the create signature (drop separate scene_tree pointer). Fixes the `scene_properties` lifetime hack — entries copy into per-entity arena owned by the world, not loader-internal storage; loader can then be destroyed immediately after load. Script factory pattern (csharp/lua) preserved. Re-enables `test_scene_loader.cpp`.
-- **C-phase 7** (housekeeping) — delete the now-empty `src/cpp/framework/` (CMakeLists + folder). Update the parent CMakeLists comment that referenced disabling it. Reconsider the `.rsp` files that referenced framework headers from the legacy locations; regenerate ClangSharp bindings if any survive.
-- **D phases** — managed wrappers replace the R6-era managed Framework implementations. Order: D1 World+SceneTree wrappers, D2 SceneLoader, D3 InputActions, ~~D4 render system wrappers — folded into the render plugin reading components directly post-R6~~, D5 cache/asset wrappers.
-  - **D1 design locked (2026-06-13)**: `world.c` `world_destroy` é alterado para liberar apenas o state próprio (apply_registry + bloco state); cascade de ecs/runtime/scene_tree é removido (ver decisão #9). O wrapper C# `World` cria e owna `FlecsEcs` + `Runtime` + `SceneTree` como membros; `World.Dispose()` cascateia os três. `IEcs`/`IRuntime` deixam de ser DI singletons — `SceneRenderModule` para de registrá-los no container; resolução se dá via `tree.World.Ecs` / `tree.World.Runtime` para quem precisar. `Tree` recebe `World` no construtor (em vez de `EcsAdapter` direto); `EcsAdapter` é construído internamente a partir de `world.Ecs`.
-- **E phase** — clean up `IEcsFactory`, `IntPtr NativeHandle` on `IEcs`, `InternalsVisibleTo` entries across `KernelEngine.Ecs.Flecs`/`Runtime`/`Kernel` csprojs. Promote `FlecsEcs.Native` from internal to public per `Allocator.Native` precedent.
-- **F phase** — Font/Label native completion + final cross-suite visual validation. Sweep deferred items: `.rsp` bindings, Lua refs, `docs/` references to the renamed paths.
-- After F: merge to `main`.
+10. **Node hierarchy design locked, impl deferred post-merge** — `Node` → `Node3D` / `Node2D` / `Canvas` / `Control` split is the correct architecture. `Node3D` carries `ke_transform_component`; `Node2D` carries `ke_transform2d_component` (xy + rot + scale, pixel/unit space); `Canvas` is a hierarchy boundary (no transform — breaks 3D/2D transform inheritance chain); `Control` carries `ke_ui_anchor_component`. Rules: Node3D inherits transform only from Node3D parents; Node2D only from Node2D parents; Canvas children can only be Control (scene_loader validates). "Node3D → Canvas → Node3D" is invalid hierarchy. **2.5D / Octopath / billboards use Node3D + billboard rendering flag, NOT Node2D** — 2.5D is 3D world space with sprite art; Node2D is for pure-2D pixel-space games. `ke_label_component` in `components.h` was rejected because: (a) Label is UI, not 3D scene vocabulary; (b) it would embed a raw `ke_font_data*` pointer in an ECS component instead of a font handle; (c) the entire concept is replaced when Canvas/Control lands. Font should be a resource with `ke_font_handle` (uint32_t, like `ke_mesh_handle`) when that milestone arrives.
+
+#### 17.6.5 Next step — merge to main
+
+All phases A through F are shipped. Branch is ready to merge.
+
+Pre-merge checklist:
+- [ ] Visual validation: examples 01–16 + Pong render correctly
+- [ ] `dotnet test KernelEngine.slnx` green
+- [ ] `ctest --preset win` ≥ 518/520 (2 pre-existing RuntimeSpike failures acceptable)
+- [ ] Merge PR to `main`
+
+Post-merge backlog (not blocking):
+- **Node3D/Node2D/Canvas/Control** hierarchy split (see decision #10)
+- **`ke_font_handle`** as first-class resource handle (alongside `ke_mesh_handle`, `ke_material_handle`)
+- **Kanban A16** — opaque owner/borrow handle split (`ke_ecs` owner + `ke_ecs_view` borrow)
+- **Render V2** — `ke_gpu_device` WebGPU-style ABI (see `docs/RenderArchitectureV2.md`)

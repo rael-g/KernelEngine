@@ -7,7 +7,7 @@ namespace KernelEngine.Framework;
 /// properties on this class — that keeps the surface flat as new components
 /// are added (skybox, ambient, spot, post-process, etc.).
 /// </summary>
-public sealed class ComponentRegistry
+public sealed class ComponentRegistry : IComponentRegistry
 {
     private readonly Dictionary<Type, uint> _byType = new();
 
