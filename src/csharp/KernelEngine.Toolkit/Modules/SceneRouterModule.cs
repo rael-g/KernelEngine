@@ -1,7 +1,6 @@
 using KernelEngine.Configuration;
 using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
-using Tomlyn.Model;
 
 namespace KernelEngine.Framework;
 
@@ -33,8 +32,26 @@ public sealed class SceneRouterModule : IRuntimeModule
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var loader    = services.GetRequiredService<NativeSceneLoader>();
+        var nodeWorld = services.GetRequiredService<NodeWorld>();
+        var types     = services.GetRequiredService<NodeTypeRegistry>();
         var router    = services.GetRequiredService<SceneRouter>();
         var initial   = ResolveInitialScene(services);
+
+        loader.RegisterScriptFactory((entity, typeName) =>
+        {
+            try
+            {
+                var type = types.Resolve(typeName);
+                var node = (Node)ActivatorUtilities.CreateInstance(services, type);
+                nodeWorld.BindNativeEntity(node, entity);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
 
         var done = new System.Threading.ManualResetEventSlim(false);
         Exception? err = null;

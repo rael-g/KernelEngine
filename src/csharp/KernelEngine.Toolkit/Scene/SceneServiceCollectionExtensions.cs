@@ -1,3 +1,4 @@
+using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
@@ -25,7 +26,11 @@ public static class SceneServiceCollectionExtensions
             foreach (var r in sp.GetServices<INodeTypeRegistrar>()) r.RegisterInto(registry);
             return registry;
         });
-        services.AddSingleton<SceneLoader>();
+        services.AddSingleton<NativeSceneLoader>(sp =>
+            new NativeSceneLoader(
+                sp.GetRequiredService<Allocator>(),
+                sp.GetRequiredService<World>(),
+                AppContext.BaseDirectory));
 
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Camera>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<DirectionalLight>());

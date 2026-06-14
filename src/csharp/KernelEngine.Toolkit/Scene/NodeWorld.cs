@@ -1,3 +1,4 @@
+using System.Text;
 using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework;
@@ -14,6 +15,7 @@ public sealed class NodeWorld
     private readonly World              _world;
     private readonly IEcsRegistry       _ecs;
     private readonly IComponentRegistry _components;
+    private readonly uint               _nameCid;
 
     private readonly List<Node>               _behaviors = new();
     private readonly List<Label>              _labels    = new();
@@ -30,6 +32,7 @@ public sealed class NodeWorld
         _world      = world;
         _ecs        = ecs;
         _components = components;
+        _nameCid    = ecs.RegisterComponent<NameComponent>("name");
     }
 
     /// <summary>
@@ -116,6 +119,29 @@ public sealed class NodeWorld
     {
         var roots = _byName.Values.Where(n => n.Parent is null).ToArray();
         for (int i = 0; i < roots.Length; i++) DestroyNode(roots[i]);
+    }
+
+    // ── Native scene loader integration ──────────────────────────────────────
+
+    /// <summary>
+    /// Binds a managed Node to an entity that was already created by the native
+    /// scene loader. Reads the name from the entity's <c>ke_name_component</c>,
+    /// skips native entity creation, and calls OnBind normally.
+    /// </summary>
+    internal void BindNativeEntity(Node node, ulong entity)
+    {
+        var name = "";
+        var sp = _ecs.GetComponent<NameComponent>(entity, _nameCid);
+        if (!sp.IsEmpty)
+        {
+            ReadOnlySpan<byte> bytes = sp[0].Name;
+            var end = bytes.IndexOf((byte)0);
+            name = Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
+        }
+
+        node.Name = name;
+        node.BindToNodeWorld(this, entity);
+        if (!string.IsNullOrEmpty(name)) _byName[name] = node;
     }
 
     // ── Generic component access ──────────────────────────────────────────────
