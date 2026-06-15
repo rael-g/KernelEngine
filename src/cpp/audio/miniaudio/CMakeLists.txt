@@ -11,7 +11,6 @@ endif()
 
 target_include_directories(ke_audio_miniaudio PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
 target_include_directories(ke_audio_miniaudio PRIVATE
@@ -24,8 +23,8 @@ find_path(MINIAUDIO_INCLUDE_DIR "miniaudio.h" REQUIRED)
 target_include_directories(ke_audio_miniaudio PRIVATE ${MINIAUDIO_INCLUDE_DIR})
 
 target_link_libraries(ke_audio_miniaudio PUBLIC
-    ke_kernel
     ke_audio
+    ke_logger
 )
 
 # miniaudio uses the OS audio APIs; on Windows that's WASAPI/DSound and brings in winmm.

@@ -5,5 +5,7 @@ target_include_directories(ke_audio INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
+target_link_libraries(ke_audio INTERFACE ke_allocator ke_common)
+
 install(TARGETS ke_audio EXPORT KernelEngineTargets)
 install(DIRECTORY include/ DESTINATION include)

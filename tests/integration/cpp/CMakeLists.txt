@@ -22,7 +22,6 @@ add_executable(test_integration_cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
@@ -53,10 +52,15 @@ target_link_libraries(test_integration_cpp PRIVATE
     ke_audio_miniaudio
     ke_physics_2d_box2d
     ke_text_stb_truetype
+    ke_allocator_malloc
+    ke_logger_simple
+    ke_input_default
+    ke_resource_cache_default
+    ke_render_frame_packet
+    ke_threading_default
     ke_runtime
     ke_ecs_flecs
     ke_framework
-    ke_kernel
     GTest::gtest_main
     GTest::gmock
 )

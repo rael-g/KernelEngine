@@ -19,7 +19,6 @@ target_link_libraries(ke_runtime PUBLIC
     ke_allocator
     ke_ecs
     ke_task_scheduler
-    ke_kernel
 )
 
 install(TARGETS ke_runtime

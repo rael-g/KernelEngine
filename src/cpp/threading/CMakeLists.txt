@@ -1,4 +1,4 @@
-﻿add_library(ke_threading
+add_library(ke_threading
     src/ke_frame_sync.cpp
 )
 
@@ -19,7 +19,7 @@ target_link_libraries(ke_threading PUBLIC
     ke_common
     ke_allocator
     ke_render
-    ke_kernel
+    ke_threading_default
 )
 
 if (WIN32)

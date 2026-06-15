@@ -5,7 +5,7 @@
 // share the same destructor (because per-domain caches are owned by the
 // subsystem that knows how to free them).
 
-#include <kernel_engine/kernel/resource_cache/resource_cache.h>
+#include <kernel_engine/resource_cache/resource_cache.h>
 
 #include <stdalign.h>
 #include <stddef.h>

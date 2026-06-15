@@ -1,6 +1,6 @@
 # Kernel Architecture V2 — What Is Allowed to Live in the Kernel
 
-**Status**: Doctrine accepted at design level (this conversation). Implementation phased; no header moved yet.
+**Status**: Doctrine accepted. Domain ejection complete (2026-06-15, branch `feat/kernel-v2`): all domain headers ejected from `src/c/kernel/include/` to `src/c/<domain>/include/`. Render components + `material_file` moved to `render/` domain. Next: §7.3 vtable audit.
 
 **Audience**: Engine maintainer + plugin/domain authors (render / physics / audio / input / text / asset / scripting).
 

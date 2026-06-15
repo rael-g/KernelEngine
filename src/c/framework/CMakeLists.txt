@@ -22,7 +22,12 @@ target_include_directories(ke_framework PUBLIC
 install(DIRECTORY include/ DESTINATION include)
 
 target_link_libraries(ke_framework PUBLIC
-    ke_kernel
+    ke_common
+    ke_allocator
+    ke_ecs
+    ke_spatial
+    ke_input
+    ke_render
     ke_asset
     ke_text
     ke_runtime

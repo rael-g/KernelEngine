@@ -4,12 +4,14 @@
 #include <kernel_engine/common/export.h>
 #include <stdint.h>
 
-#ifdef KE_LOGGER_STATIC
-#  define KE_LOGGER_API
-#elif defined(KE_LOGGER_EXPORT)
-#  define KE_LOGGER_API KE_EXPORT
-#else
-#  define KE_LOGGER_API KE_IMPORT
+#ifndef KE_LOGGER_API
+#  ifdef KE_LOGGER_STATIC
+#    define KE_LOGGER_API
+#  elif defined(KE_LOGGER_EXPORT)
+#    define KE_LOGGER_API KE_EXPORT
+#  else
+#    define KE_LOGGER_API KE_IMPORT
+#  endif
 #endif
 
 #ifdef __cplusplus

@@ -5,5 +5,7 @@ target_include_directories(ke_text INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
+target_link_libraries(ke_text INTERFACE ke_common ke_allocator)
+
 install(TARGETS ke_text EXPORT KernelEngineTargets)
 install(DIRECTORY include/ DESTINATION include)

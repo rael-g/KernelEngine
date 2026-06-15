@@ -13,7 +13,6 @@ endif()
 
 target_include_directories(ke_task_scheduler_enki PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
 target_include_directories(ke_task_scheduler_enki PRIVATE
@@ -21,7 +20,7 @@ target_include_directories(ke_task_scheduler_enki PRIVATE
 )
 
 target_link_libraries(ke_task_scheduler_enki PUBLIC 
-    ke_kernel 
+    ke_task_scheduler
     enkiTS::enkiTS
 )
 

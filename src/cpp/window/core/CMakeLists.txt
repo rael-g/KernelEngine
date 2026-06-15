@@ -4,7 +4,10 @@ add_library(ke_window_core STATIC
 
 target_link_libraries(ke_window_core PUBLIC
     ke_window_contract
-    ke_kernel
+    ke_input
+    ke_window
+    ke_allocator
+    ke_logger
 )
 
 target_include_directories(ke_window_core PUBLIC

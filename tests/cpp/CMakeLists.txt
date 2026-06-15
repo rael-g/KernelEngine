@@ -1,8 +1,6 @@
 find_package(GTest CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 
-# 1. Logic Unit Tests (Sources based for 100% coverage reliability)
-# These tests focus on core engine logic using Mocks for hardware/plugins.
 add_executable(test_renderer_logic
     test_render_contract.cpp
     test_geometry_manager.cpp
@@ -16,7 +14,6 @@ add_executable(test_renderer_logic
 )
 
 target_include_directories(test_renderer_logic PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     ${CMAKE_SOURCE_DIR}/src/c/window/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
@@ -26,8 +23,9 @@ target_include_directories(test_renderer_logic PRIVATE
 
 target_link_libraries(test_renderer_logic PRIVATE
     ke_render_bgfx
-    ke_kernel
     ke_render_core
+    ke_allocator_malloc
+    ke_logger_simple
     GTest::gtest_main
     GTest::gmock
 )
@@ -36,8 +34,7 @@ add_executable(test_threading
     test_threading.cpp
 )
 
-target_include_directories(test_threading PRIVATE 
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+target_include_directories(test_threading PRIVATE
     ${CMAKE_SOURCE_DIR}/src/cpp/threading/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
@@ -45,11 +42,9 @@ target_include_directories(test_threading PRIVATE
 
 target_link_libraries(test_threading PRIVATE
     ke_threading
-    ke_kernel
     GTest::gtest_main
 )
 
-# 2. Asset Logic Tests
 add_executable(test_asset_logic
     test_asset_logic.cpp
     ../../src/cpp/asset/assimp/src/assimp_converter.cpp
@@ -57,14 +52,13 @@ add_executable(test_asset_logic
 )
 
 target_include_directories(test_asset_logic PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     ${CMAKE_SOURCE_DIR}/src/c/asset/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/src
 )
 
 target_link_libraries(test_asset_logic PRIVATE
-    ke_kernel
     ke_asset
+    ke_allocator_malloc
     assimp::assimp
     GTest::gtest_main
 )

@@ -6,12 +6,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef KE_ALLOCATOR_STATIC
-#  define KE_ALLOCATOR_API
-#elif defined(KE_ALLOCATOR_EXPORT)
-#  define KE_ALLOCATOR_API KE_EXPORT
-#else
-#  define KE_ALLOCATOR_API KE_IMPORT
+#ifndef KE_ALLOCATOR_API
+#  ifdef KE_ALLOCATOR_STATIC
+#    define KE_ALLOCATOR_API
+#  elif defined(KE_ALLOCATOR_EXPORT)
+#    define KE_ALLOCATOR_API KE_EXPORT
+#  else
+#    define KE_ALLOCATOR_API KE_IMPORT
+#  endif
 #endif
 
 #ifdef __cplusplus

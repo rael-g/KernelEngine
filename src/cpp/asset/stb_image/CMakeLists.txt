@@ -11,7 +11,6 @@ endif()
 
 target_include_directories(ke_asset_stb_image PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
 target_include_directories(ke_asset_stb_image PRIVATE
@@ -25,8 +24,8 @@ find_path(STB_INCLUDE_DIR "stb_image.h" REQUIRED)
 target_include_directories(ke_asset_stb_image PRIVATE ${STB_INCLUDE_DIR})
 
 target_link_libraries(ke_asset_stb_image PUBLIC
-    ke_kernel
     ke_asset
+    ke_logger
 )
 
 install(TARGETS ke_asset_stb_image

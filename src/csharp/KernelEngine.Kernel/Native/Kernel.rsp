@@ -25,6 +25,8 @@ ke_kernel
 --include-directory
 ../../../c/kernel/include
 --include-directory
+../../../c/resource_cache/include
+--include-directory
 ../../../c/window/include
 --include-directory
 ../../../c/audio/include
@@ -57,7 +59,7 @@ ke_kernel
 ../../../c/render/include/kernel_engine/render/render.h
 ../../../c/render/include/kernel_engine/render/render_graph.h
 ../../../c/render/include/kernel_engine/render/shader_compiler.h
-../../../c/kernel/include/kernel_engine/kernel/resource_cache/resource_cache.h
+../../../c/resource_cache/include/kernel_engine/resource_cache/resource_cache.h
 ../../../c/input/include/kernel_engine/input/key.h
 ../../../c/input/include/kernel_engine/input/snapshot.h
 ../../../c/input/include/kernel_engine/input/event.h

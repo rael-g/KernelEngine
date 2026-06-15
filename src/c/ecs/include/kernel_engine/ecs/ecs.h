@@ -8,12 +8,14 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#ifdef KE_ECS_STATIC
-#  define KE_ECS_API
-#elif defined(KE_ECS_EXPORT)
-#  define KE_ECS_API KE_EXPORT
-#else
-#  define KE_ECS_API KE_IMPORT
+#ifndef KE_ECS_API
+#  ifdef KE_ECS_STATIC
+#    define KE_ECS_API
+#  elif defined(KE_ECS_EXPORT)
+#    define KE_ECS_API KE_EXPORT
+#  else
+#    define KE_ECS_API KE_IMPORT
+#  endif
 #endif
 
 #ifdef __cplusplus

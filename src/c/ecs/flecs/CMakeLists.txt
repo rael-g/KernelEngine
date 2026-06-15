@@ -5,7 +5,6 @@ add_library(ke_ecs_flecs
 )
 
 target_include_directories(ke_ecs_flecs PUBLIC
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -13,7 +12,8 @@ target_include_directories(ke_ecs_flecs PUBLIC
 install(DIRECTORY include/ DESTINATION include)
 
 target_link_libraries(ke_ecs_flecs PUBLIC
-    ke_kernel
+    ke_ecs
+    ke_allocator
     flecs::flecs
 )
 

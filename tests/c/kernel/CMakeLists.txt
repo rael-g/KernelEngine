@@ -1,4 +1,4 @@
-﻿find_package(GTest CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
 add_executable(test_ke_kernel
     test_allocator.cpp
     #   test_hash_map.cpp      -- deleted: hash_map.h removed (domain ejection)
@@ -19,7 +19,11 @@ add_executable(test_ke_kernel
 
 
 target_link_libraries(test_ke_kernel PRIVATE
-    ke_kernel
+    ke_allocator_malloc
+    ke_logger_simple
+    ke_input_default
+    ke_resource_cache_default
+    ke_render_frame_packet
     ke_framework
     ke_runtime
     ke_ecs_flecs
@@ -37,10 +41,10 @@ target_include_directories(test_ke_kernel PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/threading/include
     ${CMAKE_SOURCE_DIR}/src/c/runtime/include
     ${CMAKE_SOURCE_DIR}/src/c/framework/include
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     ${CMAKE_SOURCE_DIR}/src/c/render/include
     ${CMAKE_SOURCE_DIR}/src/c/input/include
     ${CMAKE_SOURCE_DIR}/src/c/asset/include
+    ${CMAKE_SOURCE_DIR}/src/c/resource_cache/include
 )
 
 set_target_properties(test_ke_kernel PROPERTIES

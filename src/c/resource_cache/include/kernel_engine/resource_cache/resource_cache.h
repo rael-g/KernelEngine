@@ -14,7 +14,7 @@
 //   - destroy_fn is per-cache (set at create time), not per-register call.
 //   - cache_insert returns ke_result (errors on duplicate key) instead of
 //     silently overwriting.
-//   - Lives in the kernel domain (`kernel/resource_cache/`) rather than
+//   - Lives in the resource_cache domain (`src/c/resource_cache/`) rather than
 //     framework — this is a primitive, not a framework opinion.
 
 #include <kernel_engine/common/error.h>

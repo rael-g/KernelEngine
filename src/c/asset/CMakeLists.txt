@@ -5,8 +5,7 @@ target_include_directories(ke_asset INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
-# asset headers depend on kernel common types and font contract
-target_link_libraries(ke_asset INTERFACE ke_kernel ke_text)
+target_link_libraries(ke_asset INTERFACE ke_common ke_allocator ke_render ke_text ke_task_scheduler)
 
 install(TARGETS ke_asset EXPORT KernelEngineTargets)
 install(DIRECTORY include/ DESTINATION include)

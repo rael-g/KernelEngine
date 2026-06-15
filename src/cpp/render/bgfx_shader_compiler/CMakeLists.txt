@@ -11,11 +11,12 @@ endif()
 
 target_include_directories(ke_shader_compiler_bgfx PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
 target_link_libraries(ke_shader_compiler_bgfx PUBLIC 
-    ke_kernel
+    ke_render
+    ke_logger
+    ke_common
 )
 
 install(TARGETS ke_shader_compiler_bgfx

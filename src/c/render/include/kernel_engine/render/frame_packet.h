@@ -10,12 +10,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef KE_RENDER_STATIC
-#  define KE_FRAME_PACKET_API
-#elif defined(KE_RENDER_EXPORT)
-#  define KE_FRAME_PACKET_API KE_EXPORT
-#else
-#  define KE_FRAME_PACKET_API KE_IMPORT
+#ifndef KE_FRAME_PACKET_API
+#  ifdef KE_RENDER_STATIC
+#    define KE_FRAME_PACKET_API
+#  elif defined(KE_RENDER_EXPORT)
+#    define KE_FRAME_PACKET_API KE_EXPORT
+#  else
+#    define KE_FRAME_PACKET_API KE_IMPORT
+#  endif
 #endif
 
 #ifdef __cplusplus

@@ -4,6 +4,6 @@ target_include_directories(ke_task_scheduler INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(ke_task_scheduler INTERFACE ke_common)
+target_link_libraries(ke_task_scheduler INTERFACE ke_common ke_allocator)
 install(TARGETS ke_task_scheduler EXPORT KernelEngineTargets)
 install(DIRECTORY include/ DESTINATION include)

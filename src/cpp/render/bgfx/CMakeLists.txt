@@ -7,7 +7,6 @@ add_library(ke_render_bgfx SHARED
 find_package(bgfx CONFIG REQUIRED)
 
 target_link_libraries(ke_render_bgfx PRIVATE
-    ke_kernel
     ke_render_core
     ke_render_bgfx_device
     ke_threading
@@ -24,7 +23,6 @@ target_include_directories(ke_render_bgfx PUBLIC
 
 target_include_directories(ke_render_bgfx PRIVATE
     src
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
