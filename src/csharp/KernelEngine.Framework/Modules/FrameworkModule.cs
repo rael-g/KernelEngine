@@ -31,7 +31,7 @@ public sealed class FrameworkModule : IRuntimeModule
         {
             var flecsEcs  = (FlecsEcs)sp.GetRequiredService<IEcs>();
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
-            var alloc     = (Allocator)sp.GetRequiredService<IAllocator>();
+            var alloc     = sp.GetRequiredService<Allocator>();
             var ecs       = sp.GetRequiredService<IEcsRegistry>();
             var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
