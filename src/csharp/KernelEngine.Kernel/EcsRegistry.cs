@@ -57,7 +57,7 @@ public sealed unsafe class EcsRegistry : IEcsRegistry
     public Span<T> AddComponent<T>(ulong entity, uint componentId) where T : unmanaged
     {
         var ptr = (T*)_native->component_add(_native, entity, componentId);
-        return new Span<T>(ptr, 1);
+        return ptr != null ? new Span<T>(ptr, 1) : Span<T>.Empty;
     }
 
     /// <summary>Pointer-returning overload (engine-internal hot path).</summary>

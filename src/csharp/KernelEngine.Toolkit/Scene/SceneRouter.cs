@@ -3,13 +3,13 @@ namespace KernelEngine.Framework;
 internal sealed class SceneRouter : ISceneRouter
 {
     private readonly NodeWorld          _nodeWorld;
-    private readonly NativeSceneLoader  _loader;
+    private readonly SceneLoader  _loader;
 
     private string? _pendingLoad;
 
     public string? CurrentScene { get; private set; }
 
-    public SceneRouter(NodeWorld nodeWorld, NativeSceneLoader loader)
+    public SceneRouter(NodeWorld nodeWorld, SceneLoader loader)
     {
         _nodeWorld = nodeWorld;
         _loader    = loader;
@@ -25,6 +25,7 @@ internal sealed class SceneRouter : ISceneRouter
         _nodeWorld.Clear();
         var path = Path.Combine(AppContext.BaseDirectory, "scenes", $"{name}.scene");
         _loader.Load(path);
+        _nodeWorld.TriggerReady();
         CurrentScene = name;
     }
 }

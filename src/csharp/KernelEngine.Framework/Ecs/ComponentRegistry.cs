@@ -15,14 +15,18 @@ public sealed class ComponentRegistry : IComponentRegistry
 
     internal ComponentRegistry(IEcsRegistry ecs)
     {
-        Register<TransformComponent>(ecs, "Transform");
+        // Names that have kernel constants ("transform", "camera", etc.) must
+        // match exactly so that the native scene-loader apply callbacks and
+        // managed contributors share one ECS slot per component type.
+        Register<TransformComponent>(ecs, "transform");
+        Register<CameraComponent>(ecs, "camera");
+        Register<DirectionalLightComponent>(ecs, "directional_light");
+        Register<PointLightComponent>(ecs, "point_light");
+        Register<SpotLightComponent>(ecs, "spot_light");
+        // Framework-only components (no kernel counterpart) keep their own names.
         Register<MeshRendererComponent>(ecs, "MeshRenderer");
-        Register<CameraComponent>(ecs, "Camera");
-        Register<DirectionalLightComponent>(ecs, "DirectionalLight");
         Register<SkyboxComponent>(ecs, "Skybox");
-        Register<PointLightComponent>(ecs, "PointLight");
         Register<AmbientLightComponent>(ecs, "AmbientLight");
-        Register<SpotLightComponent>(ecs, "SpotLight");
     }
 
     /// <summary>Returns the cid registered for the given component struct type.</summary>

@@ -1,57 +1,58 @@
-﻿using System.Numerics;
+using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Kernel;
 
 namespace Pong;
 
 /// <summary>
-/// Kinematic paddle. The scene file sets <see cref="MoveAction"/> + initial
-/// <c>Position</c>; DI fills the rest. The body is created at OnBind time
-/// at the bound-in transform position.
+/// Kinematic paddle. Physics body + input-driven movement. The visual is a
+/// Sprite2D child declared in Paddle.scene; fixture comes from CollisionShape2D
+/// child; MoveAction comes from the ECS PaddleComponent applied by the scene loader.
 /// </summary>
-public sealed class Paddle : MeshRenderer
+public sealed class Paddle : Node, IPhysicsBody2D
 {
     const float HalfH = 0.9f;
     const float Speed = 7f;
 
     private readonly IPhysics2D                  _physics;
     private readonly IInputActionMap<PongAction> _actions;
-    private readonly PongResources               _resources;
 
     private BodyHandle2D _body;
+    public BodyHandle2D  PhysicsBody => _body;
 
-    /// <summary>Set by SceneLoader from <c>[entity.properties] MoveAction</c>.</summary>
-    public PongAction MoveAction { get; set; }
+    private PongAction _moveAction;
+    private bool       _moveActionResolved;
 
-    public Paddle(IPhysics2D physics, IInputActionMap<PongAction> actions, PongResources resources)
+    public Paddle(IPhysics2D physics, IInputActionMap<PongAction> actions)
     {
-        _physics   = physics;
-        _actions   = actions;
-        _resources = resources;
+        _physics = physics;
+        _actions = actions;
     }
 
     protected override void OnBind(NodeWorld nodeWorld)
     {
-        MaterialHandle = _resources.WhiteMat;
-        LocalTransform = LocalTransform with { Scale = new Vector3(0.3f, 1.8f, 1f) };
-        base.OnBind(nodeWorld);
-
         var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
         _body = _physics.CreateBody(BodyType2D.Kinematic, pos);
-        _physics.AddBoxFixture(_body, new Vector2(0.15f, HalfH), restitution: 1f);
     }
 
     protected override void OnUnbind() => _physics.DestroyBody(_body);
 
     protected override void OnUpdate(in View view)
     {
+        if (!_moveActionResolved)
+        {
+            _moveActionResolved = true;
+            if (NodeWorld!.TryGetComponent<PaddleComponent>(Entity, "paddle", out var comp))
+                _moveAction = comp.MoveAction;
+        }
+
         var state = _physics.GetBodyState(_body);
         LocalTransform = LocalTransform with
         {
             Position = new Vector3(state.Position.X, state.Position.Y, 0f),
         };
 
-        float vy = _actions.GetAxis1D(MoveAction, in view) * Speed;
+        float vy = _actions.GetAxis1D(_moveAction, in view) * Speed;
 
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
         if (vy > 0 && state.Position.Y >=  maxY) vy = 0;

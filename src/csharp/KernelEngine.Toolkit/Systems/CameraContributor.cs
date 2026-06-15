@@ -45,16 +45,16 @@ internal sealed class CameraContributor : IFrameContributor
         var view = Matrix4x4.CreateLookAt(transform.Position, transform.Position + forward, up);
 
         Matrix4x4 proj;
-        if (cam.Orthographic)
+        if (cam.Orthographic != 0)
         {
             float halfH = cam.OrthographicSize;
             float halfW = halfH * aspect;
-            proj = Matrix4x4.CreateOrthographic(halfW * 2f, halfH * 2f, cam.Near, cam.Far);
+            proj = Matrix4x4.CreateOrthographic(halfW * 2f, halfH * 2f, cam.NearPlane, cam.FarPlane);
         }
         else
         {
             proj = Matrix4x4.CreatePerspectiveFieldOfView(
-                cam.FovDeg * MathF.PI / 180f, aspect, cam.Near, cam.Far);
+                cam.Fov * MathF.PI / 180f, aspect, cam.NearPlane, cam.FarPlane);
         }
 
         packet.SetCamera(view, proj, transform.Position);

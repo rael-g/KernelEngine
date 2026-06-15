@@ -5,48 +5,49 @@ version = 2
 [[entity]]
 name = "Ambient"
 type = "AmbientLight"
-[entity.properties]
+[entity.components.AmbientLight]
 Color = [1.0, 1.0, 1.0]
 
 [[entity]]
 name = "Camera"
 type = "Camera"
-[entity.properties]
-Orthographic     = true
-OrthographicSize = 5.0
-Near             = 0.1
-Far              = 100.0
-Position         = [0.0, 0.0, 10.0]
+[entity.transform]
+position = [0.0, 0.0, 10.0]
+[entity.components.camera]
+orthographic      = true
+orthographic_size = 5.0
+near_plane        = 0.1
+far_plane         = 100.0
 
-# Walls — each entity composes Wall.scene; the outer Position wins, the
-# subscene's Scale = [16, 0.5, 1] passes through as the default.
+# Walls — each entity composes Wall.scene (scale [16, 0.5, 1] from subscene).
 [[entity]]
 name  = "WallTop"
 scene = "res://scenes/Wall.scene"
-[entity.properties]
-Position = [0.0,  4.5]
+[entity.transform]
+position = [0.0, 4.5, 0.0]
 
 [[entity]]
 name  = "WallBottom"
 scene = "res://scenes/Wall.scene"
-[entity.properties]
-Position = [0.0, -4.5]
+[entity.transform]
+position = [0.0, -4.5, 0.0]
 
-# Paddles — Paddle.scene defines the type; per-instance Position +
-# MoveAction come from here.
+# Paddles — position and move_action come from here; type from Paddle.scene.
 [[entity]]
 name  = "PaddleLeft"
 scene = "res://scenes/Paddle.scene"
-[entity.properties]
-Position   = [-7.5, 0.0]
-MoveAction = "PaddleLeftMove"
+[entity.transform]
+position = [-7.5, 0.0, 0.0]
+[entity.components.paddle]
+move_action = "PaddleLeftMove"
 
 [[entity]]
 name  = "PaddleRight"
 scene = "res://scenes/Paddle.scene"
-[entity.properties]
-Position   = [7.5, 0.0]
-MoveAction = "PaddleRightMove"
+[entity.transform]
+position = [7.5, 0.0, 0.0]
+[entity.components.paddle]
+move_action = "PaddleRightMove"
 
 [[entity]]
 name  = "Ball"

@@ -106,4 +106,15 @@ public sealed class InputActionMap<TEnum> : IInputActionMap<TEnum> where TEnum :
         }
         return false;
     }
+
+    public bool IsJustPressed(TEnum action, in View view)
+    {
+        if (!_bindings.TryGetValue(action, out var list)) return false;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var b = list[i];
+            if (view.IsKeyJustPressed(b.KeyPositive)) return true;
+        }
+        return false;
+    }
 }

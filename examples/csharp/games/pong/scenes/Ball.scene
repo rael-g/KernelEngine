@@ -2,10 +2,43 @@
 name    = "Ball"
 version = 2
 
-# Template scene used by Main.scene via [[entity]] scene = "res://scenes/Ball.scene".
-# A single entity here today — the Ball script owns its visual/physics state
-# internally (no Sprite2D/CollisionShape2D children). Properties below act
-# as defaults that the outer scene may override.
 [[entity]]
 name = "Root"
 type = "Pong.Ball"
+
+[[entity]]
+name   = "Shape"
+parent = "Root"
+type   = "CollisionShape2D"
+[entity.properties]
+ShapeKind        = "rectangle"
+ShapeHalfExtents = [0.18, 0.18]
+Restitution      = 1.0
+Friction         = 0.0
+
+[[entity]]
+name   = "Visual"
+parent = "Root"
+type   = "Sprite2D"
+[entity.transform]
+scale = [0.36, 0.36, 1.0]
+[entity.components.MeshRenderer]
+mesh      = "quad"
+color     = [0.95, 0.95, 0.95, 1.0]
+roughness = 1.0
+
+[[entity]]
+name   = "HitSound"
+parent = "Root"
+type   = "AudioPlayer"
+[entity.properties]
+Path   = "assets/sounds/hit.wav"
+Volume = 0.5
+
+[[entity]]
+name   = "ScoreSound"
+parent = "Root"
+type   = "AudioPlayer"
+[entity.properties]
+Path   = "assets/sounds/score.wav"
+Volume = 0.6

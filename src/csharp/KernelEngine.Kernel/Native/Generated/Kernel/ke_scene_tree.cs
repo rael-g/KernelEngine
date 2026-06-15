@@ -20,6 +20,9 @@ public unsafe partial struct ke_scene_tree
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, sbyte*, ulong> find_node;
 
     [NativeTypeName("void (*)(struct ke_scene_tree *)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, void> propagate_transforms;
+
+    [NativeTypeName("void (*)(struct ke_scene_tree *)")]
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, void> destroy;
 }
 

@@ -58,4 +58,11 @@ public sealed unsafe class SceneTree
         fixed (byte* p = bytes)
             return Native->find_node(_native, (sbyte*)p);
     }
+
+    /// <summary>
+    /// Propagates local transforms down the hierarchy, writing each entity's
+    /// <c>world_matrix</c> as <c>parent_world * TRS_local</c>.
+    /// Call once per frame before any system that reads <c>WorldMatrix</c>.
+    /// </summary>
+    public void PropagateTransforms() => Native->propagate_transforms(_native);
 }

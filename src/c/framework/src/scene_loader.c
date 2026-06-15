@@ -260,6 +260,24 @@ static void attach_properties(loader_state *s, ke_entity entity, toml_table_t *p
     bag->count   = (uint32_t)count;
 }
 
+// ── Outer-transform early application ─────────────────────────────────────
+//
+// Forward declaration — apply_transform_block is defined after this function.
+static void apply_transform_block(loader_state *s, ke_entity entity, toml_table_t *xform_tbl);
+
+// For subscene entities the outer [[entity]] block may carry a [transform]
+// override table. We extract and apply it BEFORE dispatch_script so that
+// OnBind (called from inside dispatch_script) can read the correct position /
+// scale / rotation from the ECS. The remaining outer overrides (properties,
+// type-script, components) are applied afterwards as usual.
+
+static void apply_outer_transform_early(loader_state *s, ke_entity entity,
+                                         toml_table_t *outer) {
+    if (!outer) return;
+    toml_table_t *xt = toml_table_in(outer, "transform");
+    if (xt) apply_transform_block(s, entity, xt);
+}
+
 // ── Components application via apply registry ──────────────────────────────
 
 static void apply_component_block(loader_state *s, ke_entity entity,
@@ -316,8 +334,8 @@ static ke_result load_scene_recursive(loader_state *s, const char *path,
                                        ke_entity *out_root);
 
 static void apply_outer_overrides(loader_state *s, ke_entity entity, toml_table_t *outer) {
-    toml_table_t *xt = toml_table_in(outer, "transform");
-    if (xt) apply_transform_block(s, entity, xt);
+    // [entity.transform] was already applied early (before dispatch_script) by
+    // apply_outer_transform_early; skip it here to avoid a redundant write.
     toml_table_t *props = toml_table_in(outer, "properties");
     if (props) attach_properties(s, entity, props);
     toml_datum_t type_d = toml_string_in(outer, "type");
@@ -392,6 +410,10 @@ static ke_result process_entity(loader_state *s, const char *base_dir,
 
     toml_table_t *xform_tbl = toml_table_in(entity_tbl, "transform");
     if (xform_tbl) apply_transform_block(s, entity, xform_tbl);
+
+    // Apply the outer entity's [transform] override before dispatch_script so
+    // that OnBind (called inside the script factory) sees the correct position.
+    apply_outer_transform_early(s, entity, override_outer);
 
     toml_datum_t type_d = toml_string_in(entity_tbl, "type");
     if (type_d.ok) { dispatch_script(s, entity, type_d.u.s); free(type_d.u.s); }

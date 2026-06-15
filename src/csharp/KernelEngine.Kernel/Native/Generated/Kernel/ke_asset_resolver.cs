@@ -19,6 +19,12 @@ public unsafe partial struct ke_asset_resolver
     [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, const char *, ke_material_spec *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, sbyte*, ke_material_spec*, ke_result> resolve_material;
 
+    [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, const char *, float, uint32_t, uint32_t, uint32_t, ke_font_data **)")]
+    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, sbyte*, float, uint, uint, uint, ke_font_data**, ke_result> resolve_font;
+
+    [NativeTypeName("void (*)(struct ke_asset_resolver *, ke_font_data *)")]
+    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, ke_font_data*, void> free_font;
+
     [NativeTypeName("void (*)(struct ke_asset_resolver *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, void> destroy;
 }

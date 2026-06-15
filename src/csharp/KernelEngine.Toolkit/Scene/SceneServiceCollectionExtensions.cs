@@ -26,12 +26,13 @@ public static class SceneServiceCollectionExtensions
             foreach (var r in sp.GetServices<INodeTypeRegistrar>()) r.RegisterInto(registry);
             return registry;
         });
-        services.AddSingleton<NativeSceneLoader>(sp =>
-            new NativeSceneLoader(
+        services.AddSingleton<SceneLoader>(sp =>
+            new SceneLoader(
                 sp.GetRequiredService<Allocator>(),
                 sp.GetRequiredService<World>(),
                 AppContext.BaseDirectory));
 
+        services.AddSingleton<PrimitiveCache>();
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Camera>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<DirectionalLight>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<AmbientLight>());
@@ -39,7 +40,10 @@ public static class SceneServiceCollectionExtensions
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<SpotLight>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Skybox>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<MeshRenderer>());
+        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Sprite2D>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Label>());
+        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<AudioPlayer>());
+        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<CollisionShape2D>());
     }
 }
 

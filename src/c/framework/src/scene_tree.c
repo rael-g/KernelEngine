@@ -239,6 +239,47 @@ static void vt_destroy_all(ke_scene_tree *self) {
     rh->first_child = KE_ENTITY_INVALID;
 }
 
+// ── vtable: propagate_transforms ────────────────────────────────────────────
+
+static void propagate_recursive(scene_tree_state *s, ke_entity entity,
+                                const ke_mat4 *parent_world)
+{
+    ke_transform_component *t = (ke_transform_component *)s->ecs->component_get(
+        s->ecs, entity, s->transform_cid);
+
+    const ke_mat4 *child_parent = parent_world;
+    if (t) {
+        ke_mat4 local;
+        ke_mat4_from_transform(&local, &t->position, &t->rotation, &t->scale);
+        ke_mat4_mul(&t->world_matrix, &local, parent_world);
+        child_parent = &t->world_matrix;
+    }
+
+    ke_hierarchy_component *h = get_hierarchy(s, entity);
+    if (!h) return;
+    for (ke_entity c = h->first_child; c != KE_ENTITY_INVALID; ) {
+        ke_hierarchy_component *ch = get_hierarchy(s, c);
+        ke_entity next = ch ? ch->next_sibling : KE_ENTITY_INVALID;
+        propagate_recursive(s, c, child_parent);
+        c = next;
+    }
+}
+
+static void vt_propagate_transforms(ke_scene_tree *self) {
+    if (!self || !self->handle) return;
+    scene_tree_state *s = (scene_tree_state *)self->handle;
+    ke_mat4 identity;
+    for (int i = 0; i < 16; ++i) identity.m[i] = (i % 5 == 0) ? 1.0f : 0.0f;
+    ke_hierarchy_component *rh = get_hierarchy(s, s->root);
+    if (!rh) return;
+    for (ke_entity c = rh->first_child; c != KE_ENTITY_INVALID; ) {
+        ke_hierarchy_component *ch = get_hierarchy(s, c);
+        ke_entity next = ch ? ch->next_sibling : KE_ENTITY_INVALID;
+        propagate_recursive(s, c, &identity);
+        c = next;
+    }
+}
+
 // ── vtable: teardown ────────────────────────────────────────────────────────
 
 static void vt_destroy(ke_scene_tree *self) {
@@ -294,13 +335,14 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_allocator *alloc, ke_scene_tree *
         n->name[len] = '\0';
     }
 
-    s->api.handle       = s;
-    s->api.root         = vt_root;
-    s->api.create_node  = vt_create_node;
-    s->api.destroy_node = vt_destroy_node;
-    s->api.destroy_all  = vt_destroy_all;
-    s->api.find_node    = vt_find_node;
-    s->api.destroy      = vt_destroy;
+    s->api.handle                = s;
+    s->api.root                  = vt_root;
+    s->api.create_node           = vt_create_node;
+    s->api.destroy_node          = vt_destroy_node;
+    s->api.destroy_all           = vt_destroy_all;
+    s->api.find_node             = vt_find_node;
+    s->api.propagate_transforms  = vt_propagate_transforms;
+    s->api.destroy               = vt_destroy;
 
     *out_tree = &s->api;
     return KE_OK;

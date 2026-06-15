@@ -1705,20 +1705,23 @@ Or equivalent managed struct if declared on the C# side.
 
 ---
 
-#### 17.6.6 Next step — merge to main
+#### 17.6.6 Remaining tasks on this branch — merge to main
 
-After G-phase:
+**G-phase status:**
 
-Pre-merge checklist:
-- [ ] G1–G4 committed and build green
-- [ ] Visual validation: Pong renders + plays correctly (only Pong validates Toolkit; examples 01–16 are legacy pre-Runtime-V2 and are not validators for the new model)
+| Sub-phase | Status | Commit |
+|---|---|---|
+| G1 — NodeWorld replaces Tree | ✅ Done | `d07caaa` |
+| G2 — NativeSceneLoader replaces Tomlyn, trampoline wired | ✅ Done | `3956667` |
+| G3 — Pong becomes `PongModule` + paddle component via `[entity.components.paddle]` | ✅ Done | (pre-existing) |
+| G4 — Final cleanup (`NativeSceneLoader→SceneLoader`, grep Tomlyn/Tree, XML docs) | ✅ Done | pending commit |
+
+**Merge checklist:**
+
+- [ ] G3 + G4 committed and build green
+- [ ] Visual validation: Pong renders and plays correctly (Pong is the only Toolkit validator; examples 01–16 are pre-Runtime-V2 and do not validate the new model)
 - [ ] `dotnet test KernelEngine.slnx` green
-- [ ] `ctest --preset win` ≥ 518/520 (2 pre-existing RuntimeSpike failures acceptable)
+- [ ] `ctest --preset win` ≥ 518/520 (2 pre-existing RuntimeSpike failures are acceptable)
 - [ ] Merge PR to `main`
 
-Post-merge backlog (not blocking):
-- **Node3D/Node2D/Canvas/Control** hierarchy split (see decision #10)
-- **`ke_font_handle`** as first-class resource handle (alongside `ke_mesh_handle`, `ke_material_handle`)
-- **Kanban A16** — opaque owner/borrow handle split (`ke_ecs` owner + `ke_ecs_view` borrow)
-- **Render V2** — `ke_gpu_device` WebGPU-style ABI (see `docs/RenderArchitectureV2.md`)
-- **Source gen for NodeBehavior** — replace manual `OnLoad` component registration with codegen (see §15.6)
+**Everything outside this branch** is documented and prioritized in [`docs/FrameworkArchitectureV2.md`](FrameworkArchitectureV2.md) — that is the scope of the next branch.

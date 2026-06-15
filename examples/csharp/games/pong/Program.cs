@@ -34,16 +34,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new BgfxRenderModule())
         .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneRenderModule())
-    // Pong scripts the SceneLoader will instantiate.
-    .AddNodeType<Wall>("Pong.Wall")
-    .AddNodeType<Paddle>("Pong.Paddle")
-    .AddNodeType<Ball>("Pong.Ball")
-    .AddNodeType<Scoreboard>("Pong.Scoreboard")
-    .AddNodeType<PhysicsDriver>("Pong.PhysicsDriver")
-    .AddNodeType<MenuController>("Pong.MenuController")
-    // Shared materials + sounds; lazy-created on first resolution so the
-    // factory runs INSIDE the render-worker-pinned SceneRouterModule load.
-    .AddSingleton<PongResources>()
+    .Add<IRuntimeModule>(new PongModule())
     .Add<IRuntimeModule>(new SceneRouterModule());  // initial scene comes from Project's default_scene
 
 using var sp = services.BuildServiceProvider();

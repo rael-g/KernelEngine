@@ -2,10 +2,17 @@
 name    = "Wall"
 version = 2
 
-# Template scene for the top + bottom walls. The half-extents come from
-# the outer entity's Scale property; restitution is fixed in code.
 [[entity]]
 name = "Root"
 type = "Pong.Wall"
-[entity.properties]
-Scale = [16.0, 0.5, 1.0]
+
+[[entity]]
+name   = "Visual"
+parent = "Root"
+type   = "Sprite2D"
+[entity.transform]
+scale = [16.0, 0.5, 1.0]
+[entity.components.MeshRenderer]
+mesh      = "quad"
+color     = [0.15, 0.15, 0.20, 1.0]
+roughness = 1.0

@@ -1,3 +1,5 @@
+using KernelEngine.Kernel;
+
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -69,6 +71,26 @@ public abstract class Node
     protected internal abstract void OnBind(NodeWorld nodeWorld);
 
     /// <summary>
+    /// Called once after all entities in the scene are loaded and all
+    /// <c>[entity.properties]</c> blocks have been applied. Override to read
+    /// scene-file properties or look up sibling nodes (via <see cref="NodeWorld.Find"/>)
+    /// that are guaranteed to exist at this point.
+    /// Base implementation is a no-op.
+    /// </summary>
+    protected internal virtual void OnReady() { }
+
+    /// <summary>
+    /// Reads the <c>[entity.properties]</c> block declared in the scene file
+    /// for this node. Returns false when no properties block was declared.
+    /// Only valid during or after <see cref="OnReady"/>.
+    /// </summary>
+    protected bool TryGetProperties(out VariantReader reader)
+    {
+        if (NodeWorld is null) { reader = default; return false; }
+        return NodeWorld.TryGetProperties(Entity, out reader);
+    }
+
+    /// <summary>
     /// Called every simulation tick on bound nodes. Default is a no-op so
     /// only nodes that override this pay the virtual-call cost each frame.
     /// </summary>
@@ -85,6 +107,13 @@ public abstract class Node
     /// bind so BehaviorSystem iterates only the nodes that have per-frame logic.
     /// </summary>
     internal bool HasBehavior { get; private set; }
+
+    /// <summary>
+    /// Called by <see cref="NodeWorld.BindNativeEntity"/> before the entity is bound
+    /// so that the native scene loader's pre-applied transform is reflected in
+    /// <see cref="LocalTransform"/> when <see cref="OnBind"/> runs.
+    /// </summary>
+    internal void SetInitialTransform(TransformComponent tc) => _transform = tc;
 
     internal void UnbindFromNodeWorld()
     {

@@ -21,6 +21,7 @@
 #include <kernel_engine/kernel/asset/mesh_shape.h>
 #include <kernel_engine/kernel/asset/image_loader.h>
 #include <kernel_engine/kernel/asset/mesh_data.h>
+#include <kernel_engine/kernel/text/font.h>
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
 
@@ -65,6 +66,21 @@ extern "C"
         ke_result (*resolve_material)(struct ke_asset_resolver *self,
                                       const char               *path,
                                       ke_material_spec         *out);
+
+        /// Resolves a font file path into a freshly-baked ke_font_data (atlas
+        /// RGBA8 + glyph metrics). Caller owns the result; release with free_font.
+        ///
+        /// Returns KE_ERROR_INVALID_ARGUMENT when no font loader was injected
+        /// at construction time.
+        ke_result (*resolve_font)(struct ke_asset_resolver *self,
+                                  const char               *path,
+                                  float                     pixel_size,
+                                  uint32_t                  first_codepoint,
+                                  uint32_t                  codepoint_count,
+                                  uint32_t                  atlas_size,
+                                  ke_font_data            **out);
+
+        void (*free_font)(struct ke_asset_resolver *self, ke_font_data *data);
 
         void (*destroy)(struct ke_asset_resolver *self);
     } ke_asset_resolver;

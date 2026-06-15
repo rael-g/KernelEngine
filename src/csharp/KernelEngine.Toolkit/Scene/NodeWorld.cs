@@ -17,9 +17,11 @@ public sealed class NodeWorld
     private readonly IComponentRegistry _components;
     private readonly uint               _nameCid;
 
-    private readonly List<Node>               _behaviors = new();
-    private readonly List<Label>              _labels    = new();
-    private readonly Dictionary<string, Node> _byName    = new(StringComparer.Ordinal);
+    private readonly List<Node>                  _behaviors = new();
+    private readonly List<Label>                 _labels    = new();
+    private readonly List<Node>                  _allNodes  = new();
+    private readonly Dictionary<string, Node>    _byName    = new(StringComparer.Ordinal);
+    private readonly Dictionary<ulong, Node>     _byEntity  = new();
 
     internal IReadOnlyList<Node>  Behaviors => _behaviors;
     internal IReadOnlyList<Label> Labels    => _labels;
@@ -27,12 +29,21 @@ public sealed class NodeWorld
     internal void RegisterBehavior(Node node) => _behaviors.Add(node);
     internal void RegisterLabel(Label label)  => _labels.Add(label);
 
+    // Native "transform" component CID (registered by ke_world_create under "transform").
+    // Distinct from the C# "Transform" component (ComponentRegistry, 40 bytes) —
+    // this is the kernel 104-byte TransformComponent that includes WorldMatrix.
+    // Used in BindNativeEntity to seed the node's _transform before OnBind.
+    private readonly uint _nativeTransformCid;
+    private readonly uint _hierarchyCid;
+
     internal NodeWorld(World world, IEcsRegistry ecs, IComponentRegistry components)
     {
         _world      = world;
         _ecs        = ecs;
         _components = components;
-        _nameCid    = ecs.RegisterComponent<NameComponent>("name");
+        _nameCid            = ecs.RegisterComponent<NameComponent>("name");
+        _nativeTransformCid = ecs.RegisterComponent<KernelEngine.Kernel.TransformComponent>("transform");
+        _hierarchyCid       = ecs.RegisterComponent<HierarchyComponent>("hierarchy");
     }
 
     /// <summary>
@@ -52,6 +63,8 @@ public sealed class NodeWorld
         node.BindToNodeWorld(this, entity);
         parent?.AttachChild(node);
         if (!string.IsNullOrEmpty(name)) _byName[name] = node;
+        _allNodes.Add(node);
+        _byEntity[entity] = node;
         return node;
     }
 
@@ -73,6 +86,8 @@ public sealed class NodeWorld
         node.PreBind(this, entity);
         parent?.AttachChild(node);
         if (!string.IsNullOrEmpty(name)) _byName[name] = node;
+        _allNodes.Add(node);
+        _byEntity[entity] = node;
     }
 
     internal void CompleteAddNode(Node node) => node.CompleteBind();
@@ -105,8 +120,10 @@ public sealed class NodeWorld
         node.Parent?.DetachChild(node);
         node.OnUnbind();
 
-        if (node.HasBehavior)  _behaviors.Remove(node);
-        if (node is Label l)   _labels.Remove(l);
+        if (node.HasBehavior)   _behaviors.Remove(node);
+        if (node is Label l)    _labels.Remove(l);
+        _allNodes.Remove(node);
+        _byEntity.Remove(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity);
         node.UnbindFromNodeWorld();
     }
@@ -131,20 +148,63 @@ public sealed class NodeWorld
     internal void BindNativeEntity(Node node, ulong entity)
     {
         var name = "";
-        var sp = _ecs.GetComponent<NameComponent>(entity, _nameCid);
-        if (!sp.IsEmpty)
+        var nsp = _ecs.GetComponent<NameComponent>(entity, _nameCid);
+        if (!nsp.IsEmpty)
         {
-            ReadOnlySpan<byte> bytes = sp[0].Name;
+            ReadOnlySpan<byte> bytes = nsp[0].Name;
             var end = bytes.IndexOf((byte)0);
             name = Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
         }
 
+        // Seed node._transform from the native "transform" component so that
+        // OnBind (called inside BindToNodeWorld) sees the position/scale the
+        // scene loader applied before invoking the script factory.
+        var tsp = _ecs.GetComponent<KernelEngine.Kernel.TransformComponent>(entity, _nativeTransformCid);
+        if (!tsp.IsEmpty)
+        {
+            ref readonly var kt = ref tsp[0];
+            node.SetInitialTransform(new TransformComponent
+            {
+                Position = kt.Position,
+                Rotation = kt.Rotation,
+                Scale    = kt.Scale,
+            });
+        }
+
+        // Wire parent-child via the native HierarchyComponent so Children/Parent
+        // reflect the hierarchy declared in the scene file.
+        var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
+        Node? parent = null;
+        if (!hsp.IsEmpty && hsp[0].Parent != 0 && hsp[0].Parent != ulong.MaxValue)
+            _byEntity.TryGetValue(hsp[0].Parent, out parent);
+
         node.Name = name;
         node.BindToNodeWorld(this, entity);
+        parent?.AttachChild(node);
         if (!string.IsNullOrEmpty(name)) _byName[name] = node;
+        _allNodes.Add(node);
+        _byEntity[entity] = node;
     }
 
     // ── Generic component access ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads a component by its ECS registration name. Intended for game-specific
+    /// components that are not registered in the framework <see cref="IComponentRegistry"/>.
+    /// Returns false if the component type is unknown or the entity lacks it.
+    /// </summary>
+    public bool TryGetComponent<T>(ulong entity, string componentName, out T value) where T : unmanaged
+    {
+        if (!_ecs.TryLookupComponent(componentName, out var cid))
+        {
+            value = default;
+            return false;
+        }
+        var sp = _ecs.GetComponent<T>(entity, cid);
+        if (sp.IsEmpty) { value = default; return false; }
+        value = sp[0];
+        return true;
+    }
 
     internal void Set<T>(ulong entity, in T value) where T : unmanaged
     {
@@ -159,4 +219,23 @@ public sealed class NodeWorld
         value = sp[0];
         return true;
     }
+
+    /// <summary>
+    /// Calls <see cref="Node.OnReady"/> on every node in reverse insertion order
+    /// (children come after parents in a DFS scene load, so reversing gives
+    /// children-before-parents ordering). Called by <see cref="SceneRouter"/> after
+    /// the scene file is fully loaded.
+    /// </summary>
+    internal void TriggerReady()
+    {
+        for (int i = _allNodes.Count - 1; i >= 0; i--)
+            _allNodes[i].OnReady();
+    }
+
+    /// <summary>
+    /// Reads the <c>[entity.properties]</c> block declared in the scene file for
+    /// <paramref name="entity"/>. Delegates to <see cref="World.TryGetProperties"/>.
+    /// </summary>
+    internal bool TryGetProperties(ulong entity, out KernelEngine.Kernel.VariantReader reader)
+        => _world.TryGetProperties(entity, out reader);
 }

@@ -70,18 +70,55 @@ public sealed class SceneRenderModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        _ = services.GetRequiredService<IComponentRegistry>();
-        var nodeWorld = services.GetRequiredService<NodeWorld>();
-        var input     = services.GetService<IInput>();
+        var components = services.GetRequiredService<IComponentRegistry>();
+        var world      = services.GetRequiredService<World>();
 
+        // Register C# apply callbacks so [entity.components.*] blocks in scene files
+        // can populate framework-only components (parallel to ke_framework_apply_camera).
+        world.RegisterComponentApply<AmbientLightComponent>(
+            components.CidOf<AmbientLightComponent>(),
+            static (ref AmbientLightComponent comp, in VariantReader reader) =>
+            {
+                if (reader.TryGetVec3("Color", out var c)) comp.Color = c;
+            });
+
+        var primitives = services.GetRequiredService<PrimitiveCache>();
+        var renderer   = services.GetRequiredService<IRenderer>();
+        var meshCid    = components.CidOf<MeshRendererComponent>();
+
+        // [entity.components.MeshRenderer] — inline 2D visual via primitive name + color.
+        // Scene files set: mesh = "quad", color = [r,g,b,a], roughness = f.
+        // Runs on the render worker (scene load is pinned there) so GPU creation is safe.
+        world.RegisterComponentApply<MeshRendererComponent>(
+            meshCid,
+            (ref MeshRendererComponent comp, in VariantReader reader) =>
+            {
+                if (reader.TryGetString("mesh", out var meshName) && meshName is not null)
+                    comp.Mesh = primitives.Get(meshName);
+
+                if (reader.TryGetVec4("color", out var color))
+                {
+                    float roughness = 1f;
+                    reader.TryGetFloat("roughness", out roughness);
+                    comp.Material = renderer.CreateMaterial(color, roughness: roughness).Value;
+                }
+            });
+
+        var nodeWorld  = services.GetRequiredService<NodeWorld>();
+        var sceneTree  = services.GetRequiredService<World>().SceneTree;
+        var input      = services.GetService<IInput>();
+
+        IInputReader? prevSnapshot = null;
         runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, dt) =>
         {
             input?.Update();
-            var reader    = (input as Input)?.CaptureSnapshot();
-            var view      = new View(nodeWorld, dt, reader);
+            sceneTree.PropagateTransforms();
+            var snapshot  = (input as Input)?.CaptureSnapshot();
+            var view      = new View(nodeWorld, dt, snapshot, prevSnapshot);
             var behaviors = nodeWorld.Behaviors;
             for (int i = 0; i < behaviors.Count; i++)
                 behaviors[i].OnUpdate(in view);
+            prevSnapshot = snapshot;
         }, pinnedThread: 1);
     }
 }

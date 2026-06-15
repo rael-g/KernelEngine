@@ -51,6 +51,11 @@ extern "C"
         /// Returns KE_ENTITY_INVALID when not found.
         ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path);
 
+        /// Propagates local transforms down the hierarchy, writing each entity's
+        /// ke_transform_component.world_matrix as parent_world * TRS_local.
+        /// Call once per frame before any system that reads world_matrix.
+        void (*propagate_transforms)(struct ke_scene_tree *self);
+
         void (*destroy)(struct ke_scene_tree *self);
 
     } ke_scene_tree;

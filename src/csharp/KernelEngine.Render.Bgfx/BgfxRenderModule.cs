@@ -107,7 +107,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
 
         runtime.RegisterSystem("Bgfx.RenderFrame", RuntimePhase.Extract, (_, _) =>
         {
-            var packet = frameSync.BeginWrite();
+            var packet = (KernelEngine.Kernel.FramePacket)frameSync.BeginWrite();
             try
             {
                 if (resolvedClearColor is { } c)
@@ -121,7 +121,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
                 packet.EndWrite();
             }
 
-            var readPacket = frameSync.BeginRead();
+            var readPacket = (KernelEngine.Kernel.FramePacket)frameSync.BeginRead();
             try
             {
                 renderer.SubmitPacket(readPacket);

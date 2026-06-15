@@ -15,10 +15,10 @@ public class Camera : Node
     protected internal override void OnBind(NodeWorld nodeWorld)
         => nodeWorld.Set(Entity, new CameraComponent
         {
-            FovDeg           = Fov,
-            Near             = Near,
-            Far              = Far,
-            Orthographic     = Orthographic,
+            Fov              = Fov,
+            NearPlane        = Near,
+            FarPlane         = Far,
+            Orthographic     = (byte)(Orthographic ? 1 : 0),
             OrthographicSize = OrthographicSize,
         });
 }

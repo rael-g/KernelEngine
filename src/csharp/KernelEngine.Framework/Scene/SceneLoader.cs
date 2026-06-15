@@ -32,7 +32,7 @@ namespace KernelEngine.Framework;
 /// it writes. Dispose this object only after the world has shut down (or after
 /// all scene_properties components have been removed).
 /// </remarks>
-public sealed unsafe class NativeSceneLoader : IDisposable
+public sealed unsafe class SceneLoader : IDisposable
 {
     private ke_scene_loader* _native;
     private GCHandle _scriptHandle;
@@ -53,7 +53,7 @@ public sealed unsafe class NativeSceneLoader : IDisposable
     /// Optional project root for resolving <c>res://</c>-prefixed paths. Pass
     /// <see langword="null"/> to disable res:// resolution.
     /// </param>
-    public NativeSceneLoader(Allocator allocator, World world, string? projectRoot = null)
+    public SceneLoader(Allocator allocator, World world, string? projectRoot = null)
     {
         ArgumentNullException.ThrowIfNull(allocator);
         ArgumentNullException.ThrowIfNull(world);

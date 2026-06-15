@@ -20,6 +20,7 @@ typedef struct asset_resolver_state {
     ke_asset_resolver  api;
     ke_allocator      *allocator;
     ke_image_loader   *image_loader;   // borrowed; may be NULL
+    ke_font_loader    *font_loader;    // borrowed; may be NULL
     char              *project_root;   // owned (allocator-allocated); may be NULL
 } asset_resolver_state;
 
@@ -223,6 +224,30 @@ static ke_result vt_resolve_material(ke_asset_resolver *self, const char *path,
     return parse_material_file(buf, out);
 }
 
+static ke_result vt_resolve_font(ke_asset_resolver *self, const char *path,
+                                  float pixel_size, uint32_t first_codepoint,
+                                  uint32_t codepoint_count, uint32_t atlas_size,
+                                  ke_font_data **out) {
+    if (!self || !self->handle || !path || !out) return KE_ERROR_INVALID_ARGUMENT;
+    asset_resolver_state *s = (asset_resolver_state *)self->handle;
+    if (!s->font_loader) return KE_ERROR_INVALID_ARGUMENT;
+
+    char buf[1024];
+    resolve_path(s, path, buf, sizeof(buf));
+    if (!file_exists(buf)) return KE_ERROR_NOT_FOUND;
+
+    return s->font_loader->load_font(s->font_loader, buf, pixel_size,
+                                     first_codepoint, codepoint_count,
+                                     atlas_size, out);
+}
+
+static void vt_free_font(ke_asset_resolver *self, ke_font_data *data) {
+    if (!self || !self->handle || !data) return;
+    asset_resolver_state *s = (asset_resolver_state *)self->handle;
+    if (s->font_loader && s->font_loader->free_font)
+        s->font_loader->free_font(s->font_loader, data);
+}
+
 static void vt_destroy(ke_asset_resolver *self) {
     if (!self || !self->handle) return;
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
@@ -234,6 +259,7 @@ static void vt_destroy(ke_asset_resolver *self) {
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 ke_result ke_asset_resolver_create(ke_allocator *alloc, ke_image_loader *image_loader,
+                                    ke_font_loader *font_loader,
                                     const char *project_root, ke_asset_resolver **out) {
     if (!alloc || !out) return KE_ERROR_INVALID_ARGUMENT;
 
@@ -244,6 +270,7 @@ ke_result ke_asset_resolver_create(ke_allocator *alloc, ke_image_loader *image_l
 
     s->allocator    = alloc;
     s->image_loader = image_loader;
+    s->font_loader  = font_loader;
     s->project_root = dup_cstr(alloc, project_root);
     if (project_root && !s->project_root) {
         alloc->free(alloc, s);
@@ -256,6 +283,8 @@ ke_result ke_asset_resolver_create(ke_allocator *alloc, ke_image_loader *image_l
     s->api.resolve_mesh     = vt_resolve_mesh;
     s->api.free_mesh        = vt_free_mesh;
     s->api.resolve_material = vt_resolve_material;
+    s->api.resolve_font     = vt_resolve_font;
+    s->api.free_font        = vt_free_font;
     s->api.destroy          = vt_destroy;
 
     *out = &s->api;

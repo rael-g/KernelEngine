@@ -20,37 +20,57 @@ public sealed class FrameworkModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
+        // IEcsRegistry is registered first because World's constructor borrows it.
+        services.AddSingleton<IEcsRegistry>(sp =>
+        {
+            var flecsEcs = (FlecsEcs)sp.GetRequiredService<IEcs>();
+            unsafe { return new EcsRegistry(flecsEcs.Native); }
+        });
+
         services.AddSingleton<World>(sp =>
         {
             var flecsEcs  = (FlecsEcs)sp.GetRequiredService<IEcs>();
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
             var alloc     = (Allocator)sp.GetRequiredService<IAllocator>();
+            var ecs       = sp.GetRequiredService<IEcsRegistry>();
+            var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
             {
+                ke_scene_tree* tree;
+                KernelException.ThrowIfFailed(
+                    Native.NativeMethods.scene_tree_create(flecsEcs.Native, alloc.Native, &tree).ToManaged());
+
                 ke_world_params p = default;
-                p.allocator = alloc.Native;
-                p.ecs       = flecsEcs.Native;
-                p.runtime   = rtRuntime.Native;
+                p.allocator  = alloc.Native;
+                p.ecs        = flecsEcs.Native;
+                p.runtime    = rtRuntime.Native;
+                p.scene_tree = tree;
                 ke_world* w;
                 KernelException.ThrowIfFailed(
                     Native.NativeMethods.world_create(&p, &w).ToManaged());
-                return new World(w);
+                return new World(w, tree, ecs, runtime);
             }
         });
 
-        services.AddSingleton<IEcsRegistry>(sp =>
-        {
-            unsafe { return new EcsRegistry(sp.GetRequiredService<World>().Ecs); }
-        });
-
         services.AddSingleton<ComponentRegistry>(sp =>
-            new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>()));
+        {
+            // World (and its scene_tree) must be fully initialized before ComponentRegistry
+            // so that kernel components like "transform" are registered at their native C
+            // sizes (104 bytes) before this registry re-registers them at framework sizes
+            // (40 bytes). If scene_tree runs second, flecs stores transform at 40 bytes
+            // and C writes of ke_transform_component (104 bytes) corrupt adjacent heap.
+            // This guarantee must live in the factory so it holds no matter who triggers
+            // ComponentRegistry first (e.g. BgfxRenderModule resolving IFrameContributors).
+            _ = sp.GetRequiredService<World>();
+            return new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>());
+        });
 
         services.AddSingleton<IComponentRegistry>(sp => sp.GetRequiredService<ComponentRegistry>());
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
+        _ = services.GetRequiredService<World>();
         _ = services.GetRequiredService<ComponentRegistry>();
     }
 }

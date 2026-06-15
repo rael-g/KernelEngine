@@ -21,6 +21,7 @@ public readonly ref struct View
     public NodeWorld NodeWorld { get; }
 
     private readonly IInputReader? _input;
+    private readonly IInputReader? _prevInput;
 
     /// <summary>
     /// True if the given key was held down when input was last sampled.
@@ -29,10 +30,18 @@ public readonly ref struct View
     /// </summary>
     public bool IsKeyDown(int key) => _input?.IsKeyDown(key) ?? false;
 
-    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input)
+    /// <summary>
+    /// True if the given key transitioned from up to down this tick (rising edge).
+    /// Returns false when no input service is registered.
+    /// </summary>
+    public bool IsKeyJustPressed(int key)
+        => (_input?.IsKeyDown(key) ?? false) && !(_prevInput?.IsKeyDown(key) ?? false);
+
+    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input, IInputReader? prevInput = null)
     {
-        NodeWorld = nodeWorld;
-        DeltaTime = deltaTime;
-        _input    = input;
+        NodeWorld  = nodeWorld;
+        DeltaTime  = deltaTime;
+        _input     = input;
+        _prevInput = prevInput;
     }
 }

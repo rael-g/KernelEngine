@@ -32,7 +32,7 @@ public sealed class SceneRouterModule : IRuntimeModule
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var scheduler = services.GetRequiredService<ITaskScheduler>();
-        var loader    = services.GetRequiredService<NativeSceneLoader>();
+        var loader    = services.GetRequiredService<SceneLoader>();
         var nodeWorld = services.GetRequiredService<NodeWorld>();
         var types     = services.GetRequiredService<NodeTypeRegistry>();
         var router    = services.GetRequiredService<SceneRouter>();
@@ -47,8 +47,9 @@ public sealed class SceneRouterModule : IRuntimeModule
                 nodeWorld.BindNativeEntity(node, entity);
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.Error.WriteLine($"[SceneRouter] script factory failed for '{typeName}' entity={entity}: {ex.Message}");
                 return false;
             }
         });

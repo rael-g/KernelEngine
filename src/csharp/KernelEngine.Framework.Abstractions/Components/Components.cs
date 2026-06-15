@@ -34,16 +34,21 @@ public struct MeshRendererComponent
     public MaterialHandle Material;
 }
 
-/// <summary>Camera component. First entity with this drives the per-frame view/proj.</summary>
+/// <summary>
+/// Camera component. First entity with this drives the per-frame view/proj.
+/// Memory layout matches <c>ke_camera_component</c> exactly so the native
+/// scene-loader apply callback and the managed contributor share one ECS slot.
+/// </summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
 public struct CameraComponent
 {
-    public float FovDeg;
-    public float Near;
-    public float Far;
-    /// <summary>When true the contributor builds an orthographic projection sized by <see cref="OrthographicSize"/> instead of perspective.</summary>
-    public bool  Orthographic;
+    public float Fov;
+    public float NearPlane;
+    public float FarPlane;
     /// <summary>Half the vertical extent in world units (ortho only).</summary>
     public float OrthographicSize;
+    /// <summary>Non-zero = orthographic projection; zero = perspective.</summary>
+    public byte  Orthographic;
 }
 
 /// <summary>Single directional light + ambient. First entity wins (single-light pass).</summary>

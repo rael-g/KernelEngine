@@ -15,4 +15,10 @@ public interface IInputActionMap<TEnum> where TEnum : struct, Enum
     /// Returns true if any binding for the action has its positive key held.
     /// </summary>
     bool IsPressed(TEnum action, in View view);
+
+    /// <summary>
+    /// Returns true if any binding for the action transitioned from up to down
+    /// this tick (rising edge — not held from the previous frame).
+    /// </summary>
+    bool IsJustPressed(TEnum action, in View view);
 }
