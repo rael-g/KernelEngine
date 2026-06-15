@@ -2,9 +2,9 @@
 #include <gmock/gmock.h>
 #include <core_renderer.hpp>
 #include <gpu_device.hpp>
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/window/window.h>
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/window/window.h>
+#include <kernel_engine/render/frame_packet.h>
 #include "mocks.hpp"
 
 using namespace kernel_engine::render;

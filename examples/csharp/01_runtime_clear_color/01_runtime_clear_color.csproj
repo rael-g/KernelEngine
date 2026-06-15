@@ -10,8 +10,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="../../../src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />

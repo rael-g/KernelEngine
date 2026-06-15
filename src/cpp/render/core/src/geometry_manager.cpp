@@ -2,7 +2,7 @@
 #include <render_logging.hpp>
 #include "render_context.hpp"
 #include "gpu_device.hpp"
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/render/frame_packet.h>
 #include <vector>
 #include <new>
 

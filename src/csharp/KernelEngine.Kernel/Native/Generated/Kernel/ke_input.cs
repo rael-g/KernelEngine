@@ -4,12 +4,6 @@ public unsafe partial struct ke_input
 {
     public void* handle;
 
-    [NativeTypeName("struct ke_allocator *")]
-    public ke_allocator* allocator;
-
-    [NativeTypeName("struct ke_logger *")]
-    public ke_logger* logger;
-
     [NativeTypeName("void (*)(struct ke_input *)")]
     public delegate* unmanaged[Cdecl]<ke_input*, void> destroy;
 
@@ -42,12 +36,4 @@ public unsafe partial struct ke_input
 
     [NativeTypeName("void (*)(struct ke_input *, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_input*, float, float, void> on_mouse_scroll;
-
-    public partial struct ke_allocator
-    {
-    }
-
-    public partial struct ke_logger
-    {
-    }
 }

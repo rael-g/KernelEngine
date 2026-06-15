@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/render/render_graph.h>
+#include <kernel_engine/render/render_graph.h>
 #include "render_context.hpp"
 #include <gpu_types.hpp>
 

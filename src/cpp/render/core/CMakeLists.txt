@@ -29,6 +29,7 @@ target_include_directories(ke_render_core PRIVATE
 
 target_link_libraries(ke_render_core PUBLIC
     ke_kernel
+    ke_window
     ke_render_contract
     ke_threading
 )

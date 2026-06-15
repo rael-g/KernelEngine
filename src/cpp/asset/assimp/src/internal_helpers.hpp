@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/logger/logger.h>
 #include <algorithm>
 #include <cstring>
 #include <cstdio>

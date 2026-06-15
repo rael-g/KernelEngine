@@ -2,10 +2,6 @@ using System.Runtime.CompilerServices;
 
 namespace KernelEngine.Kernel.Native;
 
-public partial struct ke_frame_packet
-{
-}
-
 public unsafe partial struct ke_frame_packet
 {
     [NativeTypeName("uint64_t")]

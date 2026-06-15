@@ -26,6 +26,7 @@ target_include_directories(ke_asset_stb_image PRIVATE ${STB_INCLUDE_DIR})
 
 target_link_libraries(ke_asset_stb_image PUBLIC
     ke_kernel
+    ke_asset
 )
 
 install(TARGETS ke_asset_stb_image

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/asset/image_loader.h>
+#include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/stb_image/asset_export.h>
 
 #ifdef __cplusplus

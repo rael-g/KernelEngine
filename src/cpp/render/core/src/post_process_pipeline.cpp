@@ -14,7 +14,7 @@
 namespace kernel_engine::render::core
 {
 
-ke_result PostProcessPipeline::SetTonemapping(RenderContext& ctx, ke_bool enabled, float exposure, float gamma)
+ke_result PostProcessPipeline::SetTonemapping(RenderContext& ctx, bool enabled, float exposure, float gamma)
 {
     if (enabled && hdr_fb_ == kGpuInvalidHandle)
         return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_NOT_INITIALIZED, "SetTonemapping", "HDR framebuffer not initialized");
@@ -24,7 +24,7 @@ ke_result PostProcessPipeline::SetTonemapping(RenderContext& ctx, ke_bool enable
     return KE_OK;
 }
 
-ke_result PostProcessPipeline::SetBloom(RenderContext& ctx, ke_bool enabled, float threshold, float intensity)
+ke_result PostProcessPipeline::SetBloom(RenderContext& ctx, bool enabled, float threshold, float intensity)
 {
     if (enabled && bright_fb_ == kGpuInvalidHandle)
         return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_NOT_INITIALIZED, "SetBloom", "Bright framebuffer not initialized");
@@ -34,7 +34,7 @@ ke_result PostProcessPipeline::SetBloom(RenderContext& ctx, ke_bool enabled, flo
     return KE_OK;
 }
 
-ke_result PostProcessPipeline::SetSsao(RenderContext& ctx, ke_bool enabled, float radius, float bias, float strength)
+ke_result PostProcessPipeline::SetSsao(RenderContext& ctx, bool enabled, float radius, float bias, float strength)
 {
     ssao_enabled_  = (enabled != 0);
     ssao_radius_   = radius;

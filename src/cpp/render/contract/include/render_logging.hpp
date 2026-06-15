@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/common/error.h>
+#include <kernel_engine/logger/logger.h>
+#include <kernel_engine/common/error.h>
 #include <cstdio>
 
 namespace kernel_engine::render

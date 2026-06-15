@@ -5,7 +5,7 @@
 #include <assimp/scene.h>
 #include "assimp_converter.hpp"
 #include "texture_decoder.hpp"
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <cstdlib>
 #include <cstring>
 #include <vector>

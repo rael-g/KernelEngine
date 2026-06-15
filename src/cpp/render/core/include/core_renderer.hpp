@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/render/render.h>
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/render/render.h>
+#include <kernel_engine/render/frame_packet.h>
 #include "../src/geometry_manager.hpp"
 #include "../src/texture_manager.hpp"
 #include "../src/lighting_manager.hpp"
@@ -36,7 +36,7 @@ public:
     ke_result SubmitPacket(const struct ke_frame_packet* packet);
 
     ke_result ClearColor(float r, float g, float b, float a);
-    ke_result SetOrthographic(ke_bool enabled);
+    ke_result SetOrthographic(bool enabled);
     ke_result SetViewTransform(const ke_mat4 *view, const ke_mat4 *proj);
     ke_result SetCameraPos(float x, float y, float z);
     
@@ -46,9 +46,9 @@ public:
     ke_result SetSpotLights(const ke_spot_light *lights, uint32_t count);
 
     ke_result SetClusterConfig(const ke_cluster_config *config);
-    ke_result SetSsao(ke_bool enabled, float radius, float bias, float strength);
-    ke_result SetTonemapping(ke_bool enabled, float exposure, float gamma);
-    ke_result SetBloom(ke_bool enabled, float threshold, float intensity);
+    ke_result SetSsao(bool enabled, float radius, float bias, float strength);
+    ke_result SetTonemapping(bool enabled, float exposure, float gamma);
+    ke_result SetBloom(bool enabled, float threshold, float intensity);
 
     const char* GetLastFatalError();
 

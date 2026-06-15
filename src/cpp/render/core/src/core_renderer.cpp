@@ -8,10 +8,10 @@
 #include <clustered_forward.hpp>
 #include <shader_provider.hpp>
 #include "render_graph_impl.hpp"
-#include <kernel_engine/kernel/render/render_graph.h>
+#include <kernel_engine/render/render_graph.h>
 #include "view_ids.hpp"
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/window/window.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/window/window.h>
 #include <new>
 #include <cstring>
 #include <fstream>
@@ -74,7 +74,7 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->ClearColor(r, g, b, a);
     };
-    render_api_.set_orthographic = [](ke_render *self, ke_bool enabled) {
+    render_api_.set_orthographic = [](ke_render *self, bool enabled) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->SetOrthographic(enabled);
@@ -134,12 +134,12 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
                                     float, float, float, float) {
         return KE_OK;
     };
-    render_api_.set_tonemapping = [](ke_render *self, ke_bool e, float ex, float g) {
+    render_api_.set_tonemapping = [](ke_render *self, bool e, float ex, float g) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->post_process_.SetTonemapping(renderer_impl->ctx_, e, ex, g);
     };
-    render_api_.set_bloom = [](ke_render *self, ke_bool e, float t, float i) {
+    render_api_.set_bloom = [](ke_render *self, bool e, float t, float i) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->post_process_.SetBloom(renderer_impl->ctx_, e, t, i);
@@ -193,7 +193,7 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     render_api_.set_camera_pos = [](ke_render *self, float x, float y, float z) {
         return (self && self->handle) ? static_cast<CoreRenderer *>(self->handle)->SetCameraPos(x, y, z) : KE_ERROR_INVALID_ARGUMENT; 
     };
-    render_api_.set_ssao = [](ke_render *self, ke_bool e, float r, float b, float s) {
+    render_api_.set_ssao = [](ke_render *self, bool e, float r, float b, float s) {
         if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->post_process_.SetSsao(renderer_impl->ctx_, e, r, b, s);
@@ -915,7 +915,7 @@ ke_result CoreRenderer::ExecuteSceneOpaquePass(const struct ke_frame_packet* pac
     }
 }
 
-ke_result CoreRenderer::SetOrthographic(ke_bool enabled) {
+ke_result CoreRenderer::SetOrthographic(bool enabled) {
     orthographic_ = (enabled != 0);
     return KE_OK;
 }
@@ -985,15 +985,15 @@ ke_result CoreRenderer::SetClusterConfig(const ke_cluster_config *config) {
     return clustered_.SetClusterConfig(ctx_, config);
 }
 
-ke_result CoreRenderer::SetSsao(ke_bool enabled, float radius, float bias, float strength) {
+ke_result CoreRenderer::SetSsao(bool enabled, float radius, float bias, float strength) {
     return post_process_.SetSsao(ctx_, enabled, radius, bias, strength);
 }
 
-ke_result CoreRenderer::SetTonemapping(ke_bool enabled, float exposure, float gamma) {
+ke_result CoreRenderer::SetTonemapping(bool enabled, float exposure, float gamma) {
     return post_process_.SetTonemapping(ctx_, enabled, exposure, gamma);
 }
 
-ke_result CoreRenderer::SetBloom(ke_bool enabled, float threshold, float intensity) {
+ke_result CoreRenderer::SetBloom(bool enabled, float threshold, float intensity) {
     return post_process_.SetBloom(ctx_, enabled, threshold, intensity);
 }
 

@@ -4,8 +4,8 @@
 #include <texture_manager.hpp>
 #include <render_context.hpp>
 #include <gpu_device.hpp>
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/render/frame_packet.h>
 #include "mocks.hpp"
 
 using namespace kernel_engine::render;

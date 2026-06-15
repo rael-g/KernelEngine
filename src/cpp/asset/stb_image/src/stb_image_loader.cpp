@@ -4,8 +4,8 @@
 #include <stb_image.h>
 
 #include "kernel_engine/asset/stb_image/stb_image_loader.h"
-#include "kernel_engine/kernel/context/allocator.h"
-#include "kernel_engine/kernel/logger/logger.h"
+#include "kernel_engine/allocator/allocator.h"
+#include "kernel_engine/logger/logger.h"
 
 #include <cstring>
 #include <cstdlib>

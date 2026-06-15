@@ -1,7 +1,7 @@
 #pragma once
 
 #include <kernel_engine/asset/assimp/assimp_loader.h>
-#include <kernel_engine/kernel/asset/asset_loader.h>
+#include <kernel_engine/asset/asset_loader.h>
 
 namespace kernel_engine::asset::assimp
 {

@@ -17,6 +17,7 @@ add_executable(test_renderer_logic
 
 target_include_directories(test_renderer_logic PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+    ${CMAKE_SOURCE_DIR}/src/c/window/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
@@ -55,13 +56,15 @@ add_executable(test_asset_logic
     ../../src/cpp/asset/assimp/src/texture_decoder.cpp
 )
 
-target_include_directories(test_asset_logic PRIVATE 
+target_include_directories(test_asset_logic PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+    ${CMAKE_SOURCE_DIR}/src/c/asset/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/src
 )
 
 target_link_libraries(test_asset_logic PRIVATE
     ke_kernel
+    ke_asset
     assimp::assimp
     GTest::gtest_main
 )

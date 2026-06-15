@@ -5,8 +5,8 @@
 #include <miniaudio.h>
 
 #include "kernel_engine/audio/miniaudio/miniaudio_audio.h"
-#include "kernel_engine/kernel/context/allocator.h"
-#include "kernel_engine/kernel/logger/logger.h"
+#include "kernel_engine/allocator/allocator.h"
+#include "kernel_engine/logger/logger.h"
 
 #include <mutex>
 #include <unordered_map>
@@ -123,7 +123,7 @@ void audio_unload_sound(ke_audio *self, ke_audio_sound id)
     }
 }
 
-ke_result audio_play(ke_audio *self, ke_audio_sound id, float volume, ke_bool loop)
+ke_result audio_play(ke_audio *self, ke_audio_sound id, float volume, bool loop)
 {
     if (!self || id == KE_AUDIO_SOUND_INVALID) return KE_ERROR_INVALID_ARGUMENT;
     auto *state = static_cast<MiniAudioState *>(self->handle);

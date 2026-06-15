@@ -23,3 +23,7 @@ public unsafe partial struct ke_allocator
 public partial struct ke_allocator
 {
 }
+
+public partial struct ke_allocator
+{
+}

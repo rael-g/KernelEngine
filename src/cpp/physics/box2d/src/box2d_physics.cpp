@@ -1,8 +1,8 @@
 #include <box2d/box2d.h>
 
 #include "kernel_engine/physics/box2d/box2d_physics.h"
-#include "kernel_engine/kernel/context/allocator.h"
-#include "kernel_engine/kernel/logger/logger.h"
+#include "kernel_engine/allocator/allocator.h"
+#include "kernel_engine/logger/logger.h"
 
 #include <unordered_map>
 #include <cstring>

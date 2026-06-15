@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/threading/threading.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>

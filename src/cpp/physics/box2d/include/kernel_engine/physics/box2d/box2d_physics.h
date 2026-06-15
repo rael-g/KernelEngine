@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/physics/physics_2d.h>
+#include <kernel_engine/physics/physics_2d.h>
 #include <kernel_engine/physics/box2d/physics_export.h>
 
 #ifdef __cplusplus

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/audio/audio.h>
+#include <kernel_engine/audio/audio.h>
 #include <kernel_engine/audio/miniaudio/audio_export.h>
 
 #ifdef __cplusplus

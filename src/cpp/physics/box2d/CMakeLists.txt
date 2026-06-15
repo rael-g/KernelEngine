@@ -22,6 +22,7 @@ find_package(box2d CONFIG REQUIRED)
 
 target_link_libraries(ke_physics_2d_box2d PUBLIC
     ke_kernel
+    ke_physics
 )
 
 target_link_libraries(ke_physics_2d_box2d PRIVATE

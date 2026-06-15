@@ -25,6 +25,7 @@ target_include_directories(ke_audio_miniaudio PRIVATE ${MINIAUDIO_INCLUDE_DIR})
 
 target_link_libraries(ke_audio_miniaudio PUBLIC
     ke_kernel
+    ke_audio
 )
 
 # miniaudio uses the OS audio APIs; on Windows that's WASAPI/DSound and brings in winmm.

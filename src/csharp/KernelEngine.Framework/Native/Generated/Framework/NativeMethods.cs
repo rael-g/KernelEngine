@@ -11,9 +11,6 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_tree_create", ExactSpelling = true)]
     public static extern ke_result scene_tree_create(ke_ecs* ecs, ke_allocator* alloc, ke_scene_tree** out_tree);
 
-    [NativeTypeName("#define KE_COMPONENT_NAME_TRANSFORM \"transform\"")]
-    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_TRANSFORM => "transform"u8;
-
     [NativeTypeName("#define KE_COMPONENT_NAME_HIERARCHY \"hierarchy\"")]
     public static ReadOnlySpan<byte> KE_COMPONENT_NAME_HIERARCHY => "hierarchy"u8;
 

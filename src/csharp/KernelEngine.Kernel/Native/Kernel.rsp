@@ -79,7 +79,8 @@ ke_kernel
 ../../../c/framework/include/kernel_engine/framework/world.h
 ../../../c/framework/include/kernel_engine/framework/input_actions.h
 ../../../c/framework/include/kernel_engine/framework/scene_loader.h
-../../../c/framework/include/kernel_engine/framework/material_file.h
+../../../c/render/include/kernel_engine/render/material_file.h
+../../../c/render/include/kernel_engine/render/components.h
 ../../../c/asset/include/kernel_engine/asset/mesh_shape.h
 ../../../c/asset/include/kernel_engine/asset/asset_resolver.h
 --methodClassName

@@ -1,9 +1,5 @@
 namespace KernelEngine.Kernel.Native;
 
-public partial struct ke_world
-{
-}
-
 public unsafe partial struct ke_world
 {
     public void* handle;

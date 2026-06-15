@@ -17,7 +17,7 @@
 // links them directly; bindings construct the loader, hand it over, and the
 // resolver dispatches based on file extension.
 
-#include <kernel_engine/framework/material_file.h>  // framework-opinion POD consumed via resolve_material
+#include <kernel_engine/render/material_file.h>
 #include <kernel_engine/asset/mesh_shape.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/mesh_data.h>

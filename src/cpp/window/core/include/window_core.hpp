@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/window/window.h>
-#include <kernel_engine/kernel/input/input.h>
+#include <kernel_engine/window/window.h>
+#include <kernel_engine/input/input.h>
 #include <window_device.hpp>
 #include <kernel_engine/window/contract/window_export.h>
 #include <memory>

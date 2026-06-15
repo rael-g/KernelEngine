@@ -26,8 +26,8 @@ WindowCore::WindowCore()
         return KE_OK;
     };
     api_struct_.should_close = [](ke_window* self) {
-        if (!self) return (ke_bool)1;
-        return static_cast<WindowCore*>(self->handle)->ShouldClose() ? (ke_bool)1 : (ke_bool)0;
+        if (!self) return (bool)1;
+        return static_cast<WindowCore*>(self->handle)->ShouldClose() ? (bool)1 : (bool)0;
     };
     api_struct_.poll_events = [](ke_window* self) {
         if (!self) return KE_ERROR_INVALID_ARGUMENT;

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/task_scheduler/task_scheduler.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <atomic>
 #include <cstdlib>
 

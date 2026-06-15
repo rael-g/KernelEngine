@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/asset/asset_loader.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/asset/asset_loader.h>
 #include <string>
 
 struct aiMesh;
