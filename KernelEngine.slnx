@@ -3,6 +3,7 @@
   <Folder Name="/examples/csharp/">
     <Project Path="examples/csharp/00_input_test/00_input_test.csproj" />
     <Project Path="examples/csharp/00_runtime_minimal/00_runtime_minimal.csproj" />
+    <Project Path="examples/csharp/01_runtime_clear_color/01_runtime_clear_color.csproj" />
     <Project Path="examples/csharp/01_window_scene/01_window_scene.csproj" />
     <Project Path="examples/csharp/02_textured_quad/02_textured_quad.csproj" />
     <Project Path="examples/csharp/03_pbr_directional/03_pbr_directional.csproj" />
@@ -19,7 +20,6 @@
     <Project Path="examples/csharp/14_ui_quad/14_ui_quad.csproj" />
     <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
     <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
-    <Project Path="examples/csharp/lua_spike/lua_spike.csproj" />
   </Folder>
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />
@@ -32,21 +32,22 @@
     <Project Path="src/csharp/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj" />
     <Project Path="src/csharp/KernelEngine.Cli/KernelEngine.Cli.csproj" />
     <Project Path="src/csharp/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
-    <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/KernelEngine.Framework.Abstractions/KernelEngine.Framework.Abstractions.csproj" />
-    <Project Path="src/csharp/KernelEngine.Framework.Native/KernelEngine.Framework.Native.csproj" />
+    <Project Path="src/csharp/KernelEngine.Framework.Legacy.Abstractions/KernelEngine.Framework.Legacy.Abstractions.csproj" />
+    <Project Path="src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
+    <Project Path="src/csharp/KernelEngine.Toolkit/KernelEngine.Toolkit.csproj" />
     <Project Path="src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
-    <Project Path="src/csharp/KernelEngine.Runtime.Flecs/KernelEngine.Runtime.Flecs.csproj" />
+    <Project Path="src/csharp/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
+    <Project Path="src/csharp/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
     <Project Path="src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
     <Project Path="src/csharp/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
     <Project Path="src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
-    <Project Path="tests/csharp/KernelEngine.Framework.Tests/KernelEngine.Framework.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
-    <Project Path="tests/csharp/KernelEngine.Runtime.Flecs.Tests/KernelEngine.Runtime.Flecs.Tests.csproj" />
+    <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
   </Folder>
 </Solution>

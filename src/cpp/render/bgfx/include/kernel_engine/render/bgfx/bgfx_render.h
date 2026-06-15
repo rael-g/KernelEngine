@@ -2,7 +2,7 @@
 
 #include <kernel_engine/kernel/context/types.h>
 #include <kernel_engine/kernel/render/render.h>
-#include <kernel_engine/kernel/world/system.h>
+#include <kernel_engine/kernel/ecs/system.h>
 #include <stdint.h>
 
 #ifdef __cplusplus

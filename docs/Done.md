@@ -36,6 +36,8 @@ Cleanup cards completed during the multithread-architecture branch consolidation
 
 ## Sweep 2026-06-08 — user-curated Kanban audit (folded from `done-2.md`)
 
+> ⚠️ **Re-audit required (Kanban Z1, 2026-06-11)**: this sweep folded items without running the examples / tests that prove they work end-to-end. Confirmed errors so far: OBS.4 example 10 bloom listed as broken in memory but reportedly runs (user 2026-06-11); SSAO confirmed still broken. Do not trust the entries below until Z1 re-verifies each one against a working example/test.
+
 Capabilities the user shipped during the 4-day pause; verified against the current tree before removing from Kanban.
 
 ### Render-pipeline foundation

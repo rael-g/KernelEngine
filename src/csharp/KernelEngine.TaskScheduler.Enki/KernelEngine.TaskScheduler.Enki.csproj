@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
-    <ProjectReference Include="..\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+    <ProjectReference Include="..\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
   </ItemGroup>
 
   <ItemGroup>

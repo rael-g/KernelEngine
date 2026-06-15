@@ -39,16 +39,20 @@ public sealed unsafe class Input : IInput
     }
 
     /// <summary>Updates internal state by processing pending messages in the pipe.</summary>
+    /// <remarks>
+    /// Caller is responsible for serializing Update with reads (the runtime
+    /// pins these to a single worker via system phase ordering). The previous
+    /// hard-coded <c>ke.main</c> affinity check was tied to the legacy single-
+    /// main-thread model and no longer fits the module-driven runtime.
+    /// </remarks>
     public Result Update()
     {
-        KernelThread.AssertCurrent("ke.main");
         return _native->update(_native).Wrap();
     }
 
     /// <summary>Captures a frozen snapshot of the current input state (native form).</summary>
     public ke_input_snapshot GetSnapshot()
     {
-        KernelThread.AssertCurrent("ke.main");
         ke_input_snapshot snapshot;
         _native->get_snapshot(_native, &snapshot);
         return snapshot;

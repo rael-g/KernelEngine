@@ -1,19 +1,23 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework\KernelEngine.Framework.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework.Native\KernelEngine.Framework.Native.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Render.Bgfx\KernelEngine.Render.Bgfx.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Toolkit/KernelEngine.Toolkit.csproj" />
+    <ProjectReference Include="../../../src/csharp/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
   </ItemGroup>
 
 </Project>

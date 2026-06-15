@@ -8,9 +8,43 @@ namespace KernelEngine.Kernel;
 /// Managed wrapper around <c>ke_task_scheduler</c>.
 /// Dispatches work items to a native thread pool and bridges them to awaitable <see cref="Task"/>s.
 /// </summary>
-public sealed unsafe class TaskScheduler : IDisposable
+public unsafe class TaskScheduler : ITaskScheduler
 {
     private ke_task_scheduler* _native;
+
+    /// <inheritdoc/>
+    void ITaskScheduler.Dispatch(Action action) => Dispatch(action);  // fire-and-forget
+
+    /// <inheritdoc/>
+    void ITaskScheduler.DispatchPinned(uint threadNum, Action action)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        ArgumentNullException.ThrowIfNull(action);
+
+        var handle = GCHandle.Alloc(action);
+        _native->dispatch_pinned(_native, threadNum, &NativePinnedCallback, (void*)GCHandle.ToIntPtr(handle));
+        // Fire-and-forget; native callback frees the handle.
+    }
+
+    /// <inheritdoc/>
+    public uint NumWorkers
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_native == null, this);
+            return _native->get_num_workers(_native);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void NativePinnedCallback(void* data)
+    {
+        var handle = GCHandle.FromIntPtr((IntPtr)data);
+        var action = (Action)handle.Target!;
+        try   { action(); }
+        catch { /* fire-and-forget; future versions can surface via on_complete */ }
+        finally { handle.Free(); }
+    }
 
     /// <summary>Gets the underlying native pointer.</summary>
     public ke_task_scheduler* Native

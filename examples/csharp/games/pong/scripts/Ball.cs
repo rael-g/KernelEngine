@@ -5,77 +5,97 @@ using KernelEngine.Kernel;
 namespace Pong;
 
 /// <summary>
-/// The ball. Owns its own scoring state and reacts to <c>Launch</c>/<c>Quit</c> action events.
-/// Sound effects come from child <see cref="AudioPlayer"/> nodes declared in <c>Ball.scene</c>.
+/// The ball. Physics body + scoring logic. The visual is a Sprite2D child
+/// declared in Ball.scene; fixture comes from CollisionShape2D child;
+/// sounds come from AudioPlayer children (HitSound, ScoreSound).
 /// </summary>
-public sealed class Ball : DynamicBody2D
+public sealed class Ball : Node, IPhysicsBody2D
 {
-    const float InitialSpeed = 6f;
-
-    // Margin past the play-area edge before counting a goal — gives the ball a moment to leave
-    // the screen before the score animation fires.
+    const float InitialSpeed   = 6f;
     const float GoalLineMargin = 0.5f;
 
-    private AudioPlayer _hit       = null!;
-    private AudioPlayer _score     = null!;
-    private Scoreboard  _board     = null!;
-    private bool        _awaitingLaunch = true;
-    private Vector2     _lastVelocity;
+    private readonly IPhysics2D                  _physics;
+    private readonly IInputActionMap<PongAction> _actions;
+    private readonly ISceneRouter                _router;
 
-    protected override void Start()
+    private BodyHandle2D  _body;
+    public BodyHandle2D   PhysicsBody => _body;
+
+    private AudioPlayer? _hitSound;
+    private AudioPlayer? _scoreSound;
+    private Scoreboard?  _board;
+    private Vector2      _lastVelocity;
+    private bool         _awaitingLaunch = true;
+
+    public Ball(IPhysics2D physics, IInputActionMap<PongAction> actions, ISceneRouter router)
     {
-        base.Start();
-        _hit   = GetNode<AudioPlayer>("HitSound")
-                 ?? throw new InvalidOperationException("Ball requires a HitSound AudioPlayer child.");
-        _score = GetNode<AudioPlayer>("ScoreSound")
-                 ?? throw new InvalidOperationException("Ball requires a ScoreSound AudioPlayer child.");
-        _board = GetNode<Scoreboard>("../Scoreboard")
-                 ?? throw new InvalidOperationException("Ball requires a sibling Scoreboard node at '/Scoreboard'.");
-        _board.ShowHint("Press Space to launch");
+        _physics = physics;
+        _actions = actions;
+        _router  = router;
     }
 
-    protected override void OnInputAction(ref InputActionEvent evt)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
-        if (evt.Phase != ActionPhase.Started) return;
-        if (evt.Is(PongAction.Launch) && _awaitingLaunch) Launch();
-        // Quit lives here for lack of a dedicated menu/system node in this MVP example —
-        // a real game would route Quit through a UIInputRouter or similar instead.
-        else if (evt.Is(PongAction.Quit)) Environment.Exit(0);
+        var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
+        _body = _physics.CreateBody(BodyType2D.Dynamic, pos);
     }
 
-    protected override void Update(float dt)
+    protected override void OnReady()
     {
-        var pos = Position;
-        var vel = LinearVelocity;
+        _hitSound   = NodeWorld!.Find<AudioPlayer>("HitSound");
+        _scoreSound = NodeWorld!.Find<AudioPlayer>("ScoreSound");
+    }
+
+    protected override void OnUnbind() => _physics.DestroyBody(_body);
+
+    protected override void OnUpdate(in View view)
+    {
+        if (_board is null)
+        {
+            _board = NodeWorld!.Find<Scoreboard>("Scoreboard")
+                ?? throw new InvalidOperationException("Scene missing a 'Scoreboard' entity.");
+            _board.ShowHint("Press Space to launch");
+        }
+
+        var state = _physics.GetBodyState(_body);
+        LocalTransform = LocalTransform with
+        {
+            Position = new Vector3(state.Position.X, state.Position.Y, 0f),
+            Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, state.Angle),
+        };
+
+        if (_actions.IsJustPressed(PongAction.Quit,   in view)) _router.LoadScene("Menu");
+        if (_actions.IsJustPressed(PongAction.Launch, in view) && _awaitingLaunch) Launch();
 
         if (_awaitingLaunch) return;
 
-        // Sudden X velocity flip → paddle/wall hit (no collision events in F2 MVP).
+        var vel = state.Velocity;
         if (Math.Sign(vel.X) != Math.Sign(_lastVelocity.X) && _lastVelocity.X != 0)
-            _hit.Play();
+            _hitSound?.Play();
         _lastVelocity = vel;
 
-        if (pos.X >  Field.HalfW + GoalLineMargin) Score(leftSide: true);
-        if (pos.X < -Field.HalfW - GoalLineMargin) Score(leftSide: false);
+        if (state.Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true);
+        if (state.Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false);
     }
 
     void Launch()
     {
         _awaitingLaunch = false;
-        _board.HideHint();
-        // Alternate launch direction by total goals so neither side gets repeated free balls.
-        float dirX = _board.Total % 2 == 0 ? 1 : -1;
+        _board!.HideHint();
+        float dirX = _board.Total % 2 == 0 ? 1f : -1f;
         float dirY = (Random.Shared.NextSingle() - 0.5f) * 0.6f;
-        LinearVelocity = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
-        _lastVelocity  = LinearVelocity;
+        var v = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
+        _physics.SetBodyVelocity(_body, v);
+        _lastVelocity = v;
     }
 
-    void Score(bool leftSide)
+    void Score(bool leftScored)
     {
-        _board.RecordGoal(leftSide);
-        _score.Play();
-        Teleport(Vector2.Zero);
-        LinearVelocity = Vector2.Zero;
+        _board!.RecordGoal(leftScored);
+        _scoreSound?.Play();
+        _physics.SetBodyPosition(_body, Vector2.Zero);
+        _physics.SetBodyVelocity(_body, Vector2.Zero);
+        _lastVelocity   = Vector2.Zero;
         _awaitingLaunch = true;
         _board.ShowHint("Press Space to launch");
     }

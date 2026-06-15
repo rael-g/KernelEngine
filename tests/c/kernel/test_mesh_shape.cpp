@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/framework/mesh_shape.h>
+#include <kernel_engine/kernel/asset/mesh_shape.h>
 #include <kernel_engine/kernel/context/allocator.h>
 
 #include <cmath>

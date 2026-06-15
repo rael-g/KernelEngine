@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <!-- Sugar layer. Physically guarded against pointer-pushing: the compiler refuses
+         every "unsafe" / pointer expression here. All native interaction is delegated
+         to the IXxxBackend implementations registered by AddNativeFramework() (in
+         KernelEngine.Framework.Legacy.Native) or any equivalent backend assembly. -->
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="KernelEngine.Framework.Legacy.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+    <PackageReference Include="Tomlyn" Version="0.19.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="../KernelEngine.Framework.Legacy.Abstractions/KernelEngine.Framework.Legacy.Abstractions.csproj" />
+    <ProjectReference Include="../KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="../KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
+  </ItemGroup>
+
+</Project>

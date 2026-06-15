@@ -1,0 +1,26 @@
+[scene]
+name    = "Menu"
+version = 2
+
+[[entity]]
+name = "Ambient"
+type = "AmbientLight"
+[entity.properties]
+Color = [1.0, 1.0, 1.0]
+
+[[entity]]
+name = "Camera"
+type = "Camera"
+[entity.transform]
+position = [0.0, 0.0, 10.0]
+[entity.components.camera]
+orthographic      = true
+orthographic_size = 5.0
+near_plane        = 0.1
+far_plane         = 1000.0
+
+# Controller spawns the title + hint labels in its OnBind and drives the
+# transition to Main when Space is pressed.
+[[entity]]
+name = "Controller"
+type = "Pong.MenuController"

@@ -4,9 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Framework contracts surface. Pure managed interfaces consumed by the sugar layer;
-         concrete implementations live in KernelEngine.Framework.Native (or any other backend). -->
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <RootNamespace>KernelEngine.Framework</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

@@ -8,9 +8,12 @@ namespace KernelEngine.Kernel;
 /// <c>AddTextStbTrueType()</c>) and registered as <see cref="IFontLoader"/> for game-code consumption.
 /// Mirrors <see cref="ImageLoader"/>.
 /// </summary>
-public sealed unsafe class FontLoader : IFontLoader
+public sealed unsafe class FontLoader : IFontLoader, INativeFontLoader
 {
     private ke_font_loader* _native;
+
+    /// <inheritdoc/>
+    public ke_font_loader* Native => _native;
 
     public FontLoader(ke_font_loader* native)
     {

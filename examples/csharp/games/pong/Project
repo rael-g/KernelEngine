@@ -1,6 +1,6 @@
 [project]
 name = "Pong"
-default_scene = "res://scenes/Main.scene"
+default_scene = "Menu"
 
 [logging]
 console_level = "Warning"

@@ -3,25 +3,27 @@ add_executable(test_ke_kernel
     test_allocator.cpp
     test_hash_map.cpp
     test_ecs.cpp
-    test_world.cpp
     test_input.cpp
     test_logger.cpp
     test_hash.cpp
     test_array.cpp
-    test_resource_cache.cpp
-    test_scene_tree.cpp
-    test_input_actions.cpp
-    test_scene_loader.cpp
-    test_mesh_shape.cpp
-    test_material_file.cpp
-    test_asset_resolver.cpp
-    test_resource_queue.cpp
+    test_asset_resolver.cpp  # C-phase 1: re-enabled with new ke_framework plugin
+    test_resource_cache.cpp  # C-phase 2: re-enabled as kernel built-in
+    test_scene_tree.cpp      # C-phase 3: re-enabled with new ecs-backed scene_tree
+    test_input_actions.cpp   # C-phase 5: re-enabled with pure-C input_actions impl
+    test_scene_loader.cpp    # C-phase 6: re-enabled with pure-C scene_loader + apply registry
+    #   test_mesh_shape.cpp    -- legacy header API gone; replaced by asset_resolver
+    #   test_material_file.cpp -- legacy header API gone; replaced by asset_resolver
+    #   test_resource_queue.cpp
 )
 
 
 target_link_libraries(test_ke_kernel PRIVATE
     ke_kernel
     ke_framework
+    ke_runtime
+    ke_ecs_flecs
+    ke_task_scheduler_enki
     GTest::gtest_main
 )
 

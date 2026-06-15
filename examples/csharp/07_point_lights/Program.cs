@@ -1,81 +1,115 @@
+﻿using System.Diagnostics;
 using System.Numerics;
-using System.Diagnostics;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// 07_point_lights â€” 36-quad grid lit by four moving colored point lights, no
+// directional light. Showcases the multi-point-light path: each PointLight
+// node is its own entity with PointLightComponent, the contributor packs them
+// into the per-frame packet up to the renderer's per-frame cap.
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 07 Point Lights")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
-
-using var app = new Application();
-
-app.OnReady = (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 07_point_lights");
-    Console.WriteLine("[KernelEngine] Features: point_lights, clustered_lighting");
-
-    // Camera
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
-
-    // Materials
-    var mat = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 1f), metallic: 0.1f, roughness: 0.5f);
-
-    // Grid of spheres (or quads) to see lights
-    for (int x = -5; x <= 5; x += 2)
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 07 Point Lights"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.02f, 0.02f, 0.02f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
+        var renderer = sp.GetRequiredService<IRenderer>();
+        Console.WriteLine("[KernelEngine] Example: 07_point_lights");
+        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Features: point_lights, multi_light_accumulation");
+
+        tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
+
+        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
+
+        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+
+        // Grid of quads at z=0, x,y âˆˆ {-5, -3, -1, 1, 3, 5}.
+        for (int x = -5; x <= 5; x += 2)
         for (int y = -5; y <= 5; y += 2)
         {
-            var n = app.Tree.AddNode(new MeshRenderer { MaterialHandle = mat }, $"Sphere_{x}_{y}");
+            var n = tree.AddNode(new MeshRenderer { MaterialHandle = mat }, $"Quad_{x}_{y}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, y, 0f) };
         }
-    }
 
-    // Point lights
-    var colors = new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, new Vector3(1, 1, 0) };
-    for (int i = 0; i < 4; i++)
+        var colors = new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, new Vector3(1f, 1f, 0f) };
+        for (int i = 0; i < 4; i++)
+        {
+            tree.AddNode(new MovingPointLight
+            {
+                Color     = colors[i],
+                Intensity = 5f,
+                Radius    = 15f,
+                Phase     = i * (MathF.PI / 2f),
+            }, $"PointLight_{i}");
+        }
+    }));
+
+using var sp = services.BuildServiceProvider();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
+
+runtime.LoadModules(sp);
+
+Console.WriteLine("[07_point_lights] Loop running. Close the window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
+int frameCount = 0;
+double fpsWindowStart = 0;
+
+while (!window.ShouldClose())
+{
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
+
+    frameCount++;
+    if (now - fpsWindowStart >= 5.0)
     {
-        var light = app.Tree.AddNode(
-            new MovingLightNode { 
-                Color = colors[i], 
-                Intensity = 5.0f,
-                Phase = i * (MathF.PI / 2.0f)
-            },
-            $"PointLight_{i}");
+        double fps = frameCount / (now - fpsWindowStart);
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: 4p 0s 0d");
+        frameCount     = 0;
+        fpsWindowStart = now;
     }
-    return Task.CompletedTask;
-};
+}
 
-app.OnUpdate = (tree, input) =>
+runtime.UnloadModules(sp);
+
+Console.WriteLine("[07_point_lights] Exited cleanly.");
+
+// â”€â”€ Moving point light â€” orbits the origin with per-instance phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+sealed class MovingPointLight : PointLight
 {
-    tree.ClearColor(0.02f, 0.02f, 0.02f, 1f);
-    tree.SetAmbientLight(0.01f, 0.01f, 0.01f);
-};
-
-app.Run(services);
-
-// ── Moving point light ────────────────────────────────────────────────────────
-
-sealed class MovingLightNode : PointLight
-{
-    public float Phase { get; init; } = 0.0f;
+    public float Phase { get; init; }
 
     private float _time;
 
-    protected override void Update(float dt)
+    protected override void OnUpdate(in View view)
     {
-        _time += dt;
-        float x = MathF.Cos(_time + Phase) * 5.0f;
-        float y = MathF.Sin(_time + Phase) * 5.0f;
-        float z = MathF.Sin(_time * 0.5f) * 2.0f + 2.0f;
+        _time += view.DeltaTime;
+        float x = MathF.Cos(_time + Phase) * 5f;
+        float y = MathF.Sin(_time + Phase) * 5f;
+        float z = MathF.Sin(_time * 0.5f) * 2f + 2f;
         LocalTransform = LocalTransform with { Position = new Vector3(x, y, z) };
     }
 }

@@ -1,6 +1,6 @@
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/world/world.h>
+#include <kernel_engine/kernel/ecs/world.h>
 #include "../common/example_console_sink.h"
 #include <kernel_engine/kernel/render/render.h>
 #include <kernel_engine/kernel/window/window.h>

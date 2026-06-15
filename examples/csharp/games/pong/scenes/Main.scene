@@ -1,92 +1,65 @@
 [scene]
 name    = "Main"
-version = 1
+version = 2
+
+[[entity]]
+name = "Ambient"
+type = "AmbientLight"
+[entity.components.AmbientLight]
+Color = [1.0, 1.0, 1.0]
 
 [[entity]]
 name = "Camera"
-[entity.script]
-language = "csharp"
-type     = "Camera2D"
-[entity.properties]
-OrthographicSize = 5.0
+type = "Camera"
+[entity.transform]
+position = [0.0, 0.0, 10.0]
+[entity.components.camera]
+orthographic      = true
+orthographic_size = 5.0
+near_plane        = 0.1
+far_plane         = 100.0
 
+# Walls — each entity composes Wall.scene (scale [16, 0.5, 1] from subscene).
 [[entity]]
 name  = "WallTop"
 scene = "res://scenes/Wall.scene"
-[entity.properties]
-Position = [0.0, 4.5]
+[entity.transform]
+position = [0.0, 4.5, 0.0]
 
 [[entity]]
 name  = "WallBottom"
 scene = "res://scenes/Wall.scene"
-[entity.properties]
-Position = [0.0, -4.5]
+[entity.transform]
+position = [0.0, -4.5, 0.0]
 
+# Paddles — position and move_action come from here; type from Paddle.scene.
 [[entity]]
 name  = "PaddleLeft"
 scene = "res://scenes/Paddle.scene"
-[entity.properties]
-Position   = [-7.5, 0.0]
-MoveAction = "PaddleLeftMove"
+[entity.transform]
+position = [-7.5, 0.0, 0.0]
+[entity.components.paddle]
+move_action = "PaddleLeftMove"
 
 [[entity]]
 name  = "PaddleRight"
 scene = "res://scenes/Paddle.scene"
-[entity.properties]
-Position   = [7.5, 0.0]
-MoveAction = "PaddleRightMove"
+[entity.transform]
+position = [7.5, 0.0, 0.0]
+[entity.components.paddle]
+move_action = "PaddleRightMove"
 
 [[entity]]
 name  = "Ball"
 scene = "res://scenes/Ball.scene"
 
-# ── Scoreboard ────────────────────────────────────────────────────────────────
-# Owns 3 child Labels (Left / Right / Hint). Scoreboard.Start loads the font once and
-# applies it to all three; Ball.Start finds the Scoreboard by path and updates text via
-# SetScore / HideHint when the ball crosses the goal lines.
 [[entity]]
 name = "Scoreboard"
-[entity.script]
-language = "csharp"
-type     = "Pong.Scoreboard"
+type = "Pong.Scoreboard"
 [entity.properties]
-FontPath = "C:/Windows/Fonts/arial.ttf"
+FontPath = ""
 FontSize = 56.0
 
-# Walls at world y=±4.5 occupy ~14-41px from the top/bottom edges of the 960×540 window
-# (viewport is 10 world units tall). Label offsets stay clear of that band.
 [[entity]]
-name   = "Left"
-parent = "Scoreboard"
-[entity.script]
-language = "csharp"
-type     = "Label"
-[entity.properties]
-Text   = "0"
-Anchor = [0.30, 0.0]
-Offset = [0.0, 60.0]
-Color  = [0.95, 0.95, 0.95, 1.0]
-
-[[entity]]
-name   = "Right"
-parent = "Scoreboard"
-[entity.script]
-language = "csharp"
-type     = "Label"
-[entity.properties]
-Text   = "0"
-Anchor = [0.70, 0.0]
-Offset = [0.0, 60.0]
-Color  = [0.95, 0.95, 0.95, 1.0]
-
-[[entity]]
-name   = "Hint"
-parent = "Scoreboard"
-[entity.script]
-language = "csharp"
-type     = "Label"
-[entity.properties]
-Text   = ""
-Anchor = [0.5, 1.0]
-Offset = [0.0, -80.0]
-Color  = [0.7, 0.7, 0.7, 1.0]
+name = "PhysicsDriver"
+type = "Pong.PhysicsDriver"

@@ -1,0 +1,5 @@
+namespace KernelEngine.Kernel.Native;
+
+public partial struct ke_system_ctx
+{
+}

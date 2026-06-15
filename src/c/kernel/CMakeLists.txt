@@ -4,8 +4,8 @@ set(KERNEL_SOURCES
     src/common/hash.c
     src/logger/logger.c
     src/input/input.c
-    src/world/world.c
-    src/world/ecs.c
+    src/ecs/ecs.c
+    src/resource_cache/resource_cache.c
     src/common/thread_name.c
     src/engine/frame_packet.c
 )

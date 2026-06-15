@@ -3,7 +3,9 @@
 
 #include <kernel_engine/kernel/common/error.h>
 #include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/kernel/ecs/ecs.h>  // ke_component_id
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -15,7 +17,8 @@ extern "C" {
 // stack and that the vtable shape is workable. Full surface (resources,
 // extract phase, run-after/before deps, snapshot peek) lands in R2+.
 
-typedef struct ke_runtime ke_runtime;
+typedef struct ke_runtime    ke_runtime;
+typedef struct ke_system_ctx ke_system_ctx;
 
 typedef uint64_t ke_module_id;
 typedef uint64_t ke_system_id;
@@ -30,6 +33,18 @@ typedef enum ke_phase {
     KE_PHASE_SHUTDOWN     = 6,
 } ke_phase;
 
+// R/W access kind a system declares for each component it touches. Bitmask
+// so a single component can be marked READ|WRITE.
+typedef enum ke_access {
+    KE_ACCESS_READ  = 1 << 0,
+    KE_ACCESS_WRITE = 1 << 1,
+} ke_access;
+
+typedef struct ke_component_access {
+    ke_component_id cid;
+    ke_access       access;
+} ke_component_access;
+
 typedef struct ke_runtime_module_params {
     const char *name;
     void       *user_data;
@@ -40,8 +55,31 @@ typedef struct ke_runtime_module_params {
 typedef struct ke_runtime_system_params {
     const char *name;
     ke_phase    phase;
-    void       *user_data;
-    void      (*execute)(ke_runtime *runtime, void *user_data, float dt);
+
+    // Declared component access for parallel scheduling. The wave builder
+    // groups systems with disjoint access into the same parallel wave; the
+    // debug-mode ke_system_ctx checks every memory access against this list.
+    // Null/zero is equivalent to `exclusive = true` (no parallelism, but safe).
+    const ke_component_access *access_list;
+    uint32_t                   access_count;
+
+    // When true, system runs in its own wave and conflicts with everything.
+    // Use for opaque code paths (script bodies, editor commands, etc.) where
+    // declared access can't be enforced.
+    bool exclusive;
+
+    // Pin this system to a specific scheduler worker. 0 = any worker (default,
+    // load-balanced). 1..N = the system runs only on that worker. Used for
+    // thread-affine work (e.g. bgfx render calls pinned to a worker named
+    // "ke.render" at startup). The scheduler routes via
+    // ke_task_scheduler.dispatch_pinned when pinned_thread > 0.
+    uint32_t pinned_thread;
+
+    void *user_data;
+    // Execute callback. ctx is the ONLY door to component memory inside the
+    // system body — see kernel/runtime/system_ctx.h. Stack-allocated by the
+    // scheduler; valid only for this call.
+    void (*execute)(ke_system_ctx *ctx, void *user_data, float dt);
 } ke_runtime_system_params;
 
 typedef struct ke_runtime {

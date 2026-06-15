@@ -4,7 +4,8 @@ find_package(assimp CONFIG REQUIRED)
 # Integration Tests (DLL based)
 # These tests link against the full implementations and may interact with hardware/OS.
 add_executable(test_integration_cpp
-    test_framework_integration.cpp
+    # test_framework_integration.cpp  -- disabled in B0 (depends on legacy ke_world)
+    test_world.cpp
     test_bgfx_device_noop.cpp
     test_bgfx_device_full.cpp
     test_glfw_window_device.cpp
@@ -17,7 +18,7 @@ add_executable(test_integration_cpp
     test_miniaudio_audio.cpp
     test_box2d_physics.cpp
     test_stb_font.cpp
-    test_runtime_flecs.cpp
+    test_runtime.cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
@@ -52,8 +53,9 @@ target_link_libraries(test_integration_cpp PRIVATE
     ke_audio_miniaudio
     ke_physics_2d_box2d
     ke_text_stb_truetype
+    ke_runtime
+    ke_ecs_flecs
     ke_framework
-    ke_runtime_flecs
     ke_kernel
     GTest::gtest_main
     GTest::gmock

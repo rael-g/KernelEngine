@@ -1,42 +1,63 @@
 using System.Numerics;
 using KernelEngine.Framework;
+using KernelEngine.Kernel;
 
 namespace Pong;
 
 /// <summary>
-/// The left or right paddle. Constructed by SceneLoader (DI-injected
-/// <see cref="IInputActionReader{TEnum}"/>); the <see cref="MoveAction"/> is set per-instance
-/// from the scene file (<c>PaddleLeftMove</c> / <c>PaddleRightMove</c>).
+/// Kinematic paddle. Physics body + input-driven movement. The visual is a
+/// Sprite2D child declared in Paddle.scene; fixture comes from CollisionShape2D
+/// child; MoveAction comes from the ECS PaddleComponent applied by the scene loader.
 /// </summary>
-public sealed class Paddle(IInputActionReader<PongAction> actions) : KinematicBody2D
+public sealed class Paddle : Node, IPhysicsBody2D
 {
     const float HalfH = 0.9f;
     const float Speed = 7f;
 
-    public PongAction MoveAction { get; set; }
+    private readonly IPhysics2D                  _physics;
+    private readonly IInputActionMap<PongAction> _actions;
 
-    protected override void Start()
+    private BodyHandle2D _body;
+    public BodyHandle2D  PhysicsBody => _body;
+
+    private PongAction _moveAction;
+    private bool       _moveActionResolved;
+
+    public Paddle(IPhysics2D physics, IInputActionMap<PongAction> actions)
     {
-        // New scene format ([entity.properties] MoveAction = "PaddleLeftMove"): parse the string
-        // into the enum. Legacy format already set MoveAction via reflection; the bag has no key
-        // and the parse fallback keeps the existing value.
-        var actionName = Properties.GetString("MoveAction", MoveAction.ToString());
-        if (Enum.TryParse<PongAction>(actionName, ignoreCase: true, out var parsed))
-            MoveAction = parsed;
-        base.Start();
+        _physics = physics;
+        _actions = actions;
     }
 
-    protected override void Update(float dt)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
-        float vy = actions.GetActionAxis1D(MoveAction) * Speed;
+        var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
+        _body = _physics.CreateBody(BodyType2D.Kinematic, pos);
+    }
 
-        // Velocity clamp at the boundaries — refuse motion that would leave the play area
-        // (avoids the 1-frame overshoot of position-clamping with a fixed-step physics loop).
-        var pos = Position;
+    protected override void OnUnbind() => _physics.DestroyBody(_body);
+
+    protected override void OnUpdate(in View view)
+    {
+        if (!_moveActionResolved)
+        {
+            _moveActionResolved = true;
+            if (NodeWorld!.TryGetComponent<PaddleComponent>(Entity, "paddle", out var comp))
+                _moveAction = comp.MoveAction;
+        }
+
+        var state = _physics.GetBodyState(_body);
+        LocalTransform = LocalTransform with
+        {
+            Position = new Vector3(state.Position.X, state.Position.Y, 0f),
+        };
+
+        float vy = _actions.GetAxis1D(_moveAction, in view) * Speed;
+
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
-        if (vy > 0 && pos.Y >= maxY) vy = 0;
-        if (vy < 0 && pos.Y <= -maxY) vy = 0;
+        if (vy > 0 && state.Position.Y >=  maxY) vy = 0;
+        if (vy < 0 && state.Position.Y <= -maxY) vy = 0;
 
-        LinearVelocity = new Vector2(0, vy);
+        _physics.SetBodyVelocity(_body, new Vector2(0f, vy));
     }
 }

@@ -58,6 +58,28 @@ public static class TomlOptionsBinder
 
         if (underlying.IsInstanceOfType(raw)) return raw;
 
+        // TOML arrays (Tomlyn surfaces them as TomlArray) bind to C# arrays
+        // (T[]) and List<T> by converting each element through this same
+        // method. Anything else falls through to ChangeType below.
+        if (raw is TomlArray array)
+        {
+            if (underlying.IsArray)
+            {
+                var elemType = underlying.GetElementType()!;
+                var result   = Array.CreateInstance(elemType, array.Count);
+                for (int i = 0; i < array.Count; i++)
+                    result.SetValue(Convert(array[i], elemType), i);
+                return result;
+            }
+            if (underlying.IsGenericType && underlying.GetGenericTypeDefinition() == typeof(List<>))
+            {
+                var elemType = underlying.GetGenericArguments()[0];
+                var list     = (System.Collections.IList)Activator.CreateInstance(underlying)!;
+                foreach (var item in array) list.Add(Convert(item, elemType));
+                return list;
+            }
+        }
+
         // Tomlyn surfaces integers as long, floats as double, bools as bool, strings as string.
         // Map the common numeric coercions and enums; everything else falls through to Convert.
         if (underlying.IsEnum)

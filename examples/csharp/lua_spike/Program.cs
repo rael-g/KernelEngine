@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using KernelEngine.Kernel;
 using LuaSpike;
 

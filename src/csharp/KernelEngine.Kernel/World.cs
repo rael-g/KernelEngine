@@ -1,19 +1,24 @@
-using System.Diagnostics;
+using System.Runtime.InteropServices;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 
 /// <summary>
-/// The ECS simulation world — owns the registry, drives built-in systems (ScriptSystem,
-/// TransformSystem), and exposes the built-in component IDs.
+/// Managed wrapper over the native <c>ke_world</c> vtable. Exposes scene-level
+/// operations (loading, component apply registration) as managed APIs; does not
+/// re-expose the underlying ECS, runtime, or scene-tree native pointers.
 /// </summary>
-public sealed unsafe class World : IWorld
+public sealed unsafe class World : IDisposable
 {
-    private ke_world* _native;
-    private ke_ecs* _ecs;
-    private EcsRegistry? _registry;
-    private readonly List<ISystem> _systems = [];
+    private ke_world*      _native;
+    private ke_scene_tree* _ownedTree;
+    private SceneTree?     _sceneTree;
 
+    // Keeps managed apply delegate wrappers alive so the GC doesn't collect
+    // them while native code holds the function pointer.
+    private readonly List<GCHandle> _applyHandles = [];
+
+    /// <summary>Pointer to the native <c>ke_world</c> vtable. Valid until <see cref="Dispose"/>.</summary>
     public ke_world* Native
     {
         get
@@ -23,175 +28,118 @@ public sealed unsafe class World : IWorld
         }
     }
 
-    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
-    private TimeSpan _lastTime;
+    /// <summary>ECS registry borrowed by this world. Same instance as the DI-registered <see cref="IEcsRegistry"/>.</summary>
+    public IEcsRegistry Ecs { get; }
 
-    // ── Built-in component IDs (stable after construction) ────────────────────
+    /// <summary>Runtime borrowed by this world. Same instance as the DI-registered <see cref="IRuntime"/>.</summary>
+    public IRuntime Runtime { get; }
 
-    /// <summary>Component ID for <see cref="TransformComponent"/>.</summary>
-    public uint TransformComponentId { get; private set; }
-
-    /// <summary>Component ID for <see cref="HierarchyComponent"/>.</summary>
-    public uint HierarchyComponentId { get; private set; }
-
-    /// <summary>Component ID for the name component.</summary>
-    public uint NameComponentId { get; private set; }
-
-    /// <summary>Component ID for <see cref="ScriptComponent"/>.</summary>
-    public uint ScriptComponentId { get; private set; }
-
-    private readonly Dictionary<Type, uint> _componentIds = [];
-
-    /// <inheritdoc/>
-    public uint GetOrRegisterComponentId<T>(string name) where T : unmanaged
+    /// <summary>
+    /// Creates a <see cref="World"/> wrapper that also owns <paramref name="ownedTree"/>,
+    /// destroying it on <see cref="Dispose"/> after the world is destroyed.
+    /// </summary>
+    public World(ke_world* native, ke_scene_tree* ownedTree, IEcsRegistry ecs, IRuntime runtime)
     {
-        if (_componentIds.TryGetValue(typeof(T), out var id)) return id;
-        id = Registry.RegisterComponent<T>(name);
-        _componentIds[typeof(T)] = id;
-        return id;
-    }
-
-    // ── Construction ──────────────────────────────────────────────────────────
-
-    /// <summary>Creates a world bound to the given allocator.</summary>
-    public World(Allocator allocator)
-    {
-        var parameters = new ke_world_params
-        {
-            allocator = allocator.Native,
-        };
-        ke_world* world;
-        KernelException.ThrowIfFailed(NativeMethods.world_create(&parameters, &world).ToManaged());
-        _native = world;
-
-        TransformComponentId = _native->transform_id(_native);
-        HierarchyComponentId = _native->hierarchy_id(_native);
-        NameComponentId      = _native->name_id(_native);
-        ScriptComponentId    = _native->script_id(_native);
-
-        // Wrap the world's internal ke_ecs_registry* in the ke_ecs vtable (S5 round-trip).
-        ke_ecs* ecs;
-        KernelException.ThrowIfFailed(
-            NativeMethods.ecs_sparse_set_create(
-                _native->get_registry(_native), allocator.Native, &ecs).ToManaged());
-        _ecs = ecs;
-    }
-
-    // ── Public properties ─────────────────────────────────────────────────────
-
-    /// <summary>The ECS registry for this world.</summary>
-    public EcsRegistry Registry => _registry ??= new EcsRegistry(_ecs);
-
-    /// <summary>Interface view of the registry (Framework/user code path).</summary>
-    IEcsRegistry IWorld.Registry => Registry;
-
-    /// <summary>Entity ID of the active camera. <see cref="CameraRenderSystem"/> reads this each frame.</summary>
-    public ulong ActiveCamera { get; set; }
-
-    // ── Systems ───────────────────────────────────────────────────────────────
-
-    private readonly SystemScheduler _scheduler = new();
-    private bool _schedulerDirty = true;
-    private TaskScheduler? _taskScheduler;
-
-    /// <summary>The task scheduler used by this world for parallel execution.</summary>
-    public TaskScheduler? Scheduler
-    {
-        get
-        {
-            if (_taskScheduler == null && _native != null)
-            {
-                var nativeSched = _native->get_task_scheduler(_native);
-                if (nativeSched != null)
-                    _taskScheduler = new TaskScheduler(nativeSched);
-            }
-            return _taskScheduler;
-        }
-    }
-
-    public void AddSystem(ISystem system)
-    {
-        _systems.Add(system);
-        _schedulerDirty = true;
-    }
-
-    /// <inheritdoc/>
-    public void RegisterScript(
-        ulong entity,
-        Action? onAwake      = null,
-        Action? onStart      = null,
-        Action<float>? onUpdate     = null,
-        Action<float>? onLateUpdate = null,
-        Action? onDestroy    = null) =>
-        ScriptBridge.Register(Registry, ScriptComponentId, entity,
-            onAwake, onStart, onUpdate, onLateUpdate, onDestroy);
-
-    /// <inheritdoc/>
-    public void UnregisterScript(ulong entity) => ScriptBridge.Unregister(entity);
-
-    /// <summary>Registers a native system descriptor into the world.</summary>
-    public void AddSystem(ke_system_params desc)
-    {
-        KernelException.ThrowIfFailed(_native->add_system(_native, &desc).ToManaged(), "add_system");
+        _native    = native;
+        _ownedTree = ownedTree;
+        Ecs        = ecs;
+        Runtime    = runtime;
     }
 
     /// <summary>
-    /// Advances the simulation by one frame.
-    /// Runs the C ScriptSystem + TransformSystem, then all registered <see cref="ISystem"/>s in parallel waves.
+    /// Managed wrapper over the scene tree embedded in this world. Created on
+    /// first access and cached for the lifetime of the world.
     /// </summary>
-    public Result Update(IFramePacket? packet = null, IInputReader? input = null)
+    public SceneTree SceneTree
     {
-        KernelThread.AssertCurrent("ke.sim");
-        InputContext.Set(input);
-        try
+        get
         {
-            var now = _stopwatch.Elapsed;
-            var dt = (float)(now - _lastTime).TotalSeconds;
-            _lastTime = now;
-
-            var frame = new ke_frame { delta_time = dt };
-            var res = Native->update(Native, &frame).ToManaged();
-            if (res != KernelResult.Ok) return res;
-
-            // Lazily wrap the native task scheduler (null if none is configured — RunAsync falls back to sequential).
-            if (_taskScheduler == null)
-            {
-                var nativeSched = _native->get_task_scheduler(_native);
-                if (nativeSched != null)
-                    _taskScheduler = new TaskScheduler(nativeSched);
-            }
-
-            if (_schedulerDirty)
-            {
-                _scheduler.Build(_systems);
-                _schedulerDirty = false;
-            }
-
-            // Run systems in waves (Sim thread waits for parallel workers to finish wave by wave)
-            _scheduler.RunAsync(this, dt, packet, _taskScheduler!, input).GetAwaiter().GetResult();
-
-            return KernelResult.Ok;
-        }
-        finally
-        {
-            InputContext.Set(null);
+            var native = Native;
+            return _sceneTree ??= new SceneTree(native->scene_tree(native));
         }
     }
 
-    // ── Disposal ──────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Registers a managed apply callback for the given component id. The callback
+    /// is invoked by the native scene loader whenever an
+    /// <c>[entity.components.X]</c> block maps to <paramref name="cid"/>.
+    /// </summary>
+    /// <typeparam name="T">The unmanaged component struct the callback populates.</typeparam>
+    /// <param name="cid">Component id returned by <c>IEcsRegistry.RegisterComponent</c>.</param>
+    /// <param name="callback">Managed callback; must not be stored across frames.</param>
+    public void RegisterComponentApply<T>(uint cid, ComponentApplyCallback<T> callback) where T : unmanaged
+    {
+        var bridge = new ApplyBridge<T>(callback);
+        var del    = new ApplyNativeFn(bridge.Invoke);
+        _applyHandles.Add(GCHandle.Alloc(del));
 
+        var fnPtr = (delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>)
+            Marshal.GetFunctionPointerForDelegate(del).ToPointer();
+
+        var native = Native;
+        KernelException.ThrowIfFailed(
+            native->register_component_apply(native, cid, fnPtr).ToManaged());
+    }
+
+    private uint _scenePropertiesCid;
+
+    /// <summary>
+    /// Reads the <c>ke_scene_properties</c> component set by the scene loader for
+    /// <paramref name="entity"/>. Returns false when the entity has no properties block.
+    /// </summary>
+    public unsafe bool TryGetProperties(ulong entity, out VariantReader reader)
+    {
+        if (_scenePropertiesCid == 0 &&
+            !Ecs.TryLookupComponent("scene_properties", out _scenePropertiesCid))
+        {
+            reader = default;
+            return false;
+        }
+        var sp = Ecs.GetComponent<ke_scene_properties>(entity, _scenePropertiesCid);
+        if (sp.IsEmpty) { reader = default; return false; }
+        reader = new VariantReader(sp[0].entries, sp[0].count);
+        return true;
+    }
+
+    /// <inheritdoc cref="IDisposable.Dispose"/>
     public void Dispose()
     {
-        if (_native != null)
+        if (_native is not null)
         {
             _native->destroy(_native);
             _native = null;
-            _registry = null;
         }
-        if (_ecs != null)
+        if (_ownedTree is not null)
         {
-            _ecs->destroy(_ecs);
-            _ecs = null;
+            _ownedTree->destroy(_ownedTree);
+            _ownedTree = null;
+        }
+        foreach (var h in _applyHandles)
+            if (h.IsAllocated) h.Free();
+        _applyHandles.Clear();
+    }
+
+    // Non-generic delegate so Marshal.GetFunctionPointerForDelegate accepts it.
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private unsafe delegate void ApplyNativeFn(void* comp, ke_variant_table_entry* entries, uint count);
+
+    /// <summary>
+    /// Per-type bridge that holds the managed callback and exposes an instance
+    /// method matching <see cref="ApplyNativeFn"/> so
+    /// <see cref="Marshal.GetFunctionPointerForDelegate"/> can produce a stable
+    /// native thunk without requiring <c>[UnmanagedCallersOnly]</c> on generic code.
+    /// </summary>
+    private sealed class ApplyBridge<T> where T : unmanaged
+    {
+        private readonly ComponentApplyCallback<T> _callback;
+
+        internal ApplyBridge(ComponentApplyCallback<T> callback) => _callback = callback;
+
+        internal unsafe void Invoke(void* comp, ke_variant_table_entry* entries, uint count)
+        {
+            var reader    = new VariantReader(entries, count);
+            ref var typed = ref *(T*)comp;
+            _callback(ref typed, in reader);
         }
     }
 }

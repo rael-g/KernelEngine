@@ -1,59 +1,83 @@
+﻿using System.Diagnostics;
 using System.Numerics;
+using KernelEngine.Asset.Assimp;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework;
-using KernelEngine.Window.Glfw;
-using KernelEngine.Asset.Assimp;
+using KernelEngine.Runtime;
 using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// 12_asset_loading â€” loads `assets/Box.gltf` via the Assimp plugin and uploads
+// its meshes/materials/textures through tree.AddModel(...) (which is the
+// new-Framework equivalent of the legacy Tree.Add(model, ...) one-liner).
+
+string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 12 Asset Loading")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"))
-    .AddEnkiTaskScheduler()
-    .AddAssimpAssetLoader();
-
-using var app = new Application();
-
-app.OnReady = async (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 12_asset_loading");
-    Console.WriteLine("[KernelEngine] Features: assimp_loader, model_to_scene");
-
-    // Camera
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 5f) };
-
-    // Lights
-    app.Tree.AddNode(
-        new DirectionalLight { Color = Vector3.One, Intensity = 3.0f },
-        "Sun").LocalTransform = new Transform { Position = new Vector3(5f, 10f, 5f) };
-
-    // One-line load + add via the Assets façade (cache + dedup) and tree.Add() (uploads textures
-    // / materials / meshes + creates MeshNodes per sub-mesh under a root). Replaces the previous
-    // 3-step manual loop. Zero raw handles in game code.
-    try {
-        string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf");
-        Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
-        var model = await app.Assets!.LoadModelAsync(modelPath);
-        Console.WriteLine($"[KernelEngine] Model loaded: {model.Meshes.Count} sub-meshes");
-        app.Tree.Add(model, name: "Box");
-    }
-    catch (Exception ex)
+    .AddAssimpAssetLoader()
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 12 Asset Loading"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.1f, 0.1f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new ShadowModule())
+    .Add<IRuntimeModule>(new PostProcessModule(tonemapping: true))
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
     {
-        Console.WriteLine($"[KernelEngine] ERROR loading model: {ex.Message}");
-    }
-};
+        var renderer = sp.GetRequiredService<IRenderer>();
+        Console.WriteLine("[KernelEngine] Example: 12_asset_loading");
+        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Features: assimp_loader, model_to_scene");
 
-app.OnUpdate = (tree, input) =>
+        tree.AddNode(new AmbientLight { Color = new(0.05f, 0.05f, 0.05f) }, "Ambient");
+
+        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 5f) };
+
+        tree.AddNode(new DirectionalLight
+        {
+            Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)),
+            Color     = Vector3.One,
+            Intensity = 3f,
+        }, "Sun");
+
+        Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
+        var loader = sp.GetRequiredService<IAssetLoader>();
+        using var model = loader.LoadModel(modelPath);
+        Console.WriteLine($"[KernelEngine] Model loaded: {model.Meshes.Count} sub-meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
+        var nodes = tree.AddModel(model, renderer, rootName: "Box");
+        Console.WriteLine($"[KernelEngine] Added {nodes.Count} mesh nodes to the scene.");
+    }));
+
+using var sp = services.BuildServiceProvider();
+var window  = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
+
+runtime.LoadModules(sp);
+
+Console.WriteLine("[12_asset_loading] Loop running. Close the window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
+
+while (!window.ShouldClose())
 {
-    tree.ClearColor(0.1f, 0.1f, 0.15f, 1f);
-    tree.SetAmbientLight(0.05f, 0.05f, 0.05f);
-};
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
+}
 
-app.Run(services);
+runtime.UnloadModules(sp);
+
+Console.WriteLine("[12_asset_loading] Exited cleanly.");

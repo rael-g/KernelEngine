@@ -1,75 +1,80 @@
+﻿using System.Numerics;
 using KernelEngine.Framework;
+using KernelEngine.Kernel;
 
 namespace Pong;
 
 /// <summary>
-/// On-screen scoreboard. Owns score counters + hint <see cref="Label"/> children declared in
-/// <c>scenes/Main.scene</c>, loads the font once via <see cref="Assets"/>, applies it to each
-/// child label, and exposes the gameplay-facing API (<see cref="RecordGoal"/>, <see cref="ShowHint"/>).
-/// Score state lives here, not on <see cref="Ball"/> — multi-ball variants reuse this same scoreboard.
+/// On-screen scoreboard. Owns three Label children + score counters. The
+/// font is loaded once in <see cref="OnBind"/> (which runs on the render
+/// worker) and shared across the three labels.
 /// </summary>
 public sealed class Scoreboard : Node
 {
-    private readonly Assets _assets;
+    private readonly IFontLoader _fontLoader;
+    private readonly IRenderer   _renderer;
 
-    public Scoreboard(Assets assets) { _assets = assets; }
-
-    /// <summary>Path to the TTF/OTF file. Empty = no font load (labels stay invisible).</summary>
-    public string FontPath { get; set; } = "";
-    public float  FontSize { get; set; } = 48f;
-
+    private Font?  _font;
     private Label? _left;
     private Label? _right;
     private Label? _hint;
 
-    /// <summary>Goals scored by the left side. Read-only to consumers.</summary>
+    /// <summary>Set by SceneLoader from <c>[entity.properties] FontPath</c>.</summary>
+    public string FontPath { get; set; } = "";
+    public float  FontSize { get; set; } = 48f;
+
     public int Left  { get; private set; }
-    /// <summary>Goals scored by the right side.</summary>
     public int Right { get; private set; }
-    /// <summary>Total goals (used by <see cref="Ball"/> to alternate the launch direction).</summary>
     public int Total => Left + Right;
 
-    protected override async void Start()
+    public Scoreboard(IFontLoader fontLoader, IRenderer renderer)
     {
-        base.Start();
-
-        // New scene format ([entity.properties] FontPath/FontSize): pull from the bag with the
-        // current field as fallback so the legacy reflection-set path still works.
-        FontPath = Properties.GetString("FontPath", FontPath);
-        FontSize = Properties.GetFloat ("FontSize", FontSize);
-
-        try
-        {
-            _left  = GetNode<Label>("Left");
-            _right = GetNode<Label>("Right");
-            _hint  = GetNode<Label>("Hint");
-
-            if (!string.IsNullOrEmpty(FontPath))
-            {
-                var font = await _assets.LoadFontAsync(FontPath, FontSize);
-                if (_left  != null) _left.Font  = font;
-                if (_right != null) _right.Font = font;
-                if (_hint  != null) _hint.Font  = font;
-            }
-        }
-        catch (Exception ex)
-        {
-            // async void swallows exceptions silently into the scheduler's state machine;
-            // surface to stderr so a missing font / bad path is debuggable instead of
-            // 'labels just don't render and I have no idea why'.
-            Console.Error.WriteLine($"Scoreboard.Start failed: {ex}");
-        }
+        _fontLoader = fontLoader;
+        _renderer   = renderer;
     }
 
-    /// <summary>Records a goal for one side, updates the displayed counter, and returns the new total.</summary>
-    public int RecordGoal(bool leftSide)
+    protected override void OnBind(NodeWorld nodeWorld)
     {
-        if (leftSide) Left++; else Right++;
-        if (_left  != null) _left.Text  = Left.ToString();
-        if (_right != null) _right.Text = Right.ToString();
-        return Total;
+        var path = string.IsNullOrEmpty(FontPath)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf")
+            : FontPath;
+        _font = Font.Load(_renderer, _fontLoader, path, pixelSize: FontSize);
+
+        _left  = nodeWorld.AddNode(new Label
+        {
+            Text   = "0",
+            Font   = _font,
+            Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
+            Anchor = new Vector2(0.30f, 0f),
+            Offset = new Vector2(0f, 60f),
+        }, "ScoreLeft", parent: this);
+
+        _right = nodeWorld.AddNode(new Label
+        {
+            Text   = "0",
+            Font   = _font,
+            Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
+            Anchor = new Vector2(0.70f, 0f),
+            Offset = new Vector2(0f, 60f),
+        }, "ScoreRight", parent: this);
+
+        _hint  = nodeWorld.AddNode(new Label
+        {
+            Text   = "",
+            Font   = _font,
+            Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
+            Anchor = new Vector2(0.5f, 1f),
+            Offset = new Vector2(0f, -80f),
+        }, "ScoreHint", parent: this);
     }
 
-    public void ShowHint(string text) { if (_hint != null) _hint.Text = text; }
-    public void HideHint()            { if (_hint != null) _hint.Text = ""; }
+    public void RecordGoal(bool leftScored)
+    {
+        if (leftScored) Left++; else Right++;
+        if (_left  is not null) _left.Text  = Left.ToString();
+        if (_right is not null) _right.Text = Right.ToString();
+    }
+
+    public void ShowHint(string text) { if (_hint is not null) _hint.Text = text; }
+    public void HideHint()             { if (_hint is not null) _hint.Text = ""; }
 }

@@ -1,41 +1,32 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
-using KernelEngine.Runtime.Flecs;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
-// R3-A: minimal proof that IRuntime hosts a real OS window + frame loop.
-// No renderer, no scene tree, no resources — just window pump driven by a
-// runtime system and timing driven by the host. Open question this answers:
-// can a runtime (flecs-backed) coexist with the existing GLFW plugin without
-// going through Application.cs? Answer below.
+// Uniform Add<> pattern. Infrastructure (allocator/logger/ecs/scheduler/runtime)
+// + modules (window/render/etc.) go through one verb. Headless variants drop
+// modules they don't need; runtime never knows what's there.
 
 var services = new ServiceCollection()
     .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(800, 600, "KernelEngine — 00 Runtime Minimal");
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "KernelEngine — 00 Runtime Minimal"));
 
 using var sp = services.BuildServiceProvider();
-var window    = sp.GetRequiredService<IWindow>();
-var allocator = sp.GetRequiredService<Allocator>();
+var window   = sp.GetRequiredService<IWindow>();
+var runtime  = sp.GetRequiredService<IRuntime>();
 
-using var runtime = new FlecsRuntime(allocator);
+runtime.LoadModules(sp);
 
-// WindowModule — registers the OS poll in PreUpdate so input + close events
-// reach the host before any Update system runs. Wraps the existing GLFW plugin;
-// no rewrite needed.
-runtime.RegisterModule("Window", rt =>
-{
-    rt.RegisterSystem("PollEvents", RuntimePhase.PreUpdate, (_, _) =>
-    {
-        window.PollEvents();
-    });
-});
-
-// FpsCounter — host-side system registered directly (no module). Demonstrates
-// the runtime can drive arbitrary per-frame work; FPS prints to console every
-// 1s so the user sees the loop is alive without a renderer.
+// FpsCounter — host-side system registered directly. Demonstrates that any
+// caller can talk to the runtime; modules aren't the only way.
 var sw           = Stopwatch.StartNew();
 double lastPrint = 0;
 long   ticks     = 0;
@@ -53,9 +44,6 @@ runtime.RegisterSystem("FpsCounter", RuntimePhase.Update, (_, _) =>
 
 Console.WriteLine("[00_runtime_minimal] Loop running. Close the window to exit.");
 
-// Frame loop. The runtime owns its tick; the host owns the dt and the
-// while-should-not-close condition. R5+ will move the loop ownership inside
-// runtime.Run(cancel_token) once shutdown semantics get fleshed out.
 double prev = sw.Elapsed.TotalSeconds;
 while (!window.ShouldClose())
 {

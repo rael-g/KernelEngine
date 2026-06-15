@@ -11,7 +11,7 @@
   <Import Project="../NativeDependencies.targets" />
 
   <ItemGroup>
-    <ProjectReference Include="..\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+    <ProjectReference Include="..\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
     <ProjectReference Include="..\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
   </ItemGroup>
 

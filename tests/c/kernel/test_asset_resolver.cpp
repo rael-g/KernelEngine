@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/framework/asset_resolver.h>
+#include <kernel_engine/kernel/asset/asset_resolver.h>
+#include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/kernel/asset/image_loader.h>
 #include <kernel_engine/kernel/asset/mesh_data.h>
 #include <kernel_engine/kernel/context/allocator.h>
@@ -79,8 +80,8 @@ protected:
         ASSERT_NE(alloc, nullptr);
         InitMockLoader(loader);
         project_root = fs::temp_directory_path();
-        ASSERT_EQ(ke_asset_resolver_create(alloc, &loader.api, project_root.string().c_str(),
-                                            &resolver),
+        ASSERT_EQ(ke_asset_resolver_create(alloc, &loader.api, nullptr,
+                                            project_root.string().c_str(), &resolver),
                   KE_OK);
     }
 
@@ -126,7 +127,7 @@ TEST_F(AssetResolverTest, ResolveTexture_MissingFile_ReturnsNotFound)
 TEST_F(AssetResolverTest, ResolveTexture_NoLoader_ReturnsInvalidArgument)
 {
     ke_asset_resolver *r = nullptr;
-    ASSERT_EQ(ke_asset_resolver_create(alloc, nullptr, nullptr, &r), KE_OK);
+    ASSERT_EQ(ke_asset_resolver_create(alloc, nullptr, nullptr, nullptr, &r), KE_OK);
     ke_texture_data *data = nullptr;
     EXPECT_EQ(r->resolve_texture(r, "anything.png", &data), KE_ERROR_INVALID_ARGUMENT);
     r->destroy(r);
@@ -178,8 +179,8 @@ TEST_F(AssetResolverTest, ResolveMaterial_MalformedFile_ReturnsError)
 TEST_F(AssetResolverTest, Create_NullArgs_ReturnsInvalidArgument)
 {
     ke_asset_resolver *r = nullptr;
-    EXPECT_EQ(ke_asset_resolver_create(nullptr, &loader.api, nullptr, &r), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_asset_resolver_create(alloc, &loader.api, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_asset_resolver_create(nullptr, &loader.api, nullptr, nullptr, &r), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_asset_resolver_create(alloc, &loader.api, nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
 
 TEST_F(AssetResolverTest, ResolveTexture_NullArgs_ReturnsInvalidArgument)
@@ -232,7 +233,7 @@ TEST_F(AssetResolverTest, ResolveMesh_ExternalFile_ReturnsNotFound)
 TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
 {
     ke_asset_resolver *r = nullptr;
-    ke_asset_resolver_create(alloc, &loader.api, nullptr, &r);
+    ke_asset_resolver_create(alloc, &loader.api, nullptr, nullptr, &r);
     
     auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
     ke_material_spec spec{};

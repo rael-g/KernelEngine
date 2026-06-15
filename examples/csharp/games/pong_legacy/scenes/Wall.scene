@@ -1,0 +1,31 @@
+[scene]
+name    = "Wall"
+version = 1
+
+[[entity]]
+name = "Root"
+[entity.script]
+language = "csharp"
+type     = "StaticBody2D"
+
+[[entity]]
+name   = "Shape"
+parent = "Root"
+[entity.script]
+language = "csharp"
+type     = "CollisionShape2D"
+[entity.properties]
+ShapeKind        = "rectangle"
+ShapeHalfExtents = [8.0, 0.25]
+Restitution      = 1.0
+
+[[entity]]
+name   = "Visual"
+parent = "Root"
+[entity.script]
+language = "csharp"
+type     = "Sprite2D"
+[entity.properties]
+Mesh              = "res://primitives/quad"
+MaterialBaseColor = [0.15, 0.15, 0.2, 1.0]
+Size              = [16.0, 0.5]

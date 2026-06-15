@@ -1,79 +1,95 @@
+﻿using System.Diagnostics;
 using System.Numerics;
-using System.Diagnostics;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework;
+using KernelEngine.Runtime;
+using KernelEngine.TaskScheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// 01_window_scene â€” a single orange quad spinning on the screen under a fixed
+// directional light. Smallest possible scene that exercises window + renderer
+// + framework + a scripted node behavior.
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 01 Window/Tree")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"));
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 01 Window/Tree"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.15f, 0.15f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new PostProcessModule(tonemapping: true))
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    {
+        var renderer = sp.GetRequiredService<IRenderer>();
+        Console.WriteLine("[KernelEngine] Example: 01_window_scene");
+        Console.WriteLine("[KernelEngine] Features: window, renderer, single_quad, spinner_behavior");
 
-using var app = new Application();
-
-app.OnReady = (resources) =>
-{
-    // Directional light coming from upper-right-front
-    app.Tree.AddNode(
-        new DirectionalLight
+        tree.AddNode(new DirectionalLight
         {
-            Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)),
+            Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
             Color     = Vector3.One,
             Intensity = 2f,
-        },
-        "Sun");
+        }, "Sun");
 
-    // Camera positioned 5 units back, looking forward along -Z
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "Camera");
-    cam.LocalTransform = cam.LocalTransform with
-    {
-        Position = new Vector3(0f, 0f, 5f),
-    };
+        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
 
-    var orangeMat = resources.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
+        var orangeMat = renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f)).Value;
+        tree.AddNode(new SpinningQuad { MaterialHandle = orangeMat }, "Spinner");
+    }));
 
-    var spinner = app.Tree.AddNode(new SpinnerNode(), "Spinner");
-    app.Tree.AddNode(
-        new MeshRenderer { MaterialHandle = orangeMat },
-        "Quad",
-        parent: spinner);
-    return Task.CompletedTask;
-};
+using var sp = services.BuildServiceProvider();
+var window  = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
-Stopwatch sw = Stopwatch.StartNew();
+runtime.LoadModules(sp);
+
+Console.WriteLine("[01_window_scene] Loop running. Close the window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
 int frameCount = 0;
-app.OnUpdate = (tree, input) =>
+double fpsWindowStart = 0;
+
+while (!window.ShouldClose())
 {
-    tree.SetTonemapping(true, exposure: 1.0f, gamma: 2.2f);
-    tree.ClearColor(0.15f, 0.15f, 0.15f, 1f);
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
 
     frameCount++;
-    if (sw.Elapsed.TotalSeconds >= 5.0)
+    if (now - fpsWindowStart >= 5.0)
     {
-        double fps = frameCount / sw.Elapsed.TotalSeconds;
+        double fps = frameCount / (now - fpsWindowStart);
         Console.WriteLine($"[Example 01] FPS: {fps:F2}");
-        frameCount = 0;
-        sw.Restart();
+        frameCount     = 0;
+        fpsWindowStart = now;
     }
-};
+}
 
-app.Run(services);
+runtime.UnloadModules(sp);
 
-// ── Scripted spinner node ──────────────────────────────────────────────────────
+Console.WriteLine("[01_window_scene] Exited cleanly.");
 
-sealed class SpinnerNode : Node
+// â”€â”€ A MeshRenderer that spins around Y at 90 deg/s â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+sealed class SpinningQuad : MeshRenderer
 {
     private float _angle;
 
-    protected override void Update(float dt)
+    protected override void OnUpdate(in View view)
     {
-        _angle += 90f * dt;
+        _angle += 90f * view.DeltaTime;
         if (_angle >= 360f) _angle -= 360f;
 
         LocalTransform = LocalTransform with

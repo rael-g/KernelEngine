@@ -1,143 +1,154 @@
+﻿using System.Diagnostics;
 using System.Numerics;
+using KernelEngine.Asset.Assimp;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
-using KernelEngine.Framework;
-using KernelEngine.Window.Glfw;
-using KernelEngine.Asset.Assimp;
+using KernelEngine.Runtime;
 using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
+// 13_full_scene â€” every stabilized feature in one scene: ground plane,
+// loaded model (Box.gltf), directional + ambient + 8 orbiting point lights,
+// shadows, ACES tonemapping, bloom. SSAO is requested but stays a no-op
+// (Kanban Z3 â€” bgfx SSAO path is empty).
+
+string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
+
 var services = new ServiceCollection()
-    .AddKernel().AddNativeFramework()
+    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
-    .AddGlfwWindow(1280, 720, "KernelEngine — 13 Full Tree Demo")
-    .AddBgfxRenderer(Path.Combine(AppContext.BaseDirectory, "shaders"))
-    .AddEnkiTaskScheduler()
-    .AddAssimpAssetLoader();
+    .AddAssimpAssetLoader()
+    .Add<IEcs, FlecsEcs>()
+    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IRuntime, Runtime>()
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 13 Full Scene"))
+    .Add<IRuntimeModule>(new BgfxRenderModule(
+        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
+        vsync:      true,
+        clearColor: (0.05f, 0.05f, 0.08f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new ShadowModule(resolution: 1024, frustumSize: 30f, farPlane: 60f))
+    .Add<IRuntimeModule>(new PostProcessModule(
+        tonemapping: true, tonemappingExposure: 1.0f, tonemappingGamma: 2.2f,
+        bloom:       true, bloomThreshold:      0.9f, bloomIntensity:   1.0f,
+        ssao:        true, ssaoRadius:          0.5f, ssaoBias:         0.025f, ssaoStrength: 1.5f))
+    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    {
+        var renderer = sp.GetRequiredService<IRenderer>();
+        Console.WriteLine("[KernelEngine] Example: 13_full_scene");
+        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Features: shadows, hdr, bloom, ssao*, model_loading, 8_orbiting_point_lights");
 
-using var app = new Application();
+        tree.AddNode(new AmbientLight { Color = new(0.02f, 0.02f, 0.02f) }, "Ambient");
 
-app.OnReady = async (resources) =>
-{
-    Console.WriteLine("[KernelEngine] Example: 13_full_scene");
-    Console.WriteLine("[KernelEngine] Features: all_stabilized_systems, shadows, hdr, bloom, ssao, many_lights, assimp");
+        var cam     = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "MainCamera");
+        var eye     = new Vector3(8f, 8f, 15f);
+        var target  = new Vector3(0f, 2f, 0f);
+        var lookRot = Quaternion.CreateFromRotationMatrix(
+            Matrix4x4.CreateWorld(eye, Vector3.Normalize(target - eye), Vector3.UnitY));
+        cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
 
-    // Camera. No Camera.LookAt helper yet (framework gap — Kanban OBS.5); the camera looks
-    // down its local -Z, so orient it manually toward the Tree center for a 3/4 framing.
-    var cam = app.Tree.AddNode(
-        new Camera { Fov = 60f, Near = 0.1f, Far = 1000f },
-        "MainCamera");
-    var eye = new Vector3(8f, 8f, 15f);
-    var lookRot = Quaternion.CreateFromRotationMatrix(
-        Matrix4x4.CreateWorld(eye, Vector3.Normalize(new Vector3(0f, 2f, 0f) - eye), Vector3.UnitY));
-    cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
-
-    // Static directional light. Direction is the vector FROM the lit surface TOWARD the light
-    // source; a directional light ignores Position, so this must be set for shading + shadows.
-    var sun = app.Tree.AddNode(
-        new DirectionalLight {
+        tree.AddNode(new DirectionalLight
+        {
             Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
-            Color = new Vector3(1f, 0.95f, 0.8f),
-            Intensity = 4.0f
-        },
-        "Sun");
+            Color     = new Vector3(1f, 0.95f, 0.8f),
+            Intensity = 4f,
+        }, "Sun");
 
-    // Ground plane
-    var floorMat = await resources.CreateMaterialAsync(new Vector4(0.2f, 0.2f, 0.2f, 1f), metallic: 0.0f, roughness: 0.9f);
-    var floor = app.Tree.AddNode(new MeshRenderer { MaterialHandle = floorMat }, "Floor");
-    // Default mesh (handle 0) is a quad in the XY plane (normal +Z). Rotate -90° about X to lay it
-    // flat as a ground plane (normal +Y); local Y becomes world depth, so scale X and Y for size.
-    floor.LocalTransform = floor.LocalTransform with
-    {
-        Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2f),
-        Scale = new Vector3(50f, 50f, 1f)
-    };
+        // Floor: a Plane primitive (XZ, normal +Y) scaled out for a 50-unit ground.
+        var planeMesh = MeshPrimitives.Plane(renderer);
+        var floorMat  = renderer.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f).Value;
+        var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 1f, 50f) };
 
-    // Load model: same raw 3-step pattern as example 12 (no engine helper — see Kanban [B5.6]).
-    var loader = app.Services.GetRequiredService<IAssetLoader>();
-    try {
-        string modelPath = Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf");
-        using var modelData = await loader.LoadModelAsync(modelPath);
-
-        var gpuTextures = new TextureHandle[modelData.Textures.Count];
-        for (int i = 0; i < modelData.Textures.Count; i++)
+        try
         {
-            var tex = modelData.Textures[i];
-            gpuTextures[i] = await resources.CreateTextureAsync(tex.Width, tex.Height, tex.Pixels.ToArray());
+            var loader = sp.GetRequiredService<IAssetLoader>();
+            Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
+            using var model = loader.LoadModel(modelPath);
+            Console.WriteLine($"[KernelEngine] Model: {model.Meshes.Count} meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
+            var meshNodes = tree.AddModel(model, renderer, rootName: "CenterBox");
+
+            // Lift + scale the model. Flat hierarchy for now â€” apply per-node.
+            for (int i = 0; i < meshNodes.Count; i++)
+            {
+                meshNodes[i].LocalTransform = meshNodes[i].LocalTransform with
+                {
+                    Position = new Vector3(0f, 2f, 0f),
+                    Scale    = new Vector3(2f),
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[KernelEngine] WARN: model load failed: {ex.Message}");
         }
 
-        var gpuMaterials = new MaterialHandle[modelData.Materials.Count];
-        for (int i = 0; i < modelData.Materials.Count; i++)
+        for (int i = 0; i < 8; i++)
         {
-            var mat = modelData.Materials[i];
-            var albedo = mat.AlbedoTextureIndex >= 0 ? gpuTextures[mat.AlbedoTextureIndex] : default;
-            var normal = mat.NormalMapTextureIndex >= 0 ? gpuTextures[mat.NormalMapTextureIndex] : default;
-            gpuMaterials[i] = await resources.CreateMaterialAsync(
-                mat.BaseColor, textureHandle: albedo,
-                metallic: mat.Metallic, roughness: mat.Roughness,
-                normalMapHandle: normal);
-        }
-
-        var modelRoot = app.Tree.AddNode("CenterBox");
-        for (int i = 0; i < modelData.Meshes.Count; i++)
-        {
-            var meshData = modelData.Meshes[i];
-            var gpuMesh = await resources.CreateMeshAsync(
-                meshData.Vertices.ToArray(),
-                meshData.Indices.ToArray());
-            var material = meshData.MaterialIndex >= 0 ? gpuMaterials[meshData.MaterialIndex] : default;
-            app.Tree.AddNode(
-                new MeshRenderer { MeshHandle = gpuMesh, MaterialHandle = material },
-                meshData.Name, parent: modelRoot);
-        }
-        modelRoot.LocalTransform = modelRoot.LocalTransform with {
-            Position = new Vector3(0f, 2f, 0f),
-            Scale = new Vector3(2.0f)
-        };
-    } catch { /* ignore */ }
-
-    // Dynamic point lights
-    for (int i = 0; i < 8; i++)
-    {
-        app.Tree.AddNode(
-            new OrbitingLight {
-                Color = i % 2 == 0 ? Vector3.UnitX : Vector3.UnitZ,
-                Intensity = 40f,
-                Radius = 18f,
+            tree.AddNode(new OrbitingLight
+            {
+                Color       = i % 2 == 0 ? Vector3.UnitX : Vector3.UnitZ,
+                Intensity   = 40f,
+                Radius      = 18f,
                 OrbitRadius = 5f,
-                Speed = 0.5f + i * 0.1f,
-                Phase = i * (MathF.PI / 4f)
-            },
-            $"OrbitLight_{i}");
-    }
-};
+                Speed       = 0.5f + i * 0.1f,
+                Phase       = i * (MathF.PI / 4f),
+            }, $"OrbitLight_{i}");
+        }
+    }));
 
-app.OnUpdate = (tree, input) =>
+using var sp = services.BuildServiceProvider();
+var window  = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
+
+runtime.LoadModules(sp);
+
+Console.WriteLine("[13_full_scene] Loop running. Close the window to exit.");
+
+var clock = Stopwatch.StartNew();
+double prev = clock.Elapsed.TotalSeconds;
+int frameCount = 0;
+double fpsWindowStart = 0;
+
+while (!window.ShouldClose())
 {
-    tree.ClearColor(0.05f, 0.05f, 0.08f, 1f);
-    tree.SetAmbientLight(0.02f, 0.02f, 0.02f);
-    
-    // Enable all post-FX
-    tree.SetTonemapping(true, 1.0f, 2.2f);
-    tree.SetBloom(true, 0.9f, 1.0f);
-    tree.SetSsao(true, 0.5f, 0.025f, 1.5f);
-};
+    double now = clock.Elapsed.TotalSeconds;
+    runtime.Tick((float)(now - prev));
+    prev = now;
 
-app.Run(services);
+    frameCount++;
+    if (now - fpsWindowStart >= 5.0)
+    {
+        double fps = frameCount / (now - fpsWindowStart);
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: 8p 0s 1d");
+        frameCount     = 0;
+        fpsWindowStart = now;
+    }
+}
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+runtime.UnloadModules(sp);
+
+Console.WriteLine("[13_full_scene] Exited cleanly.");
+
+// â”€â”€ Orbiting point light â€” circles the origin at fixed height â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class OrbitingLight : PointLight
 {
     public float OrbitRadius { get; init; } = 5f;
-    public float Speed { get; init; } = 1.0f;
-    public float Phase { get; init; } = 0.0f;
+    public float Speed       { get; init; } = 1f;
+    public float Phase       { get; init; }
+
     private float _time;
 
-    protected override void Update(float dt)
+    protected override void OnUpdate(in View view)
     {
-        _time += dt * Speed;
+        _time += view.DeltaTime * Speed;
         float x = MathF.Cos(_time + Phase) * OrbitRadius;
         float z = MathF.Sin(_time + Phase) * OrbitRadius;
         LocalTransform = LocalTransform with { Position = new Vector3(x, 3f, z) };
