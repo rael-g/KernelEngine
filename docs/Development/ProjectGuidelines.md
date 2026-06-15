@@ -50,15 +50,17 @@ When considering a new capability:
 
 This rule killed `set_thread_affinity` (forbidden in iOS, restricted in Android) and `JoinTimeout` as PAL methods (resolved with `std::condition_variable`).
 
-### 1.4. No `malloc` directly. Allocators are passed via params
+### 1.4. Allocator is an internal implementation utility, not a public API
 
-Every component that allocates memory accepts an `ke_allocator*` via its `_params` struct. There is no implicit global allocator. The user picks the allocator (malloc, arena, pool) per call site.
+`ke_allocator` is a **private implementation detail** shared across all C domain implementations. It is **not** a public API and is **not** passed as a factory parameter by callers.
 
-Direct calls to `malloc`/`free`/`new`/`delete` in production code are forbidden outside of:
-- The implementation of `ke_allocator` itself.
-- C++ STL containers used in implementation files (transitive — STL allocators are accepted).
-
-If a piece of code "doesn't have an allocator yet", that is a sign the function should accept one as a parameter, not a sign that `malloc` is acceptable.
+Rules:
+- All C domain implementations (`ke_logger_simple`, `ke_resource_cache_default`, etc.) use `ke_allocator_malloc` (or `arena`, `proxy`, `frame`) **internally** — declared as PRIVATE CMake deps.
+- Factory functions do **not** accept `ke_allocator*` as a parameter. The allocation strategy is an internal decision of the implementation.
+- In debug builds, implementations link `ke_allocator_proxy` PRIVATE and call `ke_allocator_proxy_report()` from their `destroy()` to emit a leak report.
+- The single point of change for the underlying heap is `src/c/allocator/malloc/src/allocator_malloc.c` — one file, one place.
+- Direct `malloc`/`free` in C domain implementations are forbidden. Always go through `ke_allocator`.
+- C++ implementations use RAII / standard containers; they do NOT use `ke_allocator`. Debug leak checking via platform tooling (ASan, Valgrind) or their own mechanisms.
 
 ### 1.5. No "factory" naming for non-polymorphic functions
 
@@ -105,7 +107,7 @@ KE_<MODULE>_API ke_result ke_<plugin>_create(const ke_<plugin>_params* params, k
 Examples:
 - `ke_render_bgfx_create(const ke_render_bgfx_params*, ke_render**)`
 - `ke_window_glfw_create(const ke_window_glfw_params*, ke_window**)`
-- `ke_thread_std_create(ke_allocator*, const ke_thread_params*, ke_thread**)` *(legacy: takes allocator separately; new plugins put it in params)*
+- `ke_thread_std_create(const ke_thread_params*, ke_thread**)`
 
 The output is always a pointer to a kernel-defined vtable struct (`ke_render`, `ke_window`, etc.). The plugin owns the impl behind `handle`; the kernel sees only the vtable.
 
@@ -135,9 +137,8 @@ Functions that take 4+ configuration fields (or fewer with high probability of g
 
 ```c
 typedef struct ke_<plugin>_params {
-    size_t                struct_size;     // FIRST: for ABI versioning (Phase O)
-    struct ke_allocator  *allocator;       // SECOND: required for any plugin that allocates
-    struct ke_logger     *logger;          // THIRD: optional (NULL accepted) if plugin logs
+    size_t            struct_size;     // FIRST: for ABI versioning (Phase O)
+    struct ke_logger *logger;          // SECOND: optional (NULL accepted) if plugin logs
     /* domain-specific config fields */
 } ke_<plugin>_params;
 ```
@@ -145,7 +146,7 @@ typedef struct ke_<plugin>_params {
 Rules:
 * Suffix is **always `_params`**. Forbidden synonyms: `_desc`, `_descriptor`, `_info`, `_config`, `_options`. (Avoid collision with the technical "descriptor" concept from Vulkan/D3D.)
 * `struct_size` first (when ABI versioning is implemented in Phase O).
-* `allocator` second (if needed). `logger` third (if used).
+* `logger` second (if used). No `allocator` field — allocation is an internal detail (§1.4).
 * Then domain-specific fields, ordered logically (related fields grouped).
 * `const char*` fields are **owned by caller**; **callee must deep-copy** before storing. Caller is free to free its memory after the call returns.
 
@@ -244,7 +245,7 @@ src/csharp/KernelEngine.Framework/   ← orchestration (Application, default sce
 
 * Ownership MUST be explicit. Document with comments when a pointer is owning vs borrowed.
 * Raw pointers represent non-owning references unless documented otherwise.
-* Prefer engine allocators (`ke_allocator`) over `malloc`/`new`. See § 1.4.
+* In C domain implementations, always allocate via the internal `ke_allocator` (never `malloc` directly). In C++ implementations, use RAII. See §1.4.
 
 ### 3.8. Build system
 
@@ -345,7 +346,8 @@ public static IServiceCollection AddBgfxRenderer(
 | `KE_API` (kernel macro) used by a plugin | Couples plugin to kernel exports | Plugin defines own `KE_<MODULE>_API` |
 | Cargo-cult macros declared "for future use" | Becomes dead code; misleads readers | Add when there's a real consumer |
 | Hardcoded backend names in framework messages (`"AddBgfxRenderer"`) | Couples Framework to specific backend | Generic message or message via DI |
-| Direct `malloc`/`new`/`free` in production code | Bypasses allocator contract; breaks telemetry/testing | Pass `ke_allocator*` through `_params` |
+| Direct `malloc`/`free` in C domain implementations | Bypasses internal allocator; can't be swapped in one place | Use `ke_allocator` internally (§1.4) |
+| `ke_allocator*` as a factory/`_params` field | Allocator is an internal impl detail, not a public dependency | Keep allocation strategy inside the impl |
 | `.hh` / `.cc` / `.cxx` extensions | Inconsistent | `.hpp` / `.cpp` |
 | PascalCase filenames | Inconsistent | snake_case |
 | Suffix `_public` on a header in `include/` | Redundant — `include/` IS public | Drop the suffix |

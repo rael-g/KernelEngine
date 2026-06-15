@@ -1,8 +1,8 @@
 # C Kernel
 
-The kernel (`src/c/kernel/`) is the ABI-stable heart of the engine. Pure C, `extern "C"`, vtable-style function pointers everywhere. Public headers live under `src/c/kernel/include/kernel_engine/kernel/`; private implementation under `src/`. CMake target: `ke_kernel` (alias `ke::kernel`).
+The kernel (`src/c/kernel/`) is the ABI-stable heart of the engine. Pure C, `extern "C"`, vtable-style function pointers everywhere. Public headers live under each domain's `include/` (e.g. `src/c/logger/include/`, `src/c/ecs/include/`); no `ke_kernel` meta-target exists — consumers link specific impl targets directly.
 
-Conventions: `snake_case` with a `ke_` prefix; `ke_result` return values (no exceptions); explicit `ke_allocator*` for anything that allocates; `_params` suffix for parameter-bag structs (never `_desc`/`_info`/`_config`); `#pragma once`.
+Conventions: `snake_case` with a `ke_` prefix; `ke_result` return values (no exceptions); `_params` suffix for parameter-bag structs (never `_desc`/`_info`/`_config`); `#pragma once`. `ke_allocator` is an **internal** implementation utility — not passed as a factory parameter (see `docs/Development/ProjectGuidelines.md` §1.4).
 
 ## Module map
 
@@ -24,8 +24,8 @@ include/kernel_engine/kernel/
 
 ## Foundations
 
-### `ke_allocator` ✅
-The explicit allocator contract passed to every major component. Built-in strategies: malloc and arena. There is no implicit global heap (Principle 6). Raw pointers are non-owning unless documented.
+### `ke_allocator` (internal utility)
+Internal memory abstraction used by all C domain implementations. **Not a public API; not passed as a factory parameter.** Implementations link `ke_allocator_malloc` (or `arena`, `proxy`) as a PRIVATE CMake dep. The single point of change for the underlying heap strategy is `src/c/allocator/malloc/src/allocator_malloc.c`. In debug builds, impls link `ke_allocator_proxy` and report leaks in their `destroy()`.
 
 ### `ke_result` & error handling ✅
 Every fallible operation returns a `ke_result`. Callers must handle it; the kernel never throws. The managed layer maps this to `KernelResult` / `Result<T>`.

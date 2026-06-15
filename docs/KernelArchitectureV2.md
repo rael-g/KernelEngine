@@ -1,6 +1,6 @@
 # Kernel Architecture V2 — What Is Allowed to Live in the Kernel
 
-**Status**: Doctrine accepted. Domain ejection complete (2026-06-15, branch `feat/kernel-v2`): all domain headers ejected from `src/c/kernel/include/` to `src/c/<domain>/include/`. Render components + `material_file` moved to `render/` domain. Next: §7.3 vtable audit.
+**Status**: Doctrine accepted. Domain ejection complete (2026-06-15, branch `feat/kernel-v2`): all domain headers ejected from `src/c/kernel/include/` to `src/c/<domain>/include/`; `ke_kernel` meta-target deleted. Render components + `material_file` moved to `render/` domain. §7.2 allocator doctrine resolved: `ke_allocator` is an internal utility, not a public API — factory signatures drop the `ke_allocator*` parameter (impl pending). Next: §7.3 vtable audit + factory signature cleanup.
 
 **Audience**: Engine maintainer + plugin/domain authors (render / physics / audio / input / text / asset / scripting).
 
@@ -154,12 +154,19 @@ The hard case: binding A's factory needs binding B's native handle (creating a r
 
 The ceiling, stated honestly: we move from *"public, anyone takes it, contained only by convention"* to *"impossible by accident or by train-wreck; deliberate and auditable when intentional; contained vertically by the assembly graph."* That resolves the factory case (render asks for `INativeAllocator`, never fishes `allocator.Native`) and is the maximum reachable without IVT.
 
-### 7.2 Allocator doctrine (A12.1)
+### 7.2 Allocator doctrine (A12.1) — **resolved**
 
-Separate from the privacy fix, the open doctrine question: *does everyone actually need an injected allocator, or are we cargo-culting?* The answer, given corollary (b) above: **allocator injection is opt-in by need, not a blanket mandate.**
+`ke_allocator` is an **internal implementation utility**, not a public API and not a factory parameter.
 
-- Third-party libs (bgfx, GLFW, Box2D, assimp, stb, flecs) bypass our allocator entirely — so "centralized memory control" is **already partly a fiction**; we monitor *our* allocations, not theirs. Be honest about that leakage rather than pretending otherwise.
-- Target rule: **an implementation that allocates declares `ke_allocator*` in its `create`; one that doesn't, declares none.** No layer (kernel, foundation, or plugin) is forced to thread an allocator it doesn't use, and there is no implicit global to fall back on. Where allocation strategy matters, the impl picks it (GC / arena / frame / malloc) — and the choice is visible in the `create` signature, not hidden behind a doctrine that pretends every component is allocator-aware. Encourage arena/frame allocation where it measurably matters (render frame data, ECS scratch, command queues) and verify which subsystems already do; third-party leakage is documented, not hidden.
+**Decision:** all C domain implementations use `ke_allocator` internally (as a PRIVATE CMake dep). Factory functions do **not** accept `ke_allocator*` as a parameter — the caller has no say in the allocation strategy.
+
+Rationale:
+- Third-party libs (bgfx, GLFW, Box2D, assimp, stb, flecs) bypass our allocator entirely. Pretending we have "full memory control" is fiction; we control our own allocations and document where third-party leakage occurs.
+- The single point of change for the underlying heap is `allocator_malloc.c` — one file, one place. All C impls inherit the change. This is the real benefit; passing `ke_allocator*` externally buys nothing and pollutes every factory signature.
+- In debug builds, impls link `ke_allocator_proxy` (PRIVATE) and call `ke_allocator_proxy_report()` in their `destroy()`, providing per-impl leak reports without exposing the allocator externally.
+- C++ implementations use RAII / standard containers; `ke_allocator` does not apply to them. Debug leak detection via ASan / Valgrind or their own mechanisms.
+
+**What changes from the old rule:** `ke_allocator*` disappears from all `_params` structs and factory signatures. It becomes an `#include`-only, link-PRIVATE concern of each C implementation.
 
 ### 7.3 The full vtable audit
 

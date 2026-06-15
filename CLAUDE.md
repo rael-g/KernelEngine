@@ -58,7 +58,6 @@ Layer 1 — C kernel (src/c/kernel/)          ABI-stable contracts (vtables)
 Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped (struct of function pointers). Public headers under `include/kernel_engine/kernel/<domain>/`; private impl under `src/<domain>/`.
 
 Stable types:
-- `ke_allocator` — explicit allocator vtable, passed to every major component (built-ins: `ke_allocator_malloc_create`, `ke_allocator_arena_create`)
 - `ke_logger` / `ke_logger_sink` — pluggable logging
 - `ke_ecs` — language-agnostic ECS contract (entity lifetime + component storage + query). One implementation today: `KernelEngine.Ecs.Flecs` (flecs as storage-only, pipeline addons stripped).
 - `ke_runtime` — scheduler contract (phase loop + parallel waves + defer queue + fixed timestep). One implementation: in-house Bevy-style scheduler at `src/c/runtime/`.
@@ -67,7 +66,7 @@ Stable types:
 - `ke_task_scheduler` — single shared worker pool (enkiTS impl) used by every parallel subsystem.
 - `ke_resource_cache` — generic refcount + path-keyed dedup primitive, kernel built-in (`src/c/kernel/src/resource_cache/`).
 
-CMake target: `ke_kernel` (alias `ke::kernel`).
+CMake targets: no `ke_kernel` meta-target. Consumers link specific domain impl targets directly (e.g. `ke_allocator_malloc`, `ke_logger_simple`, `ke_resource_cache_default`).
 
 ### Layer 2 — Plugins
 
@@ -89,7 +88,7 @@ Plugin vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `src/
 
 - `src/c/kernel/include/` is the **sole** source of public engine API. Every interface, vtable, struct, enum, and function the engine exposes lives here. C ABI only.
 - Each plugin (`src/c/<plugin>/`, `src/cpp/<plugin>/`) exposes exactly **one factory per factory header** in `<plugin>/include/kernel_engine/<domain>/[<plugin>/]<name>_create.h`. Everything else is implementation detail (`.hpp` / `.c` / `.cpp` files under `src/`).
-- Plugin contract headers in `kernel/<domain>/` declare vtable shapes **only** — no `KE_*_API` export macros, no plain function decls. Exports live exclusively in the plugin-side `_create.h` files. (Kernel built-ins are the only exception: kernel headers self-export by precedent — `ke_allocator_malloc_create` and `ke_resource_cache_create` are declared in their kernel-include contracts.)
+- Plugin contract headers in `<domain>/include/kernel_engine/<domain>/` declare vtable shapes **only** — no `KE_*_API` export macros, no plain function decls. Exports live exclusively in the impl-side `_create.h` files.
 - If a "generic utility" feels like it wants to live in a plugin's public header, it belongs in `src/c/kernel/` instead. Implement in C (use C11 `_Thread_local`, etc., not C++).
 
 ### Layer 3 — C# native bindings (`src/csharp/Native/`)
@@ -161,7 +160,7 @@ ke.render — pinned render-thread work; bgfx APIs are called here only
 - **Headers**: `#pragma once` always. Public API in `include/`; private impl headers next to `.cpp` files, never included externally.
 - **Formatting**: `BasedOnStyle: Microsoft` (`.clang-format` at root).
 - **Error handling**: C layer returns `ke_result`. No exceptions in C. All callers handle the result.
-- **Memory**: every major component receives an explicit `ke_allocator*`. Raw pointers are non-owning unless documented otherwise.
+- **Memory**: `ke_allocator` is an **internal implementation utility**, not a public API. C implementations use `ke_allocator_malloc` (or `arena`, `proxy`) internally — PRIVATE to each impl. Factory functions do **not** take `ke_allocator*` as a parameter. In debug builds, impls link `ke_allocator_proxy` PRIVATE and emit a leak report on destroy. Raw pointers are non-owning unless documented otherwise.
 - **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
 - **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
