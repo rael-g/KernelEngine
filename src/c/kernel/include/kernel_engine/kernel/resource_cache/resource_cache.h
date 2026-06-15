@@ -17,9 +17,9 @@
 //   - Lives in the kernel domain (`kernel/resource_cache/`) rather than
 //     framework — this is a primitive, not a framework opinion.
 
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/context/types.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/common/export.h>
 #include <stdbool.h>
 #include <stdint.h>
 

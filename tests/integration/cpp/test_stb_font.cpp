@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/text/stb_truetype/stb_font.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class StbFontTest : public ::testing::Test {
 protected:

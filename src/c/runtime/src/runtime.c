@@ -1,5 +1,5 @@
 #include <kernel_engine/runtime/runtime_create.h>
-#include <kernel_engine/kernel/runtime/system_ctx.h>
+#include <kernel_engine/runtime/system_ctx.h>
 
 #include <stdalign.h>
 #include <stdio.h>

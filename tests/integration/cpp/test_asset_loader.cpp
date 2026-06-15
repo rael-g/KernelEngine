@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/asset/assimp/assimp_loader.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class AssetLoaderTest : public ::testing::Test {
 protected:
@@ -69,7 +69,7 @@ TEST_F(AssetLoaderTest, FreeModel_Null_DoesNotCrash) {
     SUCCEED();
 }
 
-#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
+#include <kernel_engine/task_scheduler/task_scheduler.h>
 #include <atomic>
 
 TEST_F(AssetLoaderTest, LoadModel_ValidFile_ReturnsOk) {

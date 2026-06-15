@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_KERNEL_CONTEXT_ALLOCATOR_SYS_H_
 #define KERNEL_ENGINE_KERNEL_CONTEXT_ALLOCATOR_SYS_H_
 
-#include <kernel_engine/kernel/context/types.h>
+#include <kernel_engine/common/export.h>
 #include <stddef.h>
 
 #ifdef __cplusplus

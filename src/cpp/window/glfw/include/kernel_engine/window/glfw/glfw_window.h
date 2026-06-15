@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/context/types.h>
-#include <kernel_engine/kernel/window/window.h>
+#include <kernel_engine/common/export.h>
+#include <kernel_engine/window/window.h>
 #include <kernel_engine/window/contract/window_export.h>
 
 #ifdef __cplusplus
@@ -15,7 +15,7 @@ typedef struct ke_window_glfw_params {
     const char*           title;
     int32_t               width;
     int32_t               height;
-    ke_bool               fullscreen;
+    bool               fullscreen;
 } ke_window_glfw_params;
 
 /**

@@ -1,7 +1,7 @@
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 #include "../common/example_console_sink.h"
-#include <kernel_engine/kernel/render/shader_compiler.h>
+#include <kernel_engine/render/shader_compiler.h>
 #include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.h>
 #include <stdio.h>
 

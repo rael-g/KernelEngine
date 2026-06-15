@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/render/bgfx/bgfx_render.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class FactoryIntegrationTest : public ::testing::Test {
 protected:

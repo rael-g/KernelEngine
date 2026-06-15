@@ -1,9 +1,9 @@
-#ifndef KERNEL_ENGINE_RENDER_BGFX_SHADER_COMPILER_H_
+﻿#ifndef KERNEL_ENGINE_RENDER_BGFX_SHADER_COMPILER_H_
 #define KERNEL_ENGINE_RENDER_BGFX_SHADER_COMPILER_H_
 
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/types.h>
-#include <kernel_engine/kernel/render/shader_compiler.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/common/export.h>
+#include <kernel_engine/render/shader_compiler.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -15,9 +15,9 @@ extern "C"
         #define KE_SHADER_COMPILER_BGFX_API
     #else
         #ifdef KE_SHADER_COMPILER_BGFX_EXPORT
-            #define KE_SHADER_COMPILER_BGFX_API KE_HELPER_EXPORT
+            #define KE_SHADER_COMPILER_BGFX_API KE_EXPORT
         #else
-            #define KE_SHADER_COMPILER_BGFX_API KE_HELPER_IMPORT
+            #define KE_SHADER_COMPILER_BGFX_API KE_IMPORT
         #endif
     #endif
 #endif

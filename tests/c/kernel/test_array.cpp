@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/kernel/common/array.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class ArrayTest : public ::testing::Test {
 protected:

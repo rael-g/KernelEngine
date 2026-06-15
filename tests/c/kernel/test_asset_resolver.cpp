@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/asset/asset_resolver.h>
+#include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
-#include <kernel_engine/kernel/asset/image_loader.h>
-#include <kernel_engine/kernel/asset/mesh_data.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/asset/image_loader.h>
+#include <kernel_engine/asset/mesh_data.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #include <cstdlib>
 #include <cstring>

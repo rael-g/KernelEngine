@@ -5,7 +5,7 @@
 // of the framework plugin). Returns a ke_world vtable backed by allocator-
 // managed state that owns the ecs+runtime+scene_tree passed via params.
 
-#include <kernel_engine/kernel/framework/world.h>
+#include <kernel_engine/framework/world.h>
 
 #ifdef __cplusplus
 extern "C"

@@ -15,7 +15,7 @@
 // cache them via get_action_id() after load and reuse across frames.
 
 #include <kernel_engine/framework/input_actions_create.h>
-#include <kernel_engine/kernel/input/key.h>
+#include <kernel_engine/input/key.h>
 
 #include "../third_party/tomlc99/toml.h"
 

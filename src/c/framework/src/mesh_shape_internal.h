@@ -5,9 +5,9 @@
 #ifndef KE_FRAMEWORK_MESH_SHAPE_INTERNAL_H_
 #define KE_FRAMEWORK_MESH_SHAPE_INTERNAL_H_
 
-#include <kernel_engine/kernel/asset/mesh_shape.h>
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/asset/mesh_shape.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C" {

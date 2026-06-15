@@ -7,9 +7,9 @@
 // addons. flecs is used as storage + queries + observers only; the scheduler
 // is the in-house ke_runtime (see kernel/runtime/runtime_create.h).
 
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 
 #ifdef __cplusplus
 extern "C" {

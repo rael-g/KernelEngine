@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/asset/mesh_shape.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/asset/mesh_shape.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #include <cmath>
 

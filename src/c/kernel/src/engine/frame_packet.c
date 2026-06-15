@@ -1,4 +1,4 @@
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/render/frame_packet.h>
 #include <string.h>
 
 ke_result ke_frame_packet_create(const ke_frame_packet_params *params,

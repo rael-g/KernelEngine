@@ -15,7 +15,6 @@ target_include_directories(ke_framework PRIVATE
 )
 
 target_include_directories(ke_framework PUBLIC
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -24,6 +23,8 @@ install(DIRECTORY include/ DESTINATION include)
 
 target_link_libraries(ke_framework PUBLIC
     ke_kernel
+    ke_asset
+    ke_text
     ke_runtime
 )
 

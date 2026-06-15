@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/framework/material_file.h>
+#include <kernel_engine/framework/material_file.h>
 
 #include <cstdlib>
 #include <filesystem>

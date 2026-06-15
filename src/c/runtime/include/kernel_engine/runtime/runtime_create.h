@@ -5,10 +5,10 @@
 // Owns the system catalog + phase loop + (eventually) parallel wave dispatch.
 // Storage is borrowed via ke_ecs*; the scheduler never owns it.
 
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/runtime/runtime.h>
-#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/task_scheduler/task_scheduler.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 
 #ifdef __cplusplus
 extern "C" {

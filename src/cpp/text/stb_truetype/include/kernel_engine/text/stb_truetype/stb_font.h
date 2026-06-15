@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/text/font.h>
+#include <kernel_engine/text/font.h>
 #include <kernel_engine/text/stb_truetype/text_export.h>
 
 #ifdef __cplusplus

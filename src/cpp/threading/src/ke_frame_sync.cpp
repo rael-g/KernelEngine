@@ -1,6 +1,6 @@
 #include "ke_frame_sync.hpp"
 #include <kernel_engine/threading/threading.h>
-#include <kernel_engine/kernel/threading/frame_sync.h>
+#include <kernel_engine/threading/frame_sync.h>
 
 #include <cstring>
 #include <new>

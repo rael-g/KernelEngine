@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/framework/scene_tree.h>
+#include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/scene_tree_create.h>
-#include <kernel_engine/kernel/framework/components.h>
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/framework/components.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 
 class SceneTreeTest : public ::testing::Test

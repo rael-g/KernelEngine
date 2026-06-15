@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/framework/scene_loader.h>
-#include <kernel_engine/kernel/framework/scene_tree.h>
-#include <kernel_engine/kernel/framework/components.h>
-#include <kernel_engine/kernel/framework/world.h>
-#include <kernel_engine/kernel/ecs/variant.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/framework/scene_loader.h>
+#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/framework/components.h>
+#include <kernel_engine/framework/world.h>
+#include <kernel_engine/ecs/variant.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/world_create.h>

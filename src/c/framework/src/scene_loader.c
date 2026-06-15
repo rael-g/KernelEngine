@@ -16,9 +16,9 @@
 // destroy — same end behavior, simpler ownership graph.
 
 #include <kernel_engine/framework/scene_loader_create.h>
-#include <kernel_engine/kernel/framework/world.h>
-#include <kernel_engine/kernel/framework/scene_tree.h>
-#include <kernel_engine/kernel/framework/components.h>
+#include <kernel_engine/framework/world.h>
+#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/framework/components.h>
 
 #include "../third_party/tomlc99/toml.h"
 

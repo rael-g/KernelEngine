@@ -1,8 +1,8 @@
-#include <kernel_engine/text/stb_truetype/stb_font.h>
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/types.h>
-#include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/text/font.h>
+﻿#include <kernel_engine/text/stb_truetype/stb_font.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/common/export.h>
+#include <kernel_engine/logger/logger.h>
+#include <kernel_engine/text/font.h>
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>
@@ -79,7 +79,7 @@ ke_result load_font(struct ke_font_loader *self,
 
     stbtt_pack_context pc;
     if (!stbtt_PackBegin(&pc, alpha.data(), (int)W, (int)H, /*stride*/0, /*padding*/1, /*alloc_context*/nullptr))
-        return KE_ERROR_RENDER;
+        return KE_ERROR;
     stbtt_PackSetOversampling(&pc, 1, 1);
 
     std::vector<stbtt_packedchar> chars(codepoint_count);
@@ -87,11 +87,11 @@ ke_result load_font(struct ke_font_loader *self,
                              (int)first_codepoint, (int)codepoint_count, chars.data()))
     {
         stbtt_PackEnd(&pc);
-        return KE_ERROR_RENDER;
+        return KE_ERROR;
     }
     stbtt_PackEnd(&pc);
 
-    // 3. Expand alpha → RGBA8 (white RGB + glyph-coverage alpha).
+    // 3. Expand alpha â†’ RGBA8 (white RGB + glyph-coverage alpha).
     uint8_t *atlas_rgba = (uint8_t *)alloc->alloc(alloc, (size_t)W * H * 4, 4);
     if (!atlas_rgba) return KE_ERROR_OUT_OF_MEMORY;
     for (size_t i = 0; i < (size_t)W * H; ++i)
@@ -107,7 +107,7 @@ ke_result load_font(struct ke_font_loader *self,
     if (!stbtt_InitFont(&info, ttf.data(), stbtt_GetFontOffsetForIndex(ttf.data(), 0)))
     {
         alloc->free(alloc, atlas_rgba);
-        return KE_ERROR_RENDER;
+        return KE_ERROR;
     }
     int ascent_i, descent_i, line_gap_i;
     stbtt_GetFontVMetrics(&info, &ascent_i, &descent_i, &line_gap_i);

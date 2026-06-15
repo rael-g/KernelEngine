@@ -7,7 +7,7 @@
 #ifndef KE_FRAMEWORK_COMPONENTS_APPLY_H_
 #define KE_FRAMEWORK_COMPONENTS_APPLY_H_
 
-#include <kernel_engine/kernel/ecs/variant.h>
+#include <kernel_engine/ecs/variant.h>
 #include <stdint.h>
 
 #ifdef __cplusplus

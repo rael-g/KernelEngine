@@ -1,6 +1,7 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/render/render.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class ShaderCompilerTest : public ::testing::Test {
 protected:

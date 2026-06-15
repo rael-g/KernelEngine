@@ -1,5 +1,5 @@
 #include "bgfx_gpu_device.hpp"
-#include <kernel_engine/kernel/common/thread_name.h>
+#include <kernel_engine/threading/thread_name.h>
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 #include <cstring>
@@ -10,7 +10,7 @@
 #include <windows.h>
 #endif
 
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/logger/logger.h>
 #include <stdexcept>
 
 namespace kernel_engine::render

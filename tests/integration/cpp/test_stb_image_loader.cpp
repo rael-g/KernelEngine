@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/asset/stb_image/stb_image_loader.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <cstdlib>
 
 class StbImageLoaderTest : public ::testing::Test

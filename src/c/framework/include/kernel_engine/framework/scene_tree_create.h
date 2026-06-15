@@ -1,9 +1,9 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
 
-#include <kernel_engine/kernel/framework/scene_tree.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"

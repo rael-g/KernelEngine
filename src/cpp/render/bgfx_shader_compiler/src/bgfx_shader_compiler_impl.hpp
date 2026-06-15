@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.h>
 #include <string>
 

@@ -1,7 +1,7 @@
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <glfw_window_device.hpp>
 #include <window_core.hpp>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <new>
 
 extern "C" {

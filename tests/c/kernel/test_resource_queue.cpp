@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/kernel/framework/resource_queue.h>
 #include <kernel_engine/framework/resource_queue_create.h>
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/render/render.h>
 
 #include <atomic>
 #include <cstring>

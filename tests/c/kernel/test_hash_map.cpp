@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/kernel/common/hash_map.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <string.h>
 
 class HashMapTest : public ::testing::Test {

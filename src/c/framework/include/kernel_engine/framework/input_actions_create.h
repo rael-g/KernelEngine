@@ -1,8 +1,8 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
 
-#include <kernel_engine/kernel/framework/input_actions.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/framework/input_actions.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"

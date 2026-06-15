@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/physics/box2d/box2d_physics.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class Box2DPhysicsTest : public ::testing::Test {
 protected:

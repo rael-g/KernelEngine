@@ -1,8 +1,8 @@
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/kernel/ecs/world.h>
-#include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/logger/logger.h>
+#include <kernel_engine/render/render.h>
 #include <kernel_engine/kernel/window/window.h>
 #include <stdio.h>
 

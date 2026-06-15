@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/input/input.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/input/input.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class InputTest : public ::testing::Test {
 protected:

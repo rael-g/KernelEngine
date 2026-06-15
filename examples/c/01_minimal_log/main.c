@@ -1,5 +1,5 @@
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 #include "../common/example_console_sink.h"
 #include <stdio.h>
 

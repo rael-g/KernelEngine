@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <stdint.h>
 #include <string.h>
 

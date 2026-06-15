@@ -6,12 +6,20 @@
 // subsystem that knows how to free them).
 
 #include <kernel_engine/kernel/resource_cache/resource_cache.h>
-#include <kernel_engine/kernel/common/hash.h>
 
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+static uint64_t ke_hash_string(const char *s)
+{
+    if (!s) return 0;
+    uint64_t h = 5381;
+    int c;
+    while ((c = (unsigned char)*s++)) h = h * 33 ^ (uint64_t)c;
+    return h;
+}
 
 // ── Internal state ──────────────────────────────────────────────────────────
 //

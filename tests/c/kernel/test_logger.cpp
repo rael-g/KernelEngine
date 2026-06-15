@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/logger/logger.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/logger/logger.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -57,6 +57,24 @@ TEST(LoggerInitTest, Create_NullAllocator_ReturnsInvalidArgument) {
 static void* fail_alloc(ke_allocator* alloc, size_t size, size_t alignment) { return nullptr; }
 static void fail_free(ke_allocator* alloc, void* ptr) {}
 
+struct CountingAllocator {
+    ke_allocator base{};
+    int remaining = 0;
+
+    static void* alloc_fn(ke_allocator* self, size_t size, size_t align) {
+        auto* ca = reinterpret_cast<CountingAllocator*>(self);
+        if (ca->remaining <= 0) return nullptr;
+        --ca->remaining;
+        return malloc(size);
+    }
+    static void free_fn(ke_allocator* self, void* ptr) { free(ptr); }
+
+    explicit CountingAllocator(int n) : remaining(n) {
+        base.alloc = alloc_fn;
+        base.free  = free_fn;
+    }
+};
+
 TEST(LoggerInitTest, Create_AllocationFailure_ReturnsOutOfMemory) {
     ke_allocator fa;
     fa.alloc = fail_alloc;
@@ -101,17 +119,16 @@ TEST_F(LoggerTest, AddSink_NullSelf_ReturnsInvalidArgument) {
     ASSERT_EQ(add_sink_fn(nullptr, sink), KE_ERROR_INVALID_ARGUMENT);
 }
 
-TEST_F(LoggerTest, AddSink_AllocationFailure_ReturnsOutOfMemory) {
+TEST(LoggerInitTest, AddSink_AllocationFailure_ReturnsOutOfMemory) {
+    // ke_logger_create does 3 allocs (internal struct + api struct + sinks array).
+    // The 4th alloc (inside add_sink) then fails, triggering OOM.
+    CountingAllocator ca(3);
+    ke_logger* l = nullptr;
+    ASSERT_EQ(ke_logger_create(&ca.base, &l), KE_OK);
     ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
-    // Force OOM by swapping allocator temporarily
-    ke_allocator fa;
-    fa.alloc = fail_alloc;
-    fa.free = fail_free;
-    auto original_alloc = logger->allocator;
-    logger->allocator = &fa;
-    ke_result res = logger->add_sink(logger, sink);
-    logger->allocator = original_alloc;
-    ASSERT_EQ(res, KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(l->add_sink(l, sink), KE_ERROR_OUT_OF_MEMORY);
+    // Logger itself can't free (allocator is exhausted), but we verify the code path.
+    // Leak is acceptable in a test that verifies OOM handling.
 }
 
 static void mock_sink_log(ke_logger_sink* self, const ke_log_event* event) {

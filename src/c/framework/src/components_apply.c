@@ -12,7 +12,7 @@
 
 #include "components_apply.h"
 
-#include <kernel_engine/kernel/framework/components.h>
+#include <kernel_engine/framework/components.h>
 
 #include <math.h>
 #include <stdbool.h>

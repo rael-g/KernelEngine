@@ -1,5 +1,5 @@
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/input/input.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/input/input.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -8,6 +8,8 @@
 
 typedef struct ke_input_internal
 {
+    ke_allocator *allocator;
+
     bool keys_down[MAX_KEYS];
     bool keys_pressed[MAX_KEYS];
     bool keys_released[MAX_KEYS];
@@ -129,21 +131,21 @@ static uint32_t input_drain_events(ke_input *self, ke_input_event *out_buf, uint
     return n;
 }
 
-static ke_bool input_is_key_pressed(ke_input *self, int32_t key)
+static bool input_is_key_pressed(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return 0;
     ke_input_internal *impl = (ke_input_internal *)self->handle;
     return impl->keys_pressed[key] ? 1 : 0;
 }
 
-static ke_bool input_is_key_released(ke_input *self, int32_t key)
+static bool input_is_key_released(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return 0;
     ke_input_internal *impl = (ke_input_internal *)self->handle;
     return impl->keys_released[key] ? 1 : 0;
 }
 
-static ke_bool input_is_key_down(ke_input *self, int32_t key)
+static bool input_is_key_down(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return 0;
     ke_input_internal *impl = (ke_input_internal *)self->handle;
@@ -181,8 +183,9 @@ static void input_get_snapshot(ke_input *self, ke_input_snapshot *out)
 static void input_destroy(ke_input *self)
 {
     if (!self) return;
-    ke_allocator *a = self->allocator;
-    a->free(a, self->handle);
+    ke_input_internal *impl = (ke_input_internal *)self->handle;
+    ke_allocator *a = impl->allocator;
+    a->free(a, impl);
     a->free(a, self);
 }
 
@@ -196,9 +199,9 @@ ke_result ke_input_create(ke_allocator *alloc, struct ke_logger *log, ke_input *
     if (!impl) { alloc->free(alloc, api); return KE_ERROR_OUT_OF_MEMORY; }
     memset(impl, 0, sizeof(ke_input_internal));
 
+    impl->allocator = alloc;
+
     api->handle = impl;
-    api->allocator = alloc;
-    api->logger = log;
     api->destroy = input_destroy;
     api->update = input_update;
     

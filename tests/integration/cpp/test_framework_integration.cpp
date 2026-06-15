@@ -1,11 +1,11 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/framework/input_actions.h>
+#include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/input_actions_create.h>
-#include <kernel_engine/kernel/framework/scene_loader.h>
+#include <kernel_engine/framework/scene_loader.h>
 #include <kernel_engine/framework/scene_loader_create.h>
-#include <kernel_engine/kernel/framework/scene_tree.h>
+#include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/scene_tree_create.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/kernel/ecs/world.h>
 #include <filesystem>
 #include <fstream>
@@ -71,7 +71,7 @@ scale = [2, 2, 2]
 #include <kernel_engine/framework/camera_render_system_create.h>
 #include <kernel_engine/kernel/framework/light_render_system.h>
 #include <kernel_engine/framework/light_render_system_create.h>
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/render/frame_packet.h>
 
 TEST_F(FrameworkIntegrationTest, CameraSystem_Update_Works) {
     ke_camera_render_system_params params{};
@@ -106,7 +106,7 @@ TEST_F(FrameworkIntegrationTest, CameraSystem_Update_Works) {
     ke_camera_render_system_destroy(sys);
 }
 
-#include <kernel_engine/kernel/asset/mesh_shape.h>
+#include <kernel_engine/asset/mesh_shape.h>
 
 TEST_F(FrameworkIntegrationTest, MeshShape_Bake_ReturnsOom_WhenAllocFails) {
     ke_allocator fa{};
@@ -162,9 +162,9 @@ TEST_F(FrameworkIntegrationTest, MeshRenderSystem_Update_Works) {
 #include <kernel_engine/kernel/framework/mesh_render_system.h>
 #include <kernel_engine/framework/mesh_render_system_create.h>
 
-#include <kernel_engine/kernel/render/render.h>
-#include <kernel_engine/kernel/render/material.h>
-#include <kernel_engine/kernel/render/mesh.h>
+#include <kernel_engine/render/render.h>
+#include <kernel_engine/render/material.h>
+#include <kernel_engine/render/mesh.h>
 
 TEST_F(FrameworkIntegrationTest, LightSystem_Ids_Works) {
     ke_light_render_system_params params = { world, alloc };

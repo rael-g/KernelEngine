@@ -1,6 +1,7 @@
 #include "bgfx_shader_compiler_impl.hpp"
 #include <cstdio>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/render/render.h>
 #include <new>
 #include <string>
 #include <vector>

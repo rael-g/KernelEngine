@@ -6,7 +6,7 @@
 // `ConsoleSink` / `Serilog`; C examples that just want logs on stderr can
 // drop this tiny header in.
 
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/logger/logger.h>
 #include <stdio.h>
 
 static void ke_example_console_sink_log(ke_logger_sink *self, const ke_log_event *event)

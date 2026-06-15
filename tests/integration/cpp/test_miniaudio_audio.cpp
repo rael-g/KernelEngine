@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/audio/miniaudio/miniaudio_audio.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 
 class MiniAudioTest : public ::testing::Test {
 protected:

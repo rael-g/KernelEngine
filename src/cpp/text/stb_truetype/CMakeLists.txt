@@ -25,6 +25,7 @@ target_include_directories(ke_text_stb_truetype PRIVATE ${STB_INCLUDE_DIR})
 
 target_link_libraries(ke_text_stb_truetype PUBLIC
     ke_kernel
+    ke_text
 )
 
 install(TARGETS ke_text_stb_truetype

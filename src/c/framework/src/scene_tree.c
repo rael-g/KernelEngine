@@ -4,8 +4,8 @@
 // component reads/writes; no separate side state.
 
 #include <kernel_engine/framework/scene_tree_create.h>
-#include <kernel_engine/kernel/framework/components.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/framework/components.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 
 #include <stddef.h>
 #include <stdbool.h>

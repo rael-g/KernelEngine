@@ -1,4 +1,4 @@
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -137,7 +137,7 @@ ke_allocator *ke_allocator_arena_create(size_t capacity)
 
 // --- Proxy Allocator (Memory Tracking) ---
 
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/logger/logger.h>
 
 typedef struct proxy_impl
 {

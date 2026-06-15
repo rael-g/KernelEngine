@@ -6,7 +6,7 @@
 // own threads and use their own sync primitives, with cross-language thread
 // identity flowing through ke_thread_set_current_name in the C kernel.
 
-#include <kernel_engine/kernel/threading/frame_sync.h>
+#include <kernel_engine/threading/frame_sync.h>
 #include <kernel_engine/threading/threading_export.h>
 #include <stdint.h>
 

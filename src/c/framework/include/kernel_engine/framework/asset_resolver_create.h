@@ -1,11 +1,11 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
 
-#include <kernel_engine/kernel/asset/asset_resolver.h>
-#include <kernel_engine/kernel/asset/image_loader.h>
-#include <kernel_engine/kernel/text/font.h>
-#include <kernel_engine/kernel/common/error.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/asset/asset_resolver.h>
+#include <kernel_engine/asset/image_loader.h>
+#include <kernel_engine/text/font.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"

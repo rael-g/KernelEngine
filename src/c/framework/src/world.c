@@ -4,8 +4,8 @@
 // scene_tree.h is included BEFORE world_create.h so that its transitive
 // `framework_export.h` define of KE_FRAMEWORK_API runs first; world_create.h's
 // own fallback definition then sees the macro already defined and skips it.
-#include <kernel_engine/kernel/framework/scene_tree.h>
-#include <kernel_engine/kernel/framework/components.h>
+#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/framework/components.h>
 #include <kernel_engine/framework/world_create.h>
 #include "components_apply.h"
 

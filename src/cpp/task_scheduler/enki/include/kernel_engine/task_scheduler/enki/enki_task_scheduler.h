@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/context/types.h>
-#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
+#include <kernel_engine/common/export.h>
+#include <kernel_engine/task_scheduler/task_scheduler.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,9 +12,9 @@ extern "C" {
         #define KE_TASK_SCHEDULER_API
     #else
         #ifdef KE_TASK_SCHEDULER_EXPORT
-            #define KE_TASK_SCHEDULER_API KE_HELPER_EXPORT
+            #define KE_TASK_SCHEDULER_API KE_EXPORT
         #else
-            #define KE_TASK_SCHEDULER_API KE_HELPER_IMPORT
+            #define KE_TASK_SCHEDULER_API KE_IMPORT
         #endif
     #endif
 #endif

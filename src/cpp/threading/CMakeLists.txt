@@ -1,4 +1,4 @@
-add_library(ke_threading
+﻿add_library(ke_threading
     src/ke_frame_sync.cpp
 )
 
@@ -11,14 +11,16 @@ endif()
 
 target_include_directories(ke_threading PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/c/threading/include>
+    $<INSTALL_INTERFACE:include>
 )
 
-target_include_directories(ke_threading PRIVATE
-    src
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+target_link_libraries(ke_threading PUBLIC
+    ke_common
+    ke_allocator
+    ke_render
+    ke_kernel
 )
-
-target_link_libraries(ke_threading PUBLIC ke_kernel)
 
 if (WIN32)
     target_link_libraries(ke_threading PRIVATE kernel32)
@@ -32,3 +34,4 @@ install(TARGETS ke_threading
 )
 
 install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/c/threading/include/ DESTINATION include)
