@@ -2,7 +2,7 @@
 
 The kernel (`src/c/kernel/`) is the ABI-stable heart of the engine. Pure C, `extern "C"`, vtable-style function pointers everywhere. Public headers live under each domain's `include/` (e.g. `src/c/logger/include/`, `src/c/ecs/include/`); no `ke_kernel` meta-target exists — consumers link specific impl targets directly.
 
-Conventions: `snake_case` with a `ke_` prefix; `ke_result` return values (no exceptions); `_params` suffix for parameter-bag structs (never `_desc`/`_info`/`_config`); `#pragma once`. `ke_allocator` is an **internal** implementation utility — not passed as a factory parameter (see `docs/Development/ProjectGuidelines.md` §1.4).
+Conventions: `snake_case` with a `ke_` prefix; `ke_result` return values with optional `ke_error** out_error` (no exceptions — see §"Error handling" below); `_params` suffix for parameter-bag structs (never `_desc`/`_info`/`_config`); `#pragma once`. `ke_allocator` is an **internal** implementation utility — not passed as a factory parameter (see `docs/Development/ProjectGuidelines.md` §1.4).
 
 ## Module map
 
@@ -27,8 +27,67 @@ include/kernel_engine/kernel/
 ### `ke_allocator` (internal utility)
 Internal memory abstraction used by all C domain implementations. **Not a public API; not passed as a factory parameter.** Implementations link `ke_allocator_malloc` (or `arena`, `proxy`) as a PRIVATE CMake dep. The single point of change for the underlying heap strategy is `src/c/allocator/malloc/src/allocator_malloc.c`. In debug builds, impls link `ke_allocator_proxy` and report leaks in their `destroy()`.
 
-### `ke_result` & error handling ✅
-Every fallible operation returns a `ke_result`. Callers must handle it; the kernel never throws. The managed layer maps this to `KernelResult` / `Result<T>`.
+### Error handling — `ke_result` + `ke_error` + `ke_error_type`
+
+Every fallible operation returns `ke_result` (a two-value enum: `KE_OK = 0` / `KE_ERROR = -1`) and optionally writes a `ke_error*` to a caller-provided output pointer. The kernel never throws.
+
+```c
+// error.h — minimalista, controle de fluxo apenas
+typedef enum ke_result { KE_OK = 0, KE_ERROR = -1 } ke_result;
+
+// ke_error_type — singleton global; comparação por identidade de ponteiro (não por int)
+typedef struct ke_error_type {
+    const char*                  name;    // "ke.window.not_initialized"
+    const struct ke_error_type*  parent;  // categoria genérica, ou NULL
+} ke_error_type;
+
+// ke_error — contexto rico, preenchido no ponto de origem
+typedef struct ke_error {
+    const ke_error_type* type;
+    const char*          message;  // detalhe dinâmico, string human-readable
+    const char*          domain;   // "ke_window", "ke_ecs", etc.
+} ke_error;
+```
+
+**Categorias genéricas** são declaradas em `error.h`:
+
+```c
+extern const ke_error_type KE_ERROR_NOT_FOUND;
+extern const ke_error_type KE_ERROR_IO;
+extern const ke_error_type KE_ERROR_OUT_OF_MEMORY;
+extern const ke_error_type KE_ERROR_INVALID_ARGUMENT;
+extern const ke_error_type KE_ERROR_NOT_INITIALIZED;
+extern const ke_error_type KE_ERROR_NOT_SUPPORTED;
+extern const ke_error_type KE_ERROR_ALREADY_EXISTS;
+```
+
+**Tipos por domínio** são declarados em `<domain>/error.h`, com `parent` apontando para a categoria genérica correspondente (ou NULL para erros sem categoria genérica equivalente):
+
+```c
+// ke_window/error.h
+extern const ke_error_type KE_WINDOW_ERROR_NOT_INITIALIZED;   // parent: NULL
+extern const ke_error_type KE_WINDOW_ERROR_CREATION_FAILED;   // parent: &KE_ERROR_IO
+```
+
+**Assinatura de vtable:** o parâmetro `out_error` é sempre opcional — `NULL` é válido quando o caller não precisa de contexto:
+
+```c
+ke_result (*load)(ke_scene_loader* self, const char* path, ke_error** out_error);
+```
+
+**Matching com hierarquia:**
+
+```c
+bool ke_error_is(const ke_error* err, const ke_error_type* type);
+
+// caller escolhe o nível de granularidade:
+if (ke_error_is(err, &KE_WINDOW_ERROR_NOT_INITIALIZED)) { /* específico */ }
+if (ke_error_is(err, &KE_ERROR_IO)) { /* qualquer IO de qualquer domínio */ }
+```
+
+**Memória:** `ke_error` aponta para um buffer thread-local estático preenchido pelo callee. Zero alocação no caminho de erro. O ponteiro é válido até a próxima chamada que falha na mesma thread — o caller deve consumir imediatamente.
+
+O managed layer mapeia `ke_result` + `ke_error` para `KernelResult` / `Result<T>` / `KernelException`.
 
 ### `ke_logger` / `ke_logger_sink` ✅
 Pluggable logging. The kernel defines the contract and log levels; sinks (console, Serilog) are provided by higher layers.

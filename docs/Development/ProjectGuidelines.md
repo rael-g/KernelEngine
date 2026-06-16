@@ -237,9 +237,12 @@ src/csharp/KernelEngine.Framework/   ← orchestration (Application, default sce
 
 ### 3.6. Error handling
 
-* C: every fallible function returns `ke_result`. No exceptions in C layer.
+* C: every fallible function returns `ke_result` (`KE_OK = 0` / `KE_ERROR = -1`). No exceptions in C layer.
 * C++: prefer `ke_result`; throw only for programmer errors (precondition violations).
 * All callers MUST handle `ke_result`. Do not discard with `(void)result` unless an explicit comment justifies why.
+* **Contexto de erro:** funções que podem falhar aceitam um `ke_error** out_error` opcional como último parâmetro. O callee preenche um buffer thread-local estático e aponta `*out_error` para ele antes de retornar `KE_ERROR`. Passar `NULL` é sempre válido — o caller que não precisa de contexto não paga custo nenhum.
+* **Tipos de erro por domínio:** cada domínio declara seus tipos de erro como singletons globais (`extern const ke_error_type KE_WINDOW_ERROR_NOT_INITIALIZED`). Comparação é por identidade de ponteiro via `ke_error_is(err, &KE_WINDOW_ERROR_NOT_INITIALIZED)`. Cada tipo aponta opcionalmente para uma categoria genérica em `error.h` (`KE_ERROR_IO`, `KE_ERROR_NOT_FOUND`, etc.) — o matching caminha a cadeia de parents, permitindo ao caller tratar no nível específico ou na categoria genérica.
+* Ver `docs/Reference/03 - C Kernel.md` §"Error handling" para o design completo com exemplos.
 
 ### 3.7. Memory and ownership
 

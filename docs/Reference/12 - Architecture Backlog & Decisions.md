@@ -365,17 +365,11 @@ management layer does not exist.
 
 ---
 
-### 1.20 [MEDIUM] `ke_result` loses all diagnostic context by the time it reaches the caller
+### 1.20 [RESOLVED 2026-06-15] `ke_result` loses all diagnostic context by the time it reaches the caller
 
-```c
-ke_result res = ke_ecs_component_add(reg, entity, cid, data);
-if (res != KE_OK) return res;  // which entity? which cid? what data? unknown.
-```
+**Resolvido** com o novo design de error handling (ver `docs/Reference/03 - C Kernel.md` §"Error handling").
 
-`ke_result` is a bare enum. When an error propagates through three call layers, the original
-context — which argument was invalid, what value caused the failure, which internal invariant
-was violated — is gone. In development builds this forces printf-debugging every error site.
-In a plugin compiled by a third party, it makes failures nearly undiagnosable.
+`ke_result` passa a ser minimalista (`KE_OK = 0` / `KE_ERROR = -1`) — apenas controle de fluxo. O contexto rico é carregado por `ke_error`, que contém um `ke_error_type*` (singleton por identidade de ponteiro, com hierarquia de parents para matching em diferentes níveis de granularidade), `message` (string dinâmica), e `domain`. Vtable slots aceitam `ke_error** out_error` como parâmetro opcional — `NULL` é válido quando o caller não precisa de contexto, zero custo de alocação (buffer thread-local estático).
 
 ---
 
