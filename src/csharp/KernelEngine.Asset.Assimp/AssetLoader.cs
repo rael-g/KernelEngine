@@ -187,7 +187,7 @@ internal sealed unsafe class AssetLoader : IAssetLoader
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void NativeLoadCompleteCallback(
-        ke_result result,
+        int result,
         ke_model_data* data,
         void* userData)
     {
@@ -195,7 +195,7 @@ internal sealed unsafe class AssetLoader : IAssetLoader
         var (loaderPtr, tcs) = ((nint, TaskCompletionSource<IModel>))handle.Target!;
         handle.Free();
 
-        if (result == ke_result.KE_OK)
+        if (result == (int)ke_result.KE_OK)
             tcs.TrySetResult(new ModelData((ke_asset_loader*)loaderPtr, data));
         else
             tcs.TrySetException(new KernelException(result.ToManaged()));

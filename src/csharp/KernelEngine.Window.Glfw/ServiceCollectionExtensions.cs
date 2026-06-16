@@ -60,7 +60,7 @@ public static class ServiceCollectionExtensions
                 title      = (sbyte*)titlePtr,
                 width      = opts.Width,
                 height     = opts.Height,
-                fullscreen = (byte)(opts.Fullscreen ? 1 : 0),
+                fullscreen = opts.Fullscreen,
             };
 
             ke_window* native;

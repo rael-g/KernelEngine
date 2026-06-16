@@ -98,7 +98,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetOrthographic(bool enabled)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_orthographic(_native, (byte)(enabled ? 1 : 0)).Wrap();
+        return _native->set_orthographic(_native, enabled).Wrap();
     }
 
     /// <summary>Sets the view and projection matrices for the active view. Call once per frame before draw calls.</summary>
@@ -117,7 +117,7 @@ public sealed unsafe class Renderer : IRenderer
     {
         KernelThread.AssertCurrent("ke.render");
         var c = _native->get_ndc_convention(_native);
-        return new NdcConvention(c.z_zero_to_one != 0, c.y_flip != 0, c.left_handed != 0);
+        return new NdcConvention(c.z_zero_to_one, c.y_flip, c.left_handed);
     }
 
     /// <summary>Uploads geometry to the GPU and returns a stable mesh handle.</summary>
@@ -263,7 +263,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetSsao(bool enabled, float radius = 0.5f, float bias = 0.025f, float strength = 1.0f)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_ssao(_native, (byte)(enabled ? 1 : 0), radius, bias, strength).Wrap();
+        return _native->set_ssao(_native, enabled, radius, bias, strength).Wrap();
     }
 
     /// <summary>
@@ -387,7 +387,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetTonemapping(bool enabled, float exposure = 1.0f, float gamma = 2.2f)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_tonemapping(_native, (byte)(enabled ? 1 : 0), exposure, gamma).Wrap();
+        return _native->set_tonemapping(_native, enabled, exposure, gamma).Wrap();
     }
 
     /// <summary>
@@ -398,7 +398,7 @@ public sealed unsafe class Renderer : IRenderer
     public Result SetBloom(bool enabled, float threshold = 1.0f, float intensity = 0.5f)
     {
         KernelThread.AssertCurrent("ke.render");
-        return _native->set_bloom(_native, (byte)(enabled ? 1 : 0), threshold, intensity).Wrap();
+        return _native->set_bloom(_native, enabled, threshold, intensity).Wrap();
     }
 
     /// <inheritdoc/>

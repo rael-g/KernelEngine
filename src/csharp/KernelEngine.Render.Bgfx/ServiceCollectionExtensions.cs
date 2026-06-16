@@ -58,7 +58,7 @@ public static class ServiceCollectionExtensions
                 logger        = logger != null ? logger.Native : null,
                 window        = ((Window)sp.GetRequiredService<IWindow>()).Native,
                 shader_path   = (sbyte*)shaderPtr,
-                vsync         = (byte)(opts.Vsync ? 1 : 0),
+                vsync         = opts.Vsync,
                 renderer_type = (uint)opts.Backend,
             };
 

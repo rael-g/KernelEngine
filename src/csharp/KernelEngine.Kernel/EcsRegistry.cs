@@ -41,7 +41,7 @@ public sealed unsafe class EcsRegistry : IEcsRegistry
         fixed (byte* namePtr = bytes)
         {
             var rc = _native->component_lookup(_native, (sbyte*)namePtr, &meta);
-            if (rc == ke_result.KE_OK)
+            if (rc == (int)ke_result.KE_OK)
             {
                 componentId = meta.cid;
                 return true;

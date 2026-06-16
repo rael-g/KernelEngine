@@ -22,9 +22,9 @@ public sealed unsafe class FlecsEcs : IEcs
 
         ke_ecs_flecs_params @params = default;
         ke_ecs* ecs;
-        var rc = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(allocator.Native, &@params, &ecs);
-        if (rc != ke_result.KE_OK)
-            throw new InvalidOperationException($"ke_ecs_flecs_create failed: {rc}");
+        var rc = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, &ecs);
+        if (rc != (int)ke_result.KE_OK)
+            throw new InvalidOperationException($"ke_ecs_flecs_create failed: {(ke_result)rc}");
         _native = ecs;
     }
 

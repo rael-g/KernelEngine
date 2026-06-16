@@ -26,11 +26,10 @@ public sealed unsafe class Input : IInput
         }
     }
 
-    public Input(Allocator allocator, Logger? logger)
+    public Input(Logger? logger)
     {
         ke_input* native;
         var res = NativeMethods.input_create(
-            allocator.Native,
             logger != null ? logger.Native : null,
             &native);
 
@@ -111,7 +110,7 @@ public sealed unsafe class Input : IInput
     }
 
     /// <summary>Returns true if the key is currently held down.</summary>
-    public bool IsKeyDown(int key) => _native->is_key_down(_native, key) != 0;
+    public bool IsKeyDown(int key) => _native->is_key_down(_native, key);
 
     public void Dispose()
     {

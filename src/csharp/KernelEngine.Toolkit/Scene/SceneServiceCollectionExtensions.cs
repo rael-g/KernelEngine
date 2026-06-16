@@ -28,7 +28,6 @@ public static class SceneServiceCollectionExtensions
         });
         services.AddSingleton<SceneLoader>(sp =>
             new SceneLoader(
-                sp.GetRequiredService<Allocator>(),
                 sp.GetRequiredService<World>(),
                 AppContext.BaseDirectory));
 

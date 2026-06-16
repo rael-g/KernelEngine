@@ -47,15 +47,13 @@ public sealed unsafe class SceneLoader : IDisposable
     /// <summary>
     /// Creates a native scene loader bound to <paramref name="world"/>.
     /// </summary>
-    /// <param name="allocator">Allocator used for loader-internal storage.</param>
     /// <param name="world">The world into which entities are loaded.</param>
     /// <param name="projectRoot">
     /// Optional project root for resolving <c>res://</c>-prefixed paths. Pass
     /// <see langword="null"/> to disable res:// resolution.
     /// </param>
-    public SceneLoader(Allocator allocator, World world, string? projectRoot = null)
+    public SceneLoader(World world, string? projectRoot = null)
     {
-        ArgumentNullException.ThrowIfNull(allocator);
         ArgumentNullException.ThrowIfNull(world);
 
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
@@ -64,7 +62,6 @@ public sealed unsafe class SceneLoader : IDisposable
         {
             KernelException.ThrowIfFailed(
                 KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
-                    allocator.Native,
                     world.Native,
                     (sbyte*)rootPtr,
                     &p).ToManaged());
@@ -84,7 +81,7 @@ public sealed unsafe class SceneLoader : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         s_pendingException = null;
-        ke_result result;
+        int result;
         fixed (byte* p = bytes)
             result = _native->load(_native, (sbyte*)p);
 
@@ -117,7 +114,7 @@ public sealed unsafe class SceneLoader : IDisposable
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static ke_result ScriptTrampoline(void* ctx, ulong entity, sbyte* typeName)
+    private static int ScriptTrampoline(void* ctx, ulong entity, sbyte* typeName)
     {
         try
         {
@@ -125,14 +122,14 @@ public sealed unsafe class SceneLoader : IDisposable
             if (gch.Target is Func<ulong, string, bool> factory)
             {
                 var name = typeName != null ? Marshal.PtrToStringUTF8((IntPtr)typeName) ?? "" : "";
-                return factory(entity, name) ? ke_result.KE_OK : ke_result.KE_ERROR_NOT_FOUND;
+                return factory(entity, name) ? (int)ke_result.KE_OK : (int)ke_result.KE_ERROR_NOT_FOUND;
             }
         }
         catch (Exception ex)
         {
             s_pendingException ??= ex;
         }
-        return ke_result.KE_ERROR;
+        return (int)ke_result.KE_ERROR;
     }
 
     /// <inheritdoc cref="IDisposable.Dispose"/>

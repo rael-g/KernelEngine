@@ -15,7 +15,7 @@ namespace KernelEngine.Framework;
 /// <remarks>
 /// Typical usage:
 /// <code>
-/// using var actions = new NativeInputActions(allocator);
+/// using var actions = new NativeInputActions();
 /// actions.Load("res://input/player.input");
 /// int moveId  = actions.GetActionId("Move");
 /// int jumpId  = actions.GetActionId("Jump");
@@ -40,14 +40,11 @@ public sealed unsafe class NativeInputActions : IDisposable
     private Action<ke_input_action_event>? _eventClosure;
 
     /// <summary>Creates a native input-actions instance.</summary>
-    /// <param name="allocator">Allocator used for internal action/binding storage.</param>
-    public NativeInputActions(Allocator allocator)
+    public NativeInputActions()
     {
-        ArgumentNullException.ThrowIfNull(allocator);
         ke_input_actions* p;
         KernelException.ThrowIfFailed(
-            KernelEngine.Framework.Native.NativeMethods.input_actions_create(
-                allocator.Native, &p).ToManaged());
+            KernelEngine.Framework.Native.NativeMethods.input_actions_create(&p).ToManaged());
         _native = p;
     }
 
@@ -62,7 +59,7 @@ public sealed unsafe class NativeInputActions : IDisposable
         ObjectDisposedException.ThrowIf(_native == null, this);
         ArgumentException.ThrowIfNullOrEmpty(path);
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
-        ke_result result;
+        int result;
         fixed (byte* p = bytes)
             result = _native->load(_native, (sbyte*)p);
         KernelException.ThrowIfFailed(result.ToManaged());
@@ -151,7 +148,7 @@ public sealed unsafe class NativeInputActions : IDisposable
         }
 
         s_pendingException = null;
-        ke_result result;
+        int result;
         if (onEvent is not null)
             result = _native->evaluate(_native, snapshot, &EventTrampoline, ctx);
         else

@@ -62,9 +62,9 @@ public sealed unsafe class RenderGraph : IDisposable
         if (string.IsNullOrEmpty(name)) return false;
 
         var bytes = AsciiZ(name);
-        ke_result rc;
+        int rc;
         fixed (byte* p = bytes) rc = _native->remove_pass(_native, (sbyte*)p);
-        if (rc == ke_result.KE_ERROR_NOT_FOUND) return false;
+        if ((ke_result)rc == ke_result.KE_ERROR_NOT_FOUND) return false;
         KernelException.ThrowIfFailed(rc.ToManaged());
 
         for (int i = _ownedPasses.Count - 1; i >= 0; i--) {

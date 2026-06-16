@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
     /// <summary>Registers a <see cref="Logger"/> singleton backed by the kernel allocator.</summary>
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {
-        services.AddSingleton(sp => new Logger(sp.GetRequiredService<Allocator>()));
+        services.AddSingleton(sp => new Logger());
         services.AddSingleton<ILogger>(sp => sp.GetRequiredService<Logger>());
         return services;
     }
@@ -65,9 +65,7 @@ public static class ServiceCollectionExtensions
     /// <summary>Registers an <see cref="Input"/> singleton.</summary>
     public static IServiceCollection AddInput(this IServiceCollection services)
     {
-        services.AddSingleton(sp => new Input(
-            sp.GetRequiredService<Allocator>(),
-            sp.GetService<Logger>()));
+        services.AddSingleton(sp => new Input(sp.GetService<Logger>()));
         services.AddSingleton<IInput>(sp => sp.GetRequiredService<Input>());
         return services;
     }

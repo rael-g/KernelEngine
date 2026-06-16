@@ -26,7 +26,6 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// <summary>
     /// Creates a native asset resolver.
     /// </summary>
-    /// <param name="allocator">Allocator used for internal storage.</param>
     /// <param name="imageLoader">
     /// Optional image-loader plugin. Pass <see langword="null"/> to disable
     /// <see cref="ResolveTexture"/>; it will throw <see cref="KernelException"/> when called.
@@ -39,11 +38,9 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// Optional project root for <c>res://</c> resolution. Pass <see langword="null"/>
     /// to restrict to absolute and CWD-relative paths.
     /// </param>
-    public NativeAssetResolver(Allocator allocator, INativeImageLoader? imageLoader = null,
+    public NativeAssetResolver(INativeImageLoader? imageLoader = null,
                                INativeFontLoader? fontLoader = null, string? projectRoot = null)
     {
-        ArgumentNullException.ThrowIfNull(allocator);
-
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
         ke_asset_resolver* p;
         ke_image_loader* imagePtr = imageLoader is not null ? imageLoader.Native : null;
@@ -52,7 +49,6 @@ public sealed unsafe class NativeAssetResolver : IDisposable
         {
             KernelException.ThrowIfFailed(
                 KernelEngine.Framework.Native.NativeMethods.asset_resolver_create(
-                    allocator.Native,
                     imagePtr,
                     fontPtr,
                     (sbyte*)rootPtr,
@@ -74,7 +70,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_texture_data* data;
-        ke_result result;
+        int result;
         fixed (byte* p = bytes)
             result = _native->resolve_texture(_native, (sbyte*)p, &data);
         KernelException.ThrowIfFailed(result.ToManaged());
@@ -93,7 +89,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_mesh_shape_data meshData = default;
-        ke_result result;
+        int result;
         fixed (byte* p = bytes)
             result = _native->resolve_mesh(_native, (sbyte*)p, &meshData);
         KernelException.ThrowIfFailed(result.ToManaged());
@@ -121,7 +117,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_font_data* data;
-        ke_result result;
+        int result;
         fixed (byte* p = bytes)
             result = _native->resolve_font(_native, (sbyte*)p, pixelSize,
                                            firstCodepoint, codepointCount, atlasSize, &data);
@@ -142,7 +138,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_material_spec spec = default;
-        ke_result result;
+        int result;
         fixed (byte* p = bytes)
             result = _native->resolve_material(_native, (sbyte*)p, &spec);
         KernelException.ThrowIfFailed(result.ToManaged());

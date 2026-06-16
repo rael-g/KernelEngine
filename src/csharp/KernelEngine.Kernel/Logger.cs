@@ -25,11 +25,11 @@ public sealed unsafe class Logger : ILogger, IDisposable
 
     private Logger(ke_logger* native) => _native = native;
 
-    /// <summary>Creates a logger using the given allocator.</summary>
-    public Logger(Allocator allocator)
+    /// <summary>Creates a logger.</summary>
+    public Logger()
     {
         ke_logger* logger;
-        KernelException.ThrowIfFailed(NativeMethods.logger_create(allocator.Native, &logger).ToManaged());
+        KernelException.ThrowIfFailed(NativeMethods.logger_create(&logger).ToManaged());
         _native = logger;
     }
 

@@ -25,19 +25,19 @@ public sealed unsafe class Runtime : IRuntime
     private readonly List<GCHandle> _systemHandles = new();
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static ke_result ModuleLoadTrampoline(ke_runtime* rt, void* userData)
+    private static int ModuleLoadTrampoline(ke_runtime* rt, void* userData)
     {
         try
         {
             var handle = GCHandle.FromIntPtr((nint)userData);
             var entry = (ModuleEntry)handle.Target!;
             entry.OnLoad(entry.Owner);
-            return ke_result.KE_OK;
+            return 0;
         }
         catch (Exception ex)
         {
             lock (s_excLock) s_pendingException = ex;
-            return ke_result.KE_ERROR;
+            return (int)ke_result.KE_ERROR;
         }
     }
 
@@ -105,9 +105,9 @@ public sealed unsafe class Runtime : IRuntime
         ke_runtime_params @params = default;
         ke_runtime* rt;
         var rc = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
-            allocator.Native, flecsEcs.Native, tsConcrete.Native, &@params, &rt);
-        if (rc != ke_result.KE_OK)
-            throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
+            flecsEcs.Native, tsConcrete.Native, &@params, &rt);
+        if (rc != (int)ke_result.KE_OK)
+            throw new InvalidOperationException($"ke_runtime_create failed: {(ke_result)rc}");
         _native = rt;
     }
 
@@ -128,8 +128,7 @@ public sealed unsafe class Runtime : IRuntime
             ke_runtime_module_params p = default;
             p.name      = (sbyte*)namePtr;
             p.user_data = (void*)GCHandle.ToIntPtr(handle);
-            p.on_load   = (delegate* unmanaged[Cdecl]<ke_runtime*, void*, ke_result>)
-                          &ModuleLoadTrampoline;
+            p.on_load   = &ModuleLoadTrampoline;
 
             var rc = _native->register_module(_native, &p, &id);
             // Surface any exception captured by the trampoline so the caller
@@ -204,9 +203,9 @@ public sealed unsafe class Runtime : IRuntime
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void CheckResult(ke_result rc, string op)
+    private static void CheckResult(int rc, string op)
     {
-        if (rc != ke_result.KE_OK)
-            throw new InvalidOperationException($"Runtime.{op} failed: {rc}");
+        if (rc != (int)ke_result.KE_OK)
+            throw new InvalidOperationException($"Runtime.{op} failed: {(ke_result)rc}");
     }
 }

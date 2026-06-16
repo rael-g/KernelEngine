@@ -31,17 +31,15 @@ public sealed class FrameworkModule : IRuntimeModule
         {
             var flecsEcs  = (FlecsEcs)sp.GetRequiredService<IEcs>();
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
-            var alloc     = sp.GetRequiredService<Allocator>();
             var ecs       = sp.GetRequiredService<IEcsRegistry>();
             var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
             {
                 ke_scene_tree* tree;
                 KernelException.ThrowIfFailed(
-                    Native.NativeMethods.scene_tree_create(flecsEcs.Native, alloc.Native, &tree).ToManaged());
+                    Native.NativeMethods.scene_tree_create(flecsEcs.Native, &tree).ToManaged());
 
                 ke_world_params p = default;
-                p.allocator  = alloc.Native;
                 p.ecs        = flecsEcs.Native;
                 p.runtime    = rtRuntime.Native;
                 p.scene_tree = tree;
