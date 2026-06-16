@@ -66,6 +66,7 @@ ke_kernel
 ../../../c/input/include/kernel_engine/input/input.h
 ../../../c/task_scheduler/include/kernel_engine/task_scheduler/task_scheduler.h
 ../../../c/threading/include/kernel_engine/threading/frame_sync.h
+../../../c/threading/include/kernel_engine/threading/thread_name.h
 ../../../c/window/include/kernel_engine/window/window.h
 ../../../c/asset/include/kernel_engine/asset/mesh_data.h
 ../../../c/asset/include/kernel_engine/asset/asset_loader.h
@@ -89,6 +90,8 @@ ke_kernel
 NativeMethods
 --prefixStrip
 ke_
+--with-type
+ke_result=ke_result
 --exclude
 ke_message_pipe
 KE_MESH_NONE

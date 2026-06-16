@@ -18,7 +18,7 @@ public unsafe partial struct ke_logger
     public delegate* unmanaged[Cdecl]<ke_logger*, void> flush;
 
     [NativeTypeName("ke_result (*)(struct ke_logger *, ke_logger_sink)")]
-    public delegate* unmanaged[Cdecl]<ke_logger*, ke_logger_sink, ke_result> add_sink;
+    public delegate* unmanaged[Cdecl]<ke_logger*, ke_logger_sink, int> add_sink;
 }
 
 public partial struct ke_logger

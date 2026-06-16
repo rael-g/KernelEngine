@@ -8,22 +8,22 @@ public unsafe partial struct ke_window
     public delegate* unmanaged[Cdecl]<ke_window*, void> destroy;
 
     [NativeTypeName("ke_result (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, ke_result> on_initialize;
+    public delegate* unmanaged[Cdecl]<ke_window*, int> on_initialize;
 
     [NativeTypeName("ke_result (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, ke_result> on_shutdown;
+    public delegate* unmanaged[Cdecl]<ke_window*, int> on_shutdown;
 
-    [NativeTypeName("ke_bool (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, byte> should_close;
-
-    [NativeTypeName("ke_result (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, ke_result> poll_events;
+    [NativeTypeName("bool (*)(struct ke_window *)")]
+    public delegate* unmanaged[Cdecl]<ke_window*, bool> should_close;
 
     [NativeTypeName("ke_result (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, ke_result> swap_buffers;
+    public delegate* unmanaged[Cdecl]<ke_window*, int> poll_events;
+
+    [NativeTypeName("ke_result (*)(struct ke_window *)")]
+    public delegate* unmanaged[Cdecl]<ke_window*, int> swap_buffers;
 
     [NativeTypeName("ke_result (*)(struct ke_window *, int32_t *, int32_t *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, int*, int*, ke_result> get_size;
+    public delegate* unmanaged[Cdecl]<ke_window*, int*, int*, int> get_size;
 
     [NativeTypeName("void *(*)(struct ke_window *)")]
     public delegate* unmanaged[Cdecl]<ke_window*, void*> get_native_handle;

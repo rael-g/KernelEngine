@@ -7,7 +7,7 @@ public unsafe partial struct ke_variant
 {
     public ke_variant_type type;
 
-    [NativeTypeName("__AnonymousRecord_variant_L42_C9")]
+    [NativeTypeName("__AnonymousRecord_variant_L32_C9")]
     public _Anonymous_e__Union Anonymous;
 
     [UnscopedRef]

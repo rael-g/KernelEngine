@@ -1,10 +1,7 @@
 namespace KernelEngine.Kernel.Native;
 
-public unsafe partial struct ke_frame_packet_params
+public partial struct ke_frame_packet_params
 {
-    [NativeTypeName("struct ke_allocator *")]
-    public ke_allocator* allocator;
-
     [NativeTypeName("uint32_t")]
     public uint draw_capacity;
 

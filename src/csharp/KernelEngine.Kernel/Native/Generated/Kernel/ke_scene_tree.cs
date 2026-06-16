@@ -11,7 +11,7 @@ public unsafe partial struct ke_scene_tree
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, sbyte*, ulong, ulong> create_node;
 
     [NativeTypeName("ke_result (*)(struct ke_scene_tree *, ke_entity)")]
-    public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong, ke_result> destroy_node;
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong, int> destroy_node;
 
     [NativeTypeName("void (*)(struct ke_scene_tree *)")]
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, void> destroy_all;

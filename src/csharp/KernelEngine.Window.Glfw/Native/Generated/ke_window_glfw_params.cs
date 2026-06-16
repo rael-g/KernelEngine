@@ -22,6 +22,5 @@ public unsafe partial struct ke_window_glfw_params
     [NativeTypeName("int32_t")]
     public int height;
 
-    [NativeTypeName("ke_bool")]
-    public byte fullscreen;
+    public bool fullscreen;
 }

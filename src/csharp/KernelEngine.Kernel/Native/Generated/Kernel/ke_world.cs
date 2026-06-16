@@ -14,7 +14,7 @@ public unsafe partial struct ke_world
     public delegate* unmanaged[Cdecl]<ke_world*, ke_scene_tree*> scene_tree;
 
     [NativeTypeName("ke_result (*)(struct ke_world *, ke_component_id, ke_component_apply_fn)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>, ke_result> register_component_apply;
+    public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>, int> register_component_apply;
 
     [NativeTypeName("ke_component_apply_fn (*)(struct ke_world *, ke_component_id)")]
     public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>> get_component_apply;
