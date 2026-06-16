@@ -17,134 +17,134 @@ public unsafe class RendererTests
     private static sbyte* _fatalErrorPtr = null;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockOnInitialize(ke_render* self) { _initializeCalled++; return ke_result.KE_OK; }
+    private static int MockOnInitialize(ke_render* self) { _initializeCalled++; return 0; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockFrame(ke_render* self) { _frameCalled++; return ke_result.KE_OK; }
+    private static int MockFrame(ke_render* self) { _frameCalled++; return 0; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockClearColor(ke_render* self, float r, float g, float b, float a) 
-    { 
-        _clearColorCalled++; 
+    private static int MockClearColor(ke_render* self, float r, float g, float b, float a)
+    {
+        _clearColorCalled++;
         _lastR = r; _lastG = g; _lastB = b; _lastA = a;
-        return ke_result.KE_OK; 
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void MockDestroy(ke_render* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockOnShutdown(ke_render* self) { return ke_result.KE_OK; }
+    private static int MockOnShutdown(ke_render* self) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSubmitPacket(ke_render* self, ke_frame_packet* packet) { return ke_result.KE_OK; }
+    private static int MockSubmitPacket(ke_render* self, ke_frame_packet* packet) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockCreateMesh(ke_render* self, ke_vertex* v, uint vc, ushort* i, uint ic, ke_mesh_handle* h) 
-    { 
-        h->idx = 42; 
-        return ke_result.KE_OK; 
+    private static int MockCreateMesh(ke_render* self, ke_vertex* v, uint vc, ushort* i, uint ic, ke_mesh_handle* h)
+    {
+        h->idx = 42;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockDestroyMesh(ke_render* self, ke_mesh_handle h) { return ke_result.KE_OK; }
+    private static int MockDestroyMesh(ke_render* self, ke_mesh_handle h) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetDirectionalLight(ke_render* self, ke_directional_light* l) { return ke_result.KE_OK; }
+    private static int MockSetDirectionalLight(ke_render* self, ke_directional_light* l) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSubmitMesh(ke_render* self, ke_mesh_handle mesh, ke_material_handle mat, ke_mat4* trans) { return ke_result.KE_OK; }
+    private static int MockSubmitMesh(ke_render* self, ke_mesh_handle mesh, ke_material_handle mat, ke_mat4* trans) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetViewTransform(ke_render* self, ke_mat4* view, ke_mat4* proj) { return ke_result.KE_OK; }
+    private static int MockSetViewTransform(ke_render* self, ke_mat4* view, ke_mat4* proj) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_ndc_convention MockGetNdcConvention(ke_render* self) 
-    { 
-        return new ke_ndc_convention { z_zero_to_one = 1, y_flip = 0, left_handed = 0 }; 
+    private static ke_ndc_convention MockGetNdcConvention(ke_render* self)
+    {
+        return new ke_ndc_convention { z_zero_to_one = true, y_flip = false, left_handed = false };
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockCreateMaterial(ke_render* self, ke_material* mat, ke_material_handle* h)
+    private static int MockCreateMaterial(ke_render* self, ke_material* mat, ke_material_handle* h)
     {
         h->idx = 123;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetShadowMap(ke_render* self, ke_shadow_map_handle h) { return ke_result.KE_OK; }
+    private static int MockSetShadowMap(ke_render* self, ke_shadow_map_handle h) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetSsao(ke_render* self, byte e, float r, float b, float s) { return ke_result.KE_OK; }
+    private static int MockSetSsao(ke_render* self, bool e, float r, float b, float s) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetTonemapping(ke_render* self, byte e, float exp, float g) { return ke_result.KE_OK; }
+    private static int MockSetTonemapping(ke_render* self, bool e, float exp, float g) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetBloom(ke_render* self, byte e, float t, float i) { return ke_result.KE_OK; }
+    private static int MockSetBloom(ke_render* self, bool e, float t, float i) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockCreateTexture(ke_render* self, uint w, uint h, byte* d, ke_texture_handle* out_h)
+    private static int MockCreateTexture(ke_render* self, uint w, uint h, byte* d, ke_texture_handle* out_h)
     {
         out_h->idx = 77;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockCreateCubemap(ke_render* self, uint s, byte* d, ke_texture_handle* out_h)
+    private static int MockCreateCubemap(ke_render* self, uint s, byte* d, ke_texture_handle* out_h)
     {
         out_h->idx = 88;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockCreateShadowMap(ke_render* self, uint w, uint h, ke_shadow_map_handle* out_h)
+    private static int MockCreateShadowMap(ke_render* self, uint w, uint h, ke_shadow_map_handle* out_h)
     {
         out_h->idx = 99;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetClusterConfig(ke_render* self, ke_cluster_config* c) { return ke_result.KE_OK; }
+    private static int MockSetClusterConfig(ke_render* self, ke_cluster_config* c) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static sbyte* MockGetLastFatalError(ke_render* self) { return _fatalErrorPtr; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetCameraPos(ke_render* self, float x, float y, float z) { return ke_result.KE_OK; }
+    private static int MockSetCameraPos(ke_render* self, float x, float y, float z) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetPointLights(ke_render* self, ke_point_light* l, uint c) { return ke_result.KE_OK; }
+    private static int MockSetPointLights(ke_render* self, ke_point_light* l, uint c) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetSpotLights(ke_render* self, ke_spot_light* l, uint c) { return ke_result.KE_OK; }
+    private static int MockSetSpotLights(ke_render* self, ke_spot_light* l, uint c) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSubmitSkybox(ke_render* self, ke_texture_handle h) { return ke_result.KE_OK; }
+    private static int MockSubmitSkybox(ke_render* self, ke_texture_handle h) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockDestroyShadowMap(ke_render* self, ke_shadow_map_handle h) { return ke_result.KE_OK; }
+    private static int MockDestroyShadowMap(ke_render* self, ke_shadow_map_handle h) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockBeginShadowPass(ke_render* self, ke_shadow_map_handle h, ke_mat4* v, ke_mat4* p) { return ke_result.KE_OK; }
+    private static int MockBeginShadowPass(ke_render* self, ke_shadow_map_handle h, ke_mat4* v, ke_mat4* p) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSubmitMeshShadow(ke_render* self, ke_mesh_handle m, ke_mat4* t) { return ke_result.KE_OK; }
+    private static int MockSubmitMeshShadow(ke_render* self, ke_mesh_handle m, ke_mat4* t) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockEndShadowPass(ke_render* self) { return ke_result.KE_OK; }
+    private static int MockEndShadowPass(ke_render* self) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetOrthographic(ke_render* self, byte e) { return ke_result.KE_OK; }
+    private static int MockSetOrthographic(ke_render* self, bool e) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetAmbientLight(ke_render* self, float r, float g, float b) { return ke_result.KE_OK; }
+    private static int MockSetAmbientLight(ke_render* self, float r, float g, float b) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockDestroyTexture(ke_render* self, ke_texture_handle h) { return ke_result.KE_OK; }
+    private static int MockDestroyTexture(ke_render* self, ke_texture_handle h) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockDestroyMaterial(ke_render* self, ke_material_handle h) { return ke_result.KE_OK; }
+    private static int MockDestroyMaterial(ke_render* self, ke_material_handle h) { return (int)ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_render_graph* MockGetRenderGraph(ke_render* self) { return null; }
@@ -191,7 +191,7 @@ public unsafe class RendererTests
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetSetOrthographic(ke_render* self, byte e) { return ke_result.KE_OK; }
+    private static int MockSetSetOrthographic(ke_render* self, bool e) { return (int)ke_result.KE_OK; }
 
     [Fact]
     public void Initialize_CallsMock()

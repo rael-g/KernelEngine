@@ -13,17 +13,17 @@ public unsafe class WindowTests
     private static int _shouldCloseCalled = 0;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockInitialize(ke_window* window)
+    private static int MockInitialize(ke_window* window)
     {
         _initializeCalled++;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockShutdown(ke_window* window)
+    private static int MockShutdown(ke_window* window)
     {
         _shutdownCalled++;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
@@ -33,10 +33,10 @@ public unsafe class WindowTests
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static byte MockShouldClose(ke_window* window)
+    private static bool MockShouldClose(ke_window* window)
     {
         _shouldCloseCalled++;
-        return 1;
+        return true;
     }
 
     [Fact]

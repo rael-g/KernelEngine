@@ -40,7 +40,7 @@ public unsafe class InputDrainTests
         mock->drain_events = &MockDrainEvents;
 
         using var allocator = new MallocAllocator();
-        var input = new Input(allocator, null);
+        var input = new Input(null);
         
         // Use reflection to swap _native for our mock
         var field = typeof(Input).GetField("_native", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);

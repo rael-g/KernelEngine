@@ -10,7 +10,7 @@ public class InputTests
     public void Input_CanBeCreated()
     {
         using var allocator = new MallocAllocator();
-        using var input = new Input(allocator, null);
+        using var input = new Input(null);
         Assert.NotNull(input);
     }
 
@@ -18,7 +18,7 @@ public class InputTests
     public void IsKeyDown_ReturnsFalse_ByDefault()
     {
         using var allocator = new MallocAllocator();
-        using var input = new Input(allocator, null);
+        using var input = new Input(null);
         Assert.False(input.IsKeyDown(65));
     }
 
@@ -27,7 +27,7 @@ public class InputTests
     {
         KernelThread.SetCurrentName("ke.main");
         using var allocator = new MallocAllocator();
-        using var input = new Input(allocator, null);
+        using var input = new Input(null);
         var reader = input.CaptureSnapshot();
         Assert.NotNull(reader);
         Assert.False(reader.IsKeyDown(65));
@@ -44,7 +44,7 @@ public class InputTests
     {
         KernelThread.SetCurrentName("ke.main");
         using var allocator = new MallocAllocator();
-        using var input = new Input(allocator, null);
+        using var input = new Input(null);
         
         var reader = input.CaptureSnapshot();
         Assert.False(reader.IsKeyDown(Key.W));

@@ -16,7 +16,7 @@ public class Physics2DTests
     private static float LastAngle = 0;
     private static Vector2 LastVelocity = Vector2.Zero;
     private static Vector2 LastImpulse = Vector2.Zero;
-    private static ke_result LastResult = ke_result.KE_OK;
+    private static int LastResult = (int)ke_result.KE_OK;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe void MockSetGravity(ke_physics_2d* self, float x, float y)
@@ -31,7 +31,7 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockCreateBody(ke_physics_2d* self, ke_body_type_2d type, float x, float y, uint* outId)
+    private static unsafe int MockCreateBody(ke_physics_2d* self, ke_body_type_2d type, float x, float y, uint* outId)
     {
         LastBodyType = type;
         LastPosition = new Vector2(x, y);
@@ -46,17 +46,17 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float d, float f, float r)
+    private static unsafe int MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float d, float f, float r)
     {
         LastBodyId = id;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float d, float f, float r)
+    private static unsafe int MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float d, float f, float r)
     {
         LastBodyId = id;
-        return ke_result.KE_OK;
+        return (int)ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -188,10 +188,10 @@ public class Physics2DTests
     {
         var native = CreateMockNative();
         var physics = new Physics2D(native);
-        LastResult = ke_result.KE_ERROR_OUT_OF_MEMORY;
+        LastResult = (int)ke_result.KE_ERROR_OUT_OF_MEMORY;
         var handle = physics.CreateBody(BodyType2D.Dynamic, new Vector2(1, 2));
         Assert.Equal(BodyHandle2D.None, handle);
-        LastResult = ke_result.KE_OK;
+        LastResult = (int)ke_result.KE_OK;
         NativeMemory.Free(native);
     }
 
