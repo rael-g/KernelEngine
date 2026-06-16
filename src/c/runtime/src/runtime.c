@@ -1,5 +1,6 @@
 #include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/runtime/system_ctx.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #include <stdalign.h>
 #include <stdio.h>
@@ -575,22 +576,25 @@ static void runtime_destroy(ke_runtime *self)
 
     ke_allocator *alloc = h->state.allocator;
     alloc->free(alloc, h);
+    alloc->destroy(alloc);
     // h->state.ecs and h->state.task_scheduler are borrowed — NOT destroyed here.
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_runtime_create(ke_allocator            *alloc,
-                             ke_ecs                  *ecs,
+ke_result ke_runtime_create(ke_ecs                  *ecs,
                              ke_task_scheduler       *task_scheduler,
                              const ke_runtime_params *params,
                              ke_runtime             **out_runtime)
 {
-    if (!alloc || !ecs || !task_scheduler || !out_runtime) return KE_ERROR_INVALID_ARGUMENT;
+    if (!ecs || !task_scheduler || !out_runtime) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_allocator *alloc = ke_allocator_malloc_create();
+    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
 
     runtime_handle *h = (runtime_handle *)alloc->alloc(
         alloc, sizeof(runtime_handle), alignof(runtime_handle));
-    if (!h) return KE_ERROR_OUT_OF_MEMORY;
+    if (!h) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     memset(h, 0, sizeof(*h));
 
     h->state.allocator      = alloc;

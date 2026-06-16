@@ -21,14 +21,13 @@ struct WorldFixture {
 
         ke_ecs *ecs = nullptr;
         ke_ecs_flecs_params ecs_params{};
-        ASSERT_EQ(ke_ecs_flecs_create(allocator, &ecs_params, &ecs), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs), KE_OK);
 
         ke_runtime *runtime = nullptr;
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(allocator, ecs, task_scheduler, &rt_params, &runtime), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime), KE_OK);
 
         ke_world_params wp{};
-        wp.allocator      = allocator;
         wp.task_scheduler = task_scheduler;
         wp.ecs            = ecs;
         wp.runtime        = runtime;

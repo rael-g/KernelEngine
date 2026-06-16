@@ -5,6 +5,7 @@
 // framework plugin's external surface is vtables + factories).
 
 #include <kernel_engine/framework/asset_resolver_create.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #include "mesh_shape_internal.h"
 #include "../third_party/tomlc99/toml.h"
@@ -254,18 +255,22 @@ static void vt_destroy(ke_asset_resolver *self) {
     ke_allocator *a = s->allocator;
     if (s->project_root) a->free(a, s->project_root);
     a->free(a, s);
+    a->destroy(a);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_asset_resolver_create(ke_allocator *alloc, ke_image_loader *image_loader,
+ke_result ke_asset_resolver_create(ke_image_loader *image_loader,
                                     ke_font_loader *font_loader,
                                     const char *project_root, ke_asset_resolver **out) {
-    if (!alloc || !out) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_allocator *alloc = ke_allocator_malloc_create();
+    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
 
     asset_resolver_state *s = (asset_resolver_state *)alloc->alloc(
         alloc, sizeof(asset_resolver_state), 8);
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    if (!s) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     memset(s, 0, sizeof(*s));
 
     s->allocator    = alloc;
@@ -274,6 +279,7 @@ ke_result ke_asset_resolver_create(ke_allocator *alloc, ke_image_loader *image_l
     s->project_root = dup_cstr(alloc, project_root);
     if (project_root && !s->project_root) {
         alloc->free(alloc, s);
+        alloc->destroy(alloc);
         return KE_ERROR_OUT_OF_MEMORY;
     }
 

@@ -1,59 +1,34 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/input/input.h>
-#include <kernel_engine/allocator/allocator.h>
 
 class InputTest : public ::testing::Test {
 protected:
-    ke_allocator* alloc = nullptr;
     ke_input* input = nullptr;
 
     void SetUp() override {
-        alloc = ke_allocator_malloc_create();
-        ASSERT_NE(alloc, nullptr);
-        ke_result res = ke_input_create(alloc, nullptr, &input);
+        ke_result res = ke_input_create(nullptr, &input);
         ASSERT_EQ(res, KE_OK);
     }
 
     void TearDown() override {
         if (input) input->destroy(input);
-        if (alloc) alloc->destroy(alloc);
     }
 };
 
 // --- Creation Tests ---
 
 TEST(InputInitTest, Create_NullOutInput_ReturnsInvalidArgument) {
-    ke_allocator* a = ke_allocator_malloc_create();
-    ASSERT_EQ(ke_input_create(a, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
-    a->destroy(a);
-}
-
-TEST(InputInitTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_input* i = nullptr;
-    ASSERT_EQ(ke_input_create(nullptr, nullptr, &i), KE_ERROR_INVALID_ARGUMENT);
-}
-
-static void* fail_alloc(ke_allocator* alloc, size_t size, size_t alignment) { return nullptr; }
-static void fail_free(ke_allocator* alloc, void* ptr) {}
-
-TEST(InputInitTest, Create_AllocationFailure_ReturnsOutOfMemory) {
-    ke_allocator fa;
-    fa.alloc = fail_alloc;
-    fa.free = fail_free;
-    ke_input* i = nullptr;
-    ASSERT_EQ(ke_input_create(&fa, nullptr, &i), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_input_create(nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
 
 // --- Destroy Tests ---
 
 TEST(InputDestroyTest, Destroy_NullInput_DoesNotCrash) {
-    ke_allocator* a = ke_allocator_malloc_create();
     ke_input* i = nullptr;
-    ke_input_create(a, nullptr, &i);
+    ke_input_create(nullptr, &i);
     auto destroy_fn = i->destroy;
     i->destroy(i);
     destroy_fn(nullptr);
-    a->destroy(a);
     SUCCEED();
 }
 

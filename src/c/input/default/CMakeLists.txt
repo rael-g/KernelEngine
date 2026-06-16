@@ -10,7 +10,7 @@ else()
     target_compile_definitions(ke_input_default PRIVATE KE_KERNEL_EXPORT)
 endif()
 
-target_link_libraries(ke_input_default PUBLIC ke_input ke_allocator)
+target_link_libraries(ke_input_default PUBLIC ke_input ke_allocator ke_allocator_malloc)
 
 install(TARGETS ke_input_default
     EXPORT KernelEngineTargets

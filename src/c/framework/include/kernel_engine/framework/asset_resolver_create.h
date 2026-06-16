@@ -5,7 +5,6 @@
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/text/font.h>
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -34,7 +33,6 @@ extern "C"
     /// <paramref name="project_root"/> may be NULL — res:// resolution is
     /// then disabled; only absolute or CWD-relative paths work.
     KE_FRAMEWORK_API ke_result ke_asset_resolver_create(
-        ke_allocator       *alloc,
         ke_image_loader    *image_loader,
         ke_font_loader     *font_loader,
         const char         *project_root,

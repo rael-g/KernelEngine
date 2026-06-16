@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ECS_ECS_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/common/export.h>
 #include <kernel_engine/ecs/component_field.h>
 #include <kernel_engine/ecs/variant.h>
 #include <stdint.h>
@@ -31,13 +31,11 @@ extern "C"
 
     typedef struct ke_ecs_registry
     {
-        struct ke_allocator *allocator;
-        ke_entity            next_entity;
-        void                *internal_data;
+        ke_entity  next_entity;
+        void      *internal_data;
     } ke_ecs_registry;
 
-    KE_ECS_API ke_result ke_ecs_registry_create(struct ke_allocator *alloc,
-                                                 ke_ecs_registry    **out_registry);
+    KE_ECS_API ke_result ke_ecs_registry_create(ke_ecs_registry **out_registry);
     KE_ECS_API void      ke_ecs_registry_destroy(ke_ecs_registry *registry);
 
     KE_ECS_API ke_entity ke_ecs_entity_create(ke_ecs_registry *registry);

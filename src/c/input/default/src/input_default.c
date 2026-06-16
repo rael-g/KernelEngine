@@ -187,16 +187,20 @@ static void input_destroy(ke_input *self)
     ke_allocator *a = impl->allocator;
     a->free(a, impl);
     a->free(a, self);
+    a->destroy(a);
 }
 
-ke_result ke_input_create(ke_allocator *alloc, struct ke_logger *log, ke_input **out_input)
+ke_result ke_input_create(struct ke_logger *log, ke_input **out_input)
 {
-    if (!alloc || !out_input) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out_input) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_allocator *alloc = ke_allocator_malloc_create();
+    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
 
     ke_input *api = (ke_input *)alloc->alloc(alloc, sizeof(ke_input), 8);
-    if (!api) return KE_ERROR_OUT_OF_MEMORY;
+    if (!api) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     ke_input_internal *impl = (ke_input_internal *)alloc->alloc(alloc, sizeof(ke_input_internal), 8);
-    if (!impl) { alloc->free(alloc, api); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!impl) { alloc->free(alloc, api); alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     memset(impl, 0, sizeof(ke_input_internal));
 
     impl->allocator = alloc;

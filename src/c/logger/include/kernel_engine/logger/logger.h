@@ -3,7 +3,6 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/logger/log_level.h>
-#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -43,7 +42,7 @@ typedef struct ke_logger ke_logger;
     } ke_logger;
 
     /// @brief Creates a logger instance.
-    KE_LOGGER_API ke_result ke_logger_create(ke_allocator *allocator, ke_logger **out_logger);
+    KE_LOGGER_API ke_result ke_logger_create(ke_logger **out_logger);
 
 #ifdef __cplusplus
 }

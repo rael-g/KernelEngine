@@ -103,18 +103,16 @@ extern "C" {
     } ke_frame_packet;
 
     typedef struct ke_frame_packet_params {
-        struct ke_allocator *allocator;
-        uint32_t             draw_capacity;
-        uint32_t             shadow_draw_capacity;
-        uint32_t             point_light_capacity;
-        uint32_t             spot_light_capacity;
-        uint32_t             ui_draw_capacity;
+        uint32_t draw_capacity;
+        uint32_t shadow_draw_capacity;
+        uint32_t point_light_capacity;
+        uint32_t spot_light_capacity;
+        uint32_t ui_draw_capacity;
     } ke_frame_packet_params;
 
     KE_FRAME_PACKET_API ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
                                                           ke_frame_packet **out_packet);
-    KE_FRAME_PACKET_API void ke_frame_packet_destroy(struct ke_allocator *allocator,
-                                                      ke_frame_packet *packet);
+    KE_FRAME_PACKET_API void ke_frame_packet_destroy(ke_frame_packet *packet);
     KE_FRAME_PACKET_API void ke_frame_packet_reset(ke_frame_packet *packet);
 
 #ifdef __cplusplus

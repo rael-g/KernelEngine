@@ -32,6 +32,7 @@ target_link_libraries(ke_framework PUBLIC
     ke_text
     ke_runtime
 )
+target_link_libraries(ke_framework PRIVATE ke_allocator_malloc)
 
 get_target_property(target_type ke_framework TYPE)
 if (target_type STREQUAL "STATIC_LIBRARY")

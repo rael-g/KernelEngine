@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/input_actions_create.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/input/key.h>
 #include <kernel_engine/input/snapshot.h>
 
@@ -34,14 +33,11 @@ static void SetKeyDown(ke_input_snapshot &snap, int key)
 class InputActionsTest : public ::testing::Test
 {
 protected:
-    ke_allocator     *allocator = nullptr;
     ke_input_actions *actions   = nullptr;
 
     void SetUp() override
     {
-        allocator = ke_allocator_malloc_create();
-        ASSERT_NE(allocator, nullptr);
-        ASSERT_EQ(ke_input_actions_create(allocator, &actions), KE_OK);
+        ASSERT_EQ(ke_input_actions_create(&actions), KE_OK);
     }
     void TearDown() override
     {
@@ -323,8 +319,7 @@ TEST_F(InputActionsTest, BindOnUnknownActionId_ReturnsNotFound)
 TEST_F(InputActionsTest, Create_ReturnsInvalidArgument_OnNullArgs)
 {
     ke_input_actions *a = nullptr;
-    EXPECT_EQ(ke_input_actions_create(nullptr, &a), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_input_actions_create(allocator, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_input_actions_create(nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
 
 TEST_F(InputActionsTest, GetAxis3D_Works)

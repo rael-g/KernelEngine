@@ -15,6 +15,7 @@
 // cache them via get_action_id() after load and reuse across frames.
 
 #include <kernel_engine/framework/input_actions_create.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/input/key.h>
 
 #include "../third_party/tomlc99/toml.h"
@@ -537,17 +538,22 @@ static void vt_destroy(ke_input_actions *self) {
     input_actions_state *s = (input_actions_state *)self->handle;
     clear_actions(s);
     if (s->actions) s->allocator->free(s->allocator, s->actions);
-    s->allocator->free(s->allocator, s);
+    ke_allocator *a = s->allocator;
+    a->free(a, s);
+    a->destroy(a);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_input_actions_create(ke_allocator *alloc, ke_input_actions **out_actions) {
-    if (!alloc || !out_actions) return KE_ERROR_INVALID_ARGUMENT;
+ke_result ke_input_actions_create(ke_input_actions **out_actions) {
+    if (!out_actions) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_allocator *alloc = ke_allocator_malloc_create();
+    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
 
     input_actions_state *s = (input_actions_state *)alloc->alloc(
         alloc, sizeof(input_actions_state), 8);
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    if (!s) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     memset(s, 0, sizeof(*s));
     s->allocator = alloc;
 

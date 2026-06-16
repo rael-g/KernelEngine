@@ -44,20 +44,19 @@ protected:
         ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler), KE_OK);
 
         ke_ecs_flecs_params ep{};
-        ASSERT_EQ(ke_ecs_flecs_create(allocator, &ep, &ecs), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs), KE_OK);
         ke_runtime_params rp{};
-        ASSERT_EQ(ke_runtime_create(allocator, ecs, task_scheduler, &rp, &runtime), KE_OK);
-        ASSERT_EQ(ke_scene_tree_create(ecs, allocator, &tree), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rp, &runtime), KE_OK);
+        ASSERT_EQ(ke_scene_tree_create(ecs, &tree), KE_OK);
 
         ke_world_params wp{};
-        wp.allocator = allocator;
         wp.task_scheduler = task_scheduler;
         wp.ecs = ecs;
         wp.runtime = runtime;
         wp.scene_tree = tree;
         ASSERT_EQ(ke_world_create(&wp, &world), KE_OK);
 
-        ASSERT_EQ(ke_scene_loader_create(allocator, world, nullptr, &loader), KE_OK);
+        ASSERT_EQ(ke_scene_loader_create(world, nullptr, &loader), KE_OK);
     }
 
     void TearDown() override
@@ -314,9 +313,8 @@ mode = 7
 TEST_F(SceneLoaderTest, Create_RejectsNullArgs)
 {
     ke_scene_loader *l = nullptr;
-    EXPECT_EQ(ke_scene_loader_create(nullptr, world, nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_scene_loader_create(allocator, nullptr, nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_scene_loader_create(allocator, world, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_loader_create(nullptr, nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_loader_create(world, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
 
 TEST_F(SceneLoaderTest, Destroy_NullSelf_IsSafe)

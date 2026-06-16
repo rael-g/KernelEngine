@@ -20,6 +20,7 @@ target_link_libraries(ke_runtime PUBLIC
     ke_ecs
     ke_task_scheduler
 )
+target_link_libraries(ke_runtime PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_runtime
     EXPORT KernelEngineTargets

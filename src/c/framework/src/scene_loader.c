@@ -16,6 +16,7 @@
 // destroy — same end behavior, simpler ownership graph.
 
 #include <kernel_engine/framework/scene_loader_create.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/components.h>
@@ -517,16 +518,20 @@ static void vt_destroy(ke_scene_loader *self) {
     arena_destroy(s);
     ke_allocator *a = s->allocator;
     a->free(a, s);
+    a->destroy(a);
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────
 
-ke_result ke_scene_loader_create(ke_allocator *alloc, struct ke_world *world,
+ke_result ke_scene_loader_create(struct ke_world *world,
                                   const char *project_root, ke_scene_loader **out_loader) {
-    if (!alloc || !world || !out_loader) return KE_ERROR_INVALID_ARGUMENT;
+    if (!world || !out_loader) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_allocator *alloc = ke_allocator_malloc_create();
+    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
 
     loader_state *s = (loader_state *)alloc->alloc(alloc, sizeof(loader_state), 8);
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    if (!s) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     memset(s, 0, sizeof(*s));
     s->allocator = alloc;
     s->world     = world;

@@ -252,20 +252,23 @@ static void ecs_flecs_destroy(ke_ecs *self)
 
     ke_allocator *alloc = h->state.allocator;
     alloc->free(alloc, h);
+    alloc->destroy(alloc);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_ecs_flecs_create(ke_allocator              *alloc,
-                              const ke_ecs_flecs_params *params,
+ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
                               ke_ecs                   **out_ecs)
 {
     (void)params;
-    if (!alloc || !out_ecs) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out_ecs) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_allocator *alloc = ke_allocator_malloc_create();
+    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
 
     ecs_flecs_handle *h = (ecs_flecs_handle *)alloc->alloc(
         alloc, sizeof(ecs_flecs_handle), alignof(ecs_flecs_handle));
-    if (!h) return KE_ERROR_OUT_OF_MEMORY;
+    if (!h) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     memset(h, 0, sizeof(*h));
 
     h->state.allocator = alloc;
@@ -273,6 +276,7 @@ ke_result ke_ecs_flecs_create(ke_allocator              *alloc,
     if (!h->state.world)
     {
         alloc->free(alloc, h);
+        alloc->destroy(alloc);
         return KE_ERROR_NOT_INITIALIZED;
     }
 

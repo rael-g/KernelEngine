@@ -6,6 +6,7 @@
 // subsystem that knows how to free them).
 
 #include <kernel_engine/resource_cache/resource_cache.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #include <stdalign.h>
 #include <stddef.h>
@@ -278,28 +279,32 @@ static void vt_destroy(ke_resource_cache *self) {
 
     table_destroy(&s->resources);
     table_destroy(&s->paths);
-    s->allocator->free(s->allocator, s);
+    ke_allocator *a = s->allocator;
+    a->free(a, s);
+    a->destroy(a);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 ke_result ke_resource_cache_create(const ke_resource_cache_params *params,
                                     ke_resource_cache             **out_cache) {
-    if (!params || !out_cache || !params->allocator) return KE_ERROR_INVALID_ARGUMENT;
+    if (!params || !out_cache) return KE_ERROR_INVALID_ARGUMENT;
 
-    ke_allocator *a = params->allocator;
+    ke_allocator *a = ke_allocator_malloc_create();
+    if (!a) return KE_ERROR_OUT_OF_MEMORY;
+
     rc_state *s = (rc_state *)a->alloc(a, sizeof(rc_state), alignof(rc_state));
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    if (!s) { a->destroy(a); return KE_ERROR_OUT_OF_MEMORY; }
     memset(s, 0, sizeof(*s));
 
     s->allocator   = a;
-    s->destroy_fn  = params->destroy_fn;
-    s->destroy_ctx = params->destroy_ctx;
+    s->destroy_fn  = params ? params->destroy_fn  : NULL;
+    s->destroy_ctx = params ? params->destroy_ctx : NULL;
 
     ke_result rc = table_init(&s->resources, a, 64);
-    if (rc != KE_OK) { a->free(a, s); return rc; }
+    if (rc != KE_OK) { a->free(a, s); a->destroy(a); return rc; }
     rc = table_init(&s->paths, a, 64);
-    if (rc != KE_OK) { table_destroy(&s->resources); a->free(a, s); return rc; }
+    if (rc != KE_OK) { table_destroy(&s->resources); a->free(a, s); a->destroy(a); return rc; }
 
     s->api.handle            = s;
     s->api.register_resource = vt_register;

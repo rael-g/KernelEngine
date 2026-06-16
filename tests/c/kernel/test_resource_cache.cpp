@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/resource_cache/resource_cache.h>
-#include <kernel_engine/allocator/allocator.h>
 
 // All tests share the malloc allocator; the cache is single-threaded inside,
 // which matches our test execution model.
@@ -28,8 +27,7 @@ void marker_destroy(ke_resource_handle, void *ctx) {
 class ResourceCacheTest : public ::testing::Test
 {
 protected:
-    ke_allocator      *allocator = nullptr;
-    ke_resource_cache *cache     = nullptr;
+    ke_resource_cache *cache = nullptr;
 
     void SetUp() override
     {
@@ -37,11 +35,7 @@ protected:
         g_last_destroyed = KE_RESOURCE_HANDLE_NONE;
         g_marker_ctx     = nullptr;
 
-        allocator = ke_allocator_malloc_create();
-        ASSERT_NE(allocator, nullptr);
-
         ke_resource_cache_params params{};
-        params.allocator   = allocator;
         params.destroy_fn  = counting_destroy;
         params.destroy_ctx = nullptr;
         ASSERT_EQ(ke_resource_cache_create(&params, &cache), KE_OK);
@@ -54,7 +48,6 @@ protected:
     void make_cache_with_marker(int *marker) {
         if (cache) cache->destroy(cache);
         ke_resource_cache_params params{};
-        params.allocator   = allocator;
         params.destroy_fn  = marker_destroy;
         params.destroy_ctx = marker;
         ASSERT_EQ(ke_resource_cache_create(&params, &cache), KE_OK);

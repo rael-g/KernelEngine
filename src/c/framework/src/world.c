@@ -7,6 +7,7 @@
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/framework/world_create.h>
+#include <kernel_engine/allocator/allocator.h>
 #include "components_apply.h"
 
 #include <stddef.h>
@@ -22,7 +23,7 @@ typedef struct apply_entry {
 } apply_entry;
 
 typedef struct ke_world_state {
-    ke_allocator             *allocator;       // borrowed
+    ke_allocator             *allocator;       // owned — created internally in ke_world_create
     struct ke_task_scheduler *task_scheduler;  // borrowed
     ke_ecs                   *ecs;             // owned
     ke_runtime               *runtime;         // owned
@@ -102,28 +103,30 @@ static void world_destroy(struct ke_world *self) {
         // "quem cria, owna": world did not create these; world must not destroy them.
         ke_allocator *a = s->allocator;
         a->free(a, s);
+        a->destroy(a);
     }
     // self lives in the same allocation as state — already freed.
 }
 
 ke_result ke_world_create(const ke_world_params *params, ke_world **out_world) {
     if (!params || !out_world) return KE_ERROR_INVALID_ARGUMENT;
-    if (!params->allocator || !params->ecs || !params->runtime) {
+    if (!params->ecs || !params->runtime) {
         return KE_ERROR_INVALID_ARGUMENT;
     }
 
-    ke_allocator *a = params->allocator;
+    ke_allocator *a = ke_allocator_malloc_create();
+    if (!a) return KE_ERROR_OUT_OF_MEMORY;
 
     // Single allocation: state + vtable contiguous. Simpler teardown.
     size_t block_size = sizeof(ke_world_state) + sizeof(ke_world);
     void *block = a->alloc(a, block_size, 8);
-    if (!block) return KE_ERROR_OUT_OF_MEMORY;
+    if (!block) { a->destroy(a); return KE_ERROR_OUT_OF_MEMORY; }
     memset(block, 0, block_size);
 
     ke_world_state *state = (ke_world_state *)block;
     ke_world       *world = (ke_world *)((char *)block + sizeof(ke_world_state));
 
-    state->allocator      = params->allocator;
+    state->allocator      = a;
     state->task_scheduler = params->task_scheduler;
     state->ecs            = params->ecs;
     state->runtime        = params->runtime;

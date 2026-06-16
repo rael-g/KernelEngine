@@ -69,18 +69,15 @@ static fs::path WriteTempFile(const std::string &suffix, const std::string &cont
 class AssetResolverTest : public ::testing::Test
 {
 protected:
-    ke_allocator      *alloc       = nullptr;
     MockImageLoader    loader;
     ke_asset_resolver *resolver    = nullptr;
     fs::path           project_root;
 
     void SetUp() override
     {
-        alloc = ke_allocator_malloc_create();
-        ASSERT_NE(alloc, nullptr);
         InitMockLoader(loader);
         project_root = fs::temp_directory_path();
-        ASSERT_EQ(ke_asset_resolver_create(alloc, &loader.api, nullptr,
+        ASSERT_EQ(ke_asset_resolver_create(&loader.api, nullptr,
                                             project_root.string().c_str(), &resolver),
                   KE_OK);
     }
@@ -127,7 +124,7 @@ TEST_F(AssetResolverTest, ResolveTexture_MissingFile_ReturnsNotFound)
 TEST_F(AssetResolverTest, ResolveTexture_NoLoader_ReturnsInvalidArgument)
 {
     ke_asset_resolver *r = nullptr;
-    ASSERT_EQ(ke_asset_resolver_create(alloc, nullptr, nullptr, nullptr, &r), KE_OK);
+    ASSERT_EQ(ke_asset_resolver_create(nullptr, nullptr, nullptr, &r), KE_OK);
     ke_texture_data *data = nullptr;
     EXPECT_EQ(r->resolve_texture(r, "anything.png", &data), KE_ERROR_INVALID_ARGUMENT);
     r->destroy(r);
@@ -179,8 +176,7 @@ TEST_F(AssetResolverTest, ResolveMaterial_MalformedFile_ReturnsError)
 TEST_F(AssetResolverTest, Create_NullArgs_ReturnsInvalidArgument)
 {
     ke_asset_resolver *r = nullptr;
-    EXPECT_EQ(ke_asset_resolver_create(nullptr, &loader.api, nullptr, nullptr, &r), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_asset_resolver_create(alloc, &loader.api, nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_asset_resolver_create(&loader.api, nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }
 
 TEST_F(AssetResolverTest, ResolveTexture_NullArgs_ReturnsInvalidArgument)
@@ -233,7 +229,7 @@ TEST_F(AssetResolverTest, ResolveMesh_ExternalFile_ReturnsNotFound)
 TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
 {
     ke_asset_resolver *r = nullptr;
-    ke_asset_resolver_create(alloc, &loader.api, nullptr, nullptr, &r);
+    ke_asset_resolver_create(&loader.api, nullptr, nullptr, &r);
     
     auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
     ke_material_spec spec{};

@@ -11,7 +11,7 @@ int main(void)
 
     ke_allocator *alloc = ke_allocator_malloc_create();
     ke_logger *logger = NULL;
-    ke_logger_create(alloc, &logger);
+    ke_logger_create(&logger);
 
     logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE));
 

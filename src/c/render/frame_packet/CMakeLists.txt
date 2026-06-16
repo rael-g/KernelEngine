@@ -10,7 +10,7 @@ else()
     target_compile_definitions(ke_render_frame_packet PRIVATE KE_KERNEL_EXPORT)
 endif()
 
-target_link_libraries(ke_render_frame_packet PUBLIC ke_render ke_allocator)
+target_link_libraries(ke_render_frame_packet PUBLIC ke_render ke_allocator ke_allocator_malloc)
 
 install(TARGETS ke_render_frame_packet
     EXPORT KernelEngineTargets

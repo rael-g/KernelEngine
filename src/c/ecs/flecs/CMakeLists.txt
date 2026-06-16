@@ -9,6 +9,13 @@ target_include_directories(ke_ecs_flecs PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+get_target_property(target_type ke_ecs_flecs TYPE)
+if (target_type STREQUAL "STATIC_LIBRARY")
+    target_compile_definitions(ke_ecs_flecs PUBLIC KE_ECS_FLECS_STATIC)
+else()
+    target_compile_definitions(ke_ecs_flecs PRIVATE KE_ECS_FLECS_EXPORT)
+endif()
+
 install(DIRECTORY include/ DESTINATION include)
 
 target_link_libraries(ke_ecs_flecs PUBLIC
@@ -16,6 +23,7 @@ target_link_libraries(ke_ecs_flecs PUBLIC
     ke_allocator
     flecs::flecs
 )
+target_link_libraries(ke_ecs_flecs PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_ecs_flecs
     EXPORT KernelEngineTargets

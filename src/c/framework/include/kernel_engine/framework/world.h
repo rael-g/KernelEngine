@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_FRAMEWORK_WORLD_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/variant.h>
@@ -25,7 +24,6 @@ extern "C"
 
     typedef struct ke_world_params
     {
-        ke_allocator             *allocator;
         struct ke_task_scheduler *task_scheduler;
         ke_ecs                   *ecs;
         ke_runtime               *runtime;

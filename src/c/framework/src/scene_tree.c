@@ -4,6 +4,7 @@
 // component reads/writes; no separate side state.
 
 #include <kernel_engine/framework/scene_tree_create.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 
@@ -287,17 +288,22 @@ static void vt_destroy(ke_scene_tree *self) {
     scene_tree_state *s = (scene_tree_state *)self->handle;
     // Destroy root + everything under it.
     destroy_entities_recursive(s, s->root);
-    s->allocator->free(s->allocator, s);
+    ke_allocator *a = s->allocator;
+    a->free(a, s);
+    a->destroy(a);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_scene_tree_create(ke_ecs *ecs, ke_allocator *alloc, ke_scene_tree **out_tree) {
-    if (!ecs || !alloc || !out_tree) return KE_ERROR_INVALID_ARGUMENT;
+ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree **out_tree) {
+    if (!ecs || !out_tree) return KE_ERROR_INVALID_ARGUMENT;
+
+    ke_allocator *alloc = ke_allocator_malloc_create();
+    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
 
     scene_tree_state *s = (scene_tree_state *)alloc->alloc(
         alloc, sizeof(scene_tree_state), 8);
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    if (!s) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
     memset(s, 0, sizeof(*s));
 
     s->ecs       = ecs;
@@ -310,6 +316,7 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_allocator *alloc, ke_scene_tree *
     s->root = ecs->entity_create(ecs);
     if (s->root == KE_ENTITY_INVALID) {
         alloc->free(alloc, s);
+        alloc->destroy(alloc);
         return KE_ERROR_OUT_OF_MEMORY;
     }
     // Add all components FIRST, then fetch + populate. Each add can move the
@@ -318,6 +325,7 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_allocator *alloc, ke_scene_tree *
         !ecs->component_add(ecs, s->root, s->name_cid)) {
         ecs->entity_destroy(ecs, s->root);
         alloc->free(alloc, s);
+        alloc->destroy(alloc);
         return KE_ERROR_OUT_OF_MEMORY;
     }
 

@@ -2,25 +2,20 @@
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/components.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 
 class SceneTreeTest : public ::testing::Test
 {
 protected:
-    ke_allocator  *allocator = nullptr;
     ke_ecs        *ecs       = nullptr;
     ke_scene_tree *tree      = nullptr;
 
     void SetUp() override
     {
-        allocator = ke_allocator_malloc_create();
-        ASSERT_NE(allocator, nullptr);
-
         ke_ecs_flecs_params ep{};
-        ASSERT_EQ(ke_ecs_flecs_create(allocator, &ep, &ecs), KE_OK);
-        ASSERT_EQ(ke_scene_tree_create(ecs, allocator, &tree), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs), KE_OK);
+        ASSERT_EQ(ke_scene_tree_create(ecs, &tree), KE_OK);
     }
     void TearDown() override
     {
@@ -179,7 +174,6 @@ TEST_F(SceneTreeTest, DestroyAll_ClearsChildrenButKeepsRoot)
 TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 {
     ke_scene_tree *t = nullptr;
-    EXPECT_EQ(ke_scene_tree_create(nullptr, allocator, &t), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_scene_tree_create(ecs, nullptr, &t),       KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_scene_tree_create(ecs, allocator, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_tree_create(nullptr, &t), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_tree_create(ecs, nullptr), KE_ERROR_INVALID_ARGUMENT);
 }

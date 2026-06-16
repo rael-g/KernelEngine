@@ -53,7 +53,7 @@ extern "C"
     } ke_input;
 
     /// @brief Creates an input system.
-    KE_API ke_result ke_input_create(struct ke_allocator *allocator, struct ke_logger *logger, ke_input **out_input);
+    KE_API ke_result ke_input_create(struct ke_logger *logger, ke_input **out_input);
 
 #ifdef __cplusplus
 }

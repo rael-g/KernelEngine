@@ -3,7 +3,6 @@
 
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/ecs/ke_ecs.h>
-#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -33,7 +32,6 @@ extern "C"
     /// caller invokes tree->destroy(tree) when done.
     KE_FRAMEWORK_API ke_result ke_scene_tree_create(
         ke_ecs         *ecs,
-        ke_allocator   *alloc,
         ke_scene_tree **out_tree);
 
 #ifdef __cplusplus

@@ -10,7 +10,7 @@ else()
     target_compile_definitions(ke_resource_cache_default PRIVATE KE_KERNEL_EXPORT)
 endif()
 
-target_link_libraries(ke_resource_cache_default PUBLIC ke_resource_cache)
+target_link_libraries(ke_resource_cache_default PUBLIC ke_resource_cache ke_allocator ke_allocator_malloc)
 
 install(TARGETS ke_resource_cache_default
     EXPORT KernelEngineTargets

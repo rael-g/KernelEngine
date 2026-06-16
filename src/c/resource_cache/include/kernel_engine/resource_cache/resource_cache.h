@@ -18,7 +18,6 @@
 //     framework — this is a primitive, not a framework opinion.
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/common/export.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -38,7 +37,6 @@ extern "C"
 
     typedef struct ke_resource_cache_params
     {
-        ke_allocator             *allocator;     ///< borrowed
         ke_resource_destroy_func  destroy_fn;    ///< invoked on refcount → 0 (and on destroy of still-live entries); may be NULL
         void                     *destroy_ctx;   ///< forwarded to destroy_fn unchanged
     } ke_resource_cache_params;

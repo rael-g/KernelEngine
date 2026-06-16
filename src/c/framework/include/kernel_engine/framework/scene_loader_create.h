@@ -3,7 +3,6 @@
 
 #include <kernel_engine/framework/scene_loader.h>
 #include <kernel_engine/framework/world.h>
-#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -37,10 +36,9 @@ extern "C"
     /// the loader only after the world has shut down OR after removing every
     /// scene_properties component the loader populated.
     KE_FRAMEWORK_API ke_result ke_scene_loader_create(
-        ke_allocator       *alloc,
-        struct ke_world    *world,
-        const char         *project_root,
-        ke_scene_loader   **out_loader);
+        struct ke_world   *world,
+        const char        *project_root,
+        ke_scene_loader  **out_loader);
 
 #ifdef __cplusplus
 }

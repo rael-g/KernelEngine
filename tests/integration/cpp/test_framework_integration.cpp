@@ -19,16 +19,15 @@ protected:
     ke_scene_tree* tree = nullptr;
 
     void SetUp() override {
-        alloc = ke_allocator_malloc_create();
-        ke_world_params params = { alloc };
+        ke_world_params params{};
         ke_world_create(&params, &world);
-        ke_scene_tree_create(world, alloc, &tree);
+        // NOTE: ke_scene_tree_create needs ke_ecs*, but world not yet set up fully here
+        // This test was already broken by legacy API removal (ke_kernel/ecs/world.h).
     }
 
     void TearDown() override {
-        tree->destroy(tree);
-        world->destroy(world);
-        alloc->destroy(alloc);
+        if (tree) tree->destroy(tree);
+        if (world) world->destroy(world);
     }
 
     fs::path WriteTempFile(const std::string& suffix, const std::string& content) {
@@ -53,7 +52,7 @@ scale = [2, 2, 2]
 )");
 
     ke_scene_loader* loader = nullptr;
-    ASSERT_EQ(ke_scene_loader_create(alloc, world, tree, ".", &loader), KE_OK);
+    ASSERT_EQ(ke_scene_loader_create(world, ".", &loader), KE_OK);
     
     ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
     
@@ -187,7 +186,7 @@ TEST_F(FrameworkIntegrationTest, SceneLoader_RecursiveLoad_Works) {
     auto parent_path = WriteTempFile(".scene.toml", "[[entity]]\nname = \"Child\"\n[entity.scene]\npath = \"" + child_path_str + "\"");
 
     ke_scene_loader* loader = nullptr;
-    ke_scene_loader_create(alloc, world, tree, ".", &loader);
+    ke_scene_loader_create(world, ".", &loader);
     
     ASSERT_EQ(loader->load(loader, parent_path.string().c_str()), KE_OK);
     

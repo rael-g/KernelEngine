@@ -5,7 +5,7 @@
 // Owns the system catalog + phase loop + (eventually) parallel wave dispatch.
 // Storage is borrowed via ke_ecs*; the scheduler never owns it.
 
-#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/common/export.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/task_scheduler/task_scheduler.h>
 #include <kernel_engine/ecs/ke_ecs.h>
@@ -26,8 +26,7 @@ typedef struct ke_runtime_params {
     float fixed_dt_max_accum;
 } ke_runtime_params;
 
-KE_API ke_result ke_runtime_create(ke_allocator            *alloc,
-                                    ke_ecs                  *ecs,
+KE_RUNTIME_API ke_result ke_runtime_create(ke_ecs                  *ecs,
                                     ke_task_scheduler       *task_scheduler,
                                     const ke_runtime_params *params,
                                     ke_runtime             **out_runtime);

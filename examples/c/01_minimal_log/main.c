@@ -1,5 +1,4 @@
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include "../common/example_console_sink.h"
 #include <stdio.h>
 
@@ -7,11 +6,8 @@ int main(void)
 {
     printf("--- KernelEngine C Minimal Log Demo ---\n");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return 1;
-
     ke_logger *logger = NULL;
-    ke_result res = ke_logger_create(alloc, &logger);
+    ke_result res = ke_logger_create(&logger);
 
     if (res == KE_OK)
     {
@@ -25,8 +21,6 @@ int main(void)
 
         logger->destroy(logger);
     }
-
-    alloc->destroy(alloc);
     printf("--- Demo Complete ---\n");
 
     return 0;

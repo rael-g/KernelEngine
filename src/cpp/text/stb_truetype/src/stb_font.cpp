@@ -1,6 +1,7 @@
 ﻿#include <kernel_engine/text/stb_truetype/stb_font.h>
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/common/export.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/logger/logger.h>
 #include <kernel_engine/text/font.h>
 

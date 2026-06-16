@@ -40,7 +40,7 @@ int main(void)
 
     ke_allocator *alloc = ke_allocator_malloc_create();
     ke_logger *logger = NULL;
-    ke_logger_create(alloc, &logger);
+    ke_logger_create(&logger);
 
     ke_logger_sink sink = {.handle = NULL, .log = app_console_sink, .destroy = NULL};
     logger->add_sink(logger, sink);

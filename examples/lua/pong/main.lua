@@ -30,8 +30,7 @@ local asset_sys_params_v = ffi.new("ke_system_params")
 framework.ke_mesh_asset_system_get_system_params(asset_sys, asset_sys_params_v)
 
 local loader_out = ffi.new("ke_scene_loader*[1]")
-assert(framework.ke_scene_loader_create(alloc, world, tree,
-                                        nil, loader_out) == 0)
+assert(framework.ke_scene_loader_create(world, nil, loader_out) == 0)
 local loader = loader_out[0]
 assert(loader.load(loader, script_dir .. "scenes/Main.scene") == 0)
 
@@ -44,7 +43,7 @@ packet.ambient_light[0] = 0.15; packet.ambient_light[1] = 0.15; packet.ambient_l
 -- ── Input actions — Pong bindings registered programmatically ───────────────
 
 local actions_out = ffi.new("ke_input_actions*[1]")
-assert(framework.ke_input_actions_create(alloc, actions_out) == 0)
+assert(framework.ke_input_actions_create(actions_out) == 0)
 local actions = actions_out[0]
 
 local PADDLE_LEFT  = actions.add_action(actions, "PaddleLeftMove",  ffi.C.KE_ACTION_TYPE_AXIS1D)

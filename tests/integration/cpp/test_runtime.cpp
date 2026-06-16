@@ -55,11 +55,11 @@ protected:
         ASSERT_NE(task_scheduler, nullptr);
 
         ke_ecs_flecs_params ecs_params{};
-        ASSERT_EQ(ke_ecs_flecs_create(allocator, &ecs_params, &ecs), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs), KE_OK);
         ASSERT_NE(ecs, nullptr);
 
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(allocator, ecs, task_scheduler, &rt_params, &runtime), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime), KE_OK);
         ASSERT_NE(runtime, nullptr);
     }
 
@@ -127,7 +127,7 @@ TEST_F(RuntimeSpike, Create_RejectsNullEcs)
 {
     ke_runtime_params rt_params{};
     ke_runtime *rt = nullptr;
-    EXPECT_EQ(ke_runtime_create(allocator, nullptr, task_scheduler, &rt_params, &rt),
+    EXPECT_EQ(ke_runtime_create(nullptr, task_scheduler, &rt_params, &rt),
               KE_ERROR_INVALID_ARGUMENT);
     EXPECT_EQ(rt, nullptr);
 }
@@ -136,7 +136,7 @@ TEST_F(RuntimeSpike, Create_RejectsNullTaskScheduler)
 {
     ke_runtime_params rt_params{};
     ke_runtime *rt = nullptr;
-    EXPECT_EQ(ke_runtime_create(allocator, ecs, nullptr, &rt_params, &rt),
+    EXPECT_EQ(ke_runtime_create(ecs, nullptr, &rt_params, &rt),
               KE_ERROR_INVALID_ARGUMENT);
     EXPECT_EQ(rt, nullptr);
 }
