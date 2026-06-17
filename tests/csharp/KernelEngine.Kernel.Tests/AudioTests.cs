@@ -6,7 +6,7 @@ namespace KernelEngine.Kernel.Tests;
 
 public class AudioTests
 {
-    private static int LastResult = (int)ke_result.KE_OK;
+    private static ke_result LastResult = ke_result.KE_OK;
     private static uint LastSoundId = 0;
     private static float LastVolume = 0;
     private static byte LastLoop = 0;
@@ -14,7 +14,7 @@ public class AudioTests
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe int MockLoadSound(ke_audio* self, sbyte* path, uint* outId)
+    private static unsafe ke_result MockLoadSound(ke_audio* self, sbyte* path, uint* outId, ke_error** out_error)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
         *outId = 42;
@@ -28,12 +28,12 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe int MockPlay(ke_audio* self, uint soundId, float volume, bool loop)
+    private static unsafe ke_result MockPlay(ke_audio* self, uint soundId, float volume, bool loop, ke_error** out_error)
     {
         LastSoundId = soundId;
         LastVolume = volume;
         LastLoop = loop ? (byte)1 : (byte)0;
-        return (int)ke_result.KE_OK;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -91,12 +91,12 @@ public class AudioTests
     {
         var native = CreateMockNative();
         var audio = new Audio(native);
-        LastResult = (int)ke_result.KE_ERROR_IO;
+        LastResult = ke_result.KE_ERROR;
 
         var handle = audio.LoadSound("test.wav");
 
         Assert.Equal(SoundHandle.None, handle);
-        LastResult = (int)ke_result.KE_OK;
+        LastResult = ke_result.KE_OK;
         NativeMemory.Free(native);
     }
 

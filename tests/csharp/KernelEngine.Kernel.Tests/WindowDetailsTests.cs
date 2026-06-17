@@ -7,14 +7,14 @@ namespace KernelEngine.Kernel.Tests;
 public unsafe class WindowDetailsTests
 {
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static int MockInit(ke_window* self) => (int)ke_result.KE_OK;
+    private static ke_result MockInit(ke_window* self, ke_error** out_error) => ke_result.KE_OK;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static int MockGetSize(ke_window* self, int* w, int* h)
+    private static ke_result MockGetSize(ke_window* self, int* w, int* h, ke_error** out_error)
     {
         *w = 1920;
         *h = 1080;
-        return (int)ke_result.KE_OK;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
@@ -24,7 +24,7 @@ public unsafe class WindowDetailsTests
     private static void MockDestroy(ke_window* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static int MockShutdown(ke_window* self) => (int)ke_result.KE_OK;
+    private static ke_result MockShutdown(ke_window* self, ke_error** out_error) => ke_result.KE_OK;
 
     [Fact]
     public void GetSize_ReturnsCorrectValues()

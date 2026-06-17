@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_COMMON_ERROR_H_
 
 #include <stdbool.h>
-#include <kernel_engine/common/export.h>
+#include <kernel_engine/common/common_export.h>
 
 #ifdef __cplusplus
 extern "C" {

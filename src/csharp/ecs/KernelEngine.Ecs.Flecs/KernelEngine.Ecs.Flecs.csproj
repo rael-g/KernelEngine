@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- flecs-backed storage plugin. Wraps the ke_ecs vtable contract via the
+         ke_ecs_flecs_create factory. Scheduler is a separate concern (see
+         KernelEngine.Runtime). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>KernelEngine.Ecs.Flecs</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <NativeDep Include="ke_ecs_flecs" />
+    <NativeDep Include="ke_kernel" />
+  </ItemGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+  </ItemGroup>
+
+</Project>

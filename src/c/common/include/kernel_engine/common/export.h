@@ -12,45 +12,12 @@
 #  define KE_HIDDEN __attribute__((visibility("hidden")))
 #endif
 
-// ── Per-domain export macros ──────────────────────────────────────────────────
-// Each domain DLL sets its own _EXPORT define (PRIVATE in CMake) when building.
-// Consumers define nothing → KE_IMPORT. Static builds set _STATIC → empty.
-
-// ke_common (error singletons + ke_error_set/is)
-#ifdef KE_COMMON_STATIC
-#  define KE_COMMON_API
-#elif defined(KE_COMMON_EXPORT)
-#  define KE_COMMON_API KE_EXPORT
-#else
-#  define KE_COMMON_API KE_IMPORT
-#endif
-
-// ke_logger_simple
-#ifdef KE_LOGGER_STATIC
-#  define KE_LOGGER_API
-#elif defined(KE_LOGGER_EXPORT)
-#  define KE_LOGGER_API KE_EXPORT
-#else
-#  define KE_LOGGER_API KE_IMPORT
-#endif
-
-// ke_input_default
-#ifdef KE_INPUT_STATIC
-#  define KE_INPUT_API
-#elif defined(KE_INPUT_EXPORT)
-#  define KE_INPUT_API KE_EXPORT
-#else
-#  define KE_INPUT_API KE_IMPORT
-#endif
-
-// ke_resource_cache_default
-#ifdef KE_RESOURCE_CACHE_STATIC
-#  define KE_RESOURCE_CACHE_API
-#elif defined(KE_RESOURCE_CACHE_EXPORT)
-#  define KE_RESOURCE_CACHE_API KE_EXPORT
-#else
-#  define KE_RESOURCE_CACHE_API KE_IMPORT
-#endif
+// ── Remaining centralized macros ─────────────────────────────────────────────
+// Migrated domains use their own <domain>_export.h:
+//   common         → common/common_export.h
+//   logger         → logger/logger_export.h
+//   input          → input/input_export.h
+//   resource_cache → resource_cache/resource_cache_export.h
 
 // ke_ecs_* (sparse set, registry — future)
 #ifdef KE_ECS_STATIC
@@ -69,10 +36,6 @@
 #else
 #  define KE_FRAME_PACKET_API KE_IMPORT
 #endif
-
-// Generic KE_API — resolves to KE_COMMON_API for symbols in common headers.
-// Legacy alias; prefer the domain-specific macro in new code.
-#define KE_API KE_COMMON_API
 
 // Allocator — internal impl dep, never exported to C# / plugin consumers.
 #define KE_ALLOCATOR_API

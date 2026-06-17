@@ -38,11 +38,11 @@ typedef struct ke_logger ke_logger;
         void (*destroy)(struct ke_logger *self);
         void (*log)(struct ke_logger *self, const ke_log_event *event);
         void (*flush)(struct ke_logger *self);
-        ke_result (*add_sink)(struct ke_logger *self, ke_logger_sink sink);
+        ke_result (*add_sink)(struct ke_logger *self, ke_logger_sink sink, ke_error **out_error);
     } ke_logger;
 
     /// @brief Creates a logger instance.
-    KE_LOGGER_API ke_result ke_logger_create(ke_logger **out_logger);
+    KE_LOGGER_API ke_result ke_logger_create(ke_logger **out_logger, ke_error **out_error);
 
 #ifdef __cplusplus
 }

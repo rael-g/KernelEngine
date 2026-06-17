@@ -25,14 +25,14 @@
 
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Framework.Legacy.Native\KernelEngine.Framework.Legacy.Native.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Render.Bgfx\KernelEngine.Render.Bgfx.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\render\KernelEngine.Render.Bgfx\KernelEngine.Render.Bgfx.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
   </ItemGroup>
 </Project>

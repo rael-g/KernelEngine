@@ -9,15 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Toolkit/KernelEngine.Toolkit.csproj" />
-    <ProjectReference Include="../../../src/csharp/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\task_scheduler\KernelEngine.TaskScheduler.Enki\KernelEngine.TaskScheduler.Enki.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\render\KernelEngine.Render.Bgfx\KernelEngine.Render.Bgfx.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\toolkit\KernelEngine.Toolkit\KernelEngine.Toolkit.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
   </ItemGroup>
 
 </Project>

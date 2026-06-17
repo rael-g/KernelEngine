@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- In-house scheduler. Wraps the ke_runtime vtable via ke_runtime_create.
+         Takes an injected ke_ecs* (the storage plugin, e.g. KernelEngine.Ecs.Flecs)
+         at construction. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>KernelEngine.Runtime</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <NativeDep Include="ke_runtime" />
+    <NativeDep Include="ke_kernel" />
+  </ItemGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
+  </ItemGroup>
+
+</Project>

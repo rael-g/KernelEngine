@@ -18,7 +18,7 @@
 //     framework — this is a primitive, not a framework opinion.
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/common/export.h>
+#include <kernel_engine/resource_cache/resource_cache_export.h>
 #include <stdbool.h>
 #include <stdint.h>
 

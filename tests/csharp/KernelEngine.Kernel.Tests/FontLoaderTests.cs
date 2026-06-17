@@ -6,17 +6,17 @@ namespace KernelEngine.Kernel.Tests;
 
 public class FontLoaderTests
 {
-    private static int LastResult = (int)ke_result.KE_OK;
+    private static ke_result LastResult = ke_result.KE_OK;
     private static bool DestroyCalled = false;
     private static bool FreeFontCalled = false;
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe int MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_font_data** outData)
+    private static unsafe ke_result MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_font_data** outData, ke_error** out_error)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
 
-        if (LastResult != 0) return LastResult;
+        if (LastResult != ke_result.KE_OK) return LastResult;
 
         var data = (ke_font_data*)NativeMemory.Alloc((nuint)sizeof(ke_font_data));
         data->atlas_width = 10;
@@ -29,7 +29,7 @@ public class FontLoaderTests
         data->ascent = 10;
 
         *outData = data;
-        return (int)ke_result.KE_OK;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -79,7 +79,7 @@ public class FontLoaderTests
         
         LastPath = null;
         FreeFontCalled = false;
-        LastResult = (int)ke_result.KE_OK;
+        LastResult = ke_result.KE_OK;
 
         var data = await loader.LoadFontAsync("test.ttf", 16);
 
@@ -99,11 +99,11 @@ public class FontLoaderTests
         FontLoader loader;
         unsafe { loader = new FontLoader((ke_font_loader*)native); }
         
-        LastResult = (int)ke_result.KE_ERROR_IO;
+        LastResult = ke_result.KE_ERROR;
 
         await Assert.ThrowsAsync<KernelException>(() => loader.LoadFontAsync("test.ttf", 16));
 
-        LastResult = (int)ke_result.KE_OK;
+        LastResult = ke_result.KE_OK;
         unsafe { NativeMemory.Free((void*)native); }
     }
 

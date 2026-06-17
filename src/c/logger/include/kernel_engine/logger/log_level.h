@@ -1,18 +1,8 @@
 #ifndef KERNEL_ENGINE_LOGGER_LOG_LEVEL_H_
 #define KERNEL_ENGINE_LOGGER_LOG_LEVEL_H_
 
-#include <kernel_engine/common/export.h>
+#include <kernel_engine/logger/logger_export.h>
 #include <stdint.h>
-
-#ifndef KE_LOGGER_API
-#  ifdef KE_LOGGER_STATIC
-#    define KE_LOGGER_API
-#  elif defined(KE_LOGGER_EXPORT)
-#    define KE_LOGGER_API KE_EXPORT
-#  else
-#    define KE_LOGGER_API KE_IMPORT
-#  endif
-#endif
 
 #ifdef __cplusplus
 extern "C"

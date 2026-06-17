@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_INPUT_INPUT_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/common/export.h>
+#include <kernel_engine/input/input_export.h>
 #include <kernel_engine/input/snapshot.h>
 #include <kernel_engine/input/event.h>
 #include <stdbool.h>
