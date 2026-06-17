@@ -12,37 +12,72 @@
 #  define KE_HIDDEN __attribute__((visibility("hidden")))
 #endif
 
-// ── Kernel built-in exports ───────────────────────────────────────────────────
-// Symbols compiled into ke_kernel (allocator, logger, ecs, resource_cache,
-// frame_packet). CMake defines KE_KERNEL_STATIC or KE_KERNEL_EXPORT.
-// Per-domain names are aliases so each header can advertise its own macro.
+// ── Per-domain export macros ──────────────────────────────────────────────────
+// Each domain DLL sets its own _EXPORT define (PRIVATE in CMake) when building.
+// Consumers define nothing → KE_IMPORT. Static builds set _STATIC → empty.
 
-#ifdef KE_KERNEL_STATIC
-#  define KE_API
-#  define KE_ALLOCATOR_API
-#  define KE_LOGGER_API
-#  define KE_ECS_API
-#  define KE_RESOURCE_CACHE_API
-#  define KE_FRAME_PACKET_API
-#elif defined(KE_KERNEL_EXPORT)
-#  define KE_API                KE_EXPORT
-#  define KE_ALLOCATOR_API      KE_EXPORT
-#  define KE_LOGGER_API         KE_EXPORT
-#  define KE_ECS_API            KE_EXPORT
-#  define KE_RESOURCE_CACHE_API KE_EXPORT
-#  define KE_FRAME_PACKET_API   KE_EXPORT
+// ke_common (error singletons + ke_error_set/is)
+#ifdef KE_COMMON_STATIC
+#  define KE_COMMON_API
+#elif defined(KE_COMMON_EXPORT)
+#  define KE_COMMON_API KE_EXPORT
 #else
-#  define KE_API                KE_IMPORT
-#  define KE_ALLOCATOR_API      KE_IMPORT
-#  define KE_LOGGER_API         KE_IMPORT
-#  define KE_ECS_API            KE_IMPORT
-#  define KE_RESOURCE_CACHE_API KE_IMPORT
-#  define KE_FRAME_PACKET_API   KE_IMPORT
+#  define KE_COMMON_API KE_IMPORT
 #endif
 
+// ke_logger_simple
+#ifdef KE_LOGGER_STATIC
+#  define KE_LOGGER_API
+#elif defined(KE_LOGGER_EXPORT)
+#  define KE_LOGGER_API KE_EXPORT
+#else
+#  define KE_LOGGER_API KE_IMPORT
+#endif
+
+// ke_input_default
+#ifdef KE_INPUT_STATIC
+#  define KE_INPUT_API
+#elif defined(KE_INPUT_EXPORT)
+#  define KE_INPUT_API KE_EXPORT
+#else
+#  define KE_INPUT_API KE_IMPORT
+#endif
+
+// ke_resource_cache_default
+#ifdef KE_RESOURCE_CACHE_STATIC
+#  define KE_RESOURCE_CACHE_API
+#elif defined(KE_RESOURCE_CACHE_EXPORT)
+#  define KE_RESOURCE_CACHE_API KE_EXPORT
+#else
+#  define KE_RESOURCE_CACHE_API KE_IMPORT
+#endif
+
+// ke_ecs_* (sparse set, registry — future)
+#ifdef KE_ECS_STATIC
+#  define KE_ECS_API
+#elif defined(KE_ECS_EXPORT)
+#  define KE_ECS_API KE_EXPORT
+#else
+#  define KE_ECS_API KE_IMPORT
+#endif
+
+// ke_render_frame_packet
+#ifdef KE_FRAME_PACKET_STATIC
+#  define KE_FRAME_PACKET_API
+#elif defined(KE_FRAME_PACKET_EXPORT)
+#  define KE_FRAME_PACKET_API KE_EXPORT
+#else
+#  define KE_FRAME_PACKET_API KE_IMPORT
+#endif
+
+// Generic KE_API — resolves to KE_COMMON_API for symbols in common headers.
+// Legacy alias; prefer the domain-specific macro in new code.
+#define KE_API KE_COMMON_API
+
+// Allocator — internal impl dep, never exported to C# / plugin consumers.
+#define KE_ALLOCATOR_API
+
 // ── ke_runtime plugin exports ─────────────────────────────────────────────────
-// Functions compiled into ke_runtime (not ke_kernel).
-// ke_runtime CMakeLists defines KE_RUNTIME_STATIC or KE_RUNTIME_EXPORT.
 #ifdef KE_RUNTIME_STATIC
 #  define KE_RUNTIME_API
 #elif defined(KE_RUNTIME_EXPORT)

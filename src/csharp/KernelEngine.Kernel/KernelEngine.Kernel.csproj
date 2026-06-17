@@ -9,6 +9,9 @@
 
   <ItemGroup>
     <NativeDep Include="ke_kernel" />
+    <NativeDep Include="ke_common" />
+    <NativeDep Include="ke_logger_simple" />
+    <NativeDep Include="ke_input_default" />
     <NativeDep Include="ke_threading" />
   </ItemGroup>
 

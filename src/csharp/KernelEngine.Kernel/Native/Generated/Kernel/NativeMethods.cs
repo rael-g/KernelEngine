@@ -5,33 +5,6 @@ namespace KernelEngine.Kernel.Native;
 
 public static unsafe partial class NativeMethods
 {
-    [NativeTypeName("#define KE_OK ((ke_result) 0)")]
-    public const int KE_OK = ((int)(0));
-
-    [NativeTypeName("#define KE_ERROR ((ke_result)-1)")]
-    public const int KE_ERROR = ((int)(-1));
-
-    [NativeTypeName("#define KE_ERROR_OUT_OF_MEMORY ((ke_result)-2)")]
-    public const int KE_ERROR_OUT_OF_MEMORY = ((int)(-2));
-
-    [NativeTypeName("#define KE_ERROR_INVALID_ARGUMENT ((ke_result)-3)")]
-    public const int KE_ERROR_INVALID_ARGUMENT = ((int)(-3));
-
-    [NativeTypeName("#define KE_ERROR_NOT_FOUND ((ke_result)-4)")]
-    public const int KE_ERROR_NOT_FOUND = ((int)(-4));
-
-    [NativeTypeName("#define KE_ERROR_NOT_INITIALIZED ((ke_result)-5)")]
-    public const int KE_ERROR_NOT_INITIALIZED = ((int)(-5));
-
-    [NativeTypeName("#define KE_ERROR_NOT_SUPPORTED ((ke_result)-6)")]
-    public const int KE_ERROR_NOT_SUPPORTED = ((int)(-6));
-
-    [NativeTypeName("#define KE_ERROR_ALREADY_EXISTS ((ke_result)-7)")]
-    public const int KE_ERROR_ALREADY_EXISTS = ((int)(-7));
-
-    [NativeTypeName("#define KE_ERROR_IO ((ke_result)-8)")]
-    public const int KE_ERROR_IO = ((int)(-8));
-
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_malloc_create", ExactSpelling = true)]
     public static extern ke_allocator* allocator_malloc_create();
 
@@ -42,8 +15,7 @@ public static unsafe partial class NativeMethods
     public static extern ke_allocator* allocator_proxy_create(ke_allocator* inner, [NativeTypeName("const char *")] sbyte* name);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_get_stats", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int allocator_proxy_get_stats(ke_allocator* proxy, ke_allocator_stats* out_stats);
+    public static extern ke_result allocator_proxy_get_stats(ke_allocator* proxy, ke_allocator_stats* out_stats, ke_error** out_error);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_report", ExactSpelling = true)]
     public static extern void allocator_proxy_report(ke_allocator* proxy, [NativeTypeName("struct ke_logger *")] ke_logger* logger);
@@ -54,20 +26,11 @@ public static unsafe partial class NativeMethods
     [NativeTypeName("#define KE_ID_ALLOCATOR_SCRATCH \"ke_alloc_scratch\"")]
     public static ReadOnlySpan<byte> KE_ID_ALLOCATOR_SCRATCH => "ke_alloc_scratch"u8;
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_log_level_to_string", ExactSpelling = true)]
-    [return: NativeTypeName("const char *")]
-    public static extern sbyte* log_level_to_string([NativeTypeName("int32_t")] int level);
-
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_logger_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int logger_create(ke_logger** out_logger);
-
     [NativeTypeName("#define KE_ID_LOGGER \"ke_logger\"")]
     public static ReadOnlySpan<byte> KE_ID_LOGGER => "ke_logger"u8;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_registry_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int ecs_registry_create(ke_ecs_registry** out_registry);
+    public static extern ke_result ecs_registry_create(ke_ecs_registry** out_registry, ke_error** out_error);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_registry_destroy", ExactSpelling = true)]
     public static extern void ecs_registry_destroy(ke_ecs_registry* registry);
@@ -88,12 +51,10 @@ public static unsafe partial class NativeMethods
     public static extern uint ecs_component_register_v2(ke_ecs_registry* registry, [NativeTypeName("const char *")] sbyte* name, [NativeTypeName("size_t")] nuint size, [NativeTypeName("const ke_component_field *")] ke_component_field* fields, [NativeTypeName("uint32_t")] uint field_count);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_component_lookup", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int ecs_component_lookup(ke_ecs_registry* registry, [NativeTypeName("const char *")] sbyte* name, ke_component_meta* out_meta);
+    public static extern ke_result ecs_component_lookup(ke_ecs_registry* registry, [NativeTypeName("const char *")] sbyte* name, ke_component_meta* out_meta, ke_error** out_error);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_component_apply_variant", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int ecs_component_apply_variant(ke_ecs_registry* registry, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint cid, [NativeTypeName("const char *")] sbyte* field_name, [NativeTypeName("const ke_variant *")] ke_variant* value);
+    public static extern ke_result ecs_component_apply_variant(ke_ecs_registry* registry, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint cid, [NativeTypeName("const char *")] sbyte* field_name, [NativeTypeName("const ke_variant *")] ke_variant* value, ke_error** out_error);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_component_add", ExactSpelling = true)]
     public static extern void* ecs_component_add(ke_ecs_registry* registry, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint component);
@@ -114,27 +75,19 @@ public static unsafe partial class NativeMethods
     public const uint KE_COMPONENT_INVALID = unchecked((uint)(-1));
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_sparse_set_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int ecs_sparse_set_create(ke_ecs_registry* registry, ke_allocator* alloc, ke_ecs** out_ecs);
+    public static extern ke_result ecs_sparse_set_create(ke_ecs_registry* registry, ke_allocator* alloc, ke_ecs** out_ecs, ke_error** out_error);
 
     [NativeTypeName("#define KE_HANDLE_NONE UINT32_MAX")]
     public const uint KE_HANDLE_NONE = 0xffffffffU;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_packet_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int frame_packet_create([NativeTypeName("const ke_frame_packet_params *")] ke_frame_packet_params* @params, ke_frame_packet** out_packet);
+    public static extern ke_result frame_packet_create([NativeTypeName("const ke_frame_packet_params *")] ke_frame_packet_params* @params, ke_frame_packet** out_packet, ke_error** out_error);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_packet_destroy", ExactSpelling = true)]
     public static extern void frame_packet_destroy(ke_frame_packet* packet);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_frame_packet_reset", ExactSpelling = true)]
     public static extern void frame_packet_reset(ke_frame_packet* packet);
-
-    [NativeTypeName("#define KE_ERROR_RENDER ((ke_result)-100)")]
-    public const int KE_ERROR_RENDER = ((int)(-100));
-
-    [NativeTypeName("#define KE_ERROR_GPU_FATAL ((ke_result)-101)")]
-    public const int KE_ERROR_GPU_FATAL = ((int)(-101));
 
     [NativeTypeName("#define KE_ID_RENDER \"ke_render\"")]
     public static ReadOnlySpan<byte> KE_ID_RENDER => "ke_render"u8;
@@ -146,15 +99,10 @@ public static unsafe partial class NativeMethods
     public static ReadOnlySpan<byte> KE_ID_SHADER_COMPILER => "ke_shader_compiler"u8;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_cache_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int resource_cache_create([NativeTypeName("const ke_resource_cache_params *")] ke_resource_cache_params* @params, ke_resource_cache** out_cache);
+    public static extern ke_result resource_cache_create([NativeTypeName("const ke_resource_cache_params *")] ke_resource_cache_params* @params, ke_resource_cache** out_cache, ke_error** out_error);
 
     [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
     public const uint KE_RESOURCE_HANDLE_NONE = 0xffffffffU;
-
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int input_create([NativeTypeName("struct ke_logger *")] ke_logger* logger, ke_input** out_input);
 
     [NativeTypeName("#define KE_ID_INPUT \"ke_input\"")]
     public static ReadOnlySpan<byte> KE_ID_INPUT => "ke_input"u8;
@@ -168,9 +116,6 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_thread_assert_current", ExactSpelling = true)]
     public static extern void thread_assert_current([NativeTypeName("const char *")] sbyte* expected_name);
-
-    [NativeTypeName("#define KE_ERROR_WINDOW ((ke_result)-200)")]
-    public const int KE_ERROR_WINDOW = ((int)(-200));
 
     [NativeTypeName("#define KE_ID_WINDOW \"ke_window\"")]
     public static ReadOnlySpan<byte> KE_ID_WINDOW => "ke_window"u8;
@@ -218,20 +163,16 @@ public static unsafe partial class NativeMethods
     public static extern void system_ctx_query(ke_system_ctx* ctx, [NativeTypeName("ke_component_id")] uint cid, [NativeTypeName("ke_entity **")] ulong** out_entities, void** out_data, [NativeTypeName("size_t *")] nuint* out_count);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_spawn", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int system_ctx_spawn(ke_system_ctx* ctx, [NativeTypeName("ke_entity *")] ulong* out_entity);
+    public static extern ke_result system_ctx_spawn(ke_system_ctx* ctx, [NativeTypeName("ke_entity *")] ulong* out_entity);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_attach", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int system_ctx_attach(ke_system_ctx* ctx, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint cid, [NativeTypeName("const void *")] void* data, [NativeTypeName("size_t")] nuint size);
+    public static extern ke_result system_ctx_attach(ke_system_ctx* ctx, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint cid, [NativeTypeName("const void *")] void* data, [NativeTypeName("size_t")] nuint size);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_detach", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int system_ctx_detach(ke_system_ctx* ctx, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint cid);
+    public static extern ke_result system_ctx_detach(ke_system_ctx* ctx, [NativeTypeName("ke_entity")] ulong entity, [NativeTypeName("ke_component_id")] uint cid);
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_despawn", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern int system_ctx_despawn(ke_system_ctx* ctx, [NativeTypeName("ke_entity")] ulong entity);
+    public static extern ke_result system_ctx_despawn(ke_system_ctx* ctx, [NativeTypeName("ke_entity")] ulong entity);
 
     [NativeTypeName("#define KE_COMPONENT_NAME_TRANSFORM \"transform\"")]
     public static ReadOnlySpan<byte> KE_COMPONENT_NAME_TRANSFORM => "transform"u8;

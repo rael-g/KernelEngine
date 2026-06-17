@@ -25,7 +25,7 @@ extern "C"
          * @brief Updates internal state (e.g. resets pressed/released flags).
          * Call once per main thread tick.
          */
-        ke_result (*update)(struct ke_input *self);
+        ke_result (*update)(struct ke_input *self, ke_error **out_error);
 
         bool (*is_key_pressed)(struct ke_input *self, int32_t key);
         bool (*is_key_released)(struct ke_input *self, int32_t key);
@@ -53,7 +53,7 @@ extern "C"
     } ke_input;
 
     /// @brief Creates an input system.
-    KE_API ke_result ke_input_create(struct ke_logger *logger, ke_input **out_input);
+    KE_INPUT_API ke_result ke_input_create(struct ke_logger *logger, ke_input **out_input, ke_error **out_error);
 
 #ifdef __cplusplus
 }
