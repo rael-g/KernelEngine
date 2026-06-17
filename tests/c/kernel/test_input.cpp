@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/input/input.h>
 
 class InputTest : public ::testing::Test {
@@ -6,7 +6,7 @@ protected:
     ke_input* input = nullptr;
 
     void SetUp() override {
-        ke_result res = ke_input_create(nullptr, &input);
+        ke_result res = ke_input_create(nullptr, &input, NULL);
         ASSERT_EQ(res, KE_OK);
     }
 
@@ -18,14 +18,14 @@ protected:
 // --- Creation Tests ---
 
 TEST(InputInitTest, Create_NullOutInput_ReturnsInvalidArgument) {
-    ASSERT_EQ(ke_input_create(nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_input_create(nullptr, nullptr, NULL), KE_ERROR);
 }
 
 // --- Destroy Tests ---
 
 TEST(InputDestroyTest, Destroy_NullInput_DoesNotCrash) {
     ke_input* i = nullptr;
-    ke_input_create(nullptr, &i);
+    ke_input_create(nullptr, &i, NULL);
     auto destroy_fn = i->destroy;
     i->destroy(i);
     destroy_fn(nullptr);
@@ -42,11 +42,11 @@ TEST_F(InputTest, Destroy_WorksNormally) {
 
 TEST_F(InputTest, Update_NullSelf_ReturnsInvalidArgument) {
     auto update_fn = input->update;
-    ASSERT_EQ(update_fn(nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(update_fn(nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(InputTest, KeyPressed_IsDetected) {
-    input->update(input);        // clear previous frame
+    input->update(input, nullptr);        // clear previous frame
     input->on_key(input, 65, 1); // 'A' press event arrives
     ASSERT_TRUE(input->is_key_pressed(input, 65));
 }
@@ -62,7 +62,7 @@ TEST_F(InputTest, Snapshot_KeyIsCaptured) {
 }
 
 TEST_F(InputTest, MouseMove_CalculatesDelta) {
-    input->update(input); // reset to (0,0) with no delta
+    input->update(input, nullptr); // reset to (0,0) with no delta
     input->on_mouse_move(input, 100.0f, 200.0f);
     input->on_mouse_move(input, 150.0f, 180.0f);
     ke_input_snapshot snapshot;
@@ -73,7 +73,7 @@ TEST_F(InputTest, MouseMove_CalculatesDelta) {
 }
 
 TEST_F(InputTest, MouseButton_IsDetected) {
-    input->update(input);
+    input->update(input, nullptr);
     input->on_mouse_button(input, 0, 1); // Left Down
     ke_input_snapshot snapshot;
     input->get_snapshot(input, &snapshot);
@@ -127,7 +127,7 @@ TEST_F(InputTest, IsKeyDown_WorksAcrossUpdate) {
     input->on_key(input, 10, 1);
     ASSERT_TRUE(input->is_key_down(input, 10));
     
-    input->update(input);
+    input->update(input, nullptr);
     ASSERT_TRUE(input->is_key_down(input, 10)); // Still down
     ASSERT_FALSE(input->is_key_pressed(input, 10)); // But not pressed this frame
     

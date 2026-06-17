@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/asset/image_loader.h>
@@ -23,8 +23,10 @@ struct MockImageLoader
     int              free_count = 0;
 };
 
-static ke_result MockLoadImage(ke_image_loader *self, const char *path, ke_texture_data **out)
+static ke_result MockLoadImage(ke_image_loader *self, const char *path, ke_texture_data **out,
+                               ke_error **out_error)
 {
+    (void)out_error;
     auto *m = static_cast<MockImageLoader *>(self->handle);
     m->last_path = path;
     m->load_count++;
@@ -78,7 +80,7 @@ protected:
         InitMockLoader(loader);
         project_root = fs::temp_directory_path();
         ASSERT_EQ(ke_asset_resolver_create(&loader.api, nullptr,
-                                            project_root.string().c_str(), &resolver),
+                                            project_root.string().c_str(), &resolver, NULL),
                   KE_OK);
     }
 
@@ -94,7 +96,7 @@ TEST_F(AssetResolverTest, ResolveTexture_AbsolutePath_DispatchesToLoader)
 {
     auto img = WriteTempFile(".png");
     ke_texture_data *data = nullptr;
-    EXPECT_EQ(resolver->resolve_texture(resolver, img.string().c_str(), &data), KE_OK);
+    EXPECT_EQ(resolver->resolve_texture(resolver, img.string().c_str(), &data, nullptr), KE_OK);
     EXPECT_NE(data, nullptr);
     EXPECT_EQ(loader.load_count, 1);
     EXPECT_EQ(loader.last_path, img.string());
@@ -108,7 +110,7 @@ TEST_F(AssetResolverTest, ResolveTexture_ResPrefix_JoinsProjectRoot)
     auto img = WriteTempFile(".png");
     auto resref = "res://" + img.filename().string();
     ke_texture_data *data = nullptr;
-    EXPECT_EQ(resolver->resolve_texture(resolver, resref.c_str(), &data), KE_OK);
+    EXPECT_EQ(resolver->resolve_texture(resolver, resref.c_str(), &data, nullptr), KE_OK);
     EXPECT_EQ(loader.last_path, img.string());
     resolver->free_texture(resolver, data);
     fs::remove(img);
@@ -117,16 +119,16 @@ TEST_F(AssetResolverTest, ResolveTexture_ResPrefix_JoinsProjectRoot)
 TEST_F(AssetResolverTest, ResolveTexture_MissingFile_ReturnsNotFound)
 {
     ke_texture_data *data = nullptr;
-    EXPECT_EQ(resolver->resolve_texture(resolver, "C:/this/does/not/exist.png", &data),
-              KE_ERROR_NOT_FOUND);
+    EXPECT_EQ(resolver->resolve_texture(resolver, "C:/this/does/not/exist.png", &data, nullptr),
+              KE_ERROR);
 }
 
 TEST_F(AssetResolverTest, ResolveTexture_NoLoader_ReturnsInvalidArgument)
 {
     ke_asset_resolver *r = nullptr;
-    ASSERT_EQ(ke_asset_resolver_create(nullptr, nullptr, nullptr, &r), KE_OK);
+    ASSERT_EQ(ke_asset_resolver_create(nullptr, nullptr, nullptr, &r, NULL), KE_OK);
     ke_texture_data *data = nullptr;
-    EXPECT_EQ(r->resolve_texture(r, "anything.png", &data), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(r->resolve_texture(r, "anything.png", &data, nullptr), KE_ERROR);
     r->destroy(r);
 }
 
@@ -135,20 +137,20 @@ TEST_F(AssetResolverTest, ResolveTexture_NoLoader_ReturnsInvalidArgument)
 TEST_F(AssetResolverTest, ResolveMesh_AllPrimitives_Works)
 {
     ke_mesh_shape_data data{};
-    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/quad", &data), KE_OK);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/quad", &data, nullptr), KE_OK);
     resolver->free_mesh(resolver, &data);
-    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/plane", &data), KE_OK);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/plane", &data, nullptr), KE_OK);
     resolver->free_mesh(resolver, &data);
-    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/cube", &data), KE_OK);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/cube", &data, nullptr), KE_OK);
     resolver->free_mesh(resolver, &data);
-    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/sphere", &data), KE_OK);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/sphere", &data, nullptr), KE_OK);
     resolver->free_mesh(resolver, &data);
 }
 
 TEST_F(AssetResolverTest, ResolveMesh_UnknownPrimitive_ReturnsNotFound)
 {
     ke_mesh_shape_data data{};
-    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/teapot", &data), KE_ERROR_NOT_FOUND);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/teapot", &data, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetResolverTest, ResolvePath_NormalizesSlashes)
@@ -158,7 +160,7 @@ TEST_F(AssetResolverTest, ResolvePath_NormalizesSlashes)
     // Replace / with \ or vice-versa to test normalization if implemented,
     // but resolver mostly relies on std::filesystem which handles it on Windows.
     ke_texture_data *data = nullptr;
-    EXPECT_EQ(resolver->resolve_texture(resolver, path.c_str(), &data), KE_OK);
+    EXPECT_EQ(resolver->resolve_texture(resolver, path.c_str(), &data, nullptr), KE_OK);
     resolver->free_texture(resolver, data);
     fs::remove(img);
 }
@@ -167,7 +169,7 @@ TEST_F(AssetResolverTest, ResolveMaterial_MalformedFile_ReturnsError)
 {
     auto mat = WriteTempFile(".material", "not toml [ [ [");
     ke_material_spec spec{};
-    EXPECT_EQ(resolver->resolve_material(resolver, mat.string().c_str(), &spec), KE_ERROR_IO);
+    EXPECT_EQ(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr), KE_ERROR);
     fs::remove(mat);
 }
 
@@ -176,31 +178,31 @@ TEST_F(AssetResolverTest, ResolveMaterial_MalformedFile_ReturnsError)
 TEST_F(AssetResolverTest, Create_NullArgs_ReturnsInvalidArgument)
 {
     ke_asset_resolver *r = nullptr;
-    EXPECT_EQ(ke_asset_resolver_create(&loader.api, nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_asset_resolver_create(&loader.api, nullptr, nullptr, nullptr, NULL), KE_ERROR);
 }
 
 TEST_F(AssetResolverTest, ResolveTexture_NullArgs_ReturnsInvalidArgument)
 {
     ke_texture_data *data = nullptr;
-    EXPECT_EQ(resolver->resolve_texture(nullptr, "test.png", &data), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(resolver->resolve_texture(resolver, nullptr, &data), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(resolver->resolve_texture(resolver, "test.png", nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(resolver->resolve_texture(nullptr, "test.png", &data, nullptr), KE_ERROR);
+    EXPECT_EQ(resolver->resolve_texture(resolver, nullptr, &data, nullptr), KE_ERROR);
+    EXPECT_EQ(resolver->resolve_texture(resolver, "test.png", nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetResolverTest, ResolveMesh_NullArgs_ReturnsInvalidArgument)
 {
     ke_mesh_shape_data data{};
-    EXPECT_EQ(resolver->resolve_mesh(nullptr, "res://primitives/cube", &data), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(resolver->resolve_mesh(resolver, nullptr, &data), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/cube", nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(resolver->resolve_mesh(nullptr, "res://primitives/cube", &data, nullptr), KE_ERROR);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, nullptr, &data, nullptr), KE_ERROR);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, "res://primitives/cube", nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetResolverTest, ResolveMaterial_NullArgs_ReturnsInvalidArgument)
 {
     ke_material_spec spec{};
-    EXPECT_EQ(resolver->resolve_material(nullptr, "test.material", &spec), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(resolver->resolve_material(resolver, nullptr, &spec), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(resolver->resolve_material(resolver, "test.material", nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(resolver->resolve_material(nullptr, "test.material", &spec, nullptr), KE_ERROR);
+    EXPECT_EQ(resolver->resolve_material(resolver, nullptr, &spec, nullptr), KE_ERROR);
+    EXPECT_EQ(resolver->resolve_material(resolver, "test.material", nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetResolverTest, FreeTexture_NullArgs_IsSafe)
@@ -223,19 +225,19 @@ TEST_F(AssetResolverTest, Destroy_NullArgs_IsSafe)
 TEST_F(AssetResolverTest, ResolveMesh_ExternalFile_ReturnsNotFound)
 {
     ke_mesh_shape_data data{};
-    EXPECT_EQ(resolver->resolve_mesh(resolver, "external.gltf", &data), KE_ERROR_NOT_FOUND);
+    EXPECT_EQ(resolver->resolve_mesh(resolver, "external.gltf", &data, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
 {
     ke_asset_resolver *r = nullptr;
-    ke_asset_resolver_create(&loader.api, nullptr, nullptr, &r);
+    ke_asset_resolver_create(&loader.api, nullptr, nullptr, &r, NULL);
     
     auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
     ke_material_spec spec{};
     // Use the full absolute path from temp dir as the reference after res://
     std::string ref = "res://" + mat.string();
-    EXPECT_EQ(r->resolve_material(r, ref.c_str(), &spec), KE_OK);
+    EXPECT_EQ(r->resolve_material(r, ref.c_str(), &spec, nullptr), KE_OK);
     
     r->destroy(r);
     fs::remove(mat);

@@ -56,7 +56,8 @@ extern "C"
                                uint32_t first_codepoint,
                                uint32_t codepoint_count,
                                uint32_t atlas_size,
-                               ke_font_data **out);
+                               ke_font_data **out,
+                               ke_error **out_error);
 
         /// @brief Frees a ke_font_data previously returned by load_font.
         void (*free_font)(struct ke_font_loader *self, ke_font_data *data);

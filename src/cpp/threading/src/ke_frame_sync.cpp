@@ -1,6 +1,7 @@
-#include "ke_frame_sync.hpp"
+﻿#include "ke_frame_sync.hpp"
 #include <kernel_engine/threading/threading.h>
 #include <kernel_engine/threading/frame_sync.h>
+#include <kernel_engine/common/error.h>
 
 #include <cstring>
 #include <new>
@@ -142,18 +143,19 @@ extern "C"
                                         uint32_t       draw_capacity,
                                         uint32_t       point_capacity,
                                         uint32_t       spot_capacity,
-                                        ke_frame_sync **out)
+                                        ke_frame_sync **out,
+                                        ke_error      **out_error)
     {
-        if (!alloc || buffer_count < 2 || !out) return KE_ERROR_INVALID_ARGUMENT;
+        if (!alloc || buffer_count < 2 || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
         auto *h = static_cast<KeFrameSyncHandle *>(
             alloc->alloc(alloc, sizeof(KeFrameSyncHandle), alignof(KeFrameSyncHandle)));
-        if (!h) return KE_ERROR_OUT_OF_MEMORY;
+        if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "handle allocation failed");
 
         auto *impl_mem = alloc->alloc(
             alloc, sizeof(kernel_engine::threading::KeFrameSync),
             alignof(kernel_engine::threading::KeFrameSync));
-        if (!impl_mem) { alloc->free(alloc, h); return KE_ERROR_OUT_OF_MEMORY; }
+        if (!impl_mem) { alloc->free(alloc, h); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "impl allocation failed"); }
 
         h->impl = new (impl_mem) kernel_engine::threading::KeFrameSync(
             alloc, buffer_count, draw_capacity, point_capacity, spot_capacity);

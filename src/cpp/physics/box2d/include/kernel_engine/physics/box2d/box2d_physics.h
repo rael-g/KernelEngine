@@ -19,7 +19,8 @@ typedef struct ke_physics_2d_box2d_params
 /// @brief Creates a Box2D-backed 2D physics world.
 KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
     const ke_physics_2d_box2d_params *params,
-    ke_physics_2d **out);
+    ke_physics_2d **out,
+    ke_error **out_error);
 
 #ifdef __cplusplus
 }

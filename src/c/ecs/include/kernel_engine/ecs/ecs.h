@@ -35,7 +35,7 @@ extern "C"
         void      *internal_data;
     } ke_ecs_registry;
 
-    KE_ECS_API ke_result ke_ecs_registry_create(ke_ecs_registry **out_registry);
+    KE_ECS_API ke_result ke_ecs_registry_create(ke_ecs_registry **out_registry, ke_error **out_error);
     KE_ECS_API void      ke_ecs_registry_destroy(ke_ecs_registry *registry);
 
     KE_ECS_API ke_entity ke_ecs_entity_create(ke_ecs_registry *registry);
@@ -60,13 +60,15 @@ extern "C"
 
     KE_ECS_API ke_result ke_ecs_component_lookup(ke_ecs_registry   *registry,
                                                    const char        *name,
-                                                   ke_component_meta *out_meta);
+                                                   ke_component_meta *out_meta,
+                                                   ke_error         **out_error);
 
     KE_ECS_API ke_result ke_ecs_component_apply_variant(ke_ecs_registry  *registry,
                                                           ke_entity         entity,
                                                           ke_component_id   cid,
                                                           const char       *field_name,
-                                                          const ke_variant *value);
+                                                          const ke_variant *value,
+                                                          ke_error        **out_error);
 
     KE_ECS_API void *ke_ecs_component_add(ke_ecs_registry *registry, ke_entity entity,
                                             ke_component_id component);

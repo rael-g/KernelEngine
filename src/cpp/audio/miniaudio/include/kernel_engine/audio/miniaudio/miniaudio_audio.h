@@ -18,7 +18,8 @@ typedef struct ke_audio_miniaudio_params
 ///        hardware device; sound playback marshals from the caller (typically ke.sim) into it.
 KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
     const ke_audio_miniaudio_params *params,
-    ke_audio **out);
+    ke_audio **out,
+    ke_error **out_error);
 
 #ifdef __cplusplus
 }

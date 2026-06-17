@@ -1,4 +1,5 @@
-#include <kernel_engine/ecs/ke_ecs_flecs.h>
+﻿#include <kernel_engine/ecs/ke_ecs_flecs.h>
+#include <kernel_engine/common/error.h>
 
 #include <flecs.h>
 
@@ -143,16 +144,16 @@ static ke_component_id ecs_flecs_component_register(ke_ecs *self, const char *na
     return (ke_component_id)ecs_component_init(h->state.world, &cdesc);
 }
 
-static ke_result ecs_flecs_component_lookup(ke_ecs *self, const char *name, ke_component_meta *out_meta)
+static ke_result ecs_flecs_component_lookup(ke_ecs *self, const char *name, ke_component_meta *out_meta, ke_error **out_error)
 {
-    if (!self || !self->handle || !name) return KE_ERROR_INVALID_ARGUMENT;
+    if (!self || !self->handle || !name) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
 
     ecs_entity_t e = ecs_lookup(h->state.world, name);
-    if (e == 0) return KE_ERROR_NOT_FOUND;
+    if (e == 0) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "component not found");
 
     const ecs_type_info_t *ti = ecs_get_type_info(h->state.world, e);
-    if (!ti) return KE_ERROR_NOT_FOUND;
+    if (!ti) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "component type info not found");
 
     if (out_meta)
     {
@@ -258,17 +259,18 @@ static void ecs_flecs_destroy(ke_ecs *self)
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
-                              ke_ecs                   **out_ecs)
+                              ke_ecs                   **out_ecs,
+                              ke_error                 **out_error)
 {
     (void)params;
-    if (!out_ecs) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out_ecs) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
+    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     ecs_flecs_handle *h = (ecs_flecs_handle *)alloc->alloc(
         alloc, sizeof(ecs_flecs_handle), alignof(ecs_flecs_handle));
-    if (!h) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!h) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
     memset(h, 0, sizeof(*h));
 
     h->state.allocator = alloc;
@@ -277,7 +279,7 @@ ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     {
         alloc->free(alloc, h);
         alloc->destroy(alloc);
-        return KE_ERROR_NOT_INITIALIZED;
+        return KE_ERROR_SET(out_error, &KE_ERROR_NOT_INITIALIZED, "flecs world init failed");
     }
 
     h->api.handle             = h;

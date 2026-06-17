@@ -1,9 +1,10 @@
-// stb_image is header-only. We're a separate shared library from the assimp plugin (which also
+﻿// stb_image is header-only. We're a separate shared library from the assimp plugin (which also
 // pulls stb in), so each DLL gets its own internal copy of the implementation — no collision.
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 #include "kernel_engine/asset/stb_image/stb_image_loader.h"
+#include "kernel_engine/common/error.h"
 #include "kernel_engine/allocator/allocator.h"
 #include "kernel_engine/logger/logger.h"
 
@@ -34,9 +35,9 @@ void destroy(ke_image_loader *self)
     if (alloc) alloc->free(alloc, self);
 }
 
-ke_result load_image(ke_image_loader *self, const char *path, ke_texture_data **out)
+ke_result load_image(ke_image_loader *self, const char *path, ke_texture_data **out, ke_error **out_error)
 {
-    if (!self || !path || !out) return KE_ERROR_INVALID_ARGUMENT;
+    if (!self || !path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     *out = nullptr;
 
     auto *state = static_cast<StbImageLoaderState *>(self->handle);
@@ -47,20 +48,20 @@ ke_result load_image(ke_image_loader *self, const char *path, ke_texture_data **
     stbi_uc *raw = stbi_load(path, &w, &h, &channels, 4);
     if (!raw) {
         log_warn(state->logger, stbi_failure_reason());
-        return KE_ERROR_NOT_FOUND;
+        return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "image file not found or failed to decode");
     }
 
     const size_t pixel_bytes = static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
 
     auto *data = static_cast<ke_texture_data *>(alloc->alloc(alloc, sizeof(ke_texture_data), alignof(ke_texture_data)));
-    if (!data) { stbi_image_free(raw); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!data) { stbi_image_free(raw); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "texture data allocation failed"); }
     std::memset(data, 0, sizeof(*data));
 
     auto *pixels = static_cast<uint8_t *>(alloc->alloc(alloc, pixel_bytes, 1));
     if (!pixels) {
         stbi_image_free(raw);
         alloc->free(alloc, data);
-        return KE_ERROR_OUT_OF_MEMORY;
+        return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "pixel buffer allocation failed");
     }
     std::memcpy(pixels, raw, pixel_bytes);
     stbi_image_free(raw);
@@ -92,18 +93,19 @@ void free_image(ke_image_loader *self, ke_texture_data *data)
 
 extern "C" KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(
     const ke_image_loader_stb_params *params,
-    ke_image_loader **out)
+    ke_image_loader **out,
+    ke_error **out_error)
 {
-    if (!params || !params->allocator || !out) return KE_ERROR_INVALID_ARGUMENT;
+    if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     auto *alloc = params->allocator;
 
     auto *state = static_cast<StbImageLoaderState *>(alloc->alloc(alloc, sizeof(StbImageLoaderState), alignof(StbImageLoaderState)));
-    if (!state) return KE_ERROR_OUT_OF_MEMORY;
+    if (!state) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     state->allocator = alloc;
     state->logger    = params->logger;
 
     auto *loader = static_cast<ke_image_loader *>(alloc->alloc(alloc, sizeof(ke_image_loader), alignof(ke_image_loader)));
-    if (!loader) { alloc->free(alloc, state); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!loader) { alloc->free(alloc, state); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed"); }
     loader->handle     = state;
     loader->destroy    = &destroy;
     loader->load_image = &load_image;

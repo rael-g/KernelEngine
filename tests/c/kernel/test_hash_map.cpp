@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/kernel/common/hash_map.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <string.h>
@@ -31,13 +31,13 @@ protected:
 
 TEST(HashMapInitTest, Init_NullMap_ReturnsInvalidArgument) {
     ke_allocator* a = ke_allocator_malloc_create();
-    ASSERT_EQ(ke_hash_map_init(nullptr, 16, a), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_hash_map_init(nullptr, 16, a), KE_ERROR);
     a->destroy(a);
 }
 
 TEST(HashMapInitTest, Init_NullAllocator_ReturnsInvalidArgument) {
     ke_hash_map m;
-    ASSERT_EQ(ke_hash_map_init(&m, 16, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_hash_map_init(&m, 16, nullptr), KE_ERROR);
 }
 
 static void* fail_alloc(ke_allocator* alloc, size_t size, size_t alignment) { return nullptr; }
@@ -53,7 +53,7 @@ TEST(HashMapInitTest, Init_AllocationFailure_ReturnsOutOfMemory) {
     fa.destroy = fail_destroy;
     
     ke_hash_map m;
-    ASSERT_EQ(ke_hash_map_init(&m, 16, &fa), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_hash_map_init(&m, 16, &fa), KE_ERROR);
 }
 
 // --- Destroy Tests ---
@@ -75,14 +75,14 @@ TEST(HashMapDestroyTest, Destroy_NullEntries_DoesNotCrash) {
 
 TEST_F(HashMapTest, Insert_NullMap_ReturnsInvalidArgument) {
     int v = 1;
-    ASSERT_EQ(ke_hash_map_insert(nullptr, 1, &v), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_hash_map_insert(nullptr, 1, &v), KE_ERROR);
 }
 
 TEST_F(HashMapTest, Insert_NullEntries_ReturnsInvalidArgument) {
     int v = 1;
     ke_hash_map_destroy(&map);
     map_initialized = false;
-    ASSERT_EQ(ke_hash_map_insert(&map, 1, &v), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_hash_map_insert(&map, 1, &v), KE_ERROR);
 }
 
 TEST_F(HashMapTest, Insert_NewKey_ReturnsOk) {
@@ -206,5 +206,5 @@ TEST(HashMapRehashTest, Rehash_AllocationFailure_ReturnsOutOfMemory) {
     int v = 1;
     // Load factor 0.7 * 2 = 1.4 -> 2 elements trigger rehash
     ke_hash_map_insert(&m, 1, &v);
-    ASSERT_EQ(ke_hash_map_insert(&m, 2, &v), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_hash_map_insert(&m, 2, &v), KE_ERROR);
 }

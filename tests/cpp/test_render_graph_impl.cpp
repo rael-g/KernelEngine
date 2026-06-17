@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <render_graph_impl.hpp>
 #include <core_renderer.hpp>
@@ -64,7 +64,7 @@ TEST_F(RenderGraphImplTest, DeclareResource_ReturnsError_OnDuplicate)
     desc.name = "test_tex";
     desc.type = KE_RESOURCE_TYPE_TEXTURE_2D;
     graph_impl->DeclareResource(&desc);
-    EXPECT_EQ(graph_impl->DeclareResource(&desc), KE_ERROR_ALREADY_EXISTS);
+    EXPECT_EQ(graph_impl->DeclareResource(&desc), KE_ERROR);
 }
 
 TEST_F(RenderGraphImplTest, ImportTexture_ReturnsOk)
@@ -87,7 +87,7 @@ TEST_F(RenderGraphImplTest, AddPass_ReturnsError_OnDuplicate)
     p.name = "test_pass";
     p.record = [](ke_render_pass_ctx*, void*) {};
     graph_impl->AddPass(&p);
-    EXPECT_EQ(graph_impl->AddPass(&p), KE_ERROR_ALREADY_EXISTS);
+    EXPECT_EQ(graph_impl->AddPass(&p), KE_ERROR);
 }
 
 TEST_F(RenderGraphImplTest, Compile_ReturnsOk_ForValidGraph)
@@ -145,7 +145,7 @@ TEST_F(RenderGraphImplTest, Compile_Fails_OnDependencyCycle)
     graph_impl->AddPass(&p1);
     graph_impl->AddPass(&p2);
 
-    EXPECT_EQ(graph_impl->Compile(), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(graph_impl->Compile(), KE_ERROR);
 }
 
 TEST_F(RenderGraphImplTest, Execute_CallsRecordCallback)
@@ -203,15 +203,15 @@ TEST_F(RenderGraphImplTest, RemovePass_Works)
 
 TEST_F(RenderGraphImplTest, RemovePass_ReturnsError_WhenNotFound)
 {
-    EXPECT_EQ(graph_impl->RemovePass("non_existent"), KE_ERROR_NOT_FOUND);
+    EXPECT_EQ(graph_impl->RemovePass("non_existent"), KE_ERROR);
 }
 
 TEST_F(RenderGraphImplTest, AddPass_NullArgs_ReturnsError)
 {
-    EXPECT_EQ(graph_impl->AddPass(nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(graph_impl->AddPass(nullptr), KE_ERROR);
 }
 
 TEST_F(RenderGraphImplTest, DeclareResource_NullArgs_ReturnsError)
 {
-    EXPECT_EQ(graph_impl->DeclareResource(nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(graph_impl->DeclareResource(nullptr), KE_ERROR);
 }

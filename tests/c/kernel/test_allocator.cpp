@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <stdint.h>
 #include <string.h>
@@ -192,7 +192,7 @@ protected:
 TEST_F(ProxyAllocatorTest, Alloc_TracksStats) {
     void* p = proxy->alloc(proxy, 100, 0);
     ke_allocator_stats stats;
-    ke_allocator_proxy_get_stats(proxy, &stats);
+    ke_allocator_proxy_get_stats(proxy, &stats, NULL);
     
     EXPECT_EQ(stats.active_allocs, 1);
     EXPECT_EQ(stats.active_bytes, 100);
@@ -204,7 +204,7 @@ TEST_F(ProxyAllocatorTest, Free_UpdatesStats) {
     proxy->free(proxy, p);
     
     ke_allocator_stats stats;
-    ke_allocator_proxy_get_stats(proxy, &stats);
+    ke_allocator_proxy_get_stats(proxy, &stats, NULL);
     EXPECT_EQ(stats.active_allocs, 0);
     EXPECT_EQ(stats.active_bytes, 0);
     EXPECT_EQ(stats.total_freed, 100);
@@ -215,7 +215,7 @@ TEST_F(ProxyAllocatorTest, Realloc_UpdatesStats) {
     void* p2 = proxy->realloc(proxy, p, 200);
     
     ke_allocator_stats stats;
-    ke_allocator_proxy_get_stats(proxy, &stats);
+    ke_allocator_proxy_get_stats(proxy, &stats, NULL);
     EXPECT_EQ(stats.active_bytes, 200);
     EXPECT_EQ(stats.total_allocated, 300); // 100 + 200
     
@@ -229,7 +229,7 @@ TEST_F(ProxyAllocatorTest, Report_Works) {
 }
 
 TEST_F(ProxyAllocatorTest, GetStats_NullArgs_ReturnsInvalidArgument) {
-    EXPECT_EQ(ke_allocator_proxy_get_stats(nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_allocator_proxy_get_stats(nullptr, nullptr, NULL), KE_ERROR);
 }
 
 TEST_F(ProxyAllocatorTest, ProxyAlloc_NullHandle_ReturnsNull) {

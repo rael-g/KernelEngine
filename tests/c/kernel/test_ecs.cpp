@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/variant.h>
@@ -15,7 +15,7 @@ protected:
     void SetUp() override {
         alloc = ke_allocator_malloc_create();
         ASSERT_NE(alloc, nullptr);
-        ke_result res = ke_ecs_registry_create(alloc, &reg);
+        ke_result res = ke_ecs_registry_create(alloc, &reg, NULL);
         ASSERT_EQ(res, KE_OK);
     }
 
@@ -30,8 +30,8 @@ protected:
 TEST(EcsInitTest, Create_NullArgs_ReturnsInvalidArgument) {
     ke_allocator* a = ke_allocator_malloc_create();
     ke_ecs_registry* r = nullptr;
-    ASSERT_EQ(ke_ecs_registry_create(nullptr, &r), KE_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(ke_ecs_registry_create(a, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_ecs_registry_create(nullptr, &r, NULL), KE_ERROR);
+    ASSERT_EQ(ke_ecs_registry_create(a, nullptr, NULL), KE_ERROR);
     a->destroy(a);
 }
 
@@ -43,7 +43,7 @@ TEST(EcsInitTest, Create_AllocationFailure_ReturnsOutOfMemory) {
     fa.alloc = fail_alloc;
     fa.free = safe_free;
     ke_ecs_registry* r = nullptr;
-    ASSERT_EQ(ke_ecs_registry_create(&fa, &r), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_ecs_registry_create(&fa, &r, NULL), KE_ERROR);
 }
 
 static int alloc_count = 0;
@@ -58,7 +58,7 @@ TEST(EcsInitTest, Create_InternalAllocationFailure_ReturnsOutOfMemory) {
     fa.free = safe_free;
     alloc_count = 0;
     ke_ecs_registry* r = nullptr;
-    ASSERT_EQ(ke_ecs_registry_create(&fa, &r), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_ecs_registry_create(&fa, &r, NULL), KE_ERROR);
 }
 
 TEST(EcsInitTest, Destroy_NullRegistry_DoesNotCrash) {
@@ -235,9 +235,9 @@ TEST_F(EcsTest, ComponentRemove_MiddleElement_Works) {
 
 TEST_F(EcsTest, SparseSet_Create_NullArgs_ReturnsInvalidArgument) {
     ke_ecs* ecs = nullptr;
-    ASSERT_EQ(ke_ecs_sparse_set_create(nullptr, alloc, &ecs), KE_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(ke_ecs_sparse_set_create(reg, nullptr, &ecs), KE_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(ke_ecs_sparse_set_create(reg, alloc, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_ecs_sparse_set_create(nullptr, alloc, &ecs), KE_ERROR);
+    ASSERT_EQ(ke_ecs_sparse_set_create(reg, nullptr, &ecs), KE_ERROR);
+    ASSERT_EQ(ke_ecs_sparse_set_create(reg, alloc, nullptr), KE_ERROR);
 }
 
 TEST_F(EcsTest, SparseSet_EntityCreate_Works) {
@@ -301,7 +301,7 @@ TEST_F(EcsTest, RegisterV2_StoresFields_LookupReturnsThem) {
     ASSERT_NE(cid, KE_COMPONENT_INVALID);
 
     ke_component_meta meta{};
-    ASSERT_EQ(ke_ecs_component_lookup(reg, "test_comp", &meta), KE_OK);
+    ASSERT_EQ(ke_ecs_component_lookup(reg, "test_comp", &meta, NULL), KE_OK);
     EXPECT_EQ(meta.cid, cid);
     EXPECT_EQ(meta.size, sizeof(PhaseOneComp));
     EXPECT_EQ(meta.field_count, 5u);
@@ -309,14 +309,14 @@ TEST_F(EcsTest, RegisterV2_StoresFields_LookupReturnsThem) {
 
 TEST_F(EcsTest, Lookup_UnknownName_ReturnsNotFound) {
     ke_component_meta meta{};
-    EXPECT_EQ(ke_ecs_component_lookup(reg, "nope", &meta), KE_ERROR_NOT_FOUND);
+    EXPECT_EQ(ke_ecs_component_lookup(reg, "nope", &meta, NULL), KE_ERROR);
 }
 
 TEST_F(EcsTest, RegisterLegacy_HasNoFields) {
     ke_component_id cid = ke_ecs_component_register(reg, "opaque", sizeof(int));
     ASSERT_NE(cid, KE_COMPONENT_INVALID);
     ke_component_meta meta{};
-    ASSERT_EQ(ke_ecs_component_lookup(reg, "opaque", &meta), KE_OK);
+    ASSERT_EQ(ke_ecs_component_lookup(reg, "opaque", &meta, NULL), KE_OK);
     EXPECT_EQ(meta.field_count, 0u);
 }
 
@@ -340,11 +340,11 @@ TEST_F(EcsTest, ApplyVariant_AllSupportedTypes_WrittenAtCorrectOffsets) {
     ke_variant vb = ke_variant_bool(true);
     ke_variant vs = ke_variant_string("hello");
 
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "i",     &vi), KE_OK);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "f",     &vf), KE_OK);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "pos",   &vv), KE_OK);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "flag",  &vb), KE_OK);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "label", &vs), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "i", &vi, NULL), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "f", &vf, NULL), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "pos", &vv, NULL), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "flag", &vb, NULL), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "label", &vs, NULL), KE_OK);
 
     EXPECT_EQ(comp->i, 42);
     EXPECT_FLOAT_EQ(comp->f, 1.5f);
@@ -363,7 +363,7 @@ TEST_F(EcsTest, ApplyVariant_StringWithSize_CopiesIntoFixedBuffer) {
     auto *c = (BufComp *)ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_string("cube");
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "primitive", &v), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "primitive", &v, NULL), KE_OK);
     EXPECT_STREQ(c->primitive, "cube");
 }
 
@@ -375,7 +375,7 @@ TEST_F(EcsTest, ApplyVariant_Vec2_Works) {
     auto *c = (VecComp *)ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_vec2(10.f, 20.f);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "v", &v), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "v", &v, NULL), KE_OK);
     EXPECT_FLOAT_EQ(c->v.x, 10.f);
     EXPECT_FLOAT_EQ(c->v.y, 20.f);
 }
@@ -388,7 +388,7 @@ TEST_F(EcsTest, ApplyVariant_Vec4_Works) {
     auto *c = (VecComp *)ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_vec4(1.f, 2.f, 3.f, 4.f);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "v", &v), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "v", &v, NULL), KE_OK);
     EXPECT_FLOAT_EQ(c->v.x, 1.f);
     EXPECT_FLOAT_EQ(c->v.w, 4.f);
 }
@@ -401,7 +401,7 @@ TEST_F(EcsTest, ApplyVariant_Quat_Works) {
     auto *c = (QuatComp *)ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_quat(0.f, 0.f, 0.f, 1.f);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "q", &v), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "q", &v, NULL), KE_OK);
     EXPECT_FLOAT_EQ(c->q.w, 1.f);
 }
 
@@ -413,7 +413,7 @@ TEST_F(EcsTest, ApplyVariant_FloatToInt_Denied) {
     ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_float(42.7f);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "i", &v), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "i", &v, NULL), KE_ERROR);
 }
 
 TEST_F(EcsTest, ApplyVariant_UnknownField_ReturnsNotFound) {
@@ -424,7 +424,7 @@ TEST_F(EcsTest, ApplyVariant_UnknownField_ReturnsNotFound) {
     ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_int(1);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "y", &v), KE_ERROR_NOT_FOUND);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "y", &v, NULL), KE_ERROR);
 }
 
 TEST_F(EcsTest, ApplyVariant_Bool_Works) {
@@ -435,7 +435,7 @@ TEST_F(EcsTest, ApplyVariant_Bool_Works) {
     auto *c = (BoolComp *)ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_bool(true);
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "b", &v), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "b", &v, NULL), KE_OK);
     EXPECT_TRUE(c->b);
 }
 
@@ -447,7 +447,7 @@ TEST_F(EcsTest, ApplyVariant_String_Works) {
     auto *c = (StringComp *)ke_ecs_component_add(reg, e, cid);
 
     ke_variant v = ke_variant_string("hello");
-    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "s", &v), KE_OK);
+    EXPECT_EQ(ke_ecs_component_apply_variant(reg, e, cid, "s", &v, NULL), KE_OK);
     EXPECT_STREQ(c->s, "hello");
 }
 

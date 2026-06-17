@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/input_actions_create.h>
 #include <kernel_engine/framework/scene_loader.h>
@@ -20,7 +20,7 @@ protected:
 
     void SetUp() override {
         ke_world_params params{};
-        ke_world_create(&params, &world);
+        ke_world_create(&params, &world, NULL);
         // NOTE: ke_scene_tree_create needs ke_ecs*, but world not yet set up fully here
         // This test was already broken by legacy API removal (ke_kernel/ecs/world.h).
     }
@@ -52,9 +52,9 @@ scale = [2, 2, 2]
 )");
 
     ke_scene_loader* loader = nullptr;
-    ASSERT_EQ(ke_scene_loader_create(world, ".", &loader), KE_OK);
+    ASSERT_EQ(ke_scene_loader_create(world, ".", &loader, NULL), KE_OK);
     
-    ASSERT_EQ(loader->load(loader, path.string().c_str()), KE_OK);
+    ASSERT_EQ(loader->load(loader, path.string().c_str(), NULL), KE_OK);
     
     ke_entity e_root = tree->find_node(tree, "Root");
     ASSERT_NE(e_root, 0ULL);
@@ -113,7 +113,7 @@ TEST_F(FrameworkIntegrationTest, MeshShape_Bake_ReturnsOom_WhenAllocFails) {
     fa.free  = +[](ke_allocator*, void*) {};
     
     ke_mesh_shape_data data{};
-    EXPECT_EQ(ke_mesh_shape_bake(&fa, KE_MESH_PRIMITIVE_CUBE, 0, &data), KE_ERROR_OUT_OF_MEMORY);
+    EXPECT_EQ(ke_mesh_shape_bake(&fa, KE_MESH_PRIMITIVE_CUBE, 0, &data), KE_ERROR);
 }
 
 #include <kernel_engine/kernel/framework/mesh_render_system.h>
@@ -186,9 +186,9 @@ TEST_F(FrameworkIntegrationTest, SceneLoader_RecursiveLoad_Works) {
     auto parent_path = WriteTempFile(".scene.toml", "[[entity]]\nname = \"Child\"\n[entity.scene]\npath = \"" + child_path_str + "\"");
 
     ke_scene_loader* loader = nullptr;
-    ke_scene_loader_create(world, ".", &loader);
+    ke_scene_loader_create(world, ".", &loader, NULL);
     
-    ASSERT_EQ(loader->load(loader, parent_path.string().c_str()), KE_OK);
+    ASSERT_EQ(loader->load(loader, parent_path.string().c_str(), NULL), KE_OK);
     
     // Sub-scene root is renamed to "Child".
     EXPECT_NE(tree->find_node(tree, "Child"), 0ULL);

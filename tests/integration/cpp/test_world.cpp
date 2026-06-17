@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/framework/world_create.h>
@@ -17,15 +17,15 @@ struct WorldFixture {
 
     void create(const char *project_root = nullptr) {
         allocator = ke_allocator_malloc_create();
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler, NULL), KE_OK);
 
         ke_ecs *ecs = nullptr;
         ke_ecs_flecs_params ecs_params{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs, NULL), KE_OK);
 
         ke_runtime *runtime = nullptr;
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime, NULL), KE_OK);
 
         ke_world_params wp{};
         wp.task_scheduler = task_scheduler;
@@ -33,7 +33,7 @@ struct WorldFixture {
         wp.runtime        = runtime;
         wp.scene_tree     = nullptr;  // C-phase reintroduces; B2 ships ke_world without scene_tree
         wp.project_root   = project_root;
-        ASSERT_EQ(ke_world_create(&wp, &world), KE_OK);
+        ASSERT_EQ(ke_world_create(&wp, &world, NULL), KE_OK);
         ASSERT_NE(world, nullptr);
     }
 

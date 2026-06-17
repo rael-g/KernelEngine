@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <geometry_manager.hpp>
 #include <render_context.hpp>
@@ -79,21 +79,21 @@ TEST_F(GeometryManagerTest, CreateMesh_ReturnsError_WhenGpuFails)
     EXPECT_CALL(*gpu_mock, Copy(_, _)).WillRepeatedly(Return((const GpuMemoryBuffer*)0x123));
     EXPECT_CALL(*gpu_mock, CreateVertexBuffer(_, _)).WillOnce(Return(kGpuInvalidHandle));
 
-    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, &handle), KE_ERROR_RENDER);
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, &handle), KE_ERROR);
 }
 
 TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnNullVerts)
 {
     uint16_t idx[3] = {0, 1, 2};
     ke_mesh_handle handle;
-    EXPECT_EQ(manager->CreateMesh(ctx, nullptr, 3, idx, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateMesh(ctx, nullptr, 3, idx, 3, &handle), KE_ERROR);
 }
 
 TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnNullOut)
 {
     ke_vertex verts[3] = {};
     uint16_t idx[3] = {0, 1, 2};
-    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, nullptr), KE_ERROR);
 }
 
 TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnZeroIndexCount)
@@ -101,14 +101,14 @@ TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnZeroIndexCount)
     ke_vertex verts[3] = {};
     uint16_t idx[3] = {0, 1, 2};
     ke_mesh_handle handle;
-    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 0, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 0, &handle), KE_ERROR);
 }
 
 TEST_F(GeometryManagerTest, CreateMesh_ReturnsInvalidArgument_OnNullIndices)
 {
     ke_vertex verts[3] = {};
     ke_mesh_handle handle;
-    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, nullptr, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, nullptr, 3, &handle), KE_ERROR);
 }
 
 // ── DestroyMesh Tests ─────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ TEST_F(GeometryManagerTest, DestroyMesh_CallsGpuDestroy)
 
 TEST_F(GeometryManagerTest, DestroyMesh_ReturnsInvalidArgument_OnInvalidHandle)
 {
-    EXPECT_EQ(manager->DestroyMesh(ctx, {999}), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->DestroyMesh(ctx, {999}), KE_ERROR);
 }
 
 // ── RecordDraw Tests ─────────────────────────────────────────────────────────
@@ -176,14 +176,14 @@ TEST_F(GeometryManagerTest, RecordDraw_ReturnsError_WhenOutOfMemory)
     packet.draw_count = 1;
     ke_mat4 transform{};
 
-    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, &transform), KE_ERROR_OUT_OF_MEMORY);
+    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, &transform), KE_ERROR);
     free(packet.draw_commands);
 }
 
 TEST_F(GeometryManagerTest, RecordDraw_ReturnsInvalidArgument_OnNullTransform)
 {
     ke_frame_packet packet{};
-    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, nullptr), KE_ERROR);
 }
 
 // ── GetMeshEntry Tests ───────────────────────────────────────────────────────
@@ -194,13 +194,13 @@ TEST_F(GeometryManagerTest, CreateMesh_ReturnsError_WhenGpuNull)
     uint16_t idx[3] = {0, 1, 2};
     ke_mesh_handle handle;
     ctx.gpu = nullptr;
-    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateMesh(ctx, verts, 3, idx, 3, &handle), KE_ERROR);
 }
 
 TEST_F(GeometryManagerTest, DestroyMesh_ReturnsError_WhenGpuNull)
 {
     ctx.gpu = nullptr;
-    EXPECT_EQ(manager->DestroyMesh(ctx, {0}), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->DestroyMesh(ctx, {0}), KE_ERROR);
 }
 
 TEST_F(GeometryManagerTest, RecordDraw_ReturnsError_OnExceedingCapacity)
@@ -211,7 +211,7 @@ TEST_F(GeometryManagerTest, RecordDraw_ReturnsError_OnExceedingCapacity)
     packet.draw_count = 1;
     
     ke_mat4 trans{};
-    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, &trans), KE_ERROR_OUT_OF_MEMORY);
+    EXPECT_EQ(manager->RecordDraw(packet, {0}, {0}, &trans), KE_ERROR);
     
     free(packet.draw_commands);
 }

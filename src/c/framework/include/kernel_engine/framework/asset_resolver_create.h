@@ -36,7 +36,8 @@ extern "C"
         ke_image_loader    *image_loader,
         ke_font_loader     *font_loader,
         const char         *project_root,
-        ke_asset_resolver **out);
+        ke_asset_resolver **out,
+        ke_error          **out_error);
 
 #ifdef __cplusplus
 }

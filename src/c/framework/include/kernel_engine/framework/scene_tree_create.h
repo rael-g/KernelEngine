@@ -32,7 +32,8 @@ extern "C"
     /// caller invokes tree->destroy(tree) when done.
     KE_FRAMEWORK_API ke_result ke_scene_tree_create(
         ke_ecs         *ecs,
-        ke_scene_tree **out_tree);
+        ke_scene_tree **out_tree,
+        ke_error      **out_error);
 
 #ifdef __cplusplus
 }

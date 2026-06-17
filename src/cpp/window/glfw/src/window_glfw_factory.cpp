@@ -1,18 +1,19 @@
-#include <kernel_engine/window/glfw/glfw_window.h>
+﻿#include <kernel_engine/window/glfw/glfw_window.h>
+#include <kernel_engine/common/error.h>
 #include <glfw_window_device.hpp>
 #include <window_core.hpp>
 #include <kernel_engine/allocator/allocator.h>
 #include <new>
 
 extern "C" {
-    KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window** out_window) {
-        if (!out_window || !params || !params->allocator) return KE_ERROR_INVALID_ARGUMENT;
+    KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window** out_window, ke_error** out_error) {
+        if (!out_window || !params || !params->allocator) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
         auto* alloc = params->allocator;
 
         // 1. Create the Hardware Implementation (Muscle)
         void* device_mem = alloc->alloc(alloc, sizeof(kernel_engine::window::GlfwWindowDevice), alignof(kernel_engine::window::GlfwWindowDevice));
-        if (!device_mem) return KE_ERROR_OUT_OF_MEMORY;
+        if (!device_mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "device allocation failed");
         auto* device = new (device_mem) kernel_engine::window::GlfwWindowDevice();
 
         // 2. Create the Agnostic Core (Brain)

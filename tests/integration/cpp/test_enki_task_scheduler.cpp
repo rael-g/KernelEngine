@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <atomic>
@@ -12,7 +12,7 @@ protected:
 
     void SetUp() override {
         allocator = ke_allocator_malloc_create();
-        ke_result res = ke_task_scheduler_enki_create(allocator, &scheduler);
+        ke_result res = ke_task_scheduler_enki_create(allocator, &scheduler, NULL);
         ASSERT_EQ(res, KE_OK);
     }
 

@@ -28,14 +28,14 @@ ke_result ConvertMesh(const aiMesh* am, ke_allocator* allocator, ke_mesh_data* m
 
     // Allocate vertex buffer
     md->vertices = (ke_vertex *)ke_alloc(allocator, sizeof(ke_vertex) * am->mNumVertices);
-    if (!md->vertices) return KE_ERROR_OUT_OF_MEMORY;
+    if (!md->vertices) return KE_ERROR;
 
     // Allocate index buffer
     md->indices = (uint16_t *)ke_alloc(allocator, sizeof(uint16_t) * md->index_count);
     if (!md->indices)
     {
         ke_free(allocator, md->vertices);
-        return KE_ERROR_OUT_OF_MEMORY;
+        return KE_ERROR;
     }
 
     // Fill vertices

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/runtime/system_ctx.h>
@@ -31,14 +31,14 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
     };
 
     ke_system_id sid = 0;
-    return runtime->register_system(runtime, &sys, &sid);
+    return runtime->register_system(runtime, &sys, &sid, nullptr);
 }
 
 }  // namespace
 
 // RuntimeSpike covers the split runtime + ECS plugin pair:
 // - ke_ecs_flecs_create() builds the storage (flecs world behind ke_ecs).
-// - ke_runtime_create(ecs) builds the scheduler (in-house, sequential for now).
+// - ke_runtime_create(ecs) builds the scheduler (in-house, sequential for now, NULL, NULL).
 class RuntimeSpike : public ::testing::Test {
 protected:
     ke_allocator      *allocator      = nullptr;
@@ -51,15 +51,15 @@ protected:
         allocator = ke_allocator_malloc_create();
         ASSERT_NE(allocator, nullptr);
 
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler, NULL), KE_OK);
         ASSERT_NE(task_scheduler, nullptr);
 
         ke_ecs_flecs_params ecs_params{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs, NULL), KE_OK);
         ASSERT_NE(ecs, nullptr);
 
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime, NULL), KE_OK);
         ASSERT_NE(runtime, nullptr);
     }
 
@@ -73,7 +73,7 @@ protected:
 
 TEST_F(RuntimeSpike, Create_Tick_Destroy_NoSystems)
 {
-    EXPECT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    EXPECT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 }
 
 TEST_F(RuntimeSpike, RegisterModule_Calls_OnLoad_Once)
@@ -85,7 +85,7 @@ TEST_F(RuntimeSpike, RegisterModule_Calls_OnLoad_Once)
     mod.on_load   = test_module_on_load;
 
     ke_module_id mid = 0;
-    ASSERT_EQ(runtime->register_module(runtime, &mod, &mid), KE_OK);
+    ASSERT_EQ(runtime->register_module(runtime, &mod, &mid, NULL), KE_OK);
     EXPECT_NE(mid, 0u);
     EXPECT_EQ(ctx.load_calls.load(), 1);
 }
@@ -98,10 +98,10 @@ TEST_F(RuntimeSpike, RegisteredSystem_FiresOncePerTick)
     mod.user_data = &ctx;
     mod.on_load   = test_module_on_load;
 
-    ASSERT_EQ(runtime->register_module(runtime, &mod, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_module(runtime, &mod, nullptr, NULL), KE_OK);
 
     for (int i = 0; i < 10; ++i) {
-        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
     }
 
     EXPECT_EQ(ctx.system_ticks.load(), 10);
@@ -109,8 +109,8 @@ TEST_F(RuntimeSpike, RegisteredSystem_FiresOncePerTick)
 
 TEST_F(RuntimeSpike, RegisterModule_NullParams_Rejected)
 {
-    EXPECT_EQ(runtime->register_module(runtime, nullptr, nullptr),
-              KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(runtime->register_module(runtime, nullptr, nullptr, NULL),
+              KE_ERROR);
 }
 
 TEST_F(RuntimeSpike, RegisterSystem_NullExecute_Rejected)
@@ -119,16 +119,16 @@ TEST_F(RuntimeSpike, RegisterSystem_NullExecute_Rejected)
     sys.name  = "Bad";
     sys.phase = KE_PHASE_UPDATE;
     // sys.execute deliberately null
-    EXPECT_EQ(runtime->register_system(runtime, &sys, nullptr),
-              KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr),
+              KE_ERROR);
 }
 
 TEST_F(RuntimeSpike, Create_RejectsNullEcs)
 {
     ke_runtime_params rt_params{};
     ke_runtime *rt = nullptr;
-    EXPECT_EQ(ke_runtime_create(nullptr, task_scheduler, &rt_params, &rt),
-              KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_runtime_create(nullptr, task_scheduler, &rt_params, &rt, NULL),
+              KE_ERROR);
     EXPECT_EQ(rt, nullptr);
 }
 
@@ -136,8 +136,8 @@ TEST_F(RuntimeSpike, Create_RejectsNullTaskScheduler)
 {
     ke_runtime_params rt_params{};
     ke_runtime *rt = nullptr;
-    EXPECT_EQ(ke_runtime_create(ecs, nullptr, &rt_params, &rt),
-              KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_runtime_create(ecs, nullptr, &rt_params, &rt, NULL),
+              KE_ERROR);
     EXPECT_EQ(rt, nullptr);
 }
 
@@ -182,7 +182,7 @@ TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
     sa.access_count = 1;
     sa.user_data    = &probe;
     sa.execute      = worker;
-    ASSERT_EQ(runtime->register_system(runtime, &sa, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sa, nullptr, nullptr), KE_OK);
 
     ke_runtime_system_params sb{};
     sb.name         = "SysB";
@@ -191,12 +191,12 @@ TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
     sb.access_count = 1;
     sb.user_data    = &probe;
     sb.execute      = worker;
-    ASSERT_EQ(runtime->register_system(runtime, &sb, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sb, nullptr, nullptr), KE_OK);
 
     // 20 ticks * 2 systems = 40 calls. Across these we should observe at
     // least 2 distinct worker thread ids if dispatch is genuinely parallel.
     for (int i = 0; i < 20; ++i)
-        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     EXPECT_EQ(probe.total_calls.load(), 40);
     EXPECT_GE(probe.thread_ids.size(), 2u)
@@ -246,14 +246,14 @@ TEST_F(RuntimeSpike, ParallelDispatch_ConflictingSystemsSerialized)
     ke_runtime_system_params s1{};
     s1.name = "Writer1"; s1.phase = KE_PHASE_UPDATE; s1.access_list = acc; s1.access_count = 1;
     s1.user_data = &tag1; s1.execute = record;
-    ASSERT_EQ(runtime->register_system(runtime, &s1, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &s1, nullptr, nullptr), KE_OK);
 
     ke_runtime_system_params s2{};
     s2.name = "Writer2"; s2.phase = KE_PHASE_UPDATE; s2.access_list = acc; s2.access_count = 1;
     s2.user_data = &tag2; s2.execute = record;
-    ASSERT_EQ(runtime->register_system(runtime, &s2, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &s2, nullptr, nullptr), KE_OK);
 
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     // Wave builder ensures Writer1 (wave 0) completes before Writer2 (wave 1)
     // starts — defer flush sits between them. So order MUST be [1, 2].
@@ -274,7 +274,7 @@ TEST_F(RuntimeSpike, FixedUpdate_AccumulatesAtFixedRate)
     fx.execute = [](ke_system_ctx *, void *ud, float) {
         static_cast<std::atomic<int> *>(ud)->fetch_add(1);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr, nullptr), KE_OK);
 
     ke_runtime_system_params up{};
     up.name    = "UpdateCounter";
@@ -283,12 +283,12 @@ TEST_F(RuntimeSpike, FixedUpdate_AccumulatesAtFixedRate)
     up.execute = [](ke_system_ctx *, void *ud, float) {
         static_cast<std::atomic<int> *>(ud)->fetch_add(1);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &up, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &up, nullptr, nullptr), KE_OK);
 
     // Default fixed_dt = 1/60. Tick at 1/60 ten times: each tick contributes
     // exactly one fixed step.
     for (int i = 0; i < 10; ++i)
-        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     EXPECT_EQ(update_ticks.load(), 10);
     EXPECT_EQ(fixed_ticks.load(), 10);
@@ -304,10 +304,10 @@ TEST_F(RuntimeSpike, FixedUpdate_LargeFrame_CatchesUp)
     fx.execute = [](ke_system_ctx *, void *ud, float) {
         static_cast<std::atomic<int> *>(ud)->fetch_add(1);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr, nullptr), KE_OK);
 
     // Default fixed_dt = 1/60. One tick of 5/60s feeds 5 fixed steps.
-    ASSERT_EQ(runtime->tick(runtime, 5.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 5.0f / 60.0f, NULL), KE_OK);
     EXPECT_EQ(fixed_ticks.load(), 5);
 }
 
@@ -321,14 +321,14 @@ TEST_F(RuntimeSpike, FixedUpdate_SmallFrame_NoStep)
     fx.execute = [](ke_system_ctx *, void *ud, float) {
         static_cast<std::atomic<int> *>(ud)->fetch_add(1);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr, nullptr), KE_OK);
 
     // Tick at 1/120 → below fixed_dt threshold. After one tick, accumulator
     // holds (1/120) and no fixed step fires. Two ticks brings accumulator to
     // 2/120 = 1/60 → one fixed step fires.
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 120.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 120.0f, NULL), KE_OK);
     EXPECT_EQ(fixed_ticks.load(), 0);
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 120.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 120.0f, NULL), KE_OK);
     EXPECT_EQ(fixed_ticks.load(), 1);
 }
 
@@ -342,18 +342,18 @@ TEST_F(RuntimeSpike, FixedUpdate_SpiralOfDeathGuarded)
     fx.execute = [](ke_system_ctx *, void *ud, float) {
         static_cast<std::atomic<int> *>(ud)->fetch_add(1);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &fx, nullptr, nullptr), KE_OK);
 
     // Default max accum = 0.25s = 15 fixed steps at 1/60. A 1.0s pause must
     // be capped: fixed_ticks should NOT be 60.
-    ASSERT_EQ(runtime->tick(runtime, 1.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f, NULL), KE_OK);
     EXPECT_LE(fixed_ticks.load(), 15);
     EXPECT_GE(fixed_ticks.load(), 14);  // floor(0.25 / (1/60))
 }
 
 TEST_F(RuntimeSpike, Tick_RejectsNegativeDt)
 {
-    EXPECT_EQ(runtime->tick(runtime, -1.0f), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(runtime->tick(runtime, -1.0f, NULL), KE_ERROR);
 }
 
 // ── Debug access checks ─────────────────────────────────────────────────────
@@ -370,9 +370,9 @@ TEST_F(RuntimeSpike, DebugCheck_FiresWhenSystemMutatesUndeclaredComponent)
         void *p = ke_system_ctx_get_mut(ctx, 7u, 1u);
         EXPECT_EQ(p, nullptr);  // check denied + returned NULL
     };
-    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr), KE_OK);
 
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     EXPECT_GE(ke_system_ctx_check_failures(), 1u);
 }
@@ -393,9 +393,9 @@ TEST_F(RuntimeSpike, DebugCheck_PassesWhenAccessDeclared)
         // here is that the DEBUG CHECK doesn't fire (no failure recorded).
         (void)ke_system_ctx_get_mut(ctx, 7u, 1u);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr), KE_OK);
 
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
 }
@@ -413,9 +413,9 @@ TEST_F(RuntimeSpike, DebugCheck_ExclusiveBypassesValidation)
         (void)ke_system_ctx_get_mut(ctx, 7u, 1u);
         (void)ke_system_ctx_get(ctx, 8u, 2u);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr), KE_OK);
 
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
 }
@@ -608,9 +608,9 @@ TEST_F(RuntimeSpike, DeferSpawn_AppliedAtWaveBarrier)
         EXPECT_EQ(ke_system_ctx_spawn(ctx, &e3), KE_OK);
         (*count)++;
     };
-    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr), KE_OK);
 
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
     EXPECT_EQ(spawn_calls, 1);
     EXPECT_EQ(ke_system_ctx_defer_applied_count(), 3u);
 }
@@ -630,9 +630,9 @@ TEST_F(RuntimeSpike, DeferAttachDetachDespawn_AppliedAtBarrier)
         EXPECT_EQ(ke_system_ctx_detach(ctx, 42u, 5u), KE_OK);
         EXPECT_EQ(ke_system_ctx_despawn(ctx, 42u), KE_OK);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr), KE_OK);
 
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
     EXPECT_EQ(ke_system_ctx_defer_applied_count(), 3u);
 }
 
@@ -648,10 +648,10 @@ TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
         ke_entity e = 0;
         ke_system_ctx_spawn(ctx, &e);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr), KE_OK);
 
     for (int i = 0; i < 5; ++i)
-        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+        ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     EXPECT_EQ(ke_system_ctx_defer_applied_count(), 5u);  // exactly 1 per tick, drains every wave
 }
@@ -671,9 +671,9 @@ TEST_F(RuntimeSpike, DebugCheck_ReadAccessAlsoSatisfiesGetCall)
         const void *bad = ke_system_ctx_get(ctx, 10u, 1u);  // undeclared → check fires
         EXPECT_EQ(bad, nullptr);
     };
-    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr), KE_OK);
+    ASSERT_EQ(runtime->register_system(runtime, &sys, nullptr, nullptr), KE_OK);
 
-    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f), KE_OK);
+    ASSERT_EQ(runtime->tick(runtime, 1.0f / 60.0f, NULL), KE_OK);
 
     EXPECT_GE(ke_system_ctx_check_failures(), 1u);
 }

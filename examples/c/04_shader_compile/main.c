@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+﻿#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include "../common/example_console_sink.h"
 #include <kernel_engine/render/shader_compiler.h>
@@ -11,15 +11,15 @@ int main(void)
 
     ke_allocator *alloc = ke_allocator_malloc_create();
     ke_logger *logger = NULL;
-    ke_logger_create(&logger);
+    ke_logger_create(&logger, NULL);
 
-    logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE));
+    logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE), NULL);
 
     ke_shader_compiler_bgfx_params compiler_params = {
         .allocator = alloc, .logger = logger, .shaderc_path = "vcpkg_installed/x64-windows-static-md/tools/bgfx/shaderc.exe"};
     ke_shader_compiler *compiler = NULL;
     ke_shader_compiler_bgfx_create(&compiler_params, &compiler);
-    compiler->on_initialize(compiler);
+    compiler->on_initialize(compiler, NULL);
 
     ke_log_event ev_start = {KE_LOG_LEVEL_INFO, "app", "Compiling test shader..."};
     logger->log(logger, &ev_start);
@@ -29,7 +29,7 @@ int main(void)
         "src/cpp/render/bgfx/shaders/fs_basic.sc",
         "src/cpp/render/bgfx/shaders/varying.def.sc",
         "fragment", "windows", "p30",
-        includes, 1);
+        includes, 1, NULL);
 
     if (res == KE_OK) {
         ke_log_event ev = {KE_LOG_LEVEL_INFO, "app", "Shader compiled successfully!"};
@@ -39,7 +39,7 @@ int main(void)
         logger->log(logger, &ev);
     }
 
-    compiler->on_shutdown(compiler);
+    compiler->on_shutdown(compiler, NULL);
     compiler->destroy(compiler);
     logger->destroy(logger);
     alloc->destroy(alloc);

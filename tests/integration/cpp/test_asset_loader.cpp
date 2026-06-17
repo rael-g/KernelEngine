@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/asset/assimp/assimp_loader.h>
 #include <kernel_engine/allocator/allocator.h>
 
@@ -10,7 +10,7 @@ protected:
     void SetUp() override {
         alloc = ke_allocator_malloc_create();
         ke_asset_loader_assimp_params params = { alloc, nullptr };
-        ke_asset_loader_assimp_create(&params, &loader);
+        ke_asset_loader_assimp_create(&params, &loader, nullptr);
     }
 
     void TearDown() override {
@@ -23,19 +23,19 @@ protected:
 
 TEST(AssetLoaderInitTest, Create_NullParams_ReturnsInvalidArgument) {
     ke_asset_loader* l = nullptr;
-    ASSERT_EQ(ke_asset_loader_assimp_create(nullptr, &l), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_asset_loader_assimp_create(nullptr, &l, nullptr), KE_ERROR);
 }
 
 TEST(AssetLoaderInitTest, Create_NullAllocator_ReturnsInvalidArgument) {
     ke_asset_loader* l = nullptr;
     ke_asset_loader_assimp_params params = { nullptr, nullptr };
-    ASSERT_EQ(ke_asset_loader_assimp_create(&params, &l), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_asset_loader_assimp_create(&params, &l, nullptr), KE_ERROR);
 }
 
 TEST(AssetLoaderInitTest, Create_NullOut_ReturnsInvalidArgument) {
     ke_allocator* a = ke_allocator_malloc_create();
     ke_asset_loader_assimp_params params = { a, nullptr };
-    ASSERT_EQ(ke_asset_loader_assimp_create(&params, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_asset_loader_assimp_create(&params, nullptr, nullptr), KE_ERROR);
     a->destroy(a);
 }
 
@@ -43,7 +43,7 @@ TEST(AssetLoaderInitTest, Create_Success_ReturnsOk) {
     ke_allocator* a = ke_allocator_malloc_create();
     ke_asset_loader* l = nullptr;
     ke_asset_loader_assimp_params params = { a, nullptr };
-    ASSERT_EQ(ke_asset_loader_assimp_create(&params, &l), KE_OK);
+    ASSERT_EQ(ke_asset_loader_assimp_create(&params, &l, nullptr), KE_OK);
     l->destroy(l);
     a->destroy(a);
 }
@@ -52,16 +52,16 @@ TEST(AssetLoaderInitTest, Create_Success_ReturnsOk) {
 
 TEST_F(AssetLoaderTest, LoadModel_NullPath_ReturnsInvalidArgument) {
     ke_model_data* out = nullptr;
-    ASSERT_EQ(loader->load_model(loader, nullptr, &out), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(loader->load_model(loader, nullptr, &out, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetLoaderTest, LoadModel_NullOut_ReturnsInvalidArgument) {
-    ASSERT_EQ(loader->load_model(loader, "test.obj", nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(loader->load_model(loader, "test.obj", nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetLoaderTest, LoadModel_NonExistentFile_ReturnsIOError) {
     ke_model_data* out = nullptr;
-    ASSERT_EQ(loader->load_model(loader, "non_existent_file.obj", &out), KE_ERROR_IO);
+    ASSERT_EQ(loader->load_model(loader, "non_existent_file.obj", &out, nullptr), KE_ERROR);
 }
 
 TEST_F(AssetLoaderTest, FreeModel_Null_DoesNotCrash) {
@@ -76,7 +76,7 @@ TEST_F(AssetLoaderTest, LoadModel_ValidFile_ReturnsOk) {
     ke_model_data* model = nullptr;
     // We assume Box.gltf is at ../../assets/Box.gltf relative to where tests run, 
     // but CWD might be root. Let's try root first.
-    ke_result res = loader->load_model(loader, "assets/Box.gltf", &model);
+    ke_result res = loader->load_model(loader, "assets/Box.gltf", &model, nullptr);
     
     if (res == KE_OK) {
         ASSERT_NE(model, nullptr);
@@ -113,7 +113,7 @@ TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
         }, &ctx);
 
     // Wait or skip if file missing
-    if (ctx.res == KE_ERROR_IO) GTEST_SKIP() << "File not found for async test";
+    if (ctx.res == KE_ERROR) GTEST_SKIP() << "File not found for async test";
     
     ASSERT_TRUE(ctx.done);
 }
@@ -150,7 +150,7 @@ TEST_F(AssetLoaderTest, LoadModel_EmbeddedTexture_Works) {
     ke_model_data* model = nullptr;
     // Box.gltf in some versions has embedded textures, let's see.
     // If not, we'll just check the fallback logic if it's there.
-    ke_result res = loader->load_model(loader, "assets/Box.gltf", &model);
+    ke_result res = loader->load_model(loader, "assets/Box.gltf", &model, nullptr);
     if (res == KE_OK) {
         // model->texture_count would be > 0 if embedded
         loader->free_model(loader, model);
@@ -165,7 +165,7 @@ TEST_F(AssetLoaderTest, LoadModel_MalformedFile_ReturnsIOError) {
     fclose(f);
     
     ke_model_data* model = nullptr;
-    ke_result res = loader->load_model(loader, path, &model);
+    ke_result res = loader->load_model(loader, path, &model, nullptr);
     // Assimp might still load it as it's robust, but it exercises the path
     if (model) loader->free_model(loader, model);
     remove(path);

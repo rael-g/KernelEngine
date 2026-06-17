@@ -1,4 +1,4 @@
-#include <window_core.hpp>
+﻿#include <window_core.hpp>
 #include <kernel_engine/common/error.h>
 #include <cstring>
 
@@ -15,7 +15,7 @@ WindowCore::WindowCore()
         delete core;
     };
     api_struct_.on_initialize = [](ke_window* self, ke_error** out_error) {
-        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
+        if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
         auto* core = static_cast<WindowCore*>(self->handle);
         // Initialization usually happens via WindowCore::Initialize() directly
         // but we can call it here if we store config.
@@ -23,7 +23,7 @@ WindowCore::WindowCore()
         return KE_OK;
     };
     api_struct_.on_shutdown = [](ke_window* self, ke_error** out_error) {
-        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
+        if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
         static_cast<WindowCore*>(self->handle)->Shutdown();
         return KE_OK;
     };
@@ -32,12 +32,12 @@ WindowCore::WindowCore()
         return static_cast<WindowCore*>(self->handle)->ShouldClose() ? 1 : 0;
     };
     api_struct_.poll_events = [](ke_window* self, ke_error** out_error) {
-        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
+        if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
         static_cast<WindowCore*>(self->handle)->PollEvents();
         return KE_OK;
     };
     api_struct_.get_size = [](ke_window* self, int32_t* w, int32_t* h, ke_error** out_error) {
-        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
+        if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
         uint32_t uw, uh;
         auto res = static_cast<WindowCore*>(self->handle)->GetSize(&uw, &uh);
         if (w) *w = (int32_t)uw;

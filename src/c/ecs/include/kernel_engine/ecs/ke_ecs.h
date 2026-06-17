@@ -24,7 +24,8 @@ extern "C"
 
         ke_result (*component_lookup)(struct ke_ecs     *self,
                                       const char        *name,
-                                      ke_component_meta *out_meta);
+                                      ke_component_meta *out_meta,
+                                      ke_error         **out_error);
 
         void *(*component_add)(struct ke_ecs *self,
                                ke_entity      entity,
@@ -50,7 +51,8 @@ extern "C"
 
     KE_ECS_API ke_result ke_ecs_sparse_set_create(ke_ecs_registry *registry,
                                                     ke_allocator    *alloc,
-                                                    ke_ecs         **out_ecs);
+                                                    ke_ecs         **out_ecs,
+                                                    ke_error       **out_error);
 
 #ifdef __cplusplus
 }

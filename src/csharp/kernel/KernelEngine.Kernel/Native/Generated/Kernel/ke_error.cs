@@ -9,5 +9,11 @@ public unsafe partial struct ke_error
     public sbyte* message;
 
     [NativeTypeName("const char *")]
-    public sbyte* domain;
+    public sbyte* file;
+
+    [NativeTypeName("uint32_t")]
+    public uint line;
+
+    [NativeTypeName("const struct ke_error *")]
+    public ke_error* cause;
 }

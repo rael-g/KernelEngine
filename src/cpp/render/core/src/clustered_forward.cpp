@@ -1,4 +1,4 @@
-#include "clustered_forward.hpp"
+﻿#include "clustered_forward.hpp"
 #include <render_logging.hpp>
 #include "lighting_manager.hpp"
 #include "render_context.hpp"
@@ -18,7 +18,7 @@ ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle&
                                             GpuProgramHandle& out_cull_prog)
 {
     if (!ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SetupClustered", "GPU device not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupClustered", "GPU device not set");
 
     if (cluster_config_.grid_x == 0)
         cluster_config_ = kDefaultConfig;
@@ -46,7 +46,7 @@ ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle&
         b_spot_lights_    == kGpuInvalidHandle || b_point_indices_ == kGpuInvalidHandle ||
         b_point_count_    == kGpuInvalidHandle || b_spot_indices_  == kGpuInvalidHandle ||
         b_spot_count_     == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SetupClustered",
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupClustered",
                                  "Failed to create cluster GPU buffers");
 
     // Count buffers are compute-write (BGFX_BUFFER_COMPUTE_WRITE) — bgfx forbids CPU-side
@@ -69,7 +69,7 @@ ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle&
             out_cull_prog = gpu.CreateComputeProgram(cs, true);
     }
     if (out_cull_prog == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SetupClustered",
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupClustered",
                                  "Failed to load cs_light_cull");
 
     cull_program_ = out_cull_prog; // own a copy so RunCull doesn't need it threaded through callers
@@ -88,7 +88,7 @@ void ClusteredForward::RunCull(RenderContext& ctx, const LightingManager& lighti
 ke_result ClusteredForward::SetClusterConfig(RenderContext& ctx, const ke_cluster_config* config)
 {
     if (!config)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "SetClusterConfig", "Config is null");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetClusterConfig", "Config is null");
     cluster_config_ = *config;
     bounds_dirty_ = true;
     return KE_OK;

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/render/bgfx/bgfx_render.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/allocator/allocator.h>
@@ -14,25 +14,25 @@ protected:
 
 TEST_F(FactoryIntegrationTest, RenderBgfx_Create_NullArgs_ReturnsInvalidArgument) {
     ke_render* r = nullptr;
-    ASSERT_EQ(ke_render_bgfx_create(nullptr, &r), KE_ERROR_INVALID_ARGUMENT);
-    
+    ASSERT_EQ(ke_render_bgfx_create(nullptr, &r, nullptr), KE_ERROR);
+
     ke_render_bgfx_params p{};
-    ASSERT_EQ(ke_render_bgfx_create(&p, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_render_bgfx_create(&p, nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(FactoryIntegrationTest, RenderBgfx_Create_NullAllocator_ReturnsInvalidArgument) {
     ke_render* r = nullptr;
     ke_render_bgfx_params p{};
     p.allocator = nullptr;
-    ASSERT_EQ(ke_render_bgfx_create(&p, &r), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_render_bgfx_create(&p, &r, nullptr), KE_ERROR);
 }
 
 TEST_F(FactoryIntegrationTest, WindowGlfw_Create_NullArgs_ReturnsInvalidArgument) {
     ke_window* w = nullptr;
-    ASSERT_EQ(ke_window_glfw_create(nullptr, &w), KE_ERROR_INVALID_ARGUMENT);
-    
+    ASSERT_EQ(ke_window_glfw_create(nullptr, &w, nullptr), KE_ERROR);
+
     ke_window_glfw_params p{};
-    ASSERT_EQ(ke_window_glfw_create(&p, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_window_glfw_create(&p, nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(FactoryIntegrationTest, RenderBgfx_Create_Oom_WhenDeviceAllocFails) {
@@ -43,7 +43,7 @@ TEST_F(FactoryIntegrationTest, RenderBgfx_Create_Oom_WhenDeviceAllocFails) {
     ke_render* r = nullptr;
     ke_render_bgfx_params p{};
     p.allocator = &fa;
-    ASSERT_EQ(ke_render_bgfx_create(&p, &r), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_render_bgfx_create(&p, &r, nullptr), KE_ERROR);
 }
 
 TEST_F(FactoryIntegrationTest, RenderBgfx_Create_Oom_WhenRendererAllocFails) {
@@ -59,7 +59,7 @@ TEST_F(FactoryIntegrationTest, RenderBgfx_Create_Oom_WhenRendererAllocFails) {
     ke_render* r = nullptr;
     ke_render_bgfx_params p{};
     p.allocator = &fa;
-    ASSERT_EQ(ke_render_bgfx_create(&p, &r), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_render_bgfx_create(&p, &r, nullptr), KE_ERROR);
 }
 
 TEST_F(FactoryIntegrationTest, WindowGlfw_Create_Oom_WhenDeviceAllocFails) {
@@ -70,5 +70,5 @@ TEST_F(FactoryIntegrationTest, WindowGlfw_Create_Oom_WhenDeviceAllocFails) {
     ke_window* w = nullptr;
     ke_window_glfw_params p{};
     p.allocator = &fa;
-    ASSERT_EQ(ke_window_glfw_create(&p, &w), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_window_glfw_create(&p, &w, nullptr), KE_ERROR);
 }

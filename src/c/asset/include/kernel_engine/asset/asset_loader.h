@@ -33,7 +33,8 @@ extern "C"
         /// @param out   Receives a pointer to the allocated ke_model_data on success.
         ke_result (*load_model)(struct ke_asset_loader *self,
                                 const char *path,
-                                ke_model_data **out);
+                                ke_model_data **out,
+                                ke_error **out_error);
 
         /// @brief Frees a ke_model_data previously returned by load_model or the async variant.
         void (*free_model)(struct ke_asset_loader *self, ke_model_data *data);

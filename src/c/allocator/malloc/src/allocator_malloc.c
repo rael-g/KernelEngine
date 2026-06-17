@@ -1,4 +1,5 @@
-#include <kernel_engine/allocator/allocator.h>
+﻿#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/common/error.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -248,9 +249,9 @@ ke_allocator *ke_allocator_proxy_create(ke_allocator *inner, const char *name)
     return api;
 }
 
-ke_result ke_allocator_proxy_get_stats(ke_allocator *proxy, ke_allocator_stats *out_stats)
+ke_result ke_allocator_proxy_get_stats(ke_allocator *proxy, ke_allocator_stats *out_stats, ke_error **out_error)
 {
-    if (!proxy || !out_stats) return KE_ERROR_INVALID_ARGUMENT;
+    if (!proxy || !out_stats) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     // Simple check: we don't have a tag system yet, so we assume the handle matches our struct layout.
     // In a safer impl we'd have a magic number.
     proxy_impl *impl = (proxy_impl *)proxy->handle;

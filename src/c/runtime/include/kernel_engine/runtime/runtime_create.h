@@ -29,7 +29,8 @@ typedef struct ke_runtime_params {
 KE_RUNTIME_API ke_result ke_runtime_create(ke_ecs                  *ecs,
                                     ke_task_scheduler       *task_scheduler,
                                     const ke_runtime_params *params,
-                                    ke_runtime             **out_runtime);
+                                    ke_runtime             **out_runtime,
+                                    ke_error               **out_error);
 
 #ifdef __cplusplus
 }

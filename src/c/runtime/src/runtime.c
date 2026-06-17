@@ -1,5 +1,6 @@
-#include <kernel_engine/runtime/runtime_create.h>
+﻿#include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/runtime/system_ctx.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 
 #include <stdalign.h>
@@ -261,8 +262,8 @@ static bool defer_reserve(defer_queue *q, size_t needed)
 
 ke_result ke_system_ctx_spawn(ke_system_ctx *ctx, ke_entity *out_entity)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    if (!ctx || !ctx->defer) return KE_ERROR;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind      = DEFER_SPAWN;
     cmd->spawn_out = out_entity;
@@ -272,8 +273,8 @@ ke_result ke_system_ctx_spawn(ke_system_ctx *ctx, ke_entity *out_entity)
 ke_result ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                                 ke_component_id cid, const void *data, size_t size)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    if (!ctx || !ctx->defer) return KE_ERROR;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind        = DEFER_ATTACH;
     cmd->entity      = entity;
@@ -285,8 +286,8 @@ ke_result ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
 
 ke_result ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_component_id cid)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    if (!ctx || !ctx->defer) return KE_ERROR;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind   = DEFER_DETACH;
     cmd->entity = entity;
@@ -296,8 +297,8 @@ ke_result ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_componen
 
 ke_result ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR_INVALID_ARGUMENT;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    if (!ctx || !ctx->defer) return KE_ERROR;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind   = DEFER_DESPAWN;
     cmd->entity = entity;
@@ -379,9 +380,10 @@ typedef struct runtime_handle
 
 static ke_result runtime_register_module(ke_runtime                     *self,
                                           const ke_runtime_module_params *p,
-                                          ke_module_id                   *out_id)
+                                          ke_module_id                   *out_id,
+                                          ke_error                      **out_error)
 {
-    if (!self || !self->handle || !p || !p->on_load) return KE_ERROR_INVALID_ARGUMENT;
+    if (!self || !self->handle || !p || !p->on_load) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     runtime_handle *h  = (runtime_handle *)self->handle;
     ke_module_id    id = ++h->state.next_module_id;
@@ -395,9 +397,10 @@ static ke_result runtime_register_module(ke_runtime                     *self,
 
 static ke_result runtime_register_system(ke_runtime                     *self,
                                           const ke_runtime_system_params *p,
-                                          ke_system_id                   *out_id)
+                                          ke_system_id                   *out_id,
+                                          ke_error                      **out_error)
 {
-    if (!self || !self->handle || !p || !p->execute) return KE_ERROR_INVALID_ARGUMENT;
+    if (!self || !self->handle || !p || !p->execute) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     runtime_handle *h = (runtime_handle *)self->handle;
 
     if (h->state.system_count == h->state.system_capacity)
@@ -405,7 +408,7 @@ static ke_result runtime_register_system(ke_runtime                     *self,
         size_t             new_cap = h->state.system_capacity ? h->state.system_capacity * 2 : 4;
         registered_system *new_buf = (registered_system *)h->state.allocator->alloc(
             h->state.allocator, sizeof(registered_system) * new_cap, alignof(registered_system));
-        if (!new_buf) return KE_ERROR_OUT_OF_MEMORY;
+        if (!new_buf) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "system array allocation failed");
         if (h->state.systems)
         {
             memcpy(new_buf, h->state.systems, sizeof(registered_system) * h->state.system_count);
@@ -533,10 +536,10 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
     }
 }
 
-static ke_result runtime_tick(ke_runtime *self, float dt)
+static ke_result runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
 {
-    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
-    if (dt < 0.0f) return KE_ERROR_INVALID_ARGUMENT;
+    if (!self || !self->handle) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (dt < 0.0f) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "negative dt");
     runtime_handle *h = (runtime_handle *)self->handle;
 
     runtime_run_phase(h, KE_PHASE_PRE_UPDATE, dt);
@@ -585,16 +588,17 @@ static void runtime_destroy(ke_runtime *self)
 ke_result ke_runtime_create(ke_ecs                  *ecs,
                              ke_task_scheduler       *task_scheduler,
                              const ke_runtime_params *params,
-                             ke_runtime             **out_runtime)
+                             ke_runtime             **out_runtime,
+                             ke_error               **out_error)
 {
-    if (!ecs || !task_scheduler || !out_runtime) return KE_ERROR_INVALID_ARGUMENT;
+    if (!ecs || !task_scheduler || !out_runtime) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
+    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     runtime_handle *h = (runtime_handle *)alloc->alloc(
         alloc, sizeof(runtime_handle), alignof(runtime_handle));
-    if (!h) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!h) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
     memset(h, 0, sizeof(*h));
 
     h->state.allocator      = alloc;

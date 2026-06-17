@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+﻿#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/kernel/ecs/world.h>
 #include "../common/example_console_sink.h"
@@ -35,18 +35,18 @@ int main(void)
 
     ke_allocator *alloc = ke_allocator_malloc_create();
     ke_logger *logger = NULL;
-    ke_logger_create(&logger);
+    ke_logger_create(&logger, NULL);
 
-    logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE));
+    logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE, NULL));
 
     ke_input *input = NULL;
-    ke_input_create(logger, &input);
+    ke_input_create(logger, &input, NULL);
 
     ke_window_glfw_params win_params = {
         .allocator = alloc, .logger = logger, .input = input, .width = 800, .height = 600, .title = "C Input Demo"};
     ke_window *window = NULL;
     ke_window_glfw_create(&win_params, &window);
-    window->on_initialize(window);
+    window->on_initialize(window, NULL);
 
     ke_render_bgfx_params render_params = {
         .allocator = alloc,
@@ -57,7 +57,7 @@ int main(void)
     };
     ke_render *renderer = NULL;
     ke_render_bgfx_create(&render_params, &renderer);
-    renderer->on_initialize(renderer);
+    renderer->on_initialize(renderer, NULL);
 
     float r = 0.2f;
     while (!window->should_close(window))
@@ -78,12 +78,12 @@ int main(void)
         }
 
         renderer->clear_color(renderer, r, 0.3f, 0.4f, 1.0f);
-        window->poll_events(window);
+        window->poll_events(window, NULL);
     }
 
-    renderer->on_shutdown(renderer);
+    renderer->on_shutdown(renderer, NULL);
     renderer->destroy(renderer);
-    window->on_shutdown(window);
+    window->on_shutdown(window, NULL);
     window->destroy(window);
     input->destroy(input);
     logger->destroy(logger);

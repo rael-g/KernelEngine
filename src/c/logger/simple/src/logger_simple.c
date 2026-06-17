@@ -1,4 +1,5 @@
-#include <kernel_engine/logger/logger.h>
+﻿#include <kernel_engine/logger/logger.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 
 #include <stddef.h>
@@ -44,11 +45,11 @@ static void logger_flush(ke_logger *self)
         if (s->sinks[i].flush) s->sinks[i].flush(&s->sinks[i]);
 }
 
-static ke_result logger_add_sink(ke_logger *self, ke_logger_sink sink)
+static ke_result logger_add_sink(ke_logger *self, ke_logger_sink sink, ke_error **out_error)
 {
-    if (!self) return KE_ERROR_INVALID_ARGUMENT;
+    if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     logger_state *s = (logger_state *)self->handle;
-    if (s->sink_count >= KE_LOGGER_MAX_SINKS) return KE_ERROR;
+    if (s->sink_count >= KE_LOGGER_MAX_SINKS) return KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "sink capacity exceeded");
     s->sinks[s->sink_count++] = sink;
     return KE_OK;
 }
@@ -67,22 +68,22 @@ const char *ke_log_level_to_string(int32_t level)
     }
 }
 
-ke_result ke_logger_create(ke_logger **out_logger)
+ke_result ke_logger_create(ke_logger **out_logger, ke_error **out_error)
 {
-    if (!out_logger) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out_logger) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *allocator = ke_allocator_malloc_create();
-    if (!allocator) return KE_ERROR_OUT_OF_MEMORY;
+    if (!allocator) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     ke_logger *logger = (ke_logger *)allocator->alloc(allocator, sizeof(ke_logger), _Alignof(ke_logger));
-    if (!logger) { allocator->destroy(allocator); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!logger) { allocator->destroy(allocator); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "logger allocation failed"); }
 
     logger_state *state = (logger_state *)allocator->alloc(allocator, sizeof(logger_state), _Alignof(logger_state));
     if (!state)
     {
         allocator->free(allocator, logger);
         allocator->destroy(allocator);
-        return KE_ERROR_OUT_OF_MEMORY;
+        return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     }
 
     memset(state, 0, sizeof(*state));

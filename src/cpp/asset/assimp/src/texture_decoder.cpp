@@ -19,7 +19,7 @@ static ke_result EncodeFallbackWhite(ke_allocator* allocator, ke_logger* logger,
 {
     log_warn(logger, "Failed to load texture; using white fallback");
     out_data->pixels = (uint8_t*)ke_alloc(allocator, 4);
-    if (!out_data->pixels) return KE_ERROR_OUT_OF_MEMORY;
+    if (!out_data->pixels) return KE_ERROR;
     out_data->pixels[0] = out_data->pixels[1] = out_data->pixels[2] = out_data->pixels[3] = 0xFF;
     out_data->width  = 1;
     out_data->height = 1;
@@ -30,7 +30,7 @@ static ke_result CopyToAllocator(const uint8_t* raw, int w, int h, ke_allocator*
 {
     size_t byte_count = (size_t)w * h * 4;
     out_data->pixels = (uint8_t*)ke_alloc(allocator, byte_count);
-    if (!out_data->pixels) return KE_ERROR_OUT_OF_MEMORY;
+    if (!out_data->pixels) return KE_ERROR;
     memcpy(out_data->pixels, raw, byte_count);
     out_data->width  = (uint32_t)w;
     out_data->height = (uint32_t)h;
@@ -70,7 +70,7 @@ ke_result DecodeEmbedded(const aiTexture* et, ke_allocator* allocator, ke_logger
     int w = (int)et->mWidth, h = (int)et->mHeight;
     size_t byte_count = (size_t)w * h * 4;
     out_data->pixels = (uint8_t*)ke_alloc(allocator, byte_count);
-    if (!out_data->pixels) return KE_ERROR_OUT_OF_MEMORY;
+    if (!out_data->pixels) return KE_ERROR;
 
     const aiTexel* src = et->pcData;
     for (int px = 0; px < w * h; ++px)

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <shadow_pipeline.hpp>
 #include <geometry_manager.hpp>
@@ -86,7 +86,7 @@ TEST_F(ShadowPipelineTest, SubmitMeshShadow_ReturnsError_OnInvalidMesh)
 {
     ke_mat4 t{};
     ke_mesh_handle m{999}; 
-    EXPECT_EQ(pipeline->SubmitMeshShadow(ctx, *geom, {1}, m, &t), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(pipeline->SubmitMeshShadow(ctx, *geom, {1}, m, &t), KE_ERROR);
 }
 
 TEST_F(ShadowPipelineTest, DestroyShadowMap_CallsGpuDestroy)

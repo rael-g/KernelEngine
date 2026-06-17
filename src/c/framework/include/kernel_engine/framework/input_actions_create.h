@@ -25,7 +25,8 @@ extern "C"
 #endif
 
     KE_FRAMEWORK_API ke_result ke_input_actions_create(
-        ke_input_actions **out_actions);
+        ke_input_actions **out_actions,
+        ke_error         **out_error);
 
 #ifdef __cplusplus
 }

@@ -27,11 +27,11 @@ extern "C"
     {
         void *handle;
 
-        ke_result (*load)(struct ke_scene_loader *self, const char *path);
+        ke_result (*load)(struct ke_scene_loader *self, const char *path, ke_error **out_error);
 
         ke_result (*register_script_factory)(struct ke_scene_loader *self,
                                               ke_script_factory_func factory,
-                                              void *ctx);
+                                              void *ctx, ke_error **out_error);
 
         void (*destroy)(struct ke_scene_loader *self);
     } ke_scene_loader;

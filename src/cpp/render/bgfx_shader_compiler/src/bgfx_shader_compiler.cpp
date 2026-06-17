@@ -1,4 +1,4 @@
-#include "bgfx_shader_compiler_impl.hpp"
+﻿#include "bgfx_shader_compiler_impl.hpp"
 #include <cstdio>
 #include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/render/render.h>
@@ -14,10 +14,12 @@ BgfxShaderCompiler::BgfxShaderCompiler(const ke_shader_compiler_bgfx_params *par
       shaderc_path_((params->shaderc_path != nullptr) ? params->shaderc_path : "")
 {
     compiler_api_.handle = this;
-    compiler_api_.on_initialize = [](ke_shader_compiler *self) {
+    compiler_api_.on_initialize = [](ke_shader_compiler *self, ke_error **out_error) {
+        (void)out_error;
         return static_cast<BgfxShaderCompiler *>(self->handle)->OnInitialize();
     };
-    compiler_api_.on_shutdown = [](ke_shader_compiler *self) {
+    compiler_api_.on_shutdown = [](ke_shader_compiler *self, ke_error **out_error) {
+        (void)out_error;
         return static_cast<BgfxShaderCompiler *>(self->handle)->OnShutdown();
     };
     compiler_api_.destroy = [](ke_shader_compiler *self) {
@@ -32,7 +34,8 @@ BgfxShaderCompiler::BgfxShaderCompiler(const ke_shader_compiler_bgfx_params *par
     };
     compiler_api_.compile_shader = [](ke_shader_compiler *self, const char *file_path, const char *varying_def_path,
                                       const char *type, const char *platform, const char *profile,
-                                      const char **includes, size_t include_count) {
+                                      const char **includes, size_t include_count, ke_error **out_error) {
+        (void)out_error;
         return static_cast<BgfxShaderCompiler *>(self->handle)
             ->CompileShader(file_path, varying_def_path, type, platform, profile, includes, include_count);
     };
@@ -65,7 +68,7 @@ ke_result BgfxShaderCompiler::CompileShader(const char *file_path, const char *v
     {
         ke_log_event ev = {KE_LOG_LEVEL_ERROR, "shader_compiler", "Shaderc path not configured."};
         if (logger_) logger_->log(logger_, &ev);
-        return KE_ERROR_NOT_INITIALIZED;
+        return KE_ERROR;
     }
 
     std::string out_path = file_path;
@@ -99,7 +102,7 @@ ke_result BgfxShaderCompiler::CompileShader(const char *file_path, const char *v
     {
         ke_log_event ev = {KE_LOG_LEVEL_ERROR, "shader_compiler", "Failed to compile shader."};
         if (logger_) logger_->log(logger_, &ev);
-        return KE_ERROR_RENDER;
+        return KE_ERROR;
     }
 
     {
@@ -118,13 +121,13 @@ extern "C"
     {
         if (out_compiler == nullptr)
         {
-            return KE_ERROR_INVALID_ARGUMENT;
+            return KE_ERROR;
         }
         *out_compiler = NULL;
 
         if ((params == nullptr) || (params->allocator == nullptr))
         {
-            return KE_ERROR_INVALID_ARGUMENT;
+            return KE_ERROR;
         }
         using namespace kernel_engine::render::shader_compiler;
         ke_allocator *alloc = params->allocator;
@@ -132,7 +135,7 @@ extern "C"
         void *mem = alloc->alloc(alloc, sizeof(BgfxShaderCompiler), 0);
         if (mem == nullptr)
         {
-            return KE_ERROR_OUT_OF_MEMORY;
+            return KE_ERROR;
         }
 
         BgfxShaderCompiler *sys = new (mem) BgfxShaderCompiler(params);

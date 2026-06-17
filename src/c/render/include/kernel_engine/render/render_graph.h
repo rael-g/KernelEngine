@@ -199,30 +199,30 @@ extern "C"
         void (*destroy)(struct ke_render_graph *self);
 
         /// @brief Declares a transient resource the graph allocates and recycles.
-        ke_result (*declare_resource)(struct ke_render_graph *self, const ke_resource_desc *desc);
+        ke_result (*declare_resource)(struct ke_render_graph *self, const ke_resource_desc *desc, ke_error **out_error);
 
         /// @brief Imports an externally-owned texture under @c name so passes
         /// can read/write it through the graph's resource system.
-        ke_result (*import_texture)(struct ke_render_graph *self, const char *name, ke_texture_handle handle);
+        ke_result (*import_texture)(struct ke_render_graph *self, const char *name, ke_texture_handle handle, ke_error **out_error);
 
         /// @brief Registers a pass. Order of registration is irrelevant —
         /// execution order is derived from the resource DAG at @c compile time.
-        ke_result (*add_pass)(struct ke_render_graph *self, const ke_render_pass_params *params);
+        ke_result (*add_pass)(struct ke_render_graph *self, const ke_render_pass_params *params, ke_error **out_error);
 
         /// @brief Removes a previously-added pass by name. Returns @c KE_ERROR_NOT_FOUND
         /// when no pass with that name is registered. Call @c compile again afterwards.
-        ke_result (*remove_pass)(struct ke_render_graph *self, const char *name);
+        ke_result (*remove_pass)(struct ke_render_graph *self, const char *name, ke_error **out_error);
 
         /// @brief Topo-sorts passes, validates reads/writes, allocates transient
         /// resources, assigns backend view-ids. Must be called after any
         /// add_pass / remove_pass / declare_resource batch and before execute.
         /// Idempotent when graph topology has not changed.
-        ke_result (*compile)(struct ke_render_graph *self);
+        ke_result (*compile)(struct ke_render_graph *self, ke_error **out_error);
 
         /// @brief Runs all passes in resolved order, feeding each its record
         /// callback. @c packet is forwarded to passes via @c get_frame_packet
         /// and may be NULL only in tests.
-        ke_result (*execute)(struct ke_render_graph *self, const struct ke_frame_packet *packet);
+        ke_result (*execute)(struct ke_render_graph *self, const struct ke_frame_packet *packet, ke_error **out_error);
     } ke_render_graph;
 
     /// @brief Convenience wrapper that delegates to @c renderer->create_render_graph.

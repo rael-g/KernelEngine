@@ -1,7 +1,8 @@
-#include "assimp_loader.hpp"
+﻿#include "assimp_loader.hpp"
 #include "assimp_converter.hpp"
 #include "texture_decoder.hpp"
 #include "internal_helpers.hpp"
+#include <kernel_engine/common/error.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -26,8 +27,8 @@ AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
         l->~AssimpLoader();
         a->free(a, l);
     };
-    api_.load_model = [](ke_asset_loader *self, const char *path, ke_model_data **out) {
-        return static_cast<AssimpLoader *>(self->handle)->LoadModel(path, out);
+    api_.load_model = [](ke_asset_loader *self, const char *path, ke_model_data **out, ke_error **out_error) {
+        return static_cast<AssimpLoader *>(self->handle)->LoadModel(path, out, out_error);
     };
     api_.free_model = [](ke_asset_loader *self, ke_model_data *data) {
         static_cast<AssimpLoader *>(self->handle)->FreeModel(data);
@@ -47,9 +48,9 @@ AssimpLoader::~AssimpLoader() = default;
 
 ke_asset_loader *AssimpLoader::ToApi() { return &api_; }
 
-ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out)
+ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_error **out_error)
 {
-    if (!path || !out) return KE_ERROR_INVALID_ARGUMENT;
+    if (!path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     Assimp::Importer importer;
     importer.SetPropertyInteger(AI_CONFIG_PP_SLM_VERTEX_LIMIT, 65534);
@@ -65,7 +66,8 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out)
 
     if (!scene || !scene->mRootNode || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE))
     {
-        return LogErr(logger_, KE_ERROR_IO, "LoadModel", importer.GetErrorString());
+        LogErr(logger_, KE_ERROR, "LoadModel", importer.GetErrorString());
+        return KE_ERROR_SET(out_error, &KE_ERROR_IO, importer.GetErrorString());
     }
 
     std::string dir = Converter::GetDirectory(path);
@@ -144,7 +146,7 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out)
 
     // ── Final Model Allocation ──────────────────────────────────────────────
     ke_model_data *model = (ke_model_data *)ke_alloc(allocator_, sizeof(ke_model_data));
-    if (!model) return KE_ERROR_OUT_OF_MEMORY;
+    if (!model) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "model allocation failed");
 
     model->mesh_count = mesh_count;
     model->material_count = mat_count;
@@ -182,7 +184,7 @@ ke_task *AssimpLoader::LoadModelAsync(ke_task_scheduler *scheduler,
     auto *ctx = static_cast<AsyncCtx *>(
         ke_alloc(allocator_, sizeof(AsyncCtx)));
     if (!ctx) {
-        on_complete(KE_ERROR_OUT_OF_MEMORY, nullptr, user_data);
+        on_complete(KE_ERROR, nullptr, user_data);
         return nullptr;
     }
 
@@ -191,7 +193,7 @@ ke_task *AssimpLoader::LoadModelAsync(ke_task_scheduler *scheduler,
         ke_alloc(allocator_, path_copy.size() + 1));
     if (!path_buf) {
         ke_free(allocator_, ctx);
-        on_complete(KE_ERROR_OUT_OF_MEMORY, nullptr, user_data);
+        on_complete(KE_ERROR, nullptr, user_data);
         return nullptr;
     }
     memcpy(path_buf, path_copy.c_str(), path_copy.size() + 1);
@@ -233,11 +235,12 @@ void AssimpLoader::FreeModel(ke_model_data *data)
 
 extern "C" KE_ASSET_ASSIMP_API ke_result
 ke_asset_loader_assimp_create(const ke_asset_loader_assimp_params *params,
-                               ke_asset_loader **out)
+                               ke_asset_loader **out,
+                               ke_error **out_error)
 {
-    if (!params || !params->allocator || !out) return KE_ERROR_INVALID_ARGUMENT;
+    if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     void *mem = params->allocator->alloc(params->allocator, sizeof(kernel_engine::asset::assimp::AssimpLoader), alignof(kernel_engine::asset::assimp::AssimpLoader));
-    if (!mem) return KE_ERROR_OUT_OF_MEMORY;
+    if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed");
     auto *loader = new (mem) kernel_engine::asset::assimp::AssimpLoader(params);
     *out = loader->ToApi();
     return KE_OK;

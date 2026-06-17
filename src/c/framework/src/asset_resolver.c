@@ -1,10 +1,11 @@
-// ke_asset_resolver impl — pure C. Maps res:// / absolute / relative paths to
+﻿// ke_asset_resolver impl — pure C. Maps res:// / absolute / relative paths to
 // CPU-side asset data via injected loaders (image_loader today; mesh loader
 // slot reserved). Material parsing is an internal helper exposed only through
 // the resolve_material vtable method (per the C-phase convention that the
 // framework plugin's external surface is vtables + factories).
 
 #include <kernel_engine/framework/asset_resolver_create.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 
 #include "mesh_shape_internal.h"
@@ -99,7 +100,7 @@ static void resolve_path(const asset_resolver_state *s, const char *path,
 // ke_asset_resolver->resolve_material — convention §17.1.3 (plugins export
 // vtable methods + factories, nothing else).
 static ke_result parse_material_file(const char *path, ke_material_spec *out_spec) {
-    if (!path || !out_spec) return KE_ERROR_INVALID_ARGUMENT;
+    if (!path || !out_spec) return KE_ERROR;
 
     // Defaults: white, non-metallic, mid-roughness, no textures.
     out_spec->base_color[0] = 1.0f;
@@ -112,15 +113,15 @@ static ke_result parse_material_file(const char *path, ke_material_spec *out_spe
     out_spec->normal_path[0] = '\0';
 
     FILE *fp = fopen(path, "rb");
-    if (!fp) return KE_ERROR_NOT_FOUND;
+    if (!fp) return KE_ERROR;
 
     char errbuf[200];
     toml_table_t *root = toml_parse_file(fp, errbuf, sizeof(errbuf));
     fclose(fp);
-    if (!root) return KE_ERROR_IO;
+    if (!root) return KE_ERROR;
 
     toml_table_t *mat = toml_table_in(root, "material");
-    if (!mat) { toml_free(root); return KE_ERROR_INVALID_ARGUMENT; }
+    if (!mat) { toml_free(root); return KE_ERROR; }
 
     toml_array_t *bc = toml_array_in(mat, "base_color");
     if (bc) {
@@ -168,16 +169,16 @@ static ke_result parse_material_file(const char *path, ke_material_spec *out_spe
 // ── Vtable methods ──────────────────────────────────────────────────────────
 
 static ke_result vt_resolve_texture(ke_asset_resolver *self, const char *path,
-                                     ke_texture_data **out) {
-    if (!self || !self->handle || !path || !out) return KE_ERROR_INVALID_ARGUMENT;
+                                     ke_texture_data **out, ke_error **out_error) {
+    if (!self || !self->handle || !path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
-    if (!s->image_loader) return KE_ERROR_INVALID_ARGUMENT;
+    if (!s->image_loader) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "no image loader injected");
 
     char buf[1024];
     resolve_path(s, path, buf, sizeof(buf));
-    if (!file_exists(buf)) return KE_ERROR_NOT_FOUND;
+    if (!file_exists(buf)) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "texture file not found");
 
-    return s->image_loader->load_image(s->image_loader, buf, out);
+    return s->image_loader->load_image(s->image_loader, buf, out, out_error);
 }
 
 static void vt_free_texture(ke_asset_resolver *self, ke_texture_data *data) {
@@ -192,8 +193,8 @@ static void vt_free_texture(ke_asset_resolver *self, ke_texture_data *data) {
 #define PRIMITIVE_PREFIX_LEN 17
 
 static ke_result vt_resolve_mesh(ke_asset_resolver *self, const char *path,
-                                  ke_mesh_shape_data *out) {
-    if (!self || !self->handle || !path || !out) return KE_ERROR_INVALID_ARGUMENT;
+                                  ke_mesh_shape_data *out, ke_error **out_error) {
+    if (!self || !self->handle || !path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
 
     if (strncmp(path, PRIMITIVE_PREFIX, PRIMITIVE_PREFIX_LEN) == 0) {
@@ -203,11 +204,11 @@ static ke_result vt_resolve_mesh(ke_asset_resolver *self, const char *path,
         else if (strcmp(name, "plane")  == 0) kind = KE_MESH_PRIMITIVE_PLANE;
         else if (strcmp(name, "cube")   == 0) kind = KE_MESH_PRIMITIVE_CUBE;
         else if (strcmp(name, "sphere") == 0) kind = KE_MESH_PRIMITIVE_SPHERE;
-        else return KE_ERROR_NOT_FOUND;
+        else return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "unknown primitive");
         return ke_mesh_shape_bake_internal(s->allocator, kind, 0, out);
     }
     // Future: dispatch .gltf/.fbx/.obj via an injected ke_asset_loader.
-    return KE_ERROR_NOT_FOUND;
+    return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "mesh not found");
 }
 
 static void vt_free_mesh(ke_asset_resolver *self, ke_mesh_shape_data *data) {
@@ -217,29 +218,31 @@ static void vt_free_mesh(ke_asset_resolver *self, ke_mesh_shape_data *data) {
 }
 
 static ke_result vt_resolve_material(ke_asset_resolver *self, const char *path,
-                                      ke_material_spec *out) {
-    if (!self || !self->handle || !path || !out) return KE_ERROR_INVALID_ARGUMENT;
+                                      ke_material_spec *out, ke_error **out_error) {
+    if (!self || !self->handle || !path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
     char buf[1024];
     resolve_path(s, path, buf, sizeof(buf));
-    return parse_material_file(buf, out);
+    ke_result rc = parse_material_file(buf, out);
+    if (rc != KE_OK) return KE_ERROR_SET(out_error, &KE_ERROR_IO, "failed to parse material file");
+    return KE_OK;
 }
 
 static ke_result vt_resolve_font(ke_asset_resolver *self, const char *path,
                                   float pixel_size, uint32_t first_codepoint,
                                   uint32_t codepoint_count, uint32_t atlas_size,
-                                  ke_font_data **out) {
-    if (!self || !self->handle || !path || !out) return KE_ERROR_INVALID_ARGUMENT;
+                                  ke_font_data **out, ke_error **out_error) {
+    if (!self || !self->handle || !path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
-    if (!s->font_loader) return KE_ERROR_INVALID_ARGUMENT;
+    if (!s->font_loader) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "no font loader injected");
 
     char buf[1024];
     resolve_path(s, path, buf, sizeof(buf));
-    if (!file_exists(buf)) return KE_ERROR_NOT_FOUND;
+    if (!file_exists(buf)) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "font file not found");
 
     return s->font_loader->load_font(s->font_loader, buf, pixel_size,
                                      first_codepoint, codepoint_count,
-                                     atlas_size, out);
+                                     atlas_size, out, out_error);
 }
 
 static void vt_free_font(ke_asset_resolver *self, ke_font_data *data) {
@@ -262,15 +265,16 @@ static void vt_destroy(ke_asset_resolver *self) {
 
 ke_result ke_asset_resolver_create(ke_image_loader *image_loader,
                                     ke_font_loader *font_loader,
-                                    const char *project_root, ke_asset_resolver **out) {
-    if (!out) return KE_ERROR_INVALID_ARGUMENT;
+                                    const char *project_root, ke_asset_resolver **out,
+                                    ke_error **out_error) {
+    if (!out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
+    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     asset_resolver_state *s = (asset_resolver_state *)alloc->alloc(
         alloc, sizeof(asset_resolver_state), 8);
-    if (!s) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!s) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
     memset(s, 0, sizeof(*s));
 
     s->allocator    = alloc;
@@ -280,7 +284,7 @@ ke_result ke_asset_resolver_create(ke_image_loader *image_loader,
     if (project_root && !s->project_root) {
         alloc->free(alloc, s);
         alloc->destroy(alloc);
-        return KE_ERROR_OUT_OF_MEMORY;
+        return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "project root allocation failed");
     }
 
     s->api.handle           = s;

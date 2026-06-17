@@ -35,7 +35,7 @@ typedef struct ke_render_bgfx_params
 /**
  * @brief Creates the BGFX render system implementation.
  */
-KE_RENDER_BGFX_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params* params, ke_render** out_render);
+KE_RENDER_BGFX_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params* params, ke_render** out_render, ke_error** out_error);
 
 #ifdef __cplusplus
 }

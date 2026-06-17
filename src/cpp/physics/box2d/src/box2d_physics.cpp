@@ -1,6 +1,7 @@
-#include <box2d/box2d.h>
+﻿#include <box2d/box2d.h>
 
 #include "kernel_engine/physics/box2d/box2d_physics.h"
+#include "kernel_engine/common/error.h"
 #include "kernel_engine/allocator/allocator.h"
 #include "kernel_engine/logger/logger.h"
 
@@ -60,9 +61,9 @@ void physics_step(ke_physics_2d *self, float dt)
     state->world->Step(dt, 8, 3);
 }
 
-ke_result physics_create_body(ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_body_2d *out)
+ke_result physics_create_body(ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_body_2d *out, ke_error **out_error)
 {
-    if (!out) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     *out = KE_BODY_2D_INVALID;
     auto *state = static_cast<Box2dState *>(self->handle);
 
@@ -73,7 +74,7 @@ ke_result physics_create_body(ke_physics_2d *self, ke_body_type_2d type, float x
     def.position.Set(x, y);
 
     b2Body *body = state->world->CreateBody(&def);
-    if (!body) return KE_ERROR_OUT_OF_MEMORY;
+    if (!body) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "body creation failed");
 
     if (state->next_id == 0) state->next_id = 1; // skip invalid sentinel
     ke_body_2d id = state->next_id++;
@@ -92,11 +93,11 @@ void physics_destroy_body(ke_physics_2d *self, ke_body_2d id)
 }
 
 ke_result physics_add_box(ke_physics_2d *self, ke_body_2d id, float hw, float hh,
-                          float density, float friction, float restitution)
+                          float density, float friction, float restitution, ke_error **out_error)
 {
     auto *state = static_cast<Box2dState *>(self->handle);
     b2Body *body = lookup(state, id);
-    if (!body) return KE_ERROR_NOT_FOUND;
+    if (!body) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "body not found");
 
     b2PolygonShape shape;
     shape.SetAsBox(hw, hh);
@@ -111,11 +112,11 @@ ke_result physics_add_box(ke_physics_2d *self, ke_body_2d id, float hw, float hh
 }
 
 ke_result physics_add_circle(ke_physics_2d *self, ke_body_2d id, float radius,
-                             float density, float friction, float restitution)
+                             float density, float friction, float restitution, ke_error **out_error)
 {
     auto *state = static_cast<Box2dState *>(self->handle);
     b2Body *body = lookup(state, id);
-    if (!body) return KE_ERROR_NOT_FOUND;
+    if (!body) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "body not found");
 
     b2CircleShape shape;
     shape.m_radius = radius;
@@ -171,13 +172,13 @@ void physics_apply_impulse(ke_physics_2d *self, ke_body_2d id, float ix, float i
 } // namespace
 
 extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
-    const ke_physics_2d_box2d_params *params, ke_physics_2d **out)
+    const ke_physics_2d_box2d_params *params, ke_physics_2d **out, ke_error **out_error)
 {
-    if (!params || !params->allocator || !out) return KE_ERROR_INVALID_ARGUMENT;
+    if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     auto *alloc = params->allocator;
 
     auto *state_mem = alloc->alloc(alloc, sizeof(Box2dState), alignof(Box2dState));
-    if (!state_mem) return KE_ERROR_OUT_OF_MEMORY;
+    if (!state_mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     auto *state = new (state_mem) Box2dState{};
     state->allocator = alloc;
     state->logger    = params->logger;
@@ -193,7 +194,7 @@ extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
         delete state->world;
         state->~Box2dState();
         alloc->free(alloc, state);
-        return KE_ERROR_OUT_OF_MEMORY;
+        return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
     }
     std::memset(api, 0, sizeof(*api));
     api->handle             = state;

@@ -1,4 +1,4 @@
-#include <kernel_engine/allocator/allocator.h>
+﻿#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/input/input.h>
 #include <stdbool.h>
@@ -46,7 +46,7 @@ static void push_event(ke_input_internal *impl, ke_input_event_kind kind, int32_
 
 static ke_result input_update(ke_input *self, ke_error **out_error)
 {
-    if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_input", "invalid argument");
+    if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     ke_input_internal *impl = (ke_input_internal *)self->handle;
 
     memset(impl->keys_pressed, 0, sizeof(impl->keys_pressed));
@@ -194,15 +194,15 @@ static void input_destroy(ke_input *self)
 
 ke_result ke_input_create(struct ke_logger *log, ke_input **out_input, ke_error **out_error)
 {
-    if (!out_input) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_input", "invalid argument");
+    if (!out_input) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_input", "allocator creation failed");
+    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     ke_input *api = (ke_input *)alloc->alloc(alloc, sizeof(ke_input), 8);
-    if (!api) { alloc->destroy(alloc); return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_input", "api allocation failed"); }
+    if (!api) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed"); }
     ke_input_internal *impl = (ke_input_internal *)alloc->alloc(alloc, sizeof(ke_input_internal), 8);
-    if (!impl) { alloc->free(alloc, api); alloc->destroy(alloc); return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_input", "state allocation failed"); }
+    if (!impl) { alloc->free(alloc, api); alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
     memset(impl, 0, sizeof(ke_input_internal));
 
     impl->allocator = alloc;

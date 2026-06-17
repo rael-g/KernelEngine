@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <assimp/mesh.h>
 #include <assimp/material.h>
 #include <assimp/texture.h>
@@ -127,7 +127,7 @@ TEST_F(AssetLogicTest, Converter_ConvertMesh_ReturnsOom_WhenAllocFails) {
 
     ke_mesh_data md{};
     ke_result res = Converter::ConvertMesh(&am, &oom_alloc, &md);
-    ASSERT_EQ(res, KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(res, KE_ERROR);
 }
 
 TEST_F(AssetLogicTest, Converter_ConvertMaterial_Alpha) {

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/kernel/common/array.h>
 #include <kernel_engine/allocator/allocator.h>
 
@@ -30,13 +30,13 @@ protected:
 
 TEST(ArrayInitTest, Init_NullArray_ReturnsInvalidArgument) {
     ke_allocator* a = ke_allocator_malloc_create();
-    ASSERT_EQ(ke_array_init(nullptr, 4, a), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_array_init(nullptr, 4, a), KE_ERROR);
     a->destroy(a);
 }
 
 TEST(ArrayInitTest, Init_NullAllocator_ReturnsInvalidArgument) {
     ke_array a;
-    ASSERT_EQ(ke_array_init(&a, 4, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_array_init(&a, 4, nullptr), KE_ERROR);
 }
 
 static void* fail_alloc(ke_allocator* alloc, size_t size, size_t alignment) { return nullptr; }
@@ -52,7 +52,7 @@ TEST(ArrayInitTest, Init_AllocationFailure_ReturnsOutOfMemory) {
     fa.destroy = fail_destroy;
     
     ke_array a;
-    ASSERT_EQ(ke_array_init(&a, 4, &fa), KE_ERROR_OUT_OF_MEMORY);
+    ASSERT_EQ(ke_array_init(&a, 4, &fa), KE_ERROR);
 }
 
 TEST_F(ArrayTest, Init_SetsSizeToZero) {
@@ -92,7 +92,7 @@ TEST_F(ArrayTest, Destroy_ClearsData) {
 
 TEST_F(ArrayTest, Push_NullArray_ReturnsInvalidArgument) {
     int v = 1;
-    ASSERT_EQ(ke_array_push(nullptr, &v), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_array_push(nullptr, &v), KE_ERROR);
 }
 
 TEST_F(ArrayTest, Push_FirstValue_ReturnsOk) {

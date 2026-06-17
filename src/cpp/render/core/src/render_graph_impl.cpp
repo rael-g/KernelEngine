@@ -1,4 +1,4 @@
-#include "render_graph_impl.hpp"
+﻿#include "render_graph_impl.hpp"
 #include "core_renderer.hpp"
 #include "render_logging.hpp"
 #include <gpu_device.hpp>
@@ -61,28 +61,34 @@ RenderGraphImpl::RenderGraphImpl(CoreRenderer* renderer, ke_allocator* allocator
         if (alloc) alloc->free(alloc, impl);
     };
 
-    api_.declare_resource = [](ke_render_graph* self, const ke_resource_desc* desc) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    api_.declare_resource = [](ke_render_graph* self, const ke_resource_desc* desc, ke_error** out_error) {
+        (void)out_error;
+        if (!self || !self->handle) return KE_ERROR;
         return static_cast<RenderGraphImpl*>(self->handle)->DeclareResource(desc);
     };
-    api_.import_texture = [](ke_render_graph* self, const char* name, ke_texture_handle handle) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    api_.import_texture = [](ke_render_graph* self, const char* name, ke_texture_handle handle, ke_error** out_error) {
+        (void)out_error;
+        if (!self || !self->handle) return KE_ERROR;
         return static_cast<RenderGraphImpl*>(self->handle)->ImportTexture(name, handle);
     };
-    api_.add_pass = [](ke_render_graph* self, const ke_render_pass_params* params) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    api_.add_pass = [](ke_render_graph* self, const ke_render_pass_params* params, ke_error** out_error) {
+        (void)out_error;
+        if (!self || !self->handle) return KE_ERROR;
         return static_cast<RenderGraphImpl*>(self->handle)->AddPass(params);
     };
-    api_.remove_pass = [](ke_render_graph* self, const char* name) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    api_.remove_pass = [](ke_render_graph* self, const char* name, ke_error** out_error) {
+        (void)out_error;
+        if (!self || !self->handle) return KE_ERROR;
         return static_cast<RenderGraphImpl*>(self->handle)->RemovePass(name);
     };
-    api_.compile = [](ke_render_graph* self) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    api_.compile = [](ke_render_graph* self, ke_error** out_error) {
+        (void)out_error;
+        if (!self || !self->handle) return KE_ERROR;
         return static_cast<RenderGraphImpl*>(self->handle)->Compile();
     };
-    api_.execute = [](ke_render_graph* self, const ke_frame_packet* packet) {
-        if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+    api_.execute = [](ke_render_graph* self, const ke_frame_packet* packet, ke_error** out_error) {
+        (void)out_error;
+        if (!self || !self->handle) return KE_ERROR;
         return static_cast<RenderGraphImpl*>(self->handle)->Execute(packet);
     };
 }
@@ -102,12 +108,12 @@ ke_render_graph* RenderGraphImpl::ToApi()
 ke_result RenderGraphImpl::DeclareResource(const ke_resource_desc* desc)
 {
     if (!desc || !desc->name || desc->name[0] == '\0')
-        return KE_ERROR_INVALID_ARGUMENT;
+        return KE_ERROR;
 
     if (resources_.find(desc->name) != resources_.end()) {
         // Re-declaring is a programming error — two unrelated systems would
         // step on each other if we silently accepted.
-        return KE_ERROR_ALREADY_EXISTS;
+        return KE_ERROR;
     }
 
     Resource r{};
@@ -126,10 +132,10 @@ ke_result RenderGraphImpl::DeclareResource(const ke_resource_desc* desc)
 ke_result RenderGraphImpl::ImportTexture(const char* name, ke_texture_handle handle)
 {
     if (!name || name[0] == '\0')
-        return KE_ERROR_INVALID_ARGUMENT;
+        return KE_ERROR;
 
     if (resources_.find(name) != resources_.end())
-        return KE_ERROR_ALREADY_EXISTS;
+        return KE_ERROR;
 
     Resource r{};
     r.name = name;
@@ -154,11 +160,11 @@ ke_result RenderGraphImpl::ImportTexture(const char* name, ke_texture_handle han
 ke_result RenderGraphImpl::AddPass(const ke_render_pass_params* params)
 {
     if (!params || !params->name || params->name[0] == '\0' || !params->record)
-        return KE_ERROR_INVALID_ARGUMENT;
+        return KE_ERROR;
 
     // Duplicate pass name = ambiguity at remove time.
     for (const auto& p : passes_) {
-        if (p.name == params->name) return KE_ERROR_ALREADY_EXISTS;
+        if (p.name == params->name) return KE_ERROR;
     }
 
     Pass pass{};
@@ -170,14 +176,14 @@ ke_result RenderGraphImpl::AddPass(const ke_render_pass_params* params)
     pass.reads.reserve(params->reads_count);
     for (uint32_t i = 0; i < params->reads_count; ++i) {
         const auto& src = params->reads[i];
-        if (!src.name) return KE_ERROR_INVALID_ARGUMENT;
+        if (!src.name) return KE_ERROR;
         pass.reads.push_back({ src.name, src.access });
     }
 
     pass.writes.reserve(params->writes_count);
     for (uint32_t i = 0; i < params->writes_count; ++i) {
         const auto& src = params->writes[i];
-        if (!src.name) return KE_ERROR_INVALID_ARGUMENT;
+        if (!src.name) return KE_ERROR;
         pass.writes.push_back({ src.name, src.access });
     }
 
@@ -188,10 +194,10 @@ ke_result RenderGraphImpl::AddPass(const ke_render_pass_params* params)
 
 ke_result RenderGraphImpl::RemovePass(const char* name)
 {
-    if (!name) return KE_ERROR_INVALID_ARGUMENT;
+    if (!name) return KE_ERROR;
     auto it = std::find_if(passes_.begin(), passes_.end(),
         [&](const Pass& p) { return p.name == name; });
-    if (it == passes_.end()) return KE_ERROR_NOT_FOUND;
+    if (it == passes_.end()) return KE_ERROR;
     passes_.erase(it);
     dirty_ = true;
     return KE_OK;
@@ -207,17 +213,17 @@ ke_result RenderGraphImpl::Compile()
     for (const auto& pass : passes_) {
         for (const auto& r : pass.reads) {
             if (resources_.find(r.name) == resources_.end())
-                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_NOT_FOUND,
+                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
                     "RenderGraph.Compile",
                     "Pass references an undeclared resource (see logs for name).");
         }
         for (const auto& w : pass.writes) {
             if (resources_.find(w.name) == resources_.end())
-                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_NOT_FOUND,
+                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
                     "RenderGraph.Compile",
                     "Pass writes an undeclared resource (see logs for name).");
             if (!AccessIsWrite(w.access))
-                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_INVALID_ARGUMENT,
+                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
                     "RenderGraph.Compile",
                     "Pass declares a resource under 'writes' but the access is read-only.");
         }
@@ -232,7 +238,7 @@ ke_result RenderGraphImpl::Compile()
         for (const auto& w : passes_[i].writes) {
             auto result = producer.emplace(w.name, i);
             if (!result.second) {
-                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_INVALID_ARGUMENT,
+                return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
                     "RenderGraph.Compile",
                     "Two passes write the same resource — split into distinct resources or merge passes.");
             }
@@ -269,7 +275,7 @@ ke_result RenderGraphImpl::Compile()
         }
     }
     if (order.size() != passes_.size()) {
-        return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_INVALID_ARGUMENT,
+        return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
             "RenderGraph.Compile",
             "Resource dependency cycle detected — split shared resources.");
     }
@@ -313,12 +319,12 @@ ke_result RenderGraphImpl::EnsureResourceMaterialized(Resource& r)
     if (r.is_imported) return KE_OK; // caller's texture, nothing to allocate.
 
     GpuDevice* gpu = renderer_->GetContext().gpu;
-    if (!gpu) return KE_ERROR_NOT_INITIALIZED;
+    if (!gpu) return KE_ERROR;
 
     if (r.desc.type == KE_RESOURCE_TYPE_STORAGE_BUFFER) {
         if (r.storage_buffer != kGpuInvalidHandle) return KE_OK;
         if (r.desc.element_count == 0 || r.desc.element_stride == 0)
-            return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_INVALID_ARGUMENT,
+            return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
                 "RenderGraph.Compile",
                 "Storage buffer resource requires non-zero element_count and element_stride.");
         // bgfx flags layout:
@@ -339,7 +345,7 @@ ke_result RenderGraphImpl::EnsureResourceMaterialized(Resource& r)
         const uint32_t total_words = (r.desc.element_count * r.desc.element_stride + 3) / 4;
         r.storage_buffer = gpu->CreateDynamicIndexBuffer(total_words, flags);
         r.owns_storage_buffer = r.storage_buffer != kGpuInvalidHandle;
-        return r.storage_buffer != kGpuInvalidHandle ? KE_OK : KE_ERROR_RENDER;
+        return r.storage_buffer != kGpuInvalidHandle ? KE_OK : KE_ERROR;
     }
 
     if (r.texture != kGpuInvalidHandle) return KE_OK; // already done.
@@ -347,7 +353,7 @@ ke_result RenderGraphImpl::EnsureResourceMaterialized(Resource& r)
     bool is_depth = false;
     uint32_t fmt = MapFormat(r.desc.format, is_depth);
     if (fmt == UINT32_MAX)
-        return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_INVALID_ARGUMENT,
+        return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
             "RenderGraph.Compile",
             "Backend does not yet support the requested ke_resource_format.");
 
@@ -358,7 +364,7 @@ ke_result RenderGraphImpl::EnsureResourceMaterialized(Resource& r)
         // TODO: route through the renderer's known backbuffer size. For now
         // we reject relative sizing until we plumb that through — phase-3
         // migrations (bloom half-res) will need it.
-        return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR_NOT_SUPPORTED,
+        return KE_RENDER_LOG_ERR(renderer_->GetContext().logger, KE_ERROR,
             "RenderGraph.Compile",
             "KE_SIZE_RELATIVE_TO_BACKBUFFER not yet wired — pass absolute width/height for now.");
     }
@@ -369,7 +375,7 @@ ke_result RenderGraphImpl::EnsureResourceMaterialized(Resource& r)
     r.owns_texture = true;
 
     if (r.texture == kGpuInvalidHandle)
-        return KE_ERROR_RENDER;
+        return KE_ERROR;
 
     // One-texture framebuffer for now (color OR depth target). MRT later.
     GpuTextureHandle attachments[1] = { r.texture };
@@ -451,7 +457,7 @@ ke_result RenderGraphImpl::Execute(const ke_frame_packet* packet)
     }
 
     GpuDevice* gpu = renderer_->GetContext().gpu;
-    if (!gpu) return KE_ERROR_NOT_INITIALIZED;
+    if (!gpu) return KE_ERROR;
 
     for (size_t idx : execution_order_) {
         Pass& pass = passes_[idx];

@@ -42,7 +42,8 @@ extern "C"
         /// image loader was injected at construction time.
         ke_result (*resolve_texture)(struct ke_asset_resolver *self,
                                      const char               *path,
-                                     ke_texture_data         **out);
+                                     ke_texture_data         **out,
+                                     ke_error                **out_error);
 
         void (*free_texture)(struct ke_asset_resolver *self,
                              ke_texture_data           *data);
@@ -55,7 +56,8 @@ extern "C"
         /// Caller owns the result; release with free_mesh.
         ke_result (*resolve_mesh)(struct ke_asset_resolver *self,
                                   const char               *path,
-                                  ke_mesh_shape_data       *out);
+                                  ke_mesh_shape_data       *out,
+                                  ke_error                **out_error);
 
         void (*free_mesh)(struct ke_asset_resolver *self,
                           ke_mesh_shape_data        *data);
@@ -65,7 +67,8 @@ extern "C"
         /// resolve_texture to materialise.
         ke_result (*resolve_material)(struct ke_asset_resolver *self,
                                       const char               *path,
-                                      ke_material_spec         *out);
+                                      ke_material_spec         *out,
+                                      ke_error                **out_error);
 
         /// Resolves a font file path into a freshly-baked ke_font_data (atlas
         /// RGBA8 + glyph metrics). Caller owns the result; release with free_font.
@@ -78,7 +81,8 @@ extern "C"
                                   uint32_t                  first_codepoint,
                                   uint32_t                  codepoint_count,
                                   uint32_t                  atlas_size,
-                                  ke_font_data            **out);
+                                  ke_font_data            **out,
+                                  ke_error                **out_error);
 
         void (*free_font)(struct ke_asset_resolver *self, ke_font_data *data);
 

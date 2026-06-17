@@ -1,4 +1,5 @@
-#include "enki_task_scheduler.hpp"
+﻿#include "enki_task_scheduler.hpp"
+#include <kernel_engine/common/error.h>
 #include <TaskScheduler.h>
 #include <atomic>
 #include <new>
@@ -162,11 +163,11 @@ ke_task_scheduler* EnkiTaskScheduler::ToApi() {
 } // namespace kernel_engine::task_scheduler::enki
 
 extern "C" {
-    ke_result ke_task_scheduler_enki_create(ke_allocator *allocator, ke_task_scheduler **out_scheduler) {
-        if (!allocator || !out_scheduler) return KE_ERROR_INVALID_ARGUMENT;
+    ke_result ke_task_scheduler_enki_create(ke_allocator *allocator, ke_task_scheduler **out_scheduler, ke_error **out_error) {
+        if (!allocator || !out_scheduler) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
         void* mem = allocator->alloc(allocator, sizeof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler), alignof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler));
-        if (!mem) return KE_ERROR_OUT_OF_MEMORY;
+        if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocation failed");
 
         auto* internal = new (mem) kernel_engine::task_scheduler::enki::EnkiTaskScheduler(allocator);
         *out_scheduler = internal->ToApi();

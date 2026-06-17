@@ -19,7 +19,7 @@ extern "C"
 
         ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent);
 
-        ke_result (*destroy_node)(struct ke_scene_tree *self, ke_entity entity);
+        ke_result (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_error **out_error);
 
         void (*destroy_all)(struct ke_scene_tree *self);
 

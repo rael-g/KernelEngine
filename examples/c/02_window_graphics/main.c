@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+﻿#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/kernel/ecs/world.h>
 #include <kernel_engine/logger/logger.h>
@@ -40,16 +40,16 @@ int main(void)
 
     ke_allocator *alloc = ke_allocator_malloc_create();
     ke_logger *logger = NULL;
-    ke_logger_create(&logger);
+    ke_logger_create(&logger, NULL);
 
     ke_logger_sink sink = {.handle = NULL, .log = app_console_sink, .destroy = NULL};
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, sink, NULL);
 
     ke_window_glfw_params win_params = {
         .allocator = alloc, .logger = logger, .message_pipe = NULL, .width = 800, .height = 600, .title = "C Window Demo"};
     ke_window *window = NULL;
     ke_window_glfw_create(&win_params, &window);
-    window->on_initialize(window);
+    window->on_initialize(window, NULL);
 
     ke_render_bgfx_params render_params = {.allocator = alloc,
                                              .logger = logger,
@@ -58,7 +58,7 @@ int main(void)
                                              .shader_path = "src/cpp/render/bgfx/shaders"};
     ke_render *renderer = NULL;
     ke_render_bgfx_create(&render_params, &renderer);
-    renderer->on_initialize(renderer);
+    renderer->on_initialize(renderer, NULL);
 
     float hue = 0.0f;
     while (!window->should_close(window))
@@ -67,12 +67,12 @@ int main(void)
         if (hue > 1.0f) hue -= 1.0f;
 
         renderer->clear_color(renderer, hue, 0.3f, 0.2f, 1.0f);
-        window->poll_events(window);
+        window->poll_events(window, NULL);
     }
 
-    renderer->on_shutdown(renderer);
+    renderer->on_shutdown(renderer, NULL);
     renderer->destroy(renderer);
-    window->on_shutdown(window);
+    window->on_shutdown(window, NULL);
     window->destroy(window);
     logger->destroy(logger);
     alloc->destroy(alloc);

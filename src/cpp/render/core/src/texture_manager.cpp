@@ -1,4 +1,4 @@
-#include "texture_manager.hpp"
+﻿#include "texture_manager.hpp"
 #include <render_logging.hpp>
 #include "render_context.hpp"
 #include "gpu_device.hpp"
@@ -14,11 +14,11 @@ namespace kernel_engine::render::core
 ke_result TextureManager::CreateTextureRgba(RenderContext& ctx, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out)
 {
     if (!px || !out || w == 0 || h == 0 || !ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateTextureRgba", "Invalid arguments or GPU not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "CreateTextureRgba", "Invalid arguments or GPU not set");
     
     GpuTextureHandle htex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtRGBA8, 0, ctx.gpu->Copy(px, w * h * 4));
     if (htex == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateTextureRgba", "GPU resource creation failed");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "CreateTextureRgba", "GPU resource creation failed");
 
     textures_.push_back(htex);
     *out = {(uint32_t)(textures_.size() - 1)};
@@ -28,10 +28,10 @@ ke_result TextureManager::CreateTextureRgba(RenderContext& ctx, uint32_t w, uint
 ke_result TextureManager::CreateCubemapRgba(RenderContext& ctx, uint32_t s, const uint8_t *d, ke_texture_handle *out)
 {
     if (!d || !out || s == 0 || !ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateCubemapRgba", "Invalid arguments or GPU not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "CreateCubemapRgba", "Invalid arguments or GPU not set");
     GpuTextureHandle h = ctx.gpu->CreateTextureCube((uint16_t)s, false, 1, kTexFmtRGBA8, 0, ctx.gpu->Copy(d, s * s * 4 * 6));
     if (h == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateCubemapRgba", "GPU resource creation failed");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "CreateCubemapRgba", "GPU resource creation failed");
     textures_.push_back(h);
     *out = {(uint32_t)(textures_.size() - 1)};
     return KE_OK;
@@ -40,7 +40,7 @@ ke_result TextureManager::CreateCubemapRgba(RenderContext& ctx, uint32_t s, cons
 ke_result TextureManager::DestroyTexture(RenderContext& ctx, ke_texture_handle h)
 {
     if (h.idx >= (uint32_t)textures_.size() || !ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "DestroyTexture", "Invalid texture handle or GPU not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "DestroyTexture", "Invalid texture handle or GPU not set");
     if (textures_[h.idx] != kGpuInvalidHandle) ctx.gpu->DestroyTexture(textures_[h.idx]);
     textures_[h.idx] = kGpuInvalidHandle;
     return KE_OK;
@@ -49,7 +49,7 @@ ke_result TextureManager::DestroyTexture(RenderContext& ctx, ke_texture_handle h
 ke_result TextureManager::SubmitSkybox(RenderContext& ctx, ke_texture_handle h, GpuProgramHandle prog, GpuVertexBufferHandle vb, GpuIndexBufferHandle ib, GpuUniformHandle sampler, GpuUniformHandle tint)
 {
     if (!ctx.gpu || prog == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SubmitSkybox", "GPU not set or invalid program");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SubmitSkybox", "GPU not set or invalid program");
     GpuTextureHandle tex = GetTextureIdx(h);
     if (tex == kGpuInvalidHandle) tex = default_cube_tex;
     

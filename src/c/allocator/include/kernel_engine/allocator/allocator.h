@@ -58,7 +58,8 @@ extern "C"
 
     /// @brief Retrieves current statistics from a proxy allocator.
     KE_ALLOCATOR_API ke_result ke_allocator_proxy_get_stats(ke_allocator *proxy,
-                                                             ke_allocator_stats *out_stats);
+                                                             ke_allocator_stats *out_stats,
+                                                             ke_error **out_error);
 
     /// @brief Logs a summary of the proxy allocator and reports leaks if any.
     KE_ALLOCATOR_API void ke_allocator_proxy_report(ke_allocator *proxy, struct ke_logger *logger);

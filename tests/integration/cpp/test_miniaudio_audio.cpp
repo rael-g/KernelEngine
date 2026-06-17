@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/audio/miniaudio/miniaudio_audio.h>
 #include <kernel_engine/allocator/allocator.h>
 
@@ -13,7 +13,7 @@ protected:
         params.allocator = allocator;
         params.logger = nullptr;
         
-        ke_result res = ke_audio_miniaudio_create(&params, &audio);
+        ke_result res = ke_audio_miniaudio_create(&params, &audio, nullptr);
         // It might return KE_ERROR if no audio device is available, but let's hope for the best or handle it.
         if (res != KE_OK) {
             audio = nullptr;
@@ -39,25 +39,25 @@ TEST_F(MiniAudioTest, Create_Works) {
 TEST_F(MiniAudioTest, Create_NullOut_ReturnsInvalidArgument) {
     ke_audio_miniaudio_params params{};
     params.allocator = allocator;
-    ASSERT_EQ(ke_audio_miniaudio_create(&params, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_audio_miniaudio_create(&params, nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(MiniAudioTest, Create_NullAllocator_ReturnsInvalidArgument) {
     ke_audio* a = nullptr;
     ke_audio_miniaudio_params params{};
     params.allocator = nullptr;
-    ASSERT_EQ(ke_audio_miniaudio_create(&params, &a), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_audio_miniaudio_create(&params, &a, nullptr), KE_ERROR);
 }
 
 TEST_F(MiniAudioTest, LoadSound_NullPath_ReturnsInvalidArgument) {
     if (!audio) GTEST_SKIP();
     uint32_t id = 0;
-    ASSERT_EQ(audio->load_sound(audio, nullptr, &id), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(audio->load_sound(audio, nullptr, &id, nullptr), KE_ERROR);
 }
 
 TEST_F(MiniAudioTest, LoadSound_NullOut_ReturnsInvalidArgument) {
     if (!audio) GTEST_SKIP();
-    ASSERT_EQ(audio->load_sound(audio, "test.wav", nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(audio->load_sound(audio, "test.wav", nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(MiniAudioTest, UnloadSound_InvalidId_IsSafe) {
@@ -107,12 +107,12 @@ TEST_F(MiniAudioTest, LoadSound_ReturnsOom_WhenAllocFails) {
     ke_audio_miniaudio_params p{};
     p.allocator = &fa;
     ke_audio* a = nullptr;
-    ke_audio_miniaudio_create(&p, &a); // This will fail creation itself due to OOM
+    ke_audio_miniaudio_create(&p, &a, nullptr); // This will fail creation itself due to OOM
     ASSERT_EQ(a, nullptr);
 }
 
 TEST_F(MiniAudioTest, Play_NullHandle_ReturnsInvalidArgument) {
-    ASSERT_EQ(audio->play(nullptr, 0, 1.0f, 0), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(audio->play(nullptr, 0, 1.0f, 0, nullptr), KE_ERROR);
 }
 
 TEST_F(MiniAudioTest, Create_ReturnsOom_WhenApiAllocFails) {
@@ -129,6 +129,6 @@ TEST_F(MiniAudioTest, Create_ReturnsOom_WhenApiAllocFails) {
     ke_audio_miniaudio_params p{};
     p.allocator = &fa;
     ke_audio* a = nullptr;
-    ke_result res = ke_audio_miniaudio_create(&p, &a);
-    ASSERT_EQ(res, KE_ERROR_OUT_OF_MEMORY);
+    ke_result res = ke_audio_miniaudio_create(&p, &a, nullptr);
+    ASSERT_EQ(res, KE_ERROR);
 }

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/threading/threading.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <atomic>
@@ -27,7 +27,7 @@ protected:
 TEST_F(ThreadingTest, FrameSync_Handoff)
 {
     ke_frame_sync *sync = nullptr;
-    ke_result      res  = ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &sync);
+    ke_result      res  = ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &sync, nullptr);
     ASSERT_EQ(res, KE_OK);
     ASSERT_NE(sync, nullptr);
 
@@ -46,7 +46,7 @@ TEST_F(ThreadingTest, FrameSync_Handoff)
 
 TEST_F(ThreadingTest, FrameSync_NullChecks) {
     ke_frame_sync *s = nullptr;
-    ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &s);
+    ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &s, nullptr);
     
     ASSERT_EQ(s->begin_write(nullptr), nullptr);
     s->end_write(nullptr);
@@ -61,14 +61,14 @@ TEST_F(ThreadingTest, FrameSync_NullChecks) {
 TEST(ThreadingInitTest, Create_NullArgs_ReturnsInvalidArgument) {
     ke_allocator a{};
     ke_frame_sync *s = nullptr;
-    ASSERT_EQ(ke_frame_sync_std_create(nullptr, 2, 1, 1, 1, &s), KE_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(ke_frame_sync_std_create(&a, 2, 1, 1, 1, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_frame_sync_std_create(nullptr, 2, 1, 1, 1, &s, nullptr), KE_ERROR);
+    ASSERT_EQ(ke_frame_sync_std_create(&a, 2, 1, 1, 1, nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(ThreadingTest, FrameSync_Blocking)
 {
     ke_frame_sync *sync = nullptr;
-    ke_frame_sync_std_create(&alloc, 2, 1, 1, 1, &sync);
+    ke_frame_sync_std_create(&alloc, 2, 1, 1, 1, &sync, nullptr);
 
     sync->begin_write(sync);
     sync->end_write(sync);

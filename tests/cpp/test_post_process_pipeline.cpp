@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <post_process_pipeline.hpp>
 #include <geometry_manager.hpp>
@@ -64,12 +64,12 @@ TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsOk_WhenShadersValid)
 
 TEST_F(PostProcessPipelineTest, SetTonemapping_Fails_WhenNotInitialized)
 {
-    EXPECT_EQ(pipeline->SetTonemapping(ctx, true, 1.0f, 2.2f), KE_ERROR_NOT_INITIALIZED);
+    EXPECT_EQ(pipeline->SetTonemapping(ctx, true, 1.0f, 2.2f), KE_ERROR);
 }
 
 TEST_F(PostProcessPipelineTest, SetBloom_Fails_WhenNotInitialized)
 {
-    EXPECT_EQ(pipeline->SetBloom(ctx, true, 1.0f, 1.0f), KE_ERROR_NOT_INITIALIZED);
+    EXPECT_EQ(pipeline->SetBloom(ctx, true, 1.0f, 1.0f), KE_ERROR);
 }
 
 TEST_F(PostProcessPipelineTest, SetTonemapping_Twice_IsSafe)
@@ -105,14 +105,14 @@ TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsError_WhenShadersFail)
 {
     EXPECT_CALL(*shader_provider, LoadShaderBinary(_, _)).WillRepeatedly(Return(nullptr));
     GpuProgramHandle b, bl, t;
-    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR_RENDER);
+    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR);
 }
 
 TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsError_WhenGpuNull)
 {
     ctx.gpu = nullptr;
     GpuProgramHandle b, bl, t;
-    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR_RENDER);
+    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR);
 }
 
 TEST_F(PostProcessPipelineTest, SubmitPostProcess_NoOp_WhenDisabled)

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <core_renderer.hpp>
 #include <gpu_device.hpp>
@@ -27,7 +27,7 @@ protected:
         
         std::memset(&window, 0, sizeof(window));
         window.get_native_handle = [](ke_window*) { return (void*)0x123; };
-        window.get_size = [](ke_window*, int32_t* w, int32_t* h) { *w = 800; *h = 600; return KE_OK; };
+        window.get_size = [](ke_window*, int32_t* w, int32_t* h, ke_error**) { *w = 800; *h = 600; return KE_OK; };
 
         GpuRendererParams params{};
         params.allocator = &alloc;
@@ -81,19 +81,19 @@ TEST_F(CoreRendererTest, OnInitialize_ReturnsOk_OnSuccess)
 TEST_F(CoreRendererTest, OnInitialize_Fails_WhenGpuInitFails)
 {
     EXPECT_CALL(*gpu_mock, Init(_)).WillOnce(Return(false));
-    EXPECT_EQ(renderer->OnInitialize(), KE_ERROR_RENDER);
+    EXPECT_EQ(renderer->OnInitialize(), KE_ERROR);
 }
 
 TEST_F(CoreRendererTest, OnInitialize_Fails_WhenShadersFail)
 {
     EXPECT_CALL(*gpu_mock, Init(_)).WillOnce(Return(true));
     EXPECT_CALL(*shader_mock, LoadShaderBinary(_, _)).WillRepeatedly(Return(nullptr));
-    EXPECT_EQ(renderer->OnInitialize(), KE_ERROR_RENDER);
+    EXPECT_EQ(renderer->OnInitialize(), KE_ERROR);
 }
 
 TEST_F(CoreRendererTest, Frame_Fails_WhenNotInitialized)
 {
-    EXPECT_EQ(renderer->Frame(), KE_ERROR_NOT_INITIALIZED);
+    EXPECT_EQ(renderer->Frame(), KE_ERROR);
 }
 
 TEST_F(CoreRendererTest, Frame_ReturnsOk_AfterInit)
@@ -144,7 +144,7 @@ TEST_F(CoreRendererTest, SetOrthographic_UpdatesState)
 
 TEST_F(CoreRendererTest, ClearColor_Fails_WhenNotInitialized)
 {
-    EXPECT_EQ(renderer->ClearColor(0,0,0,1), KE_ERROR_NOT_INITIALIZED);
+    EXPECT_EQ(renderer->ClearColor(0,0,0,1), KE_ERROR);
 }
 
 TEST_F(CoreRendererTest, SubmitPacket_TriggersAllPasses)

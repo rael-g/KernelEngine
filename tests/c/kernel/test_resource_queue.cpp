@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/kernel/framework/resource_queue.h>
 #include <kernel_engine/framework/resource_queue_create.h>
 #include <kernel_engine/allocator/allocator.h>
@@ -269,8 +269,8 @@ TEST_F(ResourceQueueTest, Future_Wait_BlocksUntilDrain)
 
 TEST_F(ResourceQueueTest, Submit_NullArgs_ReturnsInvalidArgument)
 {
-    EXPECT_EQ(queue->submit(nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(queue->submit(queue, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(queue->submit(nullptr, nullptr, nullptr), KE_ERROR);
+    EXPECT_EQ(queue->submit(queue, nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(ResourceQueueTest, Submit_InvalidMesh_ReturnsInvalidArgument)
@@ -279,14 +279,14 @@ TEST_F(ResourceQueueTest, Submit_InvalidMesh_ReturnsInvalidArgument)
     cmd.kind = KE_RESOURCE_CMD_CREATE_MESH;
     cmd.u.create_mesh.vertex_count = 1;
     cmd.u.create_mesh.vertices     = nullptr; // error
-    EXPECT_EQ(queue->submit(queue, &cmd, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(queue->submit(queue, &cmd, nullptr), KE_ERROR);
 }
 
 TEST_F(ResourceQueueTest, Submit_UnknownKind_ReturnsInvalidArgument)
 {
     ke_resource_command cmd{};
     cmd.kind = (ke_resource_command_kind)99;
-    EXPECT_EQ(queue->submit(queue, &cmd, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(queue->submit(queue, &cmd, nullptr), KE_ERROR);
 }
 
 TEST_F(ResourceQueueTest, Drain_NullArgs_ReturnsZero)
@@ -297,7 +297,7 @@ TEST_F(ResourceQueueTest, Drain_NullArgs_ReturnsZero)
 
 TEST_F(ResourceQueueTest, Future_Wait_Null_ReturnsInvalidArgument)
 {
-    EXPECT_EQ(ke_resource_future_wait(nullptr, 100), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_resource_future_wait(nullptr, 100), KE_ERROR);
 }
 
 TEST_F(ResourceQueueTest, Future_Wait_Infinite_Works)

@@ -19,7 +19,8 @@ typedef struct ke_font_loader_stb_params
 /// KernelEngine.Framework.Assets.LoadFontAsync).
 KE_TEXT_STB_TRUETYPE_API ke_result ke_font_loader_stb_create(
     const ke_font_loader_stb_params *params,
-    ke_font_loader **out);
+    ke_font_loader **out,
+    ke_error **out_error);
 
 #ifdef __cplusplus
 }

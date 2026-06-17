@@ -1,4 +1,4 @@
-// ke_world impl — default framework aggregator. Owns ecs+runtime+scene_tree
+﻿// ke_world impl — default framework aggregator. Owns ecs+runtime+scene_tree
 // transferred from host on create; cascades teardown in reverse order on destroy.
 
 // scene_tree.h is included BEFORE world_create.h so that its transitive
@@ -7,6 +7,7 @@
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/framework/world_create.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include "components_apply.h"
 
@@ -53,8 +54,9 @@ static struct ke_scene_tree *world_scene_tree(struct ke_world *self) {
 
 static ke_result world_register_component_apply(struct ke_world *self,
                                                   ke_component_id cid,
-                                                  ke_component_apply_fn apply) {
-    if (!self || !self->handle || !apply) return KE_ERROR_INVALID_ARGUMENT;
+                                                  ke_component_apply_fn apply,
+                                                  ke_error **out_error) {
+    if (!self || !self->handle || !apply) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     ke_world_state *s = (ke_world_state *)self->handle;
 
     // Replace-if-exists: registering the same cid twice updates the function.
@@ -69,7 +71,7 @@ static ke_result world_register_component_apply(struct ke_world *self,
         uint32_t cap = s->apply_capacity ? s->apply_capacity * 2 : 16;
         apply_entry *new_buf = (apply_entry *)s->allocator->alloc(
             s->allocator, sizeof(apply_entry) * cap, 8);
-        if (!new_buf) return KE_ERROR_OUT_OF_MEMORY;
+        if (!new_buf) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "apply registry allocation failed");
         if (s->apply_registry) {
             memcpy(new_buf, s->apply_registry, sizeof(apply_entry) * s->apply_count);
             s->allocator->free(s->allocator, s->apply_registry);
@@ -108,19 +110,19 @@ static void world_destroy(struct ke_world *self) {
     // self lives in the same allocation as state — already freed.
 }
 
-ke_result ke_world_create(const ke_world_params *params, ke_world **out_world) {
-    if (!params || !out_world) return KE_ERROR_INVALID_ARGUMENT;
+ke_result ke_world_create(const ke_world_params *params, ke_world **out_world, ke_error **out_error) {
+    if (!params || !out_world) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     if (!params->ecs || !params->runtime) {
-        return KE_ERROR_INVALID_ARGUMENT;
+        return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "ecs and runtime are required");
     }
 
     ke_allocator *a = ke_allocator_malloc_create();
-    if (!a) return KE_ERROR_OUT_OF_MEMORY;
+    if (!a) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     // Single allocation: state + vtable contiguous. Simpler teardown.
     size_t block_size = sizeof(ke_world_state) + sizeof(ke_world);
     void *block = a->alloc(a, block_size, 8);
-    if (!block) { a->destroy(a); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!block) { a->destroy(a); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
     memset(block, 0, block_size);
 
     ke_world_state *state = (ke_world_state *)block;
@@ -152,9 +154,9 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world) {
     ke_component_meta meta;
     #define REG(name, type, apply_fn) do { \
         ke_component_id _cid; \
-        if (e->component_lookup(e, (name), &meta) == KE_OK) { _cid = meta.cid; } \
+        if (e->component_lookup(e, (name), &meta, NULL) == KE_OK) { _cid = meta.cid; } \
         else { _cid = e->component_register(e, (name), sizeof(type)); } \
-        world->register_component_apply(world, _cid, (apply_fn)); \
+        world->register_component_apply(world, _cid, (apply_fn), NULL); \
     } while (0)
 
     REG(KE_COMPONENT_NAME_TRANSFORM,         ke_transform_component,        ke_framework_apply_transform);

@@ -21,7 +21,8 @@ extern "C"
                                                         uint32_t        draw_capacity,
                                                         uint32_t        point_capacity,
                                                         uint32_t        spot_capacity,
-                                                        ke_frame_sync **out);
+                                                        ke_frame_sync **out,
+                                                        ke_error      **out_error);
 
 #ifdef __cplusplus
 }

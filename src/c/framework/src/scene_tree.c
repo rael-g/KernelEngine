@@ -1,9 +1,10 @@
-// ke_scene_tree impl — pure C. Owns the cids of the framework's three
+﻿// ke_scene_tree impl — pure C. Owns the cids of the framework's three
 // scene-graph components (transform/hierarchy/name) registered against the
 // caller-supplied ke_ecs. All hierarchy bookkeeping flows through ECS
 // component reads/writes; no separate side state.
 
 #include <kernel_engine/framework/scene_tree_create.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/ecs/ke_ecs.h>
@@ -38,7 +39,7 @@ static const ke_name_component *get_name(scene_tree_state *s, ke_entity e) {
 // Resolves or registers a component cid by name.
 static ke_component_id ensure_component(ke_ecs *ecs, const char *name, size_t size) {
     ke_component_meta meta;
-    if (ecs->component_lookup(ecs, name, &meta) == KE_OK) return meta.cid;
+    if (ecs->component_lookup(ecs, name, &meta, NULL) == KE_OK) return meta.cid;
     return ecs->component_register(ecs, name, size);
 }
 
@@ -191,12 +192,12 @@ static void destroy_entities_recursive(scene_tree_state *s, ke_entity e) {
     s->ecs->entity_destroy(s->ecs, e);
 }
 
-static ke_result vt_destroy_node(ke_scene_tree *self, ke_entity entity) {
+static ke_result vt_destroy_node(ke_scene_tree *self, ke_entity entity, ke_error **out_error) {
     if (!self || !self->handle || entity == KE_ENTITY_INVALID)
-        return KE_ERROR_INVALID_ARGUMENT;
+        return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     scene_tree_state *s = (scene_tree_state *)self->handle;
 
-    if (!get_hierarchy(s, entity)) return KE_ERROR_NOT_FOUND;
+    if (!get_hierarchy(s, entity)) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "entity not found");
 
     // Detach from parent's child list before tearing the subtree down.
     // Snapshot the navigation fields up-front because the subsequent
@@ -295,15 +296,15 @@ static void vt_destroy(ke_scene_tree *self) {
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree **out_tree) {
-    if (!ecs || !out_tree) return KE_ERROR_INVALID_ARGUMENT;
+ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree **out_tree, ke_error **out_error) {
+    if (!ecs || !out_tree) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
+    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     scene_tree_state *s = (scene_tree_state *)alloc->alloc(
         alloc, sizeof(scene_tree_state), 8);
-    if (!s) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!s) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
     memset(s, 0, sizeof(*s));
 
     s->ecs       = ecs;
@@ -317,7 +318,7 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree **out_tree) {
     if (s->root == KE_ENTITY_INVALID) {
         alloc->free(alloc, s);
         alloc->destroy(alloc);
-        return KE_ERROR_OUT_OF_MEMORY;
+        return KE_ERROR;
     }
     // Add all components FIRST, then fetch + populate. Each add can move the
     // entity to a new archetype and invalidate pointers from earlier adds.
@@ -326,7 +327,7 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree **out_tree) {
         ecs->entity_destroy(ecs, s->root);
         alloc->free(alloc, s);
         alloc->destroy(alloc);
-        return KE_ERROR_OUT_OF_MEMORY;
+        return KE_ERROR;
     }
 
     ke_hierarchy_component *h = (ke_hierarchy_component *)ecs->component_get(ecs, s->root, s->hierarchy_cid);

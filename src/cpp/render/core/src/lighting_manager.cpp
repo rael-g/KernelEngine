@@ -1,4 +1,4 @@
-#include "lighting_manager.hpp"
+﻿#include "lighting_manager.hpp"
 #include <render_logging.hpp>
 #include "texture_manager.hpp"
 #include "render_context.hpp"
@@ -14,7 +14,7 @@ namespace kernel_engine::render::core
 
 ke_result LightingManager::SetDirectionalLight(const ke_directional_light *light)
 {
-    if (!light) return KE_ERROR_INVALID_ARGUMENT;
+    if (!light) return KE_ERROR;
     light_dir[0] = light->dir_x; light_dir[1] = light->dir_y; light_dir[2] = light->dir_z; light_dir[3] = 0.f;
     light_color[0] = light->r * light->intensity; light_color[1] = light->g * light->intensity; light_color[2] = light->b * light->intensity; light_color[3] = 0.f;
     return KE_OK;
@@ -28,14 +28,14 @@ ke_result LightingManager::SetAmbientLight(float r, float g, float b)
 
 ke_result LightingManager::StorePointLights(const ke_point_light *lights, uint32_t count)
 {
-    if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
+    if (!lights && count > 0) return KE_ERROR;
     point_lights_.assign(lights, lights + count);
     return KE_OK;
 }
 
 ke_result LightingManager::StoreSpotLights(const ke_spot_light *lights, uint32_t count)
 {
-    if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
+    if (!lights && count > 0) return KE_ERROR;
     spot_lights_.assign(lights, lights + count);
     return KE_OK;
 }
@@ -88,8 +88,8 @@ void LightingManager::UploadLights(RenderContext& ctx)
 
 ke_result LightingManager::RecordLights(struct ke_frame_packet& packet, const ke_point_light *lights, uint32_t count)
 {
-    if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
-    if (count > packet.point_light_capacity) return KE_ERROR_OUT_OF_MEMORY;
+    if (!lights && count > 0) return KE_ERROR;
+    if (count > packet.point_light_capacity) return KE_ERROR;
 
     std::memcpy(packet.point_lights, lights, count * sizeof(ke_point_light));
     packet.point_light_count = count;
@@ -101,8 +101,8 @@ ke_result LightingManager::RecordLights(struct ke_frame_packet& packet, const ke
 
 ke_result LightingManager::RecordSpotLights(struct ke_frame_packet& packet, const ke_spot_light *lights, uint32_t count)
 {
-    if (!lights && count > 0) return KE_ERROR_INVALID_ARGUMENT;
-    if (count > packet.spot_light_capacity) return KE_ERROR_OUT_OF_MEMORY;
+    if (!lights && count > 0) return KE_ERROR;
+    if (count > packet.spot_light_capacity) return KE_ERROR;
 
     std::memcpy(packet.spot_lights, lights, count * sizeof(ke_spot_light));
     packet.spot_light_count = count;
@@ -115,7 +115,7 @@ ke_result LightingManager::RecordSpotLights(struct ke_frame_packet& packet, cons
 ke_result LightingManager::CreateMaterial(RenderContext& ctx, const TextureManager& textures, const ke_material *mat, ke_material_handle *out_handle)
 {
     if (!mat || !out_handle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateMaterial", "Invalid arguments");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "CreateMaterial", "Invalid arguments");
     ke_texture_handle tex  = mat->albedo;
     ke_texture_handle nmap = mat->normal_map;
     // Default-constructed (idx=0) normal map means "no normal map" — handle 0 is
@@ -133,7 +133,7 @@ ke_result LightingManager::CreateMaterial(RenderContext& ctx, const TextureManag
 ke_result LightingManager::DestroyMaterial(RenderContext& ctx, ke_material_handle handle)
 {
     if (handle.idx >= (uint32_t)materials_.size())
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "DestroyMaterial", "Invalid material handle");
+        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "DestroyMaterial", "Invalid material handle");
     materials_[handle.idx].valid = false;
     return KE_OK;
 }

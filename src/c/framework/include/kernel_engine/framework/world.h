@@ -42,7 +42,8 @@ extern "C"
 
         ke_result (*register_component_apply)(struct ke_world      *self,
                                                ke_component_id       cid,
-                                               ke_component_apply_fn apply);
+                                               ke_component_apply_fn apply,
+                                               ke_error            **out_error);
 
         ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
                                                       ke_component_id  cid);

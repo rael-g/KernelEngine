@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/logger/logger.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,7 +27,7 @@ protected:
     ke_logger* logger = nullptr;
 
     void SetUp() override {
-        ke_result res = ke_logger_create(&logger);
+        ke_result res = ke_logger_create(&logger, NULL);
         ASSERT_EQ(res, KE_OK);
     }
 
@@ -39,7 +39,7 @@ protected:
 // --- Creation Tests ---
 
 TEST(LoggerInitTest, Create_NullOutLogger_ReturnsInvalidArgument) {
-    ASSERT_EQ(ke_logger_create(nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_logger_create(nullptr, NULL), KE_ERROR);
 }
 
 // --- Destroy Tests ---
@@ -52,7 +52,7 @@ TEST_F(LoggerTest, Destroy_NullLogger_DoesNotCrash) {
 
 TEST_F(LoggerTest, Destroy_WithSinks_Works) {
     ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, sink, NULL);
     logger->destroy(logger);
     logger = nullptr;
     SUCCEED();
@@ -75,7 +75,7 @@ TEST_F(LoggerTest, Log_NullEvent_DoesNotCrash) {
 TEST_F(LoggerTest, AddSink_NullSelf_ReturnsInvalidArgument) {
     ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
     auto add_sink_fn = logger->add_sink;
-    ASSERT_EQ(add_sink_fn(nullptr, sink), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(add_sink_fn(nullptr, sink, nullptr), KE_ERROR);
 }
 
 static void mock_sink_log(ke_logger_sink* self, const ke_log_event* event) {
@@ -91,7 +91,7 @@ TEST_F(LoggerTest, Log_CallsSink_WhenLevelMatches) {
     sink.log = mock_sink_log;
     sink.destroy = nullptr;
     
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, sink, NULL);
     
     ke_log_event ev = { KE_LOG_LEVEL_INFO, "TEST", "Message" };
     logger->log(logger, &ev);
@@ -107,7 +107,7 @@ TEST_F(LoggerTest, Log_DoesNotCallSink_WhenLevelIsLower) {
     sink.log = mock_sink_log;
     sink.destroy = nullptr;
     
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, sink, NULL);
     
     ke_log_event ev = { KE_LOG_LEVEL_INFO, "TEST", "Message" };
     logger->log(logger, &ev);
@@ -122,7 +122,7 @@ TEST_F(LoggerTest, Log_SkipsSink_WhenLogFnIsNull) {
     sink.log = nullptr; // Null log function
     sink.destroy = nullptr;
     
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, sink, NULL);
     
     ke_log_event ev = { KE_LOG_LEVEL_INFO, "TEST", "Message" };
     logger->log(logger, &ev);
@@ -131,7 +131,7 @@ TEST_F(LoggerTest, Log_SkipsSink_WhenLogFnIsNull) {
 
 TEST_F(LoggerTest, ConsoleSink_NullTagAndMessage_DoesNotCrash) {
     ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_TRACE);
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, sink, NULL);
     
     ke_log_event ev = { KE_LOG_LEVEL_INFO, nullptr, nullptr };
     logger->log(logger, &ev);
@@ -150,7 +150,7 @@ TEST_F(LoggerTest, Destroy_CallsSinkDestroy) {
     sink.log = nullptr;
     sink.destroy = mock_sink_destroy;
     
-    logger->add_sink(logger, sink);
+    logger->add_sink(logger, sink, NULL);
     logger->destroy(logger);
     logger = nullptr;
     

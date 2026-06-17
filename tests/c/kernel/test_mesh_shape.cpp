@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/asset/mesh_shape.h>
 #include <kernel_engine/allocator/allocator.h>
 
@@ -78,12 +78,12 @@ TEST_F(MeshShapeTest, Bake_Sphere_SegmentsClampedToMin3)
 TEST_F(MeshShapeTest, Bake_NullAllocator_ReturnsInvalidArgument)
 {
     ke_mesh_shape_data data{};
-    EXPECT_EQ(ke_mesh_shape_bake(nullptr, KE_MESH_PRIMITIVE_QUAD, 0, &data), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_mesh_shape_bake(nullptr, KE_MESH_PRIMITIVE_QUAD, 0, &data), KE_ERROR);
 }
 
 TEST_F(MeshShapeTest, Bake_NullOut_ReturnsInvalidArgument)
 {
-    EXPECT_EQ(ke_mesh_shape_bake(alloc, KE_MESH_PRIMITIVE_QUAD, 0, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_mesh_shape_bake(alloc, KE_MESH_PRIMITIVE_QUAD, 0, nullptr), KE_ERROR);
 }
 
 TEST_F(MeshShapeTest, Free_NullArgs_IsSafe)

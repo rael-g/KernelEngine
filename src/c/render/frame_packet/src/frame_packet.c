@@ -24,10 +24,10 @@ ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
                                  ke_frame_packet **out_packet,
                                  ke_error **out_error)
 {
-    if (!params || !out_packet) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_frame_packet", "invalid argument");
+    if (!params || !out_packet) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_frame_packet", "allocator creation failed");
+    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
 
     // Allocate [fp_priv | ke_frame_packet] in one block.
     size_t block = FP_PRIV_SIZE + sizeof(ke_frame_packet);
@@ -79,7 +79,7 @@ ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
 
 fail:
     ke_frame_packet_destroy(p);
-    return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_frame_packet", "sub-buffer allocation failed");
+    return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "sub-buffer allocation failed");
 }
 
 void ke_frame_packet_destroy(ke_frame_packet *packet)

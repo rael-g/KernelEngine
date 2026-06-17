@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/components.h>
@@ -14,8 +14,8 @@ protected:
     void SetUp() override
     {
         ke_ecs_flecs_params ep{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs), KE_OK);
-        ASSERT_EQ(ke_scene_tree_create(ecs, &tree), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs, NULL), KE_OK);
+        ASSERT_EQ(ke_scene_tree_create(ecs, &tree, NULL), KE_OK);
     }
     void TearDown() override
     {
@@ -120,7 +120,7 @@ TEST_F(SceneTreeTest, FindNode_ByPath_EmptySegments_AreSkipped)
 
 TEST_F(SceneTreeTest, DestroyNode_RejectsInvalidEntity)
 {
-    EXPECT_EQ(tree->destroy_node(tree, KE_ENTITY_INVALID), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(tree->destroy_node(tree, KE_ENTITY_INVALID, NULL), KE_ERROR);
 }
 
 TEST_F(SceneTreeTest, DestroyNode_DestroysSubtree)
@@ -129,7 +129,7 @@ TEST_F(SceneTreeTest, DestroyNode_DestroysSubtree)
     tree->create_node(tree, "Player", world_node);
     tree->create_node(tree, "Enemy",  world_node);
 
-    EXPECT_EQ(tree->destroy_node(tree, world_node), KE_OK);
+    EXPECT_EQ(tree->destroy_node(tree, world_node, NULL), KE_OK);
     EXPECT_EQ(tree->find_node(tree, "World"),  KE_ENTITY_INVALID);
     EXPECT_EQ(tree->find_node(tree, "Player"), KE_ENTITY_INVALID);
     EXPECT_EQ(tree->find_node(tree, "Enemy"),  KE_ENTITY_INVALID);
@@ -138,7 +138,7 @@ TEST_F(SceneTreeTest, DestroyNode_DestroysSubtree)
 TEST_F(SceneTreeTest, DestroyNode_UnlinksFromParent)
 {
     ke_entity child = tree->create_node(tree, "X", KE_ENTITY_INVALID);
-    EXPECT_EQ(tree->destroy_node(tree, child), KE_OK);
+    EXPECT_EQ(tree->destroy_node(tree, child, NULL), KE_OK);
     EXPECT_EQ(tree->find_node(tree, "X"), KE_ENTITY_INVALID);
 }
 
@@ -149,7 +149,7 @@ TEST_F(SceneTreeTest, DestroyNode_UnlinksFromMiddleOfChain)
     ke_entity c2 = tree->create_node(tree, "2", KE_ENTITY_INVALID);
     tree->create_node(tree, "3", KE_ENTITY_INVALID);
 
-    EXPECT_EQ(tree->destroy_node(tree, c2), KE_OK);
+    EXPECT_EQ(tree->destroy_node(tree, c2, NULL), KE_OK);
 
     // 1 and 3 should still resolve.
     EXPECT_NE(tree->find_node(tree, "1"), KE_ENTITY_INVALID);
@@ -174,6 +174,6 @@ TEST_F(SceneTreeTest, DestroyAll_ClearsChildrenButKeepsRoot)
 TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 {
     ke_scene_tree *t = nullptr;
-    EXPECT_EQ(ke_scene_tree_create(nullptr, &t), KE_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(ke_scene_tree_create(ecs, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(ke_scene_tree_create(nullptr, &t, NULL), KE_ERROR);
+    EXPECT_EQ(ke_scene_tree_create(ecs, nullptr, NULL), KE_ERROR);
 }
