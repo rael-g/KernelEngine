@@ -42,7 +42,7 @@ public sealed unsafe class FramePacket : IFramePacket
             r = light.Color.X, g = light.Color.Y, b = light.Color.Z,
             intensity = light.Intensity,
         };
-        _packet->has_dir_light = true;
+        _packet->has_dir_light = 1;
     }
 
     /// <summary>Appends a point light. Ignored when at capacity.</summary>
@@ -115,7 +115,7 @@ public sealed unsafe class FramePacket : IFramePacket
     public void SetSkybox(TextureHandle cubemapHandle)
     {
         _packet->skybox_handle = new ke_texture_handle { idx = cubemapHandle.Value };
-        _packet->has_skybox    = cubemapHandle.IsValid;
+        _packet->has_skybox    = (byte)(cubemapHandle.IsValid ? 1 : 0);
     }
 
     /// <summary>Sets the shadow map data for this frame.</summary>
@@ -152,7 +152,7 @@ public sealed unsafe class FramePacket : IFramePacket
     /// <summary>Sets SSAO parameters for this frame.</summary>
     public void SetSsao(bool enabled, float radius, float bias, float strength)
     {
-        _packet->ssao_enabled  = enabled;
+        _packet->ssao_enabled  = (byte)(enabled ? 1 : 0);
         _packet->ssao_radius   = radius;
         _packet->ssao_bias     = bias;
         _packet->ssao_strength = strength;
@@ -161,7 +161,7 @@ public sealed unsafe class FramePacket : IFramePacket
     /// <summary>Sets Tonemapping parameters for this frame.</summary>
     public void SetTonemapping(bool enabled, float exposure, float gamma)
     {
-        _packet->tonemapping_enabled = enabled;
+        _packet->tonemapping_enabled = (byte)(enabled ? 1 : 0);
         _packet->exposure            = exposure;
         _packet->gamma               = gamma;
     }
@@ -169,7 +169,7 @@ public sealed unsafe class FramePacket : IFramePacket
     /// <summary>Sets Bloom parameters for this frame.</summary>
     public void SetBloom(bool enabled, float threshold, float intensity)
     {
-        _packet->bloom_enabled   = enabled;
+        _packet->bloom_enabled   = (byte)(enabled ? 1 : 0);
         _packet->bloom_threshold = threshold;
         _packet->bloom_intensity = intensity;
     }
@@ -184,7 +184,7 @@ public sealed unsafe class FramePacket : IFramePacket
 
     /// <summary>Directional light, or <see langword="null"/> when absent.</summary>
     public ke_directional_light? DirectionalLightData =>
-        _packet->has_dir_light ? _packet->dir_light : null;
+        _packet->has_dir_light != 0 ? _packet->dir_light : null;
 
     /// <summary>Span over the point lights recorded this frame.</summary>
     public ReadOnlySpan<ke_point_light> PointLights =>
@@ -206,7 +206,7 @@ public sealed unsafe class FramePacket : IFramePacket
     public TextureHandle SkyboxHandle => new(_packet->skybox_handle.idx);
 
     /// <summary>Whether a skybox was submitted this frame.</summary>
-    public bool HasSkybox => _packet->has_skybox;
+    public bool HasSkybox => _packet->has_skybox != 0;
 
     /// <summary>Shadow map data for this frame.</summary>
     public ke_frame_shadow Shadow => _packet->shadow;

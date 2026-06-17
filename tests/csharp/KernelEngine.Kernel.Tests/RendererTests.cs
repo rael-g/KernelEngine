@@ -61,7 +61,7 @@ public unsafe class RendererTests
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_ndc_convention MockGetNdcConvention(ke_render* self)
     {
-        return new ke_ndc_convention { z_zero_to_one = true, y_flip = false, left_handed = false };
+        return new ke_ndc_convention { z_zero_to_one = 1, y_flip = 0, left_handed = 0 };
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -75,13 +75,13 @@ public unsafe class RendererTests
     private static ke_result MockSetShadowMap(ke_render* self, ke_shadow_map_handle h, ke_error** out_error) { return ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetSsao(ke_render* self, bool e, float r, float b, float s, ke_error** out_error) { return ke_result.KE_OK; }
+    private static ke_result MockSetSsao(ke_render* self, byte e, float r, float b, float s, ke_error** out_error) { return ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetTonemapping(ke_render* self, bool e, float exp, float g, ke_error** out_error) { return ke_result.KE_OK; }
+    private static ke_result MockSetTonemapping(ke_render* self, byte e, float exp, float g, ke_error** out_error) { return ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetBloom(ke_render* self, bool e, float t, float i, ke_error** out_error) { return ke_result.KE_OK; }
+    private static ke_result MockSetBloom(ke_render* self, byte e, float t, float i, ke_error** out_error) { return ke_result.KE_OK; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_result MockCreateTexture(ke_render* self, uint w, uint h, byte* d, ke_texture_handle* out_h, ke_error** out_error)
@@ -191,7 +191,7 @@ public unsafe class RendererTests
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockSetSetOrthographic(ke_render* self, bool e, ke_error** out_error) { return ke_result.KE_OK; }
+    private static ke_result MockSetSetOrthographic(ke_render* self, byte e, ke_error** out_error) { return ke_result.KE_OK; }
 
     [Fact]
     public void Initialize_CallsMock()

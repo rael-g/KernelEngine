@@ -129,11 +129,11 @@ public unsafe class FramePacketTests
         packet.SetTonemapping(true, 1.2f, 2.0f);
         packet.SetBloom(true, 0.8f, 0.3f);
         
-        Assert.True(native->ssao_enabled);
+        Assert.Equal(1, native->ssao_enabled);
         Assert.Equal(0.5f, native->ssao_radius);
-        Assert.True(native->tonemapping_enabled);
+        Assert.Equal(1, native->tonemapping_enabled);
         Assert.Equal(1.2f, native->exposure);
-        Assert.True(native->bloom_enabled);
+        Assert.Equal(1, native->bloom_enabled);
         Assert.Equal(0.8f, native->bloom_threshold);
         
         FreeNativePacket(native);
@@ -144,14 +144,14 @@ public unsafe class FramePacketTests
     {
         var native = CreateNativePacket(drawCap: 1, pointLightCap: 1, spotLightCap: 1, shadowDrawCap: 1);
         native->frame_number = 123;
-        native->has_skybox = true;
+        native->has_skybox = 1;
         native->skybox_handle.idx = 55;
         native->draw_count = 1;
         native->draw_commands[0].mesh_handle.idx = 10;
         native->point_light_count = 1;
         native->spot_light_count = 1;
         native->shadow_draw_count = 1;
-        native->has_dir_light = true;
+        native->has_dir_light = 1;
         native->dir_light.intensity = 5.0f;
 
         var packet = new FramePacket(native, null, false);
@@ -175,7 +175,7 @@ public unsafe class FramePacketTests
     public void DirectionalLightData_ReturnsNull_WhenAbsent()
     {
         var native = CreateNativePacket();
-        native->has_dir_light = false;
+        native->has_dir_light = 0;
         var packet = new FramePacket(native, null, false);
         Assert.Null(packet.DirectionalLightData);
         FreeNativePacket(native);

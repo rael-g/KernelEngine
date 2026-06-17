@@ -40,7 +40,7 @@ public sealed unsafe class Audio : IAudio
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
         if (!sound.IsValid) return;
-        _native->play(_native, sound.Value, volume, loop, null);
+        _native->play(_native, sound.Value, volume, (byte)(loop ? 1 : 0), null);
     }
 
     public void Stop(SoundHandle sound)

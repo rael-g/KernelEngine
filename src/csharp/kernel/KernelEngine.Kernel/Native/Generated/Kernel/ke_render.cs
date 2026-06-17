@@ -13,8 +13,8 @@ public unsafe partial struct ke_render
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_error**, ke_result> on_shutdown;
 
-    [NativeTypeName("ke_result (*)(struct ke_render *, bool, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, bool, ke_error**, ke_result> set_orthographic;
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_bool, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, byte, ke_error**, ke_result> set_orthographic;
 
     [NativeTypeName("ke_result (*)(struct ke_render *, float, float, float, float, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render*, float, float, float, float, ke_error**, ke_result> clear_color;
@@ -82,11 +82,11 @@ public unsafe partial struct ke_render
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_shadow_map_handle, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_shadow_map_handle, ke_error**, ke_result> set_shadow_map;
 
-    [NativeTypeName("ke_result (*)(struct ke_render *, bool, float, float, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, bool, float, float, ke_error**, ke_result> set_tonemapping;
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_bool, float, float, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, byte, float, float, ke_error**, ke_result> set_tonemapping;
 
-    [NativeTypeName("ke_result (*)(struct ke_render *, bool, float, float, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, bool, float, float, ke_error**, ke_result> set_bloom;
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_bool, float, float, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, byte, float, float, ke_error**, ke_result> set_bloom;
 
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_point_light *, uint32_t, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_point_light*, uint, ke_error**, ke_result> set_point_lights;
@@ -94,8 +94,8 @@ public unsafe partial struct ke_render
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_spot_light *, uint32_t, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_spot_light*, uint, ke_error**, ke_result> set_spot_lights;
 
-    [NativeTypeName("ke_result (*)(struct ke_render *, bool, float, float, float, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, bool, float, float, float, ke_error**, ke_result> set_ssao;
+    [NativeTypeName("ke_result (*)(struct ke_render *, ke_bool, float, float, float, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, byte, float, float, float, ke_error**, ke_result> set_ssao;
 
     [NativeTypeName("ke_result (*)(struct ke_render *, const ke_cluster_config *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_cluster_config*, ke_error**, ke_result> set_cluster_config;

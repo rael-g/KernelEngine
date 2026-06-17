@@ -2,9 +2,12 @@ namespace KernelEngine.Kernel.Native;
 
 public partial struct ke_ndc_convention
 {
-    public bool z_zero_to_one;
+    [NativeTypeName("ke_bool")]
+    public byte z_zero_to_one;
 
-    public bool y_flip;
+    [NativeTypeName("ke_bool")]
+    public byte y_flip;
 
-    public bool left_handed;
+    [NativeTypeName("ke_bool")]
+    public byte left_handed;
 }

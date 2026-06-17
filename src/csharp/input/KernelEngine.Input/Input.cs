@@ -111,7 +111,7 @@ public sealed unsafe class Input : IInput, INativeInput
     }
 
     /// <summary>Returns true if the key is currently held down.</summary>
-    public bool IsKeyDown(int key) => _native->is_key_down(_native, key);
+    public bool IsKeyDown(int key) => _native->is_key_down(_native, key) != 0;
 
     public void Dispose()
     {

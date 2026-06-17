@@ -15,12 +15,20 @@ namespace KernelEngine.Kernel;
 /// </summary>
 public static unsafe class KernelThread
 {
+    // ke_thread_set_current_name stores the raw pointer in TLS without copying.
+    // We keep one allocation alive per thread so the pointer stays valid for the
+    // thread's lifetime. Previous allocation is freed when a new name is set.
+    [ThreadStatic]
+    private static nint _currentNamePtr;
+
     /// <summary>Sets the kernel-side TLS name of the calling thread.</summary>
     public static void SetCurrentName(string name)
     {
+        var prev = _currentNamePtr;
         var nameBytes = Marshal.StringToHGlobalAnsi(name);
-        try   { NativeMethods.thread_set_current_name((sbyte*)nameBytes); }
-        finally { Marshal.FreeHGlobal(nameBytes); }
+        _currentNamePtr = nameBytes;
+        NativeMethods.thread_set_current_name((sbyte*)nameBytes);
+        if (prev != 0) Marshal.FreeHGlobal(prev);
     }
 
     /// <summary>Returns the TLS name of the calling thread (or "unknown" if never set).</summary>

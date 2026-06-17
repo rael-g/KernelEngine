@@ -1,5 +1,7 @@
 #include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/input/input.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,9 +44,9 @@ static void push_event(ke_input_internal *impl, ke_input_event_kind kind, int32_
     e->y    = y;
 }
 
-static ke_result input_update(ke_input *self)
+static ke_result input_update(ke_input *self, ke_error **out_error)
 {
-    if (!self) return KE_ERROR_INVALID_ARGUMENT;
+    if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_input", "invalid argument");
     ke_input_internal *impl = (ke_input_internal *)self->handle;
 
     memset(impl->keys_pressed, 0, sizeof(impl->keys_pressed));
@@ -131,21 +133,21 @@ static uint32_t input_drain_events(ke_input *self, ke_input_event *out_buf, uint
     return n;
 }
 
-static bool input_is_key_pressed(ke_input *self, int32_t key)
+static ke_bool input_is_key_pressed(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return 0;
     ke_input_internal *impl = (ke_input_internal *)self->handle;
     return impl->keys_pressed[key] ? 1 : 0;
 }
 
-static bool input_is_key_released(ke_input *self, int32_t key)
+static ke_bool input_is_key_released(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return 0;
     ke_input_internal *impl = (ke_input_internal *)self->handle;
     return impl->keys_released[key] ? 1 : 0;
 }
 
-static bool input_is_key_down(ke_input *self, int32_t key)
+static ke_bool input_is_key_down(ke_input *self, int32_t key)
 {
     if (!self || key < 0 || key >= MAX_KEYS) return 0;
     ke_input_internal *impl = (ke_input_internal *)self->handle;
@@ -190,17 +192,17 @@ static void input_destroy(ke_input *self)
     a->destroy(a);
 }
 
-ke_result ke_input_create(struct ke_logger *log, ke_input **out_input)
+ke_result ke_input_create(struct ke_logger *log, ke_input **out_input, ke_error **out_error)
 {
-    if (!out_input) return KE_ERROR_INVALID_ARGUMENT;
+    if (!out_input) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_input", "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
+    if (!alloc) return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_input", "allocator creation failed");
 
     ke_input *api = (ke_input *)alloc->alloc(alloc, sizeof(ke_input), 8);
-    if (!api) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!api) { alloc->destroy(alloc); return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_input", "api allocation failed"); }
     ke_input_internal *impl = (ke_input_internal *)alloc->alloc(alloc, sizeof(ke_input_internal), 8);
-    if (!impl) { alloc->free(alloc, api); alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!impl) { alloc->free(alloc, api); alloc->destroy(alloc); return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_input", "state allocation failed"); }
     memset(impl, 0, sizeof(ke_input_internal));
 
     impl->allocator = alloc;

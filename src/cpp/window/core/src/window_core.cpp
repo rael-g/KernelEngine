@@ -1,4 +1,5 @@
 #include <window_core.hpp>
+#include <kernel_engine/common/error.h>
 #include <cstring>
 
 namespace kernel_engine::window
@@ -13,29 +14,30 @@ WindowCore::WindowCore()
         auto* core = static_cast<WindowCore*>(self->handle);
         delete core;
     };
-    api_struct_.on_initialize = [](ke_window* self) {
-        if (!self) return KE_ERROR_INVALID_ARGUMENT;
+    api_struct_.on_initialize = [](ke_window* self, ke_error** out_error) {
+        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
         auto* core = static_cast<WindowCore*>(self->handle);
         // Initialization usually happens via WindowCore::Initialize() directly
         // but we can call it here if we store config.
+        (void)core;
         return KE_OK;
     };
-    api_struct_.on_shutdown = [](ke_window* self) {
-        if (!self) return KE_ERROR_INVALID_ARGUMENT;
+    api_struct_.on_shutdown = [](ke_window* self, ke_error** out_error) {
+        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
         static_cast<WindowCore*>(self->handle)->Shutdown();
         return KE_OK;
     };
-    api_struct_.should_close = [](ke_window* self) {
-        if (!self) return (bool)1;
-        return static_cast<WindowCore*>(self->handle)->ShouldClose() ? (bool)1 : (bool)0;
+    api_struct_.should_close = [](ke_window* self) -> ke_bool {
+        if (!self) return 1;
+        return static_cast<WindowCore*>(self->handle)->ShouldClose() ? 1 : 0;
     };
-    api_struct_.poll_events = [](ke_window* self) {
-        if (!self) return KE_ERROR_INVALID_ARGUMENT;
+    api_struct_.poll_events = [](ke_window* self, ke_error** out_error) {
+        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
         static_cast<WindowCore*>(self->handle)->PollEvents();
         return KE_OK;
     };
-    api_struct_.get_size = [](ke_window* self, int32_t* w, int32_t* h) {
-        if (!self) return KE_ERROR_INVALID_ARGUMENT;
+    api_struct_.get_size = [](ke_window* self, int32_t* w, int32_t* h, ke_error** out_error) {
+        if (!self) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_window", "invalid argument");
         uint32_t uw, uh;
         auto res = static_cast<WindowCore*>(self->handle)->GetSize(&uw, &uh);
         if (w) *w = (int32_t)uw;
@@ -55,10 +57,10 @@ WindowCore::~WindowCore()
 
 ke_result WindowCore::Initialize(const WindowConfig& config)
 {
-    if (!device_) return KE_ERROR_INVALID_ARGUMENT;
+    if (!device_) return KE_ERROR;
     if (initialized_) return KE_OK;
 
-    if (!device_->Initialize(config)) return KE_ERROR_WINDOW;
+    if (!device_->Initialize(config)) return KE_ERROR;
 
     initialized_ = true;
     return KE_OK;
@@ -97,7 +99,7 @@ void WindowCore::SetTitle(const char* title)
 
 ke_result WindowCore::GetSize(uint32_t* width, uint32_t* height) const
 {
-    if (!device_) return KE_ERROR_INVALID_ARGUMENT;
+    if (!device_) return KE_ERROR;
     device_->GetSize(width, height);
     return KE_OK;
 }

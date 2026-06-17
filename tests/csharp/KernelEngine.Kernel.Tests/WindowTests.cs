@@ -33,10 +33,10 @@ public unsafe class WindowTests
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static bool MockShouldClose(ke_window* window)
+    private static byte MockShouldClose(ke_window* window)
     {
         _shouldCloseCalled++;
-        return true;
+        return 1;
     }
 
     [Fact]

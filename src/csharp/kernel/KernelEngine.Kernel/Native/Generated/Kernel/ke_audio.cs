@@ -13,8 +13,8 @@ public unsafe partial struct ke_audio
     [NativeTypeName("void (*)(struct ke_audio *, ke_audio_sound)")]
     public delegate* unmanaged[Cdecl]<ke_audio*, uint, void> unload_sound;
 
-    [NativeTypeName("ke_result (*)(struct ke_audio *, ke_audio_sound, float, bool, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_audio*, uint, float, bool, ke_error**, ke_result> play;
+    [NativeTypeName("ke_result (*)(struct ke_audio *, ke_audio_sound, float, ke_bool, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_audio*, uint, float, byte, ke_error**, ke_result> play;
 
     [NativeTypeName("void (*)(struct ke_audio *, ke_audio_sound)")]
     public delegate* unmanaged[Cdecl]<ke_audio*, uint, void> stop;

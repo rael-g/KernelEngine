@@ -7,6 +7,7 @@ ke_common
 --include-directory
 ../../../../c/common/include
 --file
+../../../../c/common/include/kernel_engine/common/types.h
 ../../../../c/common/include/kernel_engine/common/error.h
 --methodClassName
 NativeMethods
@@ -16,6 +17,7 @@ ke_
 ke_result=ke_result
 --exclude
 ke_result
+ke_bool
 ke_error
 ke_error_type
 KE_ERROR_GENERAL

@@ -7,8 +7,8 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/render/light.h>
+#include <kernel_engine/common/types.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifndef KE_FRAME_PACKET_API
 #  ifdef KE_RENDER_STATIC
@@ -68,7 +68,7 @@ extern "C" {
         uint32_t         shadow_draw_capacity;
 
         ke_directional_light dir_light;
-        bool                 has_dir_light;
+        ke_bool              has_dir_light;
 
         ke_point_light  *point_lights;
         uint32_t         point_light_count;
@@ -81,18 +81,18 @@ extern "C" {
         ke_frame_camera camera;
 
         ke_texture_handle skybox_handle;
-        bool              has_skybox;
+        ke_bool           has_skybox;
 
-        bool  ssao_enabled;
-        float ssao_radius;
-        float ssao_bias;
-        float ssao_strength;
+        ke_bool ssao_enabled;
+        float   ssao_radius;
+        float   ssao_bias;
+        float   ssao_strength;
 
-        bool  tonemapping_enabled;
-        float exposure;
-        float gamma;
+        ke_bool tonemapping_enabled;
+        float   exposure;
+        float   gamma;
 
-        bool  bloom_enabled;
+        ke_bool bloom_enabled;
         float bloom_threshold;
         float bloom_intensity;
 
@@ -111,7 +111,8 @@ extern "C" {
     } ke_frame_packet_params;
 
     KE_FRAME_PACKET_API ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
-                                                          ke_frame_packet **out_packet);
+                                                          ke_frame_packet **out_packet,
+                                                          ke_error **out_error);
     KE_FRAME_PACKET_API void ke_frame_packet_destroy(ke_frame_packet *packet);
     KE_FRAME_PACKET_API void ke_frame_packet_reset(ke_frame_packet *packet);
 

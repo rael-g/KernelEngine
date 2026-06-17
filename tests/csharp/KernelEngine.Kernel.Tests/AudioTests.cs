@@ -28,11 +28,11 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockPlay(ke_audio* self, uint soundId, float volume, bool loop, ke_error** out_error)
+    private static unsafe ke_result MockPlay(ke_audio* self, uint soundId, float volume, byte loop, ke_error** out_error)
     {
         LastSoundId = soundId;
         LastVolume = volume;
-        LastLoop = loop ? (byte)1 : (byte)0;
+        LastLoop = loop;
         return ke_result.KE_OK;
     }
 

@@ -35,7 +35,8 @@ public unsafe partial struct ke_frame_packet
 
     public ke_directional_light dir_light;
 
-    public bool has_dir_light;
+    [NativeTypeName("ke_bool")]
+    public byte has_dir_light;
 
     public ke_point_light* point_lights;
 
@@ -57,9 +58,11 @@ public unsafe partial struct ke_frame_packet
 
     public ke_texture_handle skybox_handle;
 
-    public bool has_skybox;
+    [NativeTypeName("ke_bool")]
+    public byte has_skybox;
 
-    public bool ssao_enabled;
+    [NativeTypeName("ke_bool")]
+    public byte ssao_enabled;
 
     public float ssao_radius;
 
@@ -67,13 +70,15 @@ public unsafe partial struct ke_frame_packet
 
     public float ssao_strength;
 
-    public bool tonemapping_enabled;
+    [NativeTypeName("ke_bool")]
+    public byte tonemapping_enabled;
 
     public float exposure;
 
     public float gamma;
 
-    public bool bloom_enabled;
+    [NativeTypeName("ke_bool")]
+    public byte bloom_enabled;
 
     public float bloom_threshold;
 

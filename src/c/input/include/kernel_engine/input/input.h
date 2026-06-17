@@ -2,11 +2,10 @@
 #define KERNEL_ENGINE_INPUT_INPUT_H_
 
 #include <kernel_engine/common/error.h>
+#include <kernel_engine/common/types.h>
 #include <kernel_engine/input/input_export.h>
 #include <kernel_engine/input/snapshot.h>
 #include <kernel_engine/input/event.h>
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C"
 {
@@ -27,9 +26,9 @@ extern "C"
          */
         ke_result (*update)(struct ke_input *self, ke_error **out_error);
 
-        bool (*is_key_pressed)(struct ke_input *self, int32_t key);
-        bool (*is_key_released)(struct ke_input *self, int32_t key);
-        bool (*is_key_down)(struct ke_input *self, int32_t key);
+        ke_bool (*is_key_pressed)(struct ke_input *self, int32_t key);
+        ke_bool (*is_key_released)(struct ke_input *self, int32_t key);
+        ke_bool (*is_key_down)(struct ke_input *self, int32_t key);
 
         /**
          * @brief Captures a frozen snapshot of the current input state.

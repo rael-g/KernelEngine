@@ -41,6 +41,7 @@ ke_kernel
 --include-directory
 ../../../../c/render/include
 --file
+../../../../c/common/include/kernel_engine/common/types.h
 ../../../../c/common/include/kernel_engine/common/error.h
 ../../../../c/common/include/kernel_engine/common/math.h
 ../../../../c/allocator/include/kernel_engine/allocator/allocator.h
@@ -92,8 +93,10 @@ NativeMethods
 ke_
 --with-type
 ke_result=ke_result
+ke_bool=byte
 --exclude
 ke_result
+ke_bool
 ke_message_pipe
 KE_MESH_NONE
 KE_TEXTURE_NONE

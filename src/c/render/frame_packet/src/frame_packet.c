@@ -1,6 +1,8 @@
-#include <kernel_engine/render/frame_packet.h>
+﻿#include <kernel_engine/render/frame_packet.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <stdalign.h>
+#include <stdbool.h>
 #include <string.h>
 
 // Private header stored immediately before the public ke_frame_packet in memory.
@@ -19,17 +21,18 @@ static fp_priv *fp_get_priv(ke_frame_packet *p)
 }
 
 ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
-                                 ke_frame_packet **out_packet)
+                                 ke_frame_packet **out_packet,
+                                 ke_error **out_error)
 {
-    if (!params || !out_packet) return KE_ERROR_INVALID_ARGUMENT;
+    if (!params || !out_packet) return ke_error_set(out_error, &KE_ERROR_INVALID_ARGUMENT, "ke_frame_packet", "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_OUT_OF_MEMORY;
+    if (!alloc) return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_frame_packet", "allocator creation failed");
 
     // Allocate [fp_priv | ke_frame_packet] in one block.
     size_t block = FP_PRIV_SIZE + sizeof(ke_frame_packet);
     void *mem = alloc->alloc(alloc, block, alignof(ke_frame_packet));
-    if (!mem) { alloc->destroy(alloc); return KE_ERROR_OUT_OF_MEMORY; }
+    if (!mem) { alloc->destroy(alloc); return KE_ERROR; }
     memset(mem, 0, block);
 
     fp_priv *priv = (fp_priv *)mem;
@@ -76,7 +79,7 @@ ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
 
 fail:
     ke_frame_packet_destroy(p);
-    return KE_ERROR_OUT_OF_MEMORY;
+    return ke_error_set(out_error, &KE_ERROR_OUT_OF_MEMORY, "ke_frame_packet", "sub-buffer allocation failed");
 }
 
 void ke_frame_packet_destroy(ke_frame_packet *packet)
