@@ -4,9 +4,6 @@ public unsafe partial struct ke_physics_2d
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_physics_2d *)")]
-    public delegate* unmanaged[Cdecl]<ke_physics_2d*, void> destroy;
-
     [NativeTypeName("void (*)(struct ke_physics_2d *, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_physics_2d*, float, float, void> set_gravity;
 

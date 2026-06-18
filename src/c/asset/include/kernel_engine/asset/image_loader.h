@@ -17,9 +17,6 @@ extern "C"
     {
         void *handle;
 
-        /// @brief Destroys and frees the loader itself.
-        void (*destroy)(struct ke_image_loader *self);
-
         /// @brief Loads an image from @p path into a newly allocated ke_texture_data (RGBA8).
         ///        The caller owns the result and must release it with free_image.
         ke_result (*load_image)(struct ke_image_loader *self,

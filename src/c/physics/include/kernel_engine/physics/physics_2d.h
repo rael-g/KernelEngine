@@ -42,9 +42,6 @@ extern "C"
     {
         void *handle;
 
-        /// @brief Destroys the world; invalidates every body handle.
-        void (*destroy)(struct ke_physics_2d *self);
-
         /// @brief Sets world gravity (m/s^2). Default is (0, -9.81).
         void (*set_gravity)(struct ke_physics_2d *self, float x, float y);
 

@@ -44,9 +44,6 @@ extern "C"
     {
         void *handle;
 
-        /// @brief Destroys the loader.
-        void (*destroy)(struct ke_font_loader *self);
-
         /// @brief Loads @p path and bakes a glyph atlas at @p pixel_size for the codepoint range
         /// [first_codepoint, first_codepoint + codepoint_count). On success allocates a
         /// ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font.

@@ -24,9 +24,6 @@ extern "C"
     {
         void *handle;
 
-        /// @brief Destroys and frees the loader itself.
-        void (*destroy)(struct ke_asset_loader *self);
-
         /// @brief Loads a 3D model from @p path into a newly allocated ke_model_data.
         ///        The caller owns the result and must release it with free_model.
         /// @param path  Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).

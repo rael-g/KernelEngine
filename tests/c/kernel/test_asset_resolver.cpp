@@ -48,14 +48,11 @@ static void MockFreeImage(ke_image_loader *self, ke_texture_data *data)
     }
 }
 
-static void MockDestroy(ke_image_loader *) {}
-
 static void InitMockLoader(MockImageLoader &m)
 {
     m.api.handle      = &m;
     m.api.load_image  = MockLoadImage;
     m.api.free_image  = MockFreeImage;
-    m.api.destroy     = MockDestroy;
 }
 
 static fs::path WriteTempFile(const std::string &suffix, const std::string &content = "x")
