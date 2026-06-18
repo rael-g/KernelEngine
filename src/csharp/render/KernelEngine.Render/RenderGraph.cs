@@ -25,7 +25,7 @@ public sealed unsafe class RenderGraph : IDisposable
     private ke_render_graph* _native;
     private readonly List<RenderPass> _ownedPasses = new();
 
-    internal RenderGraph(ke_render_graph* native)
+    public RenderGraph(ke_render_graph* native)
     {
         if (native is null) throw new ArgumentNullException(nameof(native));
         _native = native;

@@ -16,7 +16,7 @@ public readonly unsafe ref struct RenderPassContext
 {
     private readonly ke_render_pass_ctx* _native;
 
-    internal RenderPassContext(ke_render_pass_ctx* native) { _native = native; }
+    public RenderPassContext(ke_render_pass_ctx* native) { _native = native; }
 
     /// <summary>Texture handle bound at <paramref name="resourceName"/>; <see cref="TextureHandle.None"/> if the pass did not declare it.</summary>
     public TextureHandle GetTexture(string resourceName)

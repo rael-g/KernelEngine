@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
     <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
   </ItemGroup>
 
   <ItemGroup>

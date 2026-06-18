@@ -9,7 +9,7 @@ namespace KernelEngine.Kernel;
 /// struct (defined in the auto-generated bindings). Layout is identical by construction; this
 /// class just makes the reinterpretation explicit at any callsite that has to cross the boundary.
 /// </summary>
-internal static class TransformInterop
+public static class TransformInterop
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Transform FromNative(ke_transform t) => Unsafe.As<ke_transform, Transform>(ref t);

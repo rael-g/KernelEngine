@@ -19,7 +19,7 @@ public ref struct VariantReader
     private readonly nint _entries; // ke_variant_table_entry* stored as nint
     private readonly uint _count;
 
-    internal unsafe VariantReader(ke_variant_table_entry* entries, uint count)
+    public unsafe VariantReader(ke_variant_table_entry* entries, uint count)
     {
         _entries = (nint)entries;
         _count   = count;

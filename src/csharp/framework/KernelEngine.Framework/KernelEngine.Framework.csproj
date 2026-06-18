@@ -21,6 +21,10 @@
     <ProjectReference Include="..\KernelEngine.Framework.Abstractions\KernelEngine.Framework.Abstractions.csproj" />
     <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
     <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
+    <ProjectReference Include="..\..\task_scheduler\KernelEngine.TaskScheduler\KernelEngine.TaskScheduler.csproj" />
+    <ProjectReference Include="..\..\window\KernelEngine.Window\KernelEngine.Window.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render\KernelEngine.Render.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />

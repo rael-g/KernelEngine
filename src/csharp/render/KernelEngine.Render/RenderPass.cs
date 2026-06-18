@@ -87,7 +87,7 @@ public sealed unsafe class RenderPass : IDisposable
 
     // ── Internal: materialise the native ke_render_pass_params + keep the pinning alive ──
 
-    internal void BuildNativeParams(out ke_render_pass_params @params)
+    public void BuildNativeParams(out ke_render_pass_params @params)
     {
         if (_record is null)
             throw new InvalidOperationException($"RenderPass '{Name}' has no OnRecord callback.");

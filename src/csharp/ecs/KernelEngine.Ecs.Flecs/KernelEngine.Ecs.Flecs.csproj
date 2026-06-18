@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
     <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
   </ItemGroup>
 
 </Project>
