@@ -302,11 +302,14 @@ It stays alive while render v1 lives. But **`ecs/system.h` must stop mentioning 
 | §9.1 `frame_packet` tentacle cut — `ecs/system.h` no longer mentions `frame_packet` | (domain ejection, `44975af`) | `frame_packet` lives in `src/c/render/` only |
 | §7.4 vtable audit — `ke_allocator*` removed from `create_render_graph` slot | `a47dff1` | only genuine violation found; C# bindings regenerated |
 | §6 `spatial` data contract — `ke_transform_component` in `src/c/spatial/`; `ke_render → ke_spatial` CMake dep wired | (this session) | `render/components.h` includes `spatial/transform.h`; DAG `render→spatial`, `framework→spatial` correct |
+| §7.2 allocator plain-function module — `ke_allocator` vtable abolished; replaced by plain `ke_alloc/ke_free/ke_realloc` + concrete `ke_arena`; C# managed rewrite via `NativeMemory` | `9b87376` | 129 files; all factories drop `ke_allocator*` param; `ke_allocator_malloc` static PRIVATE per impl |
+| §7.4 vtable audit — stale `(*destroy)` slots removed from `ke_asset_loader`, `ke_image_loader`, `ke_physics_2d`, `ke_font_loader` | `d0ec43f` | 4 vtables cleaned; handle `destroy` already owned the teardown |
+| §5 phase model — enum kept, §5 acid test passes; decision recorded in Pending table | — | No code change; policy decision only |
 
 ### Pending
 
 | Item | Doc ref | Notes |
 |---|---|---|
 | §7.2 refinement — `ke_allocator` vtable → plain-function module (no struct, no `create`, no `destroy`) | §7.2 last paragraph | Separate task; tracked in `project_allocator_plain_functions.md` |
-| §5 Opaque phases — confirm whether the `ke_phase` enum in runtime becomes legacy or degrades to opaque labels | §5, open question #2 | Requires runtime team discussion |
+| §5 Opaque phases — **closed**: `ke_phase` enum kept as-is; passes the §5 acid test (no domain names baked in — UPDATE/PRE_UPDATE/EXTRACT are generic scheduling primitives, not domain identifiers). STARTUP/SHUTDOWN are unimplemented but correct by design (R2+). Opaque-ID approach rejected for V1: no user-defined phases in roadmap, DLL-exported constants would add ABI friction for zero benefit. | §5, open question #2 | Decision 2026-06-18 |
 | §8 Per-domain versioning — explicit platform manifest vs. semver asserted at wire time | §8, open question #1 | Policy decision, no code yet |
