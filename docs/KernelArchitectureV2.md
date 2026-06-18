@@ -1,6 +1,6 @@
 # Kernel Architecture V2 — What Is Allowed to Live in the Kernel
 
-**Status**: Doctrine accepted. Domain ejection complete (2026-06-15, branch `feat/kernel-v2`): all domain headers ejected from `src/c/kernel/include/` to `src/c/<domain>/include/`; `ke_kernel` meta-target deleted. Render components + `material_file` moved to `render/` domain. §7.2 allocator doctrine resolved: `ke_allocator` is an internal utility, not a public API — factory signatures drop the `ke_allocator*` parameter (impl pending). Next: §7.3 ke_X_handle ownership refactor (remove destroy from vtables) + §7.4 full vtable audit.
+**Status**: Doctrine accepted and arc complete (2026-06-18, branch `feat/kernel-v2`). Domain ejection done (`src/c/kernel/` deleted); `ke_kernel` meta-target deleted; `ke_allocator` vtable abolished (plain functions); `ke_X_handle` ownership model shipped (destroy only in handles, never vtables); full vtable audit done; `spatial` data contract extracted; §5 phase model confirmed. See §12 Delivered table for commit-level detail.
 
 **Audience**: Engine maintainer + plugin/domain authors (render / physics / audio / input / text / asset / scripting).
 
@@ -163,8 +163,8 @@ The ceiling, stated honestly: we move from *"public, anyone takes it, contained 
 Rationale:
 - Third-party libs (bgfx, GLFW, Box2D, assimp, stb, flecs) bypass our allocator entirely. Pretending we have "full memory control" is fiction; we control our own allocations and document where third-party leakage occurs.
 - The single point of change for the underlying heap is `allocator_malloc.c` — one file, one place. All C impls inherit the change. This is the real benefit; passing `ke_allocator*` externally buys nothing and pollutes every factory signature.
-- In debug builds, impls link `ke_allocator_proxy` (PRIVATE) and call `ke_allocator_proxy_report()` in their `destroy()`, providing per-impl leak reports without exposing the allocator externally.
-- C++ implementations use RAII / standard containers; `ke_allocator` does not apply to them. Debug leak detection via ASan / Valgrind or their own mechanisms.
+- Debug leak detection for C impls: ASan (`-fsanitize=address`) or LeakSanitizer. No proxy allocator exists — the allocator is plain functions, not a vtable, so there is no per-impl "report at destroy" hook to wire. Each impl links `ke_allocator_malloc` PRIVATE; ASan instruments the underlying `malloc`/`free` calls directly.
+- C++ implementations use RAII / standard containers; `ke_alloc`/`ke_free` do not apply to them. Debug leak detection via ASan / Valgrind.
 
 **What changes from the old rule:** `ke_allocator*` disappears from all `_params` structs and factory signatures. It becomes an `#include`-only, link-PRIVATE concern of each C implementation.
 
