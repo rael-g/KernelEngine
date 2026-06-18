@@ -8,7 +8,7 @@ namespace KernelEngine.Kernel;
 /// Managed wrapper around <c>ke_task_scheduler</c>.
 /// Dispatches work items to a native thread pool and bridges them to awaitable <see cref="Task"/>s.
 /// </summary>
-public unsafe class TaskScheduler : ITaskScheduler
+public unsafe class TaskScheduler : ITaskScheduler, INativeTaskScheduler
 {
     private ke_task_scheduler* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_task_scheduler*, void> _destroy;
@@ -47,8 +47,7 @@ public unsafe class TaskScheduler : ITaskScheduler
         finally { handle.Free(); }
     }
 
-    /// <summary>Gets the underlying native pointer.</summary>
-    public ke_task_scheduler* Native
+    ke_task_scheduler* INativeTaskScheduler.Native
     {
         get
         {

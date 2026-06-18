@@ -13,8 +13,7 @@ public sealed unsafe class FontLoader : IFontLoader, INativeFontLoader
     private ke_font_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_font_loader*, void> _destroy;
 
-    /// <inheritdoc/>
-    public ke_font_loader* Native => _native;
+    ke_font_loader* INativeFontLoader.Native => _native;
 
     public FontLoader(ke_font_loader_handle handle)
     {

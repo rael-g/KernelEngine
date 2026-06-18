@@ -8,12 +8,11 @@ namespace KernelEngine.Kernel;
 /// Creates and destroys entities with the required Transform + Hierarchy + Name
 /// components automatically; provides path-based node lookup.
 /// </summary>
-public sealed unsafe class SceneTree
+public sealed unsafe class SceneTree : INativeSceneTree
 {
     private ke_scene_tree* _native;
 
-    /// <summary>Borrowed pointer to the native ke_scene_tree vtable. Valid for the lifetime of the owning World.</summary>
-    public ke_scene_tree* Native
+    ke_scene_tree* INativeSceneTree.Native
     {
         get
         {
@@ -25,7 +24,7 @@ public sealed unsafe class SceneTree
     internal SceneTree(ke_scene_tree* native) => _native = native;
 
     /// <summary>Root entity. Always valid for the lifetime of the tree.</summary>
-    public ulong Root => Native->root(_native);
+    public ulong Root => _native->root(_native);
 
     /// <summary>
     /// Creates a new node attached under <paramref name="parent"/>
@@ -35,7 +34,7 @@ public sealed unsafe class SceneTree
     {
         var bytes = Encoding.UTF8.GetBytes(name + "\0");
         fixed (byte* p = bytes)
-            return Native->create_node(_native, (sbyte*)p, parent);
+            return _native->create_node(_native, (sbyte*)p, parent);
     }
 
     /// <summary>
@@ -43,10 +42,10 @@ public sealed unsafe class SceneTree
     /// post-order (children before parents).
     /// </summary>
     public Result DestroyNode(ulong entity)
-        => Native->destroy_node(_native, entity, null).ToManaged();
+        => _native->destroy_node(_native, entity, null).ToManaged();
 
     /// <summary>Destroys all nodes. Used on scene shutdown.</summary>
-    public void DestroyAll() => Native->destroy_all(_native);
+    public void DestroyAll() => _native->destroy_all(_native);
 
     /// <summary>
     /// Resolves a node by name (<c>"Name"</c>) or absolute path
@@ -56,7 +55,7 @@ public sealed unsafe class SceneTree
     {
         var bytes = Encoding.UTF8.GetBytes(nameOrPath + "\0");
         fixed (byte* p = bytes)
-            return Native->find_node(_native, (sbyte*)p);
+            return _native->find_node(_native, (sbyte*)p);
     }
 
     /// <summary>
@@ -64,5 +63,5 @@ public sealed unsafe class SceneTree
     /// <c>world_matrix</c> as <c>parent_world * TRS_local</c>.
     /// Call once per frame before any system that reads <c>WorldMatrix</c>.
     /// </summary>
-    public void PropagateTransforms() => Native->propagate_transforms(_native);
+    public void PropagateTransforms() => _native->propagate_transforms(_native);
 }

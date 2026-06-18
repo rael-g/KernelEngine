@@ -14,7 +14,7 @@ namespace KernelEngine.Runtime;
 /// callback so the C side can invoke them across the ABI boundary without the GC
 /// reclaiming the delegates.
 /// </summary>
-public sealed unsafe class Runtime : IRuntime
+public sealed unsafe class Runtime : IRuntime, INativeRuntime
 {
     private ke_runtime* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
@@ -76,8 +76,7 @@ public sealed unsafe class Runtime : IRuntime
         public required Action<IRuntime, float> Execute { get; init; }
     }
 
-    /// <summary>Borrowed pointer to the native ke_runtime vtable. Valid until Dispose.</summary>
-    public ke_runtime* Native => _native;
+    ke_runtime* INativeRuntime.Native => _native;
 
     public Runtime(IEcs ecs, ITaskScheduler taskScheduler)
     {
@@ -103,7 +102,7 @@ public sealed unsafe class Runtime : IRuntime
         ke_runtime_params @params = default;
         ke_runtime_handle handle;
         var rc = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
-            flecsEcs.Native, tsConcrete.Native, &@params, &handle, null);
+            ((INativeEcs)flecsEcs).Native, ((INativeTaskScheduler)tsConcrete).Native, &@params, &handle, null);
         if (rc != ke_result.KE_OK)
             throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
         _native = handle.@ref;

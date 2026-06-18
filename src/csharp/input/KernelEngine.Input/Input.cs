@@ -19,7 +19,7 @@ public sealed unsafe class Input : IInput, INativeInput
     private ke_input* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_input*, void> _destroy;
 
-    public ke_input* Native
+    ke_input* INativeInput.Native
     {
         get
         {

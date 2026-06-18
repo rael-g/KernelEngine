@@ -178,7 +178,7 @@ internal sealed unsafe class AssetLoader : IAssetLoader
         var pathPtr = Marshal.StringToHGlobalAnsi(path);
         _native->load_model_async(
             _native,
-            _scheduler.Native,
+            ((INativeTaskScheduler)_scheduler).Native,
             (sbyte*)pathPtr,
             &NativeLoadCompleteCallback,
             (void*)GCHandle.ToIntPtr(stateHandle));

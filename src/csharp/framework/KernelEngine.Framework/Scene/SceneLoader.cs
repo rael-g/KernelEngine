@@ -63,7 +63,7 @@ public sealed unsafe class SceneLoader : IDisposable
         {
             KernelException.ThrowIfFailed(
                 KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
-                    world.Native,
+                    ((INativeWorld)world).Native,
                     (sbyte*)rootPtr,
                     &handle, null).ToManaged());
         }

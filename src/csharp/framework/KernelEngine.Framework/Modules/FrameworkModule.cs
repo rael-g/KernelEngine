@@ -24,7 +24,7 @@ public sealed class FrameworkModule : IRuntimeModule
         services.AddSingleton<IEcsRegistry>(sp =>
         {
             var flecsEcs = (FlecsEcs)sp.GetRequiredService<IEcs>();
-            unsafe { return new EcsRegistry(flecsEcs.Native); }
+            unsafe { return new EcsRegistry(((INativeEcs)flecsEcs).Native); }
         });
 
         services.AddSingleton<World>(sp =>
@@ -37,11 +37,11 @@ public sealed class FrameworkModule : IRuntimeModule
             {
                 ke_scene_tree_handle tree;
                 KernelException.ThrowIfFailed(
-                    Native.NativeMethods.scene_tree_create(flecsEcs.Native, &tree, null).ToManaged());
+                    Native.NativeMethods.scene_tree_create(((INativeEcs)flecsEcs).Native, &tree, null).ToManaged());
 
                 ke_world_params p = default;
-                p.ecs        = flecsEcs.Native;
-                p.runtime    = rtRuntime.Native;
+                p.ecs        = ((INativeEcs)flecsEcs).Native;
+                p.runtime    = ((INativeRuntime)rtRuntime).Native;
                 p.scene_tree = tree.@ref;
                 ke_world_handle w;
                 KernelException.ThrowIfFailed(

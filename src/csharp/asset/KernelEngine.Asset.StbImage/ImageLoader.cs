@@ -16,11 +16,7 @@ public sealed unsafe class ImageLoader : IImageLoader, INativeImageLoader
         _destroy = handle.destroy;
     }
 
-    /// <summary>
-    /// Raw native pointer for downstream C plugins (e.g. ke_asset_resolver) that
-    /// take a ke_image_loader injection. Engine-internal.
-    /// </summary>
-    public ke_image_loader* Native => _native;
+    ke_image_loader* INativeImageLoader.Native => _native;
 
     public IImageData LoadImage(string path)
     {

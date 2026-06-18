@@ -8,7 +8,7 @@ namespace KernelEngine.Kernel;
 /// operations (loading, component apply registration) as managed APIs; does not
 /// re-expose the underlying ECS, runtime, or scene-tree native pointers.
 /// </summary>
-public sealed unsafe class World : IDisposable
+public sealed unsafe class World : IDisposable, INativeWorld
 {
     private ke_world*      _native;
     private ke_scene_tree* _ownedTree;
@@ -20,8 +20,7 @@ public sealed unsafe class World : IDisposable
     // them while native code holds the function pointer.
     private readonly List<GCHandle> _applyHandles = [];
 
-    /// <summary>Pointer to the native <c>ke_world</c> vtable. Valid until <see cref="Dispose"/>.</summary>
-    public ke_world* Native
+    ke_world* INativeWorld.Native
     {
         get
         {
@@ -58,8 +57,7 @@ public sealed unsafe class World : IDisposable
     {
         get
         {
-            var native = Native;
-            return _sceneTree ??= new SceneTree(native->scene_tree(native));
+            return _sceneTree ??= new SceneTree(_native->scene_tree(_native));
         }
     }
 
@@ -80,9 +78,8 @@ public sealed unsafe class World : IDisposable
         var fnPtr = (delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>)
             Marshal.GetFunctionPointerForDelegate(del).ToPointer();
 
-        var native = Native;
         KernelException.ThrowIfFailed(
-            native->register_component_apply(native, cid, fnPtr, null).ToManaged());
+            _native->register_component_apply(_native, cid, fnPtr, null).ToManaged());
     }
 
     private uint _scenePropertiesCid;

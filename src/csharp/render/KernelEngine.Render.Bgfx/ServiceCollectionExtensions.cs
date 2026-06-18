@@ -55,7 +55,7 @@ public static class ServiceCollectionExtensions
             var @params = new ke_render_bgfx_params
             {
                 logger        = logger != null ? logger.Native : null,
-                window        = ((Window)sp.GetRequiredService<IWindow>()).Native,
+                window        = ((INativeWindow)sp.GetRequiredService<IWindow>()).Native,
                 shader_path   = (sbyte*)shaderPtr,
                 vsync         = opts.Vsync,
                 renderer_type = (uint)opts.Backend,

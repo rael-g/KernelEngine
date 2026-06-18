@@ -9,12 +9,12 @@ namespace KernelEngine.Kernel;
 /// Hardware-accelerated renderer. Takes ownership of a <c>ke_render*</c> created by a service factory,
 /// calls <c>on_initialize</c> on construction, and <c>on_shutdown</c>/<c>destroy</c> on disposal.
 /// </summary>
-public sealed unsafe class Renderer : IRenderer
+public sealed unsafe class Renderer : IRenderer, INativeRenderer
 {
     private ke_render* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_render*, void> _destroy;
 
-    public ke_render* Native
+    ke_render* INativeRenderer.Native
     {
         get
         {
@@ -43,8 +43,8 @@ public sealed unsafe class Renderer : IRenderer
     public RenderGraph? GetRenderGraph()
     {
         KernelThread.AssertCurrent("ke.render");
-        if (Native->get_render_graph == null) return null;
-        var g = Native->get_render_graph(Native);
+        if (_native->get_render_graph == null) return null;
+        var g = _native->get_render_graph(_native);
         return g != null ? new RenderGraph(g) : null;
     }
 

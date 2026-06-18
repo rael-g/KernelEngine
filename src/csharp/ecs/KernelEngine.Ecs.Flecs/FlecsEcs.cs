@@ -8,7 +8,7 @@ namespace KernelEngine.Ecs.Flecs;
 /// flecs-backed <see cref="ke_ecs"/> storage. Owns an internal flecs world; satisfies
 /// the C ABI ECS contract via the ke_ecs vtable.
 /// </summary>
-public sealed unsafe class FlecsEcs : IEcs
+public sealed unsafe class FlecsEcs : IEcs, INativeEcs
 {
     private ke_ecs* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
@@ -24,11 +24,7 @@ public sealed unsafe class FlecsEcs : IEcs
         _destroy = handle.destroy;
     }
 
-    /// <summary>
-    /// Borrowed pointer to the native ke_ecs vtable. The pointer is alive until
-    /// <see cref="Dispose"/> is called.
-    /// </summary>
-    public ke_ecs* Native => _native;
+    ke_ecs* INativeEcs.Native => _native;
 
     public void Dispose()
     {
