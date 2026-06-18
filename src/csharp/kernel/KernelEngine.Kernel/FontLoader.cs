@@ -11,14 +11,16 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class FontLoader : IFontLoader, INativeFontLoader
 {
     private ke_font_loader* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_font_loader*, void> _destroy;
 
     /// <inheritdoc/>
     public ke_font_loader* Native => _native;
 
-    public FontLoader(ke_font_loader* native)
+    public FontLoader(ke_font_loader_handle handle)
     {
-        if (native == null) throw new ArgumentNullException(nameof(native));
-        _native = native;
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     public Task<FontData> LoadFontAsync(
@@ -81,7 +83,7 @@ public sealed unsafe class FontLoader : IFontLoader, INativeFontLoader
     {
         if (_native != null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

@@ -22,13 +22,13 @@ public sealed unsafe class EnkiTaskScheduler : KernelEngine.Kernel.TaskScheduler
     {
     }
 
-    private static ke_task_scheduler* CreateNative(Allocator allocator)
+    private static ke_task_scheduler_handle CreateNative(Allocator allocator)
     {
         ArgumentNullException.ThrowIfNull(allocator);
-        ke_task_scheduler* native;
-        var rc = KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(allocator.Native, &native, null);
+        ke_task_scheduler_handle handle;
+        var rc = KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(allocator.Native, &handle, null);
         if (rc != ke_result.KE_OK)
             throw new InvalidOperationException($"ke_task_scheduler_enki_create failed: {rc}");
-        return native;
+        return handle;
     }
 }

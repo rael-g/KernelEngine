@@ -72,6 +72,7 @@ class AssetResolverTest : public ::testing::Test
 {
 protected:
     MockImageLoader    loader;
+    ke_asset_resolver_handle resolver_h{};
     ke_asset_resolver *resolver    = nullptr;
     fs::path           project_root;
 
@@ -80,13 +81,14 @@ protected:
         InitMockLoader(loader);
         project_root = fs::temp_directory_path();
         ASSERT_EQ(ke_asset_resolver_create(&loader.api, nullptr,
-                                            project_root.string().c_str(), &resolver, NULL),
+                                            project_root.string().c_str(), &resolver_h, NULL),
                   KE_OK);
+        resolver = resolver_h.ref;
     }
 
     void TearDown() override
     {
-        if (resolver) resolver->destroy(resolver);
+        if (resolver_h.ref) resolver_h.destroy(resolver_h.ref);
     }
 };
 
@@ -125,11 +127,12 @@ TEST_F(AssetResolverTest, ResolveTexture_MissingFile_ReturnsNotFound)
 
 TEST_F(AssetResolverTest, ResolveTexture_NoLoader_ReturnsInvalidArgument)
 {
-    ke_asset_resolver *r = nullptr;
-    ASSERT_EQ(ke_asset_resolver_create(nullptr, nullptr, nullptr, &r, NULL), KE_OK);
+    ke_asset_resolver_handle rh{};
+    ASSERT_EQ(ke_asset_resolver_create(nullptr, nullptr, nullptr, &rh, NULL), KE_OK);
+    ke_asset_resolver *r = rh.ref;
     ke_texture_data *data = nullptr;
     EXPECT_EQ(r->resolve_texture(r, "anything.png", &data, nullptr), KE_ERROR);
-    r->destroy(r);
+    rh.destroy(rh.ref);
 }
 
 // ── Mesh resolution ─────────────────────────────────────────────────────────
@@ -177,7 +180,6 @@ TEST_F(AssetResolverTest, ResolveMaterial_MalformedFile_ReturnsError)
 
 TEST_F(AssetResolverTest, Create_NullArgs_ReturnsInvalidArgument)
 {
-    ke_asset_resolver *r = nullptr;
     EXPECT_EQ(ke_asset_resolver_create(&loader.api, nullptr, nullptr, nullptr, NULL), KE_ERROR);
 }
 
@@ -219,7 +221,7 @@ TEST_F(AssetResolverTest, FreeMesh_NullArgs_IsSafe)
 
 TEST_F(AssetResolverTest, Destroy_NullArgs_IsSafe)
 {
-    resolver->destroy(nullptr);
+    resolver_h.destroy(nullptr);
 }
 
 TEST_F(AssetResolverTest, ResolveMesh_ExternalFile_ReturnsNotFound)
@@ -230,8 +232,9 @@ TEST_F(AssetResolverTest, ResolveMesh_ExternalFile_ReturnsNotFound)
 
 TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
 {
-    ke_asset_resolver *r = nullptr;
-    ke_asset_resolver_create(&loader.api, nullptr, nullptr, &r, NULL);
+    ke_asset_resolver_handle rh{};
+    ke_asset_resolver_create(&loader.api, nullptr, nullptr, &rh, NULL);
+    ke_asset_resolver *r = rh.ref;
     
     auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
     ke_material_spec spec{};
@@ -239,6 +242,6 @@ TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
     std::string ref = "res://" + mat.string();
     EXPECT_EQ(r->resolve_material(r, ref.c_str(), &spec, nullptr), KE_OK);
     
-    r->destroy(r);
+    rh.destroy(rh.ref);
     fs::remove(mat);
 }

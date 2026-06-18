@@ -170,7 +170,7 @@ void audio_set_master_volume(ke_audio *self, float volume)
 } // namespace
 
 extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
-    const ke_audio_miniaudio_params *params, ke_audio **out, ke_error **out_error)
+    const ke_audio_miniaudio_params *params, ke_audio_handle *out, ke_error **out_error)
 {
     if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     auto *alloc = params->allocator;
@@ -204,7 +204,6 @@ extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
     }
     std::memset(api, 0, sizeof(*api));
     api->handle            = state;
-    api->destroy           = &audio_destroy;
     api->load_sound        = &audio_load_sound;
     api->unload_sound      = &audio_unload_sound;
     api->play              = &audio_play;
@@ -212,6 +211,7 @@ extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
     api->set_master_volume = &audio_set_master_volume;
 
     log_info(state->logger, "miniaudio backend initialized");
-    *out = api;
+    out->ref     = api;
+    out->destroy = &audio_destroy;
     return KE_OK;
 }

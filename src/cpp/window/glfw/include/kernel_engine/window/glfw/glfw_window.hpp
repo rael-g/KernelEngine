@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <kernel_engine/common/export.h>
+#include <kernel_engine/common/error.h>
 #include <kernel_engine/window/window.h>
 
 #ifdef __cplusplus
@@ -35,7 +36,7 @@ typedef struct ke_window_glfw_params {
 /**
  * @brief Creates the GLFW window system implementation.
  */
-KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window** out_window);
+KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window_handle* out_window, ke_error** out_error);
 
 #ifdef __cplusplus
 }

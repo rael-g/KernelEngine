@@ -5,7 +5,7 @@ namespace KernelEngine.Runtime.Native;
 public static unsafe partial class NativeMethods
 {
     [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_runtime_create", ExactSpelling = true)]
-    public static extern ke_result runtime_create(ke_ecs* ecs, ke_task_scheduler* task_scheduler, [NativeTypeName("const ke_runtime_params *")] ke_runtime_params* @params, ke_runtime** out_runtime, ke_error** out_error);
+    public static extern ke_result runtime_create(ke_ecs* ecs, ke_task_scheduler* task_scheduler, [NativeTypeName("const ke_runtime_params *")] ke_runtime_params* @params, ke_runtime_handle* out_runtime, ke_error** out_error);
 
     [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_get_mut", ExactSpelling = true)]
     public static extern void* system_ctx_get_mut(ke_system_ctx* ctx, [NativeTypeName("ke_component_id")] uint cid, [NativeTypeName("ke_entity")] ulong entity);

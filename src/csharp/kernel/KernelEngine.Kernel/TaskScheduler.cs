@@ -11,6 +11,7 @@ namespace KernelEngine.Kernel;
 public unsafe class TaskScheduler : ITaskScheduler
 {
     private ke_task_scheduler* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_task_scheduler*, void> _destroy;
 
     /// <inheritdoc/>
     void ITaskScheduler.Dispatch(Action action) => Dispatch(action);  // fire-and-forget
@@ -56,7 +57,11 @@ public unsafe class TaskScheduler : ITaskScheduler
         }
     }
 
-    public TaskScheduler(ke_task_scheduler* native) => _native = native;
+    public TaskScheduler(ke_task_scheduler_handle handle)
+    {
+        _native = handle.@ref;
+        _destroy = handle.destroy;
+    }
 
     /// <summary>
     /// Schedules an <see cref="Action"/> on the native thread pool and returns a <see cref="KernelTask"/>.
@@ -165,7 +170,7 @@ public unsafe class TaskScheduler : ITaskScheduler
     {
         if (_native != null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

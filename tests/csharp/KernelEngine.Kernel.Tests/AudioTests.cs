@@ -54,7 +54,7 @@ public class AudioTests
         DestroyCalled = true;
     }
 
-    private unsafe ke_audio* CreateMockNative()
+    private unsafe ke_audio_handle CreateMockHandle()
     {
         var ptr = (ke_audio*)NativeMemory.Alloc((nuint)sizeof(ke_audio));
         ptr->load_sound = &MockLoadSound;
@@ -62,107 +62,107 @@ public class AudioTests
         ptr->play = &MockPlay;
         ptr->stop = &MockStop;
         ptr->set_master_volume = &MockSetMasterVolume;
-        ptr->destroy = &MockDestroy;
-        return ptr;
+        return new ke_audio_handle { @ref = ptr, destroy = &MockDestroy };
     }
 
     [Fact]
     public unsafe void Constructor_Throws_WhenNativeIsNull()
     {
-        Assert.Throws<ArgumentNullException>(() => new Audio(null));
+        Assert.Throws<ArgumentNullException>(() => new Audio(new ke_audio_handle()));
     }
 
     [Fact]
     public unsafe void LoadSound_CallsNative()
     {
-        var native = CreateMockNative();
-        var audio = new Audio(native);
+        var h = CreateMockHandle();
+        var audio = new Audio(h);
         LastPath = null;
-        
+
         var handle = audio.LoadSound("test.wav");
-        
+
         Assert.Equal("test.wav", LastPath);
         Assert.Equal(42u, handle.Value);
-        NativeMemory.Free(native);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public unsafe void LoadSound_ReturnsNone_WhenNativeFails()
     {
-        var native = CreateMockNative();
-        var audio = new Audio(native);
+        var h = CreateMockHandle();
+        var audio = new Audio(h);
         LastResult = ke_result.KE_ERROR;
 
         var handle = audio.LoadSound("test.wav");
 
         Assert.Equal(SoundHandle.None, handle);
         LastResult = ke_result.KE_OK;
-        NativeMemory.Free(native);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public unsafe void UnloadSound_CallsNative()
     {
-        var native = CreateMockNative();
-        var audio = new Audio(native);
+        var h = CreateMockHandle();
+        var audio = new Audio(h);
         LastSoundId = 0;
-        
+
         audio.UnloadSound(new SoundHandle(123));
-        
+
         Assert.Equal(123u, LastSoundId);
-        NativeMemory.Free(native);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public unsafe void Play_CallsNative()
     {
-        var native = CreateMockNative();
-        var audio = new Audio(native);
+        var h = CreateMockHandle();
+        var audio = new Audio(h);
         LastSoundId = 0;
-        
+
         audio.Play(new SoundHandle(123), 0.5f, true);
-        
+
         Assert.Equal(123u, LastSoundId);
         Assert.Equal(0.5f, LastVolume);
         Assert.Equal(1, LastLoop);
-        NativeMemory.Free(native);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public unsafe void Stop_CallsNative()
     {
-        var native = CreateMockNative();
-        var audio = new Audio(native);
+        var h = CreateMockHandle();
+        var audio = new Audio(h);
         LastSoundId = 0;
-        
+
         audio.Stop(new SoundHandle(123));
-        
+
         Assert.Equal(123u, LastSoundId);
-        NativeMemory.Free(native);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public unsafe void SetMasterVolume_CallsNative()
     {
-        var native = CreateMockNative();
-        var audio = new Audio(native);
-        
+        var h = CreateMockHandle();
+        var audio = new Audio(h);
+
         audio.SetMasterVolume(0.8f);
-        
+
         Assert.Equal(0.8f, LastVolume);
-        NativeMemory.Free(native);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public unsafe void Dispose_CallsDestroy()
     {
-        var native = CreateMockNative();
-        var audio = new Audio(native);
+        var h = CreateMockHandle();
+        var audio = new Audio(h);
         DestroyCalled = false;
-        
+
         audio.Dispose();
-        
+
         Assert.True(DestroyCalled);
-        NativeMemory.Free(native);
+        // Note: MockDestroy does not free memory; handle.@ref was freed by the destroy fn.
+        // If MockDestroy doesn't free, we must not double-free here.
     }
 }

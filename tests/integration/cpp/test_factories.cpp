@@ -13,7 +13,7 @@ protected:
 };
 
 TEST_F(FactoryIntegrationTest, RenderBgfx_Create_NullArgs_ReturnsInvalidArgument) {
-    ke_render* r = nullptr;
+    ke_render_handle r{};
     ASSERT_EQ(ke_render_bgfx_create(nullptr, &r, nullptr), KE_ERROR);
 
     ke_render_bgfx_params p{};
@@ -21,14 +21,14 @@ TEST_F(FactoryIntegrationTest, RenderBgfx_Create_NullArgs_ReturnsInvalidArgument
 }
 
 TEST_F(FactoryIntegrationTest, RenderBgfx_Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_render* r = nullptr;
+    ke_render_handle r{};
     ke_render_bgfx_params p{};
     p.allocator = nullptr;
     ASSERT_EQ(ke_render_bgfx_create(&p, &r, nullptr), KE_ERROR);
 }
 
 TEST_F(FactoryIntegrationTest, WindowGlfw_Create_NullArgs_ReturnsInvalidArgument) {
-    ke_window* w = nullptr;
+    ke_window_handle w{};
     ASSERT_EQ(ke_window_glfw_create(nullptr, &w, nullptr), KE_ERROR);
 
     ke_window_glfw_params p{};
@@ -40,7 +40,7 @@ TEST_F(FactoryIntegrationTest, RenderBgfx_Create_Oom_WhenDeviceAllocFails) {
     fa.alloc = +[](ke_allocator*, size_t, size_t) -> void* { return nullptr; };
     fa.free = +[](ke_allocator*, void*) {};
     
-    ke_render* r = nullptr;
+    ke_render_handle r{};
     ke_render_bgfx_params p{};
     p.allocator = &fa;
     ASSERT_EQ(ke_render_bgfx_create(&p, &r, nullptr), KE_ERROR);
@@ -56,7 +56,7 @@ TEST_F(FactoryIntegrationTest, RenderBgfx_Create_Oom_WhenRendererAllocFails) {
     };
     fa.free = +[](ke_allocator*, void* p) { if(p) free(p); };
     
-    ke_render* r = nullptr;
+    ke_render_handle r{};
     ke_render_bgfx_params p{};
     p.allocator = &fa;
     ASSERT_EQ(ke_render_bgfx_create(&p, &r, nullptr), KE_ERROR);
@@ -67,7 +67,7 @@ TEST_F(FactoryIntegrationTest, WindowGlfw_Create_Oom_WhenDeviceAllocFails) {
     fa.alloc = +[](ke_allocator*, size_t, size_t) -> void* { return nullptr; };
     fa.free = +[](ke_allocator*, void*) {};
     
-    ke_window* w = nullptr;
+    ke_window_handle w{};
     ke_window_glfw_params p{};
     p.allocator = &fa;
     ASSERT_EQ(ke_window_glfw_create(&p, &w, nullptr), KE_ERROR);

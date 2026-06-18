@@ -45,7 +45,4 @@ public unsafe partial struct ke_input_actions
 
     [NativeTypeName("void (*)(struct ke_input_actions *, int32_t, float *, float *, float *)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, int, float*, float*, float*, void> get_axis3d;
-
-    [NativeTypeName("void (*)(struct ke_input_actions *)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, void> destroy;
 }

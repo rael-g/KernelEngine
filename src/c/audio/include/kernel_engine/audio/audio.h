@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_AUDIO_AUDIO_H_
+﻿#ifndef KERNEL_ENGINE_AUDIO_AUDIO_H_
 #define KERNEL_ENGINE_AUDIO_AUDIO_H_
 
 #include <kernel_engine/common/error.h>
@@ -24,8 +24,6 @@ extern "C"
     {
         void *handle;
 
-        /// @brief Destroys the backend; stops all playback, frees loaded sounds.
-        void (*destroy)(struct ke_audio *self);
 
         /// @brief Loads a sound from @p path (format autodetected by the backend) and returns a
         ///        handle suitable for repeated playback. Returns KE_AUDIO_SOUND_INVALID on error.
@@ -45,6 +43,12 @@ extern "C"
         void (*set_master_volume)(struct ke_audio *self, float volume);
 
     } ke_audio;
+
+    typedef struct ke_audio_handle
+    {
+        ke_audio *ref;
+        void (*destroy)(ke_audio *self);
+    } ke_audio_handle;
 
 #ifdef __cplusplus
 }

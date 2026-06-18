@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
 
 #include <kernel_engine/common/error.h>
@@ -33,8 +33,13 @@ extern "C"
                                               ke_script_factory_func factory,
                                               void *ctx, ke_error **out_error);
 
-        void (*destroy)(struct ke_scene_loader *self);
     } ke_scene_loader;
+
+    typedef struct ke_scene_loader_handle
+    {
+        ke_scene_loader *ref;
+        void (*destroy)(ke_scene_loader *self);
+    } ke_scene_loader_handle;
 
 #ifdef __cplusplus
 }

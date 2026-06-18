@@ -42,6 +42,9 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
 class RuntimeSpike : public ::testing::Test {
 protected:
     ke_allocator      *allocator      = nullptr;
+    ke_task_scheduler_handle task_scheduler_h{};
+    ke_ecs_handle            ecs_h{};
+    ke_runtime_handle        runtime_h{};
     ke_task_scheduler *task_scheduler = nullptr;
     ke_ecs            *ecs            = nullptr;
     ke_runtime        *runtime        = nullptr;
@@ -51,23 +54,26 @@ protected:
         allocator = ke_allocator_malloc_create();
         ASSERT_NE(allocator, nullptr);
 
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler, NULL), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler_h, NULL), KE_OK);
+        task_scheduler = task_scheduler_h.ref;
         ASSERT_NE(task_scheduler, nullptr);
 
         ke_ecs_flecs_params ecs_params{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs, NULL), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs_h, NULL), KE_OK);
+        ecs = ecs_h.ref;
         ASSERT_NE(ecs, nullptr);
 
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime, NULL), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime_h, NULL), KE_OK);
+        runtime = runtime_h.ref;
         ASSERT_NE(runtime, nullptr);
     }
 
     void TearDown() override
     {
-        if (runtime) runtime->destroy(runtime);
-        if (ecs) ecs->destroy(ecs);
-        if (task_scheduler) task_scheduler->destroy(task_scheduler);
+        if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
+        if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
+        if (task_scheduler_h.ref) task_scheduler_h.destroy(task_scheduler_h.ref);
     }
 };
 
@@ -126,19 +132,19 @@ TEST_F(RuntimeSpike, RegisterSystem_NullExecute_Rejected)
 TEST_F(RuntimeSpike, Create_RejectsNullEcs)
 {
     ke_runtime_params rt_params{};
-    ke_runtime *rt = nullptr;
+    ke_runtime_handle rt{};
     EXPECT_EQ(ke_runtime_create(nullptr, task_scheduler, &rt_params, &rt, NULL),
               KE_ERROR);
-    EXPECT_EQ(rt, nullptr);
+    EXPECT_EQ(rt.ref, nullptr);
 }
 
 TEST_F(RuntimeSpike, Create_RejectsNullTaskScheduler)
 {
     ke_runtime_params rt_params{};
-    ke_runtime *rt = nullptr;
+    ke_runtime_handle rt{};
     EXPECT_EQ(ke_runtime_create(ecs, nullptr, &rt_params, &rt, NULL),
               KE_ERROR);
-    EXPECT_EQ(rt, nullptr);
+    EXPECT_EQ(rt.ref, nullptr);
 }
 
 // ── Parallel execution via enki dispatcher ──────────────────────────────────

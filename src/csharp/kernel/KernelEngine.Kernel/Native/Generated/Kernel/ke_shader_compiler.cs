@@ -4,9 +4,6 @@ public unsafe partial struct ke_shader_compiler
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_shader_compiler *)")]
-    public delegate* unmanaged[Cdecl]<ke_shader_compiler*, void> destroy;
-
     [NativeTypeName("ke_result (*)(struct ke_shader_compiler *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_shader_compiler*, ke_error**, ke_result> on_initialize;
 

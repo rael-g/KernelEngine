@@ -30,6 +30,9 @@ public:
 
     ke_window* ToApi();
 
+    /// Owner-handle destroy: deletes the window-core instance.
+    static void DestroyApi(ke_window* self);
+
     // Dependency Injection
     void SetDevice(WindowDevice* device);
     void SetInput(ke_input* input);

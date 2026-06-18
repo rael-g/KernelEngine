@@ -24,6 +24,7 @@ ke_result
 ke_error
 ke_error_type
 ke_input
+ke_input_handle
 ke_input_snapshot
 ke_input_event
 ke_key

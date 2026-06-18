@@ -68,7 +68,7 @@ const char *ke_log_level_to_string(int32_t level)
     }
 }
 
-ke_result ke_logger_create(ke_logger **out_logger, ke_error **out_error)
+ke_result ke_logger_create(ke_logger_handle *out_logger, ke_error **out_error)
 {
     if (!out_logger) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
@@ -90,11 +90,11 @@ ke_result ke_logger_create(ke_logger **out_logger, ke_error **out_error)
     state->alloc = allocator;
 
     logger->handle     = state;
-    logger->destroy    = logger_destroy;
     logger->log        = logger_log;
     logger->flush      = logger_flush;
     logger->add_sink   = logger_add_sink;
 
-    *out_logger = logger;
+    out_logger->ref     = logger;
+    out_logger->destroy = logger_destroy;
     return KE_OK;
 }

@@ -5,16 +5,18 @@
 class AssetLoaderTest : public ::testing::Test {
 protected:
     ke_allocator* alloc = nullptr;
+    ke_asset_loader_handle loader_h{};
     ke_asset_loader* loader = nullptr;
 
     void SetUp() override {
         alloc = ke_allocator_malloc_create();
         ke_asset_loader_assimp_params params = { alloc, nullptr };
-        ke_asset_loader_assimp_create(&params, &loader, nullptr);
+        ke_asset_loader_assimp_create(&params, &loader_h, nullptr);
+        loader = loader_h.ref;
     }
 
     void TearDown() override {
-        if (loader) loader->destroy(loader);
+        if (loader_h.ref) loader_h.destroy(loader_h.ref);
         if (alloc) alloc->destroy(alloc);
     }
 };
@@ -22,12 +24,12 @@ protected:
 // --- Creation Tests ---
 
 TEST(AssetLoaderInitTest, Create_NullParams_ReturnsInvalidArgument) {
-    ke_asset_loader* l = nullptr;
+    ke_asset_loader_handle l{};
     ASSERT_EQ(ke_asset_loader_assimp_create(nullptr, &l, nullptr), KE_ERROR);
 }
 
 TEST(AssetLoaderInitTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_asset_loader* l = nullptr;
+    ke_asset_loader_handle l{};
     ke_asset_loader_assimp_params params = { nullptr, nullptr };
     ASSERT_EQ(ke_asset_loader_assimp_create(&params, &l, nullptr), KE_ERROR);
 }
@@ -41,10 +43,10 @@ TEST(AssetLoaderInitTest, Create_NullOut_ReturnsInvalidArgument) {
 
 TEST(AssetLoaderInitTest, Create_Success_ReturnsOk) {
     ke_allocator* a = ke_allocator_malloc_create();
-    ke_asset_loader* l = nullptr;
+    ke_asset_loader_handle l{};
     ke_asset_loader_assimp_params params = { a, nullptr };
     ASSERT_EQ(ke_asset_loader_assimp_create(&params, &l, nullptr), KE_OK);
-    l->destroy(l);
+    l.destroy(l.ref);
     a->destroy(a);
 }
 

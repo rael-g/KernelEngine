@@ -21,6 +21,9 @@ class BgfxShaderCompiler
 
     ke_shader_compiler *ToApi();
 
+    /// Owner-handle destroy: tears down the compiler and frees its allocation.
+    static void DestroyApi(ke_shader_compiler *self);
+
   private:
     ke_shader_compiler compiler_api_{};
 

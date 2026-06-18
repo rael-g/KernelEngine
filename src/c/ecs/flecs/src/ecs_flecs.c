@@ -259,7 +259,7 @@ static void ecs_flecs_destroy(ke_ecs *self)
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
-                              ke_ecs                   **out_ecs,
+                              ke_ecs_handle             *out_ecs,
                               ke_error                 **out_error)
 {
     (void)params;
@@ -291,8 +291,8 @@ ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     h->api.component_remove   = ecs_flecs_component_remove;
     h->api.component_get      = ecs_flecs_component_get;
     h->api.query              = ecs_flecs_query;
-    h->api.destroy            = ecs_flecs_destroy;
 
-    *out_ecs = &h->api;
+    out_ecs->ref     = &h->api;
+    out_ecs->destroy = ecs_flecs_destroy;
     return KE_OK;
 }

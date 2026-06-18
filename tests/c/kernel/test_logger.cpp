@@ -24,15 +24,17 @@ ke_logger_sink test_console_sink(ke_log_level min_level)
 
 class LoggerTest : public ::testing::Test {
 protected:
+    ke_logger_handle logger_h{};
     ke_logger* logger = nullptr;
 
     void SetUp() override {
-        ke_result res = ke_logger_create(&logger, NULL);
+        ke_result res = ke_logger_create(&logger_h, NULL);
         ASSERT_EQ(res, KE_OK);
+        logger = logger_h.ref;
     }
 
     void TearDown() override {
-        if (logger) logger->destroy(logger);
+        if (logger_h.ref) logger_h.destroy(logger_h.ref);
     }
 };
 
@@ -45,7 +47,7 @@ TEST(LoggerInitTest, Create_NullOutLogger_ReturnsInvalidArgument) {
 // --- Destroy Tests ---
 
 TEST_F(LoggerTest, Destroy_NullLogger_DoesNotCrash) {
-    auto destroy_fn = logger->destroy;
+    auto destroy_fn = logger_h.destroy;
     destroy_fn(nullptr);
     SUCCEED();
 }
@@ -53,8 +55,9 @@ TEST_F(LoggerTest, Destroy_NullLogger_DoesNotCrash) {
 TEST_F(LoggerTest, Destroy_WithSinks_Works) {
     ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
     logger->add_sink(logger, sink, NULL);
-    logger->destroy(logger);
+    logger_h.destroy(logger_h.ref);
     logger = nullptr;
+    logger_h = {};
     SUCCEED();
 }
 
@@ -151,8 +154,9 @@ TEST_F(LoggerTest, Destroy_CallsSinkDestroy) {
     sink.destroy = mock_sink_destroy;
     
     logger->add_sink(logger, sink, NULL);
-    logger->destroy(logger);
+    logger_h.destroy(logger_h.ref);
     logger = nullptr;
+    logger_h = {};
     
     ASSERT_EQ(destroy_count, 1);
 }

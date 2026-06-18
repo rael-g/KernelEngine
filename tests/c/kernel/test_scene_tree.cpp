@@ -8,19 +8,23 @@
 class SceneTreeTest : public ::testing::Test
 {
 protected:
+    ke_ecs_handle        ecs_h{};
+    ke_scene_tree_handle tree_h{};
     ke_ecs        *ecs       = nullptr;
     ke_scene_tree *tree      = nullptr;
 
     void SetUp() override
     {
         ke_ecs_flecs_params ep{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs, NULL), KE_OK);
-        ASSERT_EQ(ke_scene_tree_create(ecs, &tree, NULL), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs_h, NULL), KE_OK);
+        ecs = ecs_h.ref;
+        ASSERT_EQ(ke_scene_tree_create(ecs, &tree_h, NULL), KE_OK);
+        tree = tree_h.ref;
     }
     void TearDown() override
     {
-        if (tree && tree->destroy) tree->destroy(tree);
-        if (ecs && ecs->destroy)   ecs->destroy(ecs);
+        if (tree_h.ref && tree_h.destroy) tree_h.destroy(tree_h.ref);
+        if (ecs_h.ref && ecs_h.destroy)   ecs_h.destroy(ecs_h.ref);
     }
 };
 
@@ -173,7 +177,7 @@ TEST_F(SceneTreeTest, DestroyAll_ClearsChildrenButKeepsRoot)
 
 TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 {
-    ke_scene_tree *t = nullptr;
+    ke_scene_tree_handle t{};
     EXPECT_EQ(ke_scene_tree_create(nullptr, &t, NULL), KE_ERROR);
     EXPECT_EQ(ke_scene_tree_create(ecs, nullptr, NULL), KE_ERROR);
 }

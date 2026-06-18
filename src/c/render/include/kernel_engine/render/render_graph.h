@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_RENDER_RENDER_GRAPH_H_
+﻿#ifndef KERNEL_ENGINE_RENDER_RENDER_GRAPH_H_
 #define KERNEL_ENGINE_RENDER_RENDER_GRAPH_H_
 
 #include <kernel_engine/common/error.h>
@@ -196,7 +196,6 @@ extern "C"
     typedef struct ke_render_graph
     {
         void *handle;
-        void (*destroy)(struct ke_render_graph *self);
 
         /// @brief Declares a transient resource the graph allocates and recycles.
         ke_result (*declare_resource)(struct ke_render_graph *self, const ke_resource_desc *desc, ke_error **out_error);
@@ -225,13 +224,19 @@ extern "C"
         ke_result (*execute)(struct ke_render_graph *self, const struct ke_frame_packet *packet, ke_error **out_error);
     } ke_render_graph;
 
+    /* ke_render_graph_handle is defined in render.h (it is the return type of the
+       create_render_graph vtable slot, and only contains pointers). */
+
     /// @brief Convenience wrapper that delegates to @c renderer->create_render_graph.
     /// The graph holds a borrowed reference to the renderer — caller keeps ownership
-    /// and must outlive it. Returns NULL when the renderer does not implement the
-    /// graph contract or on allocation failure.
-    static inline ke_render_graph *ke_render_graph_create(struct ke_render *renderer, ke_allocator *allocator)
+    /// and must outlive it. Returns a handle whose @c ref is NULL when the renderer
+    /// does not implement the graph contract or on allocation failure.
+    static inline ke_render_graph_handle ke_render_graph_create(struct ke_render *renderer, ke_allocator *allocator)
     {
-        if (!renderer || !renderer->create_render_graph) return NULL;
+        if (!renderer || !renderer->create_render_graph) {
+            ke_render_graph_handle empty = {0};
+            return empty;
+        }
         return renderer->create_render_graph(renderer, allocator);
     }
 

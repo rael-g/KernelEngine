@@ -10,11 +10,13 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class Physics2D : IPhysics2D
 {
     private ke_physics_2d* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_physics_2d*, void> _destroy;
 
-    public Physics2D(ke_physics_2d* native)
+    public Physics2D(ke_physics_2d_handle handle)
     {
-        if (native == null) throw new ArgumentNullException(nameof(native));
-        _native = native;
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     public void SetGravity(Vector2 gravity)
@@ -91,7 +93,7 @@ public sealed unsafe class Physics2D : IPhysics2D
     {
         if (_native != null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

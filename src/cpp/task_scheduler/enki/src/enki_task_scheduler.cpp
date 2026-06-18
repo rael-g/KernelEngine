@@ -50,14 +50,6 @@ EnkiTaskScheduler::EnkiTaskScheduler(ke_allocator* alloc) : allocator_(alloc) {
     scheduler_ptr_ = scheduler;
     
     api_.handle = this;
-    api_.destroy = [](ke_task_scheduler* self) {
-        if (!self) return;
-        auto* internal = static_cast<EnkiTaskScheduler*>(self->handle);
-        auto* alloc = internal->allocator_;
-        internal->~EnkiTaskScheduler();
-        alloc->free(alloc, internal);
-    };
-
     api_.dispatch = [](ke_task_scheduler* self, ke_task_func func, void* data) -> ke_task* {
         if (!self || !self->handle || !func) return nullptr;
         return self->dispatch_on_complete(self, func, data, nullptr, nullptr);
@@ -160,18 +152,27 @@ ke_task_scheduler* EnkiTaskScheduler::ToApi() {
     return &api_;
 }
 
+void EnkiTaskScheduler::DestroyApi(ke_task_scheduler* self) {
+    if (!self) return;
+    auto* internal = static_cast<EnkiTaskScheduler*>(self->handle);
+    auto* alloc = internal->allocator_;
+    internal->~EnkiTaskScheduler();
+    alloc->free(alloc, internal);
+}
+
 } // namespace kernel_engine::task_scheduler::enki
 
 extern "C" {
-    ke_result ke_task_scheduler_enki_create(ke_allocator *allocator, ke_task_scheduler **out_scheduler, ke_error **out_error) {
+    ke_result ke_task_scheduler_enki_create(ke_allocator *allocator, ke_task_scheduler_handle *out_scheduler, ke_error **out_error) {
         if (!allocator || !out_scheduler) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
         void* mem = allocator->alloc(allocator, sizeof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler), alignof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler));
         if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocation failed");
 
         auto* internal = new (mem) kernel_engine::task_scheduler::enki::EnkiTaskScheduler(allocator);
-        *out_scheduler = internal->ToApi();
-        
+        out_scheduler->ref     = internal->ToApi();
+        out_scheduler->destroy = &kernel_engine::task_scheduler::enki::EnkiTaskScheduler::DestroyApi;
+
         return KE_OK;
     }
 }

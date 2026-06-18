@@ -110,7 +110,7 @@ static void world_destroy(struct ke_world *self) {
     // self lives in the same allocation as state — already freed.
 }
 
-ke_result ke_world_create(const ke_world_params *params, ke_world **out_world, ke_error **out_error) {
+ke_result ke_world_create(const ke_world_params *params, ke_world_handle *out_world, ke_error **out_error) {
     if (!params || !out_world) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     if (!params->ecs || !params->runtime) {
         return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "ecs and runtime are required");
@@ -142,7 +142,6 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world, k
     world->scene_tree              = world_scene_tree;
     world->register_component_apply = world_register_component_apply;
     world->get_component_apply     = world_get_component_apply;
-    world->destroy                 = world_destroy;
 
     // Register the framework's built-in component vocabulary with the ecs +
     // wire up each component's apply callback. component_register is
@@ -167,6 +166,7 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world, k
     REG(KE_COMPONENT_NAME_SPOT_LIGHT,        ke_spot_light_component,       ke_framework_apply_spot_light);
     #undef REG
 
-    *out_world = world;
+    out_world->ref     = world;
+    out_world->destroy = world_destroy;
     return KE_OK;
 }

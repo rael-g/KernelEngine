@@ -17,6 +17,7 @@ public sealed unsafe class Input : IInput, INativeInput
     // ── Instance members ──────────────────────────────────────────────────────
 
     private ke_input* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_input*, void> _destroy;
 
     public ke_input* Native
     {
@@ -29,13 +30,14 @@ public sealed unsafe class Input : IInput, INativeInput
 
     public Input(INativeLogger? logger)
     {
-        ke_input* native;
+        ke_input_handle handle;
         var res = InputNative.input_create(
             logger != null ? logger.Native : null,
-            &native, null);
+            &handle, null);
 
         KernelException.ThrowIfFailed(res.ToManaged(), nameof(InputNative.input_create));
-        _native = native;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>Updates internal state by processing pending messages in the pipe.</summary>
@@ -117,7 +119,7 @@ public sealed unsafe class Input : IInput, INativeInput
     {
         if (_native != null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

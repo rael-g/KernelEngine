@@ -74,9 +74,6 @@ public static unsafe partial class NativeMethods
     [NativeTypeName("#define KE_COMPONENT_INVALID ((ke_component_id)-1)")]
     public const uint KE_COMPONENT_INVALID = unchecked((uint)(-1));
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_ecs_sparse_set_create", ExactSpelling = true)]
-    public static extern ke_result ecs_sparse_set_create(ke_ecs_registry* registry, ke_allocator* alloc, ke_ecs** out_ecs, ke_error** out_error);
-
     [NativeTypeName("#define KE_HANDLE_NONE UINT32_MAX")]
     public const uint KE_HANDLE_NONE = 0xffffffffU;
 
@@ -99,7 +96,7 @@ public static unsafe partial class NativeMethods
     public static ReadOnlySpan<byte> KE_ID_SHADER_COMPILER => "ke_shader_compiler"u8;
 
     [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_cache_create", ExactSpelling = true)]
-    public static extern ke_result resource_cache_create([NativeTypeName("const ke_resource_cache_params *")] ke_resource_cache_params* @params, ke_resource_cache** out_cache, ke_error** out_error);
+    public static extern ke_result resource_cache_create([NativeTypeName("const ke_resource_cache_params *")] ke_resource_cache_params* @params, ke_resource_cache_handle* out_cache, ke_error** out_error);
 
     [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
     public const uint KE_RESOURCE_HANDLE_NONE = 0xffffffffU;

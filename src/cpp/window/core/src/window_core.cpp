@@ -9,11 +9,6 @@ WindowCore::WindowCore()
 {
     std::memset(&api_struct_, 0, sizeof(api_struct_));
     api_struct_.handle = this;
-    api_struct_.destroy = [](ke_window* self) {
-        if (!self) return;
-        auto* core = static_cast<WindowCore*>(self->handle);
-        delete core;
-    };
     api_struct_.on_initialize = [](ke_window* self, ke_error** out_error) {
         if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
         auto* core = static_cast<WindowCore*>(self->handle);
@@ -112,6 +107,13 @@ void* WindowCore::GetNativeHandle() const
 ke_window* WindowCore::ToApi()
 {
     return &api_struct_;
+}
+
+void WindowCore::DestroyApi(ke_window* self)
+{
+    if (!self) return;
+    auto* core = static_cast<WindowCore*>(self->handle);
+    delete core;
 }
 
 void WindowCore::SetDevice(WindowDevice* device)

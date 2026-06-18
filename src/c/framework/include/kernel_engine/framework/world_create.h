@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
 
 // ke_world_create — factory for the default framework world (the only export
@@ -29,7 +29,7 @@ extern "C"
 #endif
 
     KE_FRAMEWORK_API ke_result ke_world_create(
-        const ke_world_params *params, ke_world **out_world, ke_error **out_error);
+        const ke_world_params *params, ke_world_handle *out_world, ke_error **out_error);
 
 #ifdef __cplusplus
 }

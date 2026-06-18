@@ -21,8 +21,6 @@ extern "C"
     {
         void *handle;
 
-        void (*destroy)(struct ke_task_scheduler *self);
-
         ke_task *(*dispatch)(struct ke_task_scheduler *self, ke_task_func func, void *data);
 
         ke_task *(*dispatch_on_complete)(struct ke_task_scheduler *self,
@@ -42,6 +40,12 @@ extern "C"
         uint32_t (*get_num_workers)(struct ke_task_scheduler *self);
 
     } ke_task_scheduler;
+
+    typedef struct ke_task_scheduler_handle
+    {
+        ke_task_scheduler *ref;
+        void (*destroy)(ke_task_scheduler *self);
+    } ke_task_scheduler_handle;
 
 #ifdef __cplusplus
 }

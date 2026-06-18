@@ -11,6 +11,7 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class Logger : ILogger, INativeLogger, IDisposable
 {
     private ke_logger* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_logger*, void> _destroy;
 
     // GCHandles keep managed sinks alive while native code holds function pointers to them.
     private readonly List<GCHandle> _sinkHandles = [];
@@ -24,14 +25,13 @@ public sealed unsafe class Logger : ILogger, INativeLogger, IDisposable
         }
     }
 
-    private Logger(ke_logger* native) => _native = native;
-
     /// <summary>Creates a logger.</summary>
     public Logger()
     {
-        ke_logger* logger;
-        KernelException.ThrowIfFailed(LoggerNative.logger_create(&logger, null).ToManaged());
-        _native = logger;
+        ke_logger_handle handle;
+        KernelException.ThrowIfFailed(LoggerNative.logger_create(&handle, null).ToManaged());
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>Dispatches a log event to all registered sinks.</summary>
@@ -110,7 +110,7 @@ public sealed unsafe class Logger : ILogger, INativeLogger, IDisposable
     {
         if (_native != null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

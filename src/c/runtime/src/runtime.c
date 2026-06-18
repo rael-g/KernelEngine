@@ -588,7 +588,7 @@ static void runtime_destroy(ke_runtime *self)
 ke_result ke_runtime_create(ke_ecs                  *ecs,
                              ke_task_scheduler       *task_scheduler,
                              const ke_runtime_params *params,
-                             ke_runtime             **out_runtime,
+                             ke_runtime_handle       *out_runtime,
                              ke_error               **out_error)
 {
     if (!ecs || !task_scheduler || !out_runtime) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
@@ -615,8 +615,8 @@ ke_result ke_runtime_create(ke_ecs                  *ecs,
     h->api.register_module = runtime_register_module;
     h->api.register_system = runtime_register_system;
     h->api.tick            = runtime_tick;
-    h->api.destroy         = runtime_destroy;
 
-    *out_runtime = &h->api;
+    out_runtime->ref     = &h->api;
+    out_runtime->destroy = runtime_destroy;
     return KE_OK;
 }

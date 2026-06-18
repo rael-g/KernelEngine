@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 
 #include <kernel_engine/common/error.h>
@@ -75,8 +75,13 @@ extern "C"
         void  (*get_axis3d)(struct ke_input_actions *self, int32_t action_id,
                              float *out_x, float *out_y, float *out_z);
 
-        void (*destroy)(struct ke_input_actions *self);
     } ke_input_actions;
+
+    typedef struct ke_input_actions_handle
+    {
+        ke_input_actions *ref;
+        void (*destroy)(ke_input_actions *self);
+    } ke_input_actions_handle;
 
 #ifdef __cplusplus
 }

@@ -62,10 +62,10 @@ public static class ServiceCollectionExtensions
                 renderer_type = (uint)opts.Backend,
             };
 
-            ke_render* native;
+            ke_render_handle handle;
             KernelException.ThrowIfFailed(
-                KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &native, null).ToManaged());
-            return new KernelEngine.Kernel.Renderer(native);
+                KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &handle, null).ToManaged());
+            return new KernelEngine.Kernel.Renderer(handle);
         }
         finally
         {

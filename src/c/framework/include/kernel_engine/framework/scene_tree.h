@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
 
 #include <kernel_engine/common/error.h>
@@ -27,9 +27,14 @@ extern "C"
 
         void (*propagate_transforms)(struct ke_scene_tree *self);
 
-        void (*destroy)(struct ke_scene_tree *self);
 
     } ke_scene_tree;
+
+    typedef struct ke_scene_tree_handle
+    {
+        ke_scene_tree *ref;
+        void (*destroy)(ke_scene_tree *self);
+    } ke_scene_tree_handle;
 
 #ifdef __cplusplus
 }

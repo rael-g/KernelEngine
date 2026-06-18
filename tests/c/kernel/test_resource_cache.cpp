@@ -27,6 +27,7 @@ void marker_destroy(ke_resource_handle, void *ctx) {
 class ResourceCacheTest : public ::testing::Test
 {
 protected:
+    ke_resource_cache_handle cache_h{};
     ke_resource_cache *cache = nullptr;
 
     void SetUp() override
@@ -38,19 +39,21 @@ protected:
         ke_resource_cache_params params{};
         params.destroy_fn  = counting_destroy;
         params.destroy_ctx = nullptr;
-        ASSERT_EQ(ke_resource_cache_create(&params, &cache, NULL), KE_OK);
+        ASSERT_EQ(ke_resource_cache_create(&params, &cache_h, NULL), KE_OK);
+        cache = cache_h.ref;
     }
     void TearDown() override
     {
-        if (cache && cache->destroy) cache->destroy(cache);
+        if (cache_h.ref && cache_h.destroy) cache_h.destroy(cache_h.ref);
     }
 
     void make_cache_with_marker(int *marker) {
-        if (cache) cache->destroy(cache);
+        if (cache_h.ref) cache_h.destroy(cache_h.ref);
         ke_resource_cache_params params{};
         params.destroy_fn  = marker_destroy;
         params.destroy_ctx = marker;
-        ASSERT_EQ(ke_resource_cache_create(&params, &cache, NULL), KE_OK);
+        ASSERT_EQ(ke_resource_cache_create(&params, &cache_h, NULL), KE_OK);
+        cache = cache_h.ref;
     }
 };
 

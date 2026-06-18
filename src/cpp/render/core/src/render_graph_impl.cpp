@@ -53,14 +53,6 @@ RenderGraphImpl::RenderGraphImpl(CoreRenderer* renderer, ke_allocator* allocator
     std::memset(&api_, 0, sizeof(api_));
     api_.handle = this;
 
-    api_.destroy = [](ke_render_graph* self) {
-        if (!self || !self->handle) return;
-        auto* impl = static_cast<RenderGraphImpl*>(self->handle);
-        auto* alloc = impl->allocator_;
-        impl->~RenderGraphImpl();
-        if (alloc) alloc->free(alloc, impl);
-    };
-
     api_.declare_resource = [](ke_render_graph* self, const ke_resource_desc* desc, ke_error** out_error) {
         (void)out_error;
         if (!self || !self->handle) return KE_ERROR;
@@ -101,6 +93,15 @@ RenderGraphImpl::~RenderGraphImpl()
 ke_render_graph* RenderGraphImpl::ToApi()
 {
     return &api_;
+}
+
+void RenderGraphImpl::DestroyApi(ke_render_graph* self)
+{
+    if (!self || !self->handle) return;
+    auto* impl = static_cast<RenderGraphImpl*>(self->handle);
+    auto* alloc = impl->allocator_;
+    impl->~RenderGraphImpl();
+    if (alloc) alloc->free(alloc, impl);
 }
 
 // ── DeclareResource ──────────────────────────────────────────────────────

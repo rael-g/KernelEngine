@@ -288,7 +288,7 @@ static void vt_destroy(ke_resource_cache *self) {
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 ke_result ke_resource_cache_create(const ke_resource_cache_params *params,
-                                    ke_resource_cache             **out_cache,
+                                    ke_resource_cache_handle      *out_cache,
                                     ke_error                      **out_error) {
     if (!params || !out_cache) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
@@ -315,8 +315,8 @@ ke_result ke_resource_cache_create(const ke_resource_cache_params *params,
     s->api.try_get_cached    = vt_try_get_cached;
     s->api.cache_insert      = vt_cache_insert;
     s->api.cache_evict       = vt_cache_evict;
-    s->api.destroy           = vt_destroy;
 
-    *out_cache = &s->api;
+    out_cache->ref     = &s->api;
+    out_cache->destroy = vt_destroy;
     return KE_OK;
 }

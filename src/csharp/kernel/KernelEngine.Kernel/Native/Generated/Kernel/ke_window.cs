@@ -4,9 +4,6 @@ public unsafe partial struct ke_window
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, void> destroy;
-
     [NativeTypeName("ke_result (*)(struct ke_window *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_window*, ke_error**, ke_result> on_initialize;
 

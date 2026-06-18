@@ -12,6 +12,7 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class Renderer : IRenderer
 {
     private ke_render* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_render*, void> _destroy;
 
     public ke_render* Native
     {
@@ -23,12 +24,13 @@ public sealed unsafe class Renderer : IRenderer
     }
 
     /// <summary>
-    /// Wraps an already-created <c>ke_render*</c> without triggering backend initialization.
+    /// Wraps an owner <c>ke_render_handle</c> without triggering backend initialization.
     /// Call <see cref="Initialize"/> on the thread that should become the bgfx API thread.
     /// </summary>
-    public Renderer(ke_render* native)
+    public Renderer(ke_render_handle handle)
     {
-        _native = native;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>
@@ -416,7 +418,7 @@ public sealed unsafe class Renderer : IRenderer
         if (_native == null) return; // idempotent — ke.render disposes first; DI container may call again from ke.main
         KernelThread.AssertCurrent("ke.render");
         _native->on_shutdown(_native, null);
-        _native->destroy(_native);
+        if (_destroy != null) _destroy(_native);
         _native = null;
     }
 }

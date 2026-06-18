@@ -7,5 +7,5 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_text_stb_truetype", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_font_loader_stb_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Kernel.Native.ke_result font_loader_stb_create([NativeTypeName("const ke_font_loader_stb_params *")] ke_font_loader_stb_params* @params, ke_font_loader** @out, ke_error** out_error);
+    public static extern KernelEngine.Kernel.Native.ke_result font_loader_stb_create([NativeTypeName("const ke_font_loader_stb_params *")] ke_font_loader_stb_params* @params, ke_font_loader_handle* @out, ke_error** out_error);
 }

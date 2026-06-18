@@ -10,11 +10,13 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class Audio : IAudio
 {
     private ke_audio* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_audio*, void> _destroy;
 
-    public Audio(ke_audio* native)
+    public Audio(ke_audio_handle handle)
     {
-        if (native == null) throw new ArgumentNullException(nameof(native));
-        _native = native;
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     public SoundHandle LoadSound(string path)
@@ -59,7 +61,7 @@ public sealed unsafe class Audio : IAudio
     {
         if (_native != null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

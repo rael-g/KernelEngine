@@ -42,6 +42,9 @@ public:
     /// Wires the vtable returned to user code. Owns this — destruction frees it.
     ke_render_graph* ToApi();
 
+    /// Owner-handle destroy: tears down the graph and frees its allocation.
+    static void DestroyApi(ke_render_graph* self);
+
     // ── API surface, called via vtable trampolines ─────────────────────────
     ke_result DeclareResource(const ke_resource_desc* desc);
     ke_result ImportTexture(const char* name, ke_texture_handle handle);

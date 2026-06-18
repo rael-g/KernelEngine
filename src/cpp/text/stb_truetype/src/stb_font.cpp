@@ -154,7 +154,7 @@ ke_result load_font(struct ke_font_loader *self,
 } // namespace
 
 extern "C"
-ke_result ke_font_loader_stb_create(const ke_font_loader_stb_params *params, ke_font_loader **out, ke_error **out_error)
+ke_result ke_font_loader_stb_create(const ke_font_loader_stb_params *params, ke_font_loader_handle *out, ke_error **out_error)
 {
     if (!params || !out || !params->allocator) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
@@ -167,10 +167,10 @@ ke_result ke_font_loader_stb_create(const ke_font_loader_stb_params *params, ke_
     l->logger    = params->logger;
 
     l->api.handle    = l;
-    l->api.destroy   = destroy_loader;
     l->api.load_font = load_font;
     l->api.free_font = free_font;
 
-    *out = &l->api;
+    out->ref     = &l->api;
+    out->destroy = destroy_loader;
     return KE_OK;
 }

@@ -5,6 +5,7 @@
 class StbFontTest : public ::testing::Test {
 protected:
     ke_allocator* allocator = nullptr;
+    ke_font_loader_handle loader_h{};
     ke_font_loader* loader = nullptr;
 
     void SetUp() override {
@@ -12,15 +13,16 @@ protected:
         ke_font_loader_stb_params params{};
         params.allocator = allocator;
         params.logger = nullptr;
-        
-        ke_result res = ke_font_loader_stb_create(&params, &loader, nullptr);
+
+        ke_result res = ke_font_loader_stb_create(&params, &loader_h, nullptr);
         ASSERT_EQ(res, KE_OK);
+        loader = loader_h.ref;
         ASSERT_NE(loader, nullptr);
     }
 
     void TearDown() override {
-        if (loader) {
-            loader->destroy(loader);
+        if (loader_h.ref) {
+            loader_h.destroy(loader_h.ref);
         }
         if (allocator) {
             allocator->destroy(allocator);
@@ -29,7 +31,7 @@ protected:
 };
 
 TEST_F(StbFontTest, Create_NullParams_ReturnsInvalidArgument) {
-    ke_font_loader* l = nullptr;
+    ke_font_loader_handle l{};
     ASSERT_EQ(ke_font_loader_stb_create(nullptr, &l, nullptr), KE_ERROR);
 }
 
@@ -40,7 +42,7 @@ TEST_F(StbFontTest, Create_NullOut_ReturnsInvalidArgument) {
 }
 
 TEST_F(StbFontTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_font_loader* l = nullptr;
+    ke_font_loader_handle l{};
     ke_font_loader_stb_params p{};
     p.allocator = nullptr;
     ASSERT_EQ(ke_font_loader_stb_create(&p, &l, nullptr), KE_ERROR);
@@ -97,5 +99,5 @@ TEST_F(StbFontTest, LoadFont_Successful_OnWindows) {
 }
 
 TEST_F(StbFontTest, Destroy_NullHandle_IsSafe) {
-    loader->destroy(nullptr);
+    loader_h.destroy(nullptr);
 }

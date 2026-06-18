@@ -9,7 +9,7 @@
 #include <new>
 
 extern "C" {
-    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render **out_render, ke_error **out_error) {
+    KE_RENDER_BGFX_API ke_result ke_render_bgfx_create(const ke_render_bgfx_params *params, ke_render_handle *out_render, ke_error **out_error) {
         if (!out_render || !params || !params->allocator) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
         auto* alloc = params->allocator;
@@ -42,7 +42,8 @@ extern "C" {
         auto* renderer = new (renderer_mem) kernel_engine::render::core::CoreRenderer(core_params);
         renderer->SetGpuDevice(device);
 
-        *out_render = renderer->ToApi();
+        out_render->ref     = renderer->ToApi();
+        out_render->destroy = &kernel_engine::render::core::CoreRenderer::DestroyApi;
         return KE_OK;
     }
 }

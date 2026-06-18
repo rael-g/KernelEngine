@@ -24,7 +24,4 @@ public unsafe partial struct ke_asset_resolver
 
     [NativeTypeName("void (*)(struct ke_asset_resolver *, ke_font_data *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, ke_font_data*, void> free_font;
-
-    [NativeTypeName("void (*)(struct ke_asset_resolver *)")]
-    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, void> destroy;
 }

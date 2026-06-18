@@ -4,9 +4,6 @@ public unsafe partial struct ke_task_scheduler
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_task_scheduler *)")]
-    public delegate* unmanaged[Cdecl]<ke_task_scheduler*, void> destroy;
-
     [NativeTypeName("ke_task *(*)(struct ke_task_scheduler *, ke_task_func, void *)")]
     public delegate* unmanaged[Cdecl]<ke_task_scheduler*, delegate* unmanaged[Cdecl]<void*, void>, void*, ke_task*> dispatch;
 

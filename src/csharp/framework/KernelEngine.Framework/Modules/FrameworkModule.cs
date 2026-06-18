@@ -35,15 +35,15 @@ public sealed class FrameworkModule : IRuntimeModule
             var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
             {
-                ke_scene_tree* tree;
+                ke_scene_tree_handle tree;
                 KernelException.ThrowIfFailed(
                     Native.NativeMethods.scene_tree_create(flecsEcs.Native, &tree, null).ToManaged());
 
                 ke_world_params p = default;
                 p.ecs        = flecsEcs.Native;
                 p.runtime    = rtRuntime.Native;
-                p.scene_tree = tree;
-                ke_world* w;
+                p.scene_tree = tree.@ref;
+                ke_world_handle w;
                 KernelException.ThrowIfFailed(
                     Native.NativeMethods.world_create(&p, &w, null).ToManaged());
                 return new World(w, tree, ecs, runtime);

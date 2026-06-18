@@ -3,15 +3,17 @@
 
 class InputTest : public ::testing::Test {
 protected:
+    ke_input_handle input_h{};
     ke_input* input = nullptr;
 
     void SetUp() override {
-        ke_result res = ke_input_create(nullptr, &input, NULL);
+        ke_result res = ke_input_create(nullptr, &input_h, NULL);
         ASSERT_EQ(res, KE_OK);
+        input = input_h.ref;
     }
 
     void TearDown() override {
-        if (input) input->destroy(input);
+        if (input_h.ref) input_h.destroy(input_h.ref);
     }
 };
 
@@ -24,17 +26,18 @@ TEST(InputInitTest, Create_NullOutInput_ReturnsInvalidArgument) {
 // --- Destroy Tests ---
 
 TEST(InputDestroyTest, Destroy_NullInput_DoesNotCrash) {
-    ke_input* i = nullptr;
+    ke_input_handle i{};
     ke_input_create(nullptr, &i, NULL);
-    auto destroy_fn = i->destroy;
-    i->destroy(i);
+    auto destroy_fn = i.destroy;
+    i.destroy(i.ref);
     destroy_fn(nullptr);
     SUCCEED();
 }
 
 TEST_F(InputTest, Destroy_WorksNormally) {
-    input->destroy(input);
+    input_h.destroy(input_h.ref);
     input = nullptr;
+    input_h = {};
     SUCCEED();
 }
 

@@ -15,6 +15,9 @@ public:
 
     struct ke_task_scheduler* ToApi();
 
+    /// Owner-handle destroy: tears down the scheduler and frees its allocation.
+    static void DestroyApi(struct ke_task_scheduler* self);
+
 private:
     void* scheduler_ptr_; 
     struct ke_allocator* allocator_;

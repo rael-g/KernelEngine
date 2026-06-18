@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_H_
+﻿#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_H_
 #define KERNEL_ENGINE_RUNTIME_RUNTIME_H_
 
 #include <kernel_engine/common/error.h>
@@ -64,8 +64,12 @@ typedef struct ke_runtime {
     ke_result (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_module_id *out_id, ke_error **out_error);
     ke_result (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_system_id *out_id, ke_error **out_error);
     ke_result (*tick)(ke_runtime *self, float dt, ke_error **out_error);
-    void      (*destroy)(ke_runtime *self);
 } ke_runtime;
+
+typedef struct ke_runtime_handle {
+    ke_runtime *ref;
+    void (*destroy)(ke_runtime *self);
+} ke_runtime_handle;
 
 #ifdef __cplusplus
 }

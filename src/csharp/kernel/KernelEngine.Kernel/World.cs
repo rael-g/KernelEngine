@@ -12,6 +12,8 @@ public sealed unsafe class World : IDisposable
 {
     private ke_world*      _native;
     private ke_scene_tree* _ownedTree;
+    private readonly delegate* unmanaged[Cdecl]<ke_world*, void>      _destroyWorld;
+    private readonly delegate* unmanaged[Cdecl]<ke_scene_tree*, void> _destroyTree;
     private SceneTree?     _sceneTree;
 
     // Keeps managed apply delegate wrappers alive so the GC doesn't collect
@@ -38,12 +40,14 @@ public sealed unsafe class World : IDisposable
     /// Creates a <see cref="World"/> wrapper that also owns <paramref name="ownedTree"/>,
     /// destroying it on <see cref="Dispose"/> after the world is destroyed.
     /// </summary>
-    public World(ke_world* native, ke_scene_tree* ownedTree, IEcsRegistry ecs, IRuntime runtime)
+    public World(ke_world_handle worldHandle, ke_scene_tree_handle treeHandle, IEcsRegistry ecs, IRuntime runtime)
     {
-        _native    = native;
-        _ownedTree = ownedTree;
-        Ecs        = ecs;
-        Runtime    = runtime;
+        _native       = worldHandle.@ref;
+        _destroyWorld = worldHandle.destroy;
+        _ownedTree    = treeHandle.@ref;
+        _destroyTree  = treeHandle.destroy;
+        Ecs           = ecs;
+        Runtime       = runtime;
     }
 
     /// <summary>
@@ -106,12 +110,12 @@ public sealed unsafe class World : IDisposable
     {
         if (_native is not null)
         {
-            _native->destroy(_native);
+            if (_destroyWorld != null) _destroyWorld(_native);
             _native = null;
         }
         if (_ownedTree is not null)
         {
-            _ownedTree->destroy(_ownedTree);
+            if (_destroyTree != null) _destroyTree(_ownedTree);
             _ownedTree = null;
         }
         foreach (var h in _applyHandles)

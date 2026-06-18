@@ -31,6 +31,7 @@ namespace KernelEngine.Framework;
 public sealed unsafe class NativeInputActions : IDisposable
 {
     private ke_input_actions* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_input_actions*, void> _destroy;
 
     [System.Runtime.CompilerServices.ModuleInitializer]
     internal static void InitPendingException() => s_pendingException = null;
@@ -42,10 +43,11 @@ public sealed unsafe class NativeInputActions : IDisposable
     /// <summary>Creates a native input-actions instance.</summary>
     public NativeInputActions()
     {
-        ke_input_actions* p;
+        ke_input_actions_handle handle;
         KernelException.ThrowIfFailed(
-            KernelEngine.Framework.Native.NativeMethods.input_actions_create(&p, null).ToManaged());
-        _native = p;
+            KernelEngine.Framework.Native.NativeMethods.input_actions_create(&handle, null).ToManaged());
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>
@@ -222,7 +224,7 @@ public sealed unsafe class NativeInputActions : IDisposable
     /// <inheritdoc cref="IDisposable.Dispose"/>
     public void Dispose()
     {
-        if (_native is not null) { _native->destroy(_native); _native = null; }
+        if (_native is not null) { if (_destroy != null) _destroy(_native); _native = null; }
         if (_eventHandle.IsAllocated) _eventHandle.Free();
         _eventClosure = null;
     }

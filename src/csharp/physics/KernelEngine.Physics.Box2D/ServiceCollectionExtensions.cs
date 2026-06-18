@@ -41,10 +41,10 @@ public static class ServiceCollectionExtensions
                     gravity_y = opts.GravityY,
                 };
 
-                ke_physics_2d* native;
+                ke_physics_2d_handle handle;
                 KernelException.ThrowIfFailed(
-                    KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(&@params, &native, null).ToManaged());
-                return new Physics2D(native);
+                    KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(&@params, &handle, null).ToManaged());
+                return new Physics2D(handle);
             }
         });
         return services;

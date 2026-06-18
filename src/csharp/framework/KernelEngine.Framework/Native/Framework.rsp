@@ -150,6 +150,11 @@ ke_
 ke_logger
 ke_task_scheduler
 ke_world
+ke_world_handle
+ke_scene_tree_handle
+ke_scene_loader_handle
+ke_input_actions_handle
+ke_asset_resolver_handle
 ke_world_params
 ke_scene_tree
 ke_transform_component

@@ -4,9 +4,6 @@ public unsafe partial struct ke_input
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_input *)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, void> destroy;
-
     [NativeTypeName("ke_result (*)(struct ke_input *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_input*, ke_error**, ke_result> update;
 

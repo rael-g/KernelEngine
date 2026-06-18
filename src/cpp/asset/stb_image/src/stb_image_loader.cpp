@@ -93,7 +93,7 @@ void free_image(ke_image_loader *self, ke_texture_data *data)
 
 extern "C" KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(
     const ke_image_loader_stb_params *params,
-    ke_image_loader **out,
+    ke_image_loader_handle *out,
     ke_error **out_error)
 {
     if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
@@ -107,10 +107,10 @@ extern "C" KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(
     auto *loader = static_cast<ke_image_loader *>(alloc->alloc(alloc, sizeof(ke_image_loader), alignof(ke_image_loader)));
     if (!loader) { alloc->free(alloc, state); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed"); }
     loader->handle     = state;
-    loader->destroy    = &destroy;
     loader->load_image = &load_image;
     loader->free_image = &free_image;
 
-    *out = loader;
+    out->ref     = loader;
+    out->destroy = &destroy;
     return KE_OK;
 }

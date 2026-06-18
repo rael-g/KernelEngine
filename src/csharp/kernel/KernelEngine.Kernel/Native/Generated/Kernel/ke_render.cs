@@ -4,9 +4,6 @@ public unsafe partial struct ke_render
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_render *)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, void> destroy;
-
     [NativeTypeName("ke_result (*)(struct ke_render *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_error**, ke_result> on_initialize;
 
@@ -109,8 +106,8 @@ public unsafe partial struct ke_render
     [NativeTypeName("const char *(*)(struct ke_render *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, sbyte*> get_last_fatal_error;
 
-    [NativeTypeName("struct ke_render_graph *(*)(struct ke_render *, struct ke_allocator *)")]
-    public delegate* unmanaged[Cdecl]<ke_render*, ke_allocator*, ke_render_graph*> create_render_graph;
+    [NativeTypeName("ke_render_graph_handle (*)(struct ke_render *, struct ke_allocator *)")]
+    public delegate* unmanaged[Cdecl]<ke_render*, ke_allocator*, ke_render_graph_handle> create_render_graph;
 
     [NativeTypeName("struct ke_render_graph *(*)(struct ke_render *)")]
     public delegate* unmanaged[Cdecl]<ke_render*, ke_render_graph*> get_render_graph;

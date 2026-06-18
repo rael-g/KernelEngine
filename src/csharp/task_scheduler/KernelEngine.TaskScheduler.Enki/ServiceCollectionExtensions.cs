@@ -15,9 +15,9 @@ public static class ServiceCollectionExtensions
             
             unsafe
             {
-                ke_task_scheduler* nativeScheduler;
-                KernelException.ThrowIfFailed(KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(allocator.Native, &nativeScheduler, null).ToManaged());
-                return new KernelEngine.Kernel.TaskScheduler(nativeScheduler);
+                ke_task_scheduler_handle handle;
+                KernelException.ThrowIfFailed(KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(allocator.Native, &handle, null).ToManaged());
+                return new KernelEngine.Kernel.TaskScheduler(handle);
             }
         });
         

@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_RENDER_SHADER_COMPILER_H_
+﻿#ifndef KERNEL_ENGINE_RENDER_SHADER_COMPILER_H_
 #define KERNEL_ENGINE_RENDER_SHADER_COMPILER_H_
 
 #include <kernel_engine/common/error.h>
@@ -17,7 +17,6 @@ extern "C"
     typedef struct ke_shader_compiler
     {
         void *handle;
-        void (*destroy)(struct ke_shader_compiler *self);
 
         ke_result (*on_initialize)(struct ke_shader_compiler *self, ke_error **out_error);
         ke_result (*on_shutdown)(struct ke_shader_compiler *self, ke_error **out_error);
@@ -27,6 +26,12 @@ extern "C"
                                     const char *profile, const char **include_paths, size_t include_count,
                                     ke_error **out_error);
     } ke_shader_compiler;
+
+    typedef struct ke_shader_compiler_handle
+    {
+        ke_shader_compiler *ref;
+        void (*destroy)(ke_shader_compiler *self);
+    } ke_shader_compiler_handle;
 
 #ifdef __cplusplus
 }

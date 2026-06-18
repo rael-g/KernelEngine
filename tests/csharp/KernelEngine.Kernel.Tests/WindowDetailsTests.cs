@@ -26,6 +26,9 @@ public unsafe class WindowDetailsTests
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
     private static ke_result MockShutdown(ke_window* self, ke_error** out_error) => ke_result.KE_OK;
 
+    private static ke_window_handle MakeHandle(ke_window* ptr) =>
+        new ke_window_handle { @ref = ptr, destroy = &MockDestroy };
+
     [Fact]
     public void GetSize_ReturnsCorrectValues()
     {
@@ -33,9 +36,8 @@ public unsafe class WindowDetailsTests
         mock->on_initialize = &MockInit;
         mock->get_size = &MockGetSize;
         mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
 
-        using (var window = new Window(mock))
+        using (var window = new Window(MakeHandle(mock)))
         {
             var res = window.GetSize();
             Assert.True(res.IsOk);
@@ -52,9 +54,8 @@ public unsafe class WindowDetailsTests
         mock->on_initialize = &MockInit;
         mock->get_native_handle = &MockGetHandle;
         mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
 
-        using (var window = new Window(mock))
+        using (var window = new Window(MakeHandle(mock)))
         {
             unchecked
             {

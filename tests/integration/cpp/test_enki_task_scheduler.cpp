@@ -8,17 +8,19 @@
 class EnkiTaskSchedulerTest : public ::testing::Test {
 protected:
     ke_allocator* allocator = nullptr;
+    ke_task_scheduler_handle scheduler_h{};
     ke_task_scheduler* scheduler = nullptr;
 
     void SetUp() override {
         allocator = ke_allocator_malloc_create();
-        ke_result res = ke_task_scheduler_enki_create(allocator, &scheduler, NULL);
+        ke_result res = ke_task_scheduler_enki_create(allocator, &scheduler_h, NULL);
         ASSERT_EQ(res, KE_OK);
+        scheduler = scheduler_h.ref;
     }
 
     void TearDown() override {
-        if (scheduler) {
-            scheduler->destroy(scheduler);
+        if (scheduler_h.ref) {
+            scheduler_h.destroy(scheduler_h.ref);
         }
         if (allocator) {
             allocator->destroy(allocator);
@@ -86,8 +88,9 @@ TEST_F(EnkiTaskSchedulerTest, API_NullChecks) {
 }
 
 TEST_F(EnkiTaskSchedulerTest, Destroy_NullSelf_IsSafe) {
-    auto d = scheduler->destroy;
-    scheduler->destroy(scheduler);
+    auto d = scheduler_h.destroy;
+    scheduler_h.destroy(scheduler_h.ref);
     scheduler = nullptr;
+    scheduler_h = {};
     d(nullptr);
 }

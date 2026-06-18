@@ -9,6 +9,7 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class Window : IWindow
 {
     private ke_window* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_window*, void> _destroy;
 
     public ke_window* Native
     {
@@ -20,11 +21,12 @@ public sealed unsafe class Window : IWindow
     }
 
     /// <summary>
-    /// Wraps an already-created <c>ke_window*</c> and calls <c>on_initialize</c>.
+    /// Wraps an owner <c>ke_window_handle</c> and calls <c>on_initialize</c>.
     /// </summary>
-    public Window(ke_window* native)
+    public Window(ke_window_handle handle)
     {
-        _native = native;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
         // In constructor we still throw because if initialization fails, the object is unusable.
         KernelException.ThrowIfFailed(_native->on_initialize(_native, null).ToManaged());
     }
@@ -51,7 +53,7 @@ public sealed unsafe class Window : IWindow
         if (_native != null)
         {
             _native->on_shutdown(_native, null);
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

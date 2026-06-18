@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
 
 #include <kernel_engine/framework/scene_tree.h>
@@ -32,7 +32,7 @@ extern "C"
     /// caller invokes tree->destroy(tree) when done.
     KE_FRAMEWORK_API ke_result ke_scene_tree_create(
         ke_ecs         *ecs,
-        ke_scene_tree **out_tree,
+        ke_scene_tree_handle *out_tree,
         ke_error      **out_error);
 
 #ifdef __cplusplus

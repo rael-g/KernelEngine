@@ -54,6 +54,9 @@ public:
 
     ke_render *ToApi();
 
+    /// Owner-handle destroy: tears down the renderer and frees its allocation.
+    static void DestroyApi(ke_render *self);
+
     /// @brief Accessor used by the render-graph executor to reach the shared
     /// renderer state (GPU device, logger, allocator) without re-passing
     /// them on every call. Not stable public API — internal to render-core.
@@ -66,11 +69,11 @@ public:
     /// @brief Creates a render graph bound to this renderer. Wired through the
     /// @c create_render_graph slot on @c ke_render so callers go through the
     /// generic kernel contract.
-    struct ke_render_graph* CreateRenderGraph(ke_allocator* allocator);
+    ke_render_graph_handle CreateRenderGraph(ke_allocator* allocator);
 
     /// @brief Returns the renderer's active graph (the one executed on
     /// @c SubmitPacket). Used by external/managed code to plug new passes
-    /// into the running chain.
+    /// into the running chain. Returns a borrow — ownership stays with the renderer.
     struct ke_render_graph* GetRenderGraph() { return graph_; }
 
     void SetShaderProvider(ShaderProviderInterface* provider);
@@ -163,7 +166,8 @@ private:
     render::GpuProgramHandle ui_quad_program_     = render::kGpuInvalidHandle;
 
     ke_render render_api_{};
-    struct ke_render_graph* graph_ = nullptr; // owned; built in OnInitialize.
+    ke_render_graph_handle  graph_owner_{};     // owner handle; built in OnInitialize.
+    struct ke_render_graph* graph_ = nullptr;   // borrow of graph_owner_.ref, for internal calls.
     struct ke_window* window_ = nullptr;
     std::string shader_path_;
     uint32_t renderer_type_ = 0;

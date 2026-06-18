@@ -192,7 +192,7 @@ static void input_destroy(ke_input *self)
     a->destroy(a);
 }
 
-ke_result ke_input_create(struct ke_logger *log, ke_input **out_input, ke_error **out_error)
+ke_result ke_input_create(struct ke_logger *log, ke_input_handle *out_input, ke_error **out_error)
 {
     if (!out_input) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
@@ -208,7 +208,6 @@ ke_result ke_input_create(struct ke_logger *log, ke_input **out_input, ke_error 
     impl->allocator = alloc;
 
     api->handle = impl;
-    api->destroy = input_destroy;
     api->update = input_update;
     
     api->is_key_pressed = input_is_key_pressed;
@@ -222,6 +221,7 @@ ke_result ke_input_create(struct ke_logger *log, ke_input **out_input, ke_error 
     api->on_mouse_button = input_on_mouse_button;
     api->on_mouse_scroll = input_on_mouse_scroll;
 
-    *out_input = api;
+    out_input->ref     = api;
+    out_input->destroy = input_destroy;
     return KE_OK;
 }

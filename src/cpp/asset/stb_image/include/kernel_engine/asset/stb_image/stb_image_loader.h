@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/stb_image/asset_export.h>
@@ -19,7 +19,7 @@ typedef struct ke_image_loader_stb_params
 /// @param out     Receives the created loader on success.
 KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(
     const ke_image_loader_stb_params *params,
-    ke_image_loader **out,
+    ke_image_loader_handle *out,
     ke_error **out_error);
 
 #ifdef __cplusplus

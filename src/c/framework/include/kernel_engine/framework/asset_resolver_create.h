@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
 
 #include <kernel_engine/asset/asset_resolver.h>
@@ -36,7 +36,7 @@ extern "C"
         ke_image_loader    *image_loader,
         ke_font_loader     *font_loader,
         const char         *project_root,
-        ke_asset_resolver **out,
+        ke_asset_resolver_handle *out,
         ke_error          **out_error);
 
 #ifdef __cplusplus

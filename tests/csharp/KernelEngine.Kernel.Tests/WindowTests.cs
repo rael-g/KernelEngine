@@ -39,6 +39,9 @@ public unsafe class WindowTests
         return 1;
     }
 
+    private static ke_window_handle MakeHandle(ke_window* ptr) =>
+        new ke_window_handle { @ref = ptr, destroy = &MockDestroy };
+
     [Fact]
     public void Lifecycle_CallsNativeFunctions()
     {
@@ -48,19 +51,18 @@ public unsafe class WindowTests
 
         ke_window* mock = (ke_window*)NativeMemory.Alloc((nuint)sizeof(ke_window));
         NativeMemory.Clear(mock, (nuint)sizeof(ke_window));
-        
+
         mock->on_initialize = &MockInitialize;
         mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
 
         {
-            using var window = new Window(mock);
+            using var window = new Window(MakeHandle(mock));
             Assert.Equal(1, _initializeCalled);
         }
 
         Assert.Equal(1, _shutdownCalled);
         Assert.Equal(1, _destroyCalled);
-        
+
         NativeMemory.Free(mock);
     }
 
@@ -71,18 +73,17 @@ public unsafe class WindowTests
 
         ke_window* mock = (ke_window*)NativeMemory.Alloc((nuint)sizeof(ke_window));
         NativeMemory.Clear(mock, (nuint)sizeof(ke_window));
-        
+
         mock->on_initialize = &MockInitialize;
         mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
         mock->should_close = &MockShouldClose;
 
-        using (var window = new Window(mock))
+        using (var window = new Window(MakeHandle(mock)))
         {
             Assert.True(window.ShouldClose());
             Assert.Equal(1, _shouldCloseCalled);
         }
-        
+
         NativeMemory.Free(mock);
     }
 }

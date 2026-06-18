@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // Plugin public C ABI: the only remaining contract is the frame-sync ring buffer
 // (sim↔render handoff). Thread spawning and semaphores were removed when their
@@ -21,7 +21,7 @@ extern "C"
                                                         uint32_t        draw_capacity,
                                                         uint32_t        point_capacity,
                                                         uint32_t        spot_capacity,
-                                                        ke_frame_sync **out,
+                                                        ke_frame_sync_handle *out,
                                                         ke_error      **out_error);
 
 #ifdef __cplusplus

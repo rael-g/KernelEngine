@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_CREATE_H_
 
 #include <kernel_engine/framework/scene_loader.h>
@@ -38,7 +38,7 @@ extern "C"
     KE_FRAMEWORK_API ke_result ke_scene_loader_create(
         struct ke_world   *world,
         const char        *project_root,
-        ke_scene_loader  **out_loader,
+        ke_scene_loader_handle  *out_loader,
         ke_error         **out_error);
 
 #ifdef __cplusplus

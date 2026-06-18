@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_RENDER_RENDER_H_
+﻿#ifndef KERNEL_ENGINE_RENDER_RENDER_H_
 #define KERNEL_ENGINE_RENDER_RENDER_H_
 
 #include <kernel_engine/common/error.h>
@@ -19,8 +19,16 @@ extern "C"
 #endif
 
     struct ke_frame_packet;
-    struct ke_render_graph;
+    typedef struct ke_render_graph ke_render_graph;
     struct ke_allocator;
+
+    /// @brief Owner wrapper for a render graph (only pointers, so a forward decl suffices).
+    /// Full graph definition + the ke_render_graph_create wrapper live in render_graph.h.
+    typedef struct ke_render_graph_handle
+    {
+        ke_render_graph *ref;
+        void (*destroy)(ke_render_graph *self);
+    } ke_render_graph_handle;
 
 #define KE_ID_RENDER "ke_render"
 
@@ -48,7 +56,6 @@ extern "C"
     typedef struct ke_render
     {
         void *handle;
-        void (*destroy)(struct ke_render *self);
 
         ke_result (*on_initialize)(struct ke_render *self, ke_error **out_error);
         ke_result (*on_shutdown)(struct ke_render *self, ke_error **out_error);
@@ -163,7 +170,7 @@ extern "C"
         ///        graph executor (DAG sort, transient resource pool, view-id assignment); the
         ///        kernel only declares the contract (see kernel/render/render_graph.h).
         ///        Callers usually use the @c ke_render_graph_create convenience wrapper.
-        struct ke_render_graph *(*create_render_graph)(struct ke_render *self, struct ke_allocator *allocator);
+        ke_render_graph_handle (*create_render_graph)(struct ke_render *self, struct ke_allocator *allocator);
 
         /// @brief Returns the renderer's *active* graph — the one whose passes
         ///        are executed every @c submit_packet. Managed/plugin code adds
@@ -173,6 +180,12 @@ extern "C"
         struct ke_render_graph *(*get_render_graph)(struct ke_render *self);
 
     } ke_render;
+
+    typedef struct ke_render_handle
+    {
+        ke_render *ref;
+        void (*destroy)(ke_render *self);
+    } ke_render_handle;
 
 #ifdef __cplusplus
 }

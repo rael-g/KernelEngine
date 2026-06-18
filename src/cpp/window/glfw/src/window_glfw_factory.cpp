@@ -6,7 +6,7 @@
 #include <new>
 
 extern "C" {
-    KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window** out_window, ke_error** out_error) {
+    KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window_handle* out_window, ke_error** out_error) {
         if (!out_window || !params || !params->allocator) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
         auto* alloc = params->allocator;
@@ -41,7 +41,8 @@ extern "C" {
         }
 
         // 5. Return the C-API interface
-        *out_window = core->ToApi();
+        out_window->ref     = core->ToApi();
+        out_window->destroy = &kernel_engine::window::WindowCore::DestroyApi;
         return KE_OK;
     }
 }

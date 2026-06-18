@@ -10,15 +10,17 @@ int main(void)
     printf("--- KernelEngine C Shader Compiler Demo ---\n");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
-    ke_logger *logger = NULL;
-    ke_logger_create(&logger, NULL);
+    ke_logger_handle logger_h = {0};
+    ke_logger_create(&logger_h, NULL);
+    ke_logger *logger = logger_h.ref;
 
     logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE), NULL);
 
     ke_shader_compiler_bgfx_params compiler_params = {
         .allocator = alloc, .logger = logger, .shaderc_path = "vcpkg_installed/x64-windows-static-md/tools/bgfx/shaderc.exe"};
-    ke_shader_compiler *compiler = NULL;
-    ke_shader_compiler_bgfx_create(&compiler_params, &compiler);
+    ke_shader_compiler_handle compiler_h = {0};
+    ke_shader_compiler_bgfx_create(&compiler_params, &compiler_h);
+    ke_shader_compiler *compiler = compiler_h.ref;
     compiler->on_initialize(compiler, NULL);
 
     ke_log_event ev_start = {KE_LOG_LEVEL_INFO, "app", "Compiling test shader..."};
@@ -40,8 +42,8 @@ int main(void)
     }
 
     compiler->on_shutdown(compiler, NULL);
-    compiler->destroy(compiler);
-    logger->destroy(logger);
+    compiler_h.destroy(compiler_h.ref);
+    logger_h.destroy(logger_h.ref);
     alloc->destroy(alloc);
 
     printf("--- Demo Complete ---\n");

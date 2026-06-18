@@ -4,9 +4,6 @@ public unsafe partial struct ke_frame_sync
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_frame_sync *, ke_allocator *)")]
-    public delegate* unmanaged[Cdecl]<ke_frame_sync*, ke_allocator*, void> destroy;
-
     [NativeTypeName("ke_frame_packet *(*)(struct ke_frame_sync *)")]
     public delegate* unmanaged[Cdecl]<ke_frame_sync*, ke_frame_packet*> begin_write;
 

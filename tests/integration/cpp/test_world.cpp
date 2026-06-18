@@ -12,34 +12,39 @@ namespace {
 
 struct WorldFixture {
     ke_allocator      *allocator      = nullptr;
-    ke_task_scheduler *task_scheduler = nullptr;
+    ke_task_scheduler_handle task_scheduler_h{};
+    ke_ecs_handle            ecs_h{};
+    ke_runtime_handle        runtime_h{};
+    ke_world_handle          world_h{};
     ke_world          *world          = nullptr;
 
     void create(const char *project_root = nullptr) {
         allocator = ke_allocator_malloc_create();
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler, NULL), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler_h, NULL), KE_OK);
 
-        ke_ecs *ecs = nullptr;
         ke_ecs_flecs_params ecs_params{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs, NULL), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs_h, NULL), KE_OK);
 
-        ke_runtime *runtime = nullptr;
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime, NULL), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs_h.ref, task_scheduler_h.ref, &rt_params, &runtime_h, NULL), KE_OK);
 
         ke_world_params wp{};
-        wp.task_scheduler = task_scheduler;
-        wp.ecs            = ecs;
-        wp.runtime        = runtime;
+        wp.task_scheduler = task_scheduler_h.ref;
+        wp.ecs            = ecs_h.ref;
+        wp.runtime        = runtime_h.ref;
         wp.scene_tree     = nullptr;  // C-phase reintroduces; B2 ships ke_world without scene_tree
         wp.project_root   = project_root;
-        ASSERT_EQ(ke_world_create(&wp, &world, NULL), KE_OK);
+        ASSERT_EQ(ke_world_create(&wp, &world_h, NULL), KE_OK);
+        world = world_h.ref;
         ASSERT_NE(world, nullptr);
     }
 
     void teardown() {
-        if (world) world->destroy(world);  // cascades runtime + ecs
-        if (task_scheduler) task_scheduler->destroy(task_scheduler);
+        // "Quem cria, owna": destroy in reverse-create order; world borrows the rest.
+        if (world_h.ref) world_h.destroy(world_h.ref);
+        if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
+        if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
+        if (task_scheduler_h.ref) task_scheduler_h.destroy(task_scheduler_h.ref);
     }
 };
 

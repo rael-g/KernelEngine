@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
+﻿#ifndef KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 #define KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 
 // ke_ecs_flecs — flecs-backed implementation of the ke_ecs contract.
@@ -36,7 +36,7 @@ typedef struct ke_ecs_flecs_params
 /// Creates a ke_ecs vtable backed by an internally-owned flecs world.
 /// Ownership: the caller owns the returned ke_ecs*; call ke_ecs->destroy() when done.
 KE_ECS_FLECS_API ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
-                                               ke_ecs                   **out_ecs,
+                                               ke_ecs_handle             *out_ecs,
                                                ke_error                 **out_error);
 
 #ifdef __cplusplus

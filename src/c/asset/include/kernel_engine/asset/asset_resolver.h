@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
+﻿#ifndef KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
 #define KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
 
 // ke_asset_resolver — maps res:// (and absolute) paths to typed CPU-side asset
@@ -86,8 +86,13 @@ extern "C"
 
         void (*free_font)(struct ke_asset_resolver *self, ke_font_data *data);
 
-        void (*destroy)(struct ke_asset_resolver *self);
     } ke_asset_resolver;
+
+    typedef struct ke_asset_resolver_handle
+    {
+        ke_asset_resolver *ref;
+        void (*destroy)(ke_asset_resolver *self);
+    } ke_asset_resolver_handle;
 
 #ifdef __cplusplus
 }

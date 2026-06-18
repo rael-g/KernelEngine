@@ -265,7 +265,7 @@ static void vt_destroy(ke_asset_resolver *self) {
 
 ke_result ke_asset_resolver_create(ke_image_loader *image_loader,
                                     ke_font_loader *font_loader,
-                                    const char *project_root, ke_asset_resolver **out,
+                                    const char *project_root, ke_asset_resolver_handle *out,
                                     ke_error **out_error) {
     if (!out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
@@ -295,8 +295,8 @@ ke_result ke_asset_resolver_create(ke_image_loader *image_loader,
     s->api.resolve_material = vt_resolve_material;
     s->api.resolve_font     = vt_resolve_font;
     s->api.free_font        = vt_free_font;
-    s->api.destroy          = vt_destroy;
 
-    *out = &s->api;
+    out->ref     = &s->api;
+    out->destroy = vt_destroy;
     return KE_OK;
 }

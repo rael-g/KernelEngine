@@ -24,10 +24,10 @@ public static class ServiceCollectionExtensions
                     logger    = logger != null ? logger.Native : null,
                 };
 
-                ke_audio* native;
+                ke_audio_handle handle;
                 KernelException.ThrowIfFailed(
-                    KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_create(&@params, &native, null).ToManaged());
-                return new KernelEngine.Kernel.Audio(native);
+                    KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_create(&@params, &handle, null).ToManaged());
+                return new KernelEngine.Kernel.Audio(handle);
             }
         });
         return services;

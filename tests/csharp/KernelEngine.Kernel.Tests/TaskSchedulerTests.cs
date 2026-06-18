@@ -67,9 +67,8 @@ public sealed class TaskSchedulerTests
                 dispatch             = &SyncDispatch,
                 is_completed         = &AlwaysCompleted,
                 wait                 = &NoopWait,
-                destroy              = &NoopDestroy,
             };
-            Scheduler = new TaskScheduler(_ptr);
+            Scheduler = new TaskScheduler(new ke_task_scheduler_handle { @ref = _ptr, destroy = &NoopDestroy });
         }
 
         public unsafe void Dispose()

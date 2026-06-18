@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
+﻿#ifndef KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 #define KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 
 // ke_resource_cache — generic T-erased refcount + path-keyed dedup cache.
@@ -78,15 +78,20 @@ extern "C"
         /// Removes a cached key (called automatically when refcount → 0).
         void (*cache_evict)(struct ke_resource_cache *self, const char *key);
 
-        void (*destroy)(struct ke_resource_cache *self);
 
     } ke_resource_cache;
+
+    typedef struct ke_resource_cache_handle
+    {
+        ke_resource_cache *ref;
+        void (*destroy)(ke_resource_cache *self);
+    } ke_resource_cache_handle;
 
     // ── Factory (kernel built-in) ─────────────────────────────────────────────
 
     KE_RESOURCE_CACHE_API ke_result ke_resource_cache_create(
         const ke_resource_cache_params *params,
-        ke_resource_cache             **out_cache,
+        ke_resource_cache_handle      *out_cache,
         ke_error                      **out_error);
 
 #ifdef __cplusplus

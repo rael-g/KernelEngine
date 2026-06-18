@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_ASSET_IMAGE_LOADER_H_
+﻿#ifndef KERNEL_ENGINE_ASSET_IMAGE_LOADER_H_
 #define KERNEL_ENGINE_ASSET_IMAGE_LOADER_H_
 
 #include <kernel_engine/asset/mesh_data.h>
@@ -31,6 +31,12 @@ extern "C"
         void (*free_image)(struct ke_image_loader *self, ke_texture_data *data);
 
     } ke_image_loader;
+
+    typedef struct ke_image_loader_handle
+    {
+        ke_image_loader *ref;
+        void (*destroy)(ke_image_loader *self);
+    } ke_image_loader_handle;
 
 #ifdef __cplusplus
 }

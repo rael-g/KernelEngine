@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <kernel_engine/asset/asset_loader.h>
 #include <kernel_engine/asset/assimp/asset_export.h>
@@ -19,7 +19,7 @@ typedef struct ke_asset_loader_assimp_params
 /// @param out     Receives the created loader on success.
 KE_ASSET_ASSIMP_API ke_result ke_asset_loader_assimp_create(
     const ke_asset_loader_assimp_params *params,
-    ke_asset_loader **out,
+    ke_asset_loader_handle *out,
     ke_error **out_error);
 
 #ifdef __cplusplus

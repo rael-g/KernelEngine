@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_H_
 #define KERNEL_ENGINE_FRAMEWORK_WORLD_H_
 
 #include <kernel_engine/common/error.h>
@@ -48,8 +48,13 @@ extern "C"
         ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
                                                       ke_component_id  cid);
 
-        void (*destroy)(struct ke_world *self);
     };
+
+    typedef struct ke_world_handle
+    {
+        ke_world *ref;
+        void (*destroy)(ke_world *self);
+    } ke_world_handle;
 
 #ifdef __cplusplus
 }

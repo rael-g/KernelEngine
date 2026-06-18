@@ -8,10 +8,12 @@ namespace KernelEngine.Asset.StbImage;
 public sealed unsafe class ImageLoader : IImageLoader, INativeImageLoader
 {
     private ke_image_loader* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_image_loader*, void> _destroy;
 
-    internal ImageLoader(ke_image_loader* native)
+    internal ImageLoader(ke_image_loader_handle handle)
     {
-        _native = native;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>
@@ -48,7 +50,7 @@ public sealed unsafe class ImageLoader : IImageLoader, INativeImageLoader
     public void Dispose()
     {
         if (_native == null) return;
-        _native->destroy(_native);
+        if (_destroy != null) _destroy(_native);
         _native = null;
     }
 }

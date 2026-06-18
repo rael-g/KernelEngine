@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_INPUT_INPUT_H_
+﻿#ifndef KERNEL_ENGINE_INPUT_INPUT_H_
 #define KERNEL_ENGINE_INPUT_INPUT_H_
 
 #include <kernel_engine/common/error.h>
@@ -18,7 +18,6 @@ extern "C"
     {
         void *handle;
 
-        void (*destroy)(struct ke_input *self);
 
         /**
          * @brief Updates internal state (e.g. resets pressed/released flags).
@@ -51,8 +50,14 @@ extern "C"
 
     } ke_input;
 
+    typedef struct ke_input_handle
+    {
+        ke_input *ref;
+        void (*destroy)(ke_input *self);
+    } ke_input_handle;
+
     /// @brief Creates an input system.
-    KE_INPUT_API ke_result ke_input_create(struct ke_logger *logger, ke_input **out_input, ke_error **out_error);
+    KE_INPUT_API ke_result ke_input_create(struct ke_logger *logger, ke_input_handle *out_input, ke_error **out_error);
 
 #ifdef __cplusplus
 }

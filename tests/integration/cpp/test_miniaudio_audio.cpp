@@ -5,6 +5,7 @@
 class MiniAudioTest : public ::testing::Test {
 protected:
     ke_allocator* allocator = nullptr;
+    ke_audio_handle audio_h{};
     ke_audio* audio = nullptr;
 
     void SetUp() override {
@@ -12,17 +13,19 @@ protected:
         ke_audio_miniaudio_params params{};
         params.allocator = allocator;
         params.logger = nullptr;
-        
-        ke_result res = ke_audio_miniaudio_create(&params, &audio, nullptr);
+
+        ke_result res = ke_audio_miniaudio_create(&params, &audio_h, nullptr);
         // It might return KE_ERROR if no audio device is available, but let's hope for the best or handle it.
-        if (res != KE_OK) {
+        if (res == KE_OK) {
+            audio = audio_h.ref;
+        } else {
             audio = nullptr;
         }
     }
 
     void TearDown() override {
-        if (audio) {
-            audio->destroy(audio);
+        if (audio_h.ref) {
+            audio_h.destroy(audio_h.ref);
         }
         if (allocator) {
             allocator->destroy(allocator);
@@ -43,7 +46,7 @@ TEST_F(MiniAudioTest, Create_NullOut_ReturnsInvalidArgument) {
 }
 
 TEST_F(MiniAudioTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_audio* a = nullptr;
+    ke_audio_handle a{};
     ke_audio_miniaudio_params params{};
     params.allocator = nullptr;
     ASSERT_EQ(ke_audio_miniaudio_create(&params, &a, nullptr), KE_ERROR);
@@ -74,7 +77,7 @@ TEST_F(MiniAudioTest, SetMasterVolume_NullHandle_IsSafe) {
 }
 
 TEST_F(MiniAudioTest, Destroy_NullHandle_IsSafe) {
-    audio->destroy(nullptr);
+    audio_h.destroy(nullptr);
 }
 
 TEST_F(MiniAudioTest, Play_Twice_IsSafe) {
@@ -106,9 +109,9 @@ TEST_F(MiniAudioTest, LoadSound_ReturnsOom_WhenAllocFails) {
     
     ke_audio_miniaudio_params p{};
     p.allocator = &fa;
-    ke_audio* a = nullptr;
+    ke_audio_handle a{};
     ke_audio_miniaudio_create(&p, &a, nullptr); // This will fail creation itself due to OOM
-    ASSERT_EQ(a, nullptr);
+    ASSERT_EQ(a.ref, nullptr);
 }
 
 TEST_F(MiniAudioTest, Play_NullHandle_ReturnsInvalidArgument) {
@@ -128,7 +131,7 @@ TEST_F(MiniAudioTest, Create_ReturnsOom_WhenApiAllocFails) {
     
     ke_audio_miniaudio_params p{};
     p.allocator = &fa;
-    ke_audio* a = nullptr;
+    ke_audio_handle a{};
     ke_result res = ke_audio_miniaudio_create(&p, &a, nullptr);
     ASSERT_EQ(res, KE_ERROR);
 }

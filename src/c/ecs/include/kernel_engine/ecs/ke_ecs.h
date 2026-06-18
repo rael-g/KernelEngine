@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_ECS_KE_ECS_H_
+﻿#ifndef KERNEL_ENGINE_ECS_KE_ECS_H_
 #define KERNEL_ENGINE_ECS_KE_ECS_H_
 
 #include <kernel_engine/common/error.h>
@@ -45,14 +45,14 @@ extern "C"
                       void          **out_data,
                       size_t         *out_count);
 
-        void (*destroy)(struct ke_ecs *self);
 
     } ke_ecs;
 
-    KE_ECS_API ke_result ke_ecs_sparse_set_create(ke_ecs_registry *registry,
-                                                    ke_allocator    *alloc,
-                                                    ke_ecs         **out_ecs,
-                                                    ke_error       **out_error);
+    typedef struct ke_ecs_handle
+    {
+        ke_ecs *ref;
+        void (*destroy)(ke_ecs *self);
+    } ke_ecs_handle;
 
 #ifdef __cplusplus
 }

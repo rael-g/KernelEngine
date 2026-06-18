@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_TEXT_FONT_H_
+﻿#ifndef KERNEL_ENGINE_TEXT_FONT_H_
 #define KERNEL_ENGINE_TEXT_FONT_H_
 
 #include <kernel_engine/common/error.h>
@@ -63,6 +63,12 @@ extern "C"
         void (*free_font)(struct ke_font_loader *self, ke_font_data *data);
 
     } ke_font_loader;
+
+    typedef struct ke_font_loader_handle
+    {
+        ke_font_loader *ref;
+        void (*destroy)(ke_font_loader *self);
+    } ke_font_loader_handle;
 
 #ifdef __cplusplus
 }

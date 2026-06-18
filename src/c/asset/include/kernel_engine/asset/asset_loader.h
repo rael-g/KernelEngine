@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_ASSET_ASSET_LOADER_H_
+﻿#ifndef KERNEL_ENGINE_ASSET_ASSET_LOADER_H_
 #define KERNEL_ENGINE_ASSET_ASSET_LOADER_H_
 
 #include <kernel_engine/asset/mesh_data.h>
@@ -53,6 +53,12 @@ extern "C"
                                      void *user_data);
 
     } ke_asset_loader;
+
+    typedef struct ke_asset_loader_handle
+    {
+        ke_asset_loader *ref;
+        void (*destroy)(ke_asset_loader *self);
+    } ke_asset_loader_handle;
 
 #ifdef __cplusplus
 }

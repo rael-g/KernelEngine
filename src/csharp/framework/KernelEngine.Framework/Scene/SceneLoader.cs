@@ -35,6 +35,7 @@ namespace KernelEngine.Framework;
 public sealed unsafe class SceneLoader : IDisposable
 {
     private ke_scene_loader* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_scene_loader*, void> _destroy;
     private GCHandle _scriptHandle;
     private Func<ulong, string, bool>? _scriptClosure;
 
@@ -57,16 +58,17 @@ public sealed unsafe class SceneLoader : IDisposable
         ArgumentNullException.ThrowIfNull(world);
 
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
-        ke_scene_loader* p;
+        ke_scene_loader_handle handle;
         fixed (byte* rootPtr = rootBytes)
         {
             KernelException.ThrowIfFailed(
                 KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
                     world.Native,
                     (sbyte*)rootPtr,
-                    &p, null).ToManaged());
+                    &handle, null).ToManaged());
         }
-        _native = p;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>
@@ -137,7 +139,7 @@ public sealed unsafe class SceneLoader : IDisposable
     {
         if (_native is not null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
         if (_scriptHandle.IsAllocated) _scriptHandle.Free();

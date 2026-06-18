@@ -25,10 +25,10 @@ public static class TextStbTrueTypeServiceExtensions
                     allocator = sp.GetRequiredService<Allocator>().Native,
                     logger    = logger != null ? logger.Native : null,
                 };
-                ke_font_loader* native;
+                ke_font_loader_handle handle;
                 KernelException.ThrowIfFailed(
-                    KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&@params, &native, null).ToManaged());
-                return new FontLoader(native);
+                    KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&@params, &handle, null).ToManaged());
+                return new FontLoader(handle);
             }
         });
         return services;

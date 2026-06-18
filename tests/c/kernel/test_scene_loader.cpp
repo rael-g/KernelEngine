@@ -31,6 +31,12 @@ class SceneLoaderTest : public ::testing::Test
 {
 protected:
     ke_allocator      *allocator      = nullptr;
+    ke_task_scheduler_handle task_scheduler_h{};
+    ke_ecs_handle            ecs_h{};
+    ke_runtime_handle        runtime_h{};
+    ke_scene_tree_handle     tree_h{};
+    ke_world_handle          world_h{};
+    ke_scene_loader_handle   loader_h{};
     ke_task_scheduler *task_scheduler = nullptr;
     ke_ecs            *ecs            = nullptr;
     ke_runtime        *runtime        = nullptr;
@@ -41,33 +47,39 @@ protected:
     void SetUp() override
     {
         allocator = ke_allocator_malloc_create();
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler, NULL), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler_h, NULL), KE_OK);
+        task_scheduler = task_scheduler_h.ref;
 
         ke_ecs_flecs_params ep{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs, NULL), KE_OK);
+        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs_h, NULL), KE_OK);
+        ecs = ecs_h.ref;
         ke_runtime_params rp{};
-        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rp, &runtime, NULL), KE_OK);
-        ASSERT_EQ(ke_scene_tree_create(ecs, &tree, NULL), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rp, &runtime_h, NULL), KE_OK);
+        runtime = runtime_h.ref;
+        ASSERT_EQ(ke_scene_tree_create(ecs, &tree_h, NULL), KE_OK);
+        tree = tree_h.ref;
 
         ke_world_params wp{};
         wp.task_scheduler = task_scheduler;
         wp.ecs = ecs;
         wp.runtime = runtime;
         wp.scene_tree = tree;
-        ASSERT_EQ(ke_world_create(&wp, &world, NULL), KE_OK);
+        ASSERT_EQ(ke_world_create(&wp, &world_h, NULL), KE_OK);
+        world = world_h.ref;
 
-        ASSERT_EQ(ke_scene_loader_create(world, nullptr, &loader, NULL), KE_OK);
+        ASSERT_EQ(ke_scene_loader_create(world, nullptr, &loader_h, NULL), KE_OK);
+        loader = loader_h.ref;
     }
 
     void TearDown() override
     {
-        if (loader) loader->destroy(loader);
-        if (world) world->destroy(world);
+        if (loader_h.ref) loader_h.destroy(loader_h.ref);
+        if (world_h.ref) world_h.destroy(world_h.ref);
         // world borrows ecs/runtime/scene_tree — caller destroys in reverse-create order.
-        if (tree) tree->destroy(tree);
-        if (runtime) runtime->destroy(runtime);
-        if (ecs) ecs->destroy(ecs);
-        if (task_scheduler) task_scheduler->destroy(task_scheduler);
+        if (tree_h.ref) tree_h.destroy(tree_h.ref);
+        if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
+        if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
+        if (task_scheduler_h.ref) task_scheduler_h.destroy(task_scheduler_h.ref);
     }
 };
 
@@ -312,12 +324,12 @@ mode = 7
 
 TEST_F(SceneLoaderTest, Create_RejectsNullArgs)
 {
-    ke_scene_loader *l = nullptr;
+    ke_scene_loader_handle l{};
     EXPECT_EQ(ke_scene_loader_create(nullptr, nullptr, &l, NULL), KE_ERROR);
     EXPECT_EQ(ke_scene_loader_create(world, nullptr, nullptr, NULL), KE_ERROR);
 }
 
 TEST_F(SceneLoaderTest, Destroy_NullSelf_IsSafe)
 {
-    loader->destroy(nullptr);  // must not crash
+    loader_h.destroy(nullptr);  // must not crash
 }

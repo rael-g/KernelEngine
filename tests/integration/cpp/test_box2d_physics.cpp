@@ -5,6 +5,7 @@
 class Box2DPhysicsTest : public ::testing::Test {
 protected:
     ke_allocator* allocator = nullptr;
+    ke_physics_2d_handle physics_h{};
     ke_physics_2d* physics = nullptr;
 
     void SetUp() override {
@@ -14,15 +15,16 @@ protected:
         params.logger = nullptr;
         params.gravity_x = 0;
         params.gravity_y = -9.81f;
-        
-        ke_result res = ke_physics_2d_box2d_create(&params, &physics, nullptr);
+
+        ke_result res = ke_physics_2d_box2d_create(&params, &physics_h, nullptr);
         ASSERT_EQ(res, KE_OK);
+        physics = physics_h.ref;
         ASSERT_NE(physics, nullptr);
     }
 
     void TearDown() override {
-        if (physics) {
-            physics->destroy(physics);
+        if (physics_h.ref) {
+            physics_h.destroy(physics_h.ref);
         }
         if (allocator) {
             allocator->destroy(allocator);

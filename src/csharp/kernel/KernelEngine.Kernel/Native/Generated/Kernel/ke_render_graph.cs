@@ -8,9 +8,6 @@ public unsafe partial struct ke_render_graph
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_render_graph *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_graph*, void> destroy;
-
     [NativeTypeName("ke_result (*)(struct ke_render_graph *, const ke_resource_desc *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_graph*, ke_resource_desc*, ke_error**, ke_result> declare_resource;
 

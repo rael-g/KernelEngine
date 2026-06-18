@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
+﻿#ifndef KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
 #define KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
 
 #include <kernel_engine/common/error.h>
@@ -81,6 +81,12 @@ extern "C"
         void (*apply_impulse)(struct ke_physics_2d *self, ke_body_2d body, float impulse_x, float impulse_y);
 
     } ke_physics_2d;
+
+    typedef struct ke_physics_2d_handle
+    {
+        ke_physics_2d *ref;
+        void (*destroy)(ke_physics_2d *self);
+    } ke_physics_2d_handle;
 
 #ifdef __cplusplus
 }

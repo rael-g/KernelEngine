@@ -33,7 +33,7 @@ extern "C"
     /// @brief Creates a BGFX-backed `ke_shader_compiler` instance.
     KE_SHADER_COMPILER_BGFX_API ke_result ke_shader_compiler_bgfx_create(
         const ke_shader_compiler_bgfx_params *params,
-        ke_shader_compiler **out_compiler);
+        ke_shader_compiler_handle *out_compiler);
 
 #ifdef __cplusplus
 }

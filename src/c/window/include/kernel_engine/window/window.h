@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_WINDOW_WINDOW_H_
+﻿#ifndef KERNEL_ENGINE_WINDOW_WINDOW_H_
 #define KERNEL_ENGINE_WINDOW_WINDOW_H_
 
 #include <kernel_engine/common/error.h>
@@ -18,7 +18,6 @@ extern "C"
     typedef struct ke_window
     {
         void *handle;
-        void (*destroy)(struct ke_window *self);
 
         ke_result (*on_initialize)(struct ke_window *self, ke_error **out_error);
         ke_result (*on_shutdown)(struct ke_window *self, ke_error **out_error);
@@ -29,6 +28,12 @@ extern "C"
         ke_result (*get_size)(struct ke_window *self, int32_t *width, int32_t *height, ke_error **out_error);
         void *(*get_native_handle)(struct ke_window *self);
     } ke_window;
+
+    typedef struct ke_window_handle
+    {
+        ke_window *ref;
+        void (*destroy)(ke_window *self);
+    } ke_window_handle;
 
 #ifdef __cplusplus
 }

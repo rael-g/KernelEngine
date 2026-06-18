@@ -132,7 +132,20 @@ struct KeFrameSyncHandle
 {
     ke_frame_sync                            vtable; // MUST be first
     kernel_engine::threading::KeFrameSync  *impl;
+    ke_allocator                            *alloc;  // owns this handle + impl
 };
+
+// Owner-handle destroy: frees the impl and the handle via the stored allocator.
+void fs_destroy(ke_frame_sync *self)
+{
+    if (!self) return;
+    auto *hh = reinterpret_cast<KeFrameSyncHandle *>(self);
+    ke_allocator *a = hh->alloc;
+    if (!a) return;
+    hh->impl->~KeFrameSync();
+    a->free(a, hh->impl);
+    a->free(a, hh);
+}
 
 } // namespace
 
@@ -143,7 +156,7 @@ extern "C"
                                         uint32_t       draw_capacity,
                                         uint32_t       point_capacity,
                                         uint32_t       spot_capacity,
-                                        ke_frame_sync **out,
+                                        ke_frame_sync_handle *out,
                                         ke_error      **out_error)
     {
         if (!alloc || buffer_count < 2 || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
@@ -159,6 +172,7 @@ extern "C"
 
         h->impl = new (impl_mem) kernel_engine::threading::KeFrameSync(
             alloc, buffer_count, draw_capacity, point_capacity, spot_capacity);
+        h->alloc = alloc;
         h->vtable.handle = h;
         h->vtable.begin_write = [](ke_frame_sync *self) -> ke_frame_packet * {
             if (!self) return nullptr;
@@ -174,14 +188,8 @@ extern "C"
         h->vtable.end_read = [](ke_frame_sync *self) {
             if (self) reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndRead();
         };
-        h->vtable.destroy = [](ke_frame_sync *self, ke_allocator *a) {
-            if (!self || !a) return;
-            auto *hh = reinterpret_cast<KeFrameSyncHandle *>(self);
-            hh->impl->~KeFrameSync();
-            a->free(a, hh->impl);
-            a->free(a, hh);
-        };
-        *out = &h->vtable;
+        out->ref     = &h->vtable;
+        out->destroy = fs_destroy;
         return KE_OK;
     }
 }

@@ -97,7 +97,6 @@ public unsafe class RenderGraphTests
     {
         var g = default(ke_render_graph);
         g.handle           = (void*)1;
-        g.destroy          = &MockDestroy;
         g.declare_resource = &MockDeclareResource;
         g.import_texture   = &MockImportTexture;
         g.add_pass         = &MockAddPass;

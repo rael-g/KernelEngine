@@ -1,4 +1,4 @@
-#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
 #define KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
 
 // ke_runtime_create — the in-house scheduler.
@@ -29,7 +29,7 @@ typedef struct ke_runtime_params {
 KE_RUNTIME_API ke_result ke_runtime_create(ke_ecs                  *ecs,
                                     ke_task_scheduler       *task_scheduler,
                                     const ke_runtime_params *params,
-                                    ke_runtime             **out_runtime,
+                                    ke_runtime_handle       *out_runtime,
                                     ke_error               **out_error);
 
 #ifdef __cplusplus

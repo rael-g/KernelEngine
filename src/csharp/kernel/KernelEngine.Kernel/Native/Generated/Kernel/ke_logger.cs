@@ -8,9 +8,6 @@ public unsafe partial struct ke_logger
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_logger *)")]
-    public delegate* unmanaged[Cdecl]<ke_logger*, void> destroy;
-
     [NativeTypeName("void (*)(struct ke_logger *, const ke_log_event *)")]
     public delegate* unmanaged[Cdecl]<ke_logger*, ke_log_event*, void> log;
 

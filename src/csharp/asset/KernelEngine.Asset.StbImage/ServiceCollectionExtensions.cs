@@ -22,9 +22,9 @@ public static class ServiceCollectionExtensions
                     allocator = sp.GetRequiredService<Allocator>().Native,
                     logger    = logger != null ? logger.Native : null,
                 };
-                ke_image_loader* native;
-                KernelException.ThrowIfFailed(Native.NativeMethods.image_loader_stb_create(&@params, &native, null).ToManaged());
-                return new ImageLoader(native);
+                ke_image_loader_handle handle;
+                KernelException.ThrowIfFailed(Native.NativeMethods.image_loader_stb_create(&@params, &handle, null).ToManaged());
+                return new ImageLoader(handle);
             }
         });
         return services;

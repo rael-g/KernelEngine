@@ -22,6 +22,7 @@ namespace KernelEngine.Framework;
 public sealed unsafe class NativeAssetResolver : IDisposable
 {
     private ke_asset_resolver* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_asset_resolver*, void> _destroy;
 
     /// <summary>
     /// Creates a native asset resolver.
@@ -42,7 +43,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
                                INativeFontLoader? fontLoader = null, string? projectRoot = null)
     {
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
-        ke_asset_resolver* p;
+        ke_asset_resolver_handle handle;
         ke_image_loader* imagePtr = imageLoader is not null ? imageLoader.Native : null;
         ke_font_loader*  fontPtr  = fontLoader  is not null ? fontLoader.Native  : null;
         fixed (byte* rootPtr = rootBytes)
@@ -52,9 +53,10 @@ public sealed unsafe class NativeAssetResolver : IDisposable
                     imagePtr,
                     fontPtr,
                     (sbyte*)rootPtr,
-                    &p, null).ToManaged());
+                    &handle, null).ToManaged());
         }
-        _native = p;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>
@@ -148,7 +150,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// <inheritdoc cref="IDisposable.Dispose"/>
     public void Dispose()
     {
-        if (_native is not null) { _native->destroy(_native); _native = null; }
+        if (_native is not null) { if (_destroy != null) _destroy(_native); _native = null; }
     }
 }
 

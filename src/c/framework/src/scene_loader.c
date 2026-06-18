@@ -528,7 +528,7 @@ static void vt_destroy(ke_scene_loader *self) {
 // ── Factory ───────────────────────────────────────────────────────────────
 
 ke_result ke_scene_loader_create(struct ke_world *world,
-                                  const char *project_root, ke_scene_loader **out_loader,
+                                  const char *project_root, ke_scene_loader_handle *out_loader,
                                   ke_error **out_error) {
     if (!world || !out_loader) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
@@ -562,8 +562,8 @@ ke_result ke_scene_loader_create(struct ke_world *world,
     s->api.handle                  = s;
     s->api.load                    = vt_load;
     s->api.register_script_factory = vt_register_script_factory;
-    s->api.destroy                 = vt_destroy;
 
-    *out_loader = &s->api;
+    out_loader->ref     = &s->api;
+    out_loader->destroy = vt_destroy;
     return KE_OK;
 }

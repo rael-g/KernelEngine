@@ -75,7 +75,10 @@ ke_allocator
 ke_logger
 ke_input
 ke_result
+ke_error
+ke_error_type
 ke_window
+ke_window_handle
 ke_render
 ke_world
 ke_frame_packet
@@ -101,7 +104,9 @@ ke_allocator=KernelEngine.Kernel.Native.ke_allocator
 ke_logger=KernelEngine.Kernel.Native.ke_logger
 ke_input=KernelEngine.Kernel.Native.ke_input
 ke_result=KernelEngine.Kernel.Native.ke_result
+ke_error=KernelEngine.Kernel.Native.ke_error
 ke_window=KernelEngine.Kernel.Native.ke_window
+ke_window_handle=KernelEngine.Kernel.Native.ke_window_handle
 ke_render=KernelEngine.Kernel.Native.ke_render
 ke_world=KernelEngine.Kernel.Native.ke_world
 ke_frame_packet=KernelEngine.Kernel.Native.ke_frame_packet

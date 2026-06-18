@@ -149,13 +149,12 @@ public unsafe class RendererTests
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_render_graph* MockGetRenderGraph(ke_render* self) { return null; }
 
-    private ke_render* CreateMock()
+    private ke_render_handle CreateMock()
     {
         var mock = (ke_render*)NativeMemory.AllocZeroed((nuint)sizeof(ke_render));
         mock->on_initialize = &MockOnInitialize;
         mock->frame = &MockFrame;
         mock->clear_color = &MockClearColor;
-        mock->destroy = &MockDestroy;
         mock->on_shutdown = &MockOnShutdown;
         mock->submit_packet = &MockSubmitPacket;
         mock->create_mesh = &MockCreateMesh;
@@ -187,7 +186,7 @@ public unsafe class RendererTests
         mock->destroy_texture = &MockDestroyTexture;
         mock->destroy_material = &MockDestroyMaterial;
         mock->get_render_graph = &MockGetRenderGraph;
-        return mock;
+        return new ke_render_handle { @ref = mock, destroy = &MockDestroy };
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -197,388 +196,388 @@ public unsafe class RendererTests
     public void Initialize_CallsMock()
     {
         _initializeCalled = 0;
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             renderer.Initialize();
             Assert.Equal(1, _initializeCalled);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void Frame_CallsMock()
     {
         _frameCalled = 0;
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var res = renderer.Frame();
             Assert.True(res.IsOk);
             Assert.Equal(1, _frameCalled);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void ClearColor_CallsMock()
     {
         _clearColorCalled = 0;
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             renderer.ClearColor(1, 0, 0, 1);
             Assert.Equal(1, _clearColorCalled);
             Assert.Equal(1f, _lastR);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void ClearColor_Vector4_CallsMock()
     {
         _clearColorCalled = 0;
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             renderer.ClearColor(new Vector4(0, 1, 0, 1));
             Assert.Equal(1, _clearColorCalled);
             Assert.Equal(1f, _lastG);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetOrthographic_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetOrthographic(true).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetViewTransform_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetViewTransform(Matrix4x4.Identity, Matrix4x4.Identity).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void GetNdcConvention_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var c = renderer.GetNdcConvention();
             Assert.True(c.ZeroToOneDepth);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void CreateMesh_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var res = renderer.CreateMesh(new Vertex[3], new ushort[3]);
             Assert.True(res.IsOk);
             Assert.Equal(42u, res.Value.Value);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void DestroyMesh_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.DestroyMesh(new MeshHandle(1)).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void CreateTexture_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var res = renderer.CreateTexture(2, 2, new byte[16]);
             Assert.True(res.IsOk);
             Assert.Equal(77u, res.Value.Value);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void DestroyTexture_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.DestroyTexture(new TextureHandle(1)).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void CreateMaterial_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var res = renderer.CreateMaterial(1, 1, 1, 1);
             Assert.True(res.IsOk);
             Assert.Equal(123u, res.Value.Value);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void CreateMaterial_Vector4_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var res = renderer.CreateMaterial(Vector4.One);
             Assert.True(res.IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void DestroyMaterial_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.DestroyMaterial(new MaterialHandle(1)).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetDirectionalLight_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetDirectionalLight(0, -1, 0, 1, 1, 1, 1).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetAmbientLight_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetAmbientLight(1, 1, 1).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetCameraPos_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetCameraPos(1, 2, 3).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetPointLights_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetPointLights(new ke_point_light[1]).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetSpotLights_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetSpotLights(new ke_spot_light[1]).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetSsao_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetSsao(true).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetClusterConfig_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetClusterConfig(1, 1, 1, 1, 1).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void CreateCubemap_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var res = renderer.CreateCubemap(2, new byte[16 * 6]);
             Assert.True(res.IsOk);
             Assert.Equal(88u, res.Value.Value);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SubmitSkybox_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SubmitSkybox(new TextureHandle(1)).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SubmitMesh_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SubmitMesh(new MeshHandle(1), new MaterialHandle(2), Matrix4x4.Identity).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void CreateShadowMap_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var res = renderer.CreateShadowMap(1024, 1024);
             Assert.True(res.IsOk);
             Assert.Equal(99u, res.Value.Value);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void BeginShadowPass_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.BeginShadowPass(new ShadowMapHandle(1), Matrix4x4.Identity, Matrix4x4.Identity).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SubmitMeshShadow_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SubmitMeshShadow(new MeshHandle(1), Matrix4x4.Identity).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void EndShadowPass_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.EndShadowPass().IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetShadowMap_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetShadowMap(new ShadowMapHandle(1)).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetTonemapping_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetTonemapping(true).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void SetBloom_CallsMock()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.True(renderer.SetBloom(true).IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void GetLastFatalError_ReturnsNull_WhenNoErrorMessage()
     {
         _fatalErrorPtr = null;
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             Assert.Null(renderer.GetLastFatalError());
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void GetLastFatalError_ReturnsMessage_WhenNativeHasError()
     {
-        var mock = CreateMock();
+        var h = CreateMock();
         var msg = "Fatal GPU Error";
         var ptr = Marshal.StringToCoTaskMemAnsi(msg);
         _fatalErrorPtr = (sbyte*)ptr;
         try
         {
-            using (var renderer = new Renderer(mock))
+            using (var renderer = new Renderer(h))
             {
                 Assert.Equal(msg, renderer.GetLastFatalError());
             }
@@ -588,19 +587,19 @@ public unsafe class RendererTests
             Marshal.FreeCoTaskMem(ptr);
             _fatalErrorPtr = null;
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
     public void GetRenderGraph_ReturnsNull_WhenVtableIsNull()
     {
-        var mock = CreateMock();
-        mock->get_render_graph = null;
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        h.@ref->get_render_graph = null;
+        using (var renderer = new Renderer(h))
         {
             Assert.Null(renderer.GetRenderGraph());
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 
     [Fact]
@@ -644,13 +643,13 @@ public unsafe class RendererTests
     [Fact]
     public void SubmitPacket_ReturnsOk()
     {
-        var mock = CreateMock();
-        using (var renderer = new Renderer(mock))
+        var h = CreateMock();
+        using (var renderer = new Renderer(h))
         {
             var packet = new FramePacket(null, null, true);
             var res = renderer.SubmitPacket(packet);
             Assert.True(res.IsOk);
         }
-        NativeMemory.Free(mock);
+        NativeMemory.Free(h.@ref);
     }
 }

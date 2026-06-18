@@ -138,11 +138,13 @@ internal sealed unsafe class ModelData : IModel
 internal sealed unsafe class AssetLoader : IAssetLoader
 {
     private ke_asset_loader* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_asset_loader*, void> _destroy;
     private readonly KernelEngine.Kernel.TaskScheduler _scheduler;
 
-    internal AssetLoader(ke_asset_loader* native, KernelEngine.Kernel.TaskScheduler scheduler)
+    internal AssetLoader(ke_asset_loader_handle handle, KernelEngine.Kernel.TaskScheduler scheduler)
     {
-        _native = native;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
         _scheduler = scheduler;
     }
 
@@ -205,7 +207,7 @@ internal sealed unsafe class AssetLoader : IAssetLoader
     {
         if (_native != null)
         {
-            _native->destroy(_native);
+            if (_destroy != null) _destroy(_native);
             _native = null;
         }
     }

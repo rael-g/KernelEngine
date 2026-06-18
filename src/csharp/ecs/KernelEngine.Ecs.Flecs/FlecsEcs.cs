@@ -13,6 +13,7 @@ namespace KernelEngine.Ecs.Flecs;
 public sealed unsafe class FlecsEcs : IEcs
 {
     private ke_ecs* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
     private readonly Allocator _allocator;
 
     public FlecsEcs(Allocator allocator)
@@ -21,11 +22,12 @@ public sealed unsafe class FlecsEcs : IEcs
         _allocator = allocator;
 
         ke_ecs_flecs_params @params = default;
-        ke_ecs* ecs;
-        var rc = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, &ecs, null);
+        ke_ecs_handle handle;
+        var rc = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, &handle, null);
         if (rc != (int)ke_result.KE_OK)
             throw new InvalidOperationException($"ke_ecs_flecs_create failed: {(ke_result)rc}");
-        _native = ecs;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     /// <summary>
@@ -37,7 +39,7 @@ public sealed unsafe class FlecsEcs : IEcs
     public void Dispose()
     {
         if (_native == null) return;
-        _native->destroy(_native);
+        if (_destroy != null) _destroy(_native);
         _native = null;
     }
 }

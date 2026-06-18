@@ -4,9 +4,6 @@ public unsafe partial struct ke_audio
 {
     public void* handle;
 
-    [NativeTypeName("void (*)(struct ke_audio *)")]
-    public delegate* unmanaged[Cdecl]<ke_audio*, void> destroy;
-
     [NativeTypeName("ke_result (*)(struct ke_audio *, const char *, ke_audio_sound *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_audio*, sbyte*, uint*, ke_error**, ke_result> load_sound;
 

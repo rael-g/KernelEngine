@@ -21,7 +21,4 @@ public unsafe partial struct ke_resource_cache
 
     [NativeTypeName("void (*)(struct ke_resource_cache *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_resource_cache*, sbyte*, void> cache_evict;
-
-    [NativeTypeName("void (*)(struct ke_resource_cache *)")]
-    public delegate* unmanaged[Cdecl]<ke_resource_cache*, void> destroy;
 }

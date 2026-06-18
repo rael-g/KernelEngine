@@ -21,12 +21,6 @@ AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
     : allocator_(params->allocator), logger_(params->logger)
 {
     api_.handle     = this;
-    api_.destroy    = [](ke_asset_loader *self) {
-        auto *l = static_cast<AssimpLoader *>(self->handle);
-        auto *a = l->allocator_;
-        l->~AssimpLoader();
-        a->free(a, l);
-    };
     api_.load_model = [](ke_asset_loader *self, const char *path, ke_model_data **out, ke_error **out_error) {
         return static_cast<AssimpLoader *>(self->handle)->LoadModel(path, out, out_error);
     };
@@ -47,6 +41,14 @@ AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
 AssimpLoader::~AssimpLoader() = default;
 
 ke_asset_loader *AssimpLoader::ToApi() { return &api_; }
+
+void AssimpLoader::DestroyApi(ke_asset_loader *self)
+{
+    auto *l = static_cast<AssimpLoader *>(self->handle);
+    auto *a = l->allocator_;
+    l->~AssimpLoader();
+    a->free(a, l);
+}
 
 ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_error **out_error)
 {
@@ -235,13 +237,14 @@ void AssimpLoader::FreeModel(ke_model_data *data)
 
 extern "C" KE_ASSET_ASSIMP_API ke_result
 ke_asset_loader_assimp_create(const ke_asset_loader_assimp_params *params,
-                               ke_asset_loader **out,
+                               ke_asset_loader_handle *out,
                                ke_error **out_error)
 {
     if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     void *mem = params->allocator->alloc(params->allocator, sizeof(kernel_engine::asset::assimp::AssimpLoader), alignof(kernel_engine::asset::assimp::AssimpLoader));
     if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed");
     auto *loader = new (mem) kernel_engine::asset::assimp::AssimpLoader(params);
-    *out = loader->ToApi();
+    out->ref     = loader->ToApi();
+    out->destroy = &kernel_engine::asset::assimp::AssimpLoader::DestroyApi;
     return KE_OK;
 }

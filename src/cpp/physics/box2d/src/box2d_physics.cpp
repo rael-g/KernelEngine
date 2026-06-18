@@ -172,7 +172,7 @@ void physics_apply_impulse(ke_physics_2d *self, ke_body_2d id, float ix, float i
 } // namespace
 
 extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
-    const ke_physics_2d_box2d_params *params, ke_physics_2d **out, ke_error **out_error)
+    const ke_physics_2d_box2d_params *params, ke_physics_2d_handle *out, ke_error **out_error)
 {
     if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     auto *alloc = params->allocator;
@@ -198,7 +198,6 @@ extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
     }
     std::memset(api, 0, sizeof(*api));
     api->handle             = state;
-    api->destroy            = &physics_destroy;
     api->set_gravity        = &physics_set_gravity;
     api->step               = &physics_step;
     api->create_body        = &physics_create_body;
@@ -211,6 +210,7 @@ extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
     api->apply_impulse      = &physics_apply_impulse;
 
     log_info(state->logger, "Box2D physics world initialized");
-    *out = api;
+    out->ref     = api;
+    out->destroy = &physics_destroy;
     return KE_OK;
 }

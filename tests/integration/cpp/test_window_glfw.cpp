@@ -40,7 +40,7 @@ protected:
 
     void TearDown() override {
         if (window) {
-            window->destroy(window);
+            WindowCore::DestroyApi(window);  // deletes core
             window = nullptr;
         }
         delete mock_device;
@@ -55,12 +55,12 @@ TEST(WindowFactoryTest, Create_NullOut_ReturnsInvalidArgument) {
 }
 
 TEST(WindowFactoryTest, Create_NullParams_ReturnsInvalidArgument) {
-    ke_window* w = nullptr;
+    ke_window_handle w{};
     ASSERT_EQ(ke_window_glfw_create(nullptr, &w, nullptr), KE_ERROR);
 }
 
 TEST(WindowFactoryTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_window* w = nullptr;
+    ke_window_handle w{};
     ke_window_glfw_params params = { nullptr, nullptr, nullptr, "Test", 800, 600, 0 };
     ASSERT_EQ(ke_window_glfw_create(&params, &w, nullptr), KE_ERROR);
 }
@@ -71,10 +71,10 @@ TEST(WindowFactoryTest, Create_Success_OrWindowError) {
     alloc.free = [](ke_allocator*, void* p) { std::free(p); };
 
     ke_window_glfw_params params = { &alloc, nullptr, nullptr, "Test", 800, 600, 0 };
-    ke_window* w = nullptr;
+    ke_window_handle w{};
     ke_result res = ke_window_glfw_create(&params, &w, nullptr);
     if (res == KE_OK) {
-        w->destroy(w);
+        w.destroy(w.ref);
     }
     ASSERT_TRUE(res == KE_OK || res == KE_ERROR);
 }
@@ -286,8 +286,8 @@ TEST_F(WindowCoreTest, API_GetSize_NullSelf_ReturnsInvalidArgument) {
 }
 
 TEST_F(WindowCoreTest, Destroy_NullSelf_IsSafe) {
-    auto d = window->destroy;
-    window->destroy(window);
+    auto d = &WindowCore::DestroyApi;
+    WindowCore::DestroyApi(window);
     window = nullptr;
     d(nullptr);
 }

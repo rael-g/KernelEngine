@@ -22,16 +22,6 @@ BgfxShaderCompiler::BgfxShaderCompiler(const ke_shader_compiler_bgfx_params *par
         (void)out_error;
         return static_cast<BgfxShaderCompiler *>(self->handle)->OnShutdown();
     };
-    compiler_api_.destroy = [](ke_shader_compiler *self) {
-        if (!self) return;
-        auto *sys = static_cast<BgfxShaderCompiler *>(self->handle);
-        auto *alloc = sys->allocator_;
-        if (alloc)
-        {
-            sys->~BgfxShaderCompiler();
-            alloc->free(alloc, sys);
-        }
-    };
     compiler_api_.compile_shader = [](ke_shader_compiler *self, const char *file_path, const char *varying_def_path,
                                       const char *type, const char *platform, const char *profile,
                                       const char **includes, size_t include_count, ke_error **out_error) {
@@ -48,6 +38,18 @@ BgfxShaderCompiler::~BgfxShaderCompiler()
 ke_shader_compiler *BgfxShaderCompiler::ToApi()
 {
     return &compiler_api_;
+}
+
+void BgfxShaderCompiler::DestroyApi(ke_shader_compiler *self)
+{
+    if (!self) return;
+    auto *sys = static_cast<BgfxShaderCompiler *>(self->handle);
+    auto *alloc = sys->allocator_;
+    if (alloc)
+    {
+        sys->~BgfxShaderCompiler();
+        alloc->free(alloc, sys);
+    }
 }
 
 ke_result BgfxShaderCompiler::OnInitialize()
@@ -117,13 +119,14 @@ ke_result BgfxShaderCompiler::CompileShader(const char *file_path, const char *v
 extern "C"
 {
 
-    KE_SHADER_COMPILER_BGFX_API ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_params *params, ke_shader_compiler **out_compiler)
+    KE_SHADER_COMPILER_BGFX_API ke_result ke_shader_compiler_bgfx_create(const ke_shader_compiler_bgfx_params *params, ke_shader_compiler_handle *out_compiler)
     {
         if (out_compiler == nullptr)
         {
             return KE_ERROR;
         }
-        *out_compiler = NULL;
+        out_compiler->ref     = NULL;
+        out_compiler->destroy = NULL;
 
         if ((params == nullptr) || (params->allocator == nullptr))
         {
@@ -139,7 +142,8 @@ extern "C"
         }
 
         BgfxShaderCompiler *sys = new (mem) BgfxShaderCompiler(params);
-        *out_compiler = sys->ToApi();
+        out_compiler->ref     = sys->ToApi();
+        out_compiler->destroy = &BgfxShaderCompiler::DestroyApi;
         return KE_OK;
     }
 }

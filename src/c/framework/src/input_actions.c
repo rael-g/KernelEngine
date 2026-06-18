@@ -547,7 +547,7 @@ static void vt_destroy(ke_input_actions *self) {
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_input_actions_create(ke_input_actions **out_actions, ke_error **out_error) {
+ke_result ke_input_actions_create(ke_input_actions_handle *out_actions, ke_error **out_error) {
     if (!out_actions) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
@@ -574,8 +574,8 @@ ke_result ke_input_actions_create(ke_input_actions **out_actions, ke_error **out
     s->api.get_axis1d          = vt_get_axis1d;
     s->api.get_axis2d          = vt_get_axis2d;
     s->api.get_axis3d          = vt_get_axis3d;
-    s->api.destroy             = vt_destroy;
 
-    *out_actions = &s->api;
+    out_actions->ref     = &s->api;
+    out_actions->destroy = vt_destroy;
     return KE_OK;
 }

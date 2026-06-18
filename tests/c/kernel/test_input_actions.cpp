@@ -33,15 +33,17 @@ static void SetKeyDown(ke_input_snapshot &snap, int key)
 class InputActionsTest : public ::testing::Test
 {
 protected:
+    ke_input_actions_handle actions_h{};
     ke_input_actions *actions   = nullptr;
 
     void SetUp() override
     {
-        ASSERT_EQ(ke_input_actions_create(&actions, NULL), KE_OK);
+        ASSERT_EQ(ke_input_actions_create(&actions_h, NULL), KE_OK);
+        actions = actions_h.ref;
     }
     void TearDown() override
     {
-        if (actions && actions->destroy) actions->destroy(actions);
+        if (actions_h.ref && actions_h.destroy) actions_h.destroy(actions_h.ref);
     }
 };
 

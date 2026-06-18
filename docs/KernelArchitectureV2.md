@@ -1,6 +1,6 @@
 # Kernel Architecture V2 — What Is Allowed to Live in the Kernel
 
-**Status**: Doctrine accepted. Domain ejection complete (2026-06-15, branch `feat/kernel-v2`): all domain headers ejected from `src/c/kernel/include/` to `src/c/<domain>/include/`; `ke_kernel` meta-target deleted. Render components + `material_file` moved to `render/` domain. §7.2 allocator doctrine resolved: `ke_allocator` is an internal utility, not a public API — factory signatures drop the `ke_allocator*` parameter (impl pending). Next: §7.3 vtable audit + factory signature cleanup.
+**Status**: Doctrine accepted. Domain ejection complete (2026-06-15, branch `feat/kernel-v2`): all domain headers ejected from `src/c/kernel/include/` to `src/c/<domain>/include/`; `ke_kernel` meta-target deleted. Render components + `material_file` moved to `render/` domain. §7.2 allocator doctrine resolved: `ke_allocator` is an internal utility, not a public API — factory signatures drop the `ke_allocator*` parameter (impl pending). Next: §7.3 ke_X_handle ownership refactor (remove destroy from vtables) + §7.4 full vtable audit.
 
 **Audience**: Engine maintainer + plugin/domain authors (render / physics / audio / input / text / asset / scripting).
 
@@ -168,7 +168,44 @@ Rationale:
 
 **What changes from the old rule:** `ke_allocator*` disappears from all `_params` structs and factory signatures. It becomes an `#include`-only, link-PRIVATE concern of each C implementation.
 
-### 7.3 The full vtable audit
+**Refinement (PO, 2026-06-17) — drop the vtable shape entirely.** Because the allocator is no longer an API surface (nobody outside an impl ever holds one), there is no reason for it to be a vtable-of-function-pointers with a `create`/`destroy` lifecycle. The indirection only exists to allow swapping implementations *across an ABI boundary* — and there is no boundary here. So the allocator collapses to a **traditional plain-function module**: header + implementation as one compiled unit (not an interface lib), exposing ordinary functions (`ke_alloc(size, align)` / `ke_free(ptr)` / …), linked directly (PRIVATE) by whoever needs it. No `ke_allocator` struct, no `void* handle`, no `(*destroy)` slot, no factory. The header must state plainly that this is an internal utility, not engine API.
+
+Consequence for §7.3 (the `ke_X_handle` ownership pass): **the allocator is excluded from the handle refactor.** It does not get a `ke_allocator_handle` — it stops being a vtable at all. The handle model applies only to the genuine cross-binding behavior contracts (ecs, runtime, render, window, audio, physics, …). This allocator reshape (vtable → plain functions, full internalization, de-parameterization of every factory that currently takes `ke_allocator*`) is its own task, tracked separately from the handle pass.
+
+### 7.3 Ownership doctrine — `ke_X_handle` vs `ke_X*` (resolved 2026-06-17)
+
+**Rule: who creates, owns. Factory methods receive borrows; the host holds the full owner pair.**
+
+Every `ke_*` vtable today carries a `(*destroy)(self)` slot. This creates a double-destroy hazard: any factory that receives a `ke_ecs*` (or any other vtable pointer) as a dependency *can* call `->destroy` on a borrowed reference. The fix is to make that physically impossible.
+
+**Decision — `ke_X_handle` (owner wrapper):**
+
+```c
+// ke_ecs.h — consumer vtable, NO destroy slot
+typedef struct ke_ecs {
+    ke_result (*register_component)(struct ke_ecs*, ...);
+    // ... all operation slots ...
+    // NO (*destroy)
+} ke_ecs;
+
+// Owner wrapper — only the host holds this
+typedef struct ke_ecs_handle {
+    ke_ecs* ref;                  // borrow — passed to factory deps
+    void  (*destroy)(ke_ecs*);   // impl-specific; set by create
+} ke_ecs_handle;
+```
+
+Factory signatures change from `ke_ecs** out_ecs` to `ke_ecs_handle* out_handle`.
+Consumers (factory deps) only see `ke_ecs*` — no `->destroy` slot, so the mistake doesn't compile.
+The host calls `handle.destroy(handle.ref)` at shutdown.
+
+**Scope:** the 22 genuine cross-binding vtables that currently carry `(*destroy)` (asset_loader, asset_resolver, image_loader, audio, ecs, input_actions, scene_loader, scene_tree, world, input, logger, physics_2d, render, render_graph, shader_compiler, resource_cache, runtime, task_scheduler, font_loader, frame_sync, window — and `logger_sink`, which is value-owned by its logger and keeps `destroy` as an *internal* lifecycle, see note). Each loses its `destroy` slot; each factory acquires a matching `ke_X_handle`; all call sites move from `->destroy(self)` to `handle.destroy(handle.ref)`. **`ke_allocator` is explicitly excluded** — per §7.2 it stops being a vtable altogether (plain-function module), so there is no `ke_allocator_handle`.
+
+**Note on `logger_sink`:** `ke_logger_sink` is passed *by value* into `ke_logger.add_sink` and the logger owns it thereafter — it is not a host-held factory product. Its `destroy` is an internal lifecycle the logger invokes on its own teardown, not a cross-binding ownership hazard. It keeps `destroy` in its struct and does **not** get a handle.
+
+**Note on `frame_sync`:** its current `destroy` takes `(self, ke_allocator*)` — an allocator-coupled signature that predates A12.1 doctrine. The `ke_X_handle` migration removes the slot from the vtable AND drops the allocator argument from the destroy call (allocator is internal to the impl per §7.2).
+
+### 7.4 The full vtable audit
 
 The corollaries above don't apply themselves. Every `ke_*` vtable in the codebase predates this doctrine and was written under the "vtable = class" mental model, so the offenses are spread everywhere, not concentrated in one struct. This warrants a **complete, exhaustive sweep of every vtable the engine declares** — not a spot-fix of the allocator field.
 

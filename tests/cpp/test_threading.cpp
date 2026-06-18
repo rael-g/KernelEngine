@@ -26,9 +26,10 @@ protected:
 
 TEST_F(ThreadingTest, FrameSync_Handoff)
 {
-    ke_frame_sync *sync = nullptr;
-    ke_result      res  = ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &sync, nullptr);
+    ke_frame_sync_handle sync_h{};
+    ke_result      res  = ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &sync_h, nullptr);
     ASSERT_EQ(res, KE_OK);
+    ke_frame_sync *sync = sync_h.ref;
     ASSERT_NE(sync, nullptr);
 
     ke_frame_packet *packet_w = sync->begin_write(sync);
@@ -41,34 +42,35 @@ TEST_F(ThreadingTest, FrameSync_Handoff)
     EXPECT_EQ(packet_r->frame_number, 42);
     sync->end_read(sync);
 
-    sync->destroy(sync, &alloc);
+    sync_h.destroy(sync_h.ref);
 }
 
 TEST_F(ThreadingTest, FrameSync_NullChecks) {
-    ke_frame_sync *s = nullptr;
-    ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &s, nullptr);
-    
+    ke_frame_sync_handle s_h{};
+    ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &s_h, nullptr);
+    ke_frame_sync *s = s_h.ref;
+
     ASSERT_EQ(s->begin_write(nullptr), nullptr);
     s->end_write(nullptr);
     ASSERT_EQ(s->begin_read(nullptr), nullptr);
     s->end_read(nullptr);
-    
-    s->destroy(nullptr, &alloc);
-    s->destroy(s, nullptr);
-    s->destroy(s, &alloc);
+
+    s_h.destroy(nullptr);    // null self safe
+    s_h.destroy(s_h.ref);    // real destroy
 }
 
 TEST(ThreadingInitTest, Create_NullArgs_ReturnsInvalidArgument) {
     ke_allocator a{};
-    ke_frame_sync *s = nullptr;
+    ke_frame_sync_handle s{};
     ASSERT_EQ(ke_frame_sync_std_create(nullptr, 2, 1, 1, 1, &s, nullptr), KE_ERROR);
     ASSERT_EQ(ke_frame_sync_std_create(&a, 2, 1, 1, 1, nullptr, nullptr), KE_ERROR);
 }
 
 TEST_F(ThreadingTest, FrameSync_Blocking)
 {
-    ke_frame_sync *sync = nullptr;
-    ke_frame_sync_std_create(&alloc, 2, 1, 1, 1, &sync, nullptr);
+    ke_frame_sync_handle sync_h{};
+    ke_frame_sync_std_create(&alloc, 2, 1, 1, 1, &sync_h, nullptr);
+    ke_frame_sync *sync = sync_h.ref;
 
     sync->begin_write(sync);
     sync->end_write(sync);
@@ -90,5 +92,5 @@ TEST_F(ThreadingTest, FrameSync_Blocking)
     t.join();
     EXPECT_TRUE(write_completed);
 
-    sync->destroy(sync, &alloc);
+    sync_h.destroy(sync_h.ref);
 }

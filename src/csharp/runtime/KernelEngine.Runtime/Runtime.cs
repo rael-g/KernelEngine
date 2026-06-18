@@ -17,6 +17,7 @@ namespace KernelEngine.Runtime;
 public sealed unsafe class Runtime : IRuntime
 {
     private ke_runtime* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
     private readonly Allocator                          _allocator;
     private readonly IEcs                               _ecs;            // not owned; consumer disposes separately
     private readonly KernelEngine.Kernel.TaskScheduler  _taskScheduler;  // not owned
@@ -103,12 +104,13 @@ public sealed unsafe class Runtime : IRuntime
         _taskScheduler = tsConcrete;
 
         ke_runtime_params @params = default;
-        ke_runtime* rt;
+        ke_runtime_handle handle;
         var rc = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
-            flecsEcs.Native, tsConcrete.Native, &@params, &rt, null);
+            flecsEcs.Native, tsConcrete.Native, &@params, &handle, null);
         if (rc != ke_result.KE_OK)
             throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
-        _native = rt;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
     public ulong RegisterModule(string name, Action<IRuntime> onLoad)
@@ -187,7 +189,7 @@ public sealed unsafe class Runtime : IRuntime
     public void Dispose()
     {
         if (_native == null) return;
-        _native->destroy(_native);
+        if (_destroy != null) _destroy(_native);
         _native = null;
 
         foreach (var h in _moduleHandles) if (h.IsAllocated) h.Free();

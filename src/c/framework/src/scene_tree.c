@@ -296,7 +296,7 @@ static void vt_destroy(ke_scene_tree *self) {
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree **out_tree, ke_error **out_error) {
+ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree_handle *out_tree, ke_error **out_error) {
     if (!ecs || !out_tree) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     ke_allocator *alloc = ke_allocator_malloc_create();
@@ -351,8 +351,8 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree **out_tree, ke_error *
     s->api.destroy_all           = vt_destroy_all;
     s->api.find_node             = vt_find_node;
     s->api.propagate_transforms  = vt_propagate_transforms;
-    s->api.destroy               = vt_destroy;
 
-    *out_tree = &s->api;
+    out_tree->ref     = &s->api;
+    out_tree->destroy = vt_destroy;
     return KE_OK;
 }
