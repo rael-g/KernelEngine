@@ -300,13 +300,13 @@ It stays alive while render v1 lives. But **`ecs/system.h` must stop mentioning 
 | `ke_result` + `ke_error` + `ke_error_type` design; `KE_ERROR_SET`/`KE_ERROR_WRAP` macros | `5d7576b`, `22773fb` | typed error singletons, chained cause/file/line |
 | §7.3 `ke_X_handle` ownership model — destroy removed from 22 vtables; factories return owner handle | `d234bda` | 22 vtables + all factories + all impls + C# Dispose + regen + 264/264 tests |
 | §9.1 `frame_packet` tentacle cut — `ecs/system.h` no longer mentions `frame_packet` | (domain ejection, `44975af`) | `frame_packet` lives in `src/c/render/` only |
+| §7.4 vtable audit — `ke_allocator*` removed from `create_render_graph` slot | `a47dff1` | only genuine violation found; C# bindings regenerated |
+| §6 `spatial` data contract — `ke_transform_component` in `src/c/spatial/`; `ke_render → ke_spatial` CMake dep wired | (this session) | `render/components.h` includes `spatial/transform.h`; DAG `render→spatial`, `framework→spatial` correct |
 
 ### Pending
 
 | Item | Doc ref | Notes |
 |---|---|---|
 | §7.2 refinement — `ke_allocator` vtable → plain-function module (no struct, no `create`, no `destroy`) | §7.2 last paragraph | Separate task; tracked in `project_allocator_plain_functions.md` |
-| §7.4 Full vtable audit — classify every member of every `ke_*` vtable (consumer-called vs. dependency vs. private state) | §7.4 | Rides along with domain ownership; see checklist |
-| §6 `spatial` data contract — extract `transform` out of `components.h` into a standalone `src/c/spatial/` | §6, §9 migration map | Unblocks render ↔ physics decoupling |
 | §5 Opaque phases — confirm whether the `ke_phase` enum in runtime becomes legacy or degrades to opaque labels | §5, open question #2 | Requires runtime team discussion |
 | §8 Per-domain versioning — explicit platform manifest vs. semver asserted at wire time | §8, open question #1 | Policy decision, no code yet |
