@@ -209,9 +209,9 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
         auto* renderer_impl = static_cast<CoreRenderer *>(self->handle);
         return renderer_impl->GetLastFatalError();
     };
-    render_api_.create_render_graph = [](ke_render *self, ke_allocator *allocator) -> ke_render_graph_handle {
+    render_api_.create_render_graph = [](ke_render *self) -> ke_render_graph_handle {
         if (!self || !self->handle) { ke_render_graph_handle empty = {}; return empty; }
-        return static_cast<CoreRenderer *>(self->handle)->CreateRenderGraph(allocator);
+        return static_cast<CoreRenderer *>(self->handle)->CreateRenderGraph();
     };
     render_api_.get_render_graph = [](ke_render *self) -> ke_render_graph* {
         if (!self || !self->handle) return nullptr;
@@ -230,10 +230,10 @@ void CoreRenderer::GetBackbufferSize(uint32_t* out_w, uint32_t* out_h) const
     if (out_h) *out_h = static_cast<uint32_t>(h);
 }
 
-ke_render_graph_handle CoreRenderer::CreateRenderGraph(ke_allocator* allocator)
+ke_render_graph_handle CoreRenderer::CreateRenderGraph()
 {
     ke_render_graph_handle h = {};
-    if (!allocator) allocator = ctx_.allocator;
+    ke_allocator* allocator = ctx_.allocator;
     if (!allocator) return h;
     void* mem = allocator->alloc(allocator, sizeof(RenderGraphImpl), alignof(RenderGraphImpl));
     if (!mem) return h;
@@ -361,7 +361,7 @@ ke_result CoreRenderer::OnInitialize()
 
 ke_result CoreRenderer::SetupRenderGraph()
 {
-    graph_owner_ = render_api_.create_render_graph(&render_api_, ctx_.allocator);
+    graph_owner_ = render_api_.create_render_graph(&render_api_);
     graph_ = graph_owner_.ref;
     if (!graph_)
         return KE_RENDER_LOG_ERR(ctx_.logger, KE_ERROR,

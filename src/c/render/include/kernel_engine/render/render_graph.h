@@ -231,13 +231,13 @@ extern "C"
     /// The graph holds a borrowed reference to the renderer — caller keeps ownership
     /// and must outlive it. Returns a handle whose @c ref is NULL when the renderer
     /// does not implement the graph contract or on allocation failure.
-    static inline ke_render_graph_handle ke_render_graph_create(struct ke_render *renderer, ke_allocator *allocator)
+    static inline ke_render_graph_handle ke_render_graph_create(struct ke_render *renderer)
     {
         if (!renderer || !renderer->create_render_graph) {
             ke_render_graph_handle empty = {0};
             return empty;
         }
-        return renderer->create_render_graph(renderer, allocator);
+        return renderer->create_render_graph(renderer);
     }
 
 #ifdef __cplusplus

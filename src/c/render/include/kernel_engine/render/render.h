@@ -170,7 +170,7 @@ extern "C"
         ///        graph executor (DAG sort, transient resource pool, view-id assignment); the
         ///        kernel only declares the contract (see kernel/render/render_graph.h).
         ///        Callers usually use the @c ke_render_graph_create convenience wrapper.
-        ke_render_graph_handle (*create_render_graph)(struct ke_render *self, struct ke_allocator *allocator);
+        ke_render_graph_handle (*create_render_graph)(struct ke_render *self);
 
         /// @brief Returns the renderer's *active* graph — the one whose passes
         ///        are executed every @c submit_packet. Managed/plugin code adds

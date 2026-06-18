@@ -69,7 +69,7 @@ public:
     /// @brief Creates a render graph bound to this renderer. Wired through the
     /// @c create_render_graph slot on @c ke_render so callers go through the
     /// generic kernel contract.
-    ke_render_graph_handle CreateRenderGraph(ke_allocator* allocator);
+    ke_render_graph_handle CreateRenderGraph();
 
     /// @brief Returns the renderer's active graph (the one executed on
     /// @c SubmitPacket). Used by external/managed code to plug new passes

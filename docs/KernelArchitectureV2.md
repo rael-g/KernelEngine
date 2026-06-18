@@ -284,8 +284,29 @@ It stays alive while render v1 lives. But **`ecs/system.h` must stop mentioning 
 
 ## 12. Status & next actions
 
-- **Doctrine accepted** (this conversation). Forks resolved: #1 = opaque phases; #2 = static contracts + per-domain bindings; #3 = per-domain versions; #4 = input is a domain; #5 = framework is a slim domain; #6 = `frame_packet` kept-but-untangled. Encapsulation = inject-at-construction; handle = segregated `INativeHandle` with the honest ceiling.
-- **First mechanical step** (no dependency on render v2): cut `frame_packet` from `ecs/system.h` (§9.1).
-- **Full vtable audit** (§7.3): enumerate every `ke_*` vtable, classify each member (consumer-called vs. dependency vs. private state), and move everything that isn't a consumer operation into opaque state populated by `create`. Rides along with the per-domain ejection (§9).
-- **Supersede** Kanban K1 / K3 / A12 / Bug 1.37 — fold them into the phased ejection above.
-- Nothing has been moved yet; this doc is the plan.
+**Doctrine**: accepted. Forks resolved: #1 = opaque phases; #2 = static contracts + per-domain bindings; #3 = per-domain versions; #4 = input is a domain; #5 = framework is a slim domain; #6 = `frame_packet` kept-but-untangled. Encapsulation = inject-at-construction; handle = segregated `INativeHandle` with the honest ceiling.
+
+### Delivered (branch `feat/kernel-v2`)
+
+| Item | Commit | What landed |
+|---|---|---|
+| §9 Domain ejection — all domain headers out of `src/c/kernel/include/` | `44975af` | render, audio, physics, input, window, text, asset, framework each in own `src/c/<domain>/` |
+| Render components + `material_file` → render domain | `b756d94` | `ke_camera_component` etc. live in `src/c/render/` |
+| `ke_kernel` meta-target deleted; per-domain SHARED DLLs | `69fc5b3`, `b21e0bb` | each domain is its own CMake target + DLL |
+| C# projects reorganised into per-domain subdirectories | `fb874b8` | `src/csharp/<domain>/` layout |
+| §7.2 Allocator doctrine — `ke_allocator*` removed from all factory signatures | `a2d6ab2` | no factory takes an allocator parameter |
+| C# bindings + managed layer adapted to new factory signatures | `f011bc4`, `16c2efe` | ClangSharp regen + wrapper Dispose updates |
+| `ke_bool` replaces `bool` in all vtable slots and ABI-crossing structs | `55c3a84` | ABI-safe boolean type across the board |
+| `ke_result` + `ke_error` + `ke_error_type` design; `KE_ERROR_SET`/`KE_ERROR_WRAP` macros | `5d7576b`, `22773fb` | typed error singletons, chained cause/file/line |
+| §7.3 `ke_X_handle` ownership model — destroy removed from 22 vtables; factories return owner handle | `d234bda` | 22 vtables + all factories + all impls + C# Dispose + regen + 264/264 tests |
+| §9.1 `frame_packet` tentacle cut — `ecs/system.h` no longer mentions `frame_packet` | (domain ejection, `44975af`) | `frame_packet` lives in `src/c/render/` only |
+
+### Pending
+
+| Item | Doc ref | Notes |
+|---|---|---|
+| §7.2 refinement — `ke_allocator` vtable → plain-function module (no struct, no `create`, no `destroy`) | §7.2 last paragraph | Separate task; tracked in `project_allocator_plain_functions.md` |
+| §7.4 Full vtable audit — classify every member of every `ke_*` vtable (consumer-called vs. dependency vs. private state) | §7.4 | Rides along with domain ownership; see checklist |
+| §6 `spatial` data contract — extract `transform` out of `components.h` into a standalone `src/c/spatial/` | §6, §9 migration map | Unblocks render ↔ physics decoupling |
+| §5 Opaque phases — confirm whether the `ke_phase` enum in runtime becomes legacy or degrades to opaque labels | §5, open question #2 | Requires runtime team discussion |
+| §8 Per-domain versioning — explicit platform manifest vs. semver asserted at wire time | §8, open question #1 | Policy decision, no code yet |
