@@ -25,7 +25,6 @@ extern "C"
     /// @brief Configuration for the BGFX shader compiler plugin.
     typedef struct ke_shader_compiler_bgfx_params
     {
-        struct ke_allocator *allocator;
         struct ke_logger *logger;
         const char *shaderc_path;
     } ke_shader_compiler_bgfx_params;

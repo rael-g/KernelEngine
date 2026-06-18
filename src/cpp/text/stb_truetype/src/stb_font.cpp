@@ -19,7 +19,6 @@ namespace
 struct StbFontLoader
 {
     ke_font_loader  api{};
-    ke_allocator   *allocator = nullptr;
     ke_logger      *logger    = nullptr;
 };
 
@@ -27,19 +26,17 @@ void destroy_loader(struct ke_font_loader *self)
 {
     auto *l = reinterpret_cast<StbFontLoader *>(self);
     if (!l) return;
-    auto *alloc = l->allocator;
     l->~StbFontLoader();
-    if (alloc) alloc->free(alloc, l);
+    ke_free(l);
 }
 
 void free_font(struct ke_font_loader *self, ke_font_data *data)
 {
-    auto *l = reinterpret_cast<StbFontLoader *>(self);
-    if (!l || !data) return;
-    auto *alloc = l->allocator;
-    if (data->atlas_rgba) alloc->free(alloc, data->atlas_rgba);
-    if (data->glyphs)     alloc->free(alloc, data->glyphs);
-    alloc->free(alloc, data);
+    (void)self;
+    if (!data) return;
+    if (data->atlas_rgba) ke_free(data->atlas_rgba);
+    if (data->glyphs)     ke_free(data->glyphs);
+    ke_free(data);
 }
 
 ke_result load_font(struct ke_font_loader *self,
@@ -54,8 +51,6 @@ ke_result load_font(struct ke_font_loader *self,
     auto *l = reinterpret_cast<StbFontLoader *>(self);
     if (!l || !path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
     if (pixel_size <= 0.0f || atlas_size == 0 || codepoint_count == 0) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid font parameters");
-
-    auto *alloc = l->allocator;
 
     // 1. Slurp the TTF.
     std::FILE *fp = nullptr;
@@ -94,7 +89,7 @@ ke_result load_font(struct ke_font_loader *self,
     stbtt_PackEnd(&pc);
 
     // 3. Expand alpha â†’ RGBA8 (white RGB + glyph-coverage alpha).
-    uint8_t *atlas_rgba = (uint8_t *)alloc->alloc(alloc, (size_t)W * H * 4, 4);
+    uint8_t *atlas_rgba = (uint8_t *)ke_alloc((size_t)W * H * 4, 4);
     if (!atlas_rgba) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "atlas allocation failed");
     for (size_t i = 0; i < (size_t)W * H; ++i)
     {
@@ -108,7 +103,7 @@ ke_result load_font(struct ke_font_loader *self,
     stbtt_fontinfo info;
     if (!stbtt_InitFont(&info, ttf.data(), stbtt_GetFontOffsetForIndex(ttf.data(), 0)))
     {
-        alloc->free(alloc, atlas_rgba);
+        ke_free(atlas_rgba);
         return KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "stbtt_InitFont failed");
     }
     int ascent_i, descent_i, line_gap_i;
@@ -117,9 +112,9 @@ ke_result load_font(struct ke_font_loader *self,
     const float ascent = (float)ascent_i * scale;
     const float line_h = (float)(ascent_i - descent_i + line_gap_i) * scale;
 
-    ke_glyph_metrics *glyphs = (ke_glyph_metrics *)alloc->alloc(
-        alloc, sizeof(ke_glyph_metrics) * codepoint_count, alignof(ke_glyph_metrics));
-    if (!glyphs) { alloc->free(alloc, atlas_rgba); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "glyphs allocation failed"); }
+    ke_glyph_metrics *glyphs = (ke_glyph_metrics *)ke_alloc(
+        sizeof(ke_glyph_metrics) * codepoint_count, alignof(ke_glyph_metrics));
+    if (!glyphs) { ke_free(atlas_rgba); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "glyphs allocation failed"); }
 
     for (uint32_t i = 0; i < codepoint_count; ++i)
     {
@@ -137,8 +132,8 @@ ke_result load_font(struct ke_font_loader *self,
     }
 
     // 5. Assemble ke_font_data.
-    ke_font_data *fd = (ke_font_data *)alloc->alloc(alloc, sizeof(ke_font_data), alignof(ke_font_data));
-    if (!fd) { alloc->free(alloc, atlas_rgba); alloc->free(alloc, glyphs); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "font_data allocation failed"); }
+    ke_font_data *fd = (ke_font_data *)ke_alloc(sizeof(ke_font_data), alignof(ke_font_data));
+    if (!fd) { ke_free(atlas_rgba); ke_free(glyphs); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "font_data allocation failed"); }
     fd->atlas_rgba   = atlas_rgba;
     fd->atlas_width  = W;
     fd->atlas_height = H;
@@ -156,14 +151,12 @@ ke_result load_font(struct ke_font_loader *self,
 extern "C"
 ke_result ke_font_loader_stb_create(const ke_font_loader_stb_params *params, ke_font_loader_handle *out, ke_error **out_error)
 {
-    if (!params || !out || !params->allocator) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!params || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    auto *alloc = params->allocator;
-    void *mem = alloc->alloc(alloc, sizeof(StbFontLoader), alignof(StbFontLoader));
+    void *mem = ke_alloc(sizeof(StbFontLoader), alignof(StbFontLoader));
     if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed");
 
     auto *l = new (mem) StbFontLoader();
-    l->allocator = alloc;
     l->logger    = params->logger;
 
     l->api.handle    = l;

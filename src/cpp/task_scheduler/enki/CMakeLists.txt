@@ -19,10 +19,11 @@ target_include_directories(ke_task_scheduler_enki PRIVATE
     src
 )
 
-target_link_libraries(ke_task_scheduler_enki PUBLIC 
+target_link_libraries(ke_task_scheduler_enki PUBLIC
     ke_task_scheduler
     enkiTS::enkiTS
 )
+target_link_libraries(ke_task_scheduler_enki PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_task_scheduler_enki
     EXPORT KernelEngineTargets

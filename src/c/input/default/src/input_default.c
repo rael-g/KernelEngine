@@ -10,8 +10,6 @@
 
 typedef struct ke_input_internal
 {
-    ke_allocator *allocator;
-
     bool keys_down[MAX_KEYS];
     bool keys_pressed[MAX_KEYS];
     bool keys_released[MAX_KEYS];
@@ -186,26 +184,19 @@ static void input_destroy(ke_input *self)
 {
     if (!self) return;
     ke_input_internal *impl = (ke_input_internal *)self->handle;
-    ke_allocator *a = impl->allocator;
-    a->free(a, impl);
-    a->free(a, self);
-    a->destroy(a);
+    ke_free(impl);
+    ke_free(self);
 }
 
 ke_result ke_input_create(struct ke_logger *log, ke_input_handle *out_input, ke_error **out_error)
 {
     if (!out_input) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    ke_input *api = (ke_input *)alloc->alloc(alloc, sizeof(ke_input), 8);
-    if (!api) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed"); }
-    ke_input_internal *impl = (ke_input_internal *)alloc->alloc(alloc, sizeof(ke_input_internal), 8);
-    if (!impl) { alloc->free(alloc, api); alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    ke_input *api = (ke_input *)ke_alloc(sizeof(ke_input), 8);
+    if (!api) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
+    ke_input_internal *impl = (ke_input_internal *)ke_alloc(sizeof(ke_input_internal), 8);
+    if (!impl) { ke_free(api); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
     memset(impl, 0, sizeof(ke_input_internal));
-
-    impl->allocator = alloc;
 
     api->handle = impl;
     api->update = input_update;

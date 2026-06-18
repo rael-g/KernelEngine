@@ -20,7 +20,6 @@ class ShaderProviderInterface;
  */
 struct RenderContext
 {
-    ke_allocator* allocator = nullptr;
     ke_logger*    logger    = nullptr;
     ShaderProviderInterface* shader_provider = nullptr;
     render::GpuDevice*       gpu = nullptr;

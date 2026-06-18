@@ -1,17 +1,14 @@
-﻿#include <gtest/gtest.h>
+#include <gtest/gtest.h>
 #include <kernel_engine/kernel/common/array.h>
 #include <kernel_engine/allocator/allocator.h>
 
 class ArrayTest : public ::testing::Test {
 protected:
-    ke_allocator* alloc = nullptr;
     ke_array arr;
     bool arr_initialized = false;
 
     void SetUp() override {
-        alloc = ke_allocator_malloc_create();
-        ASSERT_NE(alloc, nullptr);
-        ke_result res = ke_array_init(&arr, 4, alloc);
+        ke_result res = ke_array_init(&arr, 4);
         ASSERT_EQ(res, KE_OK);
         arr_initialized = true;
     }
@@ -20,39 +17,13 @@ protected:
         if (arr_initialized) {
             ke_array_destroy(&arr);
         }
-        if (alloc) {
-            alloc->destroy(alloc);
-        }
     }
 };
 
 // --- Initialization Tests ---
 
 TEST(ArrayInitTest, Init_NullArray_ReturnsInvalidArgument) {
-    ke_allocator* a = ke_allocator_malloc_create();
-    ASSERT_EQ(ke_array_init(nullptr, 4, a), KE_ERROR);
-    a->destroy(a);
-}
-
-TEST(ArrayInitTest, Init_NullAllocator_ReturnsInvalidArgument) {
-    ke_array a;
-    ASSERT_EQ(ke_array_init(&a, 4, nullptr), KE_ERROR);
-}
-
-static void* fail_alloc(ke_allocator* alloc, size_t size, size_t alignment) { return nullptr; }
-static void* fail_realloc(ke_allocator* alloc, void* ptr, size_t size) { return nullptr; }
-static void fail_free(ke_allocator* alloc, void* ptr) {}
-static void fail_destroy(ke_allocator* alloc) {}
-
-TEST(ArrayInitTest, Init_AllocationFailure_ReturnsOutOfMemory) {
-    ke_allocator fa;
-    fa.alloc = fail_alloc;
-    fa.realloc = fail_realloc;
-    fa.free = fail_free;
-    fa.destroy = fail_destroy;
-    
-    ke_array a;
-    ASSERT_EQ(ke_array_init(&a, 4, &fa), KE_ERROR);
+    ASSERT_EQ(ke_array_init(nullptr, 4), KE_ERROR);
 }
 
 TEST_F(ArrayTest, Init_SetsSizeToZero) {

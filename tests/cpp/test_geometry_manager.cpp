@@ -3,7 +3,6 @@
 #include <geometry_manager.hpp>
 #include <render_context.hpp>
 #include <gpu_device.hpp>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/render/frame_packet.h>
 #include "mocks.hpp"
 
@@ -18,14 +17,9 @@ class GeometryManagerTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        std::memset(&alloc, 0, sizeof(alloc));
-        alloc.alloc = [](ke_allocator*, size_t s, size_t) { return std::malloc(s); };
-        alloc.free  = [](ke_allocator*, void* p) { std::free(p); };
-
         gpu_mock = new NiceMock<MockGpuDevice>();
         ctx.gpu = gpu_mock;
-        ctx.allocator = &alloc;
-        
+
         manager = std::make_unique<GeometryManager>();
     }
 
@@ -35,7 +29,6 @@ protected:
         delete gpu_mock;
     }
 
-    ke_allocator alloc{};
     NiceMock<MockGpuDevice>* gpu_mock = nullptr;
     RenderContext ctx{};
     std::unique_ptr<GeometryManager> manager;

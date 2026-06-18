@@ -36,7 +36,7 @@ class CoreRenderer;
 class RenderGraphImpl
 {
 public:
-    explicit RenderGraphImpl(CoreRenderer* renderer, ke_allocator* allocator);
+    explicit RenderGraphImpl(CoreRenderer* renderer);
     ~RenderGraphImpl();
 
     /// Wires the vtable returned to user code. Owns this — destruction frees it.
@@ -124,7 +124,6 @@ private:
     ke_render_pass_ctx BuildPassCtx(Bridge& bridge);
 
     CoreRenderer* renderer_ = nullptr;
-    ke_allocator* allocator_ = nullptr;
 
     std::unordered_map<std::string, Resource> resources_;
     std::vector<Pass> passes_;

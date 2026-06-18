@@ -54,8 +54,7 @@ public static class ServiceCollectionExtensions
 
             var @params = new ke_window_glfw_params
             {
-                allocator  = sp.GetRequiredService<Allocator>().Native,
-                logger     = logger != null ? logger.Native : null,
+                logger = logger != null ? logger.Native : null,
                 input      = input  != null ? input.Native  : null,
                 title      = (sbyte*)titlePtr,
                 width      = opts.Width,

@@ -1,5 +1,6 @@
 ﻿#include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #include <flecs.h>
 
@@ -20,7 +21,6 @@ typedef struct query_cache_entry
 
 typedef struct ecs_flecs_state
 {
-    ke_allocator *allocator;
     ecs_world_t  *world;
 
     // Query cache — first call per cid creates the flecs query and we keep it.
@@ -54,13 +54,12 @@ static query_cache_entry *find_or_create_query(ecs_flecs_state *s, ke_component_
     if (s->query_count == s->query_capacity)
     {
         size_t new_cap = s->query_capacity ? s->query_capacity * 2 : 8;
-        query_cache_entry *new_buf = (query_cache_entry *)s->allocator->alloc(
-            s->allocator, sizeof(query_cache_entry) * new_cap, alignof(query_cache_entry));
+        query_cache_entry *new_buf = (query_cache_entry *)ke_alloc(sizeof(query_cache_entry) * new_cap, alignof(query_cache_entry));
         if (!new_buf) return NULL;
         if (s->queries)
         {
             memcpy(new_buf, s->queries, sizeof(query_cache_entry) * s->query_count);
-            s->allocator->free(s->allocator, s->queries);
+            ke_free(s->queries);
         }
         s->queries = new_buf;
         s->query_capacity = new_cap;
@@ -86,10 +85,9 @@ static bool grow_scratch_entities(ecs_flecs_state *s, size_t needed)
     if (needed <= s->scratch_entity_capacity) return true;
     size_t new_cap = s->scratch_entity_capacity ? s->scratch_entity_capacity * 2 : 16;
     while (new_cap < needed) new_cap *= 2;
-    ke_entity *new_buf = (ke_entity *)s->allocator->alloc(
-        s->allocator, sizeof(ke_entity) * new_cap, alignof(ke_entity));
+    ke_entity *new_buf = (ke_entity *)ke_alloc(sizeof(ke_entity) * new_cap, alignof(ke_entity));
     if (!new_buf) return false;
-    if (s->scratch_entities) s->allocator->free(s->allocator, s->scratch_entities);
+    if (s->scratch_entities) ke_free(s->scratch_entities);
     s->scratch_entities         = new_buf;
     s->scratch_entity_capacity  = new_cap;
     return true;
@@ -100,9 +98,9 @@ static bool grow_scratch_data(ecs_flecs_state *s, size_t needed_bytes)
     if (needed_bytes <= s->scratch_data_capacity) return true;
     size_t new_cap = s->scratch_data_capacity ? s->scratch_data_capacity * 2 : 256;
     while (new_cap < needed_bytes) new_cap *= 2;
-    char *new_buf = (char *)s->allocator->alloc(s->allocator, new_cap, alignof(max_align_t));
+    char *new_buf = (char *)ke_alloc(new_cap, alignof(max_align_t));
     if (!new_buf) return false;
-    if (s->scratch_data) s->allocator->free(s->allocator, s->scratch_data);
+    if (s->scratch_data) ke_free(s->scratch_data);
     s->scratch_data          = new_buf;
     s->scratch_data_capacity = new_cap;
     return true;
@@ -244,16 +242,14 @@ static void ecs_flecs_destroy(ke_ecs *self)
         {
             if (h->state.queries[i].query) ecs_query_fini(h->state.queries[i].query);
         }
-        h->state.allocator->free(h->state.allocator, h->state.queries);
+        ke_free(h->state.queries);
     }
-    if (h->state.scratch_entities) h->state.allocator->free(h->state.allocator, h->state.scratch_entities);
-    if (h->state.scratch_data)     h->state.allocator->free(h->state.allocator, h->state.scratch_data);
+    if (h->state.scratch_entities) ke_free(h->state.scratch_entities);
+    if (h->state.scratch_data)     ke_free(h->state.scratch_data);
 
     if (h->state.world) ecs_fini(h->state.world);
 
-    ke_allocator *alloc = h->state.allocator;
-    alloc->free(alloc, h);
-    alloc->destroy(alloc);
+    ke_free(h);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -265,20 +261,14 @@ ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     (void)params;
     if (!out_ecs) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    ecs_flecs_handle *h = (ecs_flecs_handle *)alloc->alloc(
-        alloc, sizeof(ecs_flecs_handle), alignof(ecs_flecs_handle));
-    if (!h) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    ecs_flecs_handle *h = (ecs_flecs_handle *)ke_alloc(sizeof(ecs_flecs_handle), alignof(ecs_flecs_handle));
+    if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(h, 0, sizeof(*h));
 
-    h->state.allocator = alloc;
-    h->state.world     = ecs_init();
+    h->state.world = ecs_init();
     if (!h->state.world)
     {
-        alloc->free(alloc, h);
-        alloc->destroy(alloc);
+        ke_free(h);
         return KE_ERROR_SET(out_error, &KE_ERROR_NOT_INITIALIZED, "flecs world init failed");
     }
 

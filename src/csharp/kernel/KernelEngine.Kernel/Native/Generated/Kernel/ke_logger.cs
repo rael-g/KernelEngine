@@ -1,9 +1,5 @@
 namespace KernelEngine.Kernel.Native;
 
-public partial struct ke_logger
-{
-}
-
 public unsafe partial struct ke_logger
 {
     public void* handle;

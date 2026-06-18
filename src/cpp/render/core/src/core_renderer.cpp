@@ -36,14 +36,13 @@ CoreRenderer::CoreRenderer(const GpuRendererParams& params)
     std::memset(&ctx_, 0, sizeof(ctx_));
     std::memset(&render_api_, 0, sizeof(render_api_));
     
-    ctx_.allocator = params.allocator;
     ctx_.logger    = params.logger;
 
     render_api_.handle = this;
 
     // Default shader provider (File system)
-    if (ctx_.allocator) {
-        void* provider_mem = ctx_.allocator->alloc(ctx_.allocator, sizeof(FileShaderProvider), alignof(FileShaderProvider));
+    {
+        void* provider_mem = ke_alloc(sizeof(FileShaderProvider), alignof(FileShaderProvider));
         if (provider_mem) {
             ctx_.shader_provider = new (provider_mem) FileShaderProvider(shader_path_);
             own_shader_provider_ = true;
@@ -233,11 +232,9 @@ void CoreRenderer::GetBackbufferSize(uint32_t* out_w, uint32_t* out_h) const
 ke_render_graph_handle CoreRenderer::CreateRenderGraph()
 {
     ke_render_graph_handle h = {};
-    ke_allocator* allocator = ctx_.allocator;
-    if (!allocator) return h;
-    void* mem = allocator->alloc(allocator, sizeof(RenderGraphImpl), alignof(RenderGraphImpl));
+    void* mem = ke_alloc(sizeof(RenderGraphImpl), alignof(RenderGraphImpl));
     if (!mem) return h;
-    auto* graph = new (mem) RenderGraphImpl(this, allocator);
+    auto* graph = new (mem) RenderGraphImpl(this);
     h.ref     = graph->ToApi();
     h.destroy = &RenderGraphImpl::DestroyApi;
     return h;
@@ -253,12 +250,12 @@ CoreRenderer::~CoreRenderer()
 {
     if (own_gpu_device_ && ctx_.gpu) {
         ctx_.gpu->~GpuDevice();
-        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.gpu);
+        ke_free(ctx_.gpu);
     }
     if (own_shader_provider_ && ctx_.shader_provider)
     {
         ctx_.shader_provider->~ShaderProviderInterface();
-        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.shader_provider);
+        ke_free(ctx_.shader_provider);
     }
 }
 
@@ -267,7 +264,7 @@ void CoreRenderer::SetShaderProvider(ShaderProviderInterface* provider)
     if (own_shader_provider_ && ctx_.shader_provider)
     {
         ctx_.shader_provider->~ShaderProviderInterface();
-        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.shader_provider);
+        ke_free(ctx_.shader_provider);
     }
     ctx_.shader_provider = provider;
     own_shader_provider_ = false;
@@ -277,7 +274,7 @@ void CoreRenderer::SetGpuDevice(GpuDevice* gpu)
 {
     if (own_gpu_device_ && ctx_.gpu) {
         ctx_.gpu->~GpuDevice();
-        if (ctx_.allocator) ctx_.allocator->free(ctx_.allocator, ctx_.gpu);
+        ke_free(ctx_.gpu);
     }
     ctx_.gpu = gpu;
     own_gpu_device_ = false;
@@ -1121,9 +1118,8 @@ ke_render *CoreRenderer::ToApi() { return &render_api_; }
 void CoreRenderer::DestroyApi(ke_render *self) {
     if (!self || !self->handle) return;
     auto *sys = static_cast<CoreRenderer *>(self->handle);
-    auto *alloc = sys->ctx_.allocator;
     sys->~CoreRenderer();
-    if (alloc) alloc->free(alloc, sys);
+    ke_free(sys);
 }
 
 } // namespace kernel_engine::render::core

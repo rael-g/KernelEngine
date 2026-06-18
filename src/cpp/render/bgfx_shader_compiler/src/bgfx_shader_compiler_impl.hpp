@@ -27,7 +27,6 @@ class BgfxShaderCompiler
   private:
     ke_shader_compiler compiler_api_{};
 
-    ke_allocator *allocator_ = nullptr;
     ke_logger *logger_ = nullptr;
     std::string shaderc_path_;
 };

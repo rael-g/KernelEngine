@@ -16,7 +16,7 @@ public interface IKernelFactory
     IWorld CreateWorld(IAllocator allocator);
 
     /// <summary>Creates a frame-sync ring with <paramref name="bufferCount"/> slots (caller's policy).</summary>
-    IFrameSync CreateFrameSync(IAllocator allocator, int bufferCount);
+    IFrameSync CreateFrameSync(int bufferCount);
 
     /// <summary>
     /// Publishes <paramref name="name"/> as the calling thread's name. Sets the cross-language

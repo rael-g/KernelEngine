@@ -1,17 +1,13 @@
 ﻿#include <gtest/gtest.h>
 #include <kernel_engine/audio/miniaudio/miniaudio_audio.h>
-#include <kernel_engine/allocator/allocator.h>
 
 class MiniAudioTest : public ::testing::Test {
 protected:
-    ke_allocator* allocator = nullptr;
     ke_audio_handle audio_h{};
     ke_audio* audio = nullptr;
 
     void SetUp() override {
-        allocator = ke_allocator_malloc_create();
         ke_audio_miniaudio_params params{};
-        params.allocator = allocator;
         params.logger = nullptr;
 
         ke_result res = ke_audio_miniaudio_create(&params, &audio_h, nullptr);
@@ -27,9 +23,6 @@ protected:
         if (audio_h.ref) {
             audio_h.destroy(audio_h.ref);
         }
-        if (allocator) {
-            allocator->destroy(allocator);
-        }
     }
 };
 
@@ -41,15 +34,7 @@ TEST_F(MiniAudioTest, Create_Works) {
 
 TEST_F(MiniAudioTest, Create_NullOut_ReturnsInvalidArgument) {
     ke_audio_miniaudio_params params{};
-    params.allocator = allocator;
     ASSERT_EQ(ke_audio_miniaudio_create(&params, nullptr, nullptr), KE_ERROR);
-}
-
-TEST_F(MiniAudioTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_audio_handle a{};
-    ke_audio_miniaudio_params params{};
-    params.allocator = nullptr;
-    ASSERT_EQ(ke_audio_miniaudio_create(&params, &a, nullptr), KE_ERROR);
 }
 
 TEST_F(MiniAudioTest, LoadSound_NullPath_ReturnsInvalidArgument) {
@@ -96,42 +81,6 @@ TEST_F(MiniAudioTest, SetMasterVolume_ValidValues) {
     SUCCEED();
 }
 
-TEST_F(MiniAudioTest, LoadSound_ReturnsOom_WhenAllocFails) {
-    if (!audio) GTEST_SKIP();
-    
-    ke_allocator fa{};
-    fa.alloc = [](ke_allocator*, size_t, size_t) -> void* { return nullptr; };
-    fa.free  = [](ke_allocator*, void*) {};
-    
-    // We need to inject this allocator into the existing audio state.
-    // This is hacky, but for coverage...
-    // Or we create a new one with failing allocator.
-    
-    ke_audio_miniaudio_params p{};
-    p.allocator = &fa;
-    ke_audio_handle a{};
-    ke_audio_miniaudio_create(&p, &a, nullptr); // This will fail creation itself due to OOM
-    ASSERT_EQ(a.ref, nullptr);
-}
-
 TEST_F(MiniAudioTest, Play_NullHandle_ReturnsInvalidArgument) {
     ASSERT_EQ(audio->play(nullptr, 0, 1.0f, 0, nullptr), KE_ERROR);
-}
-
-TEST_F(MiniAudioTest, Create_ReturnsOom_WhenApiAllocFails) {
-    static int countdown = 1;
-    countdown = 1; // Fail on second alloc (api struct)
-    
-    ke_allocator fa{};
-    fa.alloc = [](ke_allocator*, size_t size, size_t alignment) -> void* { 
-        if (countdown-- > 0) return malloc(size);
-        return nullptr; 
-    };
-    fa.free = [](ke_allocator*, void* p) { if(p) free(p); };
-    
-    ke_audio_miniaudio_params p{};
-    p.allocator = &fa;
-    ke_audio_handle a{};
-    ke_result res = ke_audio_miniaudio_create(&p, &a, nullptr);
-    ASSERT_EQ(res, KE_ERROR);
 }

@@ -11,6 +11,8 @@ extern "C"
 {
 #endif
 
+    struct ke_logger;
+
 #define KE_ID_INPUT "ke_input"
 
     /// @brief System responsible for keyboard and mouse state tracking.

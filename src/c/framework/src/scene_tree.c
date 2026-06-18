@@ -19,7 +19,6 @@
 typedef struct scene_tree_state {
     ke_scene_tree    api;
     ke_ecs          *ecs;          // borrowed
-    ke_allocator    *allocator;    // borrowed
     ke_entity        root;
     ke_component_id  transform_cid;
     ke_component_id  hierarchy_cid;
@@ -289,9 +288,7 @@ static void vt_destroy(ke_scene_tree *self) {
     scene_tree_state *s = (scene_tree_state *)self->handle;
     // Destroy root + everything under it.
     destroy_entities_recursive(s, s->root);
-    ke_allocator *a = s->allocator;
-    a->free(a, s);
-    a->destroy(a);
+    ke_free(s);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -299,16 +296,11 @@ static void vt_destroy(ke_scene_tree *self) {
 ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree_handle *out_tree, ke_error **out_error) {
     if (!ecs || !out_tree) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    scene_tree_state *s = (scene_tree_state *)alloc->alloc(
-        alloc, sizeof(scene_tree_state), 8);
-    if (!s) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    scene_tree_state *s = (scene_tree_state *)ke_alloc(sizeof(scene_tree_state), 8);
+    if (!s) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(s, 0, sizeof(*s));
 
     s->ecs       = ecs;
-    s->allocator = alloc;
     s->transform_cid = ensure_component(ecs, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component));
     s->hierarchy_cid = ensure_component(ecs, KE_COMPONENT_NAME_HIERARCHY, sizeof(ke_hierarchy_component));
     s->name_cid      = ensure_component(ecs, KE_COMPONENT_NAME_NAME,      sizeof(ke_name_component));
@@ -316,8 +308,7 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree_handle *out_tree, ke_e
     // Spin up root entity with the standard components.
     s->root = ecs->entity_create(ecs);
     if (s->root == KE_ENTITY_INVALID) {
-        alloc->free(alloc, s);
-        alloc->destroy(alloc);
+        ke_free(s);
         return KE_ERROR;
     }
     // Add all components FIRST, then fetch + populate. Each add can move the
@@ -325,8 +316,7 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_scene_tree_handle *out_tree, ke_e
     if (!ecs->component_add(ecs, s->root, s->hierarchy_cid) ||
         !ecs->component_add(ecs, s->root, s->name_cid)) {
         ecs->entity_destroy(ecs, s->root);
-        alloc->free(alloc, s);
-        alloc->destroy(alloc);
+        ke_free(s);
         return KE_ERROR;
     }
 

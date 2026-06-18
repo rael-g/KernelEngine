@@ -20,7 +20,6 @@ extern "C"
 
     struct ke_frame_packet;
     typedef struct ke_render_graph ke_render_graph;
-    struct ke_allocator;
 
     /// @brief Owner wrapper for a render graph (only pointers, so a forward decl suffices).
     /// Full graph definition + the ke_render_graph_create wrapper live in render_graph.h.

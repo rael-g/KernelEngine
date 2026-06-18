@@ -168,7 +168,7 @@ public class Application : IDisposable
         InitializeSystems();
 
         // ke.sim writes → ke.render reads.
-        using var frameSync     = _kernelFactory.CreateFrameSync(Allocator, bufferCount: 2);
+        using var frameSync     = _kernelFactory.CreateFrameSync(bufferCount: 2);
         using var renderReady   = new System.Threading.ManualResetEventSlim(false);
         using var simReady      = new System.Threading.ManualResetEventSlim(false);
 

@@ -3,6 +3,7 @@
 // ke_asset_resolver->resolve_mesh.
 
 #include "mesh_shape_internal.h"
+#include <kernel_engine/allocator/allocator.h>
 
 #include <math.h>
 #include <stdalign.h>
@@ -123,9 +124,9 @@ static void bake_sphere(ke_vertex *vtx, uint16_t *idx, uint32_t segments, uint32
     }
 }
 
-ke_result ke_mesh_shape_bake_internal(ke_allocator *alloc, ke_mesh_primitive prim,
+ke_result ke_mesh_shape_bake_internal(ke_mesh_primitive prim,
                                        uint32_t segments, ke_mesh_shape_data *out_data) {
-    if (!alloc || !out_data) return KE_ERROR;
+    if (!out_data) return KE_ERROR;
     memset(out_data, 0, sizeof(*out_data));
 
     uint32_t vcount = 0, icount = 0;
@@ -152,11 +153,11 @@ ke_result ke_mesh_shape_bake_internal(ke_allocator *alloc, ke_mesh_primitive pri
         return KE_ERROR;
     }
 
-    ke_vertex *vbuf = (ke_vertex *)alloc->alloc(alloc, sizeof(ke_vertex) * vcount, alignof(ke_vertex));
+    ke_vertex *vbuf = (ke_vertex *)ke_alloc(sizeof(ke_vertex) * vcount, alignof(ke_vertex));
     if (!vbuf) return KE_ERROR;
-    uint16_t *ibuf = (uint16_t *)alloc->alloc(alloc, sizeof(uint16_t) * icount, alignof(uint16_t));
+    uint16_t *ibuf = (uint16_t *)ke_alloc(sizeof(uint16_t) * icount, alignof(uint16_t));
     if (!ibuf) {
-        alloc->free(alloc, vbuf);
+        ke_free(vbuf);
         return KE_ERROR;
     }
 
@@ -179,8 +180,8 @@ ke_result ke_mesh_shape_bake_internal(ke_allocator *alloc, ke_mesh_primitive pri
         break;
     default:
         // unreachable — guarded above
-        alloc->free(alloc, vbuf);
-        alloc->free(alloc, ibuf);
+        ke_free(vbuf);
+        ke_free(ibuf);
         return KE_ERROR;
     }
 
@@ -191,10 +192,10 @@ ke_result ke_mesh_shape_bake_internal(ke_allocator *alloc, ke_mesh_primitive pri
     return KE_OK;
 }
 
-void ke_mesh_shape_free_internal(ke_allocator *alloc, ke_mesh_shape_data *data) {
-    if (!alloc || !data) return;
-    if (data->vertices) alloc->free(alloc, data->vertices);
-    if (data->indices)  alloc->free(alloc, data->indices);
+void ke_mesh_shape_free_internal(ke_mesh_shape_data *data) {
+    if (!data) return;
+    if (data->vertices) ke_free(data->vertices);
+    if (data->indices)  ke_free(data->indices);
     data->vertices     = NULL;
     data->indices      = NULL;
     data->vertex_count = 0;

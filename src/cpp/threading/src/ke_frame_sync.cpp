@@ -9,19 +9,16 @@
 namespace kernel_engine::threading
 {
 
-KeFrameSync::KeFrameSync(ke_allocator *alloc,
-                          uint32_t      buffer_count,
+KeFrameSync::KeFrameSync(uint32_t      buffer_count,
                           uint32_t      draw_capacity,
                           uint32_t      point_capacity,
                           uint32_t      spot_capacity)
-    : alloc_(alloc)
-    , count_(buffer_count)
+    : count_(buffer_count)
     , write_sem_(buffer_count)  // all slots free initially
     , read_sem_(0)              // no ready slots
 {
     packets_ = static_cast<ke_frame_packet *>(
-        alloc->alloc(alloc, sizeof(ke_frame_packet) * buffer_count,
-                     alignof(ke_frame_packet)));
+        ke_alloc(sizeof(ke_frame_packet) * buffer_count, alignof(ke_frame_packet)));
 
     for (uint32_t i = 0; i < buffer_count; ++i)
     {
@@ -31,32 +28,27 @@ KeFrameSync::KeFrameSync(ke_allocator *alloc,
         p.shadow.map_handle = KE_SHADOW_MAP_NONE;
 
         p.draw_commands = static_cast<ke_draw_command *>(
-            alloc->alloc(alloc, sizeof(ke_draw_command) * draw_capacity,
-                         alignof(ke_draw_command)));
+            ke_alloc(sizeof(ke_draw_command) * draw_capacity, alignof(ke_draw_command)));
         p.draw_capacity = draw_capacity;
 
         // Shadow draws reuse the same capacity for simplicity
         p.shadow_draw_commands = static_cast<ke_draw_command *>(
-            alloc->alloc(alloc, sizeof(ke_draw_command) * draw_capacity,
-                         alignof(ke_draw_command)));
+            ke_alloc(sizeof(ke_draw_command) * draw_capacity, alignof(ke_draw_command)));
         p.shadow_draw_capacity = draw_capacity;
 
         p.point_lights = static_cast<ke_point_light *>(
-            alloc->alloc(alloc, sizeof(ke_point_light) * point_capacity,
-                         alignof(ke_point_light)));
+            ke_alloc(sizeof(ke_point_light) * point_capacity, alignof(ke_point_light)));
         p.point_light_capacity = point_capacity;
 
         p.spot_lights = static_cast<ke_spot_light *>(
-            alloc->alloc(alloc, sizeof(ke_spot_light) * spot_capacity,
-                         alignof(ke_spot_light)));
+            ke_alloc(sizeof(ke_spot_light) * spot_capacity, alignof(ke_spot_light)));
         p.spot_light_capacity = spot_capacity;
 
         // UI draws: fixed default for now (256 quads/frame — fits Pong's score + instructions
         // with room to spare). When a real game pushes past it we add a parameter or grow on demand.
         constexpr uint32_t kUiDefaultCapacity = 256;
         p.ui_draw_commands = static_cast<ke_ui_draw_command *>(
-            alloc->alloc(alloc, sizeof(ke_ui_draw_command) * kUiDefaultCapacity,
-                         alignof(ke_ui_draw_command)));
+            ke_alloc(sizeof(ke_ui_draw_command) * kUiDefaultCapacity, alignof(ke_ui_draw_command)));
         p.ui_draw_capacity = kUiDefaultCapacity;
     }
 }
@@ -65,13 +57,13 @@ KeFrameSync::~KeFrameSync()
 {
     for (uint32_t i = 0; i < count_; ++i)
     {
-        alloc_->free(alloc_, packets_[i].draw_commands);
-        alloc_->free(alloc_, packets_[i].shadow_draw_commands);
-        alloc_->free(alloc_, packets_[i].point_lights);
-        alloc_->free(alloc_, packets_[i].spot_lights);
-        alloc_->free(alloc_, packets_[i].ui_draw_commands);
+        ke_free(packets_[i].draw_commands);
+        ke_free(packets_[i].shadow_draw_commands);
+        ke_free(packets_[i].point_lights);
+        ke_free(packets_[i].spot_lights);
+        ke_free(packets_[i].ui_draw_commands);
     }
-    alloc_->free(alloc_, packets_);
+    ke_free(packets_);
 }
 
 void KeFrameSync::semaphore_wait(std::mutex &mtx, std::condition_variable &cv, uint32_t &count)
@@ -132,47 +124,41 @@ struct KeFrameSyncHandle
 {
     ke_frame_sync                            vtable; // MUST be first
     kernel_engine::threading::KeFrameSync  *impl;
-    ke_allocator                            *alloc;  // owns this handle + impl
 };
 
-// Owner-handle destroy: frees the impl and the handle via the stored allocator.
+// Owner-handle destroy: frees the impl and the handle.
 void fs_destroy(ke_frame_sync *self)
 {
     if (!self) return;
     auto *hh = reinterpret_cast<KeFrameSyncHandle *>(self);
-    ke_allocator *a = hh->alloc;
-    if (!a) return;
     hh->impl->~KeFrameSync();
-    a->free(a, hh->impl);
-    a->free(a, hh);
+    ke_free(hh->impl);
+    ke_free(hh);
 }
 
 } // namespace
 
 extern "C"
 {
-    ke_result ke_frame_sync_std_create(ke_allocator  *alloc,
-                                        uint32_t       buffer_count,
+    ke_result ke_frame_sync_std_create(uint32_t       buffer_count,
                                         uint32_t       draw_capacity,
                                         uint32_t       point_capacity,
                                         uint32_t       spot_capacity,
                                         ke_frame_sync_handle *out,
                                         ke_error      **out_error)
     {
-        if (!alloc || buffer_count < 2 || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        if (buffer_count < 2 || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
         auto *h = static_cast<KeFrameSyncHandle *>(
-            alloc->alloc(alloc, sizeof(KeFrameSyncHandle), alignof(KeFrameSyncHandle)));
+            ke_alloc(sizeof(KeFrameSyncHandle), alignof(KeFrameSyncHandle)));
         if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "handle allocation failed");
 
-        auto *impl_mem = alloc->alloc(
-            alloc, sizeof(kernel_engine::threading::KeFrameSync),
+        auto *impl_mem = ke_alloc(sizeof(kernel_engine::threading::KeFrameSync),
             alignof(kernel_engine::threading::KeFrameSync));
-        if (!impl_mem) { alloc->free(alloc, h); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "impl allocation failed"); }
+        if (!impl_mem) { ke_free(h); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "impl allocation failed"); }
 
         h->impl = new (impl_mem) kernel_engine::threading::KeFrameSync(
-            alloc, buffer_count, draw_capacity, point_capacity, spot_capacity);
-        h->alloc = alloc;
+            buffer_count, draw_capacity, point_capacity, spot_capacity);
         h->vtable.handle = h;
         h->vtable.begin_write = [](ke_frame_sync *self) -> ke_frame_packet * {
             if (!self) return nullptr;

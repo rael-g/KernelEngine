@@ -4,7 +4,6 @@
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/ecs/variant.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/world_create.h>
@@ -30,7 +29,6 @@ static fs::path WriteTempScene(const std::string &contents) {
 class SceneLoaderTest : public ::testing::Test
 {
 protected:
-    ke_allocator      *allocator      = nullptr;
     ke_task_scheduler_handle task_scheduler_h{};
     ke_ecs_handle            ecs_h{};
     ke_runtime_handle        runtime_h{};
@@ -46,8 +44,7 @@ protected:
 
     void SetUp() override
     {
-        allocator = ke_allocator_malloc_create();
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler_h, NULL), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(&task_scheduler_h, NULL), KE_OK);
         task_scheduler = task_scheduler_h.ref;
 
         ke_ecs_flecs_params ep{};

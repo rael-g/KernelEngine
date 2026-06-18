@@ -1,294 +1,132 @@
-﻿#include <kernel_engine/allocator/allocator.h>
-#include <kernel_engine/common/error.h>
-#include <stdint.h>
-#include <stdio.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <stdlib.h>
 #include <string.h>
 
-static void *malloc_alloc(ke_allocator *self, size_t size, size_t alignment)
+/*
+ * Header layout stored just before the aligned pointer returned to callers:
+ *
+ *   [raw malloc]  (padding)  [size_t: alloc_size]  [uint16_t: offset]  [returned ptr]
+ *                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ *                            KE_HEADER_BYTES = sizeof(size_t) + sizeof(uint16_t)
+ *
+ * 'offset' = (uintptr_t)returned_ptr - (uintptr_t)raw_malloc.
+ * Stored as uint16_t so alignments up to 65535 are supported.
+ */
+
+#define KE_HEADER_BYTES (sizeof(size_t) + sizeof(uint16_t))
+
+static void  header_write(void *aligned, size_t alloc_size, uint16_t offset);
+static size_t header_read_size(const void *aligned);
+static void *header_raw(const void *aligned);
+
+static void header_write(void *aligned, size_t alloc_size, uint16_t offset)
 {
-    (void)self;
-    (void)alignment;
-    return malloc(size);
+    memcpy((uint8_t *)aligned - sizeof(uint16_t),              &offset,     sizeof(uint16_t));
+    memcpy((uint8_t *)aligned - sizeof(uint16_t) - sizeof(size_t), &alloc_size, sizeof(size_t));
 }
 
-static void malloc_free(ke_allocator *self, void *ptr)
+static size_t header_read_size(const void *aligned)
 {
-    (void)self;
-    free(ptr);
+    size_t s;
+    memcpy(&s, (const uint8_t *)aligned - sizeof(uint16_t) - sizeof(size_t), sizeof(size_t));
+    return s;
 }
 
-static void *malloc_realloc(ke_allocator *self, void *ptr, size_t new_size)
+static void *header_raw(const void *aligned)
 {
-    (void)self;
-    return realloc(ptr, new_size);
+    uint16_t offset;
+    memcpy(&offset, (const uint8_t *)aligned - sizeof(uint16_t), sizeof(uint16_t));
+    return (void *)((const uint8_t *)aligned - offset);
 }
 
-ke_allocator *ke_allocator_malloc_create(void)
+/* ── Heap allocation ──────────────────────────────────────────────────────── */
+
+void *ke_alloc(size_t size, size_t alignment)
 {
-    ke_allocator *api = (ke_allocator *)calloc(1, sizeof(ke_allocator));
-    if (!api)
-    {
+    if (size == 0)
         return NULL;
-    }
-    api->destroy = (void (*)(ke_allocator *))free;
-    api->alloc = malloc_alloc;
-    api->free = malloc_free;
-    api->realloc = malloc_realloc;
-    return api;
+    if (alignment < 1)
+        alignment = 1;
+
+    /* total must fit: header bytes + alignment padding + payload. */
+    size_t total = size + alignment + KE_HEADER_BYTES;
+    void  *raw   = malloc(total);
+    if (!raw)
+        return NULL;
+
+    /* First address that leaves room for the header before it. */
+    uintptr_t base    = (uintptr_t)raw + KE_HEADER_BYTES;
+    uintptr_t aligned = (base + alignment - 1) & ~(uintptr_t)(alignment - 1);
+    uint16_t  offset  = (uint16_t)(aligned - (uintptr_t)raw);
+
+    header_write((void *)aligned, size, offset);
+    return (void *)aligned;
 }
 
-typedef struct ke_arena
-{
-    uint8_t *buffer;
-    size_t capacity;
-    size_t offset;
-} ke_arena;
-
-static void *arena_alloc(ke_allocator *self, size_t size, size_t alignment)
-{
-    if (!self || size == 0)
-    {
-        return NULL;
-    }
-    ke_arena *arena = (ke_arena *)self->handle;
-    if (!arena || !arena->buffer)
-    {
-        return NULL;
-    }
-    if (alignment == 0)
-    {
-        alignment = 8;
-    }
-    uintptr_t current_ptr = (uintptr_t)(arena->buffer + arena->offset);
-    uintptr_t data_ptr = (current_ptr + alignment - 1) & ~(alignment - 1);
-    uintptr_t next_offset = (data_ptr + size) - (uintptr_t)arena->buffer;
-    if (next_offset > arena->capacity)
-    {
-        return NULL;
-    }
-    arena->offset = (size_t)next_offset;
-    return (void *)data_ptr;
-}
-
-static void *arena_realloc(ke_allocator *self, void *ptr, size_t new_size)
+void ke_free(void *ptr)
 {
     if (!ptr)
+        return;
+    free(header_raw(ptr));
+}
+
+void *ke_realloc(void *ptr, size_t new_size)
+{
+    if (!ptr)
+        return ke_alloc(new_size, 1);
+    if (new_size == 0)
     {
-        return arena_alloc(self, new_size, 0);
+        ke_free(ptr);
+        return NULL;
     }
-    void *new_ptr = arena_alloc(self, new_size, 0);
-    if (new_ptr)
-    {
-        memcpy(new_ptr, ptr, new_size);
-    }
+    size_t old_size = header_read_size(ptr);
+    void  *new_ptr  = ke_alloc(new_size, 1);
+    if (!new_ptr)
+        return NULL;
+    size_t copy = old_size < new_size ? old_size : new_size;
+    memcpy(new_ptr, ptr, copy);
+    ke_free(ptr);
     return new_ptr;
 }
 
-static void arena_reset(ke_allocator *self)
-{
-    if (self && self->handle)
-    {
-        ((ke_arena *)self->handle)->offset = 0;
-    }
-}
-static void arena_destroy(ke_allocator *self)
-{
-    if (!self)
-    {
-        return;
-    }
-    ke_arena *arena = (ke_arena *)self->handle;
-    if (arena)
-    {
-        free(arena->buffer);
-        free(arena);
-    }
-    free(self);
-}
+/* ── Arena ────────────────────────────────────────────────────────────────── */
 
-ke_allocator *ke_allocator_arena_create(size_t capacity)
+void ke_arena_init(ke_arena *arena, size_t capacity)
 {
-    ke_arena *arena = (ke_arena *)calloc(1, sizeof(ke_arena));
     if (!arena)
-    {
+        return;
+    arena->buffer   = (uint8_t *)malloc(capacity);
+    arena->capacity = arena->buffer ? capacity : 0;
+    arena->offset   = 0;
+}
+
+void *ke_arena_alloc(ke_arena *arena, size_t size, size_t alignment)
+{
+    if (!arena || !arena->buffer || size == 0)
         return NULL;
-    }
-    arena->buffer = (uint8_t *)malloc(capacity);
-    if (!arena->buffer)
-    {
-        free(arena);
+    if (alignment == 0)
+        alignment = 8;
+    uintptr_t cur     = (uintptr_t)(arena->buffer + arena->offset);
+    uintptr_t aligned = (cur + alignment - 1) & ~(uintptr_t)(alignment - 1);
+    size_t    next    = (size_t)(aligned + size - (uintptr_t)arena->buffer);
+    if (next > arena->capacity)
         return NULL;
-    }
-    arena->capacity = capacity;
-    ke_allocator *api = (ke_allocator *)calloc(1, sizeof(ke_allocator));
-    if (!api)
-    {
-        free(arena->buffer);
-        free(arena);
-        return NULL;
-    }
-    api->handle = arena;
-    api->destroy = arena_destroy;
-    api->alloc = arena_alloc;
-    api->realloc = arena_realloc;
-    api->reset = arena_reset;
-    return api;
+    arena->offset = next;
+    return (void *)aligned;
 }
 
-// --- Proxy Allocator (Memory Tracking) ---
-
-#include <kernel_engine/logger/logger.h>
-
-typedef struct proxy_impl
+void ke_arena_reset(ke_arena *arena)
 {
-    ke_allocator *inner;
-    char name[64];
-    ke_allocator_stats stats;
-} proxy_impl;
-
-// Note: Using a simple header to track size for free/realloc stats.
-// In a production engine we'd use a more robust way or ask the inner allocator.
-typedef struct alloc_header
-{
-    size_t size;
-} alloc_header;
-
-static void *proxy_alloc(ke_allocator *self, size_t size, size_t alignment)
-{
-    if (!self || !self->handle) return NULL;
-    proxy_impl *impl = (proxy_impl *)self->handle;
-    if (!impl->inner) return NULL;
-    
-    size_t total_size = size + sizeof(alloc_header);
-    
-    uint8_t *ptr = (uint8_t *)impl->inner->alloc(impl->inner, total_size, alignment);
-    if (!ptr) return NULL;
-
-    alloc_header *header = (alloc_header *)ptr;
-    header->size = size;
-
-    impl->stats.total_allocated += size;
-    impl->stats.active_bytes += size;
-    impl->stats.active_allocs++;
-
-    return ptr + sizeof(alloc_header);
+    if (arena)
+        arena->offset = 0;
 }
 
-static void proxy_free(ke_allocator *self, void *ptr)
+void ke_arena_destroy(ke_arena *arena)
 {
-    if (!ptr) return;
-    proxy_impl *impl = (proxy_impl *)self->handle;
-    
-    uint8_t *base_ptr = (uint8_t *)ptr - sizeof(alloc_header);
-    alloc_header *header = (alloc_header *)base_ptr;
-    
-    size_t size = header->size;
-    impl->stats.total_freed += size;
-    impl->stats.active_bytes -= size;
-    impl->stats.active_allocs--;
-
-    impl->inner->free(impl->inner, base_ptr);
-}
-
-static void *proxy_realloc(ke_allocator *self, void *ptr, size_t new_size)
-{
-    if (!ptr) return proxy_alloc(self, new_size, 0);
-    
-    proxy_impl *impl = (proxy_impl *)self->handle;
-    uint8_t *base_ptr = (uint8_t *)ptr - sizeof(alloc_header);
-    alloc_header *header = (alloc_header *)base_ptr;
-    
-    size_t old_size = header->size;
-    size_t total_new_size = new_size + sizeof(alloc_header);
-    
-    uint8_t *new_base = (uint8_t *)impl->inner->realloc(impl->inner, base_ptr, total_new_size);
-    if (!new_base) return NULL;
-
-    header = (alloc_header *)new_base;
-    header->size = new_size;
-
-    impl->stats.total_allocated += new_size;
-    impl->stats.total_freed += old_size;
-    impl->stats.active_bytes = (impl->stats.active_bytes - old_size) + new_size;
-
-    return new_base + sizeof(alloc_header);
-}
-
-static void proxy_destroy(ke_allocator *self)
-{
-    if (!self) return;
-    proxy_impl *impl = (proxy_impl *)self->handle;
-    free(impl);
-    free(self);
-}
-
-ke_allocator *ke_allocator_proxy_create(ke_allocator *inner, const char *name)
-{
-    if (!inner) return NULL;
-
-    proxy_impl *impl = (proxy_impl *)calloc(1, sizeof(proxy_impl));
-    if (!impl) return NULL;
-
-    impl->inner = inner;
-    if (name) strncpy(impl->name, name, sizeof(impl->name) - 1);
-    else strcpy(impl->name, "unnamed_proxy");
-
-    ke_allocator *api = (ke_allocator *)calloc(1, sizeof(ke_allocator));
-    if (!api) {
-        free(impl);
-        return NULL;
-    }
-
-    api->handle = impl;
-    api->destroy = proxy_destroy;
-    api->alloc = proxy_alloc;
-    api->free = proxy_free;
-    api->realloc = proxy_realloc;
-
-    return api;
-}
-
-ke_result ke_allocator_proxy_get_stats(ke_allocator *proxy, ke_allocator_stats *out_stats, ke_error **out_error)
-{
-    if (!proxy || !out_stats) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-    // Simple check: we don't have a tag system yet, so we assume the handle matches our struct layout.
-    // In a safer impl we'd have a magic number.
-    proxy_impl *impl = (proxy_impl *)proxy->handle;
-    *out_stats = impl->stats;
-    return KE_OK;
-}
-
-void ke_allocator_proxy_report(ke_allocator *proxy, struct ke_logger *logger)
-{
-    if (!proxy) return;
-    proxy_impl *impl = (proxy_impl *)proxy->handle;
-    ke_allocator_stats *s = &impl->stats;
-
-    char buf[256];
-    snprintf(buf, sizeof(buf), "Allocator Proxy '%s' Report:", impl->name);
-    
-    if (logger) {
-        ke_log_event ev = { KE_LOG_LEVEL_INFO, "memory", buf };
-        logger->log(logger, &ev);
-        
-        snprintf(buf, sizeof(buf), "  Active: %u allocs, %zu bytes", s->active_allocs, s->active_bytes);
-        logger->log(logger, &ev);
-
-        snprintf(buf, sizeof(buf), "  Total: %zu allocated, %zu freed", s->total_allocated, s->total_freed);
-        logger->log(logger, &ev);
-
-        if (s->active_allocs > 0) {
-            snprintf(buf, sizeof(buf), "  WARNING: %u LEAKS DETECTED!", s->active_allocs);
-            ev.level = KE_LOG_LEVEL_WARNING;
-            logger->log(logger, &ev);
-        }
-    } else {
-        fprintf(stderr, "%s\n", buf);
-        fprintf(stderr, "  Active: %u allocs, %zu bytes\n", s->active_allocs, s->active_bytes);
-        fprintf(stderr, "  Total: %zu allocated, %zu freed\n", s->total_allocated, s->total_freed);
-        if (s->active_allocs > 0) {
-            fprintf(stderr, "  WARNING: %u LEAKS DETECTED!\n", s->active_allocs);
-        }
-    }
+    if (!arena)
+        return;
+    free(arena->buffer);
+    arena->buffer   = NULL;
+    arena->capacity = 0;
+    arena->offset   = 0;
 }

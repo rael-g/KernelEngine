@@ -10,7 +10,6 @@ extern "C" {
 /// @brief Construction parameters for the stb_truetype-backed ke_font_loader.
 typedef struct ke_font_loader_stb_params
 {
-    struct ke_allocator *allocator;     ///< Owns loader + per-load ke_font_data buffers
     struct ke_logger    *logger;        ///< Optional
 } ke_font_loader_stb_params;
 

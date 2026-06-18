@@ -55,7 +55,7 @@ public class ApplicationTests
         
         var factory = Substitute.For<IKernelFactory>();
         factory.CreateWorld(Arg.Any<IAllocator>()).Returns(world);
-        factory.CreateFrameSync(Arg.Any<IAllocator>(), Arg.Any<int>()).Returns(Substitute.For<IFrameSync>());
+        factory.CreateFrameSync(Arg.Any<int>()).Returns(Substitute.For<IFrameSync>());
 
         services.AddSingleton(window);
         services.AddSingleton(renderer);

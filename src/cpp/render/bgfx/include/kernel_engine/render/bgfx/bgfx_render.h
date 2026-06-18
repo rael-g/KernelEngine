@@ -24,7 +24,6 @@ struct ke_window;
 /// @brief Parameters for BGFX render system creation.
 typedef struct ke_render_bgfx_params
 {
-    struct ke_allocator *allocator;
     struct ke_logger *logger;
     struct ke_window *window;
     const char *shader_path;

@@ -5,20 +5,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-// Private header stored immediately before the public ke_frame_packet in memory.
-// Allows ke_frame_packet_destroy to recover the allocator without a public field.
-typedef struct fp_priv
-{
-    ke_allocator *alloc;
-} fp_priv;
-
-#define FP_PRIV_SIZE (sizeof(fp_priv) > alignof(ke_frame_packet) \
-    ? sizeof(fp_priv) : alignof(ke_frame_packet))
-
-static fp_priv *fp_get_priv(ke_frame_packet *p)
-{
-    return (fp_priv *)((char *)p - FP_PRIV_SIZE);
-}
+// Padding before the public ke_frame_packet for alignment purposes.
+#define FP_PRIV_SIZE alignof(ke_frame_packet)
 
 ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
                                  ke_frame_packet **out_packet,
@@ -26,17 +14,11 @@ ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
 {
     if (!params || !out_packet) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    // Allocate [fp_priv | ke_frame_packet] in one block.
+    // Allocate [padding | ke_frame_packet] in one block.
     size_t block = FP_PRIV_SIZE + sizeof(ke_frame_packet);
-    void *mem = alloc->alloc(alloc, block, alignof(ke_frame_packet));
-    if (!mem) { alloc->destroy(alloc); return KE_ERROR; }
+    void *mem = ke_alloc(block, alignof(ke_frame_packet));
+    if (!mem) return KE_ERROR;
     memset(mem, 0, block);
-
-    fp_priv *priv = (fp_priv *)mem;
-    priv->alloc = alloc;
 
     ke_frame_packet *p = (ke_frame_packet *)((char *)mem + FP_PRIV_SIZE);
     p->skybox_handle      = KE_TEXTURE_NONE;
@@ -44,32 +26,32 @@ ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
     p->active_shadow_map  = KE_SHADOW_MAP_NONE;
 
     if (params->draw_capacity) {
-        p->draw_commands = (ke_draw_command *)alloc->alloc(
-            alloc, sizeof(ke_draw_command) * params->draw_capacity, 0);
+        p->draw_commands = (ke_draw_command *)ke_alloc(
+            sizeof(ke_draw_command) * params->draw_capacity, 0);
         if (!p->draw_commands) goto fail;
         p->draw_capacity = params->draw_capacity;
     }
     if (params->shadow_draw_capacity) {
-        p->shadow_draw_commands = (ke_draw_command *)alloc->alloc(
-            alloc, sizeof(ke_draw_command) * params->shadow_draw_capacity, 0);
+        p->shadow_draw_commands = (ke_draw_command *)ke_alloc(
+            sizeof(ke_draw_command) * params->shadow_draw_capacity, 0);
         if (!p->shadow_draw_commands) goto fail;
         p->shadow_draw_capacity = params->shadow_draw_capacity;
     }
     if (params->point_light_capacity) {
-        p->point_lights = (ke_point_light *)alloc->alloc(
-            alloc, sizeof(ke_point_light) * params->point_light_capacity, 0);
+        p->point_lights = (ke_point_light *)ke_alloc(
+            sizeof(ke_point_light) * params->point_light_capacity, 0);
         if (!p->point_lights) goto fail;
         p->point_light_capacity = params->point_light_capacity;
     }
     if (params->spot_light_capacity) {
-        p->spot_lights = (ke_spot_light *)alloc->alloc(
-            alloc, sizeof(ke_spot_light) * params->spot_light_capacity, 0);
+        p->spot_lights = (ke_spot_light *)ke_alloc(
+            sizeof(ke_spot_light) * params->spot_light_capacity, 0);
         if (!p->spot_lights) goto fail;
         p->spot_light_capacity = params->spot_light_capacity;
     }
     if (params->ui_draw_capacity) {
-        p->ui_draw_commands = (ke_ui_draw_command *)alloc->alloc(
-            alloc, sizeof(ke_ui_draw_command) * params->ui_draw_capacity, 0);
+        p->ui_draw_commands = (ke_ui_draw_command *)ke_alloc(
+            sizeof(ke_ui_draw_command) * params->ui_draw_capacity, 0);
         if (!p->ui_draw_commands) goto fail;
         p->ui_draw_capacity = params->ui_draw_capacity;
     }
@@ -85,15 +67,13 @@ fail:
 void ke_frame_packet_destroy(ke_frame_packet *packet)
 {
     if (!packet) return;
-    fp_priv *priv = fp_get_priv(packet);
-    ke_allocator *alloc = priv->alloc;
-    if (packet->draw_commands)        alloc->free(alloc, packet->draw_commands);
-    if (packet->shadow_draw_commands) alloc->free(alloc, packet->shadow_draw_commands);
-    if (packet->point_lights)         alloc->free(alloc, packet->point_lights);
-    if (packet->spot_lights)          alloc->free(alloc, packet->spot_lights);
-    if (packet->ui_draw_commands)     alloc->free(alloc, packet->ui_draw_commands);
-    alloc->free(alloc, priv); // frees the entire [fp_priv | ke_frame_packet] block
-    alloc->destroy(alloc);
+    if (packet->draw_commands)        ke_free(packet->draw_commands);
+    if (packet->shadow_draw_commands) ke_free(packet->shadow_draw_commands);
+    if (packet->point_lights)         ke_free(packet->point_lights);
+    if (packet->spot_lights)          ke_free(packet->spot_lights);
+    if (packet->ui_draw_commands)     ke_free(packet->ui_draw_commands);
+    // Free the entire [padding | ke_frame_packet] block via the base address.
+    ke_free((char *)packet - FP_PRIV_SIZE);
 }
 
 void ke_frame_packet_reset(ke_frame_packet *p)

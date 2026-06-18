@@ -49,7 +49,6 @@ typedef struct arena_chunk {
 
 typedef struct loader_state {
     ke_scene_loader        api;
-    ke_allocator          *allocator;
     struct ke_world       *world;
     char                   project_root[512];
 
@@ -77,8 +76,7 @@ static void *arena_alloc(loader_state *s, size_t bytes, size_t align) {
     }
 
     size_t want = bytes < ARENA_CHUNK_SIZE ? ARENA_CHUNK_SIZE : bytes;
-    arena_chunk *nc = (arena_chunk *)s->allocator->alloc(
-        s->allocator, sizeof(arena_chunk) + want, 8);
+    arena_chunk *nc = (arena_chunk *)ke_alloc(sizeof(arena_chunk) + want, 8);
     if (!nc) return NULL;
     nc->data = (uint8_t *)nc + sizeof(arena_chunk);
     nc->cap  = want;
@@ -102,7 +100,7 @@ static void arena_destroy(loader_state *s) {
     arena_chunk *c = s->arena_head;
     while (c) {
         arena_chunk *nx = c->next;
-        s->allocator->free(s->allocator, c);
+        ke_free(c);
         c = nx;
     }
     s->arena_head = NULL;
@@ -520,9 +518,7 @@ static void vt_destroy(ke_scene_loader *self) {
     if (!self || !self->handle) return;
     loader_state *s = (loader_state *)self->handle;
     arena_destroy(s);
-    ke_allocator *a = s->allocator;
-    a->free(a, s);
-    a->destroy(a);
+    ke_free(s);
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────
@@ -532,13 +528,9 @@ ke_result ke_scene_loader_create(struct ke_world *world,
                                   ke_error **out_error) {
     if (!world || !out_loader) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    loader_state *s = (loader_state *)alloc->alloc(alloc, sizeof(loader_state), 8);
-    if (!s) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    loader_state *s = (loader_state *)ke_alloc(sizeof(loader_state), 8);
+    if (!s) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(s, 0, sizeof(*s));
-    s->allocator = alloc;
     s->world     = world;
     if (project_root) {
         size_t n = strlen(project_root);

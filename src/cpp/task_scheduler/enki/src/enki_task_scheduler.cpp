@@ -1,5 +1,6 @@
 ﻿#include "enki_task_scheduler.hpp"
 #include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <TaskScheduler.h>
 #include <atomic>
 #include <new>
@@ -44,7 +45,7 @@ public:
     }
 };
 
-EnkiTaskScheduler::EnkiTaskScheduler(ke_allocator* alloc) : allocator_(alloc) {
+EnkiTaskScheduler::EnkiTaskScheduler() {
     auto* scheduler = new ::enki::TaskScheduler();
     scheduler->Initialize();
     scheduler_ptr_ = scheduler;
@@ -60,7 +61,7 @@ EnkiTaskScheduler::EnkiTaskScheduler(ke_allocator* alloc) : allocator_(alloc) {
         auto* internal = static_cast<EnkiTaskScheduler*>(self->handle);
         auto* scheduler = static_cast<::enki::TaskScheduler*>(internal->scheduler_ptr_);
         
-        void* task_mem = internal->allocator_->alloc(internal->allocator_, sizeof(EnkiTask), alignof(EnkiTask));
+        void* task_mem = ke_alloc(sizeof(EnkiTask), alignof(EnkiTask));
         if (!task_mem) return nullptr;
 
         EnkiTask* task = new (task_mem) EnkiTask();
@@ -91,12 +92,12 @@ EnkiTaskScheduler::EnkiTaskScheduler(ke_allocator* alloc) : allocator_(alloc) {
             auto* pt = static_cast<EnkiPinnedTask*>(ptr);
             scheduler->WaitforTask(pt);
             pt->~EnkiPinnedTask();
-            internal->allocator_->free(internal->allocator_, pt);
+            ke_free(pt);
         } else {
             auto* nt = static_cast<EnkiTask*>(ptr);
             scheduler->WaitforTask(nt);
             nt->~EnkiTask();
-            internal->allocator_->free(internal->allocator_, nt);
+            ke_free(nt);
         }
     };
 
@@ -118,8 +119,7 @@ EnkiTaskScheduler::EnkiTaskScheduler(ke_allocator* alloc) : allocator_(alloc) {
         auto* internal = static_cast<EnkiTaskScheduler*>(self->handle);
         auto* scheduler = static_cast<::enki::TaskScheduler*>(internal->scheduler_ptr_);
 
-        void* task_mem = internal->allocator_->alloc(internal->allocator_,
-            sizeof(EnkiPinnedTask), alignof(EnkiPinnedTask));
+        void* task_mem = ke_alloc(sizeof(EnkiPinnedTask), alignof(EnkiPinnedTask));
         if (!task_mem) return nullptr;
 
         EnkiPinnedTask* task = new (task_mem) EnkiPinnedTask(thread_num);
@@ -155,21 +155,20 @@ ke_task_scheduler* EnkiTaskScheduler::ToApi() {
 void EnkiTaskScheduler::DestroyApi(ke_task_scheduler* self) {
     if (!self) return;
     auto* internal = static_cast<EnkiTaskScheduler*>(self->handle);
-    auto* alloc = internal->allocator_;
     internal->~EnkiTaskScheduler();
-    alloc->free(alloc, internal);
+    ke_free(internal);
 }
 
 } // namespace kernel_engine::task_scheduler::enki
 
 extern "C" {
-    ke_result ke_task_scheduler_enki_create(ke_allocator *allocator, ke_task_scheduler_handle *out_scheduler, ke_error **out_error) {
-        if (!allocator || !out_scheduler) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    ke_result ke_task_scheduler_enki_create(ke_task_scheduler_handle *out_scheduler, ke_error **out_error) {
+        if (!out_scheduler) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-        void* mem = allocator->alloc(allocator, sizeof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler), alignof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler));
+        void* mem = ke_alloc(sizeof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler), alignof(kernel_engine::task_scheduler::enki::EnkiTaskScheduler));
         if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocation failed");
 
-        auto* internal = new (mem) kernel_engine::task_scheduler::enki::EnkiTaskScheduler(allocator);
+        auto* internal = new (mem) kernel_engine::task_scheduler::enki::EnkiTaskScheduler();
         out_scheduler->ref     = internal->ToApi();
         out_scheduler->destroy = &kernel_engine::task_scheduler::enki::EnkiTaskScheduler::DestroyApi;
 

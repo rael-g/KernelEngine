@@ -1,6 +1,5 @@
-﻿#include <gtest/gtest.h>
+#include <gtest/gtest.h>
 #include <kernel_engine/threading/threading.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -11,23 +10,10 @@
 // ke_semaphore vtables were deleted (judged thin stdlib wrappers; host
 // languages own thread spawning + sync primitives directly).
 
-class ThreadingTest : public ::testing::Test
-{
-protected:
-    void SetUp() override
-    {
-        std::memset(&alloc, 0, sizeof(alloc));
-        alloc.alloc = [](ke_allocator *, size_t s, size_t) { return std::malloc(s); };
-        alloc.free  = [](ke_allocator *, void *p) { std::free(p); };
-    }
-
-    ke_allocator alloc{};
-};
-
-TEST_F(ThreadingTest, FrameSync_Handoff)
+TEST(ThreadingTest, FrameSync_Handoff)
 {
     ke_frame_sync_handle sync_h{};
-    ke_result      res  = ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &sync_h, nullptr);
+    ke_result      res  = ke_frame_sync_std_create(2, 10, 10, 10, &sync_h, nullptr);
     ASSERT_EQ(res, KE_OK);
     ke_frame_sync *sync = sync_h.ref;
     ASSERT_NE(sync, nullptr);
@@ -45,9 +31,9 @@ TEST_F(ThreadingTest, FrameSync_Handoff)
     sync_h.destroy(sync_h.ref);
 }
 
-TEST_F(ThreadingTest, FrameSync_NullChecks) {
+TEST(ThreadingTest, FrameSync_NullChecks) {
     ke_frame_sync_handle s_h{};
-    ke_frame_sync_std_create(&alloc, 2, 10, 10, 10, &s_h, nullptr);
+    ke_frame_sync_std_create(2, 10, 10, 10, &s_h, nullptr);
     ke_frame_sync *s = s_h.ref;
 
     ASSERT_EQ(s->begin_write(nullptr), nullptr);
@@ -60,16 +46,14 @@ TEST_F(ThreadingTest, FrameSync_NullChecks) {
 }
 
 TEST(ThreadingInitTest, Create_NullArgs_ReturnsInvalidArgument) {
-    ke_allocator a{};
     ke_frame_sync_handle s{};
-    ASSERT_EQ(ke_frame_sync_std_create(nullptr, 2, 1, 1, 1, &s, nullptr), KE_ERROR);
-    ASSERT_EQ(ke_frame_sync_std_create(&a, 2, 1, 1, 1, nullptr, nullptr), KE_ERROR);
+    ASSERT_EQ(ke_frame_sync_std_create(2, 1, 1, 1, nullptr, nullptr), KE_ERROR);
 }
 
-TEST_F(ThreadingTest, FrameSync_Blocking)
+TEST(ThreadingTest, FrameSync_Blocking)
 {
     ke_frame_sync_handle sync_h{};
-    ke_frame_sync_std_create(&alloc, 2, 1, 1, 1, &sync_h, nullptr);
+    ke_frame_sync_std_create(2, 1, 1, 1, &sync_h, nullptr);
     ke_frame_sync *sync = sync_h.ref;
 
     sync->begin_write(sync);

@@ -1,19 +1,16 @@
 ﻿#include <gtest/gtest.h>
 #include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <atomic>
 #include <chrono>
 #include <thread>
 
 class EnkiTaskSchedulerTest : public ::testing::Test {
 protected:
-    ke_allocator* allocator = nullptr;
     ke_task_scheduler_handle scheduler_h{};
     ke_task_scheduler* scheduler = nullptr;
 
     void SetUp() override {
-        allocator = ke_allocator_malloc_create();
-        ke_result res = ke_task_scheduler_enki_create(allocator, &scheduler_h, NULL);
+        ke_result res = ke_task_scheduler_enki_create(&scheduler_h, NULL);
         ASSERT_EQ(res, KE_OK);
         scheduler = scheduler_h.ref;
     }
@@ -21,9 +18,6 @@ protected:
     void TearDown() override {
         if (scheduler_h.ref) {
             scheduler_h.destroy(scheduler_h.ref);
-        }
-        if (allocator) {
-            allocator->destroy(allocator);
         }
     }
 };

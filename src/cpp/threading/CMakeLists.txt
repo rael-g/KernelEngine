@@ -18,6 +18,7 @@ target_include_directories(ke_threading PUBLIC
 target_link_libraries(ke_threading PUBLIC
     ke_common
     ke_allocator
+    ke_allocator_malloc
     ke_render
     ke_threading_default
 )

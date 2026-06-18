@@ -2,6 +2,7 @@
 #include "core_renderer.hpp"
 #include "render_logging.hpp"
 #include <gpu_device.hpp>
+#include <kernel_engine/allocator/allocator.h>
 
 #include <algorithm>
 #include <cstring>
@@ -46,9 +47,8 @@ bool AccessIsWrite(ke_resource_access a)
 
 // ── ctor / dtor / vtable ─────────────────────────────────────────────────
 
-RenderGraphImpl::RenderGraphImpl(CoreRenderer* renderer, ke_allocator* allocator)
+RenderGraphImpl::RenderGraphImpl(CoreRenderer* renderer)
     : renderer_(renderer)
-    , allocator_(allocator)
 {
     std::memset(&api_, 0, sizeof(api_));
     api_.handle = this;
@@ -99,9 +99,8 @@ void RenderGraphImpl::DestroyApi(ke_render_graph* self)
 {
     if (!self || !self->handle) return;
     auto* impl = static_cast<RenderGraphImpl*>(self->handle);
-    auto* alloc = impl->allocator_;
     impl->~RenderGraphImpl();
-    if (alloc) alloc->free(alloc, impl);
+    ke_free(impl);
 }
 
 // ── DeclareResource ──────────────────────────────────────────────────────

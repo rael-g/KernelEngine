@@ -23,7 +23,6 @@ struct LoadedSound
 
 struct MiniAudioState
 {
-    ke_allocator                                     *allocator;
     ke_logger                                        *logger;
     ma_engine                                         engine;
     bool                                              engine_ready;
@@ -57,14 +56,13 @@ void audio_destroy(ke_audio *self)
             for (auto &kv : state->sounds)
             {
                 if (kv.second && kv.second->initialized) ma_sound_uninit(&kv.second->sound);
-                if (kv.second) state->allocator->free(state->allocator, kv.second);
+                if (kv.second) ke_free(kv.second);
             }
             state->sounds.clear();
         }
         if (state->engine_ready) ma_engine_uninit(&state->engine);
-        auto *alloc = state->allocator;
         state->~MiniAudioState();
-        alloc->free(alloc, state);
+        ke_free(state);
     }
     // ke_audio struct itself is allocated by the factory and freed here too.
     // (state.allocator was captured above; can't use after free.)
@@ -77,7 +75,7 @@ ke_result audio_load_sound(ke_audio *self, const char *path, ke_audio_sound *out
 
     auto *state = static_cast<MiniAudioState *>(self->handle);
 
-    auto *slot = static_cast<LoadedSound *>(state->allocator->alloc(state->allocator, sizeof(LoadedSound), alignof(LoadedSound)));
+    auto *slot = static_cast<LoadedSound *>(ke_alloc(sizeof(LoadedSound), alignof(LoadedSound)));
     if (!slot) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "sound slot allocation failed");
     std::memset(slot, 0, sizeof(*slot));
 
@@ -85,7 +83,7 @@ ke_result audio_load_sound(ke_audio *self, const char *path, ke_audio_sound *out
     if (r != MA_SUCCESS)
     {
         log_warn(state->logger, ma_result_description(r));
-        state->allocator->free(state->allocator, slot);
+        ke_free(slot);
         return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "sound file not found or failed to load");
     }
     slot->initialized = true;
@@ -120,7 +118,7 @@ void audio_unload_sound(ke_audio *self, ke_audio_sound id)
     if (slot)
     {
         if (slot->initialized) ma_sound_uninit(&slot->sound);
-        state->allocator->free(state->allocator, slot);
+        ke_free(slot);
     }
 }
 
@@ -172,13 +170,11 @@ void audio_set_master_volume(ke_audio *self, float volume)
 extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
     const ke_audio_miniaudio_params *params, ke_audio_handle *out, ke_error **out_error)
 {
-    if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-    auto *alloc = params->allocator;
+    if (!params || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    auto *state_mem = alloc->alloc(alloc, sizeof(MiniAudioState), alignof(MiniAudioState));
+    auto *state_mem = ke_alloc(sizeof(MiniAudioState), alignof(MiniAudioState));
     if (!state_mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     auto *state = new (state_mem) MiniAudioState{};
-    state->allocator    = alloc;
     state->logger       = params->logger;
     state->engine_ready = false;
     state->next_id      = 1;
@@ -189,17 +185,17 @@ extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
     {
         log_warn(state->logger, ma_result_description(r));
         state->~MiniAudioState();
-        alloc->free(alloc, state);
+        ke_free(state);
         return KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "engine init failed");
     }
     state->engine_ready = true;
 
-    auto *api = static_cast<ke_audio *>(alloc->alloc(alloc, sizeof(ke_audio), alignof(ke_audio)));
+    auto *api = static_cast<ke_audio *>(ke_alloc(sizeof(ke_audio), alignof(ke_audio)));
     if (!api)
     {
         ma_engine_uninit(&state->engine);
         state->~MiniAudioState();
-        alloc->free(alloc, state);
+        ke_free(state);
         return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
     }
     std::memset(api, 0, sizeof(*api));

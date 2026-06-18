@@ -1,59 +1,30 @@
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel;
 
 /// <summary>
-/// Base class for native memory allocators.
+/// Base class for unmanaged memory allocators. All allocation is performed via
+/// <c>NativeMemory</c>; no native vtable or C interop required.
 /// </summary>
 public abstract unsafe class Allocator : IAllocator
 {
-    private ke_allocator* _native;
+    private bool _disposed;
 
-    public ke_allocator* Native
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_native == null, this);
-            return _native;
-        }
-    }
-
-    private protected Allocator(ke_allocator* native) => _native = native;
-
-    public void* Allocate(nuint size, nuint alignment = 0)
-    {
-        ObjectDisposedException.ThrowIf(_native == null, this);
-        return _native->alloc(_native, size, alignment);
-    }
-
-    public void Free(void* ptr)
-    {
-        ObjectDisposedException.ThrowIf(_native == null, this);
-        _native->free(_native, ptr);
-    }
-
-    public void* Reallocate(void* ptr, nuint newSize)
-    {
-        ObjectDisposedException.ThrowIf(_native == null, this);
-        return _native->realloc(_native, ptr, newSize);
-    }
-
-    /// <summary>Resets the allocator state without freeing its backing memory.</summary>
-    public void Reset()
-    {
-        if (_native->reset != null)
-            _native->reset(_native);
-    }
+    public abstract void* Allocate(nuint size, nuint alignment = 16);
+    public abstract void  Free(void* ptr);
+    public abstract void* Reallocate(void* ptr, nuint newSize);
+    public virtual  void  Reset() { }
 
     public void Dispose()
     {
-        if (_native != null)
+        if (!_disposed)
         {
-            _native->destroy(_native);
-            _native = null;
+            _disposed = true;
+            DisposeCore();
         }
     }
+
+    protected virtual void DisposeCore() { }
 }
 
 /// <summary>
@@ -61,7 +32,22 @@ public abstract unsafe class Allocator : IAllocator
 /// </summary>
 public sealed unsafe class MallocAllocator : Allocator, IMallocAllocator
 {
-    public MallocAllocator() : base(NativeMethods.allocator_malloc_create()) { }
+    public override void* Allocate(nuint size, nuint alignment = 16) =>
+        NativeMemory.AlignedAlloc(size, alignment);
+
+    public override void Free(void* ptr) =>
+        NativeMemory.AlignedFree(ptr);
+
+    public override void* Reallocate(void* ptr, nuint newSize)
+    {
+        // NativeMemory doesn't have AlignedRealloc; alloc+copy+free
+        if (ptr == null) return Allocate(newSize);
+        void* newPtr = NativeMemory.AlignedAlloc(newSize, 16);
+        if (newPtr == null) return null;
+        NativeMemory.Copy(ptr, newPtr, newSize);
+        NativeMemory.AlignedFree(ptr);
+        return newPtr;
+    }
 }
 
 /// <summary>
@@ -69,7 +55,32 @@ public sealed unsafe class MallocAllocator : Allocator, IMallocAllocator
 /// </summary>
 public sealed unsafe class ArenaAllocator : Allocator, IArenaAllocator
 {
-    public ArenaAllocator(nuint capacity) : base(NativeMethods.allocator_arena_create(capacity)) { }
+    private readonly void* _buffer;
+    private readonly nuint _capacity;
+    private nuint _offset;
+
+    public ArenaAllocator(nuint capacity)
+    {
+        _capacity = capacity;
+        _buffer   = NativeMemory.AlignedAlloc(capacity, 16);
+        _offset   = 0;
+    }
+
+    public override void* Allocate(nuint size, nuint alignment = 16)
+    {
+        nuint aligned = (_offset + alignment - 1) & ~(alignment - 1);
+        if (aligned + size > _capacity) return null;
+        void* ptr = (byte*)_buffer + aligned;
+        _offset = aligned + size;
+        return ptr;
+    }
+
+    public override void  Free(void* ptr) { /* bump allocator; freed only on Reset/Dispose */ }
+    public override void* Reallocate(void* ptr, nuint newSize) => Allocate(newSize);
+
+    public override void Reset() => _offset = 0;
+
+    protected override void DisposeCore() => NativeMemory.AlignedFree(_buffer);
 }
 
 /// <summary>
@@ -77,41 +88,58 @@ public sealed unsafe class ArenaAllocator : Allocator, IArenaAllocator
 /// </summary>
 public sealed unsafe class ProxyAllocator : Allocator, IProxyAllocator
 {
-    public ProxyAllocator(Allocator inner, string name)
-        : base(CreateProxy(inner, name)) { }
+    private readonly Allocator             _inner;
+    private readonly string               _name;
+    private readonly Dictionary<nint, nuint> _sizes = new();
+    private ulong _totalAllocated;
+    private ulong _totalFreed;
+    private ulong _activeBytes;
+    private uint  _activeAllocs;
 
-    private static ke_allocator* CreateProxy(Allocator inner, string name)
+    public ProxyAllocator(Allocator inner, string name)
     {
-        var namePtr = Marshal.StringToHGlobalAnsi(name);
-        try
-        {
-            return NativeMethods.allocator_proxy_create(inner.Native, (sbyte*)namePtr);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(namePtr);
-        }
+        _inner = inner;
+        _name  = name;
     }
+
+    public override void* Allocate(nuint size, nuint alignment = 16)
+    {
+        void* ptr = _inner.Allocate(size, alignment);
+        if (ptr != null)
+        {
+            _sizes[(nint)ptr] = size;
+            _totalAllocated  += size;
+            _activeBytes     += size;
+            _activeAllocs++;
+        }
+        return ptr;
+    }
+
+    public override void Free(void* ptr)
+    {
+        if (ptr == null) return;
+        if (_sizes.Remove((nint)ptr, out nuint size))
+        {
+            _totalFreed  += size;
+            _activeBytes -= size;
+            if (_activeAllocs > 0) _activeAllocs--;
+        }
+        _inner.Free(ptr);
+    }
+
+    public override void* Reallocate(void* ptr, nuint newSize) => _inner.Reallocate(ptr, newSize);
 
     /// <inheritdoc/>
     public void Report(ILogger? logger)
     {
-        ke_logger* nativeLogger = null;
-        try { if (logger is INativeLogger nl) nativeLogger = nl.Native; }
-        catch (ObjectDisposedException) { }
-
-        NativeMethods.allocator_proxy_report(Native, nativeLogger);
+        string msg = $"[ProxyAllocator '{_name}'] active={_activeAllocs} allocs, " +
+                     $"total_allocated={_totalAllocated}, total_freed={_totalFreed}";
+        logger?.Log(LogLevel.Info, "ProxyAllocator", msg);
     }
 
     /// <inheritdoc/>
-    public AllocatorStats GetStats()
-    {
-        ke_allocator_stats stats;
-        NativeMethods.allocator_proxy_get_stats(Native, &stats, null);
-        return new AllocatorStats(
-            TotalAllocated: stats.total_allocated,
-            TotalFreed:     stats.total_freed,
-            ActiveBytes:    stats.active_bytes,
-            ActiveAllocs:   stats.active_allocs);
-    }
+    public AllocatorStats GetStats() =>
+        new(_totalAllocated, _totalFreed, _activeBytes, _activeAllocs);
+
+    protected override void DisposeCore() => _inner.Dispose();
 }

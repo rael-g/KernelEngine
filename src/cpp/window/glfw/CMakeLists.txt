@@ -7,7 +7,7 @@ find_package(glfw3 CONFIG REQUIRED)
 target_link_libraries(ke_window_glfw
     PUBLIC
         ke_window
-        ke_allocator
+        ke_allocator_malloc
     PRIVATE
         ke_window_core
         ke_window_glfw_device

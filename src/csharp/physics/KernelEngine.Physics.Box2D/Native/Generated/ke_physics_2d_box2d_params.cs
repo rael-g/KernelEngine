@@ -4,9 +4,6 @@ namespace KernelEngine.Physics.Box2D.Native;
 
 public unsafe partial struct ke_physics_2d_box2d_params
 {
-    [NativeTypeName("struct ke_allocator *")]
-    public KernelEngine.Kernel.Native.ke_allocator* allocator;
-
     [NativeTypeName("struct ke_logger *")]
     public KernelEngine.Kernel.Native.ke_logger* logger;
 

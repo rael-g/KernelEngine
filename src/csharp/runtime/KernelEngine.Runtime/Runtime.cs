@@ -18,7 +18,6 @@ public sealed unsafe class Runtime : IRuntime
 {
     private ke_runtime* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
-    private readonly Allocator                          _allocator;
     private readonly IEcs                               _ecs;            // not owned; consumer disposes separately
     private readonly KernelEngine.Kernel.TaskScheduler  _taskScheduler;  // not owned
 
@@ -80,9 +79,8 @@ public sealed unsafe class Runtime : IRuntime
     /// <summary>Borrowed pointer to the native ke_runtime vtable. Valid until Dispose.</summary>
     public ke_runtime* Native => _native;
 
-    public Runtime(Allocator allocator, IEcs ecs, ITaskScheduler taskScheduler)
+    public Runtime(IEcs ecs, ITaskScheduler taskScheduler)
     {
-        ArgumentNullException.ThrowIfNull(allocator);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(taskScheduler);
 
@@ -99,7 +97,6 @@ public sealed unsafe class Runtime : IRuntime
                 $"Runtime currently requires {nameof(KernelEngine.Kernel.TaskScheduler)} (or a subclass) as the {nameof(ITaskScheduler)} impl; got {taskScheduler.GetType().Name}.",
                 nameof(taskScheduler));
 
-        _allocator     = allocator;
         _ecs           = ecs;
         _taskScheduler = tsConcrete;
 

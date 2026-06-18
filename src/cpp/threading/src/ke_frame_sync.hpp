@@ -13,11 +13,10 @@ namespace kernel_engine::threading
 class KeFrameSync
 {
   public:
-    KeFrameSync(ke_allocator *alloc,
-                uint32_t      buffer_count,
-                uint32_t      draw_capacity,
-                uint32_t      point_capacity,
-                uint32_t      spot_capacity);
+    KeFrameSync(uint32_t buffer_count,
+                uint32_t draw_capacity,
+                uint32_t point_capacity,
+                uint32_t spot_capacity);
     ~KeFrameSync();
 
     KeFrameSync(const KeFrameSync &)            = delete;
@@ -32,7 +31,6 @@ class KeFrameSync
     void semaphore_wait(std::mutex &mtx, std::condition_variable &cv, uint32_t &count);
     void semaphore_signal(std::mutex &mtx, std::condition_variable &cv, uint32_t &count);
 
-    ke_allocator    *alloc_;
     ke_frame_packet *packets_;   // ring buffer
     uint32_t         count_;
 

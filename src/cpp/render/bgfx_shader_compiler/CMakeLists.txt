@@ -13,11 +13,12 @@ target_include_directories(ke_shader_compiler_bgfx PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-target_link_libraries(ke_shader_compiler_bgfx PUBLIC 
+target_link_libraries(ke_shader_compiler_bgfx PUBLIC
     ke_render
     ke_logger
     ke_common
 )
+target_link_libraries(ke_shader_compiler_bgfx PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_shader_compiler_bgfx
     EXPORT KernelEngineTargets

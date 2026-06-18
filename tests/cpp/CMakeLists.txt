@@ -58,6 +58,7 @@ target_include_directories(test_asset_logic PRIVATE
 
 target_link_libraries(test_asset_logic PRIVATE
     ke_asset
+    ke_logger
     ke_allocator_malloc
     assimp::assimp
     GTest::gtest_main

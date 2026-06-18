@@ -10,7 +10,6 @@ extern "C" {
 /// @brief Construction parameters for the Box2D-backed ke_physics_2d.
 typedef struct ke_physics_2d_box2d_params
 {
-    struct ke_allocator *allocator;
     struct ke_logger    *logger;       ///< Optional; may be NULL
     float                gravity_x;    ///< Default 0
     float                gravity_y;    ///< Default -9.81

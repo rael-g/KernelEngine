@@ -19,8 +19,7 @@ public static class ServiceCollectionExtensions
                 var logger = sp.GetService<INativeLogger>();
                 var @params = new Native.ke_asset_loader_assimp_params
                 {
-                    allocator = sp.GetRequiredService<Allocator>().Native,
-                    logger    = logger != null ? logger.Native : null,
+                    logger = logger != null ? logger.Native : null,
                 };
                 ke_asset_loader_handle handle;
                 KernelException.ThrowIfFailed(Native.NativeMethods.asset_loader_assimp_create(&@params, &handle, null).ToManaged());

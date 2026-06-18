@@ -35,7 +35,6 @@ public static class ServiceCollectionExtensions
                 var logger = sp.GetService<INativeLogger>();
                 var @params = new ke_physics_2d_box2d_params
                 {
-                    allocator = sp.GetRequiredService<Allocator>().Native,
                     logger    = logger != null ? logger.Native : null,
                     gravity_x = opts.GravityX,
                     gravity_y = opts.GravityY,

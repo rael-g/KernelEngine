@@ -11,12 +11,10 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<KernelEngine.Kernel.TaskScheduler>(sp =>
         {
-            var allocator = sp.GetRequiredService<Allocator>();
-            
             unsafe
             {
                 ke_task_scheduler_handle handle;
-                KernelException.ThrowIfFailed(KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(allocator.Native, &handle, null).ToManaged());
+                KernelException.ThrowIfFailed(KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(&handle, null).ToManaged());
                 return new KernelEngine.Kernel.TaskScheduler(handle);
             }
         });

@@ -20,8 +20,7 @@ public static class ServiceCollectionExtensions
                 var logger = sp.GetService<INativeLogger>();
                 var @params = new ke_audio_miniaudio_params
                 {
-                    allocator = sp.GetRequiredService<Allocator>().Native,
-                    logger    = logger != null ? logger.Native : null,
+                    logger = logger != null ? logger.Native : null,
                 };
 
                 ke_audio_handle handle;

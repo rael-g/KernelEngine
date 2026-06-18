@@ -10,6 +10,7 @@ target_link_libraries(ke_render_bgfx PRIVATE
     ke_render_core
     ke_render_bgfx_device
     ke_threading
+    ke_allocator_malloc
     bgfx::bgfx
     bgfx::bx
 )

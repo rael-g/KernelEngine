@@ -24,7 +24,6 @@ extern "C" {
 
 /// @brief Parameters for GLFW window creation.
 typedef struct ke_window_glfw_params {
-    struct ke_allocator*  allocator;
     struct ke_logger*     logger;
     struct ke_input*      input;
     const char*           title;

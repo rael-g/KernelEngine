@@ -10,7 +10,6 @@ extern "C" {
 /// @brief Construction parameters for the stb_image-backed image loader.
 typedef struct ke_image_loader_stb_params
 {
-    struct ke_allocator *allocator; ///< Allocator used for the loader struct + decoded pixel data
     struct ke_logger    *logger;    ///< Optional; may be NULL
 } ke_image_loader_stb_params;
 

@@ -41,7 +41,6 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
 // - ke_runtime_create(ecs) builds the scheduler (in-house, sequential for now, NULL, NULL).
 class RuntimeSpike : public ::testing::Test {
 protected:
-    ke_allocator      *allocator      = nullptr;
     ke_task_scheduler_handle task_scheduler_h{};
     ke_ecs_handle            ecs_h{};
     ke_runtime_handle        runtime_h{};
@@ -51,10 +50,7 @@ protected:
 
     void SetUp() override
     {
-        allocator = ke_allocator_malloc_create();
-        ASSERT_NE(allocator, nullptr);
-
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler_h, NULL), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(&task_scheduler_h, NULL), KE_OK);
         task_scheduler = task_scheduler_h.ref;
         ASSERT_NE(task_scheduler, nullptr);
 

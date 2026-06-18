@@ -1,17 +1,13 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/physics/box2d/box2d_physics.h>
-#include <kernel_engine/allocator/allocator.h>
 
 class Box2DPhysicsTest : public ::testing::Test {
 protected:
-    ke_allocator* allocator = nullptr;
     ke_physics_2d_handle physics_h{};
     ke_physics_2d* physics = nullptr;
 
     void SetUp() override {
-        allocator = ke_allocator_malloc_create();
         ke_physics_2d_box2d_params params{};
-        params.allocator = allocator;
         params.logger = nullptr;
         params.gravity_x = 0;
         params.gravity_y = -9.81f;
@@ -25,9 +21,6 @@ protected:
     void TearDown() override {
         if (physics_h.ref) {
             physics_h.destroy(physics_h.ref);
-        }
-        if (allocator) {
-            allocator->destroy(allocator);
         }
     }
 };

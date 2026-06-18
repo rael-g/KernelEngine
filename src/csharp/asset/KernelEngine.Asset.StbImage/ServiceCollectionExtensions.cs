@@ -19,8 +19,7 @@ public static class ServiceCollectionExtensions
                 var logger = sp.GetService<INativeLogger>();
                 var @params = new Native.ke_image_loader_stb_params
                 {
-                    allocator = sp.GetRequiredService<Allocator>().Native,
-                    logger    = logger != null ? logger.Native : null,
+                    logger = logger != null ? logger.Native : null,
                 };
                 ke_image_loader_handle handle;
                 KernelException.ThrowIfFailed(Native.NativeMethods.image_loader_stb_create(&@params, &handle, null).ToManaged());

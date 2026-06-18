@@ -26,6 +26,7 @@ target_link_libraries(ke_audio_miniaudio PUBLIC
     ke_audio
     ke_logger
 )
+target_link_libraries(ke_audio_miniaudio PRIVATE ke_allocator_malloc)
 
 # miniaudio uses the OS audio APIs; on Windows that's WASAPI/DSound and brings in winmm.
 if (WIN32)

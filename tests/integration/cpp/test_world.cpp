@@ -11,7 +11,6 @@
 namespace {
 
 struct WorldFixture {
-    ke_allocator      *allocator      = nullptr;
     ke_task_scheduler_handle task_scheduler_h{};
     ke_ecs_handle            ecs_h{};
     ke_runtime_handle        runtime_h{};
@@ -19,8 +18,7 @@ struct WorldFixture {
     ke_world          *world          = nullptr;
 
     void create(const char *project_root = nullptr) {
-        allocator = ke_allocator_malloc_create();
-        ASSERT_EQ(ke_task_scheduler_enki_create(allocator, &task_scheduler_h, NULL), KE_OK);
+        ASSERT_EQ(ke_task_scheduler_enki_create(&task_scheduler_h, NULL), KE_OK);
 
         ke_ecs_flecs_params ecs_params{};
         ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs_h, NULL), KE_OK);

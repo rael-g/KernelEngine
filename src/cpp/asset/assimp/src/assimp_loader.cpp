@@ -3,6 +3,7 @@
 #include "texture_decoder.hpp"
 #include "internal_helpers.hpp"
 #include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -18,7 +19,7 @@ namespace kernel_engine::asset::assimp
 using namespace detail;
 
 AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
-    : allocator_(params->allocator), logger_(params->logger)
+    : logger_(params->logger)
 {
     api_.handle     = this;
     api_.load_model = [](ke_asset_loader *self, const char *path, ke_model_data **out, ke_error **out_error) {
@@ -45,9 +46,8 @@ ke_asset_loader *AssimpLoader::ToApi() { return &api_; }
 void AssimpLoader::DestroyApi(ke_asset_loader *self)
 {
     auto *l = static_cast<AssimpLoader *>(self->handle);
-    auto *a = l->allocator_;
     l->~AssimpLoader();
-    a->free(a, l);
+    ke_free(l);
 }
 
 ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_error **out_error)
@@ -125,9 +125,9 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_erro
     std::vector<ke_texture_data> texs(tex_count);
     for (uint32_t ti = 0; ti < tex_count; ti++) {
         if (is_embedded[ti] && embedded_refs[ti]) {
-            TextureDecoder::DecodeEmbedded(embedded_refs[ti], allocator_, logger_, &texs[ti]);
+            TextureDecoder::DecodeEmbedded(embedded_refs[ti], logger_, &texs[ti]);
         } else {
-            TextureDecoder::DecodeExternal(external_paths[ti], allocator_, logger_, &texs[ti]);
+            TextureDecoder::DecodeExternal(external_paths[ti], logger_, &texs[ti]);
         }
     }
 
@@ -141,22 +141,22 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_erro
     uint32_t mesh_count = scene->mNumMeshes;
     std::vector<ke_mesh_data> meshes(mesh_count);
     for (uint32_t si = 0; si < mesh_count; si++) {
-        Converter::ConvertMesh(scene->mMeshes[si], allocator_, &meshes[si]);
+        Converter::ConvertMesh(scene->mMeshes[si], &meshes[si]);
         meshes[si].material_index = (scene->mMeshes[si]->mMaterialIndex < mat_count) 
                                     ? (int32_t)scene->mMeshes[si]->mMaterialIndex : -1;
     }
 
     // ── Final Model Allocation ──────────────────────────────────────────────
-    ke_model_data *model = (ke_model_data *)ke_alloc(allocator_, sizeof(ke_model_data));
+    ke_model_data *model = (ke_model_data *)ke_alloc(sizeof(ke_model_data), alignof(ke_model_data));
     if (!model) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "model allocation failed");
 
     model->mesh_count = mesh_count;
     model->material_count = mat_count;
     model->texture_count = tex_count;
 
-    model->meshes = (ke_mesh_data *)ke_alloc(allocator_, sizeof(ke_mesh_data) * mesh_count);
-    model->materials = (ke_material_data *)ke_alloc(allocator_, sizeof(ke_material_data) * mat_count);
-    model->textures = (ke_texture_data *)ke_alloc(allocator_, sizeof(ke_texture_data) * tex_count);
+    model->meshes    = (ke_mesh_data *)   ke_alloc(sizeof(ke_mesh_data)    * mesh_count, alignof(ke_mesh_data));
+    model->materials = (ke_material_data *)ke_alloc(sizeof(ke_material_data) * mat_count, alignof(ke_material_data));
+    model->textures  = (ke_texture_data *) ke_alloc(sizeof(ke_texture_data)  * tex_count, alignof(ke_texture_data));
 
     if (mesh_count) memcpy(model->meshes, meshes.data(), sizeof(ke_mesh_data) * mesh_count);
     if (mat_count) memcpy(model->materials, mats.data(), sizeof(ke_material_data) * mat_count);
@@ -177,31 +177,28 @@ ke_task *AssimpLoader::LoadModelAsync(ke_task_scheduler *scheduler,
     struct AsyncCtx
     {
         AssimpLoader               *self;
-        ke_allocator               *allocator; // cached to avoid private access from lambda
         char                       *path;      // heap-allocated copy
         ke_load_model_complete_func on_complete;
         void                       *user_data;
     };
 
     auto *ctx = static_cast<AsyncCtx *>(
-        ke_alloc(allocator_, sizeof(AsyncCtx)));
+        ke_alloc(sizeof(AsyncCtx), alignof(AsyncCtx)));
     if (!ctx) {
         on_complete(KE_ERROR, nullptr, user_data);
         return nullptr;
     }
 
     std::string path_copy(path);
-    char *path_buf = static_cast<char *>(
-        ke_alloc(allocator_, path_copy.size() + 1));
+    char *path_buf = static_cast<char *>(ke_alloc(path_copy.size() + 1, 1));
     if (!path_buf) {
-        ke_free(allocator_, ctx);
+        ke_free(ctx);
         on_complete(KE_ERROR, nullptr, user_data);
         return nullptr;
     }
     memcpy(path_buf, path_copy.c_str(), path_copy.size() + 1);
 
     ctx->self        = this;
-    ctx->allocator   = allocator_;
     ctx->path        = path_buf;
     ctx->on_complete = on_complete;
     ctx->user_data   = user_data;
@@ -212,8 +209,8 @@ ke_task *AssimpLoader::LoadModelAsync(ke_task_scheduler *scheduler,
             ke_model_data *model = nullptr;
             ke_result result = c->self->LoadModel(c->path, &model);
             c->on_complete(result, model, c->user_data);
-            ke_free(c->allocator, c->path);
-            ke_free(c->allocator, c);
+            ke_free(c->path);
+            ke_free(c);
         },
         ctx);
 }
@@ -222,15 +219,15 @@ void AssimpLoader::FreeModel(ke_model_data *data)
 {
     if (!data) return;
     for (uint32_t i = 0; i < data->mesh_count; i++) {
-        ke_free(allocator_, data->meshes[i].vertices);
-        ke_free(allocator_, data->meshes[i].indices);
+        ke_free(data->meshes[i].vertices);
+        ke_free(data->meshes[i].indices);
     }
-    ke_free(allocator_, data->meshes);
-    ke_free(allocator_, data->materials);
+    ke_free(data->meshes);
+    ke_free(data->materials);
     for (uint32_t i = 0; i < data->texture_count; i++)
-        ke_free(allocator_, data->textures[i].pixels);
-    ke_free(allocator_, data->textures);
-    ke_free(allocator_, data);
+        ke_free(data->textures[i].pixels);
+    ke_free(data->textures);
+    ke_free(data);
 }
 
 } // namespace kernel_engine::asset::assimp
@@ -240,8 +237,8 @@ ke_asset_loader_assimp_create(const ke_asset_loader_assimp_params *params,
                                ke_asset_loader_handle *out,
                                ke_error **out_error)
 {
-    if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-    void *mem = params->allocator->alloc(params->allocator, sizeof(kernel_engine::asset::assimp::AssimpLoader), alignof(kernel_engine::asset::assimp::AssimpLoader));
+    if (!params || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    void *mem = ke_alloc(sizeof(kernel_engine::asset::assimp::AssimpLoader), alignof(kernel_engine::asset::assimp::AssimpLoader));
     if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed");
     auto *loader = new (mem) kernel_engine::asset::assimp::AssimpLoader(params);
     out->ref     = loader->ToApi();

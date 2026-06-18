@@ -18,7 +18,7 @@ std::string GetDirectory(const char* path)
     return "";
 }
 
-ke_result ConvertMesh(const aiMesh* am, ke_allocator* allocator, ke_mesh_data* md)
+ke_result ConvertMesh(const aiMesh* am, ke_mesh_data* md)
 {
     memset(md, 0, sizeof(ke_mesh_data));
 
@@ -27,14 +27,14 @@ ke_result ConvertMesh(const aiMesh* am, ke_allocator* allocator, ke_mesh_data* m
     md->index_count  = am->mNumFaces * 3;
 
     // Allocate vertex buffer
-    md->vertices = (ke_vertex *)ke_alloc(allocator, sizeof(ke_vertex) * am->mNumVertices);
+    md->vertices = (ke_vertex *)ke_alloc(sizeof(ke_vertex) * am->mNumVertices, alignof(ke_vertex));
     if (!md->vertices) return KE_ERROR;
 
     // Allocate index buffer
-    md->indices = (uint16_t *)ke_alloc(allocator, sizeof(uint16_t) * md->index_count);
+    md->indices = (uint16_t *)ke_alloc(sizeof(uint16_t) * md->index_count, alignof(uint16_t));
     if (!md->indices)
     {
-        ke_free(allocator, md->vertices);
+        ke_free(md->vertices);
         return KE_ERROR;
     }
 

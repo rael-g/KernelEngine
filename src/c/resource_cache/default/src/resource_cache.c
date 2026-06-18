@@ -47,12 +47,10 @@ typedef struct table {
     size_t        capacity;  // power of two
     size_t        occupied;  // active + tombstones
     size_t        active;    // active only
-    ke_allocator *allocator;
 } table;
 
 typedef struct rc_state {
     ke_resource_cache         api;
-    ke_allocator             *allocator;
     ke_resource_destroy_func  destroy_fn;
     void                     *destroy_ctx;
     table                     resources;
@@ -61,19 +59,18 @@ typedef struct rc_state {
 
 // ── Table ops ───────────────────────────────────────────────────────────────
 
-static ke_result table_init(table *t, ke_allocator *alloc, size_t initial_capacity) {
-    t->allocator = alloc;
+static ke_result table_init(table *t, size_t initial_capacity) {
     t->capacity  = initial_capacity;
     t->occupied  = 0;
     t->active    = 0;
-    t->slots = (slot *)alloc->alloc(alloc, initial_capacity * sizeof(slot), alignof(slot));
+    t->slots = (slot *)ke_alloc(initial_capacity * sizeof(slot), alignof(slot));
     if (!t->slots) return KE_ERROR;
     memset(t->slots, 0, initial_capacity * sizeof(slot));
     return KE_OK;
 }
 
 static void table_destroy(table *t) {
-    if (t->slots && t->allocator) t->allocator->free(t->allocator, t->slots);
+    if (t->slots) ke_free(t->slots);
     t->slots = NULL;
     t->capacity = t->occupied = t->active = 0;
 }
@@ -113,7 +110,7 @@ static ke_result table_reserve(table *t) {
 static ke_result table_rehash(table *t, size_t new_capacity) {
     slot *old_slots = t->slots;
     size_t old_cap  = t->capacity;
-    slot *new_slots = (slot *)t->allocator->alloc(t->allocator, new_capacity * sizeof(slot), alignof(slot));
+    slot *new_slots = (slot *)ke_alloc(new_capacity * sizeof(slot), alignof(slot));
     if (!new_slots) return KE_ERROR;
     memset(new_slots, 0, new_capacity * sizeof(slot));
 
@@ -131,7 +128,7 @@ static ke_result table_rehash(table *t, size_t new_capacity) {
         t->occupied++;
         t->active++;
     }
-    t->allocator->free(t->allocator, old_slots);
+    ke_free(old_slots);
     return KE_OK;
 }
 
@@ -280,9 +277,7 @@ static void vt_destroy(ke_resource_cache *self) {
 
     table_destroy(&s->resources);
     table_destroy(&s->paths);
-    ke_allocator *a = s->allocator;
-    a->free(a, s);
-    a->destroy(a);
+    ke_free(s);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -292,21 +287,17 @@ ke_result ke_resource_cache_create(const ke_resource_cache_params *params,
                                     ke_error                      **out_error) {
     if (!params || !out_cache) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *a = ke_allocator_malloc_create();
-    if (!a) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    rc_state *s = (rc_state *)a->alloc(a, sizeof(rc_state), alignof(rc_state));
-    if (!s) { a->destroy(a); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    rc_state *s = (rc_state *)ke_alloc(sizeof(rc_state), alignof(rc_state));
+    if (!s) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(s, 0, sizeof(*s));
 
-    s->allocator   = a;
     s->destroy_fn  = params ? params->destroy_fn  : NULL;
     s->destroy_ctx = params ? params->destroy_ctx : NULL;
 
-    ke_result rc = table_init(&s->resources, a, 64);
-    if (rc != KE_OK) { a->free(a, s); a->destroy(a); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "resources table allocation failed"); }
-    rc = table_init(&s->paths, a, 64);
-    if (rc != KE_OK) { table_destroy(&s->resources); a->free(a, s); a->destroy(a); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "paths table allocation failed"); }
+    ke_result rc = table_init(&s->resources, 64);
+    if (rc != KE_OK) { ke_free(s); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "resources table allocation failed"); }
+    rc = table_init(&s->paths, 64);
+    if (rc != KE_OK) { table_destroy(&s->resources); ke_free(s); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "paths table allocation failed"); }
 
     s->api.handle            = s;
     s->api.register_resource = vt_register;

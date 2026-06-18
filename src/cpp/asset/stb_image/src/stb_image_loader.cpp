@@ -15,7 +15,6 @@ namespace {
 
 struct StbImageLoaderState
 {
-    ke_allocator *allocator;
     ke_logger    *logger;
 };
 
@@ -30,9 +29,8 @@ void destroy(ke_image_loader *self)
 {
     if (!self) return;
     auto *state = static_cast<StbImageLoaderState *>(self->handle);
-    auto *alloc = state ? state->allocator : nullptr;
-    if (state && alloc) alloc->free(alloc, state);
-    if (alloc) alloc->free(alloc, self);
+    ke_free(state);
+    ke_free(self);
 }
 
 ke_result load_image(ke_image_loader *self, const char *path, ke_texture_data **out, ke_error **out_error)
@@ -41,7 +39,6 @@ ke_result load_image(ke_image_loader *self, const char *path, ke_texture_data **
     *out = nullptr;
 
     auto *state = static_cast<StbImageLoaderState *>(self->handle);
-    auto *alloc = state->allocator;
 
     int w = 0, h = 0, channels = 0;
     // Force RGBA8 — matches ke_texture_data's contract (4 bytes/pixel, row-major).
@@ -53,14 +50,14 @@ ke_result load_image(ke_image_loader *self, const char *path, ke_texture_data **
 
     const size_t pixel_bytes = static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
 
-    auto *data = static_cast<ke_texture_data *>(alloc->alloc(alloc, sizeof(ke_texture_data), alignof(ke_texture_data)));
+    auto *data = static_cast<ke_texture_data *>(ke_alloc(sizeof(ke_texture_data), alignof(ke_texture_data)));
     if (!data) { stbi_image_free(raw); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "texture data allocation failed"); }
     std::memset(data, 0, sizeof(*data));
 
-    auto *pixels = static_cast<uint8_t *>(alloc->alloc(alloc, pixel_bytes, 1));
+    auto *pixels = static_cast<uint8_t *>(ke_alloc(pixel_bytes, 1));
     if (!pixels) {
         stbi_image_free(raw);
-        alloc->free(alloc, data);
+        ke_free(data);
         return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "pixel buffer allocation failed");
     }
     std::memcpy(pixels, raw, pixel_bytes);
@@ -83,10 +80,8 @@ ke_result load_image(ke_image_loader *self, const char *path, ke_texture_data **
 void free_image(ke_image_loader *self, ke_texture_data *data)
 {
     if (!self || !data) return;
-    auto *state = static_cast<StbImageLoaderState *>(self->handle);
-    auto *alloc = state->allocator;
-    if (data->pixels) alloc->free(alloc, data->pixels);
-    alloc->free(alloc, data);
+    if (data->pixels) ke_free(data->pixels);
+    ke_free(data);
 }
 
 } // namespace
@@ -96,16 +91,14 @@ extern "C" KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(
     ke_image_loader_handle *out,
     ke_error **out_error)
 {
-    if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-    auto *alloc = params->allocator;
+    if (!params || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    auto *state = static_cast<StbImageLoaderState *>(alloc->alloc(alloc, sizeof(StbImageLoaderState), alignof(StbImageLoaderState)));
+    auto *state = static_cast<StbImageLoaderState *>(ke_alloc(sizeof(StbImageLoaderState), alignof(StbImageLoaderState)));
     if (!state) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
-    state->allocator = alloc;
     state->logger    = params->logger;
 
-    auto *loader = static_cast<ke_image_loader *>(alloc->alloc(alloc, sizeof(ke_image_loader), alignof(ke_image_loader)));
-    if (!loader) { alloc->free(alloc, state); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed"); }
+    auto *loader = static_cast<ke_image_loader *>(ke_alloc(sizeof(ke_image_loader), alignof(ke_image_loader)));
+    if (!loader) { ke_free(state); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed"); }
     loader->handle     = state;
     loader->load_image = &load_image;
     loader->free_image = &free_image;

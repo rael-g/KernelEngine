@@ -26,6 +26,7 @@ target_link_libraries(ke_text_stb_truetype PUBLIC
     ke_text
     ke_logger
 )
+target_link_libraries(ke_text_stb_truetype PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_text_stb_truetype
     EXPORT KernelEngineTargets

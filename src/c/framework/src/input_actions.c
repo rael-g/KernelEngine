@@ -153,7 +153,6 @@ typedef struct action {
 
 typedef struct input_actions_state {
     ke_input_actions  api;
-    ke_allocator     *allocator;
     action           *actions;
     uint32_t          action_count;
     uint32_t          action_capacity;
@@ -165,12 +164,11 @@ static bool ensure_action_capacity(input_actions_state *s, uint32_t needed) {
     if (s->action_capacity >= needed) return true;
     uint32_t cap = s->action_capacity ? s->action_capacity : 8;
     while (cap < needed) cap *= 2;
-    action *new_buf = (action *)s->allocator->alloc(
-        s->allocator, sizeof(action) * cap, 8);
+    action *new_buf = (action *)ke_alloc(sizeof(action) * cap, 8);
     if (!new_buf) return false;
     if (s->actions) {
         memcpy(new_buf, s->actions, sizeof(action) * s->action_count);
-        s->allocator->free(s->allocator, s->actions);
+        ke_free(s->actions);
     }
     s->actions = new_buf;
     s->action_capacity = cap;
@@ -178,15 +176,15 @@ static bool ensure_action_capacity(input_actions_state *s, uint32_t needed) {
 }
 
 static bool ensure_binding_capacity(input_actions_state *s, action *a, uint32_t needed) {
+    (void)s;
     if (a->binding_capacity >= needed) return true;
     uint32_t cap = a->binding_capacity ? a->binding_capacity : 4;
     while (cap < needed) cap *= 2;
-    binding *new_buf = (binding *)s->allocator->alloc(
-        s->allocator, sizeof(binding) * cap, 8);
+    binding *new_buf = (binding *)ke_alloc(sizeof(binding) * cap, 8);
     if (!new_buf) return false;
     if (a->bindings) {
         memcpy(new_buf, a->bindings, sizeof(binding) * a->binding_count);
-        s->allocator->free(s->allocator, a->bindings);
+        ke_free(a->bindings);
     }
     a->bindings = new_buf;
     a->binding_capacity = cap;
@@ -197,7 +195,7 @@ static void clear_actions(input_actions_state *s) {
     for (uint32_t i = 0; i < s->action_count; ++i) {
         action *a = &s->actions[i];
         if (a->bindings) {
-            s->allocator->free(s->allocator, a->bindings);
+            ke_free(a->bindings);
             a->bindings = NULL;
         }
         a->binding_count = a->binding_capacity = 0;
@@ -539,10 +537,8 @@ static void vt_destroy(ke_input_actions *self) {
     if (!self || !self->handle) return;
     input_actions_state *s = (input_actions_state *)self->handle;
     clear_actions(s);
-    if (s->actions) s->allocator->free(s->allocator, s->actions);
-    ke_allocator *a = s->allocator;
-    a->free(a, s);
-    a->destroy(a);
+    if (s->actions) ke_free(s->actions);
+    ke_free(s);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -550,14 +546,9 @@ static void vt_destroy(ke_input_actions *self) {
 ke_result ke_input_actions_create(ke_input_actions_handle *out_actions, ke_error **out_error) {
     if (!out_actions) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    input_actions_state *s = (input_actions_state *)alloc->alloc(
-        alloc, sizeof(input_actions_state), 8);
-    if (!s) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    input_actions_state *s = (input_actions_state *)ke_alloc(sizeof(input_actions_state), 8);
+    if (!s) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(s, 0, sizeof(*s));
-    s->allocator = alloc;
 
     s->api.handle              = s;
     s->api.load                = vt_load;

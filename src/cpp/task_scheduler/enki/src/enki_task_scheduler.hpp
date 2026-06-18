@@ -10,7 +10,7 @@ namespace kernel_engine::task_scheduler::enki {
 
 class EnkiTaskScheduler {
 public:
-    EnkiTaskScheduler(struct ke_allocator* alloc);
+    EnkiTaskScheduler();
     ~EnkiTaskScheduler();
 
     struct ke_task_scheduler* ToApi();
@@ -19,8 +19,7 @@ public:
     static void DestroyApi(struct ke_task_scheduler* self);
 
 private:
-    void* scheduler_ptr_; 
-    struct ke_allocator* allocator_;
+    void* scheduler_ptr_;
     struct ke_task_scheduler api_{};
 };
 

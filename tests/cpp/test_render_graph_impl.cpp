@@ -3,7 +3,6 @@
 #include <render_graph_impl.hpp>
 #include <core_renderer.hpp>
 #include <gpu_device.hpp>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/render/frame_packet.h>
 #include "mocks.hpp"
 
@@ -18,19 +17,14 @@ class RenderGraphImplTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        std::memset(&alloc, 0, sizeof(alloc));
-        alloc.alloc = [](ke_allocator*, size_t s, size_t) { return std::malloc(s); };
-        alloc.free  = [](ke_allocator*, void* p) { std::free(p); };
-
         gpu_mock = new NiceMock<MockGpuDevice>();
-        
+
         GpuRendererParams params{};
-        params.allocator = &alloc;
         params.renderer_type = 1; // BGFX_RENDERER_TYPE_DIRECT3D11 or similar
-        
+
         renderer = new CoreRenderer(params);
         renderer->SetGpuDevice(gpu_mock);
-        graph_impl = new RenderGraphImpl(renderer, &alloc);
+        graph_impl = new RenderGraphImpl(renderer);
     }
 
     void TearDown() override
@@ -40,7 +34,6 @@ protected:
         delete gpu_mock;
     }
 
-    ke_allocator alloc{};
     NiceMock<MockGpuDevice>* gpu_mock = nullptr;
     CoreRenderer* renderer = nullptr;
     RenderGraphImpl* graph_impl = nullptr;

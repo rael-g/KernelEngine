@@ -10,7 +10,7 @@ else()
     target_compile_definitions(ke_allocator_malloc PRIVATE KE_KERNEL_EXPORT)
 endif()
 
-target_link_libraries(ke_allocator_malloc PUBLIC ke_allocator ke_logger)
+target_link_libraries(ke_allocator_malloc PUBLIC ke_allocator)
 
 install(TARGETS ke_allocator_malloc
     EXPORT KernelEngineTargets

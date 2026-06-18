@@ -27,7 +27,7 @@ target_link_libraries(ke_render_core PUBLIC
     ke_window
     ke_render_contract
     ke_threading
-    ke_allocator
+    ke_allocator_malloc
     ke_common
     ke_logger
 )

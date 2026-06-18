@@ -25,7 +25,6 @@ class AssimpLoader
                             void *user_data);
 
   private:
-    ke_allocator    *allocator_;
     ke_logger       *logger_;
     ke_asset_loader  api_{};
 };

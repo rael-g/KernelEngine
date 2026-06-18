@@ -6,21 +6,15 @@ namespace KernelEngine.Ecs.Flecs;
 
 /// <summary>
 /// flecs-backed <see cref="ke_ecs"/> storage. Owns an internal flecs world; satisfies
-/// the C ABI ECS contract via the ke_ecs vtable. The vtable methods (component_add,
-/// query, etc.) are stubbed in the C plugin until R2.5c — this wrapper exposes only
-/// lifetime for now.
+/// the C ABI ECS contract via the ke_ecs vtable.
 /// </summary>
 public sealed unsafe class FlecsEcs : IEcs
 {
     private ke_ecs* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
-    private readonly Allocator _allocator;
 
-    public FlecsEcs(Allocator allocator)
+    public FlecsEcs()
     {
-        ArgumentNullException.ThrowIfNull(allocator);
-        _allocator = allocator;
-
         ke_ecs_flecs_params @params = default;
         ke_ecs_handle handle;
         var rc = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, &handle, null);

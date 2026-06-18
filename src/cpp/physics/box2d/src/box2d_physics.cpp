@@ -12,7 +12,6 @@ namespace {
 
 struct Box2dState
 {
-    ke_allocator                       *allocator;
     ke_logger                          *logger;
     b2World                            *world;
     std::unordered_map<ke_body_2d, b2Body *> bodies;
@@ -41,10 +40,9 @@ void physics_destroy(ke_physics_2d *self)
     {
         // b2World destroys all bodies when it goes away — we just delete it.
         delete state->world;
-        auto *alloc = state->allocator;
         state->~Box2dState();
-        alloc->free(alloc, state);
-        alloc->free(alloc, self);
+        ke_free(state);
+        ke_free(self);
     }
 }
 
@@ -174,13 +172,11 @@ void physics_apply_impulse(ke_physics_2d *self, ke_body_2d id, float ix, float i
 extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
     const ke_physics_2d_box2d_params *params, ke_physics_2d_handle *out, ke_error **out_error)
 {
-    if (!params || !params->allocator || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-    auto *alloc = params->allocator;
+    if (!params || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    auto *state_mem = alloc->alloc(alloc, sizeof(Box2dState), alignof(Box2dState));
+    auto *state_mem = ke_alloc(sizeof(Box2dState), alignof(Box2dState));
     if (!state_mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     auto *state = new (state_mem) Box2dState{};
-    state->allocator = alloc;
     state->logger    = params->logger;
     state->next_id   = 1;
 
@@ -188,12 +184,12 @@ extern "C" KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
     // C# AddBox2D() defaults to (0, -9.81) so omitting args still gives Earth gravity.
     state->world = new b2World(b2Vec2(params->gravity_x, params->gravity_y));
 
-    auto *api = static_cast<ke_physics_2d *>(alloc->alloc(alloc, sizeof(ke_physics_2d), alignof(ke_physics_2d)));
+    auto *api = static_cast<ke_physics_2d *>(ke_alloc(sizeof(ke_physics_2d), alignof(ke_physics_2d)));
     if (!api)
     {
         delete state->world;
         state->~Box2dState();
-        alloc->free(alloc, state);
+        ke_free(state);
         return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
     }
     std::memset(api, 0, sizeof(*api));

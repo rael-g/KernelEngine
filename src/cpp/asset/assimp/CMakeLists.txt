@@ -27,6 +27,7 @@ target_link_libraries(ke_asset_assimp PUBLIC
     ke_logger
     assimp::assimp
 )
+target_link_libraries(ke_asset_assimp PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_asset_assimp
     EXPORT KernelEngineTargets

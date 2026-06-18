@@ -1,4 +1,4 @@
-using KernelEngine.Ecs.Flecs;
+﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using KernelEngine.Runtime;
@@ -12,21 +12,13 @@ namespace KernelEngine.Runtime.Tests;
 // at LoadModules time, topo-sort respects declared Dependencies.
 public class ModulePatternTests : IDisposable
 {
-    private readonly MallocAllocator   _allocator      = new();
-    private readonly EnkiTaskScheduler _taskScheduler;
-    private readonly FlecsEcs          _ecs;
-
-    public ModulePatternTests()
-    {
-        _taskScheduler = new EnkiTaskScheduler(_allocator);
-        _ecs           = new FlecsEcs(_allocator);
-    }
+    private readonly EnkiTaskScheduler _taskScheduler = new();
+    private readonly FlecsEcs          _ecs           = new();
 
     public void Dispose()
     {
         _ecs.Dispose();
         _taskScheduler.Dispose();
-        _allocator.Dispose();
     }
 
     private sealed class SimpleModule : IRuntimeModule
@@ -74,7 +66,7 @@ public class ModulePatternTests : IDisposable
         var services = new ServiceCollection().Add<IRuntimeModule>(module);
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_allocator, _ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskScheduler);
         runtime.LoadModules(sp);
 
         Assert.True(module.OnLoadCalled);
@@ -108,7 +100,7 @@ public class ModulePatternTests : IDisposable
             .Add<IRuntimeModule>(new ModuleA(order));  // registered SECOND
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_allocator, _ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskScheduler);
         runtime.LoadModules(sp);
 
         Assert.Equal(new[] { "A", "B" }, order);
@@ -126,7 +118,7 @@ public class ModulePatternTests : IDisposable
         var services = new ServiceCollection().Add<IRuntimeModule>(new CyclicModule());
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_allocator, _ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskScheduler);
 
         var ex = Assert.Throws<InvalidOperationException>(() => runtime.LoadModules(sp));
         Assert.Contains("cycle", ex.Message);
@@ -144,7 +136,7 @@ public class ModulePatternTests : IDisposable
         var services = new ServiceCollection().Add<IRuntimeModule>(new MissingDepModule());
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_allocator, _ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskScheduler);
 
         var ex = Assert.Throws<InvalidOperationException>(() => runtime.LoadModules(sp));
         Assert.Contains("not registered", ex.Message);
@@ -153,7 +145,7 @@ public class ModulePatternTests : IDisposable
     [Fact]
     public void Add_GenericContract_DiResolvesImpl()
     {
-        // Add<TContract, TImpl>() — the DI container constructs TImpl using
+        // Add<TContract, TImpl>() â€” the DI container constructs TImpl using
         // services already registered. Here ImplWithDep needs ITrackingService.
         var services = new ServiceCollection()
             .AddSingleton<ITrackingService, TrackingService>()

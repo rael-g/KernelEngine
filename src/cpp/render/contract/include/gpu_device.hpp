@@ -5,7 +5,6 @@
 #include <stdexcept>
 
 // Forward declarations for kernel types (outside renderer namespace)
-struct ke_allocator;
 struct ke_logger;
 struct ke_window;
 

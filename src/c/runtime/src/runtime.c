@@ -49,7 +49,6 @@ typedef struct defer_queue {
     defer_command *cmds;
     size_t         count;
     size_t         capacity;
-    ke_allocator  *allocator;
 } defer_queue;
 
 struct ke_system_ctx
@@ -247,13 +246,13 @@ static bool defer_reserve(defer_queue *q, size_t needed)
     if (needed <= q->capacity) return true;
     size_t new_cap = q->capacity ? q->capacity * 2 : 16;
     while (new_cap < needed) new_cap *= 2;
-    defer_command *buf = (defer_command *)q->allocator->alloc(
-        q->allocator, sizeof(defer_command) * new_cap, alignof(defer_command));
+    defer_command *buf = (defer_command *)ke_alloc(
+        sizeof(defer_command) * new_cap, alignof(defer_command));
     if (!buf) return false;
     if (q->cmds)
     {
         memcpy(buf, q->cmds, sizeof(defer_command) * q->count);
-        q->allocator->free(q->allocator, q->cmds);
+        ke_free(q->cmds);
     }
     q->cmds     = buf;
     q->capacity = new_cap;
@@ -351,7 +350,6 @@ typedef struct registered_system
 
 typedef struct runtime_state
 {
-    ke_allocator      *allocator;
     ke_ecs            *ecs;             // borrowed
     ke_task_scheduler *task_scheduler;  // borrowed
 
@@ -406,13 +404,13 @@ static ke_result runtime_register_system(ke_runtime                     *self,
     if (h->state.system_count == h->state.system_capacity)
     {
         size_t             new_cap = h->state.system_capacity ? h->state.system_capacity * 2 : 4;
-        registered_system *new_buf = (registered_system *)h->state.allocator->alloc(
-            h->state.allocator, sizeof(registered_system) * new_cap, alignof(registered_system));
+        registered_system *new_buf = (registered_system *)ke_alloc(
+            sizeof(registered_system) * new_cap, alignof(registered_system));
         if (!new_buf) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "system array allocation failed");
         if (h->state.systems)
         {
             memcpy(new_buf, h->state.systems, sizeof(registered_system) * h->state.system_count);
-            h->state.allocator->free(h->state.allocator, h->state.systems);
+            ke_free(h->state.systems);
         }
         h->state.systems         = new_buf;
         h->state.system_capacity = new_cap;
@@ -505,7 +503,6 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->defer.cmds        = NULL;
             pkg->defer.count       = 0;
             pkg->defer.capacity    = 0;
-            pkg->defer.allocator   = h->state.allocator;
 
             // Route via dispatch_pinned when the system requested a specific
             // worker; the regular dispatch load-balances across all workers.
@@ -531,7 +528,7 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             h->state.task_scheduler->wait(h->state.task_scheduler, tasks[t]);
             defer_flush(&pkgs[t].defer, h->state.ecs);
             if (pkgs[t].defer.cmds)
-                h->state.allocator->free(h->state.allocator, pkgs[t].defer.cmds);
+                ke_free(pkgs[t].defer.cmds);
         }
     }
 }
@@ -574,13 +571,10 @@ static void runtime_destroy(ke_runtime *self)
     if (!self || !self->handle) return;
     runtime_handle *h = (runtime_handle *)self->handle;
 
-    if (h->state.systems) h->state.allocator->free(h->state.allocator, h->state.systems);
+    if (h->state.systems) ke_free(h->state.systems);
     // Per-task defer queues are stack-allocated; freed at the wave barrier.
-
-    ke_allocator *alloc = h->state.allocator;
-    alloc->free(alloc, h);
-    alloc->destroy(alloc);
     // h->state.ecs and h->state.task_scheduler are borrowed — NOT destroyed here.
+    ke_free(h);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -593,15 +587,10 @@ ke_result ke_runtime_create(ke_ecs                  *ecs,
 {
     if (!ecs || !task_scheduler || !out_runtime) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    runtime_handle *h = (runtime_handle *)alloc->alloc(
-        alloc, sizeof(runtime_handle), alignof(runtime_handle));
-    if (!h) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    runtime_handle *h = (runtime_handle *)ke_alloc(sizeof(runtime_handle), alignof(runtime_handle));
+    if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(h, 0, sizeof(*h));
 
-    h->state.allocator      = alloc;
     h->state.ecs            = ecs;
     h->state.task_scheduler = task_scheduler;
 

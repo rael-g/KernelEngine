@@ -5,26 +5,26 @@ namespace KernelEngine.Kernel.Native;
 
 public static unsafe partial class NativeMethods
 {
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_malloc_create", ExactSpelling = true)]
-    public static extern ke_allocator* allocator_malloc_create();
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_alloc", ExactSpelling = true)]
+    public static extern void* alloc([NativeTypeName("size_t")] nuint size, [NativeTypeName("size_t")] nuint alignment);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_arena_create", ExactSpelling = true)]
-    public static extern ke_allocator* allocator_arena_create([NativeTypeName("size_t")] nuint fixed_capacity);
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_free", ExactSpelling = true)]
+    public static extern void free(void* ptr);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_create", ExactSpelling = true)]
-    public static extern ke_allocator* allocator_proxy_create(ke_allocator* inner, [NativeTypeName("const char *")] sbyte* name);
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_realloc", ExactSpelling = true)]
+    public static extern void* realloc(void* ptr, [NativeTypeName("size_t")] nuint new_size);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_get_stats", ExactSpelling = true)]
-    public static extern ke_result allocator_proxy_get_stats(ke_allocator* proxy, ke_allocator_stats* out_stats, ke_error** out_error);
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_arena_init", ExactSpelling = true)]
+    public static extern void arena_init(ke_arena* arena, [NativeTypeName("size_t")] nuint capacity);
 
-    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_allocator_proxy_report", ExactSpelling = true)]
-    public static extern void allocator_proxy_report(ke_allocator* proxy, [NativeTypeName("struct ke_logger *")] ke_logger* logger);
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_arena_alloc", ExactSpelling = true)]
+    public static extern void* arena_alloc(ke_arena* arena, [NativeTypeName("size_t")] nuint size, [NativeTypeName("size_t")] nuint alignment);
 
-    [NativeTypeName("#define KE_ID_ALLOCATOR_DEFAULT \"ke_alloc_default\"")]
-    public static ReadOnlySpan<byte> KE_ID_ALLOCATOR_DEFAULT => "ke_alloc_default"u8;
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_arena_reset", ExactSpelling = true)]
+    public static extern void arena_reset(ke_arena* arena);
 
-    [NativeTypeName("#define KE_ID_ALLOCATOR_SCRATCH \"ke_alloc_scratch\"")]
-    public static ReadOnlySpan<byte> KE_ID_ALLOCATOR_SCRATCH => "ke_alloc_scratch"u8;
+    [DllImport("ke_kernel", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_arena_destroy", ExactSpelling = true)]
+    public static extern void arena_destroy(ke_arena* arena);
 
     [NativeTypeName("#define KE_ID_LOGGER \"ke_logger\"")]
     public static ReadOnlySpan<byte> KE_ID_LOGGER => "ke_logger"u8;

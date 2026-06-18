@@ -54,7 +54,6 @@ public static class ServiceCollectionExtensions
 
             var @params = new ke_render_bgfx_params
             {
-                allocator     = sp.GetRequiredService<Allocator>().Native,
                 logger        = logger != null ? logger.Native : null,
                 window        = ((Window)sp.GetRequiredService<IWindow>()).Native,
                 shader_path   = (sbyte*)shaderPtr,

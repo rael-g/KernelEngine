@@ -1,7 +1,6 @@
 ﻿#include <gtest/gtest.h>
 #include <kernel_engine/kernel/framework/resource_queue.h>
 #include <kernel_engine/framework/resource_queue_create.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/render/render.h>
 
 #include <atomic>
@@ -109,15 +108,12 @@ static void InitMock(MockRenderer &m)
 class ResourceQueueTest : public ::testing::Test
 {
 protected:
-    ke_allocator      *alloc = nullptr;
     ke_resource_queue *queue = nullptr;
     MockRenderer       renderer;
 
     void SetUp() override
     {
-        alloc = ke_allocator_malloc_create();
-        ASSERT_NE(alloc, nullptr);
-        ASSERT_EQ(ke_resource_queue_create(alloc, &queue), KE_OK);
+        ASSERT_EQ(ke_resource_queue_create(&queue), KE_OK);
         InitMock(renderer);
     }
 

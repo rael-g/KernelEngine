@@ -9,16 +9,6 @@
 namespace kernel_engine::asset::assimp::detail
 {
 
-inline void *ke_alloc(ke_allocator *a, size_t n)
-{
-    return a->alloc(a, n, alignof(void *));
-}
-
-inline void ke_free(ke_allocator *a, void *p)
-{
-    if (p) a->free(a, p);
-}
-
 inline void log_info(ke_logger *logger, const char *msg)
 {
     if (!logger) return;

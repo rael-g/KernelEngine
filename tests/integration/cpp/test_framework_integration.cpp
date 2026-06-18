@@ -5,7 +5,6 @@
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/scene_tree_create.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/kernel/ecs/world.h>
 #include <filesystem>
 #include <fstream>
@@ -14,7 +13,6 @@ namespace fs = std::filesystem;
 
 class FrameworkIntegrationTest : public ::testing::Test {
 protected:
-    ke_allocator* alloc = nullptr;
     ke_world* world = nullptr;
     ke_scene_tree* tree = nullptr;
 
@@ -75,7 +73,6 @@ scale = [2, 2, 2]
 TEST_F(FrameworkIntegrationTest, CameraSystem_Update_Works) {
     ke_camera_render_system_params params{};
     params.world = world;
-    params.allocator = alloc;
     params.aspect = 1.0f;
     
     ke_camera_render_system* sys = nullptr;
@@ -107,14 +104,9 @@ TEST_F(FrameworkIntegrationTest, CameraSystem_Update_Works) {
 
 #include <kernel_engine/asset/mesh_shape.h>
 
-TEST_F(FrameworkIntegrationTest, MeshShape_Bake_ReturnsOom_WhenAllocFails) {
-    ke_allocator fa{};
-    fa.alloc = +[](ke_allocator*, size_t, size_t) -> void* { return nullptr; };
-    fa.free  = +[](ke_allocator*, void*) {};
-    
-    ke_mesh_shape_data data{};
-    EXPECT_EQ(ke_mesh_shape_bake(&fa, KE_MESH_PRIMITIVE_CUBE, 0, &data), KE_ERROR);
-}
+// MeshShape_Bake_ReturnsOom_WhenAllocFails: removed — ke_mesh_shape_bake
+// is now internal to the framework plugin and uses ke_alloc directly;
+// allocation failure cannot be injected from outside.
 
 #include <kernel_engine/kernel/framework/mesh_render_system.h>
 #include <kernel_engine/framework/mesh_render_system_create.h>
@@ -122,7 +114,6 @@ TEST_F(FrameworkIntegrationTest, MeshShape_Bake_ReturnsOom_WhenAllocFails) {
 TEST_F(FrameworkIntegrationTest, MeshRenderSystem_Update_Works) {
     ke_mesh_render_system_params params{};
     params.world = world;
-    params.allocator = alloc;
     
     ke_mesh_render_system* sys = nullptr;
     ASSERT_EQ(ke_mesh_render_system_create(&params, &sys), KE_OK);
@@ -166,7 +157,7 @@ TEST_F(FrameworkIntegrationTest, MeshRenderSystem_Update_Works) {
 #include <kernel_engine/render/mesh.h>
 
 TEST_F(FrameworkIntegrationTest, LightSystem_Ids_Works) {
-    ke_light_render_system_params params = { world, alloc };
+    ke_light_render_system_params params = { world };
     ke_light_render_system* sys = nullptr;
     ke_light_render_system_create(&params, &sys);
     

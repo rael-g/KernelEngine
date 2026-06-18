@@ -10,7 +10,7 @@ namespace kernel_engine::render::shader_compiler
 {
 
 BgfxShaderCompiler::BgfxShaderCompiler(const ke_shader_compiler_bgfx_params *params)
-    : allocator_(params->allocator), logger_(params->logger),
+    : logger_(params->logger),
       shaderc_path_((params->shaderc_path != nullptr) ? params->shaderc_path : "")
 {
     compiler_api_.handle = this;
@@ -44,12 +44,8 @@ void BgfxShaderCompiler::DestroyApi(ke_shader_compiler *self)
 {
     if (!self) return;
     auto *sys = static_cast<BgfxShaderCompiler *>(self->handle);
-    auto *alloc = sys->allocator_;
-    if (alloc)
-    {
-        sys->~BgfxShaderCompiler();
-        alloc->free(alloc, sys);
-    }
+    sys->~BgfxShaderCompiler();
+    ke_free(sys);
 }
 
 ke_result BgfxShaderCompiler::OnInitialize()
@@ -128,14 +124,13 @@ extern "C"
         out_compiler->ref     = NULL;
         out_compiler->destroy = NULL;
 
-        if ((params == nullptr) || (params->allocator == nullptr))
+        if (params == nullptr || params->shaderc_path == nullptr)
         {
             return KE_ERROR;
         }
         using namespace kernel_engine::render::shader_compiler;
-        ke_allocator *alloc = params->allocator;
 
-        void *mem = alloc->alloc(alloc, sizeof(BgfxShaderCompiler), 0);
+        void *mem = ke_alloc(sizeof(BgfxShaderCompiler), 0);
         if (mem == nullptr)
         {
             return KE_ERROR;

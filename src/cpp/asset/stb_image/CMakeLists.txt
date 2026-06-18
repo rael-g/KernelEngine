@@ -27,6 +27,7 @@ target_link_libraries(ke_asset_stb_image PUBLIC
     ke_asset
     ke_logger
 )
+target_link_libraries(ke_asset_stb_image PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_asset_stb_image
     EXPORT KernelEngineTargets

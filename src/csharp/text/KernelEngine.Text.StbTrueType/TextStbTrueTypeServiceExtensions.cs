@@ -22,8 +22,7 @@ public static class TextStbTrueTypeServiceExtensions
                 var logger = sp.GetService<INativeLogger>();
                 var @params = new ke_font_loader_stb_params
                 {
-                    allocator = sp.GetRequiredService<Allocator>().Native,
-                    logger    = logger != null ? logger.Native : null,
+                    logger = logger != null ? logger.Native : null,
                 };
                 ke_font_loader_handle handle;
                 KernelException.ThrowIfFailed(

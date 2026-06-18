@@ -1,4 +1,4 @@
-﻿#include <kernel_engine/logger/logger.h>
+#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 
@@ -9,7 +9,6 @@
 
 typedef struct logger_state
 {
-    ke_allocator   *alloc;
     ke_logger_sink  sinks[KE_LOGGER_MAX_SINKS];
     int             sink_count;
 } logger_state;
@@ -20,10 +19,8 @@ static void logger_destroy(ke_logger *self)
     logger_state *s = (logger_state *)self->handle;
     for (int i = 0; i < s->sink_count; ++i)
         if (s->sinks[i].destroy) s->sinks[i].destroy(&s->sinks[i]);
-    ke_allocator *a = s->alloc;
-    a->free(a, s);
-    a->free(a, self);
-    a->destroy(a);
+    ke_free(s);
+    ke_free(self);
 }
 
 static void logger_log(ke_logger *self, const ke_log_event *event)
@@ -72,22 +69,17 @@ ke_result ke_logger_create(ke_logger_handle *out_logger, ke_error **out_error)
 {
     if (!out_logger) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *allocator = ke_allocator_malloc_create();
-    if (!allocator) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
+    ke_logger *logger = (ke_logger *)ke_alloc(sizeof(ke_logger), _Alignof(ke_logger));
+    if (!logger) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "logger allocation failed");
 
-    ke_logger *logger = (ke_logger *)allocator->alloc(allocator, sizeof(ke_logger), _Alignof(ke_logger));
-    if (!logger) { allocator->destroy(allocator); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "logger allocation failed"); }
-
-    logger_state *state = (logger_state *)allocator->alloc(allocator, sizeof(logger_state), _Alignof(logger_state));
+    logger_state *state = (logger_state *)ke_alloc(sizeof(logger_state), _Alignof(logger_state));
     if (!state)
     {
-        allocator->free(allocator, logger);
-        allocator->destroy(allocator);
+        ke_free(logger);
         return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     }
 
     memset(state, 0, sizeof(*state));
-    state->alloc = allocator;
 
     logger->handle     = state;
     logger->log        = logger_log;

@@ -20,18 +20,17 @@
 
 typedef struct asset_resolver_state {
     ke_asset_resolver  api;
-    ke_allocator      *allocator;
     ke_image_loader   *image_loader;   // borrowed; may be NULL
     ke_font_loader    *font_loader;    // borrowed; may be NULL
-    char              *project_root;   // owned (allocator-allocated); may be NULL
+    char              *project_root;   // owned (ke_alloc-allocated); may be NULL
 } asset_resolver_state;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-static char *dup_cstr(ke_allocator *a, const char *s) {
+static char *dup_cstr(const char *s) {
     if (!s) return NULL;
     size_t n = strlen(s);
-    char *out = (char *)a->alloc(a, n + 1, 1);
+    char *out = (char *)ke_alloc(n + 1, 1);
     if (!out) return NULL;
     memcpy(out, s, n);
     out[n] = '\0';
@@ -205,7 +204,7 @@ static ke_result vt_resolve_mesh(ke_asset_resolver *self, const char *path,
         else if (strcmp(name, "cube")   == 0) kind = KE_MESH_PRIMITIVE_CUBE;
         else if (strcmp(name, "sphere") == 0) kind = KE_MESH_PRIMITIVE_SPHERE;
         else return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "unknown primitive");
-        return ke_mesh_shape_bake_internal(s->allocator, kind, 0, out);
+        return ke_mesh_shape_bake_internal(kind, 0, out);
     }
     // Future: dispatch .gltf/.fbx/.obj via an injected ke_asset_loader.
     return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "mesh not found");
@@ -214,7 +213,7 @@ static ke_result vt_resolve_mesh(ke_asset_resolver *self, const char *path,
 static void vt_free_mesh(ke_asset_resolver *self, ke_mesh_shape_data *data) {
     if (!self || !self->handle || !data) return;
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
-    ke_mesh_shape_free_internal(s->allocator, data);
+    ke_mesh_shape_free_internal(data);
 }
 
 static ke_result vt_resolve_material(ke_asset_resolver *self, const char *path,
@@ -255,10 +254,8 @@ static void vt_free_font(ke_asset_resolver *self, ke_font_data *data) {
 static void vt_destroy(ke_asset_resolver *self) {
     if (!self || !self->handle) return;
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
-    ke_allocator *a = s->allocator;
-    if (s->project_root) a->free(a, s->project_root);
-    a->free(a, s);
-    a->destroy(a);
+    if (s->project_root) ke_free(s->project_root);
+    ke_free(s);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -269,21 +266,15 @@ ke_result ke_asset_resolver_create(ke_image_loader *image_loader,
                                     ke_error **out_error) {
     if (!out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
-    ke_allocator *alloc = ke_allocator_malloc_create();
-    if (!alloc) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
-    asset_resolver_state *s = (asset_resolver_state *)alloc->alloc(
-        alloc, sizeof(asset_resolver_state), 8);
-    if (!s) { alloc->destroy(alloc); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    asset_resolver_state *s = (asset_resolver_state *)ke_alloc(sizeof(asset_resolver_state), 8);
+    if (!s) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(s, 0, sizeof(*s));
 
-    s->allocator    = alloc;
     s->image_loader = image_loader;
     s->font_loader  = font_loader;
-    s->project_root = dup_cstr(alloc, project_root);
+    s->project_root = dup_cstr(project_root);
     if (project_root && !s->project_root) {
-        alloc->free(alloc, s);
-        alloc->destroy(alloc);
+        ke_free(s);
         return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "project root allocation failed");
     }
 

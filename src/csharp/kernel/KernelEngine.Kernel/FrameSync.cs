@@ -10,36 +10,31 @@ namespace KernelEngine.Kernel;
 public sealed unsafe class FrameSync : IFrameSync
 {
     private ke_frame_sync* _native;
-    private Allocator      _alloc;
     private readonly delegate* unmanaged[Cdecl]<ke_frame_sync*, void> _destroy;
 
-    private FrameSync(ke_frame_sync_handle handle, Allocator alloc)
+    private FrameSync(ke_frame_sync_handle handle)
     {
         _native  = handle.@ref;
         _destroy = handle.destroy;
-        _alloc   = alloc;
     }
 
     /// <summary>
     /// Creates a frame sync with the given ring buffer size and pre-allocated array capacities.
     /// </summary>
-    /// <param name="alloc">Engine allocator for all internal memory.</param>
     /// <param name="bufferCount">Ring buffer depth (2 = double-buffer, 3 = triple-buffer).</param>
     /// <param name="drawCapacity">Max draw commands per frame.</param>
     /// <param name="pointLightCapacity">Max point lights per frame.</param>
     /// <param name="spotLightCapacity">Max spot lights per frame.</param>
-    public static FrameSync Create(Allocator alloc,
-                                   uint      bufferCount       = 2,
-                                   uint      drawCapacity      = 2048,
-                                   uint      pointLightCapacity = 512,
-                                   uint      spotLightCapacity  = 512)
+    public static FrameSync Create(uint bufferCount        = 2,
+                                   uint drawCapacity       = 2048,
+                                   uint pointLightCapacity = 512,
+                                   uint spotLightCapacity  = 512)
     {
         ke_frame_sync_handle handle;
         KernelException.ThrowIfFailed(NativeMethods.frame_sync_std_create(
-                alloc.Native, bufferCount,
-                drawCapacity, pointLightCapacity, spotLightCapacity,
+                bufferCount, drawCapacity, pointLightCapacity, spotLightCapacity,
                 &handle, null).ToManaged());
-        return new FrameSync(handle, alloc);
+        return new FrameSync(handle);
     }
 
     /// <summary>

@@ -10,7 +10,6 @@ extern "C" {
 /// @brief Construction parameters for the miniaudio-backed ke_audio backend.
 typedef struct ke_audio_miniaudio_params
 {
-    struct ke_allocator *allocator; ///< Allocator owns the backend struct + internal bookkeeping
     struct ke_logger    *logger;    ///< Optional; may be NULL
 } ke_audio_miniaudio_params;
 

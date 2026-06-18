@@ -17,8 +17,8 @@ public sealed class KernelFactory : IKernelFactory
         throw new NotSupportedException("World creation has moved to KernelEngine.Framework. Use SceneRenderModule.");
 
     /// <inheritdoc/>
-    public IFrameSync CreateFrameSync(IAllocator allocator, int bufferCount) =>
-        FrameSync.Create((Allocator)allocator, (uint)bufferCount);
+    public IFrameSync CreateFrameSync(int bufferCount) =>
+        FrameSync.Create((uint)bufferCount);
 
     /// <inheritdoc/>
     public void SetCurrentThreadName(string name) => KernelThread.SetCurrentName(name);

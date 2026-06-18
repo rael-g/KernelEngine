@@ -1,7 +1,6 @@
 ﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <window_core.hpp>
 #include <window_device.hpp>
 
@@ -59,18 +58,8 @@ TEST(WindowFactoryTest, Create_NullParams_ReturnsInvalidArgument) {
     ASSERT_EQ(ke_window_glfw_create(nullptr, &w, nullptr), KE_ERROR);
 }
 
-TEST(WindowFactoryTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_window_handle w{};
-    ke_window_glfw_params params = { nullptr, nullptr, nullptr, "Test", 800, 600, 0 };
-    ASSERT_EQ(ke_window_glfw_create(&params, &w, nullptr), KE_ERROR);
-}
-
 TEST(WindowFactoryTest, Create_Success_OrWindowError) {
-    ke_allocator alloc{};
-    alloc.alloc = [](ke_allocator*, size_t s, size_t) { return std::malloc(s); };
-    alloc.free = [](ke_allocator*, void* p) { std::free(p); };
-
-    ke_window_glfw_params params = { &alloc, nullptr, nullptr, "Test", 800, 600, 0 };
+    ke_window_glfw_params params = { nullptr, nullptr, "Test", 800, 600, 0 };
     ke_window_handle w{};
     ke_result res = ke_window_glfw_create(&params, &w, nullptr);
     if (res == KE_OK) {

@@ -24,7 +24,6 @@ typedef struct apply_entry {
 } apply_entry;
 
 typedef struct ke_world_state {
-    ke_allocator             *allocator;       // owned — created internally in ke_world_create
     struct ke_task_scheduler *task_scheduler;  // borrowed
     ke_ecs                   *ecs;             // owned
     ke_runtime               *runtime;         // owned
@@ -69,12 +68,11 @@ static ke_result world_register_component_apply(struct ke_world *self,
 
     if (s->apply_count == s->apply_capacity) {
         uint32_t cap = s->apply_capacity ? s->apply_capacity * 2 : 16;
-        apply_entry *new_buf = (apply_entry *)s->allocator->alloc(
-            s->allocator, sizeof(apply_entry) * cap, 8);
+        apply_entry *new_buf = (apply_entry *)ke_alloc(sizeof(apply_entry) * cap, 8);
         if (!new_buf) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "apply registry allocation failed");
         if (s->apply_registry) {
             memcpy(new_buf, s->apply_registry, sizeof(apply_entry) * s->apply_count);
-            s->allocator->free(s->allocator, s->apply_registry);
+            ke_free(s->apply_registry);
         }
         s->apply_registry = new_buf;
         s->apply_capacity = cap;
@@ -99,15 +97,13 @@ static void world_destroy(struct ke_world *self) {
     if (!self) return;
     ke_world_state *s = (ke_world_state *)self->handle;
     if (s) {
-        if (s->apply_registry) s->allocator->free(s->allocator, s->apply_registry);
+        if (s->apply_registry) ke_free(s->apply_registry);
 
         // ecs, runtime, scene_tree are BORROWED — caller destroys them after world->destroy().
         // "quem cria, owna": world did not create these; world must not destroy them.
-        ke_allocator *a = s->allocator;
-        a->free(a, s);
-        a->destroy(a);
+        // state + vtable are in one contiguous block; freeing state frees self too.
+        ke_free(s);
     }
-    // self lives in the same allocation as state — already freed.
 }
 
 ke_result ke_world_create(const ke_world_params *params, ke_world_handle *out_world, ke_error **out_error) {
@@ -116,19 +112,15 @@ ke_result ke_world_create(const ke_world_params *params, ke_world_handle *out_wo
         return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "ecs and runtime are required");
     }
 
-    ke_allocator *a = ke_allocator_malloc_create();
-    if (!a) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocator creation failed");
-
     // Single allocation: state + vtable contiguous. Simpler teardown.
     size_t block_size = sizeof(ke_world_state) + sizeof(ke_world);
-    void *block = a->alloc(a, block_size, 8);
-    if (!block) { a->destroy(a); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    void *block = ke_alloc(block_size, 8);
+    if (!block) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(block, 0, block_size);
 
     ke_world_state *state = (ke_world_state *)block;
     ke_world       *world = (ke_world *)((char *)block + sizeof(ke_world_state));
 
-    state->allocator      = a;
     state->task_scheduler = params->task_scheduler;
     state->ecs            = params->ecs;
     state->runtime        = params->runtime;

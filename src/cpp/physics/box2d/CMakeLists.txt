@@ -26,6 +26,7 @@ target_link_libraries(ke_physics_2d_box2d PUBLIC
 
 target_link_libraries(ke_physics_2d_box2d PRIVATE
     box2d::box2d
+    ke_allocator_malloc
 )
 
 install(TARGETS ke_physics_2d_box2d
