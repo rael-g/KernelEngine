@@ -310,6 +310,5 @@ It stays alive while render v1 lives. But **`ecs/system.h` must stop mentioning 
 
 | Item | Doc ref | Notes |
 |---|---|---|
-| §7.2 refinement — `ke_allocator` vtable → plain-function module (no struct, no `create`, no `destroy`) | §7.2 last paragraph | Separate task; tracked in `project_allocator_plain_functions.md` |
 | §5 Opaque phases — **closed**: `ke_phase` enum kept as-is; passes the §5 acid test (no domain names baked in — UPDATE/PRE_UPDATE/EXTRACT are generic scheduling primitives, not domain identifiers). STARTUP/SHUTDOWN are unimplemented but correct by design (R2+). Opaque-ID approach rejected for V1: no user-defined phases in roadmap, DLL-exported constants would add ABI friction for zero benefit. | §5, open question #2 | Decision 2026-06-18 |
-| §8 Per-domain versioning — explicit platform manifest vs. semver asserted at wire time | §8, open question #1 | Policy decision, no code yet |
+| §8 Per-domain versioning — explicit platform manifest vs. semver asserted at wire time | §8, open question #1 | Policy decision, no code yet; does not block merge |
