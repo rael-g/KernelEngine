@@ -33,11 +33,21 @@ typedef struct ke_ecs_flecs_params
     int reserved;  // empty for the spike; expanded as the surface grows
 } ke_ecs_flecs_params;
 
+/// Error type for flecs internal fatal assertions (ke.ecs.flecs.fatal).
+/// Parent: KE_ERROR_GENERAL. Used by ke_ecs vtable functions that intercept
+/// flecs abort() calls via ecs_os_api.abort_ + setjmp/longjmp.
+KE_ECS_FLECS_API extern const ke_error_type KE_ERROR_ECS_FLECS_FATAL;
+
 /// Creates a ke_ecs vtable backed by an internally-owned flecs world.
-/// Ownership: the caller owns the returned ke_ecs*; call ke_ecs->destroy() when done.
+/// Also installs process-wide ecs_os_api log + abort handlers so that flecs
+/// assertions are translated to ke_error instead of calling abort().
 KE_ECS_FLECS_API ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
                                                ke_ecs_handle             *out_ecs,
                                                ke_error                 **out_error);
+
+/// Returns the last flecs fatal message captured on the calling thread, or NULL
+/// if no fatal occurred. Valid until the next ke_ecs vtable call on this thread.
+KE_ECS_FLECS_API const char *ke_ecs_flecs_get_last_fatal_message(void);
 
 #ifdef __cplusplus
 }
