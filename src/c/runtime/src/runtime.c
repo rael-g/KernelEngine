@@ -351,7 +351,7 @@ typedef struct registered_system
 typedef struct runtime_state
 {
     ke_ecs            *ecs;             // borrowed
-    ke_task_scheduler *task_scheduler;  // borrowed
+    ke_scheduler *scheduler;  // borrowed
 
     registered_system *systems;
     size_t             system_count;
@@ -508,14 +508,14 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             // worker; the regular dispatch load-balances across all workers.
             if (rs->params.pinned_thread > 0)
             {
-                tasks[wave_size] = h->state.task_scheduler->dispatch_pinned(
-                    h->state.task_scheduler, rs->params.pinned_thread,
+                tasks[wave_size] = h->state.scheduler->dispatch_pinned(
+                    h->state.scheduler, rs->params.pinned_thread,
                     task_pkg_run, pkg);
             }
             else
             {
-                tasks[wave_size] = h->state.task_scheduler->dispatch(
-                    h->state.task_scheduler, task_pkg_run, pkg);
+                tasks[wave_size] = h->state.scheduler->dispatch(
+                    h->state.scheduler, task_pkg_run, pkg);
             }
             wave_size++;
         }
@@ -525,7 +525,7 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
         // through the same thread that drove the tick — no race.
         for (uint32_t t = 0; t < wave_size; t++)
         {
-            h->state.task_scheduler->wait(h->state.task_scheduler, tasks[t]);
+            h->state.scheduler->wait(h->state.scheduler, tasks[t]);
             defer_flush(&pkgs[t].defer, h->state.ecs);
             if (pkgs[t].defer.cmds)
                 ke_free(pkgs[t].defer.cmds);
@@ -561,7 +561,6 @@ static ke_result runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
 
     runtime_run_phase(h, KE_PHASE_UPDATE,      dt);
     runtime_run_phase(h, KE_PHASE_POST_UPDATE, dt);
-    runtime_run_phase(h, KE_PHASE_EXTRACT,     dt);
 
     return KE_OK;
 }
@@ -573,26 +572,26 @@ static void runtime_destroy(ke_runtime *self)
 
     if (h->state.systems) ke_free(h->state.systems);
     // Per-task defer queues are stack-allocated; freed at the wave barrier.
-    // h->state.ecs and h->state.task_scheduler are borrowed — NOT destroyed here.
+    // h->state.ecs and h->state.scheduler are borrowed — NOT destroyed here.
     ke_free(h);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 ke_result ke_runtime_create(ke_ecs                  *ecs,
-                             ke_task_scheduler       *task_scheduler,
+                             ke_scheduler       *scheduler,
                              const ke_runtime_params *params,
                              ke_runtime_handle       *out_runtime,
                              ke_error               **out_error)
 {
-    if (!ecs || !task_scheduler || !out_runtime) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!ecs || !scheduler || !out_runtime) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     runtime_handle *h = (runtime_handle *)ke_alloc(sizeof(runtime_handle), alignof(runtime_handle));
     if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
     memset(h, 0, sizeof(*h));
 
     h->state.ecs            = ecs;
-    h->state.task_scheduler = task_scheduler;
+    h->state.scheduler = scheduler;
 
     // Fixed-timestep config: caller-provided or default. 0 in either field
     // means "use the default" so {0} params get a sane 60Hz physics tick out

@@ -33,7 +33,7 @@ public interface IRuntime : IDisposable
     ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
                           uint pinnedThread = 0);
 
-    /// <summary>Drives one frame: PreUpdate → Update → PostUpdate (Extract / FixedUpdate land in R2+).</summary>
+    /// <summary>Drives one frame: PreUpdate → FixedUpdate×N → Update → PostUpdate.</summary>
     void Tick(float dt);
 }
 
@@ -45,6 +45,5 @@ public enum RuntimePhase
     FixedUpdate = 2,
     Update      = 3,
     PostUpdate  = 4,
-    Extract     = 5,
-    Shutdown    = 6,
+    Shutdown    = 5,
 }

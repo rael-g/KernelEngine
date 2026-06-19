@@ -23,8 +23,7 @@ typedef enum ke_phase {
     KE_PHASE_FIXED_UPDATE = 2,
     KE_PHASE_UPDATE       = 3,
     KE_PHASE_POST_UPDATE  = 4,
-    KE_PHASE_EXTRACT      = 5,
-    KE_PHASE_SHUTDOWN     = 6,
+    KE_PHASE_SHUTDOWN     = 5,
 } ke_phase;
 
 typedef enum ke_access {

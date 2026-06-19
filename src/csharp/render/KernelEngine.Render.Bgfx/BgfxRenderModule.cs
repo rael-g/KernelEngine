@@ -60,7 +60,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var scheduler = services.GetRequiredService<IScheduler>();
         if (scheduler.NumWorkers < RenderWorker)
             throw new InvalidOperationException(
                 $"BgfxRenderModule needs at least {RenderWorker} worker(s); scheduler has {scheduler.NumWorkers}.");
@@ -81,7 +81,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
         if (initError != null)
             throw new InvalidOperationException("Bgfx renderer Initialize failed", initError);
 
-        // Full per-tick render pipeline runs in Extract phase, pinned. Order:
+        // Full per-tick render pipeline runs in PostUpdate phase, pinned. Order:
         //   1. Open packet (BeginWrite).
         //   2. Default clear color (module config).
         //   3. Resolve every IFrameContributor and let it write its per-frame data.
@@ -103,7 +103,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
                 resolvedClearColor = (arr[0], arr[1], arr[2], arr[3]);
         }
 
-        runtime.RegisterSystem("Bgfx.RenderFrame", RuntimePhase.Extract, (_, _) =>
+        runtime.RegisterSystem("Bgfx.RenderFrame", RuntimePhase.PostUpdate, (_, _) =>
         {
             var packet = (KernelEngine.Kernel.FramePacket)frameSync.BeginWrite();
             try
@@ -139,7 +139,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
         // and block until it completes. Skipping this would either trip the
         // ke.render affinity assertion on the main thread or — worse, if the
         // assertion were removed — corrupt bgfx's internal state on shutdown.
-        var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var scheduler = services.GetRequiredService<IScheduler>();
         var renderer  = services.GetRequiredService<IRenderer>();
 
         var done = new System.Threading.ManualResetEventSlim(false);
