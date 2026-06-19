@@ -2,10 +2,6 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Native;
 
-public partial struct ke_render_graph
-{
-}
-
 public unsafe partial struct ke_render_graph
 {
     public void* handle;

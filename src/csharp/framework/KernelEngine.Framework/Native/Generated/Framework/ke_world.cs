@@ -21,7 +21,3 @@ public unsafe partial struct ke_world
     [NativeTypeName("ke_component_apply_fn (*)(struct ke_world *, ke_component_id)")]
     public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, KernelEngine.Ecs.Native.ke_variant_table_entry*, uint, void>> get_component_apply;
 }
-
-public partial struct ke_world
-{
-}
