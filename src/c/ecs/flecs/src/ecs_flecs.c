@@ -119,6 +119,7 @@ static void ecs_flecs_entity_destroy(ke_ecs *self, ke_entity entity)
 {
     if (!self || !self->handle || entity == 0) return;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (!ecs_is_alive(h->state.world, (ecs_entity_t)entity)) return;
     ecs_delete(h->state.world, (ecs_entity_t)entity);
 }
 
@@ -167,7 +168,7 @@ static void *ecs_flecs_component_add(ke_ecs *self, ke_entity entity, ke_componen
 {
     if (!self || !self->handle || entity == 0 || component == 0) return NULL;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
-    // Add the component (no-op if already present) then return a writable pointer.
+    if (!ecs_is_alive(h->state.world, (ecs_entity_t)entity)) return NULL;
     ecs_add_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
     return ecs_get_mut_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
 }
@@ -176,6 +177,7 @@ static void ecs_flecs_component_remove(ke_ecs *self, ke_entity entity, ke_compon
 {
     if (!self || !self->handle || entity == 0 || component == 0) return;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (!ecs_is_alive(h->state.world, (ecs_entity_t)entity)) return;
     ecs_remove_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
 }
 
@@ -183,8 +185,10 @@ static void *ecs_flecs_component_get(ke_ecs *self, ke_entity entity, ke_componen
 {
     if (!self || !self->handle || entity == 0 || component == 0) return NULL;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
-    // ecs_get_mut_id returns a writable pointer; mutating is the typical case
-    // for component_get(). Returns NULL if entity doesn't have the component.
+    // Guard against unregistered components or dead entities — ecs_get_mut_id
+    // asserts in both cases; ke_ecs contract says "returns NULL if not found."
+    if (!ecs_is_alive(h->state.world, (ecs_entity_t)entity)) return NULL;
+    if (!ecs_has_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component)) return NULL;
     return ecs_get_mut_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
 }
 

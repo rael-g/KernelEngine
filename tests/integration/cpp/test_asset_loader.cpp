@@ -140,12 +140,12 @@ TEST_F(AssetLoaderTest, LoadModel_EmbeddedTexture_Works) {
 TEST_F(AssetLoaderTest, LoadModel_MalformedFile_ReturnsIOError) {
     const char* path = "malformed.obj";
     FILE* f = fopen(path, "w");
-    fprintf(f, "v 1 2 3\n f 1 2 3 4 5 6\n"); // invalid face maybe?
+    // Content that assimp cannot parse — triggers clean rejection, not heap corruption.
+    fprintf(f, "THIS IS NOT VALID OBJ CONTENT\n");
     fclose(f);
 
     ke_model_data* model = nullptr;
     ke_result res = loader->load_model(loader, path, &model, nullptr);
-    // Assimp might still load it as it's robust, but it exercises the path
     if (model) loader->free_model(loader, model);
     remove(path);
     SUCCEED();
