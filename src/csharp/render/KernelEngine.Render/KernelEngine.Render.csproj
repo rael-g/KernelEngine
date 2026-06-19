@@ -12,10 +12,6 @@
     <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <NativeDep Include="ke_threading" />
-  </ItemGroup>
-
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>

@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <NativeDep Include="ke_ecs_flecs" />
-    <NativeDep Include="ke_kernel" />
   </ItemGroup>
 
   <Import Project="../../NativeDependencies.targets" />

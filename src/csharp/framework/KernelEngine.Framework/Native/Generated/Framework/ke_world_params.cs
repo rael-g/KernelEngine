@@ -4,8 +4,8 @@ namespace KernelEngine.Framework.Native;
 
 public unsafe partial struct ke_world_params
 {
-    [NativeTypeName("struct ke_task_scheduler *")]
-    public KernelEngine.Scheduler.Native.ke_scheduler* task_scheduler;
+    [NativeTypeName("struct ke_scheduler *")]
+    public KernelEngine.Scheduler.Native.ke_scheduler* scheduler;
 
     [NativeTypeName("ke_ecs *")]
     public KernelEngine.Ecs.Native.ke_ecs* ecs;

@@ -188,7 +188,9 @@ ke.render — pinned render-thread work; bgfx APIs are called here only
 
 5. **No mutex / condvar / `std::thread` in plugins.** The scheduler is the synchronization layer. Async completion uses `ke_task_scheduler->submit_to(thread, fn, ctx)` + `wait_for_task`. Producer-consumer ordering uses phase boundaries (register producer in phase N, consumer in phase N+1; the runtime guarantees the barrier). The legacy `ke_resource_queue` that reinvented a Future on `std::mutex` + `condition_variable` was deleted in C-phase 4.5 of the runtime arc.
 
-6. **Framework plugin is implemented in pure C.** `src/c/framework/` ships pure C only — no STL, no `new`/`delete`, no C++ standard library. tomlc99 (vendored) handles TOML parsing. The framework's public-facing surface is C-ABI vtable + factory functions, so C++ name-mangling at the implementation layer would only add friction for dynamic-language bindings (Lua, future Rust).
+6. **`assert()` and `abort()` are banned everywhere in engine code.** The engine has `ke_error` — a robust, typed, thread-local error propagation system. Any condition that would be expressed as `assert(x)` must instead be expressed as a `ke_result` return + `KE_ERROR_SET`. Any path that would call `abort()` must translate to `ke_error` and return an error code to the caller. This includes `ke_thread_assert_current` (which uses `assert()` and must be replaced with a `ke_result`-returning check), internal defensive guards, and plugin boundaries. Delegating failure to the OS abort dialog when a proper error system exists is a hard violation.
+
+7. **Framework plugin is implemented in pure C.** `src/c/framework/` ships pure C only — no STL, no `new`/`delete`, no C++ standard library. tomlc99 (vendored) handles TOML parsing. The framework's public-facing surface is C-ABI vtable + factory functions, so C++ name-mangling at the implementation layer would only add friction for dynamic-language bindings (Lua, future Rust).
 
 ---
 

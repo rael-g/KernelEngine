@@ -3,7 +3,7 @@ Generated/Threading/
 --namespace
 KernelEngine.Render.Native
 --libraryPath
-ke_threading_std
+ke_threading
 --include-directory
 ../../../../c/common/include
 --include-directory

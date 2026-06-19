@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <NativeDep Include="ke_runtime" />
-    <NativeDep Include="ke_kernel" />
   </ItemGroup>
 
   <Import Project="../../NativeDependencies.targets" />
