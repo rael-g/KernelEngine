@@ -658,6 +658,29 @@ TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
     EXPECT_EQ(ke_system_ctx_defer_applied_count(), 5u);  // exactly 1 per tick, drains every wave
 }
 
+// ── Abort interception ───────────────────────────────────────────────────────
+
+// Registering a component with size=0 triggers a flecs internal assertion.
+// Without KE_FLECS_GUARD the process would abort; with it, component_register
+// must return 0 and ke_ecs_flecs_get_last_fatal_message() must be non-null.
+// Uses its own ecs handle — after a fatal the world is corrupted and must not
+// be reused; the fixture ecs is untouched.
+TEST(FlecsAbortInterceptionTest, ZeroSizeComponent_ReturnsZeroNoAbort)
+{
+    ke_ecs_flecs_params p{};
+    ke_ecs_handle h{};
+    ASSERT_EQ(ke_ecs_flecs_create(&p, &h, nullptr), KE_OK);
+
+    ke_component_id cid = h.ref->component_register(h.ref, "ZeroSizeAbortTest", 0);
+    EXPECT_EQ(cid, (ke_component_id)0) << "Expected 0 return after flecs fatal";
+
+    const char *msg = ke_ecs_flecs_get_last_fatal_message();
+    EXPECT_NE(msg, nullptr) << "Expected a captured flecs fatal message";
+
+    // Destroy must not abort even though the world is corrupted.
+    h.destroy(h.ref);
+}
+
 TEST_F(RuntimeSpike, DebugCheck_ReadAccessAlsoSatisfiesGetCall)
 {
     ke_system_ctx_reset_check_failures();

@@ -1,10 +1,10 @@
 ﻿#include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
+
+#include <abort_guard.h>
 
 #include <flecs.h>
 
-#include <setjmp.h>
 #include <stdalign.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,44 +17,31 @@
 // ── Abort interception ───────────────────────────────────────────────────────
 //
 // flecs calls ecs_os_api.abort_() on internal assertion failures.  We replace
-// that slot with our own handler that:
-//   • if a vtable call is in progress (setjmp guard active): longjmps back to
-//     the guard, which returns NULL/0 and records a ke_error in the TLS ring.
-//   • otherwise: logs to stderr + calls _exit(134) — no OS abort dialog.
-//
-// ecs_os_api is global, so we install once (guarded by s_os_api_installed).
+// that slot with our own handler that delegates to ke_abort_guard_longjmp().
+// If no guard is active we log to stderr and call _exit(134) — no OS dialog.
+// ecs_os_api is global; we install once (guarded by s_os_api_installed).
 
 const ke_error_type KE_ERROR_ECS_FLECS_FATAL = {
     "ke.ecs.flecs.fatal", NULL
 };
 
-static _Thread_local char    s_tls_abort_msg[1024] = {0};
-static _Thread_local jmp_buf s_tls_abort_jmp;
-static _Thread_local bool    s_tls_abort_active     = false;
-
 const char *ke_ecs_flecs_get_last_fatal_message(void)
 {
-    return s_tls_abort_msg[0] ? s_tls_abort_msg : NULL;
+    return ke_abort_guard_last_message();
 }
 
 static void flecs_log_handler(int32_t level, const char *file, int32_t line, const char *msg)
 {
     // flecs uses negative levels for fatal/error messages.
     if (level < 0 && msg)
-        snprintf(s_tls_abort_msg, sizeof(s_tls_abort_msg),
-                 "%s:%d: %s", file ? file : "?", (int)line, msg);
+        ke_abort_guard_set_message(file, (int)line, msg);
 }
 
 static void flecs_abort_handler(void)
 {
-    if (s_tls_abort_active)
-    {
-        s_tls_abort_active = false;
-        longjmp(s_tls_abort_jmp, 1);
-    }
-    // No active guard — log and die cleanly (no OS abort dialog).
+    if (ke_abort_guard_longjmp()) return;  // longjmp fired — control transferred
     fprintf(stderr, "[ke_ecs_flecs FATAL] %s\n",
-            s_tls_abort_msg[0] ? s_tls_abort_msg : "(no message captured)");
+            ke_abort_guard_last_message() ? ke_abort_guard_last_message() : "(no message captured)");
     fflush(stderr);
     _exit(134);
 }
@@ -74,24 +61,10 @@ static void install_flecs_os_api(void)
     s_os_api_installed = true;
 }
 
-// KE_FLECS_GUARD(context_label, fail_return)
-//   Arms the TLS longjmp target.  If flecs fires abort_() while armed, the
-//   handler longjmps here; we record a ke_error and execute the fail_return
-//   statement (e.g. "return 0" or "return NULL").
-//   MUST be paired with KE_FLECS_GUARD_END() on every normal exit path.
-#define KE_FLECS_GUARD(context_label, fail_return)                       \
-    s_tls_abort_msg[0] = '\0';                                           \
-    s_tls_abort_active = true;                                           \
-    if (setjmp(s_tls_abort_jmp) != 0) {                                  \
-        s_tls_abort_active = false;                                      \
-        ke_error_set(NULL, &KE_ERROR_ECS_FLECS_FATAL,                    \
-            s_tls_abort_msg[0] ? s_tls_abort_msg : (context_label),     \
-            __FILE__, __LINE__, NULL);                                    \
-        fail_return;                                                      \
-    }
+#define KE_FLECS_GUARD(context_label, fail_return) \
+    KE_ABORT_GUARD(&KE_ERROR_ECS_FLECS_FATAL, context_label, fail_return)
 
-#define KE_FLECS_GUARD_END() \
-    s_tls_abort_active = false
+#define KE_FLECS_GUARD_END() KE_ABORT_GUARD_END()
 
 typedef struct query_cache_entry
 {
@@ -103,6 +76,7 @@ typedef struct query_cache_entry
 typedef struct ecs_flecs_state
 {
     ecs_world_t  *world;
+    bool          world_corrupted; // set when KE_FLECS_GUARD catches a fatal
 
     // Query cache — first call per cid creates the flecs query and we keep it.
     query_cache_entry *queries;
@@ -193,7 +167,7 @@ static ke_entity ecs_flecs_entity_create(ke_ecs *self)
 {
     if (!self || !self->handle) return 0;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
-    KE_FLECS_GUARD("flecs fatal in entity_create", return 0);
+    KE_FLECS_GUARD("flecs fatal in entity_create", { h->state.world_corrupted = true; return 0; });
     ke_entity result = (ke_entity)ecs_new_w_id(h->state.world, 0);
     KE_FLECS_GUARD_END();
     return result;
@@ -211,7 +185,7 @@ static ke_component_id ecs_flecs_component_register(ke_ecs *self, const char *na
 {
     if (!self || !self->handle || !name) return 0;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
-    KE_FLECS_GUARD("flecs fatal in component_register", return 0);
+    KE_FLECS_GUARD("flecs fatal in component_register", { h->state.world_corrupted = true; return 0; });
 
     // Reuse if already registered with the same name (idempotent for module reloads).
     ecs_entity_t existing = ecs_lookup(h->state.world, name);
@@ -257,7 +231,7 @@ static void *ecs_flecs_component_add(ke_ecs *self, ke_entity entity, ke_componen
     if (!self || !self->handle || entity == 0 || component == 0) return NULL;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
     if (!ecs_is_alive(h->state.world, (ecs_entity_t)entity)) return NULL;
-    KE_FLECS_GUARD("flecs fatal in component_add", return NULL);
+    KE_FLECS_GUARD("flecs fatal in component_add", { h->state.world_corrupted = true; return NULL; });
     ecs_add_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
     void *ptr = ecs_get_mut_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
     KE_FLECS_GUARD_END();
@@ -292,7 +266,7 @@ static void ecs_flecs_query(ke_ecs *self, ke_component_id component,
     if (!self || !self->handle || component == 0) return;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
 
-    KE_FLECS_GUARD("flecs fatal in query", return);
+    KE_FLECS_GUARD("flecs fatal in query", { h->state.world_corrupted = true; return; });
     query_cache_entry *entry = find_or_create_query(&h->state, component);
     if (!entry || !entry->query) return;
 
@@ -332,19 +306,22 @@ static void ecs_flecs_destroy(ke_ecs *self)
     if (!self || !self->handle) return;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
 
-    // Free cached queries + scratch buffers before tearing down the world.
-    if (h->state.queries)
+    if (!h->state.world_corrupted)
     {
-        for (size_t i = 0; i < h->state.query_count; i++)
+        // Normal path: free queries, then tear down the flecs world.
+        if (h->state.queries)
         {
-            if (h->state.queries[i].query) ecs_query_fini(h->state.queries[i].query);
+            for (size_t i = 0; i < h->state.query_count; i++)
+            {
+                if (h->state.queries[i].query) ecs_query_fini(h->state.queries[i].query);
+            }
         }
-        ke_free(h->state.queries);
+        if (h->state.world) ecs_fini(h->state.world);
     }
+    // Always free our own allocations regardless of world state.
+    if (h->state.queries)        ke_free(h->state.queries);
     if (h->state.scratch_entities) ke_free(h->state.scratch_entities);
     if (h->state.scratch_data)     ke_free(h->state.scratch_data);
-
-    if (h->state.world) ecs_fini(h->state.world);
 
     ke_free(h);
 }

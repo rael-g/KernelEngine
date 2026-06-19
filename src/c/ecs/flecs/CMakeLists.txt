@@ -8,6 +8,9 @@ target_include_directories(ke_ecs_flecs PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+target_include_directories(ke_ecs_flecs PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/c/common/src
+)
 
 get_target_property(target_type ke_ecs_flecs TYPE)
 if (target_type STREQUAL "STATIC_LIBRARY")
