@@ -3,7 +3,7 @@
 
 #include <kernel_engine/asset/mesh_data.h>
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/task_scheduler/task_scheduler.h>
+#include <kernel_engine/scheduler/scheduler.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -44,7 +44,7 @@ extern "C"
         /// @param on_complete Callback invoked with the result; must not be NULL.
         /// @param user_data  Forwarded unchanged to @p on_complete.
         ke_task *(*load_model_async)(struct ke_asset_loader *self,
-                                     ke_task_scheduler *scheduler,
+                                     ke_scheduler *scheduler,
                                      const char *path,
                                      ke_load_model_complete_func on_complete,
                                      void *user_data);

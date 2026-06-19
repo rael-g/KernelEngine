@@ -24,7 +24,7 @@ typedef struct apply_entry {
 } apply_entry;
 
 typedef struct ke_world_state {
-    struct ke_task_scheduler *task_scheduler;  // borrowed
+    struct ke_scheduler *scheduler;  // borrowed
     ke_ecs                   *ecs;             // owned
     ke_runtime               *runtime;         // owned
     struct ke_scene_tree     *scene_tree;      // owned (NULL allowed during C-phase transition)
@@ -121,7 +121,7 @@ ke_result ke_world_create(const ke_world_params *params, ke_world_handle *out_wo
     ke_world_state *state = (ke_world_state *)block;
     ke_world       *world = (ke_world *)((char *)block + sizeof(ke_world_state));
 
-    state->task_scheduler = params->task_scheduler;
+    state->scheduler = params->scheduler;
     state->ecs            = params->ecs;
     state->runtime        = params->runtime;
     state->scene_tree     = params->scene_tree;

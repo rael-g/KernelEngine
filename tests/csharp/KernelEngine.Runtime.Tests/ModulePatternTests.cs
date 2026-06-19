@@ -1,7 +1,7 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,7 +11,7 @@ namespace KernelEngine.Runtime.Tests;
 // at LoadModules time, topo-sort respects declared Dependencies.
 public class ModulePatternTests : IDisposable
 {
-    private readonly EnkiTaskScheduler _taskScheduler = new();
+    private readonly EnkiScheduler _taskScheduler = new();
     private readonly FlecsEcs          _ecs           = new();
 
     public void Dispose()

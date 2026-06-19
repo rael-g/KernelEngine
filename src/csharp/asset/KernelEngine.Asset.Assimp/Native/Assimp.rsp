@@ -13,7 +13,7 @@ ke_asset_assimp
 --include-directory
 ../../../../c/render/include
 --include-directory
-../../../../c/task_scheduler/include
+../../../../c/scheduler/include
 --include-directory
 ../../../../c/text/include
 --include-directory

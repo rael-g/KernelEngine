@@ -5,14 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NativeTarget>ke_task_scheduler_enki</NativeTarget>
+    <NativeTarget>ke_scheduler_enki</NativeTarget>
   </PropertyGroup>
 
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\task_scheduler\KernelEngine.TaskScheduler\KernelEngine.TaskScheduler.csproj" />
+    <ProjectReference Include="..\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
   </ItemGroup>
 

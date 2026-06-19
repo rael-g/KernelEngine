@@ -29,7 +29,7 @@ AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
         static_cast<AssimpLoader *>(self->handle)->FreeModel(data);
     };
     api_.load_model_async = [](ke_asset_loader *self,
-                                ke_task_scheduler *scheduler,
+                                ke_scheduler *scheduler,
                                 const char *path,
                                 ke_load_model_complete_func on_complete,
                                 void *user_data) -> ke_task * {
@@ -167,7 +167,7 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_erro
     return KE_OK;
 }
 
-ke_task *AssimpLoader::LoadModelAsync(ke_task_scheduler *scheduler,
+ke_task *AssimpLoader::LoadModelAsync(ke_scheduler *scheduler,
                                        const char *path,
                                        ke_load_model_complete_func on_complete,
                                        void *user_data)

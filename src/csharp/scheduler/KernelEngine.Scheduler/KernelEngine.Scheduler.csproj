@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\KernelEngine.TaskScheduler.Abstractions\KernelEngine.TaskScheduler.Abstractions.csproj" />
+    <ProjectReference Include="..\KernelEngine.Scheduler.Abstractions\KernelEngine.Scheduler.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
   </ItemGroup>
 

@@ -4,7 +4,7 @@ using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,7 +28,7 @@ var services = new ServiceCollection()
     .AddInput()
     .AddMiniAudio()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(640, 200, "KernelEngine — 15 Audio Test (click window, then Space)"))
     .Add<IRuntimeModule>(new BgfxRenderModule(

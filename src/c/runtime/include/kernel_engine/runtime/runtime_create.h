@@ -7,7 +7,7 @@
 
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/runtime/runtime.h>
-#include <kernel_engine/task_scheduler/task_scheduler.h>
+#include <kernel_engine/scheduler/scheduler.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@ typedef struct ke_runtime_params {
 } ke_runtime_params;
 
 KE_RUNTIME_API ke_result ke_runtime_create(ke_ecs                  *ecs,
-                                    ke_task_scheduler       *task_scheduler,
+                                    ke_scheduler       *scheduler,
                                     const ke_runtime_params *params,
                                     ke_runtime_handle       *out_runtime,
                                     ke_error               **out_error);

@@ -6,7 +6,7 @@ global using KernelEngine.Render.Native;
 global using KernelEngine.Audio.Native;
 global using KernelEngine.Physics.Native;
 global using KernelEngine.Text.Native;
-global using KernelEngine.TaskScheduler.Native;
+global using KernelEngine.Scheduler.Native;
 global using KernelEngine.Ecs.Native;
 global using KernelEngine.Runtime.Native;
 global using KernelEngine.Asset.Native;

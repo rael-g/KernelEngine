@@ -1,7 +1,7 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using Xunit;
 
 namespace KernelEngine.Runtime.Tests;
@@ -10,7 +10,7 @@ namespace KernelEngine.Runtime.Tests;
 // Mirrors the C++ RuntimeSpike suite in tests/integration/cpp/test_runtime.cpp.
 public class RuntimeTests : IDisposable
 {
-    private readonly EnkiTaskScheduler _taskScheduler = new();
+    private readonly EnkiScheduler _taskScheduler = new();
     private readonly FlecsEcs          _ecs           = new();
 
     public void Dispose()

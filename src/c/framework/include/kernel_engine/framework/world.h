@@ -12,7 +12,7 @@ extern "C"
 {
 #endif
 
-    struct ke_task_scheduler;
+    struct ke_scheduler;
     struct ke_scene_tree;
     struct ke_logger;
 
@@ -24,7 +24,7 @@ extern "C"
 
     typedef struct ke_world_params
     {
-        struct ke_task_scheduler *task_scheduler;
+        struct ke_scheduler *scheduler;
         ke_ecs                   *ecs;
         ke_runtime               *runtime;
         struct ke_scene_tree     *scene_tree;

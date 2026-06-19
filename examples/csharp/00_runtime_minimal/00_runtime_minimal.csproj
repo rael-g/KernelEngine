@@ -13,7 +13,7 @@
     <ProjectReference Include="../../../src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\task_scheduler\KernelEngine.TaskScheduler.Enki\KernelEngine.TaskScheduler.Enki.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler.Enki\KernelEngine.Scheduler.Enki.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
   </ItemGroup>
 
@@ -22,3 +22,4 @@
   </ItemGroup>
 
 </Project>
+

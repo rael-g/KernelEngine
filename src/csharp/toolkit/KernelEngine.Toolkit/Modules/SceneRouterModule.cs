@@ -31,7 +31,7 @@ public sealed class SceneRouterModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var scheduler = services.GetRequiredService<IScheduler>();
         var loader    = services.GetRequiredService<SceneLoader>();
         var nodeWorld = services.GetRequiredService<NodeWorld>();
         var types     = services.GetRequiredService<NodeTypeRegistry>();

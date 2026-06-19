@@ -25,7 +25,7 @@ public sealed class SceneModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var scheduler = services.GetRequiredService<IScheduler>();
         var nodeWorld = services.GetRequiredService<NodeWorld>();
 
         var done = new System.Threading.ManualResetEventSlim(false);

@@ -18,7 +18,7 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     private ke_runtime* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
     private readonly IEcs                               _ecs;            // not owned; consumer disposes separately
-    private readonly KernelEngine.Kernel.TaskScheduler  _taskScheduler;  // not owned
+    private readonly KernelEngine.Kernel.Scheduler  _taskScheduler;  // not owned
 
     private readonly List<GCHandle> _moduleHandles = new();
     private readonly List<GCHandle> _systemHandles = new();
@@ -77,7 +77,7 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
 
     ke_runtime* INativeRuntime.Native => _native;
 
-    public Runtime(IEcs ecs, ITaskScheduler taskScheduler)
+    public Runtime(IEcs ecs, IScheduler taskScheduler)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(taskScheduler);
@@ -90,9 +90,9 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
             throw new ArgumentException(
                 $"Runtime currently requires {nameof(FlecsEcs)} as the {nameof(IEcs)} impl; got {ecs.GetType().Name}.",
                 nameof(ecs));
-        if (taskScheduler is not KernelEngine.Kernel.TaskScheduler tsConcrete)
+        if (taskScheduler is not KernelEngine.Kernel.Scheduler tsConcrete)
             throw new ArgumentException(
-                $"Runtime currently requires {nameof(KernelEngine.Kernel.TaskScheduler)} (or a subclass) as the {nameof(ITaskScheduler)} impl; got {taskScheduler.GetType().Name}.",
+                $"Runtime currently requires {nameof(KernelEngine.Kernel.Scheduler)} (or a subclass) as the {nameof(IScheduler)} impl; got {taskScheduler.GetType().Name}.",
                 nameof(taskScheduler));
 
         _ecs           = ecs;
@@ -101,7 +101,7 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
         ke_runtime_params @params = default;
         ke_runtime_handle handle;
         var rc = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
-            ((INativeEcs)flecsEcs).Native, ((INativeTaskScheduler)tsConcrete).Native, &@params, &handle, null);
+            ((INativeEcs)flecsEcs).Native, ((INativeScheduler)tsConcrete).Native, &@params, &handle, null);
         if (rc != ke_result.KE_OK)
             throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
         _native = handle.@ref;

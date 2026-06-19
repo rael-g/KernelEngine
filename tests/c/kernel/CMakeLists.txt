@@ -27,7 +27,7 @@ target_link_libraries(test_ke_kernel PRIVATE
     ke_framework
     ke_runtime
     ke_ecs_flecs
-    ke_task_scheduler_enki
+    ke_scheduler_enki
     GTest::gtest_main
 )
 
@@ -37,7 +37,7 @@ target_include_directories(test_ke_kernel PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/logger/include
     ${CMAKE_SOURCE_DIR}/src/c/ecs/include
     ${CMAKE_SOURCE_DIR}/src/c/spatial/include
-    ${CMAKE_SOURCE_DIR}/src/c/task_scheduler/include
+    ${CMAKE_SOURCE_DIR}/src/c/scheduler/include
     ${CMAKE_SOURCE_DIR}/src/c/threading/include
     ${CMAKE_SOURCE_DIR}/src/c/runtime/include
     ${CMAKE_SOURCE_DIR}/src/c/framework/include

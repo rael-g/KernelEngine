@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -25,7 +25,7 @@
     <ProjectReference Include="..\..\asset\KernelEngine.Asset\KernelEngine.Asset.csproj" />
     <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
-    <ProjectReference Include="..\..\task_scheduler\KernelEngine.TaskScheduler\KernelEngine.TaskScheduler.csproj" />
+    <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window\KernelEngine.Window.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render\KernelEngine.Render.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
@@ -39,3 +39,4 @@
   </ItemGroup>
 
 </Project>
+

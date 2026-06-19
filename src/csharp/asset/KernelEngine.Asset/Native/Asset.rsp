@@ -13,7 +13,7 @@ ke_asset_assimp
 --include-directory
 ../../../../c/render/include
 --include-directory
-../../../../c/task_scheduler/include
+../../../../c/scheduler/include
 --include-directory
 ../../../../c/text/include
 --include-directory
@@ -36,8 +36,8 @@ ke_
 ke_result=ke_result
 ke_bool=byte
 --remap
-ke_task_scheduler=KernelEngine.TaskScheduler.Native.ke_task_scheduler
-ke_task=KernelEngine.TaskScheduler.Native.ke_task
+ke_scheduler=KernelEngine.Scheduler.Native.ke_scheduler
+ke_task=KernelEngine.Scheduler.Native.ke_task
 ke_vertex=KernelEngine.Render.Native.ke_vertex
 ke_material_spec=KernelEngine.Render.Native.ke_material_spec
 ke_font_data=KernelEngine.Text.Native.ke_font_data
@@ -45,7 +45,7 @@ ke_result=ke_result
 --exclude
 ke_result
 ke_bool
-ke_task_scheduler
+ke_scheduler
 ke_task
 ke_vertex
 ke_material_spec

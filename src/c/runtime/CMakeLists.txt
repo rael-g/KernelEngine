@@ -18,7 +18,7 @@ target_link_libraries(ke_runtime PUBLIC
     ke_common
     ke_allocator
     ke_ecs
-    ke_task_scheduler
+    ke_scheduler
 )
 target_link_libraries(ke_runtime PRIVATE ke_allocator_malloc)
 

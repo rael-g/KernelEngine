@@ -6,28 +6,28 @@
 #include <kernel_engine/runtime/system_ctx.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
+#include <kernel_engine/scheduler/enki/enki_scheduler.h>
 
 namespace {
 
 struct WorldFixture {
-    ke_task_scheduler_handle task_scheduler_h{};
+    ke_scheduler_handle scheduler_h{};
     ke_ecs_handle            ecs_h{};
     ke_runtime_handle        runtime_h{};
     ke_world_handle          world_h{};
     ke_world          *world          = nullptr;
 
     void create(const char *project_root = nullptr) {
-        ASSERT_EQ(ke_task_scheduler_enki_create(&task_scheduler_h, NULL), KE_OK);
+        ASSERT_EQ(ke_scheduler_enki_create(&scheduler_h, NULL), KE_OK);
 
         ke_ecs_flecs_params ecs_params{};
         ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs_h, NULL), KE_OK);
 
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(ecs_h.ref, task_scheduler_h.ref, &rt_params, &runtime_h, NULL), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs_h.ref, scheduler_h.ref, &rt_params, &runtime_h, NULL), KE_OK);
 
         ke_world_params wp{};
-        wp.task_scheduler = task_scheduler_h.ref;
+        wp.scheduler = scheduler_h.ref;
         wp.ecs            = ecs_h.ref;
         wp.runtime        = runtime_h.ref;
         wp.scene_tree     = nullptr;  // C-phase reintroduces; B2 ships ke_world without scene_tree
@@ -42,7 +42,7 @@ struct WorldFixture {
         if (world_h.ref) world_h.destroy(world_h.ref);
         if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
         if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
-        if (task_scheduler_h.ref) task_scheduler_h.destroy(task_scheduler_h.ref);
+        if (scheduler_h.ref) scheduler_h.destroy(scheduler_h.ref);
     }
 };
 

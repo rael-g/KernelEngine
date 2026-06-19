@@ -139,9 +139,9 @@ internal sealed unsafe class AssetLoader : IAssetLoader
 {
     private ke_asset_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_asset_loader*, void> _destroy;
-    private readonly KernelEngine.Kernel.TaskScheduler _scheduler;
+    private readonly KernelEngine.Kernel.Scheduler _scheduler;
 
-    internal AssetLoader(ke_asset_loader_handle handle, KernelEngine.Kernel.TaskScheduler scheduler)
+    internal AssetLoader(ke_asset_loader_handle handle, KernelEngine.Kernel.Scheduler scheduler)
     {
         _native = handle.@ref;
         _destroy = handle.destroy;
@@ -178,7 +178,7 @@ internal sealed unsafe class AssetLoader : IAssetLoader
         var pathPtr = Marshal.StringToHGlobalAnsi(path);
         _native->load_model_async(
             _native,
-            ((INativeTaskScheduler)_scheduler).Native,
+            ((INativeScheduler)_scheduler).Native,
             (sbyte*)pathPtr,
             &NativeLoadCompleteCallback,
             (void*)GCHandle.ToIntPtr(stateHandle));

@@ -1,24 +1,23 @@
-﻿using System.Runtime.InteropServices;
 using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KernelEngine.TaskScheduler.Enki;
+namespace KernelEngine.Scheduler.Enki;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddEnkiTaskScheduler(this IServiceCollection services)
+    public static IServiceCollection AddEnkiScheduler(this IServiceCollection services)
     {
-        services.AddSingleton<KernelEngine.Kernel.TaskScheduler>(sp =>
+        services.AddSingleton<KernelEngine.Kernel.Scheduler>(sp =>
         {
             unsafe
             {
-                ke_task_scheduler_handle handle;
-                KernelException.ThrowIfFailed(KernelEngine.TaskScheduler.Enki.Native.NativeMethods.task_scheduler_enki_create(&handle, null).ToManaged());
-                return new KernelEngine.Kernel.TaskScheduler(handle);
+                ke_scheduler_handle handle;
+                KernelException.ThrowIfFailed(KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&handle, null).ToManaged());
+                return new KernelEngine.Kernel.Scheduler(handle);
             }
         });
-        
+
         return services;
     }
 }

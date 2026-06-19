@@ -36,3 +36,4 @@
     <ProjectReference Include="..\..\..\..\src\csharp\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
   </ItemGroup>
 </Project>
+

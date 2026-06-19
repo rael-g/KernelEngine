@@ -49,7 +49,7 @@ public sealed class ShadowModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var scheduler = services.GetRequiredService<IScheduler>();
         var renderer  = services.GetRequiredService<IRenderer>();
         var resources = _resources!;
 
@@ -75,7 +75,7 @@ public sealed class ShadowModule : IRuntimeModule
     {
         if (_ownedHandle is not { } handle) return;
 
-        var scheduler = services.GetRequiredService<ITaskScheduler>();
+        var scheduler = services.GetRequiredService<IScheduler>();
         var renderer  = services.GetRequiredService<IRenderer>();
 
         var done = new System.Threading.ManualResetEventSlim(false);

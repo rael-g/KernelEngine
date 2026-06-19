@@ -45,8 +45,8 @@
     <Project Path="src/csharp/physics/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render/KernelEngine.Render.csproj" />
     <Project Path="src/csharp/runtime/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
-    <Project Path="src/csharp/task_scheduler/KernelEngine.TaskScheduler/KernelEngine.TaskScheduler.csproj" />
-    <Project Path="src/csharp/task_scheduler/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
+    <Project Path="src/csharp/scheduler/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />
+    <Project Path="src/csharp/scheduler/KernelEngine.Scheduler.Enki/KernelEngine.Scheduler.Enki.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text/KernelEngine.Text.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window/KernelEngine.Window.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -32,7 +32,7 @@
     <ProjectReference Include="..\..\..\src\csharp\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window\KernelEngine.Window.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\render\KernelEngine.Render\KernelEngine.Render.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\task_scheduler\KernelEngine.TaskScheduler\KernelEngine.TaskScheduler.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\text\KernelEngine.Text\KernelEngine.Text.csproj" />
@@ -41,3 +41,4 @@
   </ItemGroup>
 
 </Project>
+

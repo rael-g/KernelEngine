@@ -15,7 +15,7 @@ ke_framework
 --include-directory
 ../../../../c/spatial/include
 --include-directory
-../../../../c/task_scheduler/include
+../../../../c/scheduler/include
 --include-directory
 ../../../../c/threading/include
 --include-directory
@@ -66,7 +66,7 @@ ke_bool=byte
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_runtime=KernelEngine.Runtime.Native.ke_runtime
 ke_variant_table_entry=KernelEngine.Ecs.Native.ke_variant_table_entry
-ke_task_scheduler=KernelEngine.TaskScheduler.Native.ke_task_scheduler
+ke_scheduler=KernelEngine.Scheduler.Native.ke_scheduler
 ke_vertex=KernelEngine.Render.Native.ke_vertex
 ke_material_data=KernelEngine.Asset.Native.ke_material_data
 ke_image_loader=KernelEngine.Asset.Native.ke_image_loader
@@ -90,7 +90,7 @@ ke_bool
 ke_ecs
 ke_runtime
 ke_variant_table_entry
-ke_task_scheduler
+ke_scheduler
 ke_vertex
 ke_material_data
 ke_image_loader

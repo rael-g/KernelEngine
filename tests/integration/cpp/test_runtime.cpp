@@ -4,7 +4,7 @@
 #include <kernel_engine/runtime/system_ctx.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
+#include <kernel_engine/scheduler/enki/enki_scheduler.h>
 
 #include <atomic>
 #include <set>
@@ -41,18 +41,18 @@ ke_result test_module_on_load(ke_runtime *runtime, void *user_data)
 // - ke_runtime_create(ecs) builds the scheduler (in-house, sequential for now, NULL, NULL).
 class RuntimeSpike : public ::testing::Test {
 protected:
-    ke_task_scheduler_handle task_scheduler_h{};
+    ke_scheduler_handle scheduler_h{};
     ke_ecs_handle            ecs_h{};
     ke_runtime_handle        runtime_h{};
-    ke_task_scheduler *task_scheduler = nullptr;
+    ke_scheduler *scheduler = nullptr;
     ke_ecs            *ecs            = nullptr;
     ke_runtime        *runtime        = nullptr;
 
     void SetUp() override
     {
-        ASSERT_EQ(ke_task_scheduler_enki_create(&task_scheduler_h, NULL), KE_OK);
-        task_scheduler = task_scheduler_h.ref;
-        ASSERT_NE(task_scheduler, nullptr);
+        ASSERT_EQ(ke_scheduler_enki_create(&scheduler_h, NULL), KE_OK);
+        scheduler = scheduler_h.ref;
+        ASSERT_NE(scheduler, nullptr);
 
         ke_ecs_flecs_params ecs_params{};
         ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs_h, NULL), KE_OK);
@@ -60,7 +60,7 @@ protected:
         ASSERT_NE(ecs, nullptr);
 
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rt_params, &runtime_h, NULL), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, scheduler, &rt_params, &runtime_h, NULL), KE_OK);
         runtime = runtime_h.ref;
         ASSERT_NE(runtime, nullptr);
     }
@@ -69,7 +69,7 @@ protected:
     {
         if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
         if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
-        if (task_scheduler_h.ref) task_scheduler_h.destroy(task_scheduler_h.ref);
+        if (scheduler_h.ref) scheduler_h.destroy(scheduler_h.ref);
     }
 };
 
@@ -129,7 +129,7 @@ TEST_F(RuntimeSpike, Create_RejectsNullEcs)
 {
     ke_runtime_params rt_params{};
     ke_runtime_handle rt{};
-    EXPECT_EQ(ke_runtime_create(nullptr, task_scheduler, &rt_params, &rt, NULL),
+    EXPECT_EQ(ke_runtime_create(nullptr, scheduler, &rt_params, &rt, NULL),
               KE_ERROR);
     EXPECT_EQ(rt.ref, nullptr);
 }

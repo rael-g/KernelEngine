@@ -23,7 +23,7 @@ public static class ServiceCollectionExtensions
     /// <typeparamref name="TContract"/>. The DI container resolves
     /// <typeparamref name="TImpl"/>'s constructor parameters from other
     /// registered services. Use when the impl has no per-instance config
-    /// (e.g. <c>EnkiTaskScheduler</c> just needs the allocator from DI).
+    /// (e.g. <c>EnkiScheduler</c> just needs the allocator from DI).
     /// </summary>
     public static IServiceCollection Add<TContract, TImpl>(this IServiceCollection services)
         where TContract : class

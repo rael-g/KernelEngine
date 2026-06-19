@@ -9,7 +9,7 @@
 #include <kernel_engine/framework/world_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/task_scheduler/enki/enki_task_scheduler.h>
+#include <kernel_engine/scheduler/enki/enki_scheduler.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -29,13 +29,13 @@ static fs::path WriteTempScene(const std::string &contents) {
 class SceneLoaderTest : public ::testing::Test
 {
 protected:
-    ke_task_scheduler_handle task_scheduler_h{};
+    ke_scheduler_handle scheduler_h{};
     ke_ecs_handle            ecs_h{};
     ke_runtime_handle        runtime_h{};
     ke_scene_tree_handle     tree_h{};
     ke_world_handle          world_h{};
     ke_scene_loader_handle   loader_h{};
-    ke_task_scheduler *task_scheduler = nullptr;
+    ke_scheduler *scheduler = nullptr;
     ke_ecs            *ecs            = nullptr;
     ke_runtime        *runtime        = nullptr;
     ke_scene_tree     *tree           = nullptr;
@@ -44,20 +44,20 @@ protected:
 
     void SetUp() override
     {
-        ASSERT_EQ(ke_task_scheduler_enki_create(&task_scheduler_h, NULL), KE_OK);
-        task_scheduler = task_scheduler_h.ref;
+        ASSERT_EQ(ke_scheduler_enki_create(&scheduler_h, NULL), KE_OK);
+        scheduler = scheduler_h.ref;
 
         ke_ecs_flecs_params ep{};
         ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs_h, NULL), KE_OK);
         ecs = ecs_h.ref;
         ke_runtime_params rp{};
-        ASSERT_EQ(ke_runtime_create(ecs, task_scheduler, &rp, &runtime_h, NULL), KE_OK);
+        ASSERT_EQ(ke_runtime_create(ecs, scheduler, &rp, &runtime_h, NULL), KE_OK);
         runtime = runtime_h.ref;
         ASSERT_EQ(ke_scene_tree_create(ecs, &tree_h, NULL), KE_OK);
         tree = tree_h.ref;
 
         ke_world_params wp{};
-        wp.task_scheduler = task_scheduler;
+        wp.scheduler = scheduler;
         wp.ecs = ecs;
         wp.runtime = runtime;
         wp.scene_tree = tree;
@@ -76,7 +76,7 @@ protected:
         if (tree_h.ref) tree_h.destroy(tree_h.ref);
         if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
         if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
-        if (task_scheduler_h.ref) task_scheduler_h.destroy(task_scheduler_h.ref);
+        if (scheduler_h.ref) scheduler_h.destroy(scheduler_h.ref);
     }
 };
 

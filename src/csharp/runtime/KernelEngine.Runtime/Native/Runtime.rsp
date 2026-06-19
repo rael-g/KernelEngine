@@ -15,7 +15,7 @@ ke_runtime
 --include-directory
 ../../../../c/spatial/include
 --include-directory
-../../../../c/task_scheduler/include
+../../../../c/scheduler/include
 --include-directory
 ../../../../c/threading/include
 --include-directory
@@ -41,13 +41,13 @@ ke_result=ke_result
 ke_bool=byte
 --remap
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
-ke_task_scheduler=KernelEngine.TaskScheduler.Native.ke_task_scheduler
+ke_scheduler=KernelEngine.Scheduler.Native.ke_scheduler
 ke_result=ke_result
 --exclude
 ke_result
 ke_bool
 ke_ecs
-ke_task_scheduler
+ke_scheduler
 --config
 multi-file
 latest-codegen

@@ -1,9 +1,9 @@
 --output
-Generated/TaskScheduler/
+Generated/Scheduler/
 --namespace
-KernelEngine.TaskScheduler.Native
+KernelEngine.Scheduler.Native
 --libraryPath
-ke_task_scheduler_enki
+ke_scheduler_enki
 --include-directory
 ../../../../c/common/include
 --include-directory
@@ -11,11 +11,11 @@ ke_task_scheduler_enki
 --include-directory
 ../../../../c/logger/include
 --include-directory
-../../../../c/task_scheduler/include
+../../../../c/scheduler/include
 --file
-../../../../c/task_scheduler/include/kernel_engine/task_scheduler/task_scheduler.h
+../../../../c/scheduler/include/kernel_engine/scheduler/scheduler.h
 --traverse
-../../../../c/task_scheduler/include/kernel_engine/task_scheduler/task_scheduler.h
+../../../../c/scheduler/include/kernel_engine/scheduler/scheduler.h
 --methodClassName
 NativeMethods
 --prefixStrip

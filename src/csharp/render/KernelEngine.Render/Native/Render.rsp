@@ -17,7 +17,7 @@ ke_render_bgfx
 --include-directory
 ../../../../c/spatial/include
 --include-directory
-../../../../c/task_scheduler/include
+../../../../c/scheduler/include
 --include-directory
 ../../../../c/threading/include
 --include-directory

@@ -58,7 +58,7 @@ TEST_F(AssetLoaderTest, FreeModel_Null_DoesNotCrash) {
     SUCCEED();
 }
 
-#include <kernel_engine/task_scheduler/task_scheduler.h>
+#include <kernel_engine/scheduler/scheduler.h>
 #include <atomic>
 
 TEST_F(AssetLoaderTest, LoadModel_ValidFile_ReturnsOk) {
@@ -76,8 +76,8 @@ TEST_F(AssetLoaderTest, LoadModel_ValidFile_ReturnsOk) {
 
 TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
     // Synchronous mock scheduler
-    ke_task_scheduler scheduler{};
-    scheduler.dispatch = [](ke_task_scheduler*, ke_task_func f, void* d) -> ke_task* {
+    ke_scheduler scheduler{};
+    scheduler.dispatch = [](ke_scheduler*, ke_task_func f, void* d) -> ke_task* {
         f(d);
         return (ke_task*)1; // Fake task
     };
@@ -117,7 +117,7 @@ TEST_F(AssetLoaderTest, FreeModel_RealData_Works) {
 // --- Destroy Tests ---
 
 TEST_F(AssetLoaderTest, LoadModelAsync_NullArgs_ReturnsNull) {
-    ke_task_scheduler scheduler{};
+    ke_scheduler scheduler{};
     ke_task* t = loader->load_model_async(nullptr, &scheduler, "test.obj", nullptr, nullptr);
     ASSERT_EQ(t, nullptr);
 
