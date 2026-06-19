@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -11,7 +11,7 @@
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\task_scheduler\KernelEngine.TaskScheduler\KernelEngine.TaskScheduler.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
   </ItemGroup>

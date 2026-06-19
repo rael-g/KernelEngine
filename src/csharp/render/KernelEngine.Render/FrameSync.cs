@@ -1,4 +1,5 @@
-using KernelEngine.Kernel.Native;
+﻿using KernelEngine.Common.Native;
+using KernelEngine.Render.Native;
 
 namespace KernelEngine.Kernel;
 
@@ -31,7 +32,7 @@ public sealed unsafe class FrameSync : IFrameSync
                                    uint spotLightCapacity  = 512)
     {
         ke_frame_sync_handle handle;
-        KernelException.ThrowIfFailed(NativeMethods.frame_sync_std_create(
+        KernelException.ThrowIfFailed(KernelEngine.Render.Native.NativeMethods.frame_sync_std_create(
                 bufferCount, drawCapacity, pointLightCapacity, spotLightCapacity,
                 &handle, null).ToManaged());
         return new FrameSync(handle);

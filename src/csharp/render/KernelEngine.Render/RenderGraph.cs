@@ -1,5 +1,5 @@
-using System.Runtime.CompilerServices;
-using KernelEngine.Kernel.Native;
+﻿using System.Runtime.CompilerServices;
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Kernel;
 

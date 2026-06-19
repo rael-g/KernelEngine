@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KernelEngine.Asset.Abstractions\KernelEngine.Asset.Abstractions.csproj" />
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render\KernelEngine.Render.csproj" />
+    <ProjectReference Include="..\..\task_scheduler\KernelEngine.TaskScheduler\KernelEngine.TaskScheduler.csproj" />
+    <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
+  </ItemGroup>
+
+</Project>

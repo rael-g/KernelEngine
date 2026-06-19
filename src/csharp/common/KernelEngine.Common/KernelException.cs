@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+namespace KernelEngine;
 
 /// <summary>
 /// Thrown when a kernel operation returns a non-OK result.

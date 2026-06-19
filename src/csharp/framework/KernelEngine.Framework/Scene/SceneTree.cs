@@ -1,5 +1,5 @@
-using System.Text;
-using KernelEngine.Kernel.Native;
+﻿using System.Text;
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Kernel;
 

@@ -1,8 +1,8 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using KernelEngine.Configuration;
 using KernelEngine.Kernel;
 using KernelEngine.Window.Glfw.Native;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 

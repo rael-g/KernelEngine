@@ -1,3 +1,4 @@
+using KernelEngine.Common.Native;
 using System.Runtime.InteropServices;
 
 namespace KernelEngine.Ecs.Flecs.Native;

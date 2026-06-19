@@ -8,26 +8,20 @@ public class InputTests
 {
     [Fact]
     public void Input_CanBeCreated()
-    {
-        using var allocator = new MallocAllocator();
-        using var input = new Input(null);
+    {        using var input = new Input(null);
         Assert.NotNull(input);
     }
 
     [Fact]
     public void IsKeyDown_ReturnsFalse_ByDefault()
-    {
-        using var allocator = new MallocAllocator();
-        using var input = new Input(null);
+    {        using var input = new Input(null);
         Assert.False(input.IsKeyDown(65));
     }
 
     [Fact]
     public void CaptureSnapshot_ReturnsValidReader()
     {
-        KernelThread.SetCurrentName("ke.main");
-        using var allocator = new MallocAllocator();
-        using var input = new Input(null);
+        KernelThread.SetCurrentName("ke.main");        using var input = new Input(null);
         var reader = input.CaptureSnapshot();
         Assert.NotNull(reader);
         Assert.False(reader.IsKeyDown(65));
@@ -42,9 +36,7 @@ public class InputTests
     [Fact]
     public void InputReaderExtensions_WorkCorrectly()
     {
-        KernelThread.SetCurrentName("ke.main");
-        using var allocator = new MallocAllocator();
-        using var input = new Input(null);
+        KernelThread.SetCurrentName("ke.main");        using var input = new Input(null);
         
         var reader = input.CaptureSnapshot();
         Assert.False(reader.IsKeyDown(Key.W));

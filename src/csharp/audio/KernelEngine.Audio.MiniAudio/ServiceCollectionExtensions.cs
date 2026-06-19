@@ -1,6 +1,6 @@
-using KernelEngine.Audio.MiniAudio.Native;
+﻿using KernelEngine.Audio.MiniAudio.Native;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Audio.MiniAudio;

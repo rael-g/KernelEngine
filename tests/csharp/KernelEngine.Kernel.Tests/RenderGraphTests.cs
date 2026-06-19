@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Reflection;
-using KernelEngine.Kernel.Native;
 using Xunit;
 
 namespace KernelEngine.Kernel.Tests;

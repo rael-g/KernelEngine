@@ -8,9 +8,7 @@ public class LoggerSinkTests
 {
     [Fact]
     public void CustomSink_ReceivesLogEvents()
-    {
-        using var allocator = new MallocAllocator();
-        using var logger = new Logger();
+    {        using var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
         
         logger.AddSink(mockSink, LogLevel.Info);
@@ -24,9 +22,7 @@ public class LoggerSinkTests
 
     [Fact]
     public void Flush_CallsSinkFlush()
-    {
-        using var allocator = new MallocAllocator();
-        using var logger = new Logger();
+    {        using var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
         
         logger.AddSink(mockSink);
@@ -37,9 +33,7 @@ public class LoggerSinkTests
 
     [Fact]
     public void AllLogLevelMethods_ForwardCorrectLevel()
-    {
-        using var allocator = new MallocAllocator();
-        using var logger = new Logger();
+    {        using var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
         logger.AddSink(mockSink);
 

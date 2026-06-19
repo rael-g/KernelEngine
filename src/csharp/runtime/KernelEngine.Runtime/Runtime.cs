@@ -1,9 +1,8 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
-using KernelEngine.Runtime.Native;
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Runtime;
 

@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+namespace KernelEngine;
 
 /// <summary>
 /// Managed mirror of the kernel's native result code (<c>ke_result</c>).

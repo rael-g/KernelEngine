@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,7 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework.Legacy.Native\KernelEngine.Framework.Legacy.Native.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\common\KernelEngine.Common\KernelEngine.Common.csproj" />
   </ItemGroup>
 
 </Project>

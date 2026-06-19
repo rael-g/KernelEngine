@@ -8,8 +8,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <!-- FramePacket constructor is internal; tests need it for isolated unit testing. -->
+    <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NativeDep Include="ke_threading" />
+  </ItemGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

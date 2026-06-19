@@ -1,4 +1,4 @@
-using KernelEngine.Kernel.Native;
+using KernelEngine.Common.Native;
 using System.Runtime.InteropServices;
 
 namespace KernelEngine.Window.Glfw.Native;
@@ -6,6 +6,5 @@ namespace KernelEngine.Window.Glfw.Native;
 public static unsafe partial class NativeMethods
 {
     [DllImport("ke_window_glfw", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_window_glfw_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Kernel.Native.ke_result window_glfw_create([NativeTypeName("const ke_window_glfw_params *")] ke_window_glfw_params* @params, [NativeTypeName("ke_window_handle *")] KernelEngine.Kernel.Native.ke_window_handle* out_window, [NativeTypeName("ke_error **")] KernelEngine.Kernel.Native.ke_error** out_error);
+    public static extern ke_result window_glfw_create([NativeTypeName("const ke_window_glfw_params *")] ke_window_glfw_params* @params, [NativeTypeName("ke_window_handle *")] KernelEngine.Window.Native.ke_window_handle* out_window, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
 }

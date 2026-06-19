@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -21,11 +21,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Framework.Legacy.Abstractions\KernelEngine.Framework.Legacy.Abstractions.csproj" />
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render\KernelEngine.Render.csproj" />
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
+    <ProjectReference Include="..\..\window\KernelEngine.Window.Abstractions\KernelEngine.Window.Abstractions.csproj" />
+    <ProjectReference Include="..\..\audio\KernelEngine.Audio.Abstractions\KernelEngine.Audio.Abstractions.csproj" />
+    <ProjectReference Include="..\..\physics\KernelEngine.Physics.Abstractions\KernelEngine.Physics.Abstractions.csproj" />
+    <ProjectReference Include="..\..\text\KernelEngine.Text.Abstractions\KernelEngine.Text.Abstractions.csproj" />
+    <ProjectReference Include="..\..\asset\KernelEngine.Asset.Abstractions\KernelEngine.Asset.Abstractions.csproj" />
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
   </ItemGroup>
 

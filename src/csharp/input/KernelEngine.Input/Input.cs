@@ -1,6 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 
-using KernelEngine.Kernel.Native;
+using KernelEngine.Common.Native;
 using InputNative = KernelEngine.Input.Native.NativeMethods;
 
 namespace KernelEngine.Kernel;

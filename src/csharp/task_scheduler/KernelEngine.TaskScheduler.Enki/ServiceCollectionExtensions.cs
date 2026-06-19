@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.TaskScheduler.Enki;

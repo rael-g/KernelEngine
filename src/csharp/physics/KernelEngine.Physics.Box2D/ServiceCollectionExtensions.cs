@@ -1,6 +1,6 @@
-using KernelEngine.Configuration;
+﻿using KernelEngine.Configuration;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Common.Native;
 using KernelEngine.Physics.Box2D.Native;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

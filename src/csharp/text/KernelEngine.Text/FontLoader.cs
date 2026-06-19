@@ -1,7 +1,9 @@
-using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
+﻿using System.Runtime.InteropServices;
+using KernelEngine.Kernel;
+using KernelEngine.Common.Native;
+using KernelEngine.Text.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Text;
 
 /// <summary>
 /// Managed wrapper over a C kernel <c>ke_font_loader*</c>. Constructed by font plugins (e.g.

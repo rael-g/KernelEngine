@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Xunit;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel.Tests;
 

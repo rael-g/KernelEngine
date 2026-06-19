@@ -10,7 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
+    <ProjectReference Include="..\..\asset\KernelEngine.Asset.Abstractions\KernelEngine.Asset.Abstractions.csproj" />
+    <ProjectReference Include="..\KernelEngine.Framework.Abstractions\KernelEngine.Framework.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

@@ -37,7 +37,7 @@ public sealed class FrameworkModule : IRuntimeModule
             {
                 ke_scene_tree_handle tree;
                 KernelException.ThrowIfFailed(
-                    Native.NativeMethods.scene_tree_create(((INativeEcs)flecsEcs).Native, &tree, null).ToManaged());
+                    NativeMethods.scene_tree_create(((INativeEcs)flecsEcs).Native, &tree, null).ToManaged());
 
                 ke_world_params p = default;
                 p.ecs        = ((INativeEcs)flecsEcs).Native;
@@ -45,7 +45,7 @@ public sealed class FrameworkModule : IRuntimeModule
                 p.scene_tree = tree.@ref;
                 ke_world_handle w;
                 KernelException.ThrowIfFailed(
-                    Native.NativeMethods.world_create(&p, &w, null).ToManaged());
+                    NativeMethods.world_create(&p, &w, null).ToManaged());
                 return new World(w, tree, ecs, runtime);
             }
         });

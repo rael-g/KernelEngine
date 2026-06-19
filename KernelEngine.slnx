@@ -1,9 +1,8 @@
-﻿<Solution>
+<Solution>
   <Folder Name="/examples/" />
   <Folder Name="/examples/csharp/">
     <Project Path="examples/csharp/00_input_test/00_input_test.csproj" />
     <Project Path="examples/csharp/00_runtime_minimal/00_runtime_minimal.csproj" />
-    <Project Path="examples/csharp/01_runtime_clear_color/01_runtime_clear_color.csproj" />
     <Project Path="examples/csharp/01_window_scene/01_window_scene.csproj" />
     <Project Path="examples/csharp/02_textured_quad/02_textured_quad.csproj" />
     <Project Path="examples/csharp/03_pbr_directional/03_pbr_directional.csproj" />
@@ -26,7 +25,8 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
-    <Project Path="src/csharp/kernel/KernelEngine.Kernel.Abstractions/KernelEngine.Kernel.Abstractions.csproj" />
+    <Project Path="src/csharp/asset/KernelEngine.Asset.Abstractions/KernelEngine.Asset.Abstractions.csproj" />
+    <Project Path="src/csharp/asset/KernelEngine.Asset/KernelEngine.Asset.csproj" />
     <Project Path="src/csharp/asset/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
     <Project Path="src/csharp/asset/KernelEngine.Asset.StbImage/KernelEngine.Asset.StbImage.csproj" />
     <Project Path="src/csharp/audio/KernelEngine.Audio/KernelEngine.Audio.csproj" />
@@ -37,7 +37,6 @@
     <Project Path="src/csharp/framework/KernelEngine.Framework.Legacy.Abstractions/KernelEngine.Framework.Legacy.Abstractions.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/toolkit/KernelEngine.Toolkit/KernelEngine.Toolkit.csproj" />
-    <Project Path="src/csharp/kernel/KernelEngine.Kernel/KernelEngine.Kernel.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />
@@ -45,12 +44,10 @@
     <Project Path="src/csharp/physics/KernelEngine.Physics/KernelEngine.Physics.csproj" />
     <Project Path="src/csharp/physics/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render/KernelEngine.Render.csproj" />
-    <Project Path="src/csharp/render/KernelEngine.Render.Bgfx/KernelEngine.Render.Bgfx.csproj" />
     <Project Path="src/csharp/runtime/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
     <Project Path="src/csharp/task_scheduler/KernelEngine.TaskScheduler/KernelEngine.TaskScheduler.csproj" />
     <Project Path="src/csharp/task_scheduler/KernelEngine.TaskScheduler.Enki/KernelEngine.TaskScheduler.Enki.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text/KernelEngine.Text.csproj" />
-    <Project Path="src/csharp/text/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window/KernelEngine.Window.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
   </Folder>

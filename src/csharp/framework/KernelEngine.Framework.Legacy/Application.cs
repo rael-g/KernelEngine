@@ -1,8 +1,9 @@
-using System.Runtime.ExceptionServices;
+﻿using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Asset;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Framework.Legacy;
 
@@ -19,14 +20,12 @@ namespace KernelEngine.Framework.Legacy;
 public class Application : IDisposable
 {
     public IServiceProvider Services { get; private set; } = null!;
-    public IAllocator Allocator { get; private set; } = null!;
     public ILogger? Logger { get; private set; }
     public IWindow Window { get; private set; } = null!;
     public IRenderer Renderer { get; private set; } = null!;
     public IInput? Input { get; private set; }
 
     private IKernelFactory _kernelFactory = null!;
-    private IProxyAllocator? _proxyAllocator;
 
     /// <summary>The current simulation world (ECS). Engine-internal — game code uses <see cref="Tree"/>.</summary>
     internal IWorld ActiveWorld
@@ -144,10 +143,6 @@ public class Application : IDisposable
         _kernelFactory = Services.GetRequiredService<IKernelFactory>();
         _kernelFactory.SetCurrentThreadName("ke.main");
 
-        var baseAllocator = Services.GetRequiredService<IAllocator>();
-        _proxyAllocator = _kernelFactory.CreateProxyAllocator(baseAllocator, "ApplicationRoot");
-        Allocator = _proxyAllocator;
-
         Logger = Services.GetService<ILogger>();
 
         if (Logger != null)
@@ -159,8 +154,6 @@ public class Application : IDisposable
         Window      = Services.GetRequiredService<IWindow>();
         Input       = Services.GetService<IInput>();
         Renderer    = Services.GetRequiredService<IRenderer>();
-
-        ActiveWorld ??= _kernelFactory.CreateWorld(Allocator);
 
         _inputBuffer   = new InputBuffer();
         _resourceQueue = FrameworkBackends.Required.CreateResourceQueue();
@@ -673,9 +666,6 @@ public class Application : IDisposable
         _materialCache?.Dispose();
         _textureCache?.Dispose();
 
-        _proxyAllocator?.Report(Logger);
-
         (Services as IDisposable)?.Dispose();
-        _proxyAllocator?.Dispose();
     }
 }

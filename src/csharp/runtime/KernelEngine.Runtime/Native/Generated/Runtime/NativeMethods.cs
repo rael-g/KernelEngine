@@ -1,12 +1,10 @@
+using KernelEngine.Common.Native;
 using System.Runtime.InteropServices;
 
 namespace KernelEngine.Runtime.Native;
 
 public static unsafe partial class NativeMethods
 {
-    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_runtime_create", ExactSpelling = true)]
-    public static extern ke_result runtime_create(ke_ecs* ecs, ke_task_scheduler* task_scheduler, [NativeTypeName("const ke_runtime_params *")] ke_runtime_params* @params, ke_runtime_handle* out_runtime, ke_error** out_error);
-
     [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_get_mut", ExactSpelling = true)]
     public static extern void* system_ctx_get_mut(ke_system_ctx* ctx, [NativeTypeName("ke_component_id")] uint cid, [NativeTypeName("ke_entity")] ulong entity);
 
@@ -45,4 +43,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_despawn", ExactSpelling = true)]
     public static extern ke_result system_ctx_despawn(ke_system_ctx* ctx, [NativeTypeName("ke_entity")] ulong entity);
+
+    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_runtime_create", ExactSpelling = true)]
+    public static extern ke_result runtime_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_task_scheduler *")] KernelEngine.TaskScheduler.Native.ke_task_scheduler* task_scheduler, [NativeTypeName("const ke_runtime_params *")] ke_runtime_params* @params, ke_runtime_handle* out_runtime, ke_error** out_error);
 }

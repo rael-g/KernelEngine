@@ -1,5 +1,5 @@
-using System.Numerics;
-using KernelEngine.Kernel.Native;
+﻿using System.Numerics;
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Kernel;
 

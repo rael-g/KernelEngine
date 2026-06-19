@@ -24,12 +24,14 @@ ke_logger_handle
 ke_logger_sink
 ke_log_event
 ke_log_level
---with-using
-*=KernelEngine.Kernel.Native
+ke_log_level_to_string
+ke_bool
+ke_allocator
+ke_allocator_stats
+ke_arena
 --config
 multi-file
 latest-codegen
-generate-helper-types
 generate-file-scoped-namespaces
 exclude-funcs-with-body
 generate-disable-runtime-marshalling

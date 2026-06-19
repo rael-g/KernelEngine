@@ -1,3 +1,4 @@
+using KernelEngine.Asset;
 using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework.Legacy;

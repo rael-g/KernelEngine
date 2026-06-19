@@ -1,5 +1,5 @@
-using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
+﻿using KernelEngine.Kernel;
+using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Asset.StbImage;

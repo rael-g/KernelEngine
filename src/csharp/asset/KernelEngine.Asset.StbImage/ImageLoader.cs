@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
-using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
+﻿using System.Runtime.InteropServices;
+using KernelEngine.Asset;
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Asset.StbImage;
 

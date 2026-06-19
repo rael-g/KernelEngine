@@ -55,9 +55,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
             services.AddBgfxRenderer();
 
         services.AddProjectConfigSection<RenderOptions>("render");
-        services.AddSingleton<IFrameSync>(sp =>
-            sp.GetRequiredService<IKernelFactory>()
-              .CreateFrameSync(bufferCount: 2));
+        services.AddSingleton<IFrameSync>(_ => FrameSync.Create(bufferCount: 2));
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)

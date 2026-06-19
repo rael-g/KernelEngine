@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Asset;
 
 /// <summary>
 /// Decodes a 2D image file (PNG/JPG/BMP/...) into <see cref="IImageData"/> (RGBA8). Concrete

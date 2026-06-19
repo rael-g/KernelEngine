@@ -1,4 +1,4 @@
-using KernelEngine.Kernel.Native;
+﻿using KernelEngine.Common.Native;
 using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 

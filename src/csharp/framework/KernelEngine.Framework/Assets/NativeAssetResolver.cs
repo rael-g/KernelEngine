@@ -1,8 +1,12 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text;
-using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
-using KernelEngine.Framework.Native;
+using KernelEngine.Asset;
+using KernelEngine.Text;
+using KernelEngine.Common.Native;
+using KernelEngine.Asset.Native;
+using KernelEngine.Render.Native;
+using KernelEngine.Text.Native;
+using KernelEngine.Ecs.Native;
 
 namespace KernelEngine.Framework;
 

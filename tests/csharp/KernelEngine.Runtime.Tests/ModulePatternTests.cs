@@ -1,6 +1,5 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Kernel;
-using KernelEngine.Kernel.Native;
 using KernelEngine.Runtime;
 using KernelEngine.TaskScheduler.Enki;
 using Microsoft.Extensions.DependencyInjection;
@@ -138,7 +137,7 @@ public class ModulePatternTests : IDisposable
 
         using var runtime = new Runtime(_ecs, _taskScheduler);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => runtime.LoadModules(sp));
+        var ex = Assert.Throws<InvalidOperationException>((Action)(() => runtime.LoadModules(sp)));
         Assert.Contains("not registered", ex.Message);
     }
 

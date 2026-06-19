@@ -1,5 +1,0 @@
-id          = "KernelEngine.Kernel.ConsoleSink"
-using       = "KernelEngine.Kernel"
-extension   = "AddConsoleSink"
-csproj-ref  = "src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj"
-depends-on  = ["KernelEngine.Kernel.Logger"]

@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Asset;
 
 /// <summary>
 /// Read-only view of a decoded RGBA8 image. Backing memory is owned by the loader and freed on

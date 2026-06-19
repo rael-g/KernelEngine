@@ -8,7 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
+    <ProjectReference Include="..\..\input\KernelEngine.Input.Abstractions\KernelEngine.Input.Abstractions.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Abstractions\KernelEngine.Ecs.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

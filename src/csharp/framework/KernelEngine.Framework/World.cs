@@ -1,5 +1,6 @@
-using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
+﻿using System.Runtime.InteropServices;
+using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
 
 namespace KernelEngine.Kernel;
 

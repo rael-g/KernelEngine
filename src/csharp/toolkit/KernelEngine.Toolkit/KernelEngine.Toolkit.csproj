@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -10,8 +10,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework.Abstractions\KernelEngine.Framework.Abstractions.csproj" />
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel.Abstractions\KernelEngine.Kernel.Abstractions.csproj" />
-    <ProjectReference Include="..\..\kernel\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\audio\KernelEngine.Audio.Abstractions\KernelEngine.Audio.Abstractions.csproj" />
+    <ProjectReference Include="..\..\physics\KernelEngine.Physics.Abstractions\KernelEngine.Physics.Abstractions.csproj" />
+    <ProjectReference Include="..\..\text\KernelEngine.Text.Abstractions\KernelEngine.Text.Abstractions.csproj" />
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
   </ItemGroup>
