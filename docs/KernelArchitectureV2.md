@@ -31,7 +31,7 @@ The endpoint: `src/c/kernel/` compresses to **runtime + scheduler contract + ECS
 | Tier | Test | Contents |
 |---|---|---|
 | **1 — Kernel (execution substrate)** | *Does the scheduler or the ECS need this to run a system?* | ECS, runtime/scheduler contract, `system_ctx` |
-| **2 — Foundation (domain-agnostic primitives)** | *Is it a generic utility anyone uses, imposing no domain?* | allocator, logger, `common/` (containers, math, hash, handles, error), `resource_cache`, `task_scheduler`, shared **data contracts** |
+| **2 — Foundation (domain-agnostic primitives)** | *Is it a generic utility anyone uses, imposing no domain?* | allocator, logger, `common/` (containers, math, hash, handles, error), `resource_cache`, `scheduler`, shared **data contracts** |
 | **3 — Domains (independent)** | *Everything that passed neither of the above.* | render, audio, physics, input, window, text/ui, asset, framework |
 
 Tier 2 stays physically inside `src/c/kernel/` **for now** — splitting it into seven micro-libraries trades a fat kernel for a CMake nightmare. The doctrine is about *what may enter the kernel*, not about maximal fragmentation. Eject domains first; reconsider a separate `foundation` target only if it earns its keep.
@@ -72,7 +72,7 @@ A data contract imposes nothing *behavioral* — it's an agreement on bytes. Tha
 
 ### 4.2 Tier 2 — Foundation
 
-- `allocator`, `logger`, `common/`, `resource_cache`, `task_scheduler` — generic, no domain opinion.
+- `allocator`, `logger`, `common/`, `resource_cache`, `scheduler` — generic, no domain opinion.
 - **Shared data contracts** (§3.2): `spatial` (transform, future aabb/bounds). POD headers, no impl.
 - `resource_cache` is already correctly type-erased — it keys `void*` by path with a refcount and a destructor callback. It does **not** know what a "texture" is, and must never learn. *Resource kinds* are owned by whoever owns them; loaders (assimp, stb_image) are domain plugins; the cache is a generic primitive, like a hash map.
 
@@ -199,7 +199,7 @@ Factory signatures change from `ke_ecs** out_ecs` to `ke_ecs_handle* out_handle`
 Consumers (factory deps) only see `ke_ecs*` — no `->destroy` slot, so the mistake doesn't compile.
 The host calls `handle.destroy(handle.ref)` at shutdown.
 
-**Scope:** the 22 genuine cross-binding vtables that currently carry `(*destroy)` (asset_loader, asset_resolver, image_loader, audio, ecs, input_actions, scene_loader, scene_tree, world, input, logger, physics_2d, render, render_graph, shader_compiler, resource_cache, runtime, task_scheduler, font_loader, frame_sync, window — and `logger_sink`, which is value-owned by its logger and keeps `destroy` as an *internal* lifecycle, see note). Each loses its `destroy` slot; each factory acquires a matching `ke_X_handle`; all call sites move from `->destroy(self)` to `handle.destroy(handle.ref)`. **`ke_allocator` is explicitly excluded** — per §7.2 it stops being a vtable altogether (plain-function module), so there is no `ke_allocator_handle`.
+**Scope:** the 22 genuine cross-binding vtables that currently carry `(*destroy)` (asset_loader, asset_resolver, image_loader, audio, ecs, input_actions, scene_loader, scene_tree, world, input, logger, physics_2d, render, render_graph, shader_compiler, resource_cache, runtime, scheduler, font_loader, frame_sync, window — and `logger_sink`, which is value-owned by its logger and keeps `destroy` as an *internal* lifecycle, see note). Each loses its `destroy` slot; each factory acquires a matching `ke_X_handle`; all call sites move from `->destroy(self)` to `handle.destroy(handle.ref)`. **`ke_allocator` is explicitly excluded** — per §7.2 it stops being a vtable altogether (plain-function module), so there is no `ke_allocator_handle`.
 
 **Note on `logger_sink`:** `ke_logger_sink` is passed *by value* into `ke_logger.add_sink` and the logger owns it thereafter — it is not a host-held factory product. Its `destroy` is an internal lifecycle the logger invokes on its own teardown, not a cross-binding ownership hazard. It keeps `destroy` in its struct and does **not** get a handle.
 
@@ -209,7 +209,7 @@ The host calls `handle.destroy(handle.ref)` at shutdown.
 
 The corollaries above don't apply themselves. Every `ke_*` vtable in the codebase predates this doctrine and was written under the "vtable = class" mental model, so the offenses are spread everywhere, not concentrated in one struct. This warrants a **complete, exhaustive sweep of every vtable the engine declares** — not a spot-fix of the allocator field.
 
-**Scope:** every `typedef struct ke_*` that holds function pointers — across the kernel *and* every domain (render, window, audio, physics, input, text, asset, framework, runtime, ecs, task_scheduler, resource_cache, logger). Enumerate them first (`grep` the public headers for vtable shapes); the list is the audit's checklist.
+**Scope:** every `typedef struct ke_*` that holds function pointers — across the kernel *and* every domain (render, window, audio, physics, input, text, asset, framework, runtime, ecs, scheduler, resource_cache, logger). Enumerate them first (`grep` the public headers for vtable shapes); the list is the audit's checklist.
 
 **For each vtable, classify every member against corollary (a)'s test — *does a consumer call this?*:**
 
@@ -240,7 +240,7 @@ Direction, not a mechanical checklist. Domain contract headers move out of `kern
 | Current header(s) | Tier | Action |
 |---|---|---|
 | `ecs/*`, `runtime/runtime.h`, `runtime/system_ctx.h` | 1 | **Stay** (kernel execution substrate) |
-| `context/{allocator,types}.h`, `logger/*`, `common/*`, `resource_cache/*`, `task_scheduler/*` | 2 | **Stay** (foundation; revisit a separate target only if earned) |
+| `context/{allocator,types}.h`, `logger/*`, `common/*`, `resource_cache/*`, `scheduler/*` | 2 | **Stay** (foundation; revisit a separate target only if earned) |
 | `framework/components.h` → `transform` | 2 | **Extract** to new `spatial` data contract |
 | `framework/components.h` → `hierarchy`, `name` | 3 | **Keep in framework** (only framework reads them) |
 | `framework/components.h` → `camera`, `directional/point/spot_light`, `mesh` | 3 | **Move to render domain** (render owns its components) |
@@ -301,7 +301,7 @@ It stays alive while render v1 lives. But **`ecs/system.h` must stop mentioning 
 | §7.3 `ke_X_handle` ownership model — destroy removed from 22 vtables; factories return owner handle | `d234bda` | 22 vtables + all factories + all impls + C# Dispose + regen + 264/264 tests |
 | §9.1 `frame_packet` tentacle cut — `ecs/system.h` no longer mentions `frame_packet` | (domain ejection, `44975af`) | `frame_packet` lives in `src/c/render/` only |
 | §7.4 vtable audit — `ke_allocator*` removed from `create_render_graph` slot | `a47dff1` | only genuine violation found; C# bindings regenerated |
-| §6 `spatial` data contract — `ke_transform_component` in `src/c/spatial/`; `ke_render → ke_spatial` CMake dep wired | (this session) | `render/components.h` includes `spatial/transform.h`; DAG `render→spatial`, `framework→spatial` correct |
+| §6 `spatial` data contract — `ke_transform_component` in `src/c/spatial/`; `ke_render → ke_spatial` CMake dep wired | `d571323` | `render/components.h` includes `spatial/transform.h`; DAG `render→spatial`, `framework→spatial` correct |
 | §7.2 allocator plain-function module — `ke_allocator` vtable abolished; replaced by plain `ke_alloc/ke_free/ke_realloc` + concrete `ke_arena`; C# managed rewrite via `NativeMemory` | `9b87376` | 129 files; all factories drop `ke_allocator*` param; `ke_allocator_malloc` static PRIVATE per impl |
 | §7.4 vtable audit — stale `(*destroy)` slots removed from `ke_asset_loader`, `ke_image_loader`, `ke_physics_2d`, `ke_font_loader` | `d0ec43f` | 4 vtables cleaned; handle `destroy` already owned the teardown |
 | §5 phase model — enum kept, §5 acid test passes; decision recorded in Pending table | — | No code change; policy decision only |
@@ -310,5 +310,5 @@ It stays alive while render v1 lives. But **`ecs/system.h` must stop mentioning 
 
 | Item | Doc ref | Notes |
 |---|---|---|
-| §5 Opaque phases — **closed**: `ke_phase` enum kept as-is; passes the §5 acid test (no domain names baked in — UPDATE/PRE_UPDATE/EXTRACT are generic scheduling primitives, not domain identifiers). STARTUP/SHUTDOWN are unimplemented but correct by design (R2+). Opaque-ID approach rejected for V1: no user-defined phases in roadmap, DLL-exported constants would add ABI friction for zero benefit. | §5, open question #2 | Decision 2026-06-18 |
-| §8 Per-domain versioning — explicit platform manifest vs. semver asserted at wire time | §8, open question #1 | Policy decision, no code yet; does not block merge |
+| §5 Opaque phases — **closed**: `ke_phase` enum kept as-is; passes the §5 acid test (no domain names baked in — UPDATE/PRE_UPDATE are generic scheduling primitives, not domain identifiers). `KE_PHASE_EXTRACT` removed (never implemented; render V2 reads ECS directly). STARTUP/SHUTDOWN are unimplemented but correct by design (R2+). Opaque-ID approach rejected for V1: no user-defined phases in roadmap, DLL-exported constants would add ABI friction for zero benefit. | §5, open question #2 | Decision 2026-06-18; EXTRACT removed 2026-06-19 |
+| §8 Per-domain versioning — deferred to when project-level versioning is implemented | §8, open question #1 | Not blocking merge |
