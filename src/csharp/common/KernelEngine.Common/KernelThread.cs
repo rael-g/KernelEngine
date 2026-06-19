@@ -47,14 +47,8 @@ public static unsafe class KernelThread
 #if DEBUG
         var current = GetCurrentName();
         if (current != expectedName)
-        {
             throw new InvalidOperationException(
                 $"Thread affinity violation: expected '{expectedName}', current is '{current}'.");
-        }
-        // Also fire the native assertion so C-side callers stay in sync.
-        var nameBytes = Marshal.StringToHGlobalAnsi(expectedName);
-        try { NativeMethods.thread_assert_current((sbyte*)nameBytes); }
-        finally { Marshal.FreeHGlobal(nameBytes); }
 #endif
     }
 }

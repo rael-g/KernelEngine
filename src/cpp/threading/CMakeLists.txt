@@ -25,6 +25,12 @@ target_link_libraries(ke_threading PUBLIC
 
 if (WIN32)
     target_link_libraries(ke_threading PRIVATE kernel32)
+    # Explicitly export C thread-name symbols so DllImport("ke_threading") works from C#.
+    target_link_options(ke_threading PRIVATE
+        "LINKER:/EXPORT:ke_thread_set_current_name"
+        "LINKER:/EXPORT:ke_thread_get_current_name"
+        "LINKER:/EXPORT:ke_thread_check_current"
+    )
 endif()
 
 install(TARGETS ke_threading

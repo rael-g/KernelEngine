@@ -1,6 +1,7 @@
 #include <kernel_engine/threading/thread_name.h>
+#include <kernel_engine/common/error.h>
 
-#include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 #if defined(_WIN32)
@@ -22,11 +23,15 @@ const char *ke_thread_get_current_name(void)
     return tls_thread_name;
 }
 
-void ke_thread_assert_current(const char *expected_name)
+ke_result ke_thread_check_current(const char *expected_name)
 {
-    const char *actual = tls_thread_name;
-    assert(actual && strcmp(actual, expected_name) == 0 &&
-           "ke_thread_assert_current: called from wrong thread");
-    (void)actual;
-    (void)expected_name;
+    const char *actual = tls_thread_name ? tls_thread_name : "(unnamed)";
+    if (!tls_thread_name || strcmp(tls_thread_name, expected_name) != 0)
+    {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "wrong thread: expected '%s', got '%s'", expected_name, actual);
+        return ke_error_set(NULL, &KE_ERROR_INVALID_ARGUMENT, msg, __FILE__, __LINE__, NULL);
+    }
+    return KE_OK;
 }
