@@ -140,22 +140,25 @@ void fs_destroy(ke_frame_sync *self)
 
 extern "C"
 {
-    ke_result ke_frame_sync_std_create(uint32_t       buffer_count,
-                                        uint32_t       draw_capacity,
-                                        uint32_t       point_capacity,
-                                        uint32_t       spot_capacity,
-                                        ke_frame_sync_handle *out,
-                                        ke_error      **out_error)
+    ke_frame_sync_handle ke_frame_sync_std_create(uint32_t       buffer_count,
+                                                   uint32_t       draw_capacity,
+                                                   uint32_t       point_capacity,
+                                                   uint32_t       spot_capacity,
+                                                   ke_error      **out_error)
     {
-        if (buffer_count < 2 || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        ke_frame_sync_handle out{};
+        out.ref     = nullptr;
+        out.destroy = nullptr;
+
+        if (buffer_count < 2) { KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument"); return out; }
 
         auto *h = static_cast<KeFrameSyncHandle *>(
             ke_alloc(sizeof(KeFrameSyncHandle), alignof(KeFrameSyncHandle)));
-        if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "handle allocation failed");
+        if (!h) { KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "handle allocation failed"); return out; }
 
         auto *impl_mem = ke_alloc(sizeof(kernel_engine::threading::KeFrameSync),
             alignof(kernel_engine::threading::KeFrameSync));
-        if (!impl_mem) { ke_free(h); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "impl allocation failed"); }
+        if (!impl_mem) { ke_free(h); KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "impl allocation failed"); return out; }
 
         h->impl = new (impl_mem) kernel_engine::threading::KeFrameSync(
             buffer_count, draw_capacity, point_capacity, spot_capacity);
@@ -174,8 +177,8 @@ extern "C"
         h->vtable.end_read = [](ke_frame_sync *self) {
             if (self) reinterpret_cast<KeFrameSyncHandle *>(self)->impl->EndRead();
         };
-        out->ref     = &h->vtable;
-        out->destroy = fs_destroy;
-        return KE_OK;
+        out.ref     = &h->vtable;
+        out.destroy = fs_destroy;
+        return out;
     }
 }

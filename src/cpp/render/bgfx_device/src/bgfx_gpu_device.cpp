@@ -5,7 +5,7 @@
 // If the calling thread is not "ke.render", records a ke_error in the TLS
 // ring and executes fail_return. Never calls assert/abort.
 #define KE_CHECK_RENDER_THREAD(fail_return) \
-    if (ke_thread_check_current("ke.render") != KE_OK) { fail_return; }
+    if (!ke_thread_check_current("ke.render")) { fail_return; }
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 #include <cstring>

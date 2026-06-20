@@ -27,14 +27,14 @@ extern "C"
 
         /// @brief Loads a sound from @p path (format autodetected by the backend) and returns a
         ///        handle suitable for repeated playback. Returns KE_AUDIO_SOUND_INVALID on error.
-        ke_result (*load_sound)(struct ke_audio *self, const char *path, ke_audio_sound *out, ke_error **out_error);
+        ke_audio_sound (*load_sound)(struct ke_audio *self, const char *path, ke_error **out_error);
 
         /// @brief Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID.
         void (*unload_sound)(struct ke_audio *self, ke_audio_sound sound);
 
         /// @brief Plays @p sound at @p volume (0..1). If @p loop is non-zero the sound restarts
         ///        on end. Calling on an already-playing handle restarts playback from the start.
-        ke_result (*play)(struct ke_audio *self, ke_audio_sound sound, float volume, ke_bool loop, ke_error **out_error);
+        bool (*play)(struct ke_audio *self, ke_audio_sound sound, float volume, ke_bool loop, ke_error **out_error);
 
         /// @brief Stops a currently playing sound; no-op when @p sound is not playing.
         void (*stop)(struct ke_audio *self, ke_audio_sound sound);

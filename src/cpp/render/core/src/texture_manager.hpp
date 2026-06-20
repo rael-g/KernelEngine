@@ -17,11 +17,11 @@ struct RenderContext;
 class TextureManager
 {
 public:
-    ke_result CreateTextureRgba(RenderContext& ctx, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out);
-    ke_result CreateCubemapRgba(RenderContext& ctx, uint32_t s, const uint8_t *d, ke_texture_handle *out);
-    ke_result DestroyTexture(RenderContext& ctx, ke_texture_handle handle);
+    bool CreateTextureRgba(RenderContext& ctx, uint32_t w, uint32_t h, const uint8_t *px, ke_texture_handle *out);
+    bool CreateCubemapRgba(RenderContext& ctx, uint32_t s, const uint8_t *d, ke_texture_handle *out);
+    bool DestroyTexture(RenderContext& ctx, ke_texture_handle handle);
 
-    ke_result SubmitSkybox(RenderContext& ctx, ke_texture_handle handle, render::GpuProgramHandle prog, render::GpuVertexBufferHandle vb, render::GpuIndexBufferHandle ib, render::GpuUniformHandle sampler, render::GpuUniformHandle tint);
+    bool SubmitSkybox(RenderContext& ctx, ke_texture_handle handle, render::GpuProgramHandle prog, render::GpuVertexBufferHandle vb, render::GpuIndexBufferHandle ib, render::GpuUniformHandle sampler, render::GpuUniformHandle tint);
 
     void Shutdown();
 

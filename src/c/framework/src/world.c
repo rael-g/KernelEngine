@@ -51,25 +51,31 @@ static struct ke_scene_tree *world_scene_tree(struct ke_world *self) {
     return s->scene_tree;
 }
 
-static ke_result world_register_component_apply(struct ke_world *self,
+static bool world_register_component_apply(struct ke_world *self,
                                                   ke_component_id cid,
                                                   ke_component_apply_fn apply,
                                                   ke_error **out_error) {
-    if (!self || !self->handle || !apply) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!self || !self->handle || !apply) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     ke_world_state *s = (ke_world_state *)self->handle;
 
     // Replace-if-exists: registering the same cid twice updates the function.
     for (uint32_t i = 0; i < s->apply_count; ++i) {
         if (s->apply_registry[i].cid == cid) {
             s->apply_registry[i].fn = apply;
-            return KE_OK;
+            return true;
         }
     }
 
     if (s->apply_count == s->apply_capacity) {
         uint32_t cap = s->apply_capacity ? s->apply_capacity * 2 : 16;
         apply_entry *new_buf = (apply_entry *)ke_alloc(sizeof(apply_entry) * cap, 8);
-        if (!new_buf) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "apply registry allocation failed");
+        if (!new_buf) {
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "apply registry allocation failed");
+            return false;
+        }
         if (s->apply_registry) {
             memcpy(new_buf, s->apply_registry, sizeof(apply_entry) * s->apply_count);
             ke_free(s->apply_registry);
@@ -80,7 +86,7 @@ static ke_result world_register_component_apply(struct ke_world *self,
     s->apply_registry[s->apply_count].cid = cid;
     s->apply_registry[s->apply_count].fn  = apply;
     s->apply_count++;
-    return KE_OK;
+    return true;
 }
 
 static ke_component_apply_fn world_get_component_apply(struct ke_world *self,
@@ -106,16 +112,24 @@ static void world_destroy(struct ke_world *self) {
     }
 }
 
-ke_result ke_world_create(const ke_world_params *params, ke_world_handle *out_world, ke_error **out_error) {
-    if (!params || !out_world) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+ke_world_handle ke_world_create(const ke_world_params *params, ke_error **out_error) {
+    ke_world_handle null_handle = {0};
+    if (!params) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return null_handle;
+    }
     if (!params->ecs || !params->runtime) {
-        return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "ecs and runtime are required");
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "ecs and runtime are required");
+        return null_handle;
     }
 
     // Single allocation: state + vtable contiguous. Simpler teardown.
     size_t block_size = sizeof(ke_world_state) + sizeof(ke_world);
     void *block = ke_alloc(block_size, 8);
-    if (!block) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+    if (!block) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return null_handle;
+    }
     memset(block, 0, block_size);
 
     ke_world_state *state = (ke_world_state *)block;
@@ -145,7 +159,7 @@ ke_result ke_world_create(const ke_world_params *params, ke_world_handle *out_wo
     ke_component_meta meta;
     #define REG(name, type, apply_fn) do { \
         ke_component_id _cid; \
-        if (e->component_lookup(e, (name), &meta, NULL) == KE_OK) { _cid = meta.cid; } \
+        if (e->component_lookup(e, (name), &meta, NULL)) { _cid = meta.cid; } \
         else { _cid = e->component_register(e, (name), sizeof(type)); } \
         world->register_component_apply(world, _cid, (apply_fn), NULL); \
     } while (0)
@@ -158,7 +172,8 @@ ke_result ke_world_create(const ke_world_params *params, ke_world_handle *out_wo
     REG(KE_COMPONENT_NAME_SPOT_LIGHT,        ke_spot_light_component,       ke_framework_apply_spot_light);
     #undef REG
 
-    out_world->ref     = world;
-    out_world->destroy = world_destroy;
-    return KE_OK;
+    ke_world_handle out_world;
+    out_world.ref     = world;
+    out_world.destroy = world_destroy;
+    return out_world;
 }

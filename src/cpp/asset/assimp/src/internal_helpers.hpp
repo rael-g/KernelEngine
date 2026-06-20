@@ -30,12 +30,12 @@ inline void log_error(ke_logger *logger, const char *msg)
     logger->log(logger, &ev);
 }
 
-inline ke_result LogErr(ke_logger *logger, ke_result r, const char *context, const char *detail)
+inline bool LogErr(ke_logger *logger, bool r, const char *context, const char *detail)
 {
     if (logger)
     {
         char msg[1024];
-        snprintf(msg, sizeof(msg), "%s: %s (result: %d)", context, detail, r);
+        snprintf(msg, sizeof(msg), "%s: %s", context, detail);
         ke_log_event ev = {KE_LOG_LEVEL_ERROR, "asset_loader", msg};
         logger->log(logger, &ev);
     }

@@ -24,19 +24,19 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     private readonly List<GCHandle> _systemHandles = new();
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static ke_result ModuleLoadTrampoline(ke_runtime* rt, void* userData)
+    private static bool ModuleLoadTrampoline(ke_runtime* rt, void* userData, ke_error** out_error)
     {
         try
         {
             var handle = GCHandle.FromIntPtr((nint)userData);
             var entry = (ModuleEntry)handle.Target!;
             entry.OnLoad(entry.Owner);
-            return ke_result.KE_OK;
+            return true;
         }
         catch (Exception ex)
         {
             lock (s_excLock) s_pendingException = ex;
-            return ke_result.KE_ERROR;
+            return false;
         }
     }
 
@@ -99,11 +99,10 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
         _taskScheduler = tsConcrete;
 
         ke_runtime_params @params = default;
-        ke_runtime_handle handle;
-        var rc = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
-            ((INativeEcs)flecsEcs).Native, ((INativeScheduler)tsConcrete).Native, &@params, &handle, null);
-        if (rc != ke_result.KE_OK)
-            throw new InvalidOperationException($"ke_runtime_create failed: {rc}");
+        var handle = KernelEngine.Runtime.Native.NativeMethods.runtime_create(
+            ((INativeEcs)flecsEcs).Native, ((INativeScheduler)tsConcrete).Native, &@params, null);
+        if (handle.@ref == null)
+            throw new InvalidOperationException("ke_runtime_create failed");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -127,15 +126,15 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
             p.user_data = (void*)GCHandle.ToIntPtr(handle);
             p.on_load   = &ModuleLoadTrampoline;
 
-            var rc = _native->register_module(_native, &p, &id, null);
+            id = _native->register_module(_native, &p, null);
             // Surface any exception captured by the trampoline so the caller
-            // gets the real stack trace, not just KE_ERROR.
+            // gets the real stack trace, not just a generic error.
             Exception? trampolineEx;
             lock (s_excLock) { trampolineEx = s_pendingException; s_pendingException = null; }
             if (trampolineEx != null)
                 throw new InvalidOperationException(
                     $"Module '{name}' OnLoad threw", trampolineEx);
-            CheckResult(rc, nameof(RegisterModule));
+            if (id == 0) throw new InvalidOperationException($"Runtime.{nameof(RegisterModule)} failed");
         }
         return id;
     }
@@ -163,8 +162,8 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
             p.execute        = (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void>)
                                 &SystemExecuteTrampoline;
 
-            var rc = _native->register_system(_native, &p, &id, null);
-            CheckResult(rc, nameof(RegisterSystem));
+            id = _native->register_system(_native, &p, null);
+            if (id == 0) throw new InvalidOperationException($"Runtime.{nameof(RegisterSystem)} failed");
         }
         return id;
     }
@@ -173,12 +172,12 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     {
         ThrowIfDisposed();
         lock (s_excLock) s_pendingException = null;
-        var rc = _native->tick(_native, dt, null);
+        bool ok = _native->tick(_native, dt, null);
         Exception? ex;
         lock (s_excLock) { ex = s_pendingException; s_pendingException = null; }
         if (ex != null)
             throw new InvalidOperationException("System execution threw", ex);
-        CheckResult(rc, nameof(Tick));
+        if (!ok) throw new InvalidOperationException($"Runtime.{nameof(Tick)} failed");
     }
 
     public void Dispose()
@@ -199,10 +198,4 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
         if (_native == null) throw new ObjectDisposedException(nameof(Runtime));
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void CheckResult(ke_result rc, string op)
-    {
-        if (rc != ke_result.KE_OK)
-            throw new InvalidOperationException($"Runtime.{op} failed: {rc}");
-    }
 }

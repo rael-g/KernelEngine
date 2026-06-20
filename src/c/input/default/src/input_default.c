@@ -42,9 +42,12 @@ static void push_event(ke_input_internal *impl, ke_input_event_kind kind, int32_
     e->y    = y;
 }
 
-static ke_result input_update(ke_input *self, ke_error **out_error)
+static bool input_update(ke_input *self, ke_error **out_error)
 {
-    if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!self) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     ke_input_internal *impl = (ke_input_internal *)self->handle;
 
     memset(impl->keys_pressed, 0, sizeof(impl->keys_pressed));
@@ -63,7 +66,7 @@ static ke_result input_update(ke_input *self, ke_error **out_error)
     impl->event_count    = 0;
     impl->event_overflow = false;
 
-    return KE_OK;
+    return true;
 }
 
 static void input_on_key(ke_input *self, int32_t key, int32_t action)
@@ -188,14 +191,21 @@ static void input_destroy(ke_input *self)
     ke_free(self);
 }
 
-ke_result ke_input_create(struct ke_logger *log, ke_input_handle *out_input, ke_error **out_error)
+ke_input_handle ke_input_create(struct ke_logger *log, ke_error **out_error)
 {
-    if (!out_input) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    ke_input_handle null_handle = {0};
 
     ke_input *api = (ke_input *)ke_alloc(sizeof(ke_input), 8);
-    if (!api) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
+    if (!api) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
+        return null_handle;
+    }
     ke_input_internal *impl = (ke_input_internal *)ke_alloc(sizeof(ke_input_internal), 8);
-    if (!impl) { ke_free(api); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed"); }
+    if (!impl) {
+        ke_free(api);
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return null_handle;
+    }
     memset(impl, 0, sizeof(ke_input_internal));
 
     api->handle = impl;
@@ -212,7 +222,8 @@ ke_result ke_input_create(struct ke_logger *log, ke_input_handle *out_input, ke_
     api->on_mouse_button = input_on_mouse_button;
     api->on_mouse_scroll = input_on_mouse_scroll;
 
-    out_input->ref     = api;
-    out_input->destroy = input_destroy;
-    return KE_OK;
+    ke_input_handle out_input;
+    out_input.ref     = api;
+    out_input.destroy = input_destroy;
+    return out_input;
 }

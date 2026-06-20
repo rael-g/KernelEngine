@@ -31,10 +31,10 @@ public sealed unsafe class FrameSync : IFrameSync
                                    uint pointLightCapacity = 512,
                                    uint spotLightCapacity  = 512)
     {
-        ke_frame_sync_handle handle;
-        KernelException.ThrowIfFailed(KernelEngine.Render.Native.NativeMethods.frame_sync_std_create(
-                bufferCount, drawCapacity, pointLightCapacity, spotLightCapacity,
-                &handle, null).ToManaged());
+        ke_error* err = null;
+        var handle = KernelEngine.Render.Native.NativeMethods.frame_sync_std_create(
+                bufferCount, drawCapacity, pointLightCapacity, spotLightCapacity, &err);
+        if (handle.@ref == null) throw KernelError.FromNative(err, "frame_sync_std_create");
         return new FrameSync(handle);
     }
 

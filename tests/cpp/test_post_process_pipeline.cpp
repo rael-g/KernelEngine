@@ -59,17 +59,17 @@ TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsOk_WhenShadersValid)
     EXPECT_CALL(*gpu_mock, CreateUniform(_, _, _)).WillRepeatedly(Return(GpuUniformHandle{1}));
 
     GpuProgramHandle b, bl, t;
-    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_OK);
+    EXPECT_TRUE(pipeline->SetupPostProcess(ctx, *geom, b, bl, t));
 }
 
 TEST_F(PostProcessPipelineTest, SetTonemapping_Fails_WhenNotInitialized)
 {
-    EXPECT_EQ(pipeline->SetTonemapping(ctx, true, 1.0f, 2.2f), KE_ERROR);
+    EXPECT_FALSE(pipeline->SetTonemapping(ctx, true, 1.0f, 2.2f));
 }
 
 TEST_F(PostProcessPipelineTest, SetBloom_Fails_WhenNotInitialized)
 {
-    EXPECT_EQ(pipeline->SetBloom(ctx, true, 1.0f, 1.0f), KE_ERROR);
+    EXPECT_FALSE(pipeline->SetBloom(ctx, true, 1.0f, 1.0f));
 }
 
 TEST_F(PostProcessPipelineTest, SetTonemapping_Twice_IsSafe)
@@ -84,8 +84,8 @@ TEST_F(PostProcessPipelineTest, SetTonemapping_Twice_IsSafe)
     GpuProgramHandle b, bl, t;
     pipeline->SetupPostProcess(ctx, *geom, b, bl, t);
 
-    EXPECT_EQ(pipeline->SetTonemapping(ctx, true, 1.0f, 2.2f), KE_OK);
-    EXPECT_EQ(pipeline->SetTonemapping(ctx, false, 1.0f, 2.2f), KE_OK);
+    EXPECT_TRUE(pipeline->SetTonemapping(ctx, true, 1.0f, 2.2f));
+    EXPECT_TRUE(pipeline->SetTonemapping(ctx, false, 1.0f, 2.2f));
 }
 
 TEST_F(PostProcessPipelineTest, SetSsao_ReturnsOk_WhenEnabled)
@@ -97,7 +97,7 @@ TEST_F(PostProcessPipelineTest, SetSsao_ReturnsOk_WhenEnabled)
     EXPECT_CALL(*gpu_mock, CreateTexture2D(_, _, _, _, _, _, _)).WillRepeatedly(Return(GpuTextureHandle{1}));
     EXPECT_CALL(*gpu_mock, CreateFrameBuffer(_, _, _)).WillRepeatedly(Return(GpuFrameBufferHandle{1}));
 
-    EXPECT_EQ(pipeline->SetSsao(ctx, true, 0.5f, 0.025f, 1.0f), KE_OK);
+    EXPECT_TRUE(pipeline->SetSsao(ctx, true, 0.5f, 0.025f, 1.0f));
     EXPECT_TRUE(pipeline->IsSsaoEnabled());
 }
 
@@ -105,14 +105,14 @@ TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsError_WhenShadersFail)
 {
     EXPECT_CALL(*shader_provider, LoadShaderBinary(_, _)).WillRepeatedly(Return(nullptr));
     GpuProgramHandle b, bl, t;
-    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR);
+    EXPECT_FALSE(pipeline->SetupPostProcess(ctx, *geom, b, bl, t));
 }
 
 TEST_F(PostProcessPipelineTest, SetupPostProcess_ReturnsError_WhenGpuNull)
 {
     ctx.gpu = nullptr;
     GpuProgramHandle b, bl, t;
-    EXPECT_EQ(pipeline->SetupPostProcess(ctx, *geom, b, bl, t), KE_ERROR);
+    EXPECT_FALSE(pipeline->SetupPostProcess(ctx, *geom, b, bl, t));
 }
 
 TEST_F(PostProcessPipelineTest, SubmitPostProcess_NoOp_WhenDisabled)

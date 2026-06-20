@@ -15,9 +15,9 @@ typedef struct ke_audio_miniaudio_params
 
 /// @brief Creates a miniaudio-backed ke_audio. Spawns an internal audio thread that owns the
 ///        hardware device; sound playback marshals from the caller (typically ke.sim) into it.
-KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
+/// @return Handle whose @c ref is NULL on failure.
+KE_AUDIO_MINIAUDIO_API ke_audio_handle ke_audio_miniaudio_create(
     const ke_audio_miniaudio_params *params,
-    ke_audio_handle *out,
     ke_error **out_error);
 
 #ifdef __cplusplus

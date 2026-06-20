@@ -47,14 +47,13 @@ extern "C"
         /// @brief Loads @p path and bakes a glyph atlas at @p pixel_size for the codepoint range
         /// [first_codepoint, first_codepoint + codepoint_count). On success allocates a
         /// ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font.
-        ke_result (*load_font)(struct ke_font_loader *self,
-                               const char *path,
-                               float pixel_size,
-                               uint32_t first_codepoint,
-                               uint32_t codepoint_count,
-                               uint32_t atlas_size,
-                               ke_font_data **out,
-                               ke_error **out_error);
+        ke_font_data *(*load_font)(struct ke_font_loader *self,
+                                   const char *path,
+                                   float pixel_size,
+                                   uint32_t first_codepoint,
+                                   uint32_t codepoint_count,
+                                   uint32_t atlas_size,
+                                   ke_error **out_error);
 
         /// @brief Frees a ke_font_data previously returned by load_font.
         void (*free_font)(struct ke_font_loader *self, ke_font_data *data);

@@ -23,10 +23,9 @@ public sealed unsafe class EnkiScheduler : KernelEngine.Kernel.Scheduler
 
     private static ke_scheduler_handle CreateNative()
     {
-        ke_scheduler_handle handle;
-        var rc = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&handle, null);
-        if (rc != ke_result.KE_OK)
-            throw new InvalidOperationException($"ke_scheduler_enki_create failed: {rc}");
+        var handle = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(null);
+        if (handle.@ref == null)
+            throw new InvalidOperationException("ke_scheduler_enki_create failed");
         return handle;
     }
 }

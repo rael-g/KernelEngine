@@ -259,49 +259,51 @@ static bool defer_reserve(defer_queue *q, size_t needed)
     return true;
 }
 
-ke_result ke_system_ctx_spawn(ke_system_ctx *ctx, ke_entity *out_entity)
+ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
+    if (!ctx || !ctx->defer) return KE_ENTITY_INVALID;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ENTITY_INVALID;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind      = DEFER_SPAWN;
-    cmd->spawn_out = out_entity;
-    return KE_OK;
+    cmd->spawn_out = NULL;
+    // Return a placeholder; actual entity id is assigned at flush time.
+    // Caller must not use this value before the defer queue is flushed.
+    return KE_ENTITY_INVALID;
 }
 
-ke_result ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
-                                ke_component_id cid, const void *data, size_t size)
+bool ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
+                           ke_component_id cid, const void *data, size_t size)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
+    if (!ctx || !ctx->defer) return false;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind        = DEFER_ATTACH;
     cmd->entity      = entity;
     cmd->cid         = cid;
     cmd->attach_data = data;
     cmd->attach_size = size;
-    return KE_OK;
+    return true;
 }
 
-ke_result ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_component_id cid)
+bool ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_component_id cid)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
+    if (!ctx || !ctx->defer) return false;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind   = DEFER_DETACH;
     cmd->entity = entity;
     cmd->cid    = cid;
-    return KE_OK;
+    return true;
 }
 
-ke_result ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity)
+bool ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity)
 {
-    if (!ctx || !ctx->defer) return KE_ERROR;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ERROR;
+    if (!ctx || !ctx->defer) return false;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
     cmd->kind   = DEFER_DESPAWN;
     cmd->entity = entity;
-    return KE_OK;
+    return true;
 }
 
 // Apply every queued command in registration order, route through the ke_ecs
@@ -376,29 +378,33 @@ typedef struct runtime_handle
 
 // ── Vtable impls ────────────────────────────────────────────────────────────
 
-static ke_result runtime_register_module(ke_runtime                     *self,
-                                          const ke_runtime_module_params *p,
-                                          ke_module_id                   *out_id,
-                                          ke_error                      **out_error)
+static ke_module_id runtime_register_module(ke_runtime                     *self,
+                                             const ke_runtime_module_params *p,
+                                             ke_error                      **out_error)
 {
-    if (!self || !self->handle || !p || !p->on_load) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!self || !self->handle || !p || !p->on_load)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return 0;
+    }
 
     runtime_handle *h  = (runtime_handle *)self->handle;
     ke_module_id    id = ++h->state.next_module_id;
 
-    ke_result rc = p->on_load(self, p->user_data);
-    if (rc != KE_OK) return rc;
+    if (!p->on_load(self, p->user_data, out_error)) return 0;
 
-    if (out_id) *out_id = id;
-    return KE_OK;
+    return id;
 }
 
-static ke_result runtime_register_system(ke_runtime                     *self,
-                                          const ke_runtime_system_params *p,
-                                          ke_system_id                   *out_id,
-                                          ke_error                      **out_error)
+static ke_system_id runtime_register_system(ke_runtime                     *self,
+                                             const ke_runtime_system_params *p,
+                                             ke_error                      **out_error)
 {
-    if (!self || !self->handle || !p || !p->execute) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!self || !self->handle || !p || !p->execute)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return 0;
+    }
     runtime_handle *h = (runtime_handle *)self->handle;
 
     if (h->state.system_count == h->state.system_capacity)
@@ -406,7 +412,11 @@ static ke_result runtime_register_system(ke_runtime                     *self,
         size_t             new_cap = h->state.system_capacity ? h->state.system_capacity * 2 : 4;
         registered_system *new_buf = (registered_system *)ke_alloc(
             sizeof(registered_system) * new_cap, alignof(registered_system));
-        if (!new_buf) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "system array allocation failed");
+        if (!new_buf)
+        {
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "system array allocation failed");
+            return 0;
+        }
         if (h->state.systems)
         {
             memcpy(new_buf, h->state.systems, sizeof(registered_system) * h->state.system_count);
@@ -419,9 +429,7 @@ static ke_result runtime_register_system(ke_runtime                     *self,
     registered_system *rs = &h->state.systems[h->state.system_count++];
     rs->params            = *p;
 
-    ke_system_id id = ++h->state.next_system_id;
-    if (out_id) *out_id = id;
-    return KE_OK;
+    return ++h->state.next_system_id;
 }
 
 // Prototype limit: per-phase systems are buffered on the stack. 256 systems
@@ -533,10 +541,18 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
     }
 }
 
-static ke_result runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
+static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
 {
-    if (!self || !self->handle) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-    if (dt < 0.0f) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "negative dt");
+    if (!self || !self->handle)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
+    if (dt < 0.0f)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "negative dt");
+        return false;
+    }
     runtime_handle *h = (runtime_handle *)self->handle;
 
     runtime_run_phase(h, KE_PHASE_PRE_UPDATE, dt);
@@ -562,7 +578,7 @@ static ke_result runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
     runtime_run_phase(h, KE_PHASE_UPDATE,      dt);
     runtime_run_phase(h, KE_PHASE_POST_UPDATE, dt);
 
-    return KE_OK;
+    return true;
 }
 
 static void runtime_destroy(ke_runtime *self)
@@ -578,19 +594,26 @@ static void runtime_destroy(ke_runtime *self)
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_runtime_create(ke_ecs                  *ecs,
-                             ke_scheduler       *scheduler,
-                             const ke_runtime_params *params,
-                             ke_runtime_handle       *out_runtime,
-                             ke_error               **out_error)
+ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
+                                     ke_scheduler            *scheduler,
+                                     const ke_runtime_params *params,
+                                     ke_error               **out_error)
 {
-    if (!ecs || !scheduler || !out_runtime) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!ecs || !scheduler)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return (ke_runtime_handle){0};
+    }
 
     runtime_handle *h = (runtime_handle *)ke_alloc(sizeof(runtime_handle), alignof(runtime_handle));
-    if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+    if (!h)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return (ke_runtime_handle){0};
+    }
     memset(h, 0, sizeof(*h));
 
-    h->state.ecs            = ecs;
+    h->state.ecs       = ecs;
     h->state.scheduler = scheduler;
 
     // Fixed-timestep config: caller-provided or default. 0 in either field
@@ -604,7 +627,5 @@ ke_result ke_runtime_create(ke_ecs                  *ecs,
     h->api.register_system = runtime_register_system;
     h->api.tick            = runtime_tick;
 
-    out_runtime->ref     = &h->api;
-    out_runtime->destroy = runtime_destroy;
-    return KE_OK;
+    return (ke_runtime_handle){ .ref = &h->api, .destroy = runtime_destroy };
 }

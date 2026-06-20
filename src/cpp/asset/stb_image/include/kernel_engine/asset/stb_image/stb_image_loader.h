@@ -15,10 +15,9 @@ typedef struct ke_image_loader_stb_params
 
 /// @brief Creates a stb_image-backed ke_image_loader.
 /// @param params  Non-null construction parameters.
-/// @param out     Receives the created loader on success.
-KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(
+/// @return        Handle whose @c ref is NULL on failure.
+KE_ASSET_STB_IMAGE_API ke_image_loader_handle ke_image_loader_stb_create(
     const ke_image_loader_stb_params *params,
-    ke_image_loader_handle *out,
     ke_error **out_error);
 
 #ifdef __cplusplus

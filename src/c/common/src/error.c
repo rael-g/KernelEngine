@@ -28,9 +28,9 @@ static _Thread_local ke_error s_errors[2];
 static _Thread_local char     s_messages[2][512];
 static _Thread_local int      s_slot = 0;
 
-ke_result ke_error_set(ke_error** out_error, const ke_error_type* type,
-                       const char* message, const char* file, uint32_t line,
-                       const ke_error* cause) {
+void ke_error_set(ke_error** out_error, const ke_error_type* type,
+                  const char* message, const char* file, uint32_t line,
+                  const ke_error* cause) {
     int slot = s_slot;
     s_slot   = 1 - slot;
 
@@ -47,5 +47,4 @@ ke_result ke_error_set(ke_error** out_error, const ke_error_type* type,
     }
     e->message = s_messages[slot];
     if (out_error) *out_error = e;
-    return KE_ERROR;
 }

@@ -10,5 +10,5 @@ public static unsafe partial class NativeMethods
     public static extern sbyte* log_level_to_string([NativeTypeName("int32_t")] int level);
 
     [DllImport("ke_logger_simple", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_logger_create", ExactSpelling = true)]
-    public static extern ke_result logger_create(ke_logger_handle* out_logger, ke_error** out_error);
+    public static extern ke_logger_handle logger_create(ke_error** out_error);
 }

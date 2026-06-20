@@ -56,110 +56,110 @@ extern "C"
     {
         void *handle;
 
-        ke_result (*on_initialize)(struct ke_render *self, ke_error **out_error);
-        ke_result (*on_shutdown)(struct ke_render *self, ke_error **out_error);
+        bool (*on_initialize)(struct ke_render *self, ke_error **out_error);
+        bool (*on_shutdown)(struct ke_render *self, ke_error **out_error);
 
-        ke_result (*set_orthographic)(struct ke_render *self, ke_bool enabled, ke_error **out_error);
-        ke_result (*clear_color)(struct ke_render *self, float r, float g, float b, float a, ke_error **out_error);
+        bool (*set_orthographic)(struct ke_render *self, ke_bool enabled, ke_error **out_error);
+        bool (*clear_color)(struct ke_render *self, float r, float g, float b, float a, ke_error **out_error);
 
-        ke_result (*frame)(struct ke_render *self, ke_error **out_error);
-        ke_result (*set_view_transform)(struct ke_render *self, const ke_mat4 *view, const ke_mat4 *proj, ke_error **out_error);
+        bool (*frame)(struct ke_render *self, ke_error **out_error);
+        bool (*set_view_transform)(struct ke_render *self, const ke_mat4 *view, const ke_mat4 *proj, ke_error **out_error);
 
         /// @brief Returns the clip-space convention this backend expects matrices in.
         /// Valid after on_initialize. The engine's matrix builders use it so projections are correct per backend.
         ke_ndc_convention (*get_ndc_convention)(struct ke_render *self);
 
-        ke_result (*create_mesh)(struct ke_render *self,
-                                 const ke_vertex *vertices, uint32_t vertex_count,
-                                 const uint16_t *indices, uint32_t index_count,
-                                 ke_mesh_handle *out_handle, ke_error **out_error);
+        ke_mesh_handle (*create_mesh)(struct ke_render *self,
+                                      const ke_vertex *vertices, uint32_t vertex_count,
+                                      const uint16_t *indices, uint32_t index_count,
+                                      ke_error **out_error);
 
-        ke_result (*destroy_mesh)(struct ke_render *self, ke_mesh_handle handle, ke_error **out_error);
+        bool (*destroy_mesh)(struct ke_render *self, ke_mesh_handle handle, ke_error **out_error);
 
-        ke_result (*create_material)(struct ke_render *self,
-                                     const ke_material *mat,
-                                     ke_material_handle *out_handle, ke_error **out_error);
+        ke_material_handle (*create_material)(struct ke_render *self,
+                                              const ke_material *mat,
+                                              ke_error **out_error);
 
-        ke_result (*destroy_material)(struct ke_render *self, ke_material_handle handle, ke_error **out_error);
+        bool (*destroy_material)(struct ke_render *self, ke_material_handle handle, ke_error **out_error);
 
-        ke_result (*submit_mesh)(struct ke_render *self,
-                                 ke_mesh_handle mesh, ke_material_handle material,
-                                 const ke_mat4 *transform, ke_error **out_error);
+        bool (*submit_mesh)(struct ke_render *self,
+                            ke_mesh_handle mesh, ke_material_handle material,
+                            const ke_mat4 *transform, ke_error **out_error);
 
-        ke_result (*create_texture_rgba)(struct ke_render *self,
-                                         uint32_t width, uint32_t height,
-                                         const uint8_t *pixels,
-                                         ke_texture_handle *out_handle, ke_error **out_error);
+        ke_texture_handle (*create_texture_rgba)(struct ke_render *self,
+                                                 uint32_t width, uint32_t height,
+                                                 const uint8_t *pixels,
+                                                 ke_error **out_error);
 
-        ke_result (*destroy_texture)(struct ke_render *self, ke_texture_handle handle, ke_error **out_error);
+        bool (*destroy_texture)(struct ke_render *self, ke_texture_handle handle, ke_error **out_error);
 
-        ke_result (*set_directional_light)(struct ke_render *self, const ke_directional_light *light, ke_error **out_error);
-        ke_result (*set_ambient_light)(struct ke_render *self, float r, float g, float b, ke_error **out_error);
-        ke_result (*set_camera_pos)(struct ke_render *self, float x, float y, float z, ke_error **out_error);
+        bool (*set_directional_light)(struct ke_render *self, const ke_directional_light *light, ke_error **out_error);
+        bool (*set_ambient_light)(struct ke_render *self, float r, float g, float b, ke_error **out_error);
+        bool (*set_camera_pos)(struct ke_render *self, float x, float y, float z, ke_error **out_error);
 
-        ke_result (*create_cubemap_rgba)(struct ke_render *self,
-                                         uint32_t size,
-                                         const uint8_t *data,
-                                         ke_texture_handle *out_handle, ke_error **out_error);
+        ke_texture_handle (*create_cubemap_rgba)(struct ke_render *self,
+                                                 uint32_t size,
+                                                 const uint8_t *data,
+                                                 ke_error **out_error);
 
-        ke_result (*submit_skybox)(struct ke_render *self, ke_texture_handle cubemap_handle, ke_error **out_error);
+        bool (*submit_skybox)(struct ke_render *self, ke_texture_handle cubemap_handle, ke_error **out_error);
 
-        ke_result (*create_shadow_map)(struct ke_render *self, uint32_t width, uint32_t height,
-                                       ke_shadow_map_handle *out_handle, ke_error **out_error);
+        ke_shadow_map_handle (*create_shadow_map)(struct ke_render *self, uint32_t width, uint32_t height,
+                                                  ke_error **out_error);
 
-        ke_result (*destroy_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle, ke_error **out_error);
+        bool (*destroy_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle, ke_error **out_error);
 
-        ke_result (*begin_shadow_pass)(struct ke_render *self, ke_shadow_map_handle handle,
-                                      const ke_mat4 *light_view, const ke_mat4 *light_proj, ke_error **out_error);
+        bool (*begin_shadow_pass)(struct ke_render *self, ke_shadow_map_handle handle,
+                                  const ke_mat4 *light_view, const ke_mat4 *light_proj, ke_error **out_error);
 
-        ke_result (*submit_mesh_shadow)(struct ke_render *self, ke_mesh_handle mesh,
-                                        const ke_mat4 *transform, ke_error **out_error);
+        bool (*submit_mesh_shadow)(struct ke_render *self, ke_mesh_handle mesh,
+                                   const ke_mat4 *transform, ke_error **out_error);
 
-        ke_result (*end_shadow_pass)(struct ke_render *self, ke_error **out_error);
+        bool (*end_shadow_pass)(struct ke_render *self, ke_error **out_error);
 
-        ke_result (*set_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle, ke_error **out_error);
+        bool (*set_shadow_map)(struct ke_render *self, ke_shadow_map_handle handle, ke_error **out_error);
 
         /// @brief Enables HDR tonemapping. When enabled, the scene renders to an offscreen
         ///        RGBA16F framebuffer and the final output goes through ACES tonemapping.
-        ke_result (*set_tonemapping)(struct ke_render *self, ke_bool enabled,
-                                     float exposure, float gamma, ke_error **out_error);
+        bool (*set_tonemapping)(struct ke_render *self, ke_bool enabled,
+                                float exposure, float gamma, ke_error **out_error);
 
         /// @brief Enables bloom post-processing. Requires tonemapping to be enabled first.
-        ke_result (*set_bloom)(struct ke_render *self, ke_bool enabled,
-                               float threshold, float intensity, ke_error **out_error);
+        bool (*set_bloom)(struct ke_render *self, ke_bool enabled,
+                          float threshold, float intensity, ke_error **out_error);
 
         /// @brief Uploads an array of point lights for the current frame.
         ///        Replaces any previously set point lights.
-        ke_result (*set_point_lights)(struct ke_render *self,
-                                      const ke_point_light *lights, uint32_t count, ke_error **out_error);
+        bool (*set_point_lights)(struct ke_render *self,
+                                 const ke_point_light *lights, uint32_t count, ke_error **out_error);
 
         /// @brief Uploads an array of spot lights for the current frame.
         ///        Replaces any previously set spot lights.
-        ke_result (*set_spot_lights)(struct ke_render *self,
-                                     const ke_spot_light *lights, uint32_t count, ke_error **out_error);
+        bool (*set_spot_lights)(struct ke_render *self,
+                                const ke_spot_light *lights, uint32_t count, ke_error **out_error);
 
         /// @brief Enables or disables screen-space ambient occlusion (SSAO).
         ///        When enabled, a G-buffer pre-pass is added each frame. No-op if
         ///        the underlying renderer does not support SSAO.
-        ke_result (*set_ssao)(struct ke_render *self, ke_bool enabled,
-                              float radius, float bias, float strength, ke_error **out_error);
+        bool (*set_ssao)(struct ke_render *self, ke_bool enabled,
+                         float radius, float bias, float strength, ke_error **out_error);
 
         /// @brief Configures the cluster grid dimensions and light density limits.
-        ke_result (*set_cluster_config)(struct ke_render *self, const ke_cluster_config *config, ke_error **out_error);
+        bool (*set_cluster_config)(struct ke_render *self, const ke_cluster_config *config, ke_error **out_error);
 
         /// @brief Records a textured screen-space quad into the frame packet's UI list. Coordinates
         ///        are pixels (top-left origin); the texture handle may be KE_TEXTURE_NONE for a
         ///        flat-colored quad. Drawn in the dedicated UI view (after post-fx, no depth,
         ///        alpha-blended). Sim-side recorder — actual draw happens during submit_packet.
-        ke_result (*submit_ui_quad)(struct ke_render *self,
-                                    ke_texture_handle texture,
-                                    float dst_x, float dst_y, float dst_w, float dst_h,
-                                    float src_u0, float src_v0, float src_u1, float src_v1,
-                                    float r, float g, float b, float a, ke_error **out_error);
+        bool (*submit_ui_quad)(struct ke_render *self,
+                               ke_texture_handle texture,
+                               float dst_x, float dst_y, float dst_w, float dst_h,
+                               float src_u0, float src_v0, float src_u1, float src_v1,
+                               float r, float g, float b, float a, ke_error **out_error);
 
         /// @brief Consumes a pre-recorded frame packet and submits all draw calls to the GPU.
         ///        Must be called on the bgfx API thread, before @c frame().
-        ke_result (*submit_packet)(struct ke_render *self, const struct ke_frame_packet *packet, ke_error **out_error);
+        bool (*submit_packet)(struct ke_render *self, const struct ke_frame_packet *packet, ke_error **out_error);
 
         /// @brief Retrieves implementation-specific fatal error details (e.g., GPU crash reason).
         ///        Returns a pointer to a string that is valid until the next renderer call.

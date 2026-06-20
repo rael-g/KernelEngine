@@ -28,8 +28,9 @@ public sealed unsafe class Logger : ILogger, INativeLogger, IDisposable
     /// <summary>Creates a logger.</summary>
     public Logger()
     {
-        ke_logger_handle handle;
-        KernelException.ThrowIfFailed(LoggerNative.logger_create(&handle, null).ToManaged());
+        ke_error* err = null;
+        var handle = LoggerNative.logger_create(&err);
+        if (handle.@ref == null) throw KernelError.FromNative(err, "logger_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }

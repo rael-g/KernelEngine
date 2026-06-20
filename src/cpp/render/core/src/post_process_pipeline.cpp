@@ -1,4 +1,4 @@
-﻿#include "post_process_pipeline.hpp"
+#include "post_process_pipeline.hpp"
 #include <render_logging.hpp>
 #include "render_context.hpp"
 #include "geometry_manager.hpp"
@@ -14,43 +14,43 @@
 namespace kernel_engine::render::core
 {
 
-ke_result PostProcessPipeline::SetTonemapping(RenderContext& ctx, bool enabled, float exposure, float gamma)
+bool PostProcessPipeline::SetTonemapping(RenderContext& ctx, bool enabled, float exposure, float gamma)
 {
     if (enabled && hdr_fb_ == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetTonemapping", "HDR framebuffer not initialized");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetTonemapping", "HDR framebuffer not initialized");
     pp_enabled_ = (enabled != 0);
     exposure_   = exposure;
     gamma_      = gamma;
-    return KE_OK;
+    return true;
 }
 
-ke_result PostProcessPipeline::SetBloom(RenderContext& ctx, bool enabled, float threshold, float intensity)
+bool PostProcessPipeline::SetBloom(RenderContext& ctx, bool enabled, float threshold, float intensity)
 {
     if (enabled && bright_fb_ == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetBloom", "Bright framebuffer not initialized");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetBloom", "Bright framebuffer not initialized");
     bloom_enabled_   = (enabled != 0);
     bloom_threshold_ = threshold;
     bloom_intensity_ = intensity;
-    return KE_OK;
+    return true;
 }
 
-ke_result PostProcessPipeline::SetSsao(RenderContext& ctx, bool enabled, float radius, float bias, float strength)
+bool PostProcessPipeline::SetSsao(RenderContext& ctx, bool enabled, float radius, float bias, float strength)
 {
     ssao_enabled_  = (enabled != 0);
     ssao_radius_   = radius;
     ssao_bias_     = bias;
     ssao_strength_ = strength;
-    return KE_OK;
+    return true;
 }
 
-ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx, 
-                                                GeometryManager& geometry,
-                                                GpuProgramHandle& out_bright_prog, 
-                                                GpuProgramHandle& out_blur_prog, 
-                                                GpuProgramHandle& out_tonemap_prog)
+bool PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
+                                           GeometryManager& geometry,
+                                           GpuProgramHandle& out_bright_prog,
+                                           GpuProgramHandle& out_blur_prog,
+                                           GpuProgramHandle& out_tonemap_prog)
 {
     if (!ctx.gpu || !ctx.shader_provider)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupPostProcess", "GPU or ShaderProvider not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetupPostProcess", "GPU or ShaderProvider not set");
 
     auto load_shader = [&](const char* name) -> GpuShaderHandle {
         const GpuMemoryBuffer* mem = ctx.shader_provider->LoadShaderBinary(ctx, name);
@@ -67,7 +67,7 @@ ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
 
     if (vs_screen == kGpuInvalidHandle || fs_bright == kGpuInvalidHandle ||
         fs_blur == kGpuInvalidHandle || fs_tone == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupPostProcess", "Shader loading failed");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetupPostProcess", "Shader loading failed");
 
     // vs_screen is shared; don't destroy it until the last program is created.
     out_bright_prog  = ctx.gpu->CreateProgram(vs_screen, fs_bright, false);
@@ -109,13 +109,13 @@ ke_result PostProcessPipeline::SetupPostProcess(RenderContext& ctx,
     blur_params_uniform_    = ctx.gpu->CreateUniform("u_blurParams",   GpuUniformType::Vec4, 1);
     tonemap_params_uniform_ = ctx.gpu->CreateUniform("u_tonemapParams",GpuUniformType::Vec4, 1);
 
-    return KE_OK;
+    return true;
 }
 
-ke_result PostProcessPipeline::SetupSsao(RenderContext& ctx, GpuProgramHandle& out_prepass, GpuProgramHandle& out_ssao, GpuProgramHandle& out_ssao_blur)
+bool PostProcessPipeline::SetupSsao(RenderContext& ctx, GpuProgramHandle& out_prepass, GpuProgramHandle& out_ssao, GpuProgramHandle& out_ssao_blur)
 {
     // Implementation placeholder
-    return KE_OK;
+    return true;
 }
 
 void PostProcessPipeline::SubmitPostProcess(RenderContext& ctx, GeometryManager& geom, TextureManager& tex,

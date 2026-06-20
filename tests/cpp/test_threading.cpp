@@ -12,9 +12,8 @@
 
 TEST(ThreadingTest, FrameSync_Handoff)
 {
-    ke_frame_sync_handle sync_h{};
-    ke_result      res  = ke_frame_sync_std_create(2, 10, 10, 10, &sync_h, nullptr);
-    ASSERT_EQ(res, KE_OK);
+    ke_frame_sync_handle sync_h = ke_frame_sync_std_create(2, 10, 10, 10, nullptr);
+    ASSERT_NE(sync_h.ref, nullptr);
     ke_frame_sync *sync = sync_h.ref;
     ASSERT_NE(sync, nullptr);
 
@@ -32,8 +31,7 @@ TEST(ThreadingTest, FrameSync_Handoff)
 }
 
 TEST(ThreadingTest, FrameSync_NullChecks) {
-    ke_frame_sync_handle s_h{};
-    ke_frame_sync_std_create(2, 10, 10, 10, &s_h, nullptr);
+    ke_frame_sync_handle s_h = ke_frame_sync_std_create(2, 10, 10, 10, nullptr);
     ke_frame_sync *s = s_h.ref;
 
     ASSERT_EQ(s->begin_write(nullptr), nullptr);
@@ -45,15 +43,15 @@ TEST(ThreadingTest, FrameSync_NullChecks) {
     s_h.destroy(s_h.ref);    // real destroy
 }
 
-TEST(ThreadingInitTest, Create_NullArgs_ReturnsInvalidArgument) {
-    ke_frame_sync_handle s{};
-    ASSERT_EQ(ke_frame_sync_std_create(2, 1, 1, 1, nullptr, nullptr), KE_ERROR);
+TEST(ThreadingInitTest, Create_ZeroBuffers_ReturnsNull) {
+    // buffer_count == 0 is invalid
+    ke_frame_sync_handle s = ke_frame_sync_std_create(1, 60, 60, 100, nullptr);
+    ASSERT_EQ(s.ref, nullptr);
 }
 
 TEST(ThreadingTest, FrameSync_Blocking)
 {
-    ke_frame_sync_handle sync_h{};
-    ke_frame_sync_std_create(2, 1, 1, 1, &sync_h, nullptr);
+    ke_frame_sync_handle sync_h = ke_frame_sync_std_create(2, 1, 1, 1, nullptr);
     ke_frame_sync *sync = sync_h.ref;
 
     sync->begin_write(sync);

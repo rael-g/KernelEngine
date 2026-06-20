@@ -11,10 +11,11 @@ extern "C"
 #endif
 
     /// @brief Completion callback for ke_asset_loader::load_model_async.
-    /// @param result   KE_OK on success, an error code on failure.
-    /// @param data     Loaded model data (valid only when result == KE_OK); NULL on failure.
-    /// @param user_data  Opaque pointer forwarded from load_model_async.
-    typedef void (*ke_load_model_complete_func)(ke_result result,
+    /// @param error     NULL on success; pointer to a ke_error on failure (valid until the next
+    ///                  failing call on this thread — copy what you need before returning).
+    /// @param data      Loaded model data (valid only when error == NULL); NULL on failure.
+    /// @param user_data Opaque pointer forwarded from load_model_async.
+    typedef void (*ke_load_model_complete_func)(const ke_error *error,
                                                 struct ke_model_data *data,
                                                 void *user_data);
 
@@ -28,10 +29,9 @@ extern "C"
         ///        The caller owns the result and must release it with free_model.
         /// @param path  Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).
         /// @param out   Receives a pointer to the allocated ke_model_data on success.
-        ke_result (*load_model)(struct ke_asset_loader *self,
-                                const char *path,
-                                ke_model_data **out,
-                                ke_error **out_error);
+        ke_model_data *(*load_model)(struct ke_asset_loader *self,
+                                     const char *path,
+                                     ke_error **out_error);
 
         /// @brief Frees a ke_model_data previously returned by load_model or the async variant.
         void (*free_model)(struct ke_asset_loader *self, ke_model_data *data);

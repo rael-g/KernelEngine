@@ -40,12 +40,12 @@ KE_RUNTIME_API void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
                                           ke_entity **out_entities, void **out_data,
                                           size_t *out_count);
 
-KE_RUNTIME_API ke_result ke_system_ctx_spawn(ke_system_ctx *ctx, ke_entity *out_entity);
-KE_RUNTIME_API ke_result ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
-                                                ke_component_id cid, const void *data, size_t size);
-KE_RUNTIME_API ke_result ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity,
-                                                ke_component_id cid);
-KE_RUNTIME_API ke_result ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity);
+KE_RUNTIME_API ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx);
+KE_RUNTIME_API bool     ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
+                                               ke_component_id cid, const void *data, size_t size);
+KE_RUNTIME_API bool     ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity,
+                                               ke_component_id cid);
+KE_RUNTIME_API bool     ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity);
 
 #ifdef __cplusplus
 }

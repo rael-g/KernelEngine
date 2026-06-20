@@ -50,20 +50,20 @@ extern "C"
         void (*step)(struct ke_physics_2d *self, float dt);
 
         /// @brief Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.
-        ke_result (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_body_2d *out, ke_error **out_error);
+        ke_body_2d (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_error **out_error);
 
         /// @brief Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID.
         void (*destroy_body)(struct ke_physics_2d *self, ke_body_2d body);
 
         /// @brief Attaches an axis-aligned box fixture (half-extents from body origin).
-        ke_result (*add_box_fixture)(struct ke_physics_2d *self, ke_body_2d body,
-                                     float half_w, float half_h,
-                                     float density, float friction, float restitution, ke_error **out_error);
+        bool (*add_box_fixture)(struct ke_physics_2d *self, ke_body_2d body,
+                                float half_w, float half_h,
+                                float density, float friction, float restitution, ke_error **out_error);
 
         /// @brief Attaches a circle fixture centered at the body origin.
-        ke_result (*add_circle_fixture)(struct ke_physics_2d *self, ke_body_2d body,
-                                        float radius,
-                                        float density, float friction, float restitution, ke_error **out_error);
+        bool (*add_circle_fixture)(struct ke_physics_2d *self, ke_body_2d body,
+                                   float radius,
+                                   float density, float friction, float restitution, ke_error **out_error);
 
         /// @brief Reads the body's current pose and motion into @p out.
         void (*get_body_state)(struct ke_physics_2d *self, ke_body_2d body, ke_body_state_2d *out);

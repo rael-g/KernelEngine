@@ -12,9 +12,9 @@
 extern "C" {
 #endif
 
-ke_result ke_mesh_shape_bake_internal(ke_mesh_primitive   prim,
-                                       uint32_t            segments,
-                                       ke_mesh_shape_data *out_data);
+bool ke_mesh_shape_bake_internal(ke_mesh_primitive   prim,
+                                  uint32_t            segments,
+                                  ke_mesh_shape_data *out_data);
 
 void ke_mesh_shape_free_internal(ke_mesh_shape_data *data);
 

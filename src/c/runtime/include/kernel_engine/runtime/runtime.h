@@ -39,7 +39,7 @@ typedef struct ke_component_access {
 typedef struct ke_runtime_module_params {
     const char *name;
     void       *user_data;
-    ke_result (*on_load)(ke_runtime *runtime, void *user_data);
+    bool (*on_load)(ke_runtime *runtime, void *user_data, ke_error **out_error);
     void      (*on_unload)(ke_runtime *runtime, void *user_data);
 } ke_runtime_module_params;
 
@@ -60,9 +60,9 @@ typedef struct ke_runtime_system_params {
 typedef struct ke_runtime {
     void *handle;
 
-    ke_result (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_module_id *out_id, ke_error **out_error);
-    ke_result (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_system_id *out_id, ke_error **out_error);
-    ke_result (*tick)(ke_runtime *self, float dt, ke_error **out_error);
+    ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
+    ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
+    bool         (*tick)(ke_runtime *self, float dt, ke_error **out_error);
 } ke_runtime;
 
 typedef struct ke_runtime_handle {

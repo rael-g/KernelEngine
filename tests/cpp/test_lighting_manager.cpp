@@ -43,21 +43,21 @@ protected:
 TEST_F(LightingManagerTest, SetDirectionalLight_StoresValues)
 {
     ke_directional_light light = { 1, -2, 3, 0.1f, 0.2f, 0.3f, 2.0f };
-    EXPECT_EQ(manager->SetDirectionalLight(&light), KE_OK);
+    EXPECT_EQ(manager->SetDirectionalLight(&light), true);
     EXPECT_FLOAT_EQ(manager->light_dir[0], 1.0f);
     EXPECT_FLOAT_EQ(manager->light_color[0], 0.2f); // 0.1 * 2.0
 }
 
 TEST_F(LightingManagerTest, SetDirectionalLight_ReturnsError_OnNull)
 {
-    EXPECT_EQ(manager->SetDirectionalLight(nullptr), KE_ERROR);
+    EXPECT_EQ(manager->SetDirectionalLight(nullptr), false);
 }
 
 // ── Ambient Light Tests ──────────────────────────────────────────────────────
 
 TEST_F(LightingManagerTest, SetAmbientLight_ReturnsOk)
 {
-    EXPECT_EQ(manager->SetAmbientLight(0.1f, 0.2f, 0.3f), KE_OK);
+    EXPECT_EQ(manager->SetAmbientLight(0.1f, 0.2f, 0.3f), true);
 }
 
 TEST_F(LightingManagerTest, SetAmbientLight_StoresRed)
@@ -83,14 +83,14 @@ TEST_F(LightingManagerTest, SetAmbientLight_StoresBlue)
 TEST_F(LightingManagerTest, StorePointLights_UpdatesSize)
 {
     ke_point_light lights[2] = {};
-    EXPECT_EQ(manager->StorePointLights(lights, 2), KE_OK);
+    EXPECT_EQ(manager->StorePointLights(lights, 2), true);
     EXPECT_EQ(manager->GetPointLightCount(), 2);
 }
 
 TEST_F(LightingManagerTest, StoreSpotLights_UpdatesSize)
 {
     ke_spot_light lights[3] = {};
-    EXPECT_EQ(manager->StoreSpotLights(lights, 3), KE_OK);
+    EXPECT_EQ(manager->StoreSpotLights(lights, 3), true);
     EXPECT_EQ(manager->GetSpotLightCount(), 3);
 }
 
@@ -127,7 +127,7 @@ TEST_F(LightingManagerTest, RecordLights_UpdatesPacket)
     ke_point_light lights[2] = {};
     lights[0].intensity = 5.0f;
 
-    EXPECT_EQ(manager->RecordLights(packet, lights, 2), KE_OK);
+    EXPECT_EQ(manager->RecordLights(packet, lights, 2), true);
     EXPECT_EQ(packet.point_light_count, 2);
     EXPECT_FLOAT_EQ(packet.point_lights[0].intensity, 5.0f);
 
@@ -140,7 +140,7 @@ TEST_F(LightingManagerTest, CreateMaterial_AssignsHandle)
 {
     ke_material mat{};
     ke_material_handle h;
-    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), KE_OK);
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), true);
     EXPECT_EQ(h.idx, 0);
 }
 
@@ -183,7 +183,7 @@ TEST_F(LightingManagerTest, CreateMaterial_KeepsExplicitNormalMap)
     ke_material mat{};
     mat.normal_map.idx = 7;
     ke_material_handle h;
-    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), KE_OK);
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, &mat, &h), true);
     EXPECT_EQ(manager->GetMaterial(h).normal_map_handle.idx, 7u);
 }
 
@@ -193,25 +193,25 @@ TEST_F(LightingManagerTest, DestroyMaterial_MarksInvalid)
     ke_material_handle h;
     manager->CreateMaterial(ctx, *textures, &mat, &h);
     
-    EXPECT_EQ(manager->DestroyMaterial(ctx, h), KE_OK);
+    EXPECT_EQ(manager->DestroyMaterial(ctx, h), true);
     EXPECT_FALSE(manager->GetMaterial(h).valid);
 }
 
 TEST_F(LightingManagerTest, StorePointLights_ReturnsError_OnNullWithCount)
 {
-    EXPECT_EQ(manager->StorePointLights(nullptr, 5), KE_ERROR);
+    EXPECT_EQ(manager->StorePointLights(nullptr, 5), false);
 }
 
 TEST_F(LightingManagerTest, StoreSpotLights_ReturnsError_OnNullWithCount)
 {
-    EXPECT_EQ(manager->StoreSpotLights(nullptr, 5), KE_ERROR);
+    EXPECT_EQ(manager->StoreSpotLights(nullptr, 5), false);
 }
 
 TEST_F(LightingManagerTest, RecordLights_ReturnsError_OnNullWithCount)
 {
     ke_frame_packet packet{};
     packet.point_light_capacity = 10;
-    EXPECT_EQ(manager->RecordLights(packet, nullptr, 5), KE_ERROR);
+    EXPECT_EQ(manager->RecordLights(packet, nullptr, 5), false);
 }
 
 TEST_F(LightingManagerTest, RecordLights_ReturnsError_OnExceedingCapacity)
@@ -219,7 +219,7 @@ TEST_F(LightingManagerTest, RecordLights_ReturnsError_OnExceedingCapacity)
     ke_frame_packet packet{};
     packet.point_light_capacity = 1;
     ke_point_light lights[2] = {};
-    EXPECT_EQ(manager->RecordLights(packet, lights, 2), KE_ERROR);
+    EXPECT_EQ(manager->RecordLights(packet, lights, 2), false);
 }
 
 TEST_F(LightingManagerTest, RecordSpotLights_ReturnsError_OnExceedingCapacity)
@@ -227,7 +227,7 @@ TEST_F(LightingManagerTest, RecordSpotLights_ReturnsError_OnExceedingCapacity)
     ke_frame_packet packet{};
     packet.spot_light_capacity = 1;
     ke_spot_light lights[2] = {};
-    EXPECT_EQ(manager->RecordSpotLights(packet, lights, 2), KE_ERROR);
+    EXPECT_EQ(manager->RecordSpotLights(packet, lights, 2), false);
 }
 
 TEST_F(LightingManagerTest, UploadLights_ClampsToMaxPointLights)
@@ -258,12 +258,12 @@ TEST_F(LightingManagerTest, UploadLights_ClampsToMaxSpotLights)
 
 TEST_F(LightingManagerTest, DestroyMaterial_ReturnsError_OnInvalidHandle)
 {
-    EXPECT_EQ(manager->DestroyMaterial(ctx, {999}), KE_ERROR);
+    EXPECT_EQ(manager->DestroyMaterial(ctx, {999}), false);
 }
 
 TEST_F(LightingManagerTest, CreateMaterial_ReturnsError_OnNullArgs)
 {
     ke_material_handle h;
-    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, nullptr, &h), KE_ERROR);
-    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, (ke_material*)0x1, nullptr), KE_ERROR);
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, nullptr, &h), false);
+    EXPECT_EQ(manager->CreateMaterial(ctx, *textures, (ke_material*)0x1, nullptr), false);
 }

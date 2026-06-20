@@ -28,8 +28,8 @@ extern "C"
 #endif
 #endif
 
-    KE_FRAMEWORK_API ke_result ke_world_create(
-        const ke_world_params *params, ke_world_handle *out_world, ke_error **out_error);
+    KE_FRAMEWORK_API ke_world_handle ke_world_create(
+        const ke_world_params *params, ke_error **out_error);
 
 #ifdef __cplusplus
 }

@@ -25,9 +25,8 @@ public sealed unsafe class Audio : IAudio
         var ptr = Marshal.StringToHGlobalAnsi(path);
         try
         {
-            uint id;
-            var res = _native->load_sound(_native, (sbyte*)ptr, &id, null).ToManaged();
-            return res == KernelResult.Ok ? new SoundHandle(id) : SoundHandle.None;
+            uint id = _native->load_sound(_native, (sbyte*)ptr, null);
+            return id != 0 ? new SoundHandle(id) : SoundHandle.None;
         }
         finally { Marshal.FreeHGlobal(ptr); }
     }

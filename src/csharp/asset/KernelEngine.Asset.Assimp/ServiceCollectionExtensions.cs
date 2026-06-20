@@ -21,8 +21,9 @@ public static class ServiceCollectionExtensions
                 {
                     logger = logger != null ? logger.Native : null,
                 };
-                ke_asset_loader_handle handle;
-                KernelException.ThrowIfFailed(Native.NativeMethods.asset_loader_assimp_create(&@params, &handle, null).ToManaged());
+                ke_error* err = null;
+                var handle = Native.NativeMethods.asset_loader_assimp_create(&@params, &err);
+                if (handle.@ref == null) throw KernelError.FromNative(err, "asset_loader_assimp_create");
                 // Async loading uses the kernel scheduler; resolve via the
                 // interface so any IScheduler impl (EnkiScheduler,
                 // future alternatives) works. The concrete base class is

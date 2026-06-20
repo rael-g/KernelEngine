@@ -153,7 +153,7 @@ public static class CrashHandler
             Console.Error.WriteLine("        A native plugin called abort(). The most recent stderr line(s) above usually");
             Console.Error.WriteLine("        carry the source file/line/message logged by the plugin before it aborted.");
             Console.Error.WriteLine("        If nothing precedes this banner, the plugin aborted without logging — that");
-            Console.Error.WriteLine("        is a plugin bug (plugins must translate failures into ke_result errors).");
+            Console.Error.WriteLine("        is a plugin bug (plugins must translate failures into ke_error + bool/null return).");
             Console.Error.WriteLine();
             Console.Error.WriteLine("Managed stack trace at the point of abort:");
             Console.Error.WriteLine(Environment.StackTrace);

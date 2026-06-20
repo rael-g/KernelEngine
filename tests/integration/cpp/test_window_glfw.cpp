@@ -50,22 +50,22 @@ protected:
 // ── Factory null-param tests ──────────────────────────────────────────────────
 
 TEST(WindowFactoryTest, Create_NullOut_ReturnsInvalidArgument) {
-    ASSERT_EQ(ke_window_glfw_create(nullptr, nullptr, nullptr), KE_ERROR);
+    ASSERT_EQ(ke_window_glfw_create(nullptr, nullptr).ref, nullptr);
 }
 
 TEST(WindowFactoryTest, Create_NullParams_ReturnsInvalidArgument) {
     ke_window_handle w{};
-    ASSERT_EQ(ke_window_glfw_create(nullptr, &w, nullptr), KE_ERROR);
+    w = ke_window_glfw_create(nullptr, nullptr); ASSERT_EQ(w.ref, nullptr);
 }
 
 TEST(WindowFactoryTest, Create_Success_OrWindowError) {
     ke_window_glfw_params params = { nullptr, nullptr, "Test", 800, 600, 0 };
     ke_window_handle w{};
-    ke_result res = ke_window_glfw_create(&params, &w, nullptr);
-    if (res == KE_OK) {
+    w = ke_window_glfw_create(&params, nullptr);
+    if (w.ref != nullptr) {
         w.destroy(w.ref);
     }
-    ASSERT_TRUE(res == KE_OK || res == KE_ERROR);
+    SUCCEED(); // handle or null — both valid outcomes;
 }
 
 // ── Core unit tests via mock device ──────────────────────────────────────────
@@ -108,7 +108,7 @@ TEST_F(WindowCoreTest, GetSize_DelegatesToDevice) {
 
 TEST_F(WindowCoreTest, PollEvents_DelegatesToDevice) {
     EXPECT_CALL(*mock_device, PollEvents(_)).Times(1);
-    ASSERT_EQ(window->poll_events(window, NULL), KE_OK);
+    ASSERT_TRUE(window->poll_events(window, NULL));
 }
 
 TEST_F(WindowCoreTest, Shutdown_CallsDeviceShutdown) {
@@ -119,14 +119,14 @@ TEST_F(WindowCoreTest, Shutdown_CallsDeviceShutdown) {
 TEST_F(WindowCoreTest, Initialize_ReturnsError_WhenDeviceFails) {
     EXPECT_CALL(*mock_device, Initialize(_)).WillOnce(Return(false));
     WindowConfig config = { "Fail", 800, 600, false, true };
-    ASSERT_EQ(core->Initialize(config), KE_ERROR);
+    ASSERT_FALSE(core->Initialize(config));
 }
 
 TEST_F(WindowCoreTest, Initialize_ReturnsOk_WhenAlreadyInitialized) {
     EXPECT_CALL(*mock_device, Initialize(_)).WillOnce(Return(true));
     WindowConfig config = { "Ok", 800, 600, false, true };
     core->Initialize(config);
-    ASSERT_EQ(core->Initialize(config), KE_OK); // Should return KE_OK immediately
+    ASSERT_TRUE(core->Initialize(config)); // Should return KE_OK immediately
 }
 
 TEST_F(WindowCoreTest, SetTitle_DelegatesToDevice) {
@@ -259,7 +259,7 @@ TEST_F(WindowCoreTest, HandleEvent_KeyUp_UpdatesInput) {
 }
 
 TEST_F(WindowCoreTest, API_PollEvents_NullSelf_ReturnsInvalidArgument) {
-    ASSERT_EQ(window->poll_events(nullptr, NULL), KE_ERROR);
+    ASSERT_FALSE(window->poll_events(nullptr, NULL));
 }
 
 TEST_F(WindowCoreTest, API_ShouldClose_NullSelf_ReturnsTrue) {
@@ -271,7 +271,7 @@ TEST_F(WindowCoreTest, API_GetNativeHandle_NullSelf_ReturnsNull) {
 }
 
 TEST_F(WindowCoreTest, API_GetSize_NullSelf_ReturnsInvalidArgument) {
-    ASSERT_EQ(window->get_size(nullptr, nullptr, nullptr, NULL), KE_ERROR);
+    ASSERT_FALSE(window->get_size(nullptr, nullptr, nullptr, NULL));
 }
 
 TEST_F(WindowCoreTest, Destroy_NullSelf_IsSafe) {

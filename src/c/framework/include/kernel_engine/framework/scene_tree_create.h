@@ -30,10 +30,9 @@ extern "C"
     /// scene_tree on the same ecs already registered them, the existing cids
     /// are picked up via component_lookup). Returns the tree via out_tree;
     /// caller invokes tree->destroy(tree) when done.
-    KE_FRAMEWORK_API ke_result ke_scene_tree_create(
-        ke_ecs         *ecs,
-        ke_scene_tree_handle *out_tree,
-        ke_error      **out_error);
+    KE_FRAMEWORK_API ke_scene_tree_handle ke_scene_tree_create(
+        ke_ecs    *ecs,
+        ke_error **out_error);
 
 #ifdef __cplusplus
 }

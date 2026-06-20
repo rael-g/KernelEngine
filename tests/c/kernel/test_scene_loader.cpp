@@ -44,16 +44,20 @@ protected:
 
     void SetUp() override
     {
-        ASSERT_EQ(ke_scheduler_enki_create(&scheduler_h, NULL), KE_OK);
+        scheduler_h = ke_scheduler_enki_create(NULL);
+        ASSERT_NE(scheduler_h.ref, nullptr);
         scheduler = scheduler_h.ref;
 
         ke_ecs_flecs_params ep{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ep, &ecs_h, NULL), KE_OK);
+        ecs_h = ke_ecs_flecs_create(&ep, NULL);
+        ASSERT_NE(ecs_h.ref, nullptr);
         ecs = ecs_h.ref;
         ke_runtime_params rp{};
-        ASSERT_EQ(ke_runtime_create(ecs, scheduler, &rp, &runtime_h, NULL), KE_OK);
+        runtime_h = ke_runtime_create(ecs, scheduler, &rp, NULL);
+        ASSERT_NE(runtime_h.ref, nullptr);
         runtime = runtime_h.ref;
-        ASSERT_EQ(ke_scene_tree_create(ecs, &tree_h, NULL), KE_OK);
+        tree_h = ke_scene_tree_create(ecs, NULL);
+        ASSERT_NE(tree_h.ref, nullptr);
         tree = tree_h.ref;
 
         ke_world_params wp{};
@@ -61,10 +65,12 @@ protected:
         wp.ecs = ecs;
         wp.runtime = runtime;
         wp.scene_tree = tree;
-        ASSERT_EQ(ke_world_create(&wp, &world_h, NULL), KE_OK);
+        world_h = ke_world_create(&wp, NULL);
+        ASSERT_NE(world_h.ref, nullptr);
         world = world_h.ref;
 
-        ASSERT_EQ(ke_scene_loader_create(world, nullptr, &loader_h, NULL), KE_OK);
+        loader_h = ke_scene_loader_create(world, nullptr, NULL);
+        ASSERT_NE(loader_h.ref, nullptr);
         loader = loader_h.ref;
     }
 
@@ -85,12 +91,12 @@ protected:
 TEST_F(SceneLoaderTest, EmptyFile_NoEntities_ReturnsOk)
 {
     auto p = WriteTempScene("[scene]\nname = \"empty\"\n");
-    EXPECT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
+    EXPECT_TRUE(loader->load(loader, p.string().c_str(), NULL));
 }
 
 TEST_F(SceneLoaderTest, MissingFile_ReturnsNotFound)
 {
-    EXPECT_EQ(loader->load(loader, "no_such_file_anywhere.scene.toml", NULL), KE_ERROR);
+    EXPECT_FALSE(loader->load(loader, "no_such_file_anywhere.scene.toml", NULL));
 }
 
 TEST_F(SceneLoaderTest, BasicEntity_AppearsInTree)
@@ -99,8 +105,8 @@ TEST_F(SceneLoaderTest, BasicEntity_AppearsInTree)
 [[entity]]
 name = "Player"
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
-    EXPECT_NE(tree->find_node(tree, "Player"), KE_ENTITY_INVALID);
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    EXPECT_NE(tree->find_node(tree, "Player", NULL), KE_ENTITY_INVALID);
 }
 
 TEST_F(SceneLoaderTest, ParentReferencesPriorEntity)
@@ -113,8 +119,8 @@ name = "World"
 name = "Child"
 parent = "World"
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
-    EXPECT_NE(tree->find_node(tree, "World/Child"), KE_ENTITY_INVALID);
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    EXPECT_NE(tree->find_node(tree, "World/Child", NULL), KE_ENTITY_INVALID);
 }
 
 // ── Transform application ──────────────────────────────────────────────────
@@ -127,12 +133,12 @@ name = "X"
 [entity.transform]
 position = [1.0, 2.0, 3.0]
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
-    ke_entity e = tree->find_node(tree, "X");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "X", NULL);
     ASSERT_NE(e, KE_ENTITY_INVALID);
 
     ke_component_meta meta;
-    ASSERT_EQ(ecs->component_lookup(ecs, "transform", &meta, nullptr), KE_OK);
+    ASSERT_TRUE(ecs->component_lookup(ecs, "transform", &meta, nullptr));
     auto *t = (ke_transform_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(t, nullptr);
     EXPECT_FLOAT_EQ(t->position.x, 1.0f);
@@ -151,12 +157,12 @@ name = "Crate"
 primitive = "cube"
 color = [0.8, 0.3, 0.2, 1.0]
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
-    ke_entity e = tree->find_node(tree, "Crate");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Crate", NULL);
     ASSERT_NE(e, KE_ENTITY_INVALID);
 
     ke_component_meta meta;
-    ASSERT_EQ(ecs->component_lookup(ecs, "mesh", &meta, nullptr), KE_OK);
+    ASSERT_TRUE(ecs->component_lookup(ecs, "mesh", &meta, nullptr));
     auto *m = (ke_mesh_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(m, nullptr);
     EXPECT_STREQ(m->primitive, "cube");
@@ -174,12 +180,12 @@ fov_degrees = 60.0
 near_plane = 0.1
 far_plane = 100.0
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
-    ke_entity e = tree->find_node(tree, "Cam");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Cam", NULL);
     ASSERT_NE(e, KE_ENTITY_INVALID);
 
     ke_component_meta meta;
-    ASSERT_EQ(ecs->component_lookup(ecs, "camera", &meta, nullptr), KE_OK);
+    ASSERT_TRUE(ecs->component_lookup(ecs, "camera", &meta, nullptr));
     auto *c = (ke_camera_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(c, nullptr);
     // 60° → 1.0472 rad
@@ -199,12 +205,12 @@ name = "P"
 Health = 100
 MoveAction = "PlayerMove"
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
-    ke_entity e = tree->find_node(tree, "P");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "P", NULL);
     ASSERT_NE(e, KE_ENTITY_INVALID);
 
     ke_component_meta meta;
-    ASSERT_EQ(ecs->component_lookup(ecs, KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta, nullptr), KE_OK);
+    ASSERT_TRUE(ecs->component_lookup(ecs, KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta, nullptr));
     auto *bag = (ke_scene_properties *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(bag, nullptr);
     EXPECT_EQ(bag->count, 2u);
@@ -235,30 +241,31 @@ struct ScriptCallSpy {
     ke_entity last_entity = KE_ENTITY_INVALID;
 };
 
-ke_result spy_factory(void *ctx, ke_entity entity, const char *type_name) {
+bool spy_factory(void *ctx, ke_entity entity, const char *type_name, ke_error **out_error) {
+    (void)out_error;
     auto *s = static_cast<ScriptCallSpy *>(ctx);
     s->calls++;
     s->last_entity = entity;
     std::strncpy(s->last_type, type_name, sizeof(s->last_type) - 1);
-    return KE_OK;
+    return true;
 }
 }
 
 TEST_F(SceneLoaderTest, Script_FactoryReceivesEntityAndType)
 {
     ScriptCallSpy spy;
-    ASSERT_EQ(loader->register_script_factory(loader, spy_factory, &spy, nullptr), KE_OK);
+    ASSERT_TRUE(loader->register_script_factory(loader, spy_factory, &spy, nullptr));
 
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Paddle"
 type = "PaddleController"
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
 
     EXPECT_EQ(spy.calls, 1);
     EXPECT_STREQ(spy.last_type, "PaddleController");
-    EXPECT_EQ(spy.last_entity, tree->find_node(tree, "Paddle"));
+    EXPECT_EQ(spy.last_entity, tree->find_node(tree, "Paddle", NULL));
 }
 
 TEST_F(SceneLoaderTest, Script_NoFactory_EntityStillCreated)
@@ -269,8 +276,8 @@ TEST_F(SceneLoaderTest, Script_NoFactory_EntityStillCreated)
 name = "Lone"
 type = "Whatever"
 )");
-    EXPECT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
-    EXPECT_NE(tree->find_node(tree, "Lone"), KE_ENTITY_INVALID);
+    EXPECT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    EXPECT_NE(tree->find_node(tree, "Lone", NULL), KE_ENTITY_INVALID);
 }
 
 // ── User component with custom apply ────────────────────────────────────
@@ -298,7 +305,7 @@ TEST_F(SceneLoaderTest, UserComponent_AppliedThroughCustomCallback)
 {
     ke_component_id demo_cid = ecs->component_register(ecs, "demo", sizeof(DemoComp));
     ASSERT_NE(demo_cid, KE_COMPONENT_INVALID);
-    ASSERT_EQ(world->register_component_apply(world, demo_cid, demo_apply, nullptr), KE_OK);
+    ASSERT_TRUE(world->register_component_apply(world, demo_cid, demo_apply, nullptr));
 
     auto p = WriteTempScene(R"(
 [[entity]]
@@ -307,9 +314,9 @@ name = "Test"
 fov = 1.5
 mode = 7
 )");
-    ASSERT_EQ(loader->load(loader, p.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
 
-    ke_entity e = tree->find_node(tree, "Test");
+    ke_entity e = tree->find_node(tree, "Test", NULL);
     ASSERT_NE(e, KE_ENTITY_INVALID);
     auto *d = (DemoComp *)ecs->component_get(ecs, e, demo_cid);
     ASSERT_NE(d, nullptr);
@@ -321,9 +328,7 @@ mode = 7
 
 TEST_F(SceneLoaderTest, Create_RejectsNullArgs)
 {
-    ke_scene_loader_handle l{};
-    EXPECT_EQ(ke_scene_loader_create(nullptr, nullptr, &l, NULL), KE_ERROR);
-    EXPECT_EQ(ke_scene_loader_create(world, nullptr, nullptr, NULL), KE_ERROR);
+    EXPECT_EQ(ke_scene_loader_create(nullptr, nullptr, NULL).ref, nullptr);
 }
 
 TEST_F(SceneLoaderTest, Destroy_NullSelf_IsSafe)

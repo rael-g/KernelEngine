@@ -154,9 +154,9 @@ internal sealed unsafe class AssetLoader : IAssetLoader
         var pathPtr = Marshal.StringToHGlobalAnsi(path);
         try
         {
-            ke_model_data* data;
-            KernelException.ThrowIfFailed(
-                _native->load_model(_native, (sbyte*)pathPtr, &data, null).ToManaged());
+            ke_error* err = null;
+            ke_model_data* data = _native->load_model(_native, (sbyte*)pathPtr, &err);
+            if (data == null) throw KernelError.FromNative(err, "load_model");
             return new ModelData(_native, data);
         }
         finally
@@ -189,7 +189,7 @@ internal sealed unsafe class AssetLoader : IAssetLoader
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void NativeLoadCompleteCallback(
-        ke_result result,
+        ke_error* error,
         ke_model_data* data,
         void* userData)
     {
@@ -197,10 +197,10 @@ internal sealed unsafe class AssetLoader : IAssetLoader
         var (loaderPtr, tcs) = ((nint, TaskCompletionSource<IModel>))handle.Target!;
         handle.Free();
 
-        if (result == ke_result.KE_OK)
+        if (error == null && data != null)
             tcs.TrySetResult(new ModelData((ke_asset_loader*)loaderPtr, data));
         else
-            tcs.TrySetException(new KernelException(result.ToManaged()));
+            tcs.TrySetException(KernelError.FromNative(error, "load_model_async"));
     }
 
     public void Dispose()

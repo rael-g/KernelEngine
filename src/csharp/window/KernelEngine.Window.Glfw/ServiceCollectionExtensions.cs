@@ -62,9 +62,9 @@ public static class ServiceCollectionExtensions
                 fullscreen = opts.Fullscreen,
             };
 
-            ke_window_handle handle;
-            KernelException.ThrowIfFailed(
-                KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &handle, null).ToManaged());
+            ke_error* err = null;
+            var handle = KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &err);
+            if (handle.@ref == null) throw KernelError.FromNative(err, "window_glfw_create");
             return new KernelEngine.Kernel.Window(handle);
         }
         finally

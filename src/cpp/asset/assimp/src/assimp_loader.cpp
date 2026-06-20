@@ -22,8 +22,8 @@ AssimpLoader::AssimpLoader(const ke_asset_loader_assimp_params *params)
     : logger_(params->logger)
 {
     api_.handle     = this;
-    api_.load_model = [](ke_asset_loader *self, const char *path, ke_model_data **out, ke_error **out_error) {
-        return static_cast<AssimpLoader *>(self->handle)->LoadModel(path, out, out_error);
+    api_.load_model = [](ke_asset_loader *self, const char *path, ke_error **out_error) -> ke_model_data * {
+        return static_cast<AssimpLoader *>(self->handle)->LoadModel(path, out_error);
     };
     api_.free_model = [](ke_asset_loader *self, ke_model_data *data) {
         static_cast<AssimpLoader *>(self->handle)->FreeModel(data);
@@ -50,9 +50,13 @@ void AssimpLoader::DestroyApi(ke_asset_loader *self)
     ke_free(l);
 }
 
-ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_error **out_error)
+ke_model_data *AssimpLoader::LoadModel(const char *path, ke_error **out_error)
 {
-    if (!path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!path)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return nullptr;
+    }
 
     Assimp::Importer importer;
     importer.SetPropertyInteger(AI_CONFIG_PP_SLM_VERTEX_LIMIT, 65534);
@@ -68,8 +72,9 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_erro
 
     if (!scene || !scene->mRootNode || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE))
     {
-        LogErr(logger_, KE_ERROR, "LoadModel", importer.GetErrorString());
-        return KE_ERROR_SET(out_error, &KE_ERROR_IO, importer.GetErrorString());
+        LogErr(logger_, false, "LoadModel", importer.GetErrorString());
+        KE_ERROR_SET(out_error, &KE_ERROR_IO, importer.GetErrorString());
+        return nullptr;
     }
 
     std::string dir = Converter::GetDirectory(path);
@@ -148,7 +153,11 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_erro
 
     // ── Final Model Allocation ──────────────────────────────────────────────
     ke_model_data *model = (ke_model_data *)ke_alloc(sizeof(ke_model_data), alignof(ke_model_data));
-    if (!model) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "model allocation failed");
+    if (!model)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "model allocation failed");
+        return nullptr;
+    }
 
     model->mesh_count = mesh_count;
     model->material_count = mat_count;
@@ -162,9 +171,8 @@ ke_result AssimpLoader::LoadModel(const char *path, ke_model_data **out, ke_erro
     if (mat_count) memcpy(model->materials, mats.data(), sizeof(ke_material_data) * mat_count);
     if (tex_count) memcpy(model->textures, texs.data(), sizeof(ke_texture_data) * tex_count);
 
-    *out = model;
     log_info(logger_, "Model loaded successfully");
-    return KE_OK;
+    return model;
 }
 
 ke_task *AssimpLoader::LoadModelAsync(ke_scheduler *scheduler,
@@ -185,7 +193,7 @@ ke_task *AssimpLoader::LoadModelAsync(ke_scheduler *scheduler,
     auto *ctx = static_cast<AsyncCtx *>(
         ke_alloc(sizeof(AsyncCtx), alignof(AsyncCtx)));
     if (!ctx) {
-        on_complete(KE_ERROR, nullptr, user_data);
+        on_complete(false, nullptr, user_data);
         return nullptr;
     }
 
@@ -193,7 +201,7 @@ ke_task *AssimpLoader::LoadModelAsync(ke_scheduler *scheduler,
     char *path_buf = static_cast<char *>(ke_alloc(path_copy.size() + 1, 1));
     if (!path_buf) {
         ke_free(ctx);
-        on_complete(KE_ERROR, nullptr, user_data);
+        on_complete(false, nullptr, user_data);
         return nullptr;
     }
     memcpy(path_buf, path_copy.c_str(), path_copy.size() + 1);
@@ -206,9 +214,10 @@ ke_task *AssimpLoader::LoadModelAsync(ke_scheduler *scheduler,
     return scheduler->dispatch(scheduler,
         [](void *data) {
             auto *c = static_cast<AsyncCtx *>(data);
-            ke_model_data *model = nullptr;
-            ke_result result = c->self->LoadModel(c->path, &model);
-            c->on_complete(result, model, c->user_data);
+            ke_model_data *model = c->self->LoadModel(c->path);
+            static const ke_error_type s_load_fail_type = { "ke.asset.assimp.load_failed", &KE_ERROR_IO };
+            static const ke_error s_load_fail = { &s_load_fail_type, "model load failed", nullptr, 0, nullptr };
+            c->on_complete(model != nullptr ? nullptr : &s_load_fail, model, c->user_data);
             ke_free(c->path);
             ke_free(c);
         },
@@ -232,16 +241,21 @@ void AssimpLoader::FreeModel(ke_model_data *data)
 
 } // namespace kernel_engine::asset::assimp
 
-extern "C" KE_ASSET_ASSIMP_API ke_result
+extern "C" KE_ASSET_ASSIMP_API ke_asset_loader_handle
 ke_asset_loader_assimp_create(const ke_asset_loader_assimp_params *params,
-                               ke_asset_loader_handle *out,
                                ke_error **out_error)
 {
-    if (!params || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!params)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return {nullptr, nullptr};
+    }
     void *mem = ke_alloc(sizeof(kernel_engine::asset::assimp::AssimpLoader), alignof(kernel_engine::asset::assimp::AssimpLoader));
-    if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed");
+    if (!mem)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "loader allocation failed");
+        return {nullptr, nullptr};
+    }
     auto *loader = new (mem) kernel_engine::asset::assimp::AssimpLoader(params);
-    out->ref     = loader->ToApi();
-    out->destroy = &kernel_engine::asset::assimp::AssimpLoader::DestroyApi;
-    return KE_OK;
+    return {loader->ToApi(), &kernel_engine::asset::assimp::AssimpLoader::DestroyApi};
 }

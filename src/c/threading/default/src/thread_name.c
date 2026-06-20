@@ -1,4 +1,4 @@
-#include <kernel_engine/threading/thread_name.h>
+﻿#include <kernel_engine/threading/thread_name.h>
 #include <kernel_engine/common/error.h>
 
 #include <stdio.h>
@@ -23,7 +23,7 @@ const char *ke_thread_get_current_name(void)
     return tls_thread_name;
 }
 
-ke_result ke_thread_check_current(const char *expected_name)
+bool ke_thread_check_current(const char *expected_name)
 {
     const char *actual = tls_thread_name ? tls_thread_name : "(unnamed)";
     if (!tls_thread_name || strcmp(tls_thread_name, expected_name) != 0)
@@ -31,7 +31,8 @@ ke_result ke_thread_check_current(const char *expected_name)
         char msg[256];
         snprintf(msg, sizeof(msg),
                  "wrong thread: expected '%s', got '%s'", expected_name, actual);
-        return ke_error_set(NULL, &KE_ERROR_INVALID_ARGUMENT, msg, __FILE__, __LINE__, NULL);
+        ke_error_set(NULL, &KE_ERROR_INVALID_ARGUMENT, msg, __FILE__, __LINE__, NULL);
+        return false;
     }
-    return KE_OK;
+    return true;
 }

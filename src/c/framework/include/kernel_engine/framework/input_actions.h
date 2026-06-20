@@ -42,29 +42,29 @@ extern "C"
     {
         void *handle;
 
-        ke_result (*load)(struct ke_input_actions *self, const char *path, ke_error **out_error);
+        bool (*load)(struct ke_input_actions *self, const char *path, ke_error **out_error);
 
         int32_t (*get_action_id)(struct ke_input_actions *self, const char *name);
 
         int32_t (*add_action)(struct ke_input_actions *self, const char *name,
                               ke_action_type type);
 
-        ke_result (*bind_key)(struct ke_input_actions *self, int32_t action_id, ke_key key, ke_error **out_error);
+        bool (*bind_key)(struct ke_input_actions *self, int32_t action_id, ke_key key, ke_error **out_error);
 
-        ke_result (*bind_mouse_button)(struct ke_input_actions *self, int32_t action_id,
-                                        ke_mouse_button button, ke_error **out_error);
+        bool (*bind_mouse_button)(struct ke_input_actions *self, int32_t action_id,
+                                  ke_mouse_button button, ke_error **out_error);
 
-        ke_result (*bind_key_pair)(struct ke_input_actions *self, int32_t action_id,
-                                    ke_key negative, ke_key positive, ke_error **out_error);
+        bool (*bind_key_pair)(struct ke_input_actions *self, int32_t action_id,
+                              ke_key negative, ke_key positive, ke_error **out_error);
 
-        ke_result (*bind_key_quad)(struct ke_input_actions *self, int32_t action_id,
-                                    ke_key up, ke_key down, ke_key left, ke_key right, ke_error **out_error);
+        bool (*bind_key_quad)(struct ke_input_actions *self, int32_t action_id,
+                              ke_key up, ke_key down, ke_key left, ke_key right, ke_error **out_error);
 
-        ke_result (*evaluate)(struct ke_input_actions *self,
-                               const ke_input_snapshot    *snapshot,
-                               ke_input_action_event_func  on_event,
-                               void                       *event_ctx,
-                               ke_error                  **out_error);
+        bool (*evaluate)(struct ke_input_actions *self,
+                         const ke_input_snapshot    *snapshot,
+                         ke_input_action_event_func  on_event,
+                         void                       *event_ctx,
+                         ke_error                  **out_error);
 
         bool  (*is_action_down)(struct ke_input_actions *self, int32_t action_id);
         bool  (*was_action_pressed)(struct ke_input_actions *self, int32_t action_id);

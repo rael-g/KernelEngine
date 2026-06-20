@@ -79,8 +79,9 @@ public sealed unsafe class World : IDisposable, INativeWorld
         var fnPtr = (delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>)
             Marshal.GetFunctionPointerForDelegate(del).ToPointer();
 
-        KernelException.ThrowIfFailed(
-            _native->register_component_apply(_native, cid, fnPtr, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(
+            _native->register_component_apply(_native, cid, fnPtr, &err), err, "register_component_apply");
     }
 
     private uint _scenePropertiesCid;

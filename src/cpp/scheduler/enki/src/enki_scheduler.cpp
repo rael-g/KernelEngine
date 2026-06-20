@@ -161,16 +161,15 @@ void EnkiScheduler::DestroyApi(ke_scheduler* self) {
 } // namespace kernel_engine::scheduler::enki
 
 extern "C" {
-    ke_result ke_scheduler_enki_create(ke_scheduler_handle *out_scheduler, ke_error **out_error) {
-        if (!out_scheduler) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-
+    ke_scheduler_handle ke_scheduler_enki_create(ke_error **out_error) {
         void* mem = ke_alloc(sizeof(kernel_engine::scheduler::enki::EnkiScheduler), alignof(kernel_engine::scheduler::enki::EnkiScheduler));
-        if (!mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocation failed");
+        if (!mem)
+        {
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "allocation failed");
+            return {nullptr, nullptr};
+        }
 
         auto* internal = new (mem) kernel_engine::scheduler::enki::EnkiScheduler();
-        out_scheduler->ref     = internal->ToApi();
-        out_scheduler->destroy = &kernel_engine::scheduler::enki::EnkiScheduler::DestroyApi;
-
-        return KE_OK;
+        return {internal->ToApi(), &kernel_engine::scheduler::enki::EnkiScheduler::DestroyApi};
     }
 }

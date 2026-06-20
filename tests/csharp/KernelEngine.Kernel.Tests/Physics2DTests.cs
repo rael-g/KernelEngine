@@ -15,7 +15,7 @@ public class Physics2DTests
     private static float LastAngle = 0;
     private static Vector2 LastVelocity = Vector2.Zero;
     private static Vector2 LastImpulse = Vector2.Zero;
-    private static ke_result LastResult = ke_result.KE_OK;
+    private static bool LastResult = true;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
     private static unsafe void MockSetGravity(ke_physics_2d* self, float x, float y)
@@ -30,12 +30,11 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockCreateBody(ke_physics_2d* self, ke_body_type_2d type, float x, float y, uint* outId, ke_error** out_error)
+    private static unsafe uint MockCreateBody(ke_physics_2d* self, ke_body_type_2d type, float x, float y, ke_error** out_error)
     {
         LastBodyType = type;
         LastPosition = new Vector2(x, y);
-        *outId = 42;
-        return LastResult;
+        return LastResult ? 42u : 0u;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -45,17 +44,17 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float d, float f, float r, ke_error** out_error)
+    private static unsafe bool MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float d, float f, float r, ke_error** out_error)
     {
         LastBodyId = id;
-        return ke_result.KE_OK;
+        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float d, float f, float r, ke_error** out_error)
+    private static unsafe bool MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float d, float f, float r, ke_error** out_error)
     {
         LastBodyId = id;
-        return ke_result.KE_OK;
+        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -186,10 +185,10 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         var physics = new Physics2D(h);
-        LastResult = ke_result.KE_ERROR;
+        LastResult = false;
         var handle = physics.CreateBody(BodyType2D.Dynamic, new Vector2(1, 2));
         Assert.Equal(BodyHandle2D.None, handle);
-        LastResult = ke_result.KE_OK;
+        LastResult = true;
         NativeMemory.Free(h.@ref);
     }
 

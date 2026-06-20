@@ -1,4 +1,4 @@
-﻿#include <gtest/gtest.h>
+#include <gtest/gtest.h>
 #include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.h>
 #include <kernel_engine/render/render.h>
 
@@ -12,7 +12,7 @@ protected:
             .logger = nullptr,
             .shaderc_path = "invalid_shaderc_executable"
         };
-        ke_shader_compiler_bgfx_create(&params, &compiler_h);
+        compiler_h = ke_shader_compiler_bgfx_create(&params);
         compiler = compiler_h.ref;
     }
 
@@ -23,19 +23,15 @@ protected:
 
 // --- Creation Tests ---
 
-TEST(ShaderCompilerInitTest, Create_NullOut_ReturnsInvalidArgument) {
-    ASSERT_EQ(ke_shader_compiler_bgfx_create(nullptr, nullptr), KE_ERROR);
+TEST(ShaderCompilerInitTest, Create_NullParams_ReturnsNull) {
+    ke_shader_compiler_handle c = ke_shader_compiler_bgfx_create(nullptr);
+    ASSERT_EQ(c.ref, nullptr);
 }
 
-TEST(ShaderCompilerInitTest, Create_NullParams_ReturnsInvalidArgument) {
-    ke_shader_compiler_handle c{};
-    ASSERT_EQ(ke_shader_compiler_bgfx_create(nullptr, &c), KE_ERROR);
-}
-
-TEST(ShaderCompilerInitTest, Create_NullParams_Fields_ReturnsError) {
-    ke_shader_compiler_handle c{};
+TEST(ShaderCompilerInitTest, Create_NullShadercPath_ReturnsNull) {
     ke_shader_compiler_bgfx_params params = { nullptr, nullptr };
-    ASSERT_EQ(ke_shader_compiler_bgfx_create(&params, &c), KE_ERROR);
+    ke_shader_compiler_handle c = ke_shader_compiler_bgfx_create(&params);
+    ASSERT_EQ(c.ref, nullptr);
 }
 
 // --- Lifecycle Tests ---
@@ -49,33 +45,31 @@ TEST_F(ShaderCompilerTest, Handle_IsSet) {
 }
 
 TEST_F(ShaderCompilerTest, OnInitialize_ReturnsOk) {
-    ASSERT_EQ(compiler->on_initialize(compiler, NULL), KE_OK);
+    ASSERT_TRUE(compiler->on_initialize(compiler, NULL));
 }
 
 TEST_F(ShaderCompilerTest, OnShutdown_ReturnsOk) {
-    ASSERT_EQ(compiler->on_shutdown(compiler, NULL), KE_OK);
+    ASSERT_TRUE(compiler->on_shutdown(compiler, NULL));
 }
 
 // --- Compilation Tests ---
 
-TEST_F(ShaderCompilerTest, Compile_InvalidBinary_ReturnsRenderError) {
+TEST_F(ShaderCompilerTest, Compile_InvalidBinary_ReturnsError) {
     // system() will fail to find 'invalid_shaderc_executable'
-    ke_result res = compiler->compile_shader(compiler, "test.vert", "varying.def", "v", "windows", "vs_5_0", nullptr, 0, nullptr);
-    ASSERT_EQ(res, KE_ERROR);
+    bool ok = compiler->compile_shader(compiler, "test.vert", "varying.def", "v", "windows", "vs_5_0", nullptr, 0, nullptr);
+    ASSERT_FALSE(ok);
 }
 
-TEST(ShaderCompilerEmptyTest, Create_NullShadercPath_ReturnsError) {
+TEST(ShaderCompilerEmptyTest, Create_NullShadercPath_ReturnsNull) {
     ke_shader_compiler_bgfx_params params = { nullptr, nullptr };
-    ke_shader_compiler_handle ch{};
-    ASSERT_EQ(ke_shader_compiler_bgfx_create(&params, &ch), KE_ERROR);
+    ke_shader_compiler_handle ch = ke_shader_compiler_bgfx_create(&params);
     ASSERT_EQ(ch.ref, nullptr);
 }
 
 TEST_F(ShaderCompilerTest, Compile_WithIncludes_DoesNotCrash) {
     const char* includes[] = { "inc1", "inc2" };
-    // Should still return KE_ERROR because binary is invalid, but tests the include loop
-    ke_result res = compiler->compile_shader(compiler, "test.vert", "varying.def", "v", "windows", "vs_5_0", includes, 2, nullptr);
-    ASSERT_EQ(res, KE_ERROR);
+    bool ok = compiler->compile_shader(compiler, "test.vert", "varying.def", "v", "windows", "vs_5_0", includes, 2, nullptr);
+    ASSERT_FALSE(ok);
 }
 
 // --- Destroy Tests ---

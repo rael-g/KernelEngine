@@ -5,7 +5,7 @@ namespace KernelEngine.Kernel.Tests;
 
 public class AudioTests
 {
-    private static ke_result LastResult = ke_result.KE_OK;
+    private static bool LastResult = true;
     private static uint LastSoundId = 0;
     private static float LastVolume = 0;
     private static byte LastLoop = 0;
@@ -13,11 +13,10 @@ public class AudioTests
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockLoadSound(ke_audio* self, sbyte* path, uint* outId, ke_error** out_error)
+    private static unsafe uint MockLoadSound(ke_audio* self, sbyte* path, ke_error** out_error)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
-        *outId = 42;
-        return LastResult;
+        return LastResult ? 42u : 0u;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -27,12 +26,12 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockPlay(ke_audio* self, uint soundId, float volume, byte loop, ke_error** out_error)
+    private static unsafe bool MockPlay(ke_audio* self, uint soundId, float volume, byte loop, ke_error** out_error)
     {
         LastSoundId = soundId;
         LastVolume = volume;
         LastLoop = loop;
-        return ke_result.KE_OK;
+        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -89,12 +88,12 @@ public class AudioTests
     {
         var h = CreateMockHandle();
         var audio = new Audio(h);
-        LastResult = ke_result.KE_ERROR;
+        LastResult = false;
 
         var handle = audio.LoadSound("test.wav");
 
         Assert.Equal(SoundHandle.None, handle);
-        LastResult = ke_result.KE_OK;
+        LastResult = true;
         NativeMemory.Free(h.@ref);
     }
 

@@ -6,12 +6,12 @@ public unsafe partial struct ke_shader_compiler
 {
     public void* handle;
 
-    [NativeTypeName("ke_result (*)(struct ke_shader_compiler *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_shader_compiler*, ke_error**, ke_result> on_initialize;
+    [NativeTypeName("bool (*)(struct ke_shader_compiler *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_shader_compiler*, ke_error**, bool> on_initialize;
 
-    [NativeTypeName("ke_result (*)(struct ke_shader_compiler *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_shader_compiler*, ke_error**, ke_result> on_shutdown;
+    [NativeTypeName("bool (*)(struct ke_shader_compiler *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_shader_compiler*, ke_error**, bool> on_shutdown;
 
-    [NativeTypeName("ke_result (*)(struct ke_shader_compiler *, const char *, const char *, const char *, const char *, const char *, const char **, size_t, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_shader_compiler*, sbyte*, sbyte*, sbyte*, sbyte*, sbyte*, sbyte**, nuint, ke_error**, ke_result> compile_shader;
+    [NativeTypeName("bool (*)(struct ke_shader_compiler *, const char *, const char *, const char *, const char *, const char *, const char **, size_t, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_shader_compiler*, sbyte*, sbyte*, sbyte*, sbyte*, sbyte*, sbyte**, nuint, ke_error**, bool> compile_shader;
 }

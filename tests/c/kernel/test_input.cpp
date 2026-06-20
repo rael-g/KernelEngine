@@ -7,8 +7,8 @@ protected:
     ke_input* input = nullptr;
 
     void SetUp() override {
-        ke_result res = ke_input_create(nullptr, &input_h, NULL);
-        ASSERT_EQ(res, KE_OK);
+        input_h = ke_input_create(nullptr, NULL);
+        ASSERT_NE(input_h.ref, nullptr);
         input = input_h.ref;
     }
 
@@ -19,15 +19,16 @@ protected:
 
 // --- Creation Tests ---
 
-TEST(InputInitTest, Create_NullOutInput_ReturnsInvalidArgument) {
-    ASSERT_EQ(ke_input_create(nullptr, nullptr, NULL), KE_ERROR);
+TEST(InputInitTest, Create_ReturnsValidHandle) {
+    ke_input_handle h = ke_input_create(nullptr, NULL);
+    ASSERT_NE(h.ref, nullptr);
+    h.destroy(h.ref);
 }
 
 // --- Destroy Tests ---
 
 TEST(InputDestroyTest, Destroy_NullInput_DoesNotCrash) {
-    ke_input_handle i{};
-    ke_input_create(nullptr, &i, NULL);
+    ke_input_handle i = ke_input_create(nullptr, NULL);
     auto destroy_fn = i.destroy;
     i.destroy(i.ref);
     destroy_fn(nullptr);
@@ -43,9 +44,9 @@ TEST_F(InputTest, Destroy_WorksNormally) {
 
 // --- Update and State Tests ---
 
-TEST_F(InputTest, Update_NullSelf_ReturnsInvalidArgument) {
+TEST_F(InputTest, Update_NullSelf_ReturnsFalse) {
     auto update_fn = input->update;
-    ASSERT_EQ(update_fn(nullptr, nullptr), KE_ERROR);
+    ASSERT_FALSE(update_fn(nullptr, nullptr));
 }
 
 TEST_F(InputTest, KeyPressed_IsDetected) {

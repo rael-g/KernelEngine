@@ -12,8 +12,8 @@ extern "C"
 {
 #endif
 
-    typedef ke_result (*ke_script_factory_func)(void *ctx, ke_entity entity,
-                                                const char *type_name);
+    typedef bool (*ke_script_factory_func)(void *ctx, ke_entity entity,
+                                           const char *type_name, ke_error **out_error);
 
     typedef struct ke_scene_properties
     {
@@ -27,11 +27,11 @@ extern "C"
     {
         void *handle;
 
-        ke_result (*load)(struct ke_scene_loader *self, const char *path, ke_error **out_error);
+        bool (*load)(struct ke_scene_loader *self, const char *path, ke_error **out_error);
 
-        ke_result (*register_script_factory)(struct ke_scene_loader *self,
-                                              ke_script_factory_func factory,
-                                              void *ctx, ke_error **out_error);
+        bool (*register_script_factory)(struct ke_scene_loader *self,
+                                        ke_script_factory_func factory,
+                                        void *ctx, ke_error **out_error);
 
     } ke_scene_loader;
 

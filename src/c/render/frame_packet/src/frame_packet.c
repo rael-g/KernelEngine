@@ -8,16 +8,16 @@
 // Padding before the public ke_frame_packet for alignment purposes.
 #define FP_PRIV_SIZE alignof(ke_frame_packet)
 
-ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
+bool ke_frame_packet_create(const ke_frame_packet_params *params,
                                  ke_frame_packet **out_packet,
                                  ke_error **out_error)
 {
-    if (!params || !out_packet) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!params || !out_packet) { KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument"); return false; }
 
     // Allocate [padding | ke_frame_packet] in one block.
     size_t block = FP_PRIV_SIZE + sizeof(ke_frame_packet);
     void *mem = ke_alloc(block, alignof(ke_frame_packet));
-    if (!mem) return KE_ERROR;
+    if (!mem) return false;
     memset(mem, 0, block);
 
     ke_frame_packet *p = (ke_frame_packet *)((char *)mem + FP_PRIV_SIZE);
@@ -57,11 +57,12 @@ ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
     }
 
     *out_packet = p;
-    return KE_OK;
+    return true;
 
 fail:
     ke_frame_packet_destroy(p);
-    return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "sub-buffer allocation failed");
+    KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "sub-buffer allocation failed");
+    return false;
 }
 
 void ke_frame_packet_destroy(ke_frame_packet *packet)

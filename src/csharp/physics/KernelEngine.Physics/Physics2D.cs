@@ -34,9 +34,8 @@ public sealed unsafe class Physics2D : IPhysics2D
     public BodyHandle2D CreateBody(BodyType2D type, Vector2 position)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        uint id;
-        var res = _native->create_body(_native, (ke_body_type_2d)(int)type, position.X, position.Y, &id, null).ToManaged();
-        return res == KernelResult.Ok ? new BodyHandle2D(id) : BodyHandle2D.None;
+        uint id = _native->create_body(_native, (ke_body_type_2d)(int)type, position.X, position.Y, null);
+        return id != 0 ? new BodyHandle2D(id) : BodyHandle2D.None;
     }
 
     public void DestroyBody(BodyHandle2D body)

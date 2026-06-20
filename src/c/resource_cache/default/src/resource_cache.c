@@ -59,14 +59,14 @@ typedef struct rc_state {
 
 // ── Table ops ───────────────────────────────────────────────────────────────
 
-static ke_result table_init(table *t, size_t initial_capacity) {
+static bool table_init(table *t, size_t initial_capacity) {
     t->capacity  = initial_capacity;
     t->occupied  = 0;
     t->active    = 0;
     t->slots = (slot *)ke_alloc(initial_capacity * sizeof(slot), alignof(slot));
-    if (!t->slots) return KE_ERROR;
+    if (!t->slots) return false;
     memset(t->slots, 0, initial_capacity * sizeof(slot));
-    return KE_OK;
+    return true;
 }
 
 static void table_destroy(table *t) {
@@ -100,18 +100,18 @@ static size_t table_probe(const table *t, uint64_t key, bool *out_found) {
     return (first_tombstone != SIZE_MAX) ? first_tombstone : 0;
 }
 
-static ke_result table_rehash(table *t, size_t new_capacity);
+static bool table_rehash(table *t, size_t new_capacity);
 
-static ke_result table_reserve(table *t) {
-    if ((t->occupied + 1) * 10 < t->capacity * 7) return KE_OK;
+static bool table_reserve(table *t) {
+    if ((t->occupied + 1) * 10 < t->capacity * 7) return true;
     return table_rehash(t, t->capacity * 2);
 }
 
-static ke_result table_rehash(table *t, size_t new_capacity) {
+static bool table_rehash(table *t, size_t new_capacity) {
     slot *old_slots = t->slots;
     size_t old_cap  = t->capacity;
     slot *new_slots = (slot *)ke_alloc(new_capacity * sizeof(slot), alignof(slot));
-    if (!new_slots) return KE_ERROR;
+    if (!new_slots) return false;
     memset(new_slots, 0, new_capacity * sizeof(slot));
 
     t->slots = new_slots;
@@ -129,7 +129,7 @@ static ke_result table_rehash(table *t, size_t new_capacity) {
         t->active++;
     }
     ke_free(old_slots);
-    return KE_OK;
+    return true;
 }
 
 static uint64_t key_from_handle(ke_resource_handle h) {
@@ -145,34 +145,49 @@ static uint64_t key_from_path(const char *path) {
 
 // ── vtable: lifetime ────────────────────────────────────────────────────────
 
-static ke_result vt_register(ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error) {
-    if (!self || handle == KE_RESOURCE_HANDLE_NONE) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+static bool vt_register(ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error) {
+    if (!self || handle == KE_RESOURCE_HANDLE_NONE)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     rc_state *s = (rc_state *)self->handle;
 
-    ke_result rc = table_reserve(&s->resources);
-    if (rc != KE_OK) return rc;
+    if (!table_reserve(&s->resources)) return false;
 
     bool found = false;
     uint64_t key = key_from_handle(handle);
     size_t idx = table_probe(&s->resources, key, &found);
-    if (found) return KE_ERROR_SET(out_error, &KE_ERROR_ALREADY_EXISTS, "handle already registered");
+    if (found)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_ALREADY_EXISTS, "handle already registered");
+        return false;
+    }
 
     if (s->resources.slots[idx].key == RC_EMPTY) s->resources.occupied++;
     s->resources.active++;
     s->resources.slots[idx].key      = key;
     s->resources.slots[idx].refcount = 1;
     s->resources.slots[idx].handle   = handle;
-    return KE_OK;
+    return true;
 }
 
-static ke_result vt_retain(ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error) {
-    if (!self || handle == KE_RESOURCE_HANDLE_NONE) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+static bool vt_retain(ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error) {
+    if (!self || handle == KE_RESOURCE_HANDLE_NONE)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     rc_state *s = (rc_state *)self->handle;
     bool found = false;
     size_t idx = table_probe(&s->resources, key_from_handle(handle), &found);
-    if (!found) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "handle not found");
+    if (!found)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "handle not found");
+        return false;
+    }
     s->resources.slots[idx].refcount++;
-    return KE_OK;
+    return true;
 }
 
 // Walks the path table and tombstones any entry pointing at `handle`. Called
@@ -187,17 +202,29 @@ static void evict_paths_for_handle(rc_state *s, ke_resource_handle handle) {
     }
 }
 
-static ke_result vt_release(ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error) {
-    if (!self || handle == KE_RESOURCE_HANDLE_NONE) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+static bool vt_release(ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error) {
+    if (!self || handle == KE_RESOURCE_HANDLE_NONE)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     rc_state *s = (rc_state *)self->handle;
     bool found = false;
     size_t idx = table_probe(&s->resources, key_from_handle(handle), &found);
-    if (!found) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "handle not found");
+    if (!found)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "handle not found");
+        return false;
+    }
 
     slot *slot_ref = &s->resources.slots[idx];
-    if (slot_ref->refcount == 0) return KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "refcount is already zero");
+    if (slot_ref->refcount == 0)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "refcount is already zero");
+        return false;
+    }
     slot_ref->refcount--;
-    if (slot_ref->refcount > 0) return KE_OK;
+    if (slot_ref->refcount > 0) return true;
 
     slot_ref->key = RC_TOMBSTONE;
     slot_ref->refcount = 0;
@@ -206,7 +233,7 @@ static ke_result vt_release(ke_resource_cache *self, ke_resource_handle handle, 
     evict_paths_for_handle(s, handle);
 
     if (s->destroy_fn) s->destroy_fn(handle, s->destroy_ctx);
-    return KE_OK;
+    return true;
 }
 
 // ── vtable: path cache ──────────────────────────────────────────────────────
@@ -221,7 +248,7 @@ static bool vt_try_get_cached(ke_resource_cache *self, const char *key, ke_resou
     ke_resource_handle h = s->paths.slots[idx].handle;
     // Retain on behalf of caller. If the underlying resource vanished
     // (stale path entry), drop the path entry and report cache miss.
-    if (vt_retain(self, h, NULL) != KE_OK) {
+    if (!vt_retain(self, h, NULL)) {
         s->paths.slots[idx].key = RC_TOMBSTONE;
         s->paths.active--;
         return false;
@@ -230,23 +257,34 @@ static bool vt_try_get_cached(ke_resource_cache *self, const char *key, ke_resou
     return true;
 }
 
-static ke_result vt_cache_insert(ke_resource_cache *self, const char *key, ke_resource_handle handle, ke_error **out_error) {
-    if (!self || !key || handle == KE_RESOURCE_HANDLE_NONE) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+static bool vt_cache_insert(ke_resource_cache *self, const char *key, ke_resource_handle handle, ke_error **out_error) {
+    if (!self || !key || handle == KE_RESOURCE_HANDLE_NONE)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     rc_state *s = (rc_state *)self->handle;
-    ke_result rc = table_reserve(&s->paths);
-    if (rc != KE_OK) return KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "path table rehash failed");
+    if (!table_reserve(&s->paths))
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "path table rehash failed");
+        return false;
+    }
 
     bool found = false;
     uint64_t k = key_from_path(key);
     size_t idx = table_probe(&s->paths, k, &found);
-    if (found) return KE_ERROR_SET(out_error, &KE_ERROR_ALREADY_EXISTS, "key already in cache; call try_get_cached first");
+    if (found)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_ALREADY_EXISTS, "key already in cache; call try_get_cached first");
+        return false;
+    }
 
     if (s->paths.slots[idx].key == RC_EMPTY) s->paths.occupied++;
     s->paths.active++;
     s->paths.slots[idx].key      = k;
     s->paths.slots[idx].refcount = 0;
     s->paths.slots[idx].handle   = handle;
-    return KE_OK;
+    return true;
 }
 
 static void vt_cache_evict(ke_resource_cache *self, const char *key) {
@@ -282,22 +320,38 @@ static void vt_destroy(ke_resource_cache *self) {
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_resource_cache_create(const ke_resource_cache_params *params,
-                                    ke_resource_cache_handle      *out_cache,
-                                    ke_error                      **out_error) {
-    if (!params || !out_cache) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+ke_resource_cache_handle ke_resource_cache_create(const ke_resource_cache_params *params,
+                                                   ke_error                      **out_error) {
+    if (!params)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return (ke_resource_cache_handle){0};
+    }
 
     rc_state *s = (rc_state *)ke_alloc(sizeof(rc_state), alignof(rc_state));
-    if (!s) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+    if (!s)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return (ke_resource_cache_handle){0};
+    }
     memset(s, 0, sizeof(*s));
 
-    s->destroy_fn  = params ? params->destroy_fn  : NULL;
-    s->destroy_ctx = params ? params->destroy_ctx : NULL;
+    s->destroy_fn  = params->destroy_fn;
+    s->destroy_ctx = params->destroy_ctx;
 
-    ke_result rc = table_init(&s->resources, 64);
-    if (rc != KE_OK) { ke_free(s); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "resources table allocation failed"); }
-    rc = table_init(&s->paths, 64);
-    if (rc != KE_OK) { table_destroy(&s->resources); ke_free(s); return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "paths table allocation failed"); }
+    if (!table_init(&s->resources, 64))
+    {
+        ke_free(s);
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "resources table allocation failed");
+        return (ke_resource_cache_handle){0};
+    }
+    if (!table_init(&s->paths, 64))
+    {
+        table_destroy(&s->resources);
+        ke_free(s);
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "paths table allocation failed");
+        return (ke_resource_cache_handle){0};
+    }
 
     s->api.handle            = s;
     s->api.register_resource = vt_register;
@@ -307,7 +361,5 @@ ke_result ke_resource_cache_create(const ke_resource_cache_params *params,
     s->api.cache_insert      = vt_cache_insert;
     s->api.cache_evict       = vt_cache_evict;
 
-    out_cache->ref     = &s->api;
-    out_cache->destroy = vt_destroy;
-    return KE_OK;
+    return (ke_resource_cache_handle){ .ref = &s->api, .destroy = vt_destroy };
 }

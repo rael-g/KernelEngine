@@ -17,13 +17,13 @@ extern "C"
 
         ke_entity (*root)(struct ke_scene_tree *self);
 
-        ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent);
+        ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_error **out_error);
 
-        ke_result (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_error **out_error);
+        bool (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_error **out_error);
 
         void (*destroy_all)(struct ke_scene_tree *self);
 
-        ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path);
+        ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path, ke_error **out_error);
 
         void (*propagate_transforms)(struct ke_scene_tree *self);
 

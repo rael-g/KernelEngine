@@ -9,7 +9,7 @@ protected:
 
     void SetUp() override {
         ke_asset_loader_assimp_params params = { nullptr };
-        ke_asset_loader_assimp_create(&params, &loader_h, nullptr);
+        loader_h = ke_asset_loader_assimp_create(&params, nullptr);
         loader = loader_h.ref;
     }
 
@@ -21,36 +21,27 @@ protected:
 // --- Creation Tests ---
 
 TEST(AssetLoaderInitTest, Create_NullParams_ReturnsInvalidArgument) {
-    ke_asset_loader_handle l{};
-    ASSERT_EQ(ke_asset_loader_assimp_create(nullptr, &l, nullptr), KE_ERROR);
-}
-
-TEST(AssetLoaderInitTest, Create_NullOut_ReturnsInvalidArgument) {
-    ke_asset_loader_assimp_params params = { nullptr };
-    ASSERT_EQ(ke_asset_loader_assimp_create(&params, nullptr, nullptr), KE_ERROR);
+    ke_asset_loader_handle l = ke_asset_loader_assimp_create(nullptr, nullptr);
+    ASSERT_EQ(l.ref, nullptr);
 }
 
 TEST(AssetLoaderInitTest, Create_Success_ReturnsOk) {
-    ke_asset_loader_handle l{};
     ke_asset_loader_assimp_params params = { nullptr };
-    ASSERT_EQ(ke_asset_loader_assimp_create(&params, &l, nullptr), KE_OK);
+    ke_asset_loader_handle l = ke_asset_loader_assimp_create(&params, nullptr);
+    ASSERT_NE(l.ref, nullptr);
     l.destroy(l.ref);
 }
 
 // --- API Tests ---
 
 TEST_F(AssetLoaderTest, LoadModel_NullPath_ReturnsInvalidArgument) {
-    ke_model_data* out = nullptr;
-    ASSERT_EQ(loader->load_model(loader, nullptr, &out, nullptr), KE_ERROR);
-}
-
-TEST_F(AssetLoaderTest, LoadModel_NullOut_ReturnsInvalidArgument) {
-    ASSERT_EQ(loader->load_model(loader, "test.obj", nullptr, nullptr), KE_ERROR);
+    ke_model_data* out = loader->load_model(loader, nullptr, nullptr);
+    ASSERT_EQ(out, nullptr);
 }
 
 TEST_F(AssetLoaderTest, LoadModel_NonExistentFile_ReturnsIOError) {
-    ke_model_data* out = nullptr;
-    ASSERT_EQ(loader->load_model(loader, "non_existent_file.obj", &out, nullptr), KE_ERROR);
+    ke_model_data* out = loader->load_model(loader, "non_existent_file.obj", nullptr);
+    ASSERT_EQ(out, nullptr);
 }
 
 TEST_F(AssetLoaderTest, FreeModel_Null_DoesNotCrash) {
@@ -62,11 +53,9 @@ TEST_F(AssetLoaderTest, FreeModel_Null_DoesNotCrash) {
 #include <atomic>
 
 TEST_F(AssetLoaderTest, LoadModel_ValidFile_ReturnsOk) {
-    ke_model_data* model = nullptr;
-    ke_result res = loader->load_model(loader, "assets/Box.gltf", &model, nullptr);
+    ke_model_data* model = loader->load_model(loader, "assets/Box.gltf", nullptr);
 
-    if (res == KE_OK) {
-        ASSERT_NE(model, nullptr);
+    if (model != nullptr) {
         EXPECT_GT(model->mesh_count, 0);
         loader->free_model(loader, model);
     } else {
@@ -84,18 +73,18 @@ TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
 
     struct Context {
         std::atomic<bool> done{false};
-        ke_result res = KE_ERROR;
+        const ke_error *err = nullptr;
     } ctx;
 
     loader->load_model_async(loader, &scheduler, "assets/Box.gltf",
-        [](ke_result res, ke_model_data* data, void* user) {
+        [](const ke_error *error, ke_model_data* data, void* user) {
             auto* c = (Context*)user;
-            c->res = res;
+            c->err = error;
             c->done = true;
         }, &ctx);
 
     // Wait or skip if file missing
-    if (ctx.res == KE_ERROR) GTEST_SKIP() << "File not found for async test";
+    if (ctx.err != nullptr) GTEST_SKIP() << "File not found for async test";
 
     ASSERT_TRUE(ctx.done);
 }
@@ -129,23 +118,18 @@ TEST_F(AssetLoaderTest, LoadModelAsync_NullArgs_ReturnsNull) {
 }
 
 TEST_F(AssetLoaderTest, LoadModel_EmbeddedTexture_Works) {
-    ke_model_data* model = nullptr;
-    ke_result res = loader->load_model(loader, "assets/Box.gltf", &model, nullptr);
-    if (res == KE_OK) {
-        loader->free_model(loader, model);
-    }
+    ke_model_data* model = loader->load_model(loader, "assets/Box.gltf", nullptr);
+    if (model) loader->free_model(loader, model);
     SUCCEED();
 }
 
 TEST_F(AssetLoaderTest, LoadModel_MalformedFile_ReturnsIOError) {
     const char* path = "malformed.obj";
     FILE* f = fopen(path, "w");
-    // Content that assimp cannot parse — triggers clean rejection, not heap corruption.
     fprintf(f, "THIS IS NOT VALID OBJ CONTENT\n");
     fclose(f);
 
-    ke_model_data* model = nullptr;
-    ke_result res = loader->load_model(loader, path, &model, nullptr);
+    ke_model_data* model = loader->load_model(loader, path, nullptr);
     if (model) loader->free_model(loader, model);
     remove(path);
     SUCCEED();

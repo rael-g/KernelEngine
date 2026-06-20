@@ -22,10 +22,10 @@ extern "C"
                                                const char    *name,
                                                size_t         element_size);
 
-        ke_result (*component_lookup)(struct ke_ecs     *self,
-                                      const char        *name,
-                                      ke_component_meta *out_meta,
-                                      ke_error         **out_error);
+        bool (*component_lookup)(struct ke_ecs     *self,
+                                 const char        *name,
+                                 ke_component_meta *out_meta,
+                                 ke_error         **out_error);
 
         void *(*component_add)(struct ke_ecs *self,
                                ke_entity      entity,

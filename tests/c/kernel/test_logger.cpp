@@ -28,8 +28,8 @@ protected:
     ke_logger* logger = nullptr;
 
     void SetUp() override {
-        ke_result res = ke_logger_create(&logger_h, NULL);
-        ASSERT_EQ(res, KE_OK);
+        logger_h = ke_logger_create(NULL);
+        ASSERT_NE(logger_h.ref, nullptr);
         logger = logger_h.ref;
     }
 
@@ -40,8 +40,10 @@ protected:
 
 // --- Creation Tests ---
 
-TEST(LoggerInitTest, Create_NullOutLogger_ReturnsInvalidArgument) {
-    ASSERT_EQ(ke_logger_create(nullptr, NULL), KE_ERROR);
+TEST(LoggerInitTest, Create_ReturnsValidHandle) {
+    ke_logger_handle h = ke_logger_create(NULL);
+    ASSERT_NE(h.ref, nullptr);
+    h.destroy(h.ref);
 }
 
 // --- Destroy Tests ---
@@ -75,10 +77,10 @@ TEST_F(LoggerTest, Log_NullEvent_DoesNotCrash) {
     SUCCEED();
 }
 
-TEST_F(LoggerTest, AddSink_NullSelf_ReturnsInvalidArgument) {
+TEST_F(LoggerTest, AddSink_NullSelf_ReturnsFalse) {
     ke_logger_sink sink = test_console_sink(KE_LOG_LEVEL_INFO);
     auto add_sink_fn = logger->add_sink;
-    ASSERT_EQ(add_sink_fn(nullptr, sink, nullptr), KE_ERROR);
+    ASSERT_FALSE(add_sink_fn(nullptr, sink, nullptr));
 }
 
 static void mock_sink_log(ke_logger_sink* self, const ke_log_event* event) {

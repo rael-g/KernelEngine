@@ -9,7 +9,7 @@ struct aiTexture;
 namespace kernel_engine::asset::assimp::TextureDecoder
 {
 
-ke_result DecodeExternal(const std::string& path, ke_logger* logger, ke_texture_data* out_data);
-ke_result DecodeEmbedded(const aiTexture* embedded, ke_logger* logger, ke_texture_data* out_data);
+bool DecodeExternal(const std::string& path, ke_logger* logger, ke_texture_data* out_data);
+bool DecodeEmbedded(const aiTexture* embedded, ke_logger* logger, ke_texture_data* out_data);
 
 } // namespace kernel_engine::asset::assimp::TextureDecoder

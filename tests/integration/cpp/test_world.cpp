@@ -18,13 +18,16 @@ struct WorldFixture {
     ke_world          *world          = nullptr;
 
     void create(const char *project_root = nullptr) {
-        ASSERT_EQ(ke_scheduler_enki_create(&scheduler_h, NULL), KE_OK);
+        scheduler_h = ke_scheduler_enki_create(NULL);
+        ASSERT_NE(scheduler_h.ref, nullptr);
 
         ke_ecs_flecs_params ecs_params{};
-        ASSERT_EQ(ke_ecs_flecs_create(&ecs_params, &ecs_h, NULL), KE_OK);
+        ecs_h = ke_ecs_flecs_create(&ecs_params, NULL);
+        ASSERT_NE(ecs_h.ref, nullptr);
 
         ke_runtime_params rt_params{};
-        ASSERT_EQ(ke_runtime_create(ecs_h.ref, scheduler_h.ref, &rt_params, &runtime_h, NULL), KE_OK);
+        runtime_h = ke_runtime_create(ecs_h.ref, scheduler_h.ref, &rt_params, NULL);
+        ASSERT_NE(runtime_h.ref, nullptr);
 
         ke_world_params wp{};
         wp.scheduler = scheduler_h.ref;
@@ -32,7 +35,7 @@ struct WorldFixture {
         wp.runtime        = runtime_h.ref;
         wp.scene_tree     = nullptr;  // C-phase reintroduces; B2 ships ke_world without scene_tree
         wp.project_root   = project_root;
-        ASSERT_EQ(ke_world_create(&wp, &world_h, NULL), KE_OK);
+        world_h = ke_world_create(&wp, NULL);
         world = world_h.ref;
         ASSERT_NE(world, nullptr);
     }

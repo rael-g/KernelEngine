@@ -26,11 +26,10 @@ typedef struct ke_runtime_params {
     float fixed_dt_max_accum;
 } ke_runtime_params;
 
-KE_RUNTIME_API ke_result ke_runtime_create(ke_ecs                  *ecs,
-                                    ke_scheduler       *scheduler,
-                                    const ke_runtime_params *params,
-                                    ke_runtime_handle       *out_runtime,
-                                    ke_error               **out_error);
+KE_RUNTIME_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
+                                                   ke_scheduler            *scheduler,
+                                                   const ke_runtime_params *params,
+                                                   ke_error               **out_error);
 
 #ifdef __cplusplus
 }

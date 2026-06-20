@@ -10,8 +10,8 @@ protected:
     ke_scheduler* scheduler = nullptr;
 
     void SetUp() override {
-        ke_result res = ke_scheduler_enki_create(&scheduler_h, NULL);
-        ASSERT_EQ(res, KE_OK);
+        scheduler_h = ke_scheduler_enki_create(NULL);
+        ASSERT_NE(scheduler_h.ref, nullptr);
         scheduler = scheduler_h.ref;
     }
 

@@ -124,9 +124,9 @@ static void bake_sphere(ke_vertex *vtx, uint16_t *idx, uint32_t segments, uint32
     }
 }
 
-ke_result ke_mesh_shape_bake_internal(ke_mesh_primitive prim,
+bool ke_mesh_shape_bake_internal(ke_mesh_primitive prim,
                                        uint32_t segments, ke_mesh_shape_data *out_data) {
-    if (!out_data) return KE_ERROR;
+    if (!out_data) return false;
     memset(out_data, 0, sizeof(*out_data));
 
     uint32_t vcount = 0, icount = 0;
@@ -150,15 +150,15 @@ ke_result ke_mesh_shape_bake_internal(ke_mesh_primitive prim,
         icount = sphere_index_count(segments, rings);
         break;
     default:
-        return KE_ERROR;
+        return false;
     }
 
     ke_vertex *vbuf = (ke_vertex *)ke_alloc(sizeof(ke_vertex) * vcount, alignof(ke_vertex));
-    if (!vbuf) return KE_ERROR;
+    if (!vbuf) return false;
     uint16_t *ibuf = (uint16_t *)ke_alloc(sizeof(uint16_t) * icount, alignof(uint16_t));
     if (!ibuf) {
         ke_free(vbuf);
-        return KE_ERROR;
+        return false;
     }
 
     switch (prim) {
@@ -182,14 +182,14 @@ ke_result ke_mesh_shape_bake_internal(ke_mesh_primitive prim,
         // unreachable — guarded above
         ke_free(vbuf);
         ke_free(ibuf);
-        return KE_ERROR;
+        return false;
     }
 
     out_data->vertices     = vbuf;
     out_data->vertex_count = vcount;
     out_data->indices      = ibuf;
     out_data->index_count  = icount;
-    return KE_OK;
+    return true;
 }
 
 void ke_mesh_shape_free_internal(ke_mesh_shape_data *data) {

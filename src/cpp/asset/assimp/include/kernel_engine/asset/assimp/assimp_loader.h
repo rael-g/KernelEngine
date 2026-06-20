@@ -15,10 +15,9 @@ typedef struct ke_asset_loader_assimp_params
 
 /// @brief Creates an Assimp-backed ke_asset_loader.
 /// @param params  Non-null construction parameters.
-/// @param out     Receives the created loader on success.
-KE_ASSET_ASSIMP_API ke_result ke_asset_loader_assimp_create(
+/// @return        Handle whose @c ref is NULL on failure.
+KE_ASSET_ASSIMP_API ke_asset_loader_handle ke_asset_loader_assimp_create(
     const ke_asset_loader_assimp_params *params,
-    ke_asset_loader_handle *out,
     ke_error **out_error);
 
 #ifdef __cplusplus

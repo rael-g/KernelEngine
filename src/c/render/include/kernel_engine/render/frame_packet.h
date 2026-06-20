@@ -110,9 +110,9 @@ extern "C" {
         uint32_t ui_draw_capacity;
     } ke_frame_packet_params;
 
-    KE_FRAME_PACKET_API ke_result ke_frame_packet_create(const ke_frame_packet_params *params,
-                                                          ke_frame_packet **out_packet,
-                                                          ke_error **out_error);
+    KE_FRAME_PACKET_API bool ke_frame_packet_create(const ke_frame_packet_params *params,
+                                                     ke_frame_packet **out_packet,
+                                                     ke_error **out_error);
     KE_FRAME_PACKET_API void ke_frame_packet_destroy(ke_frame_packet *packet);
     KE_FRAME_PACKET_API void ke_frame_packet_reset(ke_frame_packet *packet);
 

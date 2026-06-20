@@ -16,8 +16,8 @@ class LightingManager;
 class ClusteredForward
 {
 public:
-    ke_result SetupClustered(RenderContext& ctx, render::GpuProgramHandle& out_depth_prog, render::GpuProgramHandle& out_cull_prog);
-    ke_result SetClusterConfig(RenderContext& ctx, const ke_cluster_config *config);
+    bool SetupClustered(RenderContext& ctx, render::GpuProgramHandle& out_depth_prog, render::GpuProgramHandle& out_cull_prog);
+    bool SetClusterConfig(RenderContext& ctx, const ke_cluster_config *config);
 
     void UpdateClusterBounds(RenderContext& ctx);
     void DispatchLightCull(RenderContext& ctx, const LightingManager& lighting, render::GpuProgramHandle cull_prog);

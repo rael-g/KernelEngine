@@ -6,8 +6,8 @@ public unsafe partial struct ke_input
 {
     public void* handle;
 
-    [NativeTypeName("ke_result (*)(struct ke_input *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_error**, ke_result> update;
+    [NativeTypeName("bool (*)(struct ke_input *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_error**, bool> update;
 
     [NativeTypeName("ke_bool (*)(struct ke_input *, int32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input*, int, byte> is_key_pressed;

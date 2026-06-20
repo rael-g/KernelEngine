@@ -18,13 +18,13 @@ extern "C"
     {
         void *handle;
 
-        ke_result (*on_initialize)(struct ke_shader_compiler *self, ke_error **out_error);
-        ke_result (*on_shutdown)(struct ke_shader_compiler *self, ke_error **out_error);
+        bool (*on_initialize)(struct ke_shader_compiler *self, ke_error **out_error);
+        bool (*on_shutdown)(struct ke_shader_compiler *self, ke_error **out_error);
 
-        ke_result (*compile_shader)(struct ke_shader_compiler *self, const char *file_path,
-                                    const char *varying_def_path, const char *type, const char *platform,
-                                    const char *profile, const char **include_paths, size_t include_count,
-                                    ke_error **out_error);
+        bool (*compile_shader)(struct ke_shader_compiler *self, const char *file_path,
+                               const char *varying_def_path, const char *type, const char *platform,
+                               const char *profile, const char **include_paths, size_t include_count,
+                               ke_error **out_error);
     } ke_shader_compiler;
 
     typedef struct ke_shader_compiler_handle

@@ -19,8 +19,9 @@ typedef struct ke_window_glfw_params {
 
 /**
  * @brief Creates a new window implementation using GLFW3.
+ * @return Handle whose @c ref is NULL on failure.
  */
-KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window_handle* out_window, ke_error** out_error);
+KE_WINDOW_API ke_window_handle ke_window_glfw_create(const ke_window_glfw_params* params, ke_error** out_error);
 
 #ifdef __cplusplus
 }

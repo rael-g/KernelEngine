@@ -1,5 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-using KernelEngine.Common.Native;
 
 namespace KernelEngine.Kernel;
 
@@ -43,8 +42,9 @@ public sealed unsafe class RenderGraph : IDisposable
         if (pass is null) throw new ArgumentNullException(nameof(pass));
 
         pass.BuildNativeParams(out ke_render_pass_params @params);
-        var rc = _native->add_pass(_native, &@params, null);
-        KernelException.ThrowIfFailed(rc.ToManaged());
+        ke_error* err = null;
+        var rc = _native->add_pass(_native, &@params, &err);
+        KernelError.ThrowIfFailed(rc, err, "add_pass");
         _ownedPasses.Add(pass);
 
         // Topology changed — the next Execute will recompile automatically. We
@@ -62,9 +62,9 @@ public sealed unsafe class RenderGraph : IDisposable
         if (string.IsNullOrEmpty(name)) return false;
 
         var bytes = AsciiZ(name);
-        ke_result rc;
+        bool rc;
         fixed (byte* p = bytes) rc = _native->remove_pass(_native, (sbyte*)p, null);
-        if (rc != ke_result.KE_OK) return false;
+        if (!rc) return false;
 
         for (int i = _ownedPasses.Count - 1; i >= 0; i--) {
             if (_ownedPasses[i].Name == name) {
@@ -82,7 +82,8 @@ public sealed unsafe class RenderGraph : IDisposable
     public void Recompile()
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        KernelException.ThrowIfFailed(_native->compile(_native, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(_native->compile(_native, &err), err, "compile");
     }
 
     public void Dispose()

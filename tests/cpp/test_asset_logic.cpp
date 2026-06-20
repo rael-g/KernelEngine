@@ -21,9 +21,9 @@ TEST(AssetLogicTest, Converter_ConvertMaterial_Success) {
 
     ke_material_data md;
     int32_t albedo = -1, normal = -1;
-    ke_result res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
+    bool res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
 
-    ASSERT_EQ(res, KE_OK);
+    ASSERT_TRUE(res);
     EXPECT_FLOAT_EQ(md.base_color_r, 1.0f);
 }
 
@@ -36,9 +36,9 @@ TEST(AssetLogicTest, Converter_ConvertMaterial_MetallicRoughness) {
 
     ke_material_data md;
     int32_t albedo = -1, normal = -1;
-    ke_result res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
+    bool res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
 
-    ASSERT_EQ(res, KE_OK);
+    ASSERT_TRUE(res);
     EXPECT_FLOAT_EQ(md.metallic, 0.8f);
     EXPECT_FLOAT_EQ(md.roughness, 0.2f);
 }
@@ -50,9 +50,9 @@ TEST(AssetLogicTest, Converter_ConvertMaterial_DiffuseFallback) {
 
     ke_material_data md;
     int32_t albedo = -1, normal = -1;
-    ke_result res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
+    bool res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
 
-    ASSERT_EQ(res, KE_OK);
+    ASSERT_TRUE(res);
     EXPECT_FLOAT_EQ(md.base_color_r, 0.1f);
     EXPECT_FLOAT_EQ(md.base_color_g, 0.2f);
     EXPECT_FLOAT_EQ(md.base_color_b, 0.3f);
@@ -79,9 +79,9 @@ TEST(AssetLogicTest, Converter_ConvertMesh_Success) {
     am.mFaces[0].mIndices = new unsigned int[3]{ 0, 1, 2 };
 
     ke_mesh_data md{};
-    ke_result res = Converter::ConvertMesh(&am, &md);
+    bool res = Converter::ConvertMesh(&am, &md);
 
-    ASSERT_EQ(res, KE_OK);
+    ASSERT_TRUE(res);
     EXPECT_STREQ(md.name, "TestMesh");
     EXPECT_EQ(md.vertex_count, 3);
     EXPECT_EQ(md.index_count, 3);
@@ -97,8 +97,8 @@ TEST(AssetLogicTest, Converter_ConvertMaterial_Alpha) {
 
     ke_material_data md;
     int32_t albedo = -1, normal = -1;
-    ke_result res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
+    bool res = Converter::ConvertMaterial(&am, &md, &albedo, &normal);
 
-    ASSERT_EQ(res, KE_OK);
+    ASSERT_TRUE(res);
     EXPECT_FLOAT_EQ(md.base_color_a, 0.5f);
 }

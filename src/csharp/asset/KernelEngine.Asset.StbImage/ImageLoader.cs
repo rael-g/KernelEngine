@@ -30,8 +30,9 @@ public sealed unsafe class ImageLoader : IImageLoader, INativeImageLoader
             var written = System.Text.Encoding.UTF8.GetBytes(path, span);
             span[written] = 0;
 
-            ke_texture_data* data;
-            KernelException.ThrowIfFailed(_native->load_image(_native, (sbyte*)pathPtr, &data, null).ToManaged());
+            ke_error* err = null;
+            ke_texture_data* data = _native->load_image(_native, (sbyte*)pathPtr, &err);
+            if (data == null) throw KernelError.FromNative(err, "load_image");
             return new ImageData(_native, data);
         }
         finally

@@ -16,10 +16,9 @@ public sealed unsafe class FlecsEcs : IEcs, INativeEcs
     public FlecsEcs()
     {
         ke_ecs_flecs_params @params = default;
-        ke_ecs_handle handle;
-        var rc = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, &handle, null);
-        if (rc != (int)ke_result.KE_OK)
-            throw new InvalidOperationException($"ke_ecs_flecs_create failed: {(ke_result)rc}");
+        var handle = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, null);
+        if (handle.@ref == null)
+            throw new InvalidOperationException("ke_ecs_flecs_create failed");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }

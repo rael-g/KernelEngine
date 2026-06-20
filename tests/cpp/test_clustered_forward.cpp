@@ -50,13 +50,13 @@ TEST_F(ClusteredForwardTest, SetupClustered_ReturnsOk)
     EXPECT_CALL(*gpu_mock, CreateComputeProgram(_, _)).WillOnce(Return(GpuProgramHandle{1}));
 
     GpuProgramHandle d, c;
-    EXPECT_EQ(clustered->SetupClustered(ctx, d, c), KE_OK);
+    EXPECT_TRUE(clustered->SetupClustered(ctx, d, c));
 }
 
 TEST_F(ClusteredForwardTest, SetClusterConfig_UpdatesInternalState)
 {
     ke_cluster_config config = { 8, 4, 12, 128, 256 };
-    EXPECT_EQ(clustered->SetClusterConfig(ctx, &config), KE_OK);
+    EXPECT_TRUE(clustered->SetClusterConfig(ctx, &config));
 }
 
 TEST_F(ClusteredForwardTest, UpdateClusterBounds_CallsGpuMethods)

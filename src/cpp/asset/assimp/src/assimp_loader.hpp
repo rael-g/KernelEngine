@@ -17,7 +17,7 @@ class AssimpLoader
     /// Owner-handle destroy: tears down the loader and frees its allocation.
     static void DestroyApi(ke_asset_loader *self);
 
-    ke_result LoadModel(const char *path, ke_model_data **out, ke_error **out_error = nullptr);
+    ke_model_data *LoadModel(const char *path, ke_error **out_error = nullptr);
     void FreeModel(ke_model_data *data);
     ke_task *LoadModelAsync(ke_scheduler *scheduler,
                             const char *path,

@@ -43,7 +43,7 @@ TEST_F(ShadowPipelineTest, CreateShadowMap_ReturnsOk)
     EXPECT_CALL(*gpu_mock, CreateTexture2D(_, _, _, _, kTexFmtD16, _, _)).WillOnce(Return(GpuTextureHandle{2}));
     EXPECT_CALL(*gpu_mock, CreateFrameBuffer(2, _, _)).WillOnce(Return(GpuFrameBufferHandle{3}));
 
-    EXPECT_EQ(pipeline->CreateShadowMap(ctx, 512, 512, &handle), KE_OK);
+    EXPECT_EQ(pipeline->CreateShadowMap(ctx, 512, 512, &handle), true);
     EXPECT_EQ(handle.idx, 0);
 }
 
@@ -60,7 +60,7 @@ TEST_F(ShadowPipelineTest, BeginShadowPass_CallsGpuMethods)
     EXPECT_CALL(*gpu_mock, SetViewClear(_, _, _, _, _)).Times(1);
     EXPECT_CALL(*gpu_mock, SetViewTransform(_, _, _)).Times(1);
 
-    EXPECT_EQ(pipeline->BeginShadowPass(ctx, h, &v, &p), KE_OK);
+    EXPECT_EQ(pipeline->BeginShadowPass(ctx, h, &v, &p), true);
 }
 
 TEST_F(ShadowPipelineTest, SubmitMeshShadow_CallsGpuMethods)
@@ -79,14 +79,14 @@ TEST_F(ShadowPipelineTest, SubmitMeshShadow_CallsGpuMethods)
     EXPECT_CALL(*gpu_mock, SetIndexBufferStatic(GpuIndexBufferHandle{200})).Times(1);
     EXPECT_CALL(*gpu_mock, Submit(_, prog, _, _)).Times(1);
 
-    EXPECT_EQ(pipeline->SubmitMeshShadow(ctx, *geom, prog, m, &t), KE_OK);
+    EXPECT_EQ(pipeline->SubmitMeshShadow(ctx, *geom, prog, m, &t), true);
 }
 
 TEST_F(ShadowPipelineTest, SubmitMeshShadow_ReturnsError_OnInvalidMesh)
 {
     ke_mat4 t{};
     ke_mesh_handle m{999}; 
-    EXPECT_EQ(pipeline->SubmitMeshShadow(ctx, *geom, {1}, m, &t), KE_ERROR);
+    EXPECT_EQ(pipeline->SubmitMeshShadow(ctx, *geom, {1}, m, &t), false);
 }
 
 TEST_F(ShadowPipelineTest, DestroyShadowMap_CallsGpuDestroy)
@@ -97,5 +97,5 @@ TEST_F(ShadowPipelineTest, DestroyShadowMap_CallsGpuDestroy)
     pipeline->CreateShadowMap(ctx, 512, 512, &h);
 
     EXPECT_CALL(*gpu_mock, DestroyFrameBuffer(GpuFrameBufferHandle{10})).Times(1);
-    EXPECT_EQ(pipeline->DestroyShadowMap(ctx, h), KE_OK);
+    EXPECT_EQ(pipeline->DestroyShadowMap(ctx, h), true);
 }

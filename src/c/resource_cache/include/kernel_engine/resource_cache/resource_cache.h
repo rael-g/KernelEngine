@@ -49,16 +49,16 @@ extern "C"
 
         /// Registers a new resource with refcount = 1. Returns KE_ERROR_INVALID_ARGUMENT
         /// if handle == KE_RESOURCE_HANDLE_NONE or if already registered.
-        ke_result (*register_resource)(struct ke_resource_cache *self,
-                                       ke_resource_handle         handle,
-                                       ke_error                 **out_error);
+        bool (*register_resource)(struct ke_resource_cache *self,
+                                  ke_resource_handle         handle,
+                                  ke_error                 **out_error);
 
-        /// Increments the reference count. Returns KE_ERROR_NOT_FOUND if the handle is unknown.
-        ke_result (*retain)(struct ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error);
+        /// Increments the reference count. Sets out_error to KE_ERROR_NOT_FOUND if the handle is unknown.
+        bool (*retain)(struct ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error);
 
         /// Decrements the reference count; fires the cache's destroy_fn when it reaches zero
         /// and removes the entry.
-        ke_result (*release)(struct ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error);
+        bool (*release)(struct ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error);
 
         // ── Path-keyed cache (dedup) ──────────────────────────────────────────
 
@@ -70,10 +70,10 @@ extern "C"
         /// Associates a handle with a string key for later dedup lookups. Returns
         /// KE_ERROR_INVALID_ARGUMENT if the key is already mapped (callers should
         /// try_get_cached first to detect intentional re-insertion).
-        ke_result (*cache_insert)(struct ke_resource_cache *self,
-                                  const char               *key,
-                                  ke_resource_handle        handle,
-                                  ke_error                **out_error);
+        bool (*cache_insert)(struct ke_resource_cache *self,
+                             const char               *key,
+                             ke_resource_handle        handle,
+                             ke_error                **out_error);
 
         /// Removes a cached key (called automatically when refcount → 0).
         void (*cache_evict)(struct ke_resource_cache *self, const char *key);
@@ -89,10 +89,9 @@ extern "C"
 
     // ── Factory (kernel built-in) ─────────────────────────────────────────────
 
-    KE_RESOURCE_CACHE_API ke_result ke_resource_cache_create(
+    KE_RESOURCE_CACHE_API ke_resource_cache_handle ke_resource_cache_create(
         const ke_resource_cache_params *params,
-        ke_resource_cache_handle      *out_cache,
-        ke_error                      **out_error);
+        ke_error                       **out_error);
 
 #ifdef __cplusplus
 }

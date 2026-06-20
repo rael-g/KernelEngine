@@ -12,17 +12,17 @@ public unsafe class WindowTests
     private static int _shouldCloseCalled = 0;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockInitialize(ke_window* window, ke_error** out_error)
+    private static bool MockInitialize(ke_window* window, ke_error** out_error)
     {
         _initializeCalled++;
-        return ke_result.KE_OK;
+        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockShutdown(ke_window* window, ke_error** out_error)
+    private static bool MockShutdown(ke_window* window, ke_error** out_error)
     {
         _shutdownCalled++;
-        return ke_result.KE_OK;
+        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]

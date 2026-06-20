@@ -19,13 +19,13 @@ public:
     WindowCore();
     ~WindowCore();
 
-    ke_result Initialize(const WindowConfig& config);
+    bool Initialize(const WindowConfig& config);
     void Shutdown();
     void PollEvents();
     bool ShouldClose() const;
 
     void SetTitle(const char* title);
-    ke_result GetSize(uint32_t* width, uint32_t* height) const;
+    bool GetSize(uint32_t* width, uint32_t* height) const;
     void* GetNativeHandle() const;
 
     ke_window* ToApi();

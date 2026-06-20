@@ -68,15 +68,22 @@ void audio_destroy(ke_audio *self)
     // (state.allocator was captured above; can't use after free.)
 }
 
-ke_result audio_load_sound(ke_audio *self, const char *path, ke_audio_sound *out, ke_error **out_error)
+ke_audio_sound audio_load_sound(ke_audio *self, const char *path, ke_error **out_error)
 {
-    if (!self || !path || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-    *out = KE_AUDIO_SOUND_INVALID;
+    if (!self || !path)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return KE_AUDIO_SOUND_INVALID;
+    }
 
     auto *state = static_cast<MiniAudioState *>(self->handle);
 
     auto *slot = static_cast<LoadedSound *>(ke_alloc(sizeof(LoadedSound), alignof(LoadedSound)));
-    if (!slot) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "sound slot allocation failed");
+    if (!slot)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "sound slot allocation failed");
+        return KE_AUDIO_SOUND_INVALID;
+    }
     std::memset(slot, 0, sizeof(*slot));
 
     ma_result r = ma_sound_init_from_file(&state->engine, path, 0, nullptr, nullptr, &slot->sound);
@@ -84,7 +91,8 @@ ke_result audio_load_sound(ke_audio *self, const char *path, ke_audio_sound *out
     {
         log_warn(state->logger, ma_result_description(r));
         ke_free(slot);
-        return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "sound file not found or failed to load");
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "sound file not found or failed to load");
+        return KE_AUDIO_SOUND_INVALID;
     }
     slot->initialized = true;
 
@@ -96,8 +104,7 @@ ke_result audio_load_sound(ke_audio *self, const char *path, ke_audio_sound *out
         state->sounds[id] = slot;
     }
 
-    *out = id;
-    return KE_OK;
+    return id;
 }
 
 void audio_unload_sound(ke_audio *self, ke_audio_sound id)
@@ -122,9 +129,13 @@ void audio_unload_sound(ke_audio *self, ke_audio_sound id)
     }
 }
 
-ke_result audio_play(ke_audio *self, ke_audio_sound id, float volume, ke_bool loop, ke_error **out_error)
+bool audio_play(ke_audio *self, ke_audio_sound id, float volume, ke_bool loop, ke_error **out_error)
 {
-    if (!self || id == KE_AUDIO_SOUND_INVALID) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!self || id == KE_AUDIO_SOUND_INVALID)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     auto *state = static_cast<MiniAudioState *>(self->handle);
 
     LoadedSound *slot = nullptr;
@@ -133,7 +144,11 @@ ke_result audio_play(ke_audio *self, ke_audio_sound id, float volume, ke_bool lo
         auto it = state->sounds.find(id);
         if (it != state->sounds.end()) slot = it->second;
     }
-    if (!slot || !slot->initialized) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "sound not loaded");
+    if (!slot || !slot->initialized)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "sound not loaded");
+        return false;
+    }
 
     // Re-trigger semantics: stop + rewind so play() on an already-playing handle restarts cleanly.
     ma_sound_stop(&slot->sound);
@@ -141,7 +156,12 @@ ke_result audio_play(ke_audio *self, ke_audio_sound id, float volume, ke_bool lo
     ma_sound_set_volume(&slot->sound, volume);
     ma_sound_set_looping(&slot->sound, loop ? MA_TRUE : MA_FALSE);
     ma_result r = ma_sound_start(&slot->sound);
-    return (r == MA_SUCCESS) ? KE_OK : KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "ma_sound_start failed");
+    if (r != MA_SUCCESS)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "ma_sound_start failed");
+        return false;
+    }
+    return true;
 }
 
 void audio_stop(ke_audio *self, ke_audio_sound id)
@@ -167,13 +187,21 @@ void audio_set_master_volume(ke_audio *self, float volume)
 
 } // namespace
 
-extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
-    const ke_audio_miniaudio_params *params, ke_audio_handle *out, ke_error **out_error)
+extern "C" KE_AUDIO_MINIAUDIO_API ke_audio_handle ke_audio_miniaudio_create(
+    const ke_audio_miniaudio_params *params, ke_error **out_error)
 {
-    if (!params || !out) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!params)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return {nullptr, nullptr};
+    }
 
     auto *state_mem = ke_alloc(sizeof(MiniAudioState), alignof(MiniAudioState));
-    if (!state_mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+    if (!state_mem)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return {nullptr, nullptr};
+    }
     auto *state = new (state_mem) MiniAudioState{};
     state->logger       = params->logger;
     state->engine_ready = false;
@@ -186,7 +214,8 @@ extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
         log_warn(state->logger, ma_result_description(r));
         state->~MiniAudioState();
         ke_free(state);
-        return KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "engine init failed");
+        KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "engine init failed");
+        return {nullptr, nullptr};
     }
     state->engine_ready = true;
 
@@ -196,7 +225,8 @@ extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
         ma_engine_uninit(&state->engine);
         state->~MiniAudioState();
         ke_free(state);
-        return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "api allocation failed");
+        return {nullptr, nullptr};
     }
     std::memset(api, 0, sizeof(*api));
     api->handle            = state;
@@ -207,7 +237,5 @@ extern "C" KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(
     api->set_master_volume = &audio_set_master_volume;
 
     log_info(state->logger, "miniaudio backend initialized");
-    out->ref     = api;
-    out->destroy = &audio_destroy;
-    return KE_OK;
+    return {api, &audio_destroy};
 }

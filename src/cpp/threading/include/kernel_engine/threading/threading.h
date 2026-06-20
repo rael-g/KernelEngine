@@ -16,12 +16,12 @@ extern "C"
 #endif
 
     /// @brief Creates a frame sync ring buffer, filling the @c ke_frame_sync vtable.
-    KE_THREADING_API ke_result ke_frame_sync_std_create(uint32_t        buffer_count,
-                                                        uint32_t        draw_capacity,
-                                                        uint32_t        point_capacity,
-                                                        uint32_t        spot_capacity,
-                                                        ke_frame_sync_handle *out,
-                                                        ke_error      **out_error);
+    /// @return Handle whose @c ref is NULL on failure.
+    KE_THREADING_API ke_frame_sync_handle ke_frame_sync_std_create(uint32_t        buffer_count,
+                                                                   uint32_t        draw_capacity,
+                                                                   uint32_t        point_capacity,
+                                                                   uint32_t        spot_capacity,
+                                                                   ke_error      **out_error);
 
 #ifdef __cplusplus
 }

@@ -13,11 +13,11 @@ class BgfxShaderCompiler
     explicit BgfxShaderCompiler(const ke_shader_compiler_bgfx_params *params);
     ~BgfxShaderCompiler();
 
-    static ke_result OnInitialize();
-    static ke_result OnShutdown();
+    static bool OnInitialize();
+    static bool OnShutdown();
 
-    ke_result CompileShader(const char *file_path, const char *varying_def_path, const char *type, const char *platform,
-                            const char *profile, const char **include_paths, size_t include_count);
+    bool CompileShader(const char *file_path, const char *varying_def_path, const char *type, const char *platform,
+                       const char *profile, const char **include_paths, size_t include_count);
 
     ke_shader_compiler *ToApi();
 

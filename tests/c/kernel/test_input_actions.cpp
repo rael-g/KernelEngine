@@ -38,7 +38,8 @@ protected:
 
     void SetUp() override
     {
-        ASSERT_EQ(ke_input_actions_create(&actions_h, NULL), KE_OK);
+        actions_h = ke_input_actions_create(NULL);
+        ASSERT_NE(actions_h.ref, nullptr);
         actions = actions_h.ref;
     }
     void TearDown() override
@@ -51,8 +52,7 @@ protected:
 
 TEST_F(InputActionsTest, Load_MissingFile_ReturnsNotFound)
 {
-    EXPECT_EQ(actions->load(actions, "C:/this/path/does/not/exist.input", NULL),
-              KE_ERROR);
+    EXPECT_FALSE(actions->load(actions, "C:/this/path/does/not/exist.input", NULL));
 }
 
 TEST_F(InputActionsTest, Load_AssignsSequentialIds)
@@ -67,7 +67,7 @@ type = "Axis1D"
 bindings = [ { kind = "key_pair", negative = "S", positive = "W" } ]
 )",
                                     ".input");
-    ASSERT_EQ(actions->load(actions, path.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(actions->load(actions, path.string().c_str(), NULL));
     EXPECT_EQ(actions->get_action_id(actions, "Jump"), 0);
     EXPECT_EQ(actions->get_action_id(actions, "Move"), 1);
     EXPECT_EQ(actions->get_action_id(actions, "Unknown"), -1);
@@ -84,7 +84,7 @@ type = "Button"
 bindings = [ { kind = "key", key = "Space" } ]
 )",
                                     ".input");
-    ASSERT_EQ(actions->load(actions, path.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(actions->load(actions, path.string().c_str(), NULL));
     int32_t id = actions->get_action_id(actions, "Jump");
 
     ke_input_snapshot snap{};
@@ -123,7 +123,7 @@ type = "Axis1D"
 bindings = [ { kind = "key_pair", negative = "S", positive = "W" } ]
 )",
                                     ".input");
-    ASSERT_EQ(actions->load(actions, path.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(actions->load(actions, path.string().c_str(), NULL));
     int32_t id = actions->get_action_id(actions, "Move");
 
     ke_input_snapshot snap{};
@@ -158,7 +158,7 @@ type = "Axis2D"
 bindings = [ { kind = "key_quad", up = "W", down = "S", left = "A", right = "D" } ]
 )",
                                     ".input");
-    ASSERT_EQ(actions->load(actions, path.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(actions->load(actions, path.string().c_str(), NULL));
     int32_t id = actions->get_action_id(actions, "Move");
 
     ke_input_snapshot snap{};
@@ -183,7 +183,7 @@ type = "Button"
 bindings = [ { kind = "mouse", button = "Left" } ]
 )",
                                     ".input");
-    ASSERT_EQ(actions->load(actions, path.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(actions->load(actions, path.string().c_str(), NULL));
     int32_t id = actions->get_action_id(actions, "Fire");
 
     ke_input_snapshot snap{};
@@ -204,7 +204,7 @@ type = "Button"
 bindings = [ { kind = "key", key = "Space" } ]
 )",
                                     ".input");
-    ASSERT_EQ(actions->load(actions, path.string().c_str(), NULL), KE_OK);
+    ASSERT_TRUE(actions->load(actions, path.string().c_str(), NULL));
     int32_t id = actions->get_action_id(actions, "Jump");
 
     struct Counter { int started = 0, canceled = 0, performed = 0; } c;
@@ -260,11 +260,11 @@ TEST_F(InputActionsTest, AddAction_RejectsDuplicateAndInvalidNames)
 TEST_F(InputActionsTest, BindKey_DrivesButtonActive)
 {
     int32_t jump = actions->add_action(actions, "Jump", KE_ACTION_TYPE_BUTTON);
-    ASSERT_EQ(actions->bind_key(actions, jump, KE_KEY_SPACE, NULL), KE_OK);
+    ASSERT_TRUE(actions->bind_key(actions, jump, KE_KEY_SPACE, NULL));
 
     ke_input_snapshot snap{};
     SetKeyDown(snap, KE_KEY_SPACE);
-    ASSERT_EQ(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr), KE_OK);
+    ASSERT_TRUE(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr));
     EXPECT_TRUE(actions->is_action_down(actions, jump));
     EXPECT_TRUE(actions->was_action_pressed(actions, jump));
 }
@@ -272,29 +272,29 @@ TEST_F(InputActionsTest, BindKey_DrivesButtonActive)
 TEST_F(InputActionsTest, BindKeyPair_ProducesAxis1D)
 {
     int32_t strafe = actions->add_action(actions, "Strafe", KE_ACTION_TYPE_AXIS1D);
-    ASSERT_EQ(actions->bind_key_pair(actions, strafe, KE_KEY_A, KE_KEY_D, NULL), KE_OK);
+    ASSERT_TRUE(actions->bind_key_pair(actions, strafe, KE_KEY_A, KE_KEY_D, NULL));
 
     ke_input_snapshot snap{};
     SetKeyDown(snap, KE_KEY_D);
-    ASSERT_EQ(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr), KE_OK);
+    ASSERT_TRUE(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr));
     EXPECT_FLOAT_EQ(actions->get_axis1d(actions, strafe), 1.0f);
 
     snap = {};
     SetKeyDown(snap, KE_KEY_A);
-    ASSERT_EQ(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr), KE_OK);
+    ASSERT_TRUE(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr));
     EXPECT_FLOAT_EQ(actions->get_axis1d(actions, strafe), -1.0f);
 }
 
 TEST_F(InputActionsTest, BindKeyQuad_ProducesAxis2D)
 {
     int32_t move = actions->add_action(actions, "Move", KE_ACTION_TYPE_AXIS2D);
-    ASSERT_EQ(actions->bind_key_quad(actions, move,
-                                     KE_KEY_W, KE_KEY_S, KE_KEY_A, KE_KEY_D, NULL), KE_OK);
+    ASSERT_TRUE(actions->bind_key_quad(actions, move,
+                                      KE_KEY_W, KE_KEY_S, KE_KEY_A, KE_KEY_D, NULL));
 
     ke_input_snapshot snap{};
     SetKeyDown(snap, KE_KEY_W);
     SetKeyDown(snap, KE_KEY_D);
-    ASSERT_EQ(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr), KE_OK);
+    ASSERT_TRUE(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr));
     float x = 0, y = 0;
     actions->get_axis2d(actions, move, &x, &y);
     EXPECT_FLOAT_EQ(x,  1.0f);
@@ -304,24 +304,25 @@ TEST_F(InputActionsTest, BindKeyQuad_ProducesAxis2D)
 TEST_F(InputActionsTest, BindMouseButton_DrivesButtonActive)
 {
     int32_t fire = actions->add_action(actions, "Fire", KE_ACTION_TYPE_BUTTON);
-    ASSERT_EQ(actions->bind_mouse_button(actions, fire, KE_MOUSE_BUTTON_LEFT, NULL), KE_OK);
+    ASSERT_TRUE(actions->bind_mouse_button(actions, fire, KE_MOUSE_BUTTON_LEFT, NULL));
 
     ke_input_snapshot snap{};
     snap.mouse_buttons_down = 1u << KE_MOUSE_BUTTON_LEFT;
-    ASSERT_EQ(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr), KE_OK);
+    ASSERT_TRUE(actions->evaluate(actions, &snap, nullptr, nullptr, nullptr));
     EXPECT_TRUE(actions->is_action_down(actions, fire));
 }
 
 TEST_F(InputActionsTest, BindOnUnknownActionId_ReturnsNotFound)
 {
-    EXPECT_EQ(actions->bind_key(actions, 99, KE_KEY_SPACE, NULL), KE_ERROR);
-    EXPECT_EQ(actions->bind_key_pair(actions, 99, KE_KEY_A, KE_KEY_D, NULL), KE_ERROR);
+    EXPECT_FALSE(actions->bind_key(actions, 99, KE_KEY_SPACE, NULL));
+    EXPECT_FALSE(actions->bind_key_pair(actions, 99, KE_KEY_A, KE_KEY_D, NULL));
 }
 
-TEST_F(InputActionsTest, Create_ReturnsInvalidArgument_OnNullArgs)
+TEST_F(InputActionsTest, Create_ReturnsValidHandle)
 {
-    ke_input_actions *a = nullptr;
-    EXPECT_EQ(ke_input_actions_create(nullptr, NULL), KE_ERROR);
+    ke_input_actions_handle h = ke_input_actions_create(NULL);
+    EXPECT_NE(h.ref, nullptr);
+    if (h.ref && h.destroy) h.destroy(h.ref);
 }
 
 TEST_F(InputActionsTest, GetAxis3D_Works)
@@ -338,7 +339,7 @@ TEST_F(InputActionsTest, GetAxis3D_Works)
 
 TEST_F(InputActionsTest, Evaluate_ReturnsInvalidArgument_OnNullArgs)
 {
-    EXPECT_EQ(actions->evaluate(actions, nullptr, nullptr, nullptr, nullptr), KE_ERROR);
+    EXPECT_FALSE(actions->evaluate(actions, nullptr, nullptr, nullptr, nullptr));
 }
 
 TEST_F(InputActionsTest, WasActionPressed_FalseWhenNotInitialPress)

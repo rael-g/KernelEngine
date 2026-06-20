@@ -6,14 +6,14 @@ public unsafe partial struct ke_audio
 {
     public void* handle;
 
-    [NativeTypeName("ke_result (*)(struct ke_audio *, const char *, ke_audio_sound *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_audio*, sbyte*, uint*, ke_error**, ke_result> load_sound;
+    [NativeTypeName("ke_audio_sound (*)(struct ke_audio *, const char *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_audio*, sbyte*, ke_error**, uint> load_sound;
 
     [NativeTypeName("void (*)(struct ke_audio *, ke_audio_sound)")]
     public delegate* unmanaged[Cdecl]<ke_audio*, uint, void> unload_sound;
 
-    [NativeTypeName("ke_result (*)(struct ke_audio *, ke_audio_sound, float, ke_bool, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_audio*, uint, float, byte, ke_error**, ke_result> play;
+    [NativeTypeName("bool (*)(struct ke_audio *, ke_audio_sound, float, ke_bool, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_audio*, uint, float, byte, ke_error**, bool> play;
 
     [NativeTypeName("void (*)(struct ke_audio *, ke_audio_sound)")]
     public delegate* unmanaged[Cdecl]<ke_audio*, uint, void> stop;

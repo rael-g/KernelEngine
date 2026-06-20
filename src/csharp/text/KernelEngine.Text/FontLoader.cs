@@ -40,14 +40,13 @@ public sealed unsafe class FontLoader : IFontLoader, INativeFontLoader
             var pathPtr = Marshal.StringToHGlobalAnsi(path);
             try
             {
-                ke_font_data* data = null;
                 var loader = _native;
                 if (loader == null) throw new ObjectDisposedException(nameof(FontLoader));
 
-                var res = loader->load_font(loader, (sbyte*)pathPtr, pixelSize,
-                                            firstCodepoint, codepointCount, atlasSize, &data, null).ToManaged();
-                KernelException.ThrowIfFailed(res);
-                if (data == null) throw new InvalidOperationException("Font loader returned a null result.");
+                ke_error* err = null;
+                ke_font_data* data = loader->load_font(loader, (sbyte*)pathPtr, pixelSize,
+                                                       firstCodepoint, codepointCount, atlasSize, &err);
+                if (data == null) throw KernelError.FromNative(err, "load_font");
 
                 try
                 {

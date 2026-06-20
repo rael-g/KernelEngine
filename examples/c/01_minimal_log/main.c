@@ -6,11 +6,10 @@ int main(void)
 {
     printf("--- KernelEngine C Minimal Log Demo ---\n");
 
-    ke_logger_handle logger_h = {0};
-    ke_result res = ke_logger_create(&logger_h, NULL);
+    ke_logger_handle logger_h = ke_logger_create(NULL);
     ke_logger *logger = logger_h.ref;
 
-    if (res == KE_OK)
+    if (logger_h.ref)
     {
         logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE), NULL);
 

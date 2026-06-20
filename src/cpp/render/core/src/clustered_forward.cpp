@@ -14,11 +14,11 @@
 namespace kernel_engine::render::core
 {
 
-ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle& out_depth_prog,
-                                            GpuProgramHandle& out_cull_prog)
+bool ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle& out_depth_prog,
+                                       GpuProgramHandle& out_cull_prog)
 {
     if (!ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupClustered", "GPU device not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetupClustered", "GPU device not set");
 
     if (cluster_config_.grid_x == 0)
         cluster_config_ = kDefaultConfig;
@@ -46,7 +46,7 @@ ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle&
         b_spot_lights_    == kGpuInvalidHandle || b_point_indices_ == kGpuInvalidHandle ||
         b_point_count_    == kGpuInvalidHandle || b_spot_indices_  == kGpuInvalidHandle ||
         b_spot_count_     == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupClustered",
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetupClustered",
                                  "Failed to create cluster GPU buffers");
 
     // Count buffers are compute-write (BGFX_BUFFER_COMPUTE_WRITE) — bgfx forbids CPU-side
@@ -69,14 +69,14 @@ ke_result ClusteredForward::SetupClustered(RenderContext& ctx, GpuProgramHandle&
             out_cull_prog = gpu.CreateComputeProgram(cs, true);
     }
     if (out_cull_prog == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetupClustered",
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetupClustered",
                                  "Failed to load cs_light_cull");
 
     cull_program_ = out_cull_prog; // own a copy so RunCull doesn't need it threaded through callers
     (void)out_depth_prog;          // depth pre-pass deferred to a later phase
 
     bounds_dirty_ = true;
-    return KE_OK;
+    return true;
 }
 
 void ClusteredForward::RunCull(RenderContext& ctx, const LightingManager& lighting)
@@ -85,13 +85,13 @@ void ClusteredForward::RunCull(RenderContext& ctx, const LightingManager& lighti
     DispatchLightCull(ctx, lighting, cull_program_);
 }
 
-ke_result ClusteredForward::SetClusterConfig(RenderContext& ctx, const ke_cluster_config* config)
+bool ClusteredForward::SetClusterConfig(RenderContext& ctx, const ke_cluster_config* config)
 {
     if (!config)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR, "SetClusterConfig", "Config is null");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetClusterConfig", "Config is null");
     cluster_config_ = *config;
     bounds_dirty_ = true;
-    return KE_OK;
+    return true;
 }
 
 void ClusteredForward::UpdateClusterBounds(RenderContext& ctx)

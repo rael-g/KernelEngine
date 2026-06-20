@@ -48,7 +48,7 @@ TEST_F(RenderGraphImplTest, DeclareResource_ReturnsOk_ForValidDesc)
     desc.width = 128;
     desc.height = 128;
     
-    EXPECT_EQ(graph_impl->DeclareResource(&desc), KE_OK);
+    EXPECT_TRUE(graph_impl->DeclareResource(&desc));
 }
 
 TEST_F(RenderGraphImplTest, DeclareResource_ReturnsError_OnDuplicate)
@@ -57,12 +57,12 @@ TEST_F(RenderGraphImplTest, DeclareResource_ReturnsError_OnDuplicate)
     desc.name = "test_tex";
     desc.type = KE_RESOURCE_TYPE_TEXTURE_2D;
     graph_impl->DeclareResource(&desc);
-    EXPECT_EQ(graph_impl->DeclareResource(&desc), KE_ERROR);
+    EXPECT_FALSE(graph_impl->DeclareResource(&desc));
 }
 
 TEST_F(RenderGraphImplTest, ImportTexture_ReturnsOk)
 {
-    EXPECT_EQ(graph_impl->ImportTexture("imported", {42}), KE_OK);
+    EXPECT_TRUE(graph_impl->ImportTexture("imported", {42}));
 }
 
 TEST_F(RenderGraphImplTest, AddPass_ReturnsOk)
@@ -71,7 +71,7 @@ TEST_F(RenderGraphImplTest, AddPass_ReturnsOk)
     p.name = "test_pass";
     p.record = [](ke_render_pass_ctx*, void*) {};
     
-    EXPECT_EQ(graph_impl->AddPass(&p), KE_OK);
+    EXPECT_TRUE(graph_impl->AddPass(&p));
 }
 
 TEST_F(RenderGraphImplTest, AddPass_ReturnsError_OnDuplicate)
@@ -80,7 +80,7 @@ TEST_F(RenderGraphImplTest, AddPass_ReturnsError_OnDuplicate)
     p.name = "test_pass";
     p.record = [](ke_render_pass_ctx*, void*) {};
     graph_impl->AddPass(&p);
-    EXPECT_EQ(graph_impl->AddPass(&p), KE_ERROR);
+    EXPECT_FALSE(graph_impl->AddPass(&p));
 }
 
 TEST_F(RenderGraphImplTest, Compile_ReturnsOk_ForValidGraph)
@@ -103,7 +103,7 @@ TEST_F(RenderGraphImplTest, Compile_ReturnsOk_ForValidGraph)
     EXPECT_CALL(*gpu_mock, CreateTexture2D(_, _, _, _, _, _, _)).WillOnce(Return(GpuTextureHandle{1}));
     EXPECT_CALL(*gpu_mock, CreateFrameBuffer(_, _, _)).WillOnce(Return(GpuFrameBufferHandle{2}));
 
-    EXPECT_EQ(graph_impl->Compile(), KE_OK);
+    EXPECT_TRUE(graph_impl->Compile());
 }
 
 TEST_F(RenderGraphImplTest, Compile_Fails_OnDependencyCycle)
@@ -138,7 +138,7 @@ TEST_F(RenderGraphImplTest, Compile_Fails_OnDependencyCycle)
     graph_impl->AddPass(&p1);
     graph_impl->AddPass(&p2);
 
-    EXPECT_EQ(graph_impl->Compile(), KE_ERROR);
+    EXPECT_FALSE(graph_impl->Compile());
 }
 
 TEST_F(RenderGraphImplTest, Execute_CallsRecordCallback)
@@ -174,13 +174,13 @@ TEST_F(RenderGraphImplTest, Compile_HandlesDepthTextures)
     EXPECT_CALL(*gpu_mock, CreateTexture2D(_, _, _, _, kTexFmtD16, _, _)).WillOnce(Return(GpuTextureHandle{1}));
     EXPECT_CALL(*gpu_mock, CreateFrameBuffer(_, _, _)).WillOnce(Return(GpuFrameBufferHandle{2}));
 
-    EXPECT_EQ(graph_impl->Compile(), KE_OK);
+    EXPECT_TRUE(graph_impl->Compile());
 }
 
 TEST_F(RenderGraphImplTest, Execute_NoOp_WhenEmpty)
 {
-    // Execute on empty graph should return KE_OK and do nothing
-    EXPECT_EQ(graph_impl->Execute(nullptr), KE_OK);
+    // Execute on empty graph should return true and do nothing
+    EXPECT_TRUE(graph_impl->Execute(nullptr));
 }
 
 TEST_F(RenderGraphImplTest, RemovePass_Works)
@@ -189,22 +189,22 @@ TEST_F(RenderGraphImplTest, RemovePass_Works)
     p.name = "to_remove";
     p.record = [](auto,auto){};
     graph_impl->AddPass(&p);
-    EXPECT_EQ(graph_impl->RemovePass("to_remove"), KE_OK);
+    EXPECT_TRUE(graph_impl->RemovePass("to_remove"));
     // Should be able to add it again
-    EXPECT_EQ(graph_impl->AddPass(&p), KE_OK);
+    EXPECT_TRUE(graph_impl->AddPass(&p));
 }
 
 TEST_F(RenderGraphImplTest, RemovePass_ReturnsError_WhenNotFound)
 {
-    EXPECT_EQ(graph_impl->RemovePass("non_existent"), KE_ERROR);
+    EXPECT_FALSE(graph_impl->RemovePass("non_existent"));
 }
 
 TEST_F(RenderGraphImplTest, AddPass_NullArgs_ReturnsError)
 {
-    EXPECT_EQ(graph_impl->AddPass(nullptr), KE_ERROR);
+    EXPECT_EQ(graph_impl->AddPass(nullptr), false);
 }
 
 TEST_F(RenderGraphImplTest, DeclareResource_NullArgs_ReturnsError)
 {
-    EXPECT_EQ(graph_impl->DeclareResource(nullptr), KE_ERROR);
+    EXPECT_EQ(graph_impl->DeclareResource(nullptr), false);
 }

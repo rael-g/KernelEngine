@@ -19,13 +19,13 @@ extern "C"
     {
         void *handle;
 
-        ke_result (*on_initialize)(struct ke_window *self, ke_error **out_error);
-        ke_result (*on_shutdown)(struct ke_window *self, ke_error **out_error);
+        bool (*on_initialize)(struct ke_window *self, ke_error **out_error);
+        bool (*on_shutdown)(struct ke_window *self, ke_error **out_error);
 
         ke_bool (*should_close)(struct ke_window *self);
-        ke_result (*poll_events)(struct ke_window *self, ke_error **out_error);
-        ke_result (*swap_buffers)(struct ke_window *self, ke_error **out_error);
-        ke_result (*get_size)(struct ke_window *self, int32_t *width, int32_t *height, ke_error **out_error);
+        bool (*poll_events)(struct ke_window *self, ke_error **out_error);
+        bool (*swap_buffers)(struct ke_window *self, ke_error **out_error);
+        bool (*get_size)(struct ke_window *self, int32_t *width, int32_t *height, ke_error **out_error);
         void *(*get_native_handle)(struct ke_window *self);
     } ke_window;
 

@@ -2,6 +2,7 @@
 #include "../common/example_console_sink.h"
 #include <kernel_engine/render/shader_compiler.h>
 #include <kernel_engine/render/bgfx_shader_compiler/bgfx_shader_compiler.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 int main(void)
@@ -9,15 +10,14 @@ int main(void)
     printf("--- KernelEngine C Shader Compiler Demo ---\n");
 
     ke_logger_handle logger_h = {0};
-    ke_logger_create(&logger_h, NULL);
+    logger_h = ke_logger_create(NULL);
     ke_logger *logger = logger_h.ref;
 
     logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE), NULL);
 
     ke_shader_compiler_bgfx_params compiler_params = {
         .logger = logger, .shaderc_path = "vcpkg_installed/x64-windows-static-md/tools/bgfx/shaderc.exe"};
-    ke_shader_compiler_handle compiler_h = {0};
-    ke_shader_compiler_bgfx_create(&compiler_params, &compiler_h);
+    ke_shader_compiler_handle compiler_h = ke_shader_compiler_bgfx_create(&compiler_params);
     ke_shader_compiler *compiler = compiler_h.ref;
     compiler->on_initialize(compiler, NULL);
 
@@ -25,13 +25,13 @@ int main(void)
     logger->log(logger, &ev_start);
 
     const char* includes[] = { "src/cpp/render/bgfx/shaders" };
-    ke_result res = compiler->compile_shader(compiler,
+    bool ok = compiler->compile_shader(compiler,
         "src/cpp/render/bgfx/shaders/fs_basic.sc",
         "src/cpp/render/bgfx/shaders/varying.def.sc",
         "fragment", "windows", "p30",
         includes, 1, NULL);
 
-    if (res == KE_OK) {
+    if (ok) {
         ke_log_event ev = {KE_LOG_LEVEL_INFO, "app", "Shader compiled successfully!"};
         logger->log(logger, &ev);
     } else {

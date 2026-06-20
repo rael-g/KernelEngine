@@ -1,4 +1,4 @@
-﻿#include <gtest/gtest.h>
+#include <gtest/gtest.h>
 #include <kernel_engine/audio/miniaudio/miniaudio_audio.h>
 
 class MiniAudioTest : public ::testing::Test {
@@ -10,13 +10,8 @@ protected:
         ke_audio_miniaudio_params params{};
         params.logger = nullptr;
 
-        ke_result res = ke_audio_miniaudio_create(&params, &audio_h, nullptr);
-        // It might return KE_ERROR if no audio device is available, but let's hope for the best or handle it.
-        if (res == KE_OK) {
-            audio = audio_h.ref;
-        } else {
-            audio = nullptr;
-        }
+        audio_h = ke_audio_miniaudio_create(&params, nullptr);
+        audio = audio_h.ref;  // may be null if no audio device available
     }
 
     void TearDown() override {
@@ -27,34 +22,34 @@ protected:
 };
 
 TEST_F(MiniAudioTest, Create_Works) {
-    // If Setup failed because of no audio device, skip
     if (!audio) GTEST_SKIP() << "No audio device available";
     ASSERT_NE(audio, nullptr);
 }
 
-TEST_F(MiniAudioTest, Create_NullOut_ReturnsInvalidArgument) {
-    ke_audio_miniaudio_params params{};
-    ASSERT_EQ(ke_audio_miniaudio_create(&params, nullptr, nullptr), KE_ERROR);
+TEST_F(MiniAudioTest, Create_NullParams_ReturnsNull) {
+    ke_audio_handle h = ke_audio_miniaudio_create(nullptr, nullptr);
+    ASSERT_EQ(h.ref, nullptr);
 }
 
-TEST_F(MiniAudioTest, LoadSound_NullPath_ReturnsInvalidArgument) {
+TEST_F(MiniAudioTest, LoadSound_NullPath_ReturnsInvalid) {
     if (!audio) GTEST_SKIP();
-    uint32_t id = 0;
-    ASSERT_EQ(audio->load_sound(audio, nullptr, &id, nullptr), KE_ERROR);
+    ke_audio_sound id = audio->load_sound(audio, nullptr, nullptr);
+    ASSERT_EQ(id, KE_AUDIO_SOUND_INVALID);
 }
 
-TEST_F(MiniAudioTest, LoadSound_NullOut_ReturnsInvalidArgument) {
+TEST_F(MiniAudioTest, LoadSound_BadPath_ReturnsInvalid) {
     if (!audio) GTEST_SKIP();
-    ASSERT_EQ(audio->load_sound(audio, "test.wav", nullptr, nullptr), KE_ERROR);
+    ke_audio_sound id = audio->load_sound(audio, "nonexistent.wav", nullptr);
+    ASSERT_EQ(id, KE_AUDIO_SOUND_INVALID);
 }
 
 TEST_F(MiniAudioTest, UnloadSound_InvalidId_IsSafe) {
     if (!audio) GTEST_SKIP();
-    audio->unload_sound(audio, 0);
+    audio->unload_sound(audio, KE_AUDIO_SOUND_INVALID);
 }
 
 TEST_F(MiniAudioTest, Stop_NullHandle_IsSafe) {
-    audio->stop(nullptr, 0);
+    audio->stop(nullptr, KE_AUDIO_SOUND_INVALID);
 }
 
 TEST_F(MiniAudioTest, SetMasterVolume_NullHandle_IsSafe) {
@@ -67,9 +62,6 @@ TEST_F(MiniAudioTest, Destroy_NullHandle_IsSafe) {
 
 TEST_F(MiniAudioTest, Play_Twice_IsSafe) {
     if (!audio) GTEST_SKIP();
-    // Again, no real sound ID, but we can check it doesn't crash 
-    // when handle is not found (already tested).
-    // If we could mock ma_sound...
     SUCCEED();
 }
 
@@ -81,6 +73,7 @@ TEST_F(MiniAudioTest, SetMasterVolume_ValidValues) {
     SUCCEED();
 }
 
-TEST_F(MiniAudioTest, Play_NullHandle_ReturnsInvalidArgument) {
-    ASSERT_EQ(audio->play(nullptr, 0, 1.0f, 0, nullptr), KE_ERROR);
+TEST_F(MiniAudioTest, Play_NullHandle_ReturnsFalse) {
+    bool ok = audio->play(nullptr, KE_AUDIO_SOUND_INVALID, 1.0f, false, nullptr);
+    ASSERT_FALSE(ok);
 }

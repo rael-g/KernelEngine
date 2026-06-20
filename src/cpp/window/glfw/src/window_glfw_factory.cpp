@@ -6,12 +6,20 @@
 #include <new>
 
 extern "C" {
-    KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params* params, ke_window_handle* out_window, ke_error** out_error) {
-        if (!out_window || !params) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    KE_WINDOW_API ke_window_handle ke_window_glfw_create(const ke_window_glfw_params* params, ke_error** out_error) {
+        if (!params)
+        {
+            KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+            return {nullptr, nullptr};
+        }
 
         // 1. Create the Hardware Implementation (Muscle)
         void* device_mem = ke_alloc(sizeof(kernel_engine::window::GlfwWindowDevice), alignof(kernel_engine::window::GlfwWindowDevice));
-        if (!device_mem) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "device allocation failed");
+        if (!device_mem)
+        {
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "device allocation failed");
+            return {nullptr, nullptr};
+        }
         auto* device = new (device_mem) kernel_engine::window::GlfwWindowDevice();
 
         // 2. Create the Agnostic Core (Brain)
@@ -31,16 +39,14 @@ extern "C" {
             true // Default VSync
         };
 
-        ke_result res = core->Initialize(config);
-        if (res != KE_OK) {
+        if (!core->Initialize(config))
+        {
             delete core;
             ke_free(device_mem);
-            return res;
+            return {nullptr, nullptr};
         }
 
         // 5. Return the C-API interface
-        out_window->ref     = core->ToApi();
-        out_window->destroy = &kernel_engine::window::WindowCore::DestroyApi;
-        return KE_OK;
+        return {core->ToApi(), &kernel_engine::window::WindowCore::DestroyApi};
     }
 }

@@ -205,16 +205,28 @@ static ke_component_id ecs_flecs_component_register(ke_ecs *self, const char *na
     return cid;
 }
 
-static ke_result ecs_flecs_component_lookup(ke_ecs *self, const char *name, ke_component_meta *out_meta, ke_error **out_error)
+static bool ecs_flecs_component_lookup(ke_ecs *self, const char *name, ke_component_meta *out_meta, ke_error **out_error)
 {
-    if (!self || !self->handle || !name) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!self || !self->handle || !name)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
 
     ecs_entity_t e = ecs_lookup(h->state.world, name);
-    if (e == 0) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "component not found");
+    if (e == 0)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "component not found");
+        return false;
+    }
 
     const ecs_type_info_t *ti = ecs_get_type_info(h->state.world, e);
-    if (!ti) return KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "component type info not found");
+    if (!ti)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "component type info not found");
+        return false;
+    }
 
     if (out_meta)
     {
@@ -223,7 +235,7 @@ static ke_result ecs_flecs_component_lookup(ke_ecs *self, const char *name, ke_c
         out_meta->fields      = NULL;  // field reflection not used through this impl
         out_meta->field_count = 0;
     }
-    return KE_OK;
+    return true;
 }
 
 static void *ecs_flecs_component_add(ke_ecs *self, ke_entity entity, ke_component_id component)
@@ -328,24 +340,27 @@ static void ecs_flecs_destroy(ke_ecs *self)
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
-                              ke_ecs_handle             *out_ecs,
-                              ke_error                 **out_error)
+ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
+                                   ke_error                 **out_error)
 {
     (void)params;
-    if (!out_ecs) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
 
     install_flecs_os_api();
 
     ecs_flecs_handle *h = (ecs_flecs_handle *)ke_alloc(sizeof(ecs_flecs_handle), alignof(ecs_flecs_handle));
-    if (!h) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+    if (!h)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return (ke_ecs_handle){0};
+    }
     memset(h, 0, sizeof(*h));
 
     h->state.world = ecs_init();
     if (!h->state.world)
     {
         ke_free(h);
-        return KE_ERROR_SET(out_error, &KE_ERROR_NOT_INITIALIZED, "flecs world init failed");
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_INITIALIZED, "flecs world init failed");
+        return (ke_ecs_handle){0};
     }
 
     h->api.handle             = h;
@@ -358,7 +373,5 @@ ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     h->api.component_get      = ecs_flecs_component_get;
     h->api.query              = ecs_flecs_query;
 
-    out_ecs->ref     = &h->api;
-    out_ecs->destroy = ecs_flecs_destroy;
-    return KE_OK;
+    return (ke_ecs_handle){ .ref = &h->api, .destroy = ecs_flecs_destroy };
 }

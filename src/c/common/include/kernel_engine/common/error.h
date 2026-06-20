@@ -9,10 +9,6 @@
 extern "C" {
 #endif
 
-/// Two-value result: KE_OK (success) or KE_ERROR (failure).
-/// Rich context is carried by ke_error — see ke_error_is() and ke_error_set().
-typedef enum ke_result { KE_OK = 0, KE_ERROR = -1 } ke_result;
-
 /// Error type singleton. Each domain declares its types as global const instances.
 /// Comparison is by pointer identity via ke_error_is() — never compare addresses directly.
 typedef struct ke_error_type {
@@ -44,14 +40,14 @@ KE_COMMON_API extern const ke_error_type KE_ERROR_ALREADY_EXISTS;
 /// Returns true if err->type matches type or any ancestor in its parent chain.
 KE_COMMON_API bool ke_error_is(const ke_error* err, const ke_error_type* type);
 
-/// Low-level: fill a thread-local error slot and return KE_ERROR.
+/// Low-level: fill a thread-local error slot and write to *out_error if non-NULL.
 /// Prefer the KE_ERROR_SET / KE_ERROR_WRAP macros which inject __FILE__ and __LINE__.
-KE_COMMON_API ke_result ke_error_set(ke_error** out_error, const ke_error_type* type,
-                                     const char* message, const char* file, uint32_t line,
-                                     const ke_error* cause);
+KE_COMMON_API void ke_error_set(ke_error** out_error, const ke_error_type* type,
+                                const char* message, const char* file, uint32_t line,
+                                const ke_error* cause);
 
-/// Report an error at the call site. Expands to a ke_error_set() call with __FILE__/__LINE__
-/// already filled; evaluates to KE_ERROR so it can be used as a return statement.
+/// Record an error at the call site. Statement — must be followed by a return of the
+/// appropriate sentinel (NULL, false, KE_ENTITY_INVALID, etc.).
 #define KE_ERROR_SET(out_error, type, message) \
     ke_error_set(out_error, type, message, __FILE__, __LINE__, NULL)
 

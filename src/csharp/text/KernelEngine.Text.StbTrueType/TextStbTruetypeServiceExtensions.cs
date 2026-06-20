@@ -25,9 +25,9 @@ public static class TextStbTrueTypeServiceExtensions
                 {
                     logger = logger != null ? logger.Native : null,
                 };
-                ke_font_loader_handle handle;
-                KernelException.ThrowIfFailed(
-                    KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&@params, &handle, null).ToManaged());
+                ke_error* err = null;
+                var handle = KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&@params, &err);
+                if (handle.@ref == null) throw KernelError.FromNative(err, "font_loader_stb_create");
                 return new FontLoader(handle);
             }
         });

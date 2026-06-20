@@ -21,8 +21,9 @@ public static class ServiceCollectionExtensions
                 {
                     logger = logger != null ? logger.Native : null,
                 };
-                ke_image_loader_handle handle;
-                KernelException.ThrowIfFailed(Native.NativeMethods.image_loader_stb_create(&@params, &handle, null).ToManaged());
+                ke_error* err = null;
+                var handle = Native.NativeMethods.image_loader_stb_create(&@params, &err);
+                if (handle.@ref == null) throw KernelError.FromNative(err, "image_loader_stb_create");
                 return new ImageLoader(handle);
             }
         });

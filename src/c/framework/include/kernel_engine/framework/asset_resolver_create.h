@@ -32,12 +32,11 @@ extern "C"
     /// The resolver does NOT take ownership of either loader.
     /// <paramref name="project_root"/> may be NULL — res:// resolution is
     /// then disabled; only absolute or CWD-relative paths work.
-    KE_FRAMEWORK_API ke_result ke_asset_resolver_create(
-        ke_image_loader    *image_loader,
-        ke_font_loader     *font_loader,
-        const char         *project_root,
-        ke_asset_resolver_handle *out,
-        ke_error          **out_error);
+    KE_FRAMEWORK_API ke_asset_resolver_handle ke_asset_resolver_create(
+        ke_image_loader *image_loader,
+        ke_font_loader  *font_loader,
+        const char      *project_root,
+        ke_error       **out_error);
 
 #ifdef __cplusplus
 }

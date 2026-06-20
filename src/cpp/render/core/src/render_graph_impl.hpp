@@ -46,12 +46,12 @@ public:
     static void DestroyApi(ke_render_graph* self);
 
     // ── API surface, called via vtable trampolines ─────────────────────────
-    ke_result DeclareResource(const ke_resource_desc* desc);
-    ke_result ImportTexture(const char* name, ke_texture_handle handle);
-    ke_result AddPass(const ke_render_pass_params* params);
-    ke_result RemovePass(const char* name);
-    ke_result Compile();
-    ke_result Execute(const struct ke_frame_packet* packet);
+    bool DeclareResource(const ke_resource_desc* desc);
+    bool ImportTexture(const char* name, ke_texture_handle handle);
+    bool AddPass(const ke_render_pass_params* params);
+    bool RemovePass(const char* name);
+    bool Compile();
+    bool Execute(const struct ke_frame_packet* packet);
 
 private:
     // Forward-decl so Bridge can mention Pass before its full definition.
@@ -114,9 +114,9 @@ private:
 
     // Helpers.
     Resource* FindResource(const std::string& name);
-    ke_result EnsureResourceMaterialized(Resource& r);
-    ke_result ReleaseAllResources();
-    ke_result RecompileTopology();
+    bool EnsureResourceMaterialized(Resource& r);
+    bool ReleaseAllResources();
+    bool RecompileTopology();
 
     // Record-callback bridge: backend opens a ctx wired to the caller's
     // stack-resident Bridge, the user's record function queries reads/writes

@@ -35,10 +35,9 @@ extern "C"
     /// scene_properties component the loader wrote becomes dangling. Destroy
     /// the loader only after the world has shut down OR after removing every
     /// scene_properties component the loader populated.
-    KE_FRAMEWORK_API ke_result ke_scene_loader_create(
+    KE_FRAMEWORK_API ke_scene_loader_handle ke_scene_loader_create(
         struct ke_world   *world,
         const char        *project_root,
-        ke_scene_loader_handle  *out_loader,
         ke_error         **out_error);
 
 #ifdef __cplusplus

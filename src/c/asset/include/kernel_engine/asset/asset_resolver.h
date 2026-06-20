@@ -40,7 +40,7 @@ extern "C"
         /// Returns KE_ERROR_NOT_FOUND when the file is missing or the
         /// extension is unsupported; KE_ERROR_INVALID_ARGUMENT when no
         /// image loader was injected at construction time.
-        ke_result (*resolve_texture)(struct ke_asset_resolver *self,
+        bool (*resolve_texture)(struct ke_asset_resolver *self,
                                      const char               *path,
                                      ke_texture_data         **out,
                                      ke_error                **out_error);
@@ -54,7 +54,7 @@ extern "C"
         ///   (additional model-file extensions land when an asset loader
         ///    is injected; .gltf/.fbx/.obj are not yet routed)
         /// Caller owns the result; release with free_mesh.
-        ke_result (*resolve_mesh)(struct ke_asset_resolver *self,
+        bool (*resolve_mesh)(struct ke_asset_resolver *self,
                                   const char               *path,
                                   ke_mesh_shape_data       *out,
                                   ke_error                **out_error);
@@ -65,7 +65,7 @@ extern "C"
         /// Parses a `.material` TOML file into ke_material_spec. Texture
         /// fields stay as path strings — feed them back through
         /// resolve_texture to materialise.
-        ke_result (*resolve_material)(struct ke_asset_resolver *self,
+        bool (*resolve_material)(struct ke_asset_resolver *self,
                                       const char               *path,
                                       ke_material_spec         *out,
                                       ke_error                **out_error);
@@ -75,7 +75,7 @@ extern "C"
         ///
         /// Returns KE_ERROR_INVALID_ARGUMENT when no font loader was injected
         /// at construction time.
-        ke_result (*resolve_font)(struct ke_asset_resolver *self,
+        bool (*resolve_font)(struct ke_asset_resolver *self,
                                   const char               *path,
                                   float                     pixel_size,
                                   uint32_t                  first_codepoint,

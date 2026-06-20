@@ -19,10 +19,9 @@ extern "C"
 
         /// @brief Loads an image from @p path into a newly allocated ke_texture_data (RGBA8).
         ///        The caller owns the result and must release it with free_image.
-        ke_result (*load_image)(struct ke_image_loader *self,
-                                const char *path,
-                                ke_texture_data **out,
-                                ke_error **out_error);
+        ke_texture_data *(*load_image)(struct ke_image_loader *self,
+                                       const char *path,
+                                       ke_error **out_error);
 
         /// @brief Frees a ke_texture_data previously returned by load_image.
         void (*free_image)(struct ke_image_loader *self, ke_texture_data *data);

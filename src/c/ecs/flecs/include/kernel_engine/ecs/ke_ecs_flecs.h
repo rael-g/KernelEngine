@@ -41,9 +41,8 @@ KE_ECS_FLECS_API extern const ke_error_type KE_ERROR_ECS_FLECS_FATAL;
 /// Creates a ke_ecs vtable backed by an internally-owned flecs world.
 /// Also installs process-wide ecs_os_api log + abort handlers so that flecs
 /// assertions are translated to ke_error instead of calling abort().
-KE_ECS_FLECS_API ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
-                                               ke_ecs_handle             *out_ecs,
-                                               ke_error                 **out_error);
+KE_ECS_FLECS_API ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
+                                                   ke_error                 **out_error);
 
 /// Returns the last flecs fatal message captured on the calling thread, or NULL
 /// if no fatal occurred. Valid until the next ke_ecs vtable call on this thread.

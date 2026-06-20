@@ -42,13 +42,19 @@ static void logger_flush(ke_logger *self)
         if (s->sinks[i].flush) s->sinks[i].flush(&s->sinks[i]);
 }
 
-static ke_result logger_add_sink(ke_logger *self, ke_logger_sink sink, ke_error **out_error)
+static bool logger_add_sink(ke_logger *self, ke_logger_sink sink, ke_error **out_error)
 {
-    if (!self) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    if (!self) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     logger_state *s = (logger_state *)self->handle;
-    if (s->sink_count >= KE_LOGGER_MAX_SINKS) return KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "sink capacity exceeded");
+    if (s->sink_count >= KE_LOGGER_MAX_SINKS) {
+        KE_ERROR_SET(out_error, &KE_ERROR_GENERAL, "sink capacity exceeded");
+        return false;
+    }
     s->sinks[s->sink_count++] = sink;
-    return KE_OK;
+    return true;
 }
 
 const char *ke_log_level_to_string(int32_t level)
@@ -65,18 +71,22 @@ const char *ke_log_level_to_string(int32_t level)
     }
 }
 
-ke_result ke_logger_create(ke_logger_handle *out_logger, ke_error **out_error)
+ke_logger_handle ke_logger_create(ke_error **out_error)
 {
-    if (!out_logger) return KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+    ke_logger_handle null_handle = {0};
 
     ke_logger *logger = (ke_logger *)ke_alloc(sizeof(ke_logger), _Alignof(ke_logger));
-    if (!logger) return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "logger allocation failed");
+    if (!logger) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "logger allocation failed");
+        return null_handle;
+    }
 
     logger_state *state = (logger_state *)ke_alloc(sizeof(logger_state), _Alignof(logger_state));
     if (!state)
     {
         ke_free(logger);
-        return KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return null_handle;
     }
 
     memset(state, 0, sizeof(*state));
@@ -86,7 +96,8 @@ ke_result ke_logger_create(ke_logger_handle *out_logger, ke_error **out_error)
     logger->flush      = logger_flush;
     logger->add_sink   = logger_add_sink;
 
-    out_logger->ref     = logger;
-    out_logger->destroy = logger_destroy;
-    return KE_OK;
+    ke_logger_handle out_logger;
+    out_logger.ref     = logger;
+    out_logger.destroy = logger_destroy;
+    return out_logger;
 }
