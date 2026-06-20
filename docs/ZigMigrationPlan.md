@@ -307,13 +307,16 @@ hand-build today.
 - **CMake** — to be removed (it is the explicit driver of the project), once
   build.zig parity is proven (trigger below still open).
 
-**Still open:**
-- **[DECISION — PO] Pinned Zig version** — which release to standardize on, and the
-  upgrade cadence policy.
-- **[DECISION — PO] Test framework fate** — keep GoogleTest under `zig cc`, or
-  migrate to Zig's built-in `test` blocks as each module moves to Zig.
-- **[DECISION — PO] CMake retirement trigger** — how many green cycles of build.zig
-  parity before deleting the CMake tree.
+**Settled (PO, 2026-06-20):**
+- **Pinned Zig version** — 0.16.x (latest stable at time of work; verify on
+  ziglang.org — if 0.16 is not yet released, pin the latest available stable and
+  upgrade to 0.16 when it lands).
+- **Test framework fate** — migrate to Zig's built-in `test` blocks progressively:
+  as each module moves to Zig, its GoogleTest suite moves to `zig build test`.
+  C++ modules keep GoogleTest under `zig cc` until their Zig port.
+- **CMake retirement trigger** — 1 green cycle (build.zig produces identical DLLs,
+  all C++ tests pass, all C# examples run) + PO manual validation of runtime
+  examples. CMake deleted immediately after that session.
 
 ---
 
