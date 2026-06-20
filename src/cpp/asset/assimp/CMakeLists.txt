@@ -13,7 +13,7 @@ endif()
 
 target_include_directories(ke_asset_assimp PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+    ${CMAKE_SOURCE_DIR}/src/c/asset/include
 )
 
 target_include_directories(ke_asset_assimp PRIVATE
@@ -23,9 +23,11 @@ target_include_directories(ke_asset_assimp PRIVATE
 find_package(assimp CONFIG REQUIRED)
 
 target_link_libraries(ke_asset_assimp PUBLIC
-    ke_kernel
+    ke_asset
+    ke_logger
     assimp::assimp
 )
+target_link_libraries(ke_asset_assimp PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_asset_assimp
     EXPORT KernelEngineTargets

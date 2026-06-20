@@ -209,7 +209,7 @@ typedef struct ke_logger ke_logger;
 
     } ke_logger;
 
-           ke_result ke_logger_create(ke_allocator *allocator, ke_logger **out_logger);
+           ke_result ke_logger_create(ke_logger **out_logger);
     typedef struct ke_input_snapshot
     {
 
@@ -275,7 +275,7 @@ typedef struct ke_logger ke_logger;
 
     } ke_input;
 
-           ke_result ke_input_create(struct ke_allocator *allocator, struct ke_logger *logger, ke_input **out_input);
+           ke_result ke_input_create(struct ke_logger *logger, ke_input **out_input);
     typedef struct ke_directional_light
     {
         float dir_x, dir_y, dir_z;
@@ -718,7 +718,8 @@ typedef struct ke_logger ke_logger;
     struct ke_frame;
 
     typedef struct ke_world_params {
-        struct ke_allocator *allocator;
+        struct ke_task_scheduler *task_scheduler;
+        ke_ecs *ecs;
     } ke_world_params;
 
     typedef struct ke_world
@@ -768,8 +769,7 @@ struct ke_world;
     } ke_scene_tree;
 
                      ke_result ke_scene_tree_create(
-        struct ke_world *world,
-        ke_allocator *alloc,
+        ke_ecs *ecs,
         ke_scene_tree **out_tree);
 
     typedef enum ke_key
@@ -981,7 +981,6 @@ struct ke_world;
     } ke_input_actions;
 
                      ke_result ke_input_actions_create(
-        ke_allocator *alloc,
         ke_input_actions **out_actions);
     typedef enum ke_mesh_primitive
     {
@@ -1162,9 +1161,7 @@ struct ke_world;
         void (*destroy)(struct ke_scene_loader *self);
     } ke_scene_loader;
                      ke_result ke_scene_loader_create(
-        ke_allocator *alloc,
         struct ke_world *world,
-        ke_scene_tree *tree,
         const char *project_root,
         ke_scene_loader **out_loader);
 struct ke_window;

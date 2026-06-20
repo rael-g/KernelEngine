@@ -15,7 +15,6 @@ target_include_directories(ke_framework PRIVATE
 )
 
 target_include_directories(ke_framework PUBLIC
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -23,9 +22,17 @@ target_include_directories(ke_framework PUBLIC
 install(DIRECTORY include/ DESTINATION include)
 
 target_link_libraries(ke_framework PUBLIC
-    ke_kernel
+    ke_common
+    ke_allocator
+    ke_ecs
+    ke_spatial
+    ke_input
+    ke_render
+    ke_asset
+    ke_text
     ke_runtime
 )
+target_link_libraries(ke_framework PRIVATE ke_allocator_malloc)
 
 get_target_property(target_type ke_framework TYPE)
 if (target_type STREQUAL "STATIC_LIBRARY")

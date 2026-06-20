@@ -1,4 +1,3 @@
-using KernelEngine.Kernel.Native;
 using Xunit;
 
 namespace KernelEngine.Kernel.Tests;

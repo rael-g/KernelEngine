@@ -5,7 +5,7 @@ using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,7 +18,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 01 Window/Tree"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
@@ -44,7 +44,7 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
 
-        var orangeMat = renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f)).Value;
+        var orangeMat = renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
         tree.AddNode(new SpinningQuad { MaterialHandle = orangeMat }, "Spinner");
     }));
 

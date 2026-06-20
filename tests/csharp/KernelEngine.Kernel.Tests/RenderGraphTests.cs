@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Reflection;
-using KernelEngine.Kernel.Native;
 using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
@@ -37,7 +36,7 @@ public unsafe class RenderGraphTests
     // ── Mock vtable callbacks ─────────────────────────────────────────────────────────────
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockAddPass(ke_render_graph* self, ke_render_pass_params* p)
+    private static bool MockAddPass(ke_render_graph* self, ke_render_pass_params* p, ke_error** out_error)
     {
         _addPassCalled++;
         _lastPassType   = p->type;
@@ -48,7 +47,7 @@ public unsafe class RenderGraphTests
         _lastPassName = p->name != null ? new string(p->name) : "";
         _lastReadName = (p->reads != null && p->reads_count > 0 && p->reads[0].name != null)
             ? new string(p->reads[0].name) : "";
-        return ke_result.KE_OK;
+        return true;
     }
 
     [Fact]
@@ -63,41 +62,40 @@ public unsafe class RenderGraphTests
     public void RemovePass_returns_false_when_not_found()
     {
         var native = BuildMockGraph();
-        g_mockRemovePassResult = ke_result.KE_ERROR_NOT_FOUND;
+        g_mockRemovePassResult = false;
         var graph  = new RenderGraph(&native);
         try {
             Assert.False(graph.RemovePass("unknown"));
-        } finally { g_mockRemovePassResult = ke_result.KE_OK; }
+        } finally { g_mockRemovePassResult = true; }
     }
 
-    private static ke_result g_mockRemovePassResult = ke_result.KE_OK;
+    private static bool g_mockRemovePassResult = true;
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockRemovePass(ke_render_graph* self, sbyte* name) 
-    { 
-        _removePassCalled++; 
-        return g_mockRemovePassResult; 
+    private static bool MockRemovePass(ke_render_graph* self, sbyte* name, ke_error** out_error)
+    {
+        _removePassCalled++;
+        return g_mockRemovePassResult;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockCompile(ke_render_graph* self) { _compileCalled++; return ke_result.KE_OK; }
+    private static bool MockCompile(ke_render_graph* self, ke_error** out_error) { _compileCalled++; return true; }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void MockDestroy(ke_render_graph* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockDeclareResource(ke_render_graph* self, ke_resource_desc* d) => ke_result.KE_OK;
+    private static bool MockDeclareResource(ke_render_graph* self, ke_resource_desc* d, ke_error** out_error) => true;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockImportTexture(ke_render_graph* self, sbyte* name, ke_texture_handle h) => ke_result.KE_OK;
+    private static bool MockImportTexture(ke_render_graph* self, sbyte* name, ke_texture_handle h, ke_error** out_error) => true;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result MockExecute(ke_render_graph* self, ke_frame_packet* pkt) => ke_result.KE_OK;
+    private static bool MockExecute(ke_render_graph* self, ke_frame_packet* pkt, ke_error** out_error) => true;
 
     private static ke_render_graph BuildMockGraph()
     {
         var g = default(ke_render_graph);
         g.handle           = (void*)1;
-        g.destroy          = &MockDestroy;
         g.declare_resource = &MockDeclareResource;
         g.import_texture   = &MockImportTexture;
         g.add_pass         = &MockAddPass;

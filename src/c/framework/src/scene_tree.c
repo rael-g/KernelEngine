@@ -1,11 +1,13 @@
-// ke_scene_tree impl — pure C. Owns the cids of the framework's three
+﻿// ke_scene_tree impl — pure C. Owns the cids of the framework's three
 // scene-graph components (transform/hierarchy/name) registered against the
 // caller-supplied ke_ecs. All hierarchy bookkeeping flows through ECS
 // component reads/writes; no separate side state.
 
 #include <kernel_engine/framework/scene_tree_create.h>
-#include <kernel_engine/kernel/framework/components.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/framework/components.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -17,7 +19,6 @@
 typedef struct scene_tree_state {
     ke_scene_tree    api;
     ke_ecs          *ecs;          // borrowed
-    ke_allocator    *allocator;    // borrowed
     ke_entity        root;
     ke_component_id  transform_cid;
     ke_component_id  hierarchy_cid;
@@ -37,7 +38,7 @@ static const ke_name_component *get_name(scene_tree_state *s, ke_entity e) {
 // Resolves or registers a component cid by name.
 static ke_component_id ensure_component(ke_ecs *ecs, const char *name, size_t size) {
     ke_component_meta meta;
-    if (ecs->component_lookup(ecs, name, &meta) == KE_OK) return meta.cid;
+    if (ecs->component_lookup(ecs, name, &meta, NULL)) return meta.cid;
     return ecs->component_register(ecs, name, size);
 }
 
@@ -50,7 +51,8 @@ static ke_entity vt_root(ke_scene_tree *self) {
 
 // ── vtable: create_node ─────────────────────────────────────────────────────
 
-static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity parent) {
+static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity parent, ke_error **out_error) {
+    (void)out_error;
     if (!self || !self->handle) return KE_ENTITY_INVALID;
     scene_tree_state *s = (scene_tree_state *)self->handle;
     if (parent == KE_ENTITY_INVALID) parent = s->root;
@@ -151,7 +153,8 @@ static ke_entity child_by_segment(scene_tree_state *s, ke_entity parent,
     return KE_ENTITY_INVALID;
 }
 
-static ke_entity vt_find_node(ke_scene_tree *self, const char *name_or_path) {
+static ke_entity vt_find_node(ke_scene_tree *self, const char *name_or_path, ke_error **out_error) {
+    (void)out_error;
     if (!self || !self->handle || !name_or_path || !name_or_path[0])
         return KE_ENTITY_INVALID;
     scene_tree_state *s = (scene_tree_state *)self->handle;
@@ -190,12 +193,17 @@ static void destroy_entities_recursive(scene_tree_state *s, ke_entity e) {
     s->ecs->entity_destroy(s->ecs, e);
 }
 
-static ke_result vt_destroy_node(ke_scene_tree *self, ke_entity entity) {
-    if (!self || !self->handle || entity == KE_ENTITY_INVALID)
-        return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_destroy_node(ke_scene_tree *self, ke_entity entity, ke_error **out_error) {
+    if (!self || !self->handle || entity == KE_ENTITY_INVALID) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     scene_tree_state *s = (scene_tree_state *)self->handle;
 
-    if (!get_hierarchy(s, entity)) return KE_ERROR_NOT_FOUND;
+    if (!get_hierarchy(s, entity)) {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "entity not found");
+        return false;
+    }
 
     // Detach from parent's child list before tearing the subtree down.
     // Snapshot the navigation fields up-front because the subsequent
@@ -219,7 +227,7 @@ static ke_result vt_destroy_node(ke_scene_tree *self, ke_entity entity) {
     }
 
     destroy_entities_recursive(s, entity);
-    return KE_OK;
+    return true;
 }
 
 static void vt_destroy_all(ke_scene_tree *self) {
@@ -287,21 +295,26 @@ static void vt_destroy(ke_scene_tree *self) {
     scene_tree_state *s = (scene_tree_state *)self->handle;
     // Destroy root + everything under it.
     destroy_entities_recursive(s, s->root);
-    s->allocator->free(s->allocator, s);
+    ke_free(s);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_scene_tree_create(ke_ecs *ecs, ke_allocator *alloc, ke_scene_tree **out_tree) {
-    if (!ecs || !alloc || !out_tree) return KE_ERROR_INVALID_ARGUMENT;
+ke_scene_tree_handle ke_scene_tree_create(ke_ecs *ecs, ke_error **out_error) {
+    ke_scene_tree_handle null_handle = {0};
+    if (!ecs) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return null_handle;
+    }
 
-    scene_tree_state *s = (scene_tree_state *)alloc->alloc(
-        alloc, sizeof(scene_tree_state), 8);
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    scene_tree_state *s = (scene_tree_state *)ke_alloc(sizeof(scene_tree_state), 8);
+    if (!s) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return null_handle;
+    }
     memset(s, 0, sizeof(*s));
 
     s->ecs       = ecs;
-    s->allocator = alloc;
     s->transform_cid = ensure_component(ecs, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component));
     s->hierarchy_cid = ensure_component(ecs, KE_COMPONENT_NAME_HIERARCHY, sizeof(ke_hierarchy_component));
     s->name_cid      = ensure_component(ecs, KE_COMPONENT_NAME_NAME,      sizeof(ke_name_component));
@@ -309,16 +322,16 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_allocator *alloc, ke_scene_tree *
     // Spin up root entity with the standard components.
     s->root = ecs->entity_create(ecs);
     if (s->root == KE_ENTITY_INVALID) {
-        alloc->free(alloc, s);
-        return KE_ERROR_OUT_OF_MEMORY;
+        ke_free(s);
+        return null_handle;
     }
     // Add all components FIRST, then fetch + populate. Each add can move the
     // entity to a new archetype and invalidate pointers from earlier adds.
     if (!ecs->component_add(ecs, s->root, s->hierarchy_cid) ||
         !ecs->component_add(ecs, s->root, s->name_cid)) {
         ecs->entity_destroy(ecs, s->root);
-        alloc->free(alloc, s);
-        return KE_ERROR_OUT_OF_MEMORY;
+        ke_free(s);
+        return null_handle;
     }
 
     ke_hierarchy_component *h = (ke_hierarchy_component *)ecs->component_get(ecs, s->root, s->hierarchy_cid);
@@ -342,8 +355,9 @@ ke_result ke_scene_tree_create(ke_ecs *ecs, ke_allocator *alloc, ke_scene_tree *
     s->api.destroy_all           = vt_destroy_all;
     s->api.find_node             = vt_find_node;
     s->api.propagate_transforms  = vt_propagate_transforms;
-    s->api.destroy               = vt_destroy;
 
-    *out_tree = &s->api;
-    return KE_OK;
+    ke_scene_tree_handle out_tree;
+    out_tree.ref     = &s->api;
+    out_tree.destroy = vt_destroy;
+    return out_tree;
 }

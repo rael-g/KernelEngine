@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/render/render.h>
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
@@ -26,14 +26,14 @@ struct ShadowMapEntry
 class ShadowPipeline
 {
 public:
-    ke_result CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out);
-    ke_result DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle handle);
+    bool CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out);
+    bool DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle handle);
 
-    ke_result BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p);
-    ke_result SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geom, render::GpuProgramHandle prog, ke_mesh_handle m, const ke_mat4 *t);
-    ke_result EndShadowPass(RenderContext& ctx);
+    bool BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p);
+    bool SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geom, render::GpuProgramHandle prog, ke_mesh_handle m, const ke_mat4 *t);
+    bool EndShadowPass(RenderContext& ctx);
 
-    ke_result SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h);
+    bool SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h);
 
     render::GpuTextureHandle GetActiveShadowTex() const;
 

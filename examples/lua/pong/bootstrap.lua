@@ -63,7 +63,7 @@ local alloc = kernel.ke_allocator_malloc_create()
 assert(alloc ~= nil)
 
 local logger_out = ffi.new("ke_logger*[1]")
-assert(kernel.ke_logger_create(alloc, logger_out) == 0)
+assert(kernel.ke_logger_create(logger_out) == 0)
 local logger = logger_out[0]
 
 local sink = ffi.new("ke_logger_sink")
@@ -77,7 +77,7 @@ assert(logger.add_sink(logger, sink) == 0)
 -- ── Input + Window ──────────────────────────────────────────────────────────
 
 local input_out = ffi.new("ke_input*[1]")
-assert(kernel.ke_input_create(alloc, logger, input_out) == 0)
+assert(kernel.ke_input_create(logger, input_out) == 0)
 local input = input_out[0]
 
 local WIN_W, WIN_H = 960, 540
@@ -118,13 +118,14 @@ assert(render.on_initialize(render) == 0)
 -- ── World + Scene tree ──────────────────────────────────────────────────────
 
 local world_params = ffi.new("ke_world_params")
-world_params.allocator = alloc
 local world_out = ffi.new("ke_world*[1]")
 assert(kernel.ke_world_create(world_params, world_out) == 0)
 local world = world_out[0]
 
 local tree_out = ffi.new("ke_scene_tree*[1]")
-assert(framework.ke_scene_tree_create(world, alloc, tree_out) == 0)
+-- NOTE: ke_scene_tree_create now takes (ke_ecs*, ke_scene_tree**).
+-- bootstrap.lua needs a full rewrite for the new world+ecs setup pattern.
+assert(framework.ke_scene_tree_create(world.ecs(world), tree_out) == 0)
 local tree = tree_out[0]
 
 -- ── Render systems (Camera + Mesh + Light) ──────────────────────────────────

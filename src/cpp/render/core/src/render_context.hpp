@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/context/types.h>
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/common/export.h>
+#include <kernel_engine/logger/logger.h>
 #include <cstdint>
 
 namespace kernel_engine::render
@@ -20,7 +20,6 @@ class ShaderProviderInterface;
  */
 struct RenderContext
 {
-    ke_allocator* allocator = nullptr;
     ke_logger*    logger    = nullptr;
     ShaderProviderInterface* shader_provider = nullptr;
     render::GpuDevice*       gpu = nullptr;

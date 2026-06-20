@@ -14,7 +14,7 @@ add_executable(test_integration_cpp
     test_shader_compiler.cpp
     test_asset_loader.cpp
     test_stb_image_loader.cpp
-    test_enki_task_scheduler.cpp
+    test_enki_scheduler.cpp
     test_miniaudio_audio.cpp
     test_box2d_physics.cpp
     test_stb_font.cpp
@@ -22,7 +22,6 @@ add_executable(test_integration_cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
     ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
@@ -35,7 +34,7 @@ target_include_directories(test_integration_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx_shader_compiler/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/stb_image/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/task_scheduler/enki/include
+    ${CMAKE_SOURCE_DIR}/src/cpp/scheduler/enki/include
     ${CMAKE_SOURCE_DIR}/src/cpp/audio/miniaudio/include
     ${CMAKE_SOURCE_DIR}/src/cpp/physics/box2d/include
     ${CMAKE_SOURCE_DIR}/src/cpp/text/stb_truetype/include
@@ -49,14 +48,19 @@ target_link_libraries(test_integration_cpp PRIVATE
     ke_shader_compiler_bgfx
     ke_asset_assimp
     ke_asset_stb_image
-    ke_task_scheduler_enki
+    ke_scheduler_enki
     ke_audio_miniaudio
     ke_physics_2d_box2d
     ke_text_stb_truetype
+    ke_allocator_malloc
+    ke_logger_simple
+    ke_input_default
+    ke_resource_cache_default
+    ke_render_frame_packet
+    ke_threading_default
     ke_runtime
     ke_ecs_flecs
     ke_framework
-    ke_kernel
     GTest::gtest_main
     GTest::gmock
 )

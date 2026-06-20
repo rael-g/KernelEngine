@@ -5,7 +5,7 @@ using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,7 +18,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 10 HDR & Bloom"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
@@ -41,7 +41,7 @@ var services = new ServiceCollection()
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 10f) };
 
         var cubeMesh = MeshPrimitives.Cube(renderer);
-        var mat      = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+        var mat      = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
         var glow = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, "GlowCube");
         glow.LocalTransform = glow.LocalTransform with { Scale = new Vector3(2f, 2f, 2f) };

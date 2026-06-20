@@ -1,0 +1,12 @@
+using KernelEngine.Common.Native;
+
+namespace KernelEngine.Framework.Native;
+
+public unsafe partial struct ke_scene_properties
+{
+    [NativeTypeName("const ke_variant_table_entry *")]
+    public KernelEngine.Ecs.Native.ke_variant_table_entry* entries;
+
+    [NativeTypeName("uint32_t")]
+    public uint count;
+}

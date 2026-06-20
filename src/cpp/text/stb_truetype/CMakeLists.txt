@@ -11,7 +11,6 @@ endif()
 
 target_include_directories(ke_text_stb_truetype PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
 )
 
 target_include_directories(ke_text_stb_truetype PRIVATE
@@ -24,8 +23,10 @@ find_path(STB_INCLUDE_DIR "stb_truetype.h" REQUIRED)
 target_include_directories(ke_text_stb_truetype PRIVATE ${STB_INCLUDE_DIR})
 
 target_link_libraries(ke_text_stb_truetype PUBLIC
-    ke_kernel
+    ke_text
+    ke_logger
 )
+target_link_libraries(ke_text_stb_truetype PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_text_stb_truetype
     EXPORT KernelEngineTargets

@@ -16,8 +16,6 @@ public class ServiceCollectionExtensionsTests
         services.AddKernel();
         var provider = services.BuildServiceProvider();
 
-        Assert.NotNull(provider.GetService<Allocator>());
-        Assert.NotNull(provider.GetService<IAllocator>());
         Assert.NotNull(provider.GetService<IKernelFactory>());
     }
 

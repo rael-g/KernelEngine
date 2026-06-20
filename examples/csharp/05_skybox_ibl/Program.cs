@@ -5,7 +5,7 @@ using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +20,7 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .AddInput()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 05 Skybox & IBL (FreeLook)"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
@@ -65,12 +65,12 @@ var services = new ServiceCollection()
             }
         }
 
-        var cubemap = renderer.CreateCubemap(faceSize, cubeData).Value;
+        var cubemap = renderer.CreateCubemap(faceSize, cubeData);
         Console.WriteLine($"[KernelEngine] Cubemap: handle={cubemap.Value} faceSize={faceSize}");
 
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
-        var mirrorMat = renderer.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f).Value;
+        var mirrorMat = renderer.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f);
         tree.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
 
         tree.AddNode(new DirectionalLight

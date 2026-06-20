@@ -18,7 +18,7 @@ std::string GetDirectory(const char* path)
     return "";
 }
 
-ke_result ConvertMesh(const aiMesh* am, ke_allocator* allocator, ke_mesh_data* md)
+bool ConvertMesh(const aiMesh* am, ke_mesh_data* md)
 {
     memset(md, 0, sizeof(ke_mesh_data));
 
@@ -27,15 +27,15 @@ ke_result ConvertMesh(const aiMesh* am, ke_allocator* allocator, ke_mesh_data* m
     md->index_count  = am->mNumFaces * 3;
 
     // Allocate vertex buffer
-    md->vertices = (ke_vertex *)ke_alloc(allocator, sizeof(ke_vertex) * am->mNumVertices);
-    if (!md->vertices) return KE_ERROR_OUT_OF_MEMORY;
+    md->vertices = (ke_vertex *)ke_alloc(sizeof(ke_vertex) * am->mNumVertices, alignof(ke_vertex));
+    if (!md->vertices) return false;
 
     // Allocate index buffer
-    md->indices = (uint16_t *)ke_alloc(allocator, sizeof(uint16_t) * md->index_count);
+    md->indices = (uint16_t *)ke_alloc(sizeof(uint16_t) * md->index_count, alignof(uint16_t));
     if (!md->indices)
     {
-        ke_free(allocator, md->vertices);
-        return KE_ERROR_OUT_OF_MEMORY;
+        ke_free(md->vertices);
+        return false;
     }
 
     // Fill vertices
@@ -89,10 +89,10 @@ ke_result ConvertMesh(const aiMesh* am, ke_allocator* allocator, ke_mesh_data* m
     }
     md->index_count = idx_cursor;
 
-    return KE_OK;
+    return true;
 }
 
-ke_result ConvertMaterial(const aiMaterial* am, ke_material_data* md, int32_t* albedo_index, int32_t* normal_index)
+bool ConvertMaterial(const aiMaterial* am, ke_material_data* md, int32_t* albedo_index, int32_t* normal_index)
 {
     memset(md, 0, sizeof(ke_material_data));
 
@@ -117,7 +117,7 @@ ke_result ConvertMaterial(const aiMaterial* am, ke_material_data* md, int32_t* a
     md->metallic  = metallic;
     md->roughness = roughness;
 
-    return KE_OK;
+    return true;
 }
 
 } // namespace kernel_engine::asset::assimp::Converter

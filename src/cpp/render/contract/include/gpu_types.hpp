@@ -4,7 +4,6 @@
 #include <cstdint>
 
 // Forward declarations for kernel types (outside renderer namespace)
-struct ke_allocator;
 struct ke_logger;
 struct ke_window;
 
@@ -133,7 +132,6 @@ struct GpuInitConfig
  */
 struct GpuRendererParams
 {
-    ::ke_allocator* allocator;
     ::ke_logger*    logger;
     const char*     shader_path;
     ::ke_window*    window;

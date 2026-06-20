@@ -1,6 +1,5 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
 using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
@@ -37,10 +36,7 @@ public unsafe class InputDrainTests
     public void DrainEvents_TranslatesNativeToManaged()
     {
         var mock = (ke_input*)NativeMemory.AllocZeroed((nuint)sizeof(ke_input));
-        mock->drain_events = &MockDrainEvents;
-
-        using var allocator = new MallocAllocator();
-        var input = new Input(allocator, null);
+        mock->drain_events = &MockDrainEvents;        var input = new Input(null);
         
         // Use reflection to swap _native for our mock
         var field = typeof(Input).GetField("_native", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);

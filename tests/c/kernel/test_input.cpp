@@ -1,77 +1,56 @@
-#include <gtest/gtest.h>
-#include <kernel_engine/kernel/input/input.h>
-#include <kernel_engine/kernel/context/allocator.h>
+﻿#include <gtest/gtest.h>
+#include <kernel_engine/input/input.h>
 
 class InputTest : public ::testing::Test {
 protected:
-    ke_allocator* alloc = nullptr;
+    ke_input_handle input_h{};
     ke_input* input = nullptr;
 
     void SetUp() override {
-        alloc = ke_allocator_malloc_create();
-        ASSERT_NE(alloc, nullptr);
-        ke_result res = ke_input_create(alloc, nullptr, &input);
-        ASSERT_EQ(res, KE_OK);
+        input_h = ke_input_create(nullptr, NULL);
+        ASSERT_NE(input_h.ref, nullptr);
+        input = input_h.ref;
     }
 
     void TearDown() override {
-        if (input) input->destroy(input);
-        if (alloc) alloc->destroy(alloc);
+        if (input_h.ref) input_h.destroy(input_h.ref);
     }
 };
 
 // --- Creation Tests ---
 
-TEST(InputInitTest, Create_NullOutInput_ReturnsInvalidArgument) {
-    ke_allocator* a = ke_allocator_malloc_create();
-    ASSERT_EQ(ke_input_create(a, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
-    a->destroy(a);
-}
-
-TEST(InputInitTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_input* i = nullptr;
-    ASSERT_EQ(ke_input_create(nullptr, nullptr, &i), KE_ERROR_INVALID_ARGUMENT);
-}
-
-static void* fail_alloc(ke_allocator* alloc, size_t size, size_t alignment) { return nullptr; }
-static void fail_free(ke_allocator* alloc, void* ptr) {}
-
-TEST(InputInitTest, Create_AllocationFailure_ReturnsOutOfMemory) {
-    ke_allocator fa;
-    fa.alloc = fail_alloc;
-    fa.free = fail_free;
-    ke_input* i = nullptr;
-    ASSERT_EQ(ke_input_create(&fa, nullptr, &i), KE_ERROR_OUT_OF_MEMORY);
+TEST(InputInitTest, Create_ReturnsValidHandle) {
+    ke_input_handle h = ke_input_create(nullptr, NULL);
+    ASSERT_NE(h.ref, nullptr);
+    h.destroy(h.ref);
 }
 
 // --- Destroy Tests ---
 
 TEST(InputDestroyTest, Destroy_NullInput_DoesNotCrash) {
-    ke_allocator* a = ke_allocator_malloc_create();
-    ke_input* i = nullptr;
-    ke_input_create(a, nullptr, &i);
-    auto destroy_fn = i->destroy;
-    i->destroy(i);
+    ke_input_handle i = ke_input_create(nullptr, NULL);
+    auto destroy_fn = i.destroy;
+    i.destroy(i.ref);
     destroy_fn(nullptr);
-    a->destroy(a);
     SUCCEED();
 }
 
 TEST_F(InputTest, Destroy_WorksNormally) {
-    input->destroy(input);
+    input_h.destroy(input_h.ref);
     input = nullptr;
+    input_h = {};
     SUCCEED();
 }
 
 // --- Update and State Tests ---
 
-TEST_F(InputTest, Update_NullSelf_ReturnsInvalidArgument) {
+TEST_F(InputTest, Update_NullSelf_ReturnsFalse) {
     auto update_fn = input->update;
-    ASSERT_EQ(update_fn(nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_FALSE(update_fn(nullptr, nullptr));
 }
 
 TEST_F(InputTest, KeyPressed_IsDetected) {
-    input->update(input);        // clear previous frame
+    input->update(input, nullptr);        // clear previous frame
     input->on_key(input, 65, 1); // 'A' press event arrives
     ASSERT_TRUE(input->is_key_pressed(input, 65));
 }
@@ -87,7 +66,7 @@ TEST_F(InputTest, Snapshot_KeyIsCaptured) {
 }
 
 TEST_F(InputTest, MouseMove_CalculatesDelta) {
-    input->update(input); // reset to (0,0) with no delta
+    input->update(input, nullptr); // reset to (0,0) with no delta
     input->on_mouse_move(input, 100.0f, 200.0f);
     input->on_mouse_move(input, 150.0f, 180.0f);
     ke_input_snapshot snapshot;
@@ -98,7 +77,7 @@ TEST_F(InputTest, MouseMove_CalculatesDelta) {
 }
 
 TEST_F(InputTest, MouseButton_IsDetected) {
-    input->update(input);
+    input->update(input, nullptr);
     input->on_mouse_button(input, 0, 1); // Left Down
     ke_input_snapshot snapshot;
     input->get_snapshot(input, &snapshot);
@@ -152,7 +131,7 @@ TEST_F(InputTest, IsKeyDown_WorksAcrossUpdate) {
     input->on_key(input, 10, 1);
     ASSERT_TRUE(input->is_key_down(input, 10));
     
-    input->update(input);
+    input->update(input, nullptr);
     ASSERT_TRUE(input->is_key_down(input, 10)); // Still down
     ASSERT_FALSE(input->is_key_pressed(input, 10)); // But not pressed this frame
     

@@ -2,9 +2,8 @@
 #include <gmock/gmock.h>
 #include <core_renderer.hpp>
 #include <gpu_device.hpp>
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/engine/frame_packet.h>
-#include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/render/frame_packet.h>
+#include <kernel_engine/render/render.h>
 #include "mocks.hpp"
 
 using namespace kernel_engine::render::bgfx;
@@ -17,13 +16,9 @@ class BgfxRenderTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        std::memset(&alloc, 0, sizeof(alloc));
-        alloc.alloc = [](ke_allocator*, size_t s, size_t) { return std::malloc(s); };
-        alloc.free  = [](ke_allocator*, void* p) { std::free(p); };
-
         gpu_mock = new NiceMock<MockGpuDevice>();
         shader_provider_mock = new NiceMock<MockShaderProvider>();
-        
+
         GpuRendererParams params{};
         renderer = std::unique_ptr<CoreRenderer>(new CoreRenderer(params));
         
@@ -40,7 +35,6 @@ protected:
         delete gpu_mock;
     }
 
-    ke_allocator alloc{};
     NiceMock<MockGpuDevice>* gpu_mock = nullptr;
     NiceMock<MockShaderProvider>* shader_provider_mock = nullptr;
     std::unique_ptr<CoreRenderer> renderer;

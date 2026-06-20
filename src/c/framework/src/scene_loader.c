@@ -1,4 +1,4 @@
-// ke_scene_loader impl — pure C, tomlc99 backed.
+﻿// ke_scene_loader impl — pure C, tomlc99 backed.
 //
 // Walks a `.scene.toml` file:
 //   [[entity]] entries → tree.create_node + transform/components apply + script
@@ -16,9 +16,11 @@
 // destroy — same end behavior, simpler ownership graph.
 
 #include <kernel_engine/framework/scene_loader_create.h>
-#include <kernel_engine/kernel/framework/world.h>
-#include <kernel_engine/kernel/framework/scene_tree.h>
-#include <kernel_engine/kernel/framework/components.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/framework/world.h>
+#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/framework/components.h>
 
 #include "../third_party/tomlc99/toml.h"
 
@@ -47,7 +49,6 @@ typedef struct arena_chunk {
 
 typedef struct loader_state {
     ke_scene_loader        api;
-    ke_allocator          *allocator;
     struct ke_world       *world;
     char                   project_root[512];
 
@@ -75,8 +76,7 @@ static void *arena_alloc(loader_state *s, size_t bytes, size_t align) {
     }
 
     size_t want = bytes < ARENA_CHUNK_SIZE ? ARENA_CHUNK_SIZE : bytes;
-    arena_chunk *nc = (arena_chunk *)s->allocator->alloc(
-        s->allocator, sizeof(arena_chunk) + want, 8);
+    arena_chunk *nc = (arena_chunk *)ke_alloc(sizeof(arena_chunk) + want, 8);
     if (!nc) return NULL;
     nc->data = (uint8_t *)nc + sizeof(arena_chunk);
     nc->cap  = want;
@@ -100,7 +100,7 @@ static void arena_destroy(loader_state *s) {
     arena_chunk *c = s->arena_head;
     while (c) {
         arena_chunk *nx = c->next;
-        s->allocator->free(s->allocator, c);
+        ke_free(c);
         c = nx;
     }
     s->arena_head = NULL;
@@ -230,7 +230,7 @@ static void resolve_path(const loader_state *s, const char *base_dir,
 // ── Script dispatch ────────────────────────────────────────────────────────
 
 static void dispatch_script(loader_state *s, ke_entity entity, const char *type_name) {
-    if (s->script_factory) s->script_factory(s->script_ctx, entity, type_name);
+    if (s->script_factory) s->script_factory(s->script_ctx, entity, type_name, NULL);
 }
 
 // ── Properties bag ─────────────────────────────────────────────────────────
@@ -285,7 +285,7 @@ static void apply_component_block(loader_state *s, ke_entity entity,
     ke_ecs *e = s->world->ecs(s->world);
 
     ke_component_meta meta;
-    if (e->component_lookup(e, comp_name, &meta) != KE_OK) return;  // unknown component; skip
+    if (!e->component_lookup(e, comp_name, &meta, NULL)) return;  // unknown component; skip
 
     void *comp = e->component_add(e, entity, meta.cid);
     if (!comp) return;
@@ -327,11 +327,12 @@ typedef struct named_entity {
     ke_entity  entity;
 } named_entity;
 
-static ke_result load_scene_recursive(loader_state *s, const char *path,
+static bool load_scene_recursive(loader_state *s, const char *path,
                                        ke_entity attach_parent,
                                        const char *override_name,
                                        toml_table_t *override_outer,
-                                       ke_entity *out_root);
+                                       ke_entity *out_root,
+                                       ke_error **out_error);
 
 static void apply_outer_overrides(loader_state *s, ke_entity entity, toml_table_t *outer) {
     // [entity.transform] was already applied early (before dispatch_script) by
@@ -351,16 +352,20 @@ static void apply_outer_overrides(loader_state *s, ke_entity entity, toml_table_
     }
 }
 
-static ke_result process_entity(loader_state *s, const char *base_dir,
+static bool process_entity(loader_state *s, const char *base_dir,
                                  toml_table_t *entity_tbl,
                                  named_entity *by_name, uint32_t *by_name_count,
                                  uint32_t by_name_cap,
                                  ke_entity attach_parent_override,
                                  const char *override_name,
                                  toml_table_t *override_outer,
-                                 ke_entity *out_entity) {
+                                 ke_entity *out_entity,
+                                 ke_error **out_error) {
     toml_datum_t name_d = toml_string_in(entity_tbl, "name");
-    if (!name_d.ok && !override_name) return KE_ERROR_INVALID_ARGUMENT;
+    if (!name_d.ok && !override_name) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "entity missing name");
+        return false;
+    }
     const char *effective_name = override_name ? override_name : name_d.u.s;
 
     struct ke_scene_tree *tree = s->world->scene_tree(s->world);
@@ -376,7 +381,8 @@ static ke_result process_entity(loader_state *s, const char *base_dir,
         free(pn.u.s);
         if (found == KE_ENTITY_INVALID) {
             if (name_d.ok) free(name_d.u.s);
-            return KE_ERROR_NOT_FOUND;
+            KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "parent entity not found");
+            return false;
         }
         parent = found;
     }
@@ -387,9 +393,9 @@ static ke_result process_entity(loader_state *s, const char *base_dir,
         resolve_path(s, base_dir, scene_ref.u.s, resolved, sizeof(resolved));
         free(scene_ref.u.s);
         ke_entity nested_root = KE_ENTITY_INVALID;
-        ke_result rc = load_scene_recursive(s, resolved, parent,
-                                            effective_name, entity_tbl, &nested_root);
-        if (rc != KE_OK) { if (name_d.ok) free(name_d.u.s); return rc; }
+        bool ok = load_scene_recursive(s, resolved, parent,
+                                            effective_name, entity_tbl, &nested_root, out_error);
+        if (!ok) { if (name_d.ok) free(name_d.u.s); return false; }
         if (name_d.ok && *by_name_count < by_name_cap) {
             named_entity *ne = &by_name[(*by_name_count)++];
             copy_name_init: {
@@ -402,11 +408,15 @@ static ke_result process_entity(loader_state *s, const char *base_dir,
         }
         if (out_entity) *out_entity = nested_root;
         if (name_d.ok) free(name_d.u.s);
-        return KE_OK;
+        return true;
     }
 
-    ke_entity entity = tree->create_node(tree, effective_name, parent);
-    if (entity == KE_ENTITY_INVALID) { if (name_d.ok) free(name_d.u.s); return KE_ERROR_OUT_OF_MEMORY; }
+    ke_entity entity = tree->create_node(tree, effective_name, parent, out_error);
+    if (entity == KE_ENTITY_INVALID) {
+        if (name_d.ok) free(name_d.u.s);
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "failed to create node");
+        return false;
+    }
 
     toml_table_t *xform_tbl = toml_table_in(entity_tbl, "transform");
     if (xform_tbl) apply_transform_block(s, entity, xform_tbl);
@@ -443,26 +453,33 @@ static ke_result process_entity(loader_state *s, const char *base_dir,
     }
     if (out_entity) *out_entity = entity;
     if (name_d.ok) free(name_d.u.s);
-    return KE_OK;
+    return true;
 }
 
-static ke_result load_scene_recursive(loader_state *s, const char *path,
+static bool load_scene_recursive(loader_state *s, const char *path,
                                        ke_entity attach_parent,
                                        const char *override_name,
                                        toml_table_t *override_outer,
-                                       ke_entity *out_root) {
+                                       ke_entity *out_root,
+                                       ke_error **out_error) {
     FILE *fp = fopen(path, "rb");
-    if (!fp) return KE_ERROR_NOT_FOUND;
+    if (!fp) {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "scene file not found");
+        return false;
+    }
     char errbuf[200];
     toml_table_t *root = toml_parse_file(fp, errbuf, sizeof(errbuf));
     fclose(fp);
-    if (!root) return KE_ERROR_NOT_FOUND;
+    if (!root) {
+        KE_ERROR_SET(out_error, &KE_ERROR_IO, "failed to parse scene file");
+        return false;
+    }
 
     char base_dir[512];
     path_dirname(path, base_dir, sizeof(base_dir));
 
     toml_array_t *entities = toml_array_in(root, "entity");
-    if (!entities) { if (out_root) *out_root = KE_ENTITY_INVALID; toml_free(root); return KE_OK; }
+    if (!entities) { if (out_root) *out_root = KE_ENTITY_INVALID; toml_free(root); return true; }
 
     enum { NAME_CAP = 256 };
     named_entity by_name[NAME_CAP];
@@ -475,60 +492,72 @@ static ke_result load_scene_recursive(loader_state *s, const char *path,
         toml_table_t *et = toml_table_at(entities, i);
         if (!et) continue;
         ke_entity ent = KE_ENTITY_INVALID;
-        ke_result rc;
+        bool ok;
         if (is_first) {
-            rc = process_entity(s, base_dir, et, by_name, &by_name_count, NAME_CAP,
-                                attach_parent, override_name, override_outer, &ent);
+            ok = process_entity(s, base_dir, et, by_name, &by_name_count, NAME_CAP,
+                                attach_parent, override_name, override_outer, &ent, out_error);
             first_root = ent;
             is_first = false;
         } else {
-            rc = process_entity(s, base_dir, et, by_name, &by_name_count, NAME_CAP,
-                                KE_ENTITY_INVALID, NULL, NULL, &ent);
+            ok = process_entity(s, base_dir, et, by_name, &by_name_count, NAME_CAP,
+                                KE_ENTITY_INVALID, NULL, NULL, &ent, out_error);
         }
-        if (rc != KE_OK) { toml_free(root); return rc; }
+        if (!ok) { toml_free(root); return false; }
     }
 
     if (out_root) *out_root = first_root;
     toml_free(root);
-    return KE_OK;
+    return true;
 }
 
 // ── vtable ────────────────────────────────────────────────────────────────
 
-static ke_result vt_load(ke_scene_loader *self, const char *path) {
-    if (!self || !self->handle || !path) return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_load(ke_scene_loader *self, const char *path, ke_error **out_error) {
+    if (!self || !self->handle || !path) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     loader_state *s = (loader_state *)self->handle;
-    return load_scene_recursive(s, path, KE_ENTITY_INVALID, NULL, NULL, NULL);
+    return load_scene_recursive(s, path, KE_ENTITY_INVALID, NULL, NULL, NULL, out_error);
 }
 
-static ke_result vt_register_script_factory(ke_scene_loader *self,
+static bool vt_register_script_factory(ke_scene_loader *self,
                                              ke_script_factory_func factory,
-                                             void *ctx) {
-    if (!self || !self->handle || !factory) return KE_ERROR_INVALID_ARGUMENT;
+                                             void *ctx, ke_error **out_error) {
+    if (!self || !self->handle || !factory) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     loader_state *s = (loader_state *)self->handle;
     s->script_factory = factory;
     s->script_ctx     = ctx;
-    return KE_OK;
+    return true;
 }
 
 static void vt_destroy(ke_scene_loader *self) {
     if (!self || !self->handle) return;
     loader_state *s = (loader_state *)self->handle;
     arena_destroy(s);
-    ke_allocator *a = s->allocator;
-    a->free(a, s);
+    ke_free(s);
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────
 
-ke_result ke_scene_loader_create(ke_allocator *alloc, struct ke_world *world,
-                                  const char *project_root, ke_scene_loader **out_loader) {
-    if (!alloc || !world || !out_loader) return KE_ERROR_INVALID_ARGUMENT;
+ke_scene_loader_handle ke_scene_loader_create(struct ke_world *world,
+                                  const char *project_root,
+                                  ke_error **out_error) {
+    ke_scene_loader_handle null_handle = {0};
+    if (!world) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return null_handle;
+    }
 
-    loader_state *s = (loader_state *)alloc->alloc(alloc, sizeof(loader_state), 8);
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    loader_state *s = (loader_state *)ke_alloc(sizeof(loader_state), 8);
+    if (!s) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return null_handle;
+    }
     memset(s, 0, sizeof(*s));
-    s->allocator = alloc;
     s->world     = world;
     if (project_root) {
         size_t n = strlen(project_root);
@@ -542,7 +571,7 @@ ke_result ke_scene_loader_create(ke_allocator *alloc, struct ke_world *world,
     // populated directly by attach_properties, not field-by-field.
     ke_ecs *e = world->ecs(world);
     ke_component_meta meta;
-    if (e->component_lookup(e, KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta) == KE_OK) {
+    if (e->component_lookup(e, KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta, NULL)) {
         s->scene_properties_cid = meta.cid;
     } else {
         s->scene_properties_cid = e->component_register(
@@ -552,8 +581,9 @@ ke_result ke_scene_loader_create(ke_allocator *alloc, struct ke_world *world,
     s->api.handle                  = s;
     s->api.load                    = vt_load;
     s->api.register_script_factory = vt_register_script_factory;
-    s->api.destroy                 = vt_destroy;
 
-    *out_loader = &s->api;
-    return KE_OK;
+    ke_scene_loader_handle out_loader;
+    out_loader.ref     = &s->api;
+    out_loader.destroy = vt_destroy;
+    return out_loader;
 }

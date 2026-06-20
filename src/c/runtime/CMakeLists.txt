@@ -2,17 +2,25 @@ add_library(ke_runtime
     src/runtime.c
 )
 
+get_target_property(target_type ke_runtime TYPE)
+if (target_type STREQUAL "STATIC_LIBRARY")
+    target_compile_definitions(ke_runtime PUBLIC KE_RUNTIME_STATIC)
+else()
+    target_compile_definitions(ke_runtime PRIVATE KE_RUNTIME_EXPORT)
+endif()
+
 target_include_directories(ke_runtime PUBLIC
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-install(DIRECTORY include/ DESTINATION include)
-
 target_link_libraries(ke_runtime PUBLIC
-    ke_kernel
+    ke_common
+    ke_allocator
+    ke_ecs
+    ke_scheduler
 )
+target_link_libraries(ke_runtime PRIVATE ke_allocator_malloc)
 
 install(TARGETS ke_runtime
     EXPORT KernelEngineTargets
@@ -20,3 +28,5 @@ install(TARGETS ke_runtime
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
+
+install(DIRECTORY include/ DESTINATION include)

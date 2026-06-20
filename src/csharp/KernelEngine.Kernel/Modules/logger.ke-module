@@ -1,5 +1,0 @@
-id          = "KernelEngine.Kernel.Logger"
-using       = "KernelEngine.Kernel"
-extension   = "AddLogger"
-csproj-ref  = "src/csharp/KernelEngine.Kernel/KernelEngine.Kernel.csproj"
-depends-on  = ["KernelEngine.Kernel"]

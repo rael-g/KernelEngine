@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/render/render.h>
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/render/render.h>
+#include <kernel_engine/render/frame_packet.h>
 #include "../src/geometry_manager.hpp"
 #include "../src/texture_manager.hpp"
 #include "../src/lighting_manager.hpp"
@@ -26,33 +26,36 @@ public:
     explicit CoreRenderer(const render::GpuRendererParams& params); 
     virtual ~CoreRenderer();
 
-    ke_result OnInitialize();
-    ke_result OnShutdown();
-    
+    bool OnInitialize();
+    bool OnShutdown();
+
     // Legacy frame (immediate)
-    ke_result Frame();
-    
+    bool Frame();
+
     // NEW: Multithreaded frame submission
-    ke_result SubmitPacket(const struct ke_frame_packet* packet);
+    bool SubmitPacket(const struct ke_frame_packet* packet);
 
-    ke_result ClearColor(float r, float g, float b, float a);
-    ke_result SetOrthographic(ke_bool enabled);
-    ke_result SetViewTransform(const ke_mat4 *view, const ke_mat4 *proj);
-    ke_result SetCameraPos(float x, float y, float z);
-    
-    ke_result SetDirectionalLight(const ke_directional_light *light);
-    ke_result SetAmbientLight(float r, float g, float b);
-    ke_result SetPointLights(const ke_point_light *lights, uint32_t count);
-    ke_result SetSpotLights(const ke_spot_light *lights, uint32_t count);
+    bool ClearColor(float r, float g, float b, float a);
+    bool SetOrthographic(bool enabled);
+    bool SetViewTransform(const ke_mat4 *view, const ke_mat4 *proj);
+    bool SetCameraPos(float x, float y, float z);
 
-    ke_result SetClusterConfig(const ke_cluster_config *config);
-    ke_result SetSsao(ke_bool enabled, float radius, float bias, float strength);
-    ke_result SetTonemapping(ke_bool enabled, float exposure, float gamma);
-    ke_result SetBloom(ke_bool enabled, float threshold, float intensity);
+    bool SetDirectionalLight(const ke_directional_light *light);
+    bool SetAmbientLight(float r, float g, float b);
+    bool SetPointLights(const ke_point_light *lights, uint32_t count);
+    bool SetSpotLights(const ke_spot_light *lights, uint32_t count);
+
+    bool SetClusterConfig(const ke_cluster_config *config);
+    bool SetSsao(bool enabled, float radius, float bias, float strength);
+    bool SetTonemapping(bool enabled, float exposure, float gamma);
+    bool SetBloom(bool enabled, float threshold, float intensity);
 
     const char* GetLastFatalError();
 
     ke_render *ToApi();
+
+    /// Owner-handle destroy: tears down the renderer and frees its allocation.
+    static void DestroyApi(ke_render *self);
 
     /// @brief Accessor used by the render-graph executor to reach the shared
     /// renderer state (GPU device, logger, allocator) without re-passing
@@ -66,11 +69,11 @@ public:
     /// @brief Creates a render graph bound to this renderer. Wired through the
     /// @c create_render_graph slot on @c ke_render so callers go through the
     /// generic kernel contract.
-    struct ke_render_graph* CreateRenderGraph(ke_allocator* allocator);
+    ke_render_graph_handle CreateRenderGraph();
 
     /// @brief Returns the renderer's active graph (the one executed on
     /// @c SubmitPacket). Used by external/managed code to plug new passes
-    /// into the running chain.
+    /// into the running chain. Returns a borrow — ownership stays with the renderer.
     struct ke_render_graph* GetRenderGraph() { return graph_; }
 
     void SetShaderProvider(ShaderProviderInterface* provider);
@@ -79,7 +82,7 @@ public:
     virtual render::GpuShaderHandle LoadShader(const char *name);
 
 protected:
-    virtual ke_result SetupShader();
+    virtual bool SetupShader();
 
 private:
     /// @brief Builds the render graph used by SubmitPacket. Phase 3 Step A
@@ -87,47 +90,47 @@ private:
     /// FrameSubmitter chain — orchestration goes through the graph immediately,
     /// internal pipeline code stays untouched. Steps B-H split that pass into
     /// per-stage callbacks.
-    ke_result SetupRenderGraph();
+    bool SetupRenderGraph();
 
     /// @brief Runs the directional shadow depth pass — split out of the
     /// monolithic pass in Phase 3 Step B. Skips silently when the packet
     /// carries no valid shadow map handle.
-    ke_result ExecuteShadowPass(const struct ke_frame_packet* packet);
+    bool ExecuteShadowPass(const struct ke_frame_packet* packet);
 
     /// @brief Renders the skybox cube around the camera (Phase 3 Step C).
     /// Skips silently when the packet carries no skybox or the skybox program
     /// failed to load. Runs after the main scene pass — depth-test LEQUAL fills
     /// only pixels the scene left at the far plane.
-    ke_result ExecuteSkyboxPass(const struct ke_frame_packet* packet);
+    bool ExecuteSkyboxPass(const struct ke_frame_packet* packet);
 
     /// @brief SSAO compose pass (Phase 3 Step D). No-op until
     /// PostProcessPipeline::SetupSsao stops being a stub (OBS.4) — extracted
     /// here so the future fix lands inside the graph instead of the legacy chain.
-    ke_result ExecuteSsaoPass(const struct ke_frame_packet* packet);
+    bool ExecuteSsaoPass(const struct ke_frame_packet* packet);
 
     /// @brief HDR post-fx chain (bright-pass + 2-tap blur + ACES tonemap) plus
     /// the scene-FB redirect when tonemap is disabled (Phase 3 Step E). The
     /// chain is bundled because @c PostProcessPipeline::SubmitPostProcess
     /// already runs all three views in one call; gating them with one toggle
     /// matches the legacy semantics 1:1.
-    ke_result ExecutePostFxPass(const struct ke_frame_packet* packet);
+    bool ExecutePostFxPass(const struct ke_frame_packet* packet);
 
     /// @brief UI overlay pass (Phase 3 Step F). Renders the packet's
     /// @c ui_draw_commands as 2D textured quads in backbuffer pixel space.
     /// Runs after every other pass so the overlay composites on top.
-    ke_result ExecuteUiPass(const struct ke_frame_packet* packet);
+    bool ExecuteUiPass(const struct ke_frame_packet* packet);
 
     /// @brief Lights + scene-shader uniform upload pass (Phase 6.1). Pure
     /// CPU pack + SetUniform calls — no GPU draws or dispatches. Runs first
     /// in the chain so subsequent passes (cluster cull, scene draws) see
     /// fresh light/camera/ambient/ibl uniforms.
-    ke_result ExecuteLightsUploadPass(const struct ke_frame_packet* packet);
+    bool ExecuteLightsUploadPass(const struct ke_frame_packet* packet);
 
     /// @brief Clustered light culling compute dispatch (Phase 6.2). Reads
     /// the stored light arrays, packs them into the cluster cull's storage
     /// buffers, and dispatches the CS that bins lights into screen-space
     /// clusters. Runs between @c lights.upload and the main scene pass.
-    ke_result ExecuteClusterCullPass(const struct ke_frame_packet* packet);
+    bool ExecuteClusterCullPass(const struct ke_frame_packet* packet);
 
     /// @brief Main opaque scene pass (Phase 6.3). Sets the scene-view
     /// transform and submits one draw per @c ke_draw_command, binding the
@@ -135,7 +138,7 @@ private:
     /// (via @c ClusteredForward::BindForSceneRead) the cluster buffers. The
     /// last block of the legacy chain — its extraction completes F.RC2 and
     /// retires @c FrameSubmitter + @c SubmitPacketLegacy.
-    ke_result ExecuteSceneOpaquePass(const struct ke_frame_packet* packet);
+    bool ExecuteSceneOpaquePass(const struct ke_frame_packet* packet);
 
     RenderContext ctx_;
     bool own_gpu_device_ = false;
@@ -163,7 +166,8 @@ private:
     render::GpuProgramHandle ui_quad_program_     = render::kGpuInvalidHandle;
 
     ke_render render_api_{};
-    struct ke_render_graph* graph_ = nullptr; // owned; built in OnInitialize.
+    ke_render_graph_handle  graph_owner_{};     // owner handle; built in OnInitialize.
+    struct ke_render_graph* graph_ = nullptr;   // borrow of graph_owner_.ref, for internal calls.
     struct ke_window* window_ = nullptr;
     std::string shader_path_;
     uint32_t renderer_type_ = 0;

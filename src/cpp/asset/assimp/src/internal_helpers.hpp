@@ -1,23 +1,13 @@
 #pragma once
 
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/logger/logger.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/logger/logger.h>
 #include <algorithm>
 #include <cstring>
 #include <cstdio>
 
 namespace kernel_engine::asset::assimp::detail
 {
-
-inline void *ke_alloc(ke_allocator *a, size_t n)
-{
-    return a->alloc(a, n, alignof(void *));
-}
-
-inline void ke_free(ke_allocator *a, void *p)
-{
-    if (p) a->free(a, p);
-}
 
 inline void log_info(ke_logger *logger, const char *msg)
 {
@@ -40,12 +30,12 @@ inline void log_error(ke_logger *logger, const char *msg)
     logger->log(logger, &ev);
 }
 
-inline ke_result LogErr(ke_logger *logger, ke_result r, const char *context, const char *detail)
+inline bool LogErr(ke_logger *logger, bool r, const char *context, const char *detail)
 {
     if (logger)
     {
         char msg[1024];
-        snprintf(msg, sizeof(msg), "%s: %s (result: %d)", context, detail, r);
+        snprintf(msg, sizeof(msg), "%s: %s", context, detail);
         ke_log_event ev = {KE_LOG_LEVEL_ERROR, "asset_loader", msg};
         logger->log(logger, &ev);
     }

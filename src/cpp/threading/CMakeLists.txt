@@ -11,17 +11,26 @@ endif()
 
 target_include_directories(ke_threading PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/c/threading/include>
+    $<INSTALL_INTERFACE:include>
 )
 
-target_include_directories(ke_threading PRIVATE
-    src
-    ${CMAKE_SOURCE_DIR}/src/c/kernel/include
+target_link_libraries(ke_threading PUBLIC
+    ke_common
+    ke_allocator
+    ke_allocator_malloc
+    ke_render
+    ke_threading_default
 )
-
-target_link_libraries(ke_threading PUBLIC ke_kernel)
 
 if (WIN32)
     target_link_libraries(ke_threading PRIVATE kernel32)
+    # Explicitly export C thread-name symbols so DllImport("ke_threading") works from C#.
+    target_link_options(ke_threading PRIVATE
+        "LINKER:/EXPORT:ke_thread_set_current_name"
+        "LINKER:/EXPORT:ke_thread_get_current_name"
+        "LINKER:/EXPORT:ke_thread_check_current"
+    )
 endif()
 
 install(TARGETS ke_threading
@@ -32,3 +41,4 @@ install(TARGETS ke_threading
 )
 
 install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/c/threading/include/ DESTINATION include)

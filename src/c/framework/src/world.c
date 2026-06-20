@@ -1,12 +1,14 @@
-// ke_world impl — default framework aggregator. Owns ecs+runtime+scene_tree
+﻿// ke_world impl — default framework aggregator. Owns ecs+runtime+scene_tree
 // transferred from host on create; cascades teardown in reverse order on destroy.
 
 // scene_tree.h is included BEFORE world_create.h so that its transitive
 // `framework_export.h` define of KE_FRAMEWORK_API runs first; world_create.h's
 // own fallback definition then sees the macro already defined and skips it.
-#include <kernel_engine/kernel/framework/scene_tree.h>
-#include <kernel_engine/kernel/framework/components.h>
+#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/framework/components.h>
 #include <kernel_engine/framework/world_create.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
 #include "components_apply.h"
 
 #include <stddef.h>
@@ -22,8 +24,7 @@ typedef struct apply_entry {
 } apply_entry;
 
 typedef struct ke_world_state {
-    ke_allocator             *allocator;       // borrowed
-    struct ke_task_scheduler *task_scheduler;  // borrowed
+    struct ke_scheduler *scheduler;  // borrowed
     ke_ecs                   *ecs;             // owned
     ke_runtime               *runtime;         // owned
     struct ke_scene_tree     *scene_tree;      // owned (NULL allowed during C-phase transition)
@@ -50,28 +51,34 @@ static struct ke_scene_tree *world_scene_tree(struct ke_world *self) {
     return s->scene_tree;
 }
 
-static ke_result world_register_component_apply(struct ke_world *self,
+static bool world_register_component_apply(struct ke_world *self,
                                                   ke_component_id cid,
-                                                  ke_component_apply_fn apply) {
-    if (!self || !self->handle || !apply) return KE_ERROR_INVALID_ARGUMENT;
+                                                  ke_component_apply_fn apply,
+                                                  ke_error **out_error) {
+    if (!self || !self->handle || !apply) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     ke_world_state *s = (ke_world_state *)self->handle;
 
     // Replace-if-exists: registering the same cid twice updates the function.
     for (uint32_t i = 0; i < s->apply_count; ++i) {
         if (s->apply_registry[i].cid == cid) {
             s->apply_registry[i].fn = apply;
-            return KE_OK;
+            return true;
         }
     }
 
     if (s->apply_count == s->apply_capacity) {
         uint32_t cap = s->apply_capacity ? s->apply_capacity * 2 : 16;
-        apply_entry *new_buf = (apply_entry *)s->allocator->alloc(
-            s->allocator, sizeof(apply_entry) * cap, 8);
-        if (!new_buf) return KE_ERROR_OUT_OF_MEMORY;
+        apply_entry *new_buf = (apply_entry *)ke_alloc(sizeof(apply_entry) * cap, 8);
+        if (!new_buf) {
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "apply registry allocation failed");
+            return false;
+        }
         if (s->apply_registry) {
             memcpy(new_buf, s->apply_registry, sizeof(apply_entry) * s->apply_count);
-            s->allocator->free(s->allocator, s->apply_registry);
+            ke_free(s->apply_registry);
         }
         s->apply_registry = new_buf;
         s->apply_capacity = cap;
@@ -79,7 +86,7 @@ static ke_result world_register_component_apply(struct ke_world *self,
     s->apply_registry[s->apply_count].cid = cid;
     s->apply_registry[s->apply_count].fn  = apply;
     s->apply_count++;
-    return KE_OK;
+    return true;
 }
 
 static ke_component_apply_fn world_get_component_apply(struct ke_world *self,
@@ -96,35 +103,39 @@ static void world_destroy(struct ke_world *self) {
     if (!self) return;
     ke_world_state *s = (ke_world_state *)self->handle;
     if (s) {
-        if (s->apply_registry) s->allocator->free(s->allocator, s->apply_registry);
+        if (s->apply_registry) ke_free(s->apply_registry);
 
         // ecs, runtime, scene_tree are BORROWED — caller destroys them after world->destroy().
         // "quem cria, owna": world did not create these; world must not destroy them.
-        ke_allocator *a = s->allocator;
-        a->free(a, s);
+        // state + vtable are in one contiguous block; freeing state frees self too.
+        ke_free(s);
     }
-    // self lives in the same allocation as state — already freed.
 }
 
-ke_result ke_world_create(const ke_world_params *params, ke_world **out_world) {
-    if (!params || !out_world) return KE_ERROR_INVALID_ARGUMENT;
-    if (!params->allocator || !params->ecs || !params->runtime) {
-        return KE_ERROR_INVALID_ARGUMENT;
+ke_world_handle ke_world_create(const ke_world_params *params, ke_error **out_error) {
+    ke_world_handle null_handle = {0};
+    if (!params) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return null_handle;
     }
-
-    ke_allocator *a = params->allocator;
+    if (!params->ecs || !params->runtime) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "ecs and runtime are required");
+        return null_handle;
+    }
 
     // Single allocation: state + vtable contiguous. Simpler teardown.
     size_t block_size = sizeof(ke_world_state) + sizeof(ke_world);
-    void *block = a->alloc(a, block_size, 8);
-    if (!block) return KE_ERROR_OUT_OF_MEMORY;
+    void *block = ke_alloc(block_size, 8);
+    if (!block) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return null_handle;
+    }
     memset(block, 0, block_size);
 
     ke_world_state *state = (ke_world_state *)block;
     ke_world       *world = (ke_world *)((char *)block + sizeof(ke_world_state));
 
-    state->allocator      = params->allocator;
-    state->task_scheduler = params->task_scheduler;
+    state->scheduler = params->scheduler;
     state->ecs            = params->ecs;
     state->runtime        = params->runtime;
     state->scene_tree     = params->scene_tree;
@@ -137,7 +148,6 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world) {
     world->scene_tree              = world_scene_tree;
     world->register_component_apply = world_register_component_apply;
     world->get_component_apply     = world_get_component_apply;
-    world->destroy                 = world_destroy;
 
     // Register the framework's built-in component vocabulary with the ecs +
     // wire up each component's apply callback. component_register is
@@ -149,9 +159,9 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world) {
     ke_component_meta meta;
     #define REG(name, type, apply_fn) do { \
         ke_component_id _cid; \
-        if (e->component_lookup(e, (name), &meta) == KE_OK) { _cid = meta.cid; } \
+        if (e->component_lookup(e, (name), &meta, NULL)) { _cid = meta.cid; } \
         else { _cid = e->component_register(e, (name), sizeof(type)); } \
-        world->register_component_apply(world, _cid, (apply_fn)); \
+        world->register_component_apply(world, _cid, (apply_fn), NULL); \
     } while (0)
 
     REG(KE_COMPONENT_NAME_TRANSFORM,         ke_transform_component,        ke_framework_apply_transform);
@@ -162,6 +172,8 @@ ke_result ke_world_create(const ke_world_params *params, ke_world **out_world) {
     REG(KE_COMPONENT_NAME_SPOT_LIGHT,        ke_spot_light_component,       ke_framework_apply_spot_light);
     #undef REG
 
-    *out_world = world;
-    return KE_OK;
+    ke_world_handle out_world;
+    out_world.ref     = world;
+    out_world.destroy = world_destroy;
+    return out_world;
 }

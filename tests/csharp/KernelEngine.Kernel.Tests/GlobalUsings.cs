@@ -1,0 +1,14 @@
+global using KernelEngine.Common.Native;
+global using KernelEngine.Logger.Native;
+global using KernelEngine.Input.Native;
+global using KernelEngine.Window.Native;
+global using KernelEngine.Render.Native;
+global using KernelEngine.Audio.Native;
+global using KernelEngine.Physics.Native;
+global using KernelEngine.Text.Native;
+global using KernelEngine.Scheduler.Native;
+global using KernelEngine.Ecs.Native;
+global using KernelEngine.Runtime.Native;
+global using KernelEngine.Asset.Native;
+global using KernelEngine.Framework.Native;
+global using KernelEngine.Text;

@@ -6,7 +6,7 @@ using KernelEngine.Kernel;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +28,7 @@ var services = new ServiceCollection()
     .AddTextStbTrueType()
     .AddInputActions<PongAction>()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new BgfxRenderModule())

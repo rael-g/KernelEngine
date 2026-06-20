@@ -1,14 +1,14 @@
-#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
 #define KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
 
 // ke_runtime_create — the in-house scheduler.
 // Owns the system catalog + phase loop + (eventually) parallel wave dispatch.
 // Storage is borrowed via ke_ecs*; the scheduler never owns it.
 
-#include <kernel_engine/kernel/context/allocator.h>
-#include <kernel_engine/kernel/runtime/runtime.h>
-#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
+#include <kernel_engine/common/export.h>
+#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,11 +26,10 @@ typedef struct ke_runtime_params {
     float fixed_dt_max_accum;
 } ke_runtime_params;
 
-KE_API ke_result ke_runtime_create(ke_allocator            *alloc,
-                                    ke_ecs                  *ecs,
-                                    ke_task_scheduler       *task_scheduler,
-                                    const ke_runtime_params *params,
-                                    ke_runtime             **out_runtime);
+KE_RUNTIME_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
+                                                   ke_scheduler            *scheduler,
+                                                   const ke_runtime_params *params,
+                                                   ke_error               **out_error);
 
 #ifdef __cplusplus
 }

@@ -5,7 +5,7 @@ using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +20,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 04 Normal Map"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
@@ -55,11 +55,11 @@ var services = new ServiceCollection()
             pixels[i + 3] = 255;
         }
 
-        var nm = renderer.CreateTexture(w, h, pixels).Value;
+        var nm = renderer.CreateTexture(w, h, pixels);
         Console.WriteLine($"[KernelEngine] NormalMap: handle={nm.Value} width={w} height={h}");
 
-        var matPlain  = renderer.CreateMaterial(Vector4.One, roughness: 0.3f).Value;
-        var matNormal = renderer.CreateMaterial(Vector4.One, roughness: 0.3f, normalMapHandle: nm).Value;
+        var matPlain  = renderer.CreateMaterial(Vector4.One, roughness: 0.3f);
+        var matNormal = renderer.CreateMaterial(Vector4.One, roughness: 0.3f, normalMapHandle: nm);
 
         tree.AddNode(
             new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },

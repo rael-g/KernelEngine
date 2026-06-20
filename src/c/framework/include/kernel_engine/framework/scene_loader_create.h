@@ -1,9 +1,8 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_CREATE_H_
 
-#include <kernel_engine/kernel/framework/scene_loader.h>
-#include <kernel_engine/kernel/framework/world.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/framework/scene_loader.h>
+#include <kernel_engine/framework/world.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -36,11 +35,10 @@ extern "C"
     /// scene_properties component the loader wrote becomes dangling. Destroy
     /// the loader only after the world has shut down OR after removing every
     /// scene_properties component the loader populated.
-    KE_FRAMEWORK_API ke_result ke_scene_loader_create(
-        ke_allocator       *alloc,
-        struct ke_world    *world,
-        const char         *project_root,
-        ke_scene_loader   **out_loader);
+    KE_FRAMEWORK_API ke_scene_loader_handle ke_scene_loader_create(
+        struct ke_world   *world,
+        const char        *project_root,
+        ke_error         **out_error);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <kernel_engine/kernel/task_scheduler/task_scheduler.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/allocator/allocator.h>
 #include <atomic>
 #include <cstdlib>
 
@@ -18,13 +18,13 @@ struct MockTask {
     bool                     completed;
 };
 
-ke_task_scheduler make_sync_scheduler() {
-    ke_task_scheduler s{};
+ke_scheduler make_sync_scheduler() {
+    ke_scheduler s{};
     s.handle = nullptr;
 
-    s.destroy = [](ke_task_scheduler*) {};
+    s.destroy = [](ke_scheduler*) {};
 
-    s.dispatch_on_complete = [](ke_task_scheduler* self,
+    s.dispatch_on_complete = [](ke_scheduler* self,
                                 ke_task_func func, void* data,
                                 ke_task_on_complete_func on_complete,
                                 void* user_data) -> ke_task* {
@@ -35,15 +35,15 @@ ke_task_scheduler make_sync_scheduler() {
         return reinterpret_cast<ke_task*>(task);
     };
 
-    s.dispatch = [](ke_task_scheduler* self, ke_task_func func, void* data) -> ke_task* {
+    s.dispatch = [](ke_scheduler* self, ke_task_func func, void* data) -> ke_task* {
         return self->dispatch_on_complete(self, func, data, nullptr, nullptr);
     };
 
-    s.wait = [](ke_task_scheduler*, ke_task* task) {
+    s.wait = [](ke_scheduler*, ke_task* task) {
         delete reinterpret_cast<MockTask*>(task);
     };
 
-    s.is_completed = [](ke_task_scheduler*, ke_task* task) -> bool {
+    s.is_completed = [](ke_scheduler*, ke_task* task) -> bool {
         if (!task) return true;
         return reinterpret_cast<MockTask*>(task)->completed;
     };
@@ -57,7 +57,7 @@ ke_task_scheduler make_sync_scheduler() {
 
 class TaskSchedulerTest : public ::testing::Test {
 protected:
-    ke_task_scheduler scheduler{};
+    ke_scheduler scheduler{};
 
     void SetUp() override { scheduler = make_sync_scheduler(); }
     void TearDown() override { scheduler.destroy(&scheduler); }

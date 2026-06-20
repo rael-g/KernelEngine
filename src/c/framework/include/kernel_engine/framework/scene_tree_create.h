@@ -1,9 +1,8 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_CREATE_H_
 
-#include <kernel_engine/kernel/framework/scene_tree.h>
-#include <kernel_engine/kernel/ecs/ke_ecs.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/framework/scene_tree.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -31,10 +30,9 @@ extern "C"
     /// scene_tree on the same ecs already registered them, the existing cids
     /// are picked up via component_lookup). Returns the tree via out_tree;
     /// caller invokes tree->destroy(tree) when done.
-    KE_FRAMEWORK_API ke_result ke_scene_tree_create(
-        ke_ecs         *ecs,
-        ke_allocator   *alloc,
-        ke_scene_tree **out_tree);
+    KE_FRAMEWORK_API ke_scene_tree_handle ke_scene_tree_create(
+        ke_ecs    *ecs,
+        ke_error **out_error);
 
 #ifdef __cplusplus
 }

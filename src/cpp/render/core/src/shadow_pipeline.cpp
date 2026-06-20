@@ -11,10 +11,10 @@
 namespace kernel_engine::render::core
 {
 
-ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out)
+bool ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32_t h, ke_shadow_map_handle *out)
 {
     if (!out || w == 0 || h == 0 || !ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "CreateShadowMap", "Invalid arguments or GPU not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "CreateShadowMap", "Invalid arguments or GPU not set");
 
     // The shadow map is SAMPLED as an R32F color target: fs_shadow writes gl_FragCoord.z into it,
     // and the scene shader samples that value. A D16 depth attachment backs the depth test. A
@@ -22,16 +22,16 @@ ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32
     // and sampling a raw D16 depth texture is not portable across backends.
     GpuTextureHandle color_tex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtR32F, kTexFlagRT, nullptr);
     if (color_tex == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU color texture creation failed");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "CreateShadowMap", "GPU color texture creation failed");
 
     GpuTextureHandle depth_tex = ctx.gpu->CreateTexture2D((uint16_t)w, (uint16_t)h, false, 1, kTexFmtD16, kTexFlagRT, nullptr);
     if (depth_tex == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU depth texture creation failed");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "CreateShadowMap", "GPU depth texture creation failed");
 
     GpuTextureHandle attachments[2] = { color_tex, depth_tex };
     GpuFrameBufferHandle fb = ctx.gpu->CreateFrameBuffer(2, attachments, true);
     if (fb == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "CreateShadowMap", "GPU framebuffer creation failed");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "CreateShadowMap", "GPU framebuffer creation failed");
 
     ShadowMapEntry entry;
     entry.fb = fb;
@@ -42,25 +42,25 @@ ke_result ShadowPipeline::CreateShadowMap(RenderContext& ctx, uint32_t w, uint32
 
     shadow_maps_.push_back(entry);
     *out = {(uint32_t)(shadow_maps_.size() - 1)};
-    return KE_OK;
+    return true;
 }
 
-ke_result ShadowPipeline::DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
+bool ShadowPipeline::DestroyShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
 {
     if (h.idx >= (uint32_t)shadow_maps_.size() || !ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "DestroyShadowMap", "Invalid handle or GPU not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "DestroyShadowMap", "Invalid handle or GPU not set");
     if (shadow_maps_[h.idx].fb != kGpuInvalidHandle) ctx.gpu->DestroyFrameBuffer(shadow_maps_[h.idx].fb);
     shadow_maps_[h.idx].valid = false;
-    return KE_OK;
+    return true;
 }
 
-ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p)
+bool ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_handle h, const ke_mat4 *v, const ke_mat4 *p)
 {
     if (h.idx >= (uint32_t)shadow_maps_.size() || !v || !p || !ctx.gpu)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "BeginShadowPass", "Invalid arguments or GPU not set");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "BeginShadowPass", "Invalid arguments or GPU not set");
     auto &entry = shadow_maps_[h.idx];
     if (!entry.valid)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "BeginShadowPass", "Shadow map not valid");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "BeginShadowPass", "Shadow map not valid");
 
     active_shadow_handle = h;
     // View 0 (SHADOW): MUST be lower than the scene view (1) so bgfx renders the shadow depth
@@ -88,16 +88,16 @@ ke_result ShadowPipeline::BeginShadowPass(RenderContext& ctx, ke_shadow_map_hand
         ctx.gpu->SetUniform(shadow_params_uniform, sp, 1);
     }
 
-    return KE_OK;
+    return true;
 }
 
-ke_result ShadowPipeline::SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geom, GpuProgramHandle prog, ke_mesh_handle m, const ke_mat4 *t)
+bool ShadowPipeline::SubmitMeshShadow(RenderContext& ctx, const GeometryManager& geom, GpuProgramHandle prog, ke_mesh_handle m, const ke_mat4 *t)
 {
     if (!ctx.gpu || prog == kGpuInvalidHandle || !t)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_RENDER, "SubmitMeshShadow", "Invalid arguments or program");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SubmitMeshShadow", "Invalid arguments or program");
     const auto &entry = geom.GetMeshEntry(m);
     if (entry.vb == kGpuInvalidHandle)
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "SubmitMeshShadow", "Invalid mesh entry");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SubmitMeshShadow", "Invalid mesh entry");
 
     ctx.gpu->SetTransform(t->m, 1);
     ctx.gpu->SetVertexBuffer(0, entry.vb);
@@ -109,25 +109,25 @@ ke_result ShadowPipeline::SubmitMeshShadow(RenderContext& ctx, const GeometryMan
     ctx.gpu->SetState(GpuStateFlags::WriteRgba | GpuStateFlags::WriteZ | GpuStateFlags::DepthTestLess, 0);
     ctx.gpu->Submit(Id(ViewId::Shadow), prog, 0, false);
 
-    return KE_OK;
+    return true;
 }
 
-ke_result ShadowPipeline::EndShadowPass(RenderContext& ctx)
+bool ShadowPipeline::EndShadowPass(RenderContext& ctx)
 {
     // Intentionally a no-op: active_shadow_handle MUST remain set so the main scene pass (which runs
     // after this in FrameSubmitter) can bind the shadow depth texture via GetActiveShadowTex().
     // Resetting it here left s_shadowMap on the white fallback → ComputeShadow always returned 1.0
     // (no shadow ever). The handle is re-set every frame by BeginShadowPass.
     (void)ctx;
-    return KE_OK;
+    return true;
 }
 
-ke_result ShadowPipeline::SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
+bool ShadowPipeline::SetShadowMap(RenderContext& ctx, ke_shadow_map_handle h)
 {
     if (h.idx >= (uint32_t)shadow_maps_.size())
-        return KE_RENDER_LOG_ERR(ctx.logger, KE_ERROR_INVALID_ARGUMENT, "SetShadowMap", "Invalid handle");
+        return KE_RENDER_LOG_ERR(ctx.logger, false, "SetShadowMap", "Invalid handle");
     active_shadow_handle = h;
-    return KE_OK;
+    return true;
 }
 
 GpuTextureHandle ShadowPipeline::GetActiveShadowTex() const

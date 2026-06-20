@@ -1,7 +1,6 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/kernel/context/allocator.h>
 #include <window_core.hpp>
 #include <window_device.hpp>
 
@@ -40,7 +39,7 @@ protected:
 
     void TearDown() override {
         if (window) {
-            window->destroy(window);
+            WindowCore::DestroyApi(window);  // deletes core
             window = nullptr;
         }
         delete mock_device;
@@ -51,32 +50,22 @@ protected:
 // ── Factory null-param tests ──────────────────────────────────────────────────
 
 TEST(WindowFactoryTest, Create_NullOut_ReturnsInvalidArgument) {
-    ASSERT_EQ(ke_window_glfw_create(nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(ke_window_glfw_create(nullptr, nullptr).ref, nullptr);
 }
 
 TEST(WindowFactoryTest, Create_NullParams_ReturnsInvalidArgument) {
-    ke_window* w = nullptr;
-    ASSERT_EQ(ke_window_glfw_create(nullptr, &w), KE_ERROR_INVALID_ARGUMENT);
-}
-
-TEST(WindowFactoryTest, Create_NullAllocator_ReturnsInvalidArgument) {
-    ke_window* w = nullptr;
-    ke_window_glfw_params params = { nullptr, nullptr, nullptr, "Test", 800, 600, 0 };
-    ASSERT_EQ(ke_window_glfw_create(&params, &w), KE_ERROR_INVALID_ARGUMENT);
+    ke_window_handle w{};
+    w = ke_window_glfw_create(nullptr, nullptr); ASSERT_EQ(w.ref, nullptr);
 }
 
 TEST(WindowFactoryTest, Create_Success_OrWindowError) {
-    ke_allocator alloc{};
-    alloc.alloc = [](ke_allocator*, size_t s, size_t) { return std::malloc(s); };
-    alloc.free = [](ke_allocator*, void* p) { std::free(p); };
-
-    ke_window_glfw_params params = { &alloc, nullptr, nullptr, "Test", 800, 600, 0 };
-    ke_window* w = nullptr;
-    ke_result res = ke_window_glfw_create(&params, &w);
-    if (res == KE_OK) {
-        w->destroy(w);
+    ke_window_glfw_params params = { nullptr, nullptr, "Test", 800, 600, 0 };
+    ke_window_handle w{};
+    w = ke_window_glfw_create(&params, nullptr);
+    if (w.ref != nullptr) {
+        w.destroy(w.ref);
     }
-    ASSERT_TRUE(res == KE_OK || res == KE_ERROR_WINDOW);
+    SUCCEED(); // handle or null — both valid outcomes;
 }
 
 // ── Core unit tests via mock device ──────────────────────────────────────────
@@ -112,32 +101,32 @@ TEST_F(WindowCoreTest, GetSize_DelegatesToDevice) {
             if (h) *h = 600;
         }));
     int32_t w = 0, h = 0;
-    window->get_size(window, &w, &h);
+    window->get_size(window, &w, &h, NULL);
     ASSERT_EQ(w, 800);
     ASSERT_EQ(h, 600);
 }
 
 TEST_F(WindowCoreTest, PollEvents_DelegatesToDevice) {
     EXPECT_CALL(*mock_device, PollEvents(_)).Times(1);
-    ASSERT_EQ(window->poll_events(window), KE_OK);
+    ASSERT_TRUE(window->poll_events(window, NULL));
 }
 
 TEST_F(WindowCoreTest, Shutdown_CallsDeviceShutdown) {
     EXPECT_CALL(*mock_device, Shutdown()).Times(::testing::AtLeast(1));
-    window->on_shutdown(window);
+    window->on_shutdown(window, NULL);
 }
 
 TEST_F(WindowCoreTest, Initialize_ReturnsError_WhenDeviceFails) {
     EXPECT_CALL(*mock_device, Initialize(_)).WillOnce(Return(false));
     WindowConfig config = { "Fail", 800, 600, false, true };
-    ASSERT_EQ(core->Initialize(config), KE_ERROR_WINDOW);
+    ASSERT_FALSE(core->Initialize(config));
 }
 
 TEST_F(WindowCoreTest, Initialize_ReturnsOk_WhenAlreadyInitialized) {
     EXPECT_CALL(*mock_device, Initialize(_)).WillOnce(Return(true));
     WindowConfig config = { "Ok", 800, 600, false, true };
     core->Initialize(config);
-    ASSERT_EQ(core->Initialize(config), KE_OK); // Should return KE_OK immediately
+    ASSERT_TRUE(core->Initialize(config)); // Should return KE_OK immediately
 }
 
 TEST_F(WindowCoreTest, SetTitle_DelegatesToDevice) {
@@ -166,7 +155,7 @@ TEST_F(WindowCoreTest, HandleEvent_KeyDown_UpdatesInput) {
         callback(ev);
     }));
 
-    window->poll_events(window);
+    window->poll_events(window, NULL);
     ASSERT_EQ(last_key, 42);
 }
 
@@ -192,7 +181,7 @@ TEST_F(WindowCoreTest, HandleEvent_MouseMove_UpdatesInput) {
         callback(ev);
     }));
 
-    window->poll_events(window);
+    window->poll_events(window, NULL);
     ASSERT_FLOAT_EQ(last_pos[0], 10.5f);
     ASSERT_FLOAT_EQ(last_pos[1], 20.5f);
 }
@@ -217,7 +206,7 @@ TEST_F(WindowCoreTest, HandleEvent_MouseButton_UpdatesInput) {
         callback(ev);
     }));
 
-    window->poll_events(window);
+    window->poll_events(window, NULL);
     ASSERT_EQ(last_btn, 1);
 }
 
@@ -241,7 +230,7 @@ TEST_F(WindowCoreTest, HandleEvent_MouseUp_UpdatesInput) {
         callback(ev);
     }));
 
-    window->poll_events(window);
+    window->poll_events(window, NULL);
     ASSERT_EQ(last_action, 0); // 0 for Up
 }
 
@@ -265,12 +254,12 @@ TEST_F(WindowCoreTest, HandleEvent_KeyUp_UpdatesInput) {
         callback(ev);
     }));
 
-    window->poll_events(window);
+    window->poll_events(window, NULL);
     ASSERT_EQ(last_action, 0); // 0 for Up
 }
 
 TEST_F(WindowCoreTest, API_PollEvents_NullSelf_ReturnsInvalidArgument) {
-    ASSERT_EQ(window->poll_events(nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_FALSE(window->poll_events(nullptr, NULL));
 }
 
 TEST_F(WindowCoreTest, API_ShouldClose_NullSelf_ReturnsTrue) {
@@ -282,12 +271,12 @@ TEST_F(WindowCoreTest, API_GetNativeHandle_NullSelf_ReturnsNull) {
 }
 
 TEST_F(WindowCoreTest, API_GetSize_NullSelf_ReturnsInvalidArgument) {
-    ASSERT_EQ(window->get_size(nullptr, nullptr, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    ASSERT_FALSE(window->get_size(nullptr, nullptr, nullptr, NULL));
 }
 
 TEST_F(WindowCoreTest, Destroy_NullSelf_IsSafe) {
-    auto d = window->destroy;
-    window->destroy(window);
+    auto d = &WindowCore::DestroyApi;
+    WindowCore::DestroyApi(window);
     window = nullptr;
     d(nullptr);
 }

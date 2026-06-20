@@ -5,5 +5,7 @@ target_include_directories(ke_window_contract INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
+target_link_libraries(ke_window_contract INTERFACE ke_window)
+
 install(TARGETS ke_window_contract EXPORT KernelEngineTargets)
 install(DIRECTORY include/ DESTINATION include)

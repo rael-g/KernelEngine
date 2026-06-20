@@ -1,4 +1,4 @@
-// ke_input_actions impl — pure C. Parses `.input` TOML files into an internal
+﻿// ke_input_actions impl — pure C. Parses `.input` TOML files into an internal
 // table of actions + bindings, evaluates them against ke_input_snapshot per
 // frame, exposes polling + event paths. Schema:
 //
@@ -15,7 +15,9 @@
 // cache them via get_action_id() after load and reuse across frames.
 
 #include <kernel_engine/framework/input_actions_create.h>
-#include <kernel_engine/kernel/input/key.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/allocator/allocator.h>
+#include <kernel_engine/input/key.h>
 
 #include "../third_party/tomlc99/toml.h"
 
@@ -151,7 +153,6 @@ typedef struct action {
 
 typedef struct input_actions_state {
     ke_input_actions  api;
-    ke_allocator     *allocator;
     action           *actions;
     uint32_t          action_count;
     uint32_t          action_capacity;
@@ -163,12 +164,11 @@ static bool ensure_action_capacity(input_actions_state *s, uint32_t needed) {
     if (s->action_capacity >= needed) return true;
     uint32_t cap = s->action_capacity ? s->action_capacity : 8;
     while (cap < needed) cap *= 2;
-    action *new_buf = (action *)s->allocator->alloc(
-        s->allocator, sizeof(action) * cap, 8);
+    action *new_buf = (action *)ke_alloc(sizeof(action) * cap, 8);
     if (!new_buf) return false;
     if (s->actions) {
         memcpy(new_buf, s->actions, sizeof(action) * s->action_count);
-        s->allocator->free(s->allocator, s->actions);
+        ke_free(s->actions);
     }
     s->actions = new_buf;
     s->action_capacity = cap;
@@ -176,15 +176,15 @@ static bool ensure_action_capacity(input_actions_state *s, uint32_t needed) {
 }
 
 static bool ensure_binding_capacity(input_actions_state *s, action *a, uint32_t needed) {
+    (void)s;
     if (a->binding_capacity >= needed) return true;
     uint32_t cap = a->binding_capacity ? a->binding_capacity : 4;
     while (cap < needed) cap *= 2;
-    binding *new_buf = (binding *)s->allocator->alloc(
-        s->allocator, sizeof(binding) * cap, 8);
+    binding *new_buf = (binding *)ke_alloc(sizeof(binding) * cap, 8);
     if (!new_buf) return false;
     if (a->bindings) {
         memcpy(new_buf, a->bindings, sizeof(binding) * a->binding_count);
-        s->allocator->free(s->allocator, a->bindings);
+        ke_free(a->bindings);
     }
     a->bindings = new_buf;
     a->binding_capacity = cap;
@@ -195,7 +195,7 @@ static void clear_actions(input_actions_state *s) {
     for (uint32_t i = 0; i < s->action_count; ++i) {
         action *a = &s->actions[i];
         if (a->bindings) {
-            s->allocator->free(s->allocator, a->bindings);
+            ke_free(a->bindings);
             a->bindings = NULL;
         }
         a->binding_count = a->binding_capacity = 0;
@@ -315,21 +315,30 @@ static bool parse_binding_table(toml_table_t *bt, binding *out) {
 
 // ── vtable: load ────────────────────────────────────────────────────────────
 
-static ke_result vt_load(ke_input_actions *self, const char *path) {
-    if (!self || !self->handle || !path) return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_load(ke_input_actions *self, const char *path, ke_error **out_error) {
+    if (!self || !self->handle || !path) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     input_actions_state *s = (input_actions_state *)self->handle;
     clear_actions(s);
 
     FILE *fp = fopen(path, "rb");
-    if (!fp) return KE_ERROR_NOT_FOUND;
+    if (!fp) {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "input file not found");
+        return false;
+    }
 
     char errbuf[200];
     toml_table_t *root = toml_parse_file(fp, errbuf, sizeof(errbuf));
     fclose(fp);
-    if (!root) return KE_ERROR_NOT_FOUND;
+    if (!root) {
+        KE_ERROR_SET(out_error, &KE_ERROR_IO, "failed to parse input file");
+        return false;
+    }
 
     toml_table_t *action_section = toml_table_in(root, "action");
-    if (!action_section) { toml_free(root); return KE_OK; }
+    if (!action_section) { toml_free(root); return true; }
 
     for (int i = 0; ; ++i) {
         const char *action_name = toml_key_in(action_section, i);
@@ -337,7 +346,11 @@ static ke_result vt_load(ke_input_actions *self, const char *path) {
         toml_table_t *action_tbl = toml_table_in(action_section, action_name);
         if (!action_tbl) continue;
 
-        if (!ensure_action_capacity(s, s->action_count + 1)) { toml_free(root); return KE_ERROR_OUT_OF_MEMORY; }
+        if (!ensure_action_capacity(s, s->action_count + 1)) {
+            toml_free(root);
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "action capacity exceeded");
+            return false;
+        }
         action *act = &s->actions[s->action_count];
         memset(act, 0, sizeof(*act));
         copy_name(act->name, action_name);
@@ -358,7 +371,9 @@ static ke_result vt_load(ke_input_actions *self, const char *path) {
                 binding b;
                 if (!parse_binding_table(bt, &b)) continue;
                 if (!ensure_binding_capacity(s, act, act->binding_count + 1)) {
-                    toml_free(root); return KE_ERROR_OUT_OF_MEMORY;
+                    toml_free(root);
+                    KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "binding capacity exceeded");
+                    return false;
                 }
                 act->bindings[act->binding_count++] = b;
             }
@@ -368,7 +383,7 @@ static ke_result vt_load(ke_input_actions *self, const char *path) {
     }
 
     toml_free(root);
-    return KE_OK;
+    return true;
 }
 
 // ── vtable: get_action_id ───────────────────────────────────────────────────
@@ -400,44 +415,66 @@ static action *get_action_mut(input_actions_state *s, int32_t id) {
     return &s->actions[id];
 }
 
-static ke_result append_binding(input_actions_state *s, int32_t id, binding b) {
+static bool append_binding(input_actions_state *s, int32_t id, binding b, ke_error **out_error) {
     action *a = get_action_mut(s, id);
-    if (!a) return KE_ERROR_NOT_FOUND;
-    if (!ensure_binding_capacity(s, a, a->binding_count + 1)) return KE_ERROR_OUT_OF_MEMORY;
+    if (!a) {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "action not found");
+        return false;
+    }
+    if (!ensure_binding_capacity(s, a, a->binding_count + 1)) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "binding capacity exceeded");
+        return false;
+    }
     a->bindings[a->binding_count++] = b;
-    return KE_OK;
+    return true;
 }
 
-static ke_result vt_bind_key(ke_input_actions *self, int32_t action_id, ke_key key) {
-    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_bind_key(ke_input_actions *self, int32_t action_id, ke_key key, ke_error **out_error) {
+    if (!self || !self->handle) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     binding b = { BK_KEY, (int)key, 0, 0, 0 };
-    return append_binding((input_actions_state *)self->handle, action_id, b);
+    return append_binding((input_actions_state *)self->handle, action_id, b, out_error);
 }
 
-static ke_result vt_bind_mouse_button(ke_input_actions *self, int32_t action_id, ke_mouse_button button) {
-    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_bind_mouse_button(ke_input_actions *self, int32_t action_id, ke_mouse_button button, ke_error **out_error) {
+    if (!self || !self->handle) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     binding b = { BK_MOUSE_BUTTON, (int)button, 0, 0, 0 };
-    return append_binding((input_actions_state *)self->handle, action_id, b);
+    return append_binding((input_actions_state *)self->handle, action_id, b, out_error);
 }
 
-static ke_result vt_bind_key_pair(ke_input_actions *self, int32_t action_id, ke_key neg, ke_key pos) {
-    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_bind_key_pair(ke_input_actions *self, int32_t action_id, ke_key neg, ke_key pos, ke_error **out_error) {
+    if (!self || !self->handle) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     binding b = { BK_KEY_PAIR, (int)neg, (int)pos, 0, 0 };
-    return append_binding((input_actions_state *)self->handle, action_id, b);
+    return append_binding((input_actions_state *)self->handle, action_id, b, out_error);
 }
 
-static ke_result vt_bind_key_quad(ke_input_actions *self, int32_t action_id,
-                                   ke_key up, ke_key down, ke_key left, ke_key right) {
-    if (!self || !self->handle) return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_bind_key_quad(ke_input_actions *self, int32_t action_id,
+                                   ke_key up, ke_key down, ke_key left, ke_key right, ke_error **out_error) {
+    if (!self || !self->handle) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     binding b = { BK_KEY_QUAD, (int)up, (int)down, (int)left, (int)right };
-    return append_binding((input_actions_state *)self->handle, action_id, b);
+    return append_binding((input_actions_state *)self->handle, action_id, b, out_error);
 }
 
 // ── vtable: evaluate ────────────────────────────────────────────────────────
 
-static ke_result vt_evaluate(ke_input_actions *self, const ke_input_snapshot *snapshot,
-                              ke_input_action_event_func on_event, void *event_ctx) {
-    if (!self || !self->handle || !snapshot) return KE_ERROR_INVALID_ARGUMENT;
+static bool vt_evaluate(ke_input_actions *self, const ke_input_snapshot *snapshot,
+                              ke_input_action_event_func on_event, void *event_ctx,
+                              ke_error **out_error) {
+    if (!self || !self->handle || !snapshot) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
     input_actions_state *s = (input_actions_state *)self->handle;
 
     for (uint32_t id = 0; id < s->action_count; ++id) {
@@ -487,7 +524,7 @@ static ke_result vt_evaluate(ke_input_actions *self, const ke_input_snapshot *sn
             on_event(event_ctx, ev);
         }
     }
-    return KE_OK;
+    return true;
 }
 
 // ── vtable: polling ─────────────────────────────────────────────────────────
@@ -536,20 +573,21 @@ static void vt_destroy(ke_input_actions *self) {
     if (!self || !self->handle) return;
     input_actions_state *s = (input_actions_state *)self->handle;
     clear_actions(s);
-    if (s->actions) s->allocator->free(s->allocator, s->actions);
-    s->allocator->free(s->allocator, s);
+    if (s->actions) ke_free(s->actions);
+    ke_free(s);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
-ke_result ke_input_actions_create(ke_allocator *alloc, ke_input_actions **out_actions) {
-    if (!alloc || !out_actions) return KE_ERROR_INVALID_ARGUMENT;
+ke_input_actions_handle ke_input_actions_create(ke_error **out_error) {
+    ke_input_actions_handle null_handle = {0};
 
-    input_actions_state *s = (input_actions_state *)alloc->alloc(
-        alloc, sizeof(input_actions_state), 8);
-    if (!s) return KE_ERROR_OUT_OF_MEMORY;
+    input_actions_state *s = (input_actions_state *)ke_alloc(sizeof(input_actions_state), 8);
+    if (!s) {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "state allocation failed");
+        return null_handle;
+    }
     memset(s, 0, sizeof(*s));
-    s->allocator = alloc;
 
     s->api.handle              = s;
     s->api.load                = vt_load;
@@ -566,8 +604,9 @@ ke_result ke_input_actions_create(ke_allocator *alloc, ke_input_actions **out_ac
     s->api.get_axis1d          = vt_get_axis1d;
     s->api.get_axis2d          = vt_get_axis2d;
     s->api.get_axis3d          = vt_get_axis3d;
-    s->api.destroy             = vt_destroy;
 
-    *out_actions = &s->api;
-    return KE_OK;
+    ke_input_actions_handle out_actions;
+    out_actions.ref     = &s->api;
+    out_actions.destroy = vt_destroy;
+    return out_actions;
 }

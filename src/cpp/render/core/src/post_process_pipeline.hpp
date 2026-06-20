@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/kernel/render/render.h>
+#include <kernel_engine/render/render.h>
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
@@ -18,17 +18,17 @@ class TextureManager;
 class PostProcessPipeline
 {
 public:
-    ke_result SetupPostProcess(RenderContext& ctx, 
-                               GeometryManager& geometry,
-                               render::GpuProgramHandle& out_bright_prog, 
-                               render::GpuProgramHandle& out_blur_prog, 
-                               render::GpuProgramHandle& out_tonemap_prog);
+    bool SetupPostProcess(RenderContext& ctx,
+                          GeometryManager& geometry,
+                          render::GpuProgramHandle& out_bright_prog,
+                          render::GpuProgramHandle& out_blur_prog,
+                          render::GpuProgramHandle& out_tonemap_prog);
 
-    ke_result SetupSsao(RenderContext& ctx, render::GpuProgramHandle& out_prepass, render::GpuProgramHandle& out_ssao, render::GpuProgramHandle& out_ssao_blur);
+    bool SetupSsao(RenderContext& ctx, render::GpuProgramHandle& out_prepass, render::GpuProgramHandle& out_ssao, render::GpuProgramHandle& out_ssao_blur);
 
-    ke_result SetTonemapping(RenderContext& ctx, ke_bool enabled, float exposure, float gamma);
-    ke_result SetBloom(RenderContext& ctx, ke_bool enabled, float threshold, float intensity);
-    ke_result SetSsao(RenderContext& ctx, ke_bool enabled, float radius, float bias, float strength);
+    bool SetTonemapping(RenderContext& ctx, bool enabled, float exposure, float gamma);
+    bool SetBloom(RenderContext& ctx, bool enabled, float threshold, float intensity);
+    bool SetSsao(RenderContext& ctx, bool enabled, float radius, float bias, float strength);
 
     void SubmitPostProcess(RenderContext& ctx, GeometryManager& geom, TextureManager& tex, render::GpuProgramHandle bright, render::GpuProgramHandle blur, render::GpuProgramHandle tone);
     void SubmitSsao(RenderContext& ctx, GeometryManager& geom, TextureManager& tex, render::GpuProgramHandle ssao, render::GpuProgramHandle ssao_blur);

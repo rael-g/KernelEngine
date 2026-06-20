@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
 using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
@@ -7,14 +6,14 @@ namespace KernelEngine.Kernel.Tests;
 public unsafe class WindowDetailsTests
 {
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockInit(ke_window* self) => ke_result.KE_OK;
+    private static bool MockInit(ke_window* self, ke_error** out_error) => true;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockGetSize(ke_window* self, int* w, int* h)
+    private static bool MockGetSize(ke_window* self, int* w, int* h, ke_error** out_error)
     {
         *w = 1920;
         *h = 1080;
-        return ke_result.KE_OK;
+        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
@@ -24,7 +23,10 @@ public unsafe class WindowDetailsTests
     private static void MockDestroy(ke_window* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockShutdown(ke_window* self) => ke_result.KE_OK;
+    private static bool MockShutdown(ke_window* self, ke_error** out_error) => true;
+
+    private static ke_window_handle MakeHandle(ke_window* ptr) =>
+        new ke_window_handle { @ref = ptr, destroy = &MockDestroy };
 
     [Fact]
     public void GetSize_ReturnsCorrectValues()
@@ -33,14 +35,12 @@ public unsafe class WindowDetailsTests
         mock->on_initialize = &MockInit;
         mock->get_size = &MockGetSize;
         mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
 
-        using (var window = new Window(mock))
+        using (var window = new Window(MakeHandle(mock)))
         {
-            var res = window.GetSize();
-            Assert.True(res.IsOk);
-            Assert.Equal(1920, res.Value.Width);
-            Assert.Equal(1080, res.Value.Height);
+            var (width, height) = window.GetSize();
+            Assert.Equal(1920, width);
+            Assert.Equal(1080, height);
         }
         NativeMemory.Free(mock);
     }
@@ -52,9 +52,8 @@ public unsafe class WindowDetailsTests
         mock->on_initialize = &MockInit;
         mock->get_native_handle = &MockGetHandle;
         mock->on_shutdown = &MockShutdown;
-        mock->destroy = &MockDestroy;
 
-        using (var window = new Window(mock))
+        using (var window = new Window(MakeHandle(mock)))
         {
             unchecked
             {

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <texture_manager.hpp>
 #include <render_context.hpp>
@@ -40,7 +40,7 @@ TEST_F(TextureManagerTest, CreateTextureRgba_ReturnsOk)
     EXPECT_CALL(*gpu_mock, Copy(_, _)).WillRepeatedly(Return((const GpuMemoryBuffer*)0x123));
     EXPECT_CALL(*gpu_mock, CreateTexture2D(_, _, _, _, _, _, _)).WillOnce(Return(GpuTextureHandle{1}));
 
-    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, pixels, &handle), KE_OK);
+    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, pixels, &handle), true);
     EXPECT_EQ(handle.idx, 0);
 }
 
@@ -52,7 +52,7 @@ TEST_F(TextureManagerTest, CreateCubemapRgba_ReturnsOk)
     EXPECT_CALL(*gpu_mock, Copy(_, _)).WillRepeatedly(Return((const GpuMemoryBuffer*)0x123));
     EXPECT_CALL(*gpu_mock, CreateTextureCube(_, _, _, _, _, _)).WillOnce(Return(GpuTextureHandle{5}));
 
-    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 2, data, &handle), KE_OK);
+    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 2, data, &handle), true);
     EXPECT_EQ(handle.idx, 0);
 }
 
@@ -67,33 +67,33 @@ TEST_F(TextureManagerTest, DestroyTexture_CallsGpuDestroy)
     manager->CreateTextureRgba(ctx, 2, 2, pixels, &handle);
 
     EXPECT_CALL(*gpu_mock, DestroyTexture(GpuTextureHandle{10})).Times(1);
-    EXPECT_EQ(manager->DestroyTexture(ctx, handle), KE_OK);
+    EXPECT_EQ(manager->DestroyTexture(ctx, handle), true);
 }
 
 TEST_F(TextureManagerTest, CreateTextureRgba_ReturnsInvalidArgument_OnNullPixels)
 {
     ke_texture_handle handle;
-    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, nullptr, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, nullptr, &handle), false);
 }
 
 TEST_F(TextureManagerTest, CreateTextureRgba_ReturnsInvalidArgument_OnNullOut)
 {
     uint8_t pixels[16] = {};
-    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, pixels, nullptr), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, pixels, nullptr), false);
 }
 
 TEST_F(TextureManagerTest, CreateTextureRgba_ReturnsInvalidArgument_OnZeroWidth)
 {
     uint8_t pixels[16] = {};
     ke_texture_handle handle;
-    EXPECT_EQ(manager->CreateTextureRgba(ctx, 0, 2, pixels, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateTextureRgba(ctx, 0, 2, pixels, &handle), false);
 }
 
 TEST_F(TextureManagerTest, CreateTextureRgba_ReturnsInvalidArgument_OnZeroHeight)
 {
     uint8_t pixels[16] = {};
     ke_texture_handle handle;
-    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 0, pixels, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 0, pixels, &handle), false);
 }
 
 TEST_F(TextureManagerTest, CreateTextureRgba_ReturnsError_WhenGpuFails)
@@ -103,25 +103,25 @@ TEST_F(TextureManagerTest, CreateTextureRgba_ReturnsError_WhenGpuFails)
 
     EXPECT_CALL(*gpu_mock, CreateTexture2D(_, _, _, _, _, _, _)).WillOnce(Return(kGpuInvalidHandle));
 
-    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, pixels, &handle), KE_ERROR_RENDER);
+    EXPECT_EQ(manager->CreateTextureRgba(ctx, 2, 2, pixels, &handle), false);
 }
 
 TEST_F(TextureManagerTest, CreateCubemapRgba_ReturnsInvalidArgument_OnNullData)
 {
     ke_texture_handle handle;
-    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 2, nullptr, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 2, nullptr, &handle), false);
 }
 
 TEST_F(TextureManagerTest, CreateCubemapRgba_ReturnsInvalidArgument_OnZeroSize)
 {
     uint8_t data[64] = {};
     ke_texture_handle handle;
-    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 0, data, &handle), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 0, data, &handle), false);
 }
 
 TEST_F(TextureManagerTest, DestroyTexture_ReturnsInvalidArgument_OnOutOfBounds)
 {
-    EXPECT_EQ(manager->DestroyTexture(ctx, {999}), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->DestroyTexture(ctx, {999}), false);
 }
 
 TEST_F(TextureManagerTest, CreateCubemapRgba_ReturnsError_WhenGpuFails)
@@ -129,13 +129,13 @@ TEST_F(TextureManagerTest, CreateCubemapRgba_ReturnsError_WhenGpuFails)
     uint8_t data[64] = {};
     ke_texture_handle handle;
     EXPECT_CALL(*gpu_mock, CreateTextureCube(_, _, _, _, _, _)).WillOnce(Return(kGpuInvalidHandle));
-    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 2, data, &handle), KE_ERROR_RENDER);
+    EXPECT_EQ(manager->CreateCubemapRgba(ctx, 2, data, &handle), false);
 }
 
 TEST_F(TextureManagerTest, DestroyTexture_ReturnsError_WhenGpuNull)
 {
     ctx.gpu = nullptr;
-    EXPECT_EQ(manager->DestroyTexture(ctx, {0}), KE_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(manager->DestroyTexture(ctx, {0}), false);
 }
 
 TEST_F(TextureManagerTest, SubmitSkybox_UsesDefaultCube_WhenHandleInvalid)
@@ -152,5 +152,5 @@ TEST_F(TextureManagerTest, SubmitSkybox_UsesDefaultCube_WhenHandleInvalid)
     EXPECT_CALL(*gpu_mock, SetTexture(0, sampler, GpuTextureHandle{99}, _)).Times(1);
     EXPECT_CALL(*gpu_mock, Submit(_, prog, _, _)).Times(1);
 
-    EXPECT_EQ(manager->SubmitSkybox(ctx, {888}, prog, vb, ib, sampler, tint), KE_OK);
+    EXPECT_EQ(manager->SubmitSkybox(ctx, {888}, prog, vb, ib, sampler, tint), true);
 }

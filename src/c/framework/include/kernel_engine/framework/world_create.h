@@ -1,11 +1,11 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
 
 // ke_world_create — factory for the default framework world (the only export
 // of the framework plugin). Returns a ke_world vtable backed by allocator-
 // managed state that owns the ecs+runtime+scene_tree passed via params.
 
-#include <kernel_engine/kernel/framework/world.h>
+#include <kernel_engine/framework/world.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -28,8 +28,8 @@ extern "C"
 #endif
 #endif
 
-    KE_FRAMEWORK_API ke_result ke_world_create(
-        const ke_world_params *params, ke_world **out_world);
+    KE_FRAMEWORK_API ke_world_handle ke_world_create(
+        const ke_world_params *params, ke_error **out_error);
 
 #ifdef __cplusplus
 }

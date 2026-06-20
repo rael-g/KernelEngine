@@ -1,8 +1,7 @@
-#ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
 
-#include <kernel_engine/kernel/framework/input_actions.h>
-#include <kernel_engine/kernel/context/allocator.h>
+#include <kernel_engine/framework/input_actions.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -25,9 +24,8 @@ extern "C"
 #endif
 #endif
 
-    KE_FRAMEWORK_API ke_result ke_input_actions_create(
-        ke_allocator       *alloc,
-        ke_input_actions  **out_actions);
+    KE_FRAMEWORK_API ke_input_actions_handle ke_input_actions_create(
+        ke_error **out_error);
 
 #ifdef __cplusplus
 }

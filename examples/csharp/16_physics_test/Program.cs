@@ -5,7 +5,7 @@ using KernelEngine.Kernel;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,7 +27,7 @@ var services = new ServiceCollection()
     .AddInput()
     .AddBox2D()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 16 Physics Test (Space drops cube, R resets)"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
@@ -55,8 +55,8 @@ var services = new ServiceCollection()
         }, "Sun");
 
         var cubeMesh = MeshPrimitives.Cube(renderer);
-        var floorMat = renderer.CreateMaterial(new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f).Value;
-        var ballMat  = renderer.CreateMaterial(new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f).Value;
+        var floorMat = renderer.CreateMaterial(new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f);
+        var ballMat  = renderer.CreateMaterial(new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with

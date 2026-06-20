@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/render/render.h>
-#include <kernel_engine/kernel/engine/frame_packet.h>
+#include <kernel_engine/render/render.h>
+#include <kernel_engine/render/frame_packet.h>
 #include "internal_types.hpp"
 #include "gpu_types.hpp"
 #include <vector>
@@ -28,12 +28,12 @@ struct MaterialEntry
 class LightingManager
 {
 public:
-    ke_result SetDirectionalLight(const ke_directional_light *light);
-    ke_result SetAmbientLight(float r, float g, float b);
-    
+    bool SetDirectionalLight(const ke_directional_light *light);
+    bool SetAmbientLight(float r, float g, float b);
+
     // Immediate-mode: store for current frame (used by vtable path)
-    ke_result StorePointLights(const ke_point_light *lights, uint32_t count);
-    ke_result StoreSpotLights(const ke_spot_light *lights, uint32_t count);
+    bool StorePointLights(const ke_point_light *lights, uint32_t count);
+    bool StoreSpotLights(const ke_spot_light *lights, uint32_t count);
 
     /// Packs the stored point/spot lights into the GPU uniform arrays and sets u_lightCounts.
     /// Forward (brute-force) path: caps at kMaxPointLights / kMaxSpotLights.
@@ -43,11 +43,11 @@ public:
     static constexpr uint32_t kMaxSpotLights  = 48;  // u_spotLights[192]  = 4 vec4 each
 
     // Recording methods for multithreading
-    ke_result RecordLights(struct ke_frame_packet& packet, const ke_point_light *lights, uint32_t count);
-    ke_result RecordSpotLights(struct ke_frame_packet& packet, const ke_spot_light *lights, uint32_t count);
-    
-    ke_result CreateMaterial(RenderContext& ctx, const TextureManager& textures, const ke_material *mat, ke_material_handle *out_handle);
-    ke_result DestroyMaterial(RenderContext& ctx, ke_material_handle handle);
+    bool RecordLights(struct ke_frame_packet& packet, const ke_point_light *lights, uint32_t count);
+    bool RecordSpotLights(struct ke_frame_packet& packet, const ke_spot_light *lights, uint32_t count);
+
+    bool CreateMaterial(RenderContext& ctx, const TextureManager& textures, const ke_material *mat, ke_material_handle *out_handle);
+    bool DestroyMaterial(RenderContext& ctx, ke_material_handle handle);
 
     void Shutdown();
 

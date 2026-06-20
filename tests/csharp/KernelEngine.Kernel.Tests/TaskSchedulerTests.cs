@@ -1,18 +1,17 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel.Native;
 using Xunit;
 
 namespace KernelEngine.Kernel.Tests;
 
 /// <summary>
-/// Tests for <see cref="TaskScheduler"/>, <see cref="KernelTask"/>, and <see cref="KernelTask{T}"/>.
+/// Tests for <see cref="Scheduler"/>, <see cref="KernelTask"/>, and <see cref="KernelTask{T}"/>.
 ///
-/// The native scheduler is mocked via a synthetic <c>ke_task_scheduler</c> struct
+/// The native scheduler is mocked via a synthetic <c>ke_scheduler</c> struct
 /// whose function pointers execute work synchronously on the calling thread.
 /// No real enki threads are started — we test only the C# wrapper logic.
 /// </summary>
-public sealed class TaskSchedulerTests
+public sealed class SchedulerTests
 {
     // ── Sync mock callbacks ───────────────────────────────────────────────────
     //
@@ -21,7 +20,7 @@ public sealed class TaskSchedulerTests
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe ke_task* SyncDispatchOnComplete(
-        ke_task_scheduler* self,
+        ke_scheduler* self,
         delegate* unmanaged[Cdecl]<void*, void> func,
         void* data,
         delegate* unmanaged[Cdecl]<ke_task*, void*, void> on_complete,
@@ -34,7 +33,7 @@ public sealed class TaskSchedulerTests
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe ke_task* SyncDispatch(
-        ke_task_scheduler* self,
+        ke_scheduler* self,
         delegate* unmanaged[Cdecl]<void*, void> func,
         void* data)
     {
@@ -43,33 +42,32 @@ public sealed class TaskSchedulerTests
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe bool AlwaysCompleted(ke_task_scheduler* self, ke_task* task) => true;
+    private static unsafe bool AlwaysCompleted(ke_scheduler* self, ke_task* task) => true;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void NoopDestroy(ke_task_scheduler* self) { }
+    private static unsafe void NoopDestroy(ke_scheduler* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void NoopWait(ke_task_scheduler* self, ke_task* task) { }
+    private static unsafe void NoopWait(ke_scheduler* self, ke_task* task) { }
 
     // ── Mock handle ───────────────────────────────────────────────────────────
 
     private sealed class MockSchedulerHandle : IDisposable
     {
-        private unsafe ke_task_scheduler* _ptr;
-        public TaskScheduler Scheduler { get; }
+        private unsafe ke_scheduler* _ptr;
+        public Scheduler Scheduler { get; }
 
         public unsafe MockSchedulerHandle()
         {
-            _ptr = (ke_task_scheduler*)NativeMemory.Alloc((nuint)sizeof(ke_task_scheduler));
-            *_ptr = new ke_task_scheduler
+            _ptr = (ke_scheduler*)NativeMemory.Alloc((nuint)sizeof(ke_scheduler));
+            *_ptr = new ke_scheduler
             {
                 dispatch_on_complete = &SyncDispatchOnComplete,
                 dispatch             = &SyncDispatch,
                 is_completed         = &AlwaysCompleted,
                 wait                 = &NoopWait,
-                destroy              = &NoopDestroy,
             };
-            Scheduler = new TaskScheduler(_ptr);
+            Scheduler = new Scheduler(new ke_scheduler_handle { @ref = _ptr, destroy = &NoopDestroy });
         }
 
         public unsafe void Dispose()
@@ -180,7 +178,7 @@ public sealed class TaskSchedulerTests
         using var mock = new MockSchedulerHandle();
         var s = mock.Scheduler;
 
-        static async Task<int> ComputeAsync(TaskScheduler s)
+        static async Task<int> ComputeAsync(Scheduler s)
         {
             int a = await s.DispatchKernelTask(() => 10);
             int b = await s.DispatchKernelTask(() => 32);

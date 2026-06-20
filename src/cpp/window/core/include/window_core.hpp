@@ -1,7 +1,7 @@
 #pragma once
 
-#include <kernel_engine/kernel/window/window.h>
-#include <kernel_engine/kernel/input/input.h>
+#include <kernel_engine/window/window.h>
+#include <kernel_engine/input/input.h>
 #include <window_device.hpp>
 #include <kernel_engine/window/contract/window_export.h>
 #include <memory>
@@ -19,16 +19,19 @@ public:
     WindowCore();
     ~WindowCore();
 
-    ke_result Initialize(const WindowConfig& config);
+    bool Initialize(const WindowConfig& config);
     void Shutdown();
     void PollEvents();
     bool ShouldClose() const;
 
     void SetTitle(const char* title);
-    ke_result GetSize(uint32_t* width, uint32_t* height) const;
+    bool GetSize(uint32_t* width, uint32_t* height) const;
     void* GetNativeHandle() const;
 
     ke_window* ToApi();
+
+    /// Owner-handle destroy: deletes the window-core instance.
+    static void DestroyApi(ke_window* self);
 
     // Dependency Injection
     void SetDevice(WindowDevice* device);

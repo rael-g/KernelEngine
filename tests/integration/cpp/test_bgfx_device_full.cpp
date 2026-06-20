@@ -1,6 +1,6 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <bgfx_gpu_device.hpp>
-#include <kernel_engine/kernel/common/thread_name.h>
+#include <kernel_engine/threading/thread_name.h>
 
 using namespace kernel_engine::render;
 using namespace kernel_engine::render::bgfx;

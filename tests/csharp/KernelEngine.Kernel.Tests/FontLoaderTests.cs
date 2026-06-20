@@ -1,22 +1,21 @@
 using System.Runtime.InteropServices;
 using Xunit;
-using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Kernel.Tests;
 
 public class FontLoaderTests
 {
-    private static ke_result LastResult = ke_result.KE_OK;
+    private static bool LastResult = true;
     private static bool DestroyCalled = false;
     private static bool FreeFontCalled = false;
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_font_data** outData)
+    private static unsafe ke_font_data* MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_error** out_error)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
-        
-        if (LastResult != ke_result.KE_OK) return LastResult;
+
+        if (!LastResult) return null;
 
         var data = (ke_font_data*)NativeMemory.Alloc((nuint)sizeof(ke_font_data));
         data->atlas_width = 10;
@@ -27,9 +26,8 @@ public class FontLoaderTests
         data->glyphs[0].codepoint = 65;
         data->line_height = 12;
         data->ascent = 10;
-        
-        *outData = data;
-        return ke_result.KE_OK;
+
+        return data;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -50,77 +48,76 @@ public class FontLoaderTests
         DestroyCalled = true;
     }
 
-    private unsafe ke_font_loader* CreateMockNative()
+    private unsafe ke_font_loader_handle CreateMockHandle()
     {
         var ptr = (ke_font_loader*)NativeMemory.Alloc((nuint)sizeof(ke_font_loader));
         ptr->load_font = &MockLoadFont;
         ptr->free_font = &MockFreeFont;
-        ptr->destroy = &MockDestroy;
-        return ptr;
+        return new ke_font_loader_handle { @ref = ptr, destroy = &MockDestroy };
     }
 
     [Fact]
     public void Constructor_Throws_WhenNativeIsNull()
     {
-        unsafe 
-        { 
-            Assert.Throws<ArgumentNullException>(() => new FontLoader(null)); 
+        unsafe
+        {
+            Assert.Throws<ArgumentNullException>(() => new FontLoader(new ke_font_loader_handle()));
         }
     }
 
     [Fact]
     public async Task LoadFontAsync_CallsNative()
     {
-        IntPtr native;
-        unsafe { native = (IntPtr)CreateMockNative(); }
-        
+        ke_font_loader_handle h;
+        unsafe { h = CreateMockHandle(); }
+
         FontLoader loader;
-        unsafe { loader = new FontLoader((ke_font_loader*)native); }
-        
+        unsafe { loader = new FontLoader(h); }
+
         LastPath = null;
         FreeFontCalled = false;
-        LastResult = ke_result.KE_OK;
+        LastResult = true;
 
         var data = await loader.LoadFontAsync("test.ttf", 16);
 
         Assert.Equal("test.ttf", LastPath);
         Assert.Equal(10u, data.AtlasWidth);
         Assert.True(FreeFontCalled);
-        
-        unsafe { NativeMemory.Free((void*)native); }
+
+        unsafe { NativeMemory.Free(h.@ref); }
     }
 
     [Fact]
     public async Task LoadFontAsync_Throws_WhenNativeFails()
     {
-        IntPtr native;
-        unsafe { native = (IntPtr)CreateMockNative(); }
-        
+        ke_font_loader_handle h;
+        unsafe { h = CreateMockHandle(); }
+
         FontLoader loader;
-        unsafe { loader = new FontLoader((ke_font_loader*)native); }
-        
-        LastResult = ke_result.KE_ERROR_IO;
+        unsafe { loader = new FontLoader(h); }
 
-        await Assert.ThrowsAsync<KernelException>(() => loader.LoadFontAsync("test.ttf", 16));
+        LastResult = false;
 
-        LastResult = ke_result.KE_OK;
-        unsafe { NativeMemory.Free((void*)native); }
+        await Assert.ThrowsAsync<KernelError>(() => loader.LoadFontAsync("test.ttf", 16));
+
+        LastResult = true;
+        unsafe { NativeMemory.Free(h.@ref); }
     }
 
     [Fact]
     public void Dispose_CallsDestroy()
     {
-        IntPtr native;
-        unsafe { native = (IntPtr)CreateMockNative(); }
-        
+        ke_font_loader_handle h;
+        unsafe { h = CreateMockHandle(); }
+
         FontLoader loader;
-        unsafe { loader = new FontLoader((ke_font_loader*)native); }
-        
+        unsafe { loader = new FontLoader(h); }
+
         DestroyCalled = false;
 
         loader.Dispose();
 
         Assert.True(DestroyCalled);
-        unsafe { NativeMemory.Free((void*)native); }
+        // MockDestroy doesn't free memory — don't double-free here.
     }
 }

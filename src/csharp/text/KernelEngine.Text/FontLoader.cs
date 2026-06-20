@@ -1,0 +1,90 @@
+﻿using System.Runtime.InteropServices;
+using KernelEngine.Kernel;
+using KernelEngine.Common.Native;
+using KernelEngine.Text.Native;
+
+namespace KernelEngine.Text;
+
+/// <summary>
+/// Managed wrapper over a C kernel <c>ke_font_loader*</c>. Constructed by font plugins (e.g.
+/// <c>AddTextStbTrueType()</c>) and registered as <see cref="IFontLoader"/> for game-code consumption.
+/// Mirrors <see cref="ImageLoader"/>.
+/// </summary>
+public sealed unsafe class FontLoader : IFontLoader, INativeFontLoader
+{
+    private ke_font_loader* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_font_loader*, void> _destroy;
+
+    ke_font_loader* INativeFontLoader.Native => _native;
+
+    public FontLoader(ke_font_loader_handle handle)
+    {
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
+        _native = handle.@ref;
+        _destroy = handle.destroy;
+    }
+
+    public Task<FontData> LoadFontAsync(
+        string path,
+        float pixelSize,
+        uint atlasSize     = 512,
+        uint firstCodepoint = 32,
+        uint codepointCount = 95)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        ArgumentNullException.ThrowIfNull(path);
+
+        // Decode on a worker so ke.sim isn't blocked on disk + CPU bake.
+        return Task.Run(() =>
+        {
+            var pathPtr = Marshal.StringToHGlobalAnsi(path);
+            try
+            {
+                var loader = _native;
+                if (loader == null) throw new ObjectDisposedException(nameof(FontLoader));
+
+                ke_error* err = null;
+                ke_font_data* data = loader->load_font(loader, (sbyte*)pathPtr, pixelSize,
+                                                       firstCodepoint, codepointCount, atlasSize, &err);
+                if (data == null) throw KernelError.FromNative(err, "load_font");
+
+                try
+                {
+                    // Copy native atlas + glyphs into managed arrays so the native buffer can be freed.
+                    var atlasLen = (int)(data->atlas_width * data->atlas_height * 4);
+                    var atlas    = new byte[atlasLen];
+                    Marshal.Copy((IntPtr)data->atlas_rgba, atlas, 0, atlasLen);
+
+                    var glyphs = new GlyphMetrics[data->glyph_count];
+                    for (uint i = 0; i < data->glyph_count; i++)
+                    {
+                        ref var g = ref data->glyphs[i];
+                        glyphs[i] = new GlyphMetrics(
+                            g.codepoint,
+                            g.u0, g.v0, g.u1, g.v1,
+                            g.bearing_x, g.bearing_y,
+                            g.width, g.height,
+                            g.advance_x);
+                    }
+
+                    return new FontData(atlas, data->atlas_width, data->atlas_height,
+                                        glyphs, data->line_height, data->ascent);
+                }
+                finally
+                {
+                    loader->free_font(loader, data);
+                }
+            }
+            finally { Marshal.FreeHGlobal(pathPtr); }
+        });
+    }
+
+    public void Dispose()
+    {
+        if (_native != null)
+        {
+            if (_destroy != null) _destroy(_native);
+            _native = null;
+        }
+    }
+}

@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>KernelEngine.Framework</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
+    <ProjectReference Include="..\..\input\KernelEngine.Input.Abstractions\KernelEngine.Input.Abstractions.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Abstractions\KernelEngine.Ecs.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

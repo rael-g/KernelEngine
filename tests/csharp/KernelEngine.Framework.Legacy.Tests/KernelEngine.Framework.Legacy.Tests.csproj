@@ -18,9 +18,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Framework.Legacy.Native\KernelEngine.Framework.Legacy.Native.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\KernelEngine.Kernel\KernelEngine.Kernel.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\common\KernelEngine.Common\KernelEngine.Common.csproj" />
   </ItemGroup>
 
 </Project>

@@ -42,7 +42,7 @@ TEST(RenderContractTest, BgfxFatalException_StoresMessage) {
 #include <render_logging.hpp>
 
 TEST(RenderContractTest, LogErr_HandlesNullLogger) {
-    EXPECT_EQ(LogErr(nullptr, KE_ERROR, "T", "C", "D"), KE_ERROR);
+    EXPECT_FALSE(LogErr(nullptr, false, "T", "C", "D"));
 }
 
 static void mock_log_impl(ke_logger* self, const ke_log_event* ev) {
@@ -56,6 +56,6 @@ TEST(RenderContractTest, LogErr_CallsLogger) {
     logger.handle = &called;
     logger.log = mock_log_impl;
     
-    LogErr(&logger, KE_ERROR, "T", "C", "D");
+    LogErr(&logger, false, "T", "C", "D");
     EXPECT_EQ(called, 1);
 }

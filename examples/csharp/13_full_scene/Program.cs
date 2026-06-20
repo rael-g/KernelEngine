@@ -6,7 +6,7 @@ using KernelEngine.Framework;
 using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
-using KernelEngine.TaskScheduler.Enki;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,7 +23,7 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .AddAssimpAssetLoader()
     .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 13 Full Scene"))
     .Add<IRuntimeModule>(new BgfxRenderModule(
@@ -62,7 +62,7 @@ var services = new ServiceCollection()
 
         // Floor: a Plane primitive (XZ, normal +Y) scaled out for a 50-unit ground.
         var planeMesh = MeshPrimitives.Plane(renderer);
-        var floorMat  = renderer.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f).Value;
+        var floorMat  = renderer.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
         var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 1f, 50f) };
 
