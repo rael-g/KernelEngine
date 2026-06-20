@@ -30,12 +30,12 @@ public sealed unsafe class Input : IInput, INativeInput
 
     public Input(INativeLogger? logger)
     {
-        ke_input_handle handle;
-        var res = InputNative.input_create(
+        ke_error* err = null;
+        var handle = InputNative.input_create(
             logger != null ? logger.Native : null,
-            &handle, null);
+            &err);
 
-        KernelException.ThrowIfFailed(res.ToManaged(), nameof(InputNative.input_create));
+        if (handle.@ref == null) throw KernelError.FromNative(err, nameof(InputNative.input_create));
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -47,9 +47,10 @@ public sealed unsafe class Input : IInput, INativeInput
     /// hard-coded <c>ke.main</c> affinity check was tied to the legacy single-
     /// main-thread model and no longer fits the module-driven runtime.
     /// </remarks>
-    public Result Update()
+    public void Update()
     {
-        return _native->update(_native, null).Wrap();
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(_native->update(_native, &err), err, "update");
     }
 
     /// <summary>Captures a frozen snapshot of the current input state (native form).</summary>

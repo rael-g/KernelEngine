@@ -41,7 +41,7 @@ var services = new ServiceCollection()
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 10f) };
 
         var cubeMesh = MeshPrimitives.Cube(renderer);
-        var mat      = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+        var mat      = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
         var glow = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, "GlowCube");
         glow.LocalTransform = glow.LocalTransform with { Scale = new Vector3(2f, 2f, 2f) };

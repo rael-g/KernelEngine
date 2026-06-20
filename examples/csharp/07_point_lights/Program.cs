@@ -40,7 +40,7 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
 
-        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
         // Grid of quads at z=0, x,y âˆˆ {-5, -3, -1, 1, 3, 5}.
         for (int x = -5; x <= 5; x += 2)

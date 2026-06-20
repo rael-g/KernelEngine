@@ -33,11 +33,11 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// </summary>
     /// <param name="imageLoader">
     /// Optional image-loader plugin. Pass <see langword="null"/> to disable
-    /// <see cref="ResolveTexture"/>; it will throw <see cref="KernelException"/> when called.
+    /// <see cref="ResolveTexture"/>; it will throw <see cref="KernelError"/> when called.
     /// </param>
     /// <param name="fontLoader">
     /// Optional font-loader plugin. Pass <see langword="null"/> to disable
-    /// <see cref="ResolveFont"/>; it will throw <see cref="KernelException"/> when called.
+    /// <see cref="ResolveFont"/>; it will throw <see cref="KernelError"/> when called.
     /// </param>
     /// <param name="projectRoot">
     /// Optional project root for <c>res://</c> resolution. Pass <see langword="null"/>
@@ -47,26 +47,23 @@ public sealed unsafe class NativeAssetResolver : IDisposable
                                INativeFontLoader? fontLoader = null, string? projectRoot = null)
     {
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
-        ke_asset_resolver_handle handle;
         ke_image_loader* imagePtr = imageLoader is not null ? imageLoader.Native : null;
         ke_font_loader*  fontPtr  = fontLoader  is not null ? fontLoader.Native  : null;
         fixed (byte* rootPtr = rootBytes)
         {
-            KernelException.ThrowIfFailed(
-                KernelEngine.Framework.Native.NativeMethods.asset_resolver_create(
-                    imagePtr,
-                    fontPtr,
-                    (sbyte*)rootPtr,
-                    &handle, null).ToManaged());
+            ke_error* err = null;
+            var handle = KernelEngine.Framework.Native.NativeMethods.asset_resolver_create(
+                imagePtr, fontPtr, (sbyte*)rootPtr, &err);
+            if (handle.@ref == null) throw KernelError.FromNative(err, "asset_resolver_create");
+            _native = handle.@ref;
+            _destroy = handle.destroy;
         }
-        _native = handle.@ref;
-        _destroy = handle.destroy;
     }
 
     /// <summary>
     /// Resolves an image path to freshly-decoded RGBA8 pixel data. Caller disposes the result.
     /// </summary>
-    /// <exception cref="KernelException">
+    /// <exception cref="KernelError">
     /// File not found, unsupported extension, or no image loader was injected.
     /// </exception>
     public IImageData ResolveTexture(string path)
@@ -76,10 +73,11 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_texture_data* data;
-        ke_result result;
+        bool ok;
+        ke_error* err = null;
         fixed (byte* p = bytes)
-            result = _native->resolve_texture(_native, (sbyte*)p, &data, null);
-        KernelException.ThrowIfFailed(result.ToManaged());
+            ok = _native->resolve_texture(_native, (sbyte*)p, &data, &err);
+        KernelError.ThrowIfFailed(ok, err, "resolve_texture");
         return new ResolvedTextureData(_native, data);
     }
 
@@ -87,7 +85,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// Resolves a mesh path to CPU-side vertex + index data. Caller disposes the result.
     /// Primitives: <c>res://primitives/{quad|plane|cube|sphere}</c>.
     /// </summary>
-    /// <exception cref="KernelException">Path unresolvable or unsupported extension.</exception>
+    /// <exception cref="KernelError">Path unresolvable or unsupported extension.</exception>
     public ResolvedMeshData ResolveMesh(string path)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
@@ -95,10 +93,11 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_mesh_shape_data meshData = default;
-        ke_result result;
+        bool ok;
+        ke_error* err = null;
         fixed (byte* p = bytes)
-            result = _native->resolve_mesh(_native, (sbyte*)p, &meshData, null);
-        KernelException.ThrowIfFailed(result.ToManaged());
+            ok = _native->resolve_mesh(_native, (sbyte*)p, &meshData, &err);
+        KernelError.ThrowIfFailed(ok, err, "resolve_mesh");
         return new ResolvedMeshData(_native, meshData);
     }
 
@@ -111,7 +110,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// <param name="firstCodepoint">First Unicode codepoint to include (default 32 = space).</param>
     /// <param name="codepointCount">Number of contiguous codepoints to bake (default 95).</param>
     /// <param name="atlasSize">Square atlas dimension in pixels (default 512).</param>
-    /// <exception cref="KernelException">
+    /// <exception cref="KernelError">
     /// File not found, unsupported format, or no font loader was injected.
     /// </exception>
     public ResolvedFontData ResolveFont(string path, float pixelSize,
@@ -123,11 +122,12 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_font_data* data;
-        ke_result result;
+        bool ok;
+        ke_error* err = null;
         fixed (byte* p = bytes)
-            result = _native->resolve_font(_native, (sbyte*)p, pixelSize,
-                                           firstCodepoint, codepointCount, atlasSize, &data, null);
-        KernelException.ThrowIfFailed(result.ToManaged());
+            ok = _native->resolve_font(_native, (sbyte*)p, pixelSize,
+                                       firstCodepoint, codepointCount, atlasSize, &data, &err);
+        KernelError.ThrowIfFailed(ok, err, "resolve_font");
         return new ResolvedFontData(_native, data);
     }
 
@@ -136,7 +136,7 @@ public sealed unsafe class NativeAssetResolver : IDisposable
     /// Texture path fields inside the spec stay as strings; feed them back through
     /// <see cref="ResolveTexture"/> to obtain pixel data.
     /// </summary>
-    /// <exception cref="KernelException">File not found or parse failure.</exception>
+    /// <exception cref="KernelError">File not found or parse failure.</exception>
     public MaterialSpec ResolveMaterial(string path)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
@@ -144,10 +144,11 @@ public sealed unsafe class NativeAssetResolver : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         ke_material_spec spec = default;
-        ke_result result;
+        bool ok;
+        ke_error* err = null;
         fixed (byte* p = bytes)
-            result = _native->resolve_material(_native, (sbyte*)p, &spec, null);
-        KernelException.ThrowIfFailed(result.ToManaged());
+            ok = _native->resolve_material(_native, (sbyte*)p, &spec, &err);
+        KernelError.ThrowIfFailed(ok, err, "resolve_material");
         return MaterialSpec.FromNative(spec);
     }
 

@@ -100,7 +100,7 @@ public sealed class SceneRenderModule : IRuntimeModule
                 {
                     float roughness = 1f;
                     reader.TryGetFloat("roughness", out roughness);
-                    comp.Material = renderer.CreateMaterial(color, roughness: roughness).Value;
+                    comp.Material = renderer.CreateMaterial(color, roughness: roughness);
                 }
             });
 

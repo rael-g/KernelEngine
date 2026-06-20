@@ -38,7 +38,7 @@ public sealed class Font : IDisposable
     {
         using var data = loader.LoadFontAsync(path, pixelSize, atlasSize, firstCodepoint, codepointCount)
                                .GetAwaiter().GetResult();
-        var atlas = renderer.CreateTexture(data.AtlasWidth, data.AtlasHeight, data.AtlasRgba).Value;
+        var atlas = renderer.CreateTexture(data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
         return new Font(renderer, atlas, data.Glyphs, data.LineHeight, data.Ascent);
     }
 

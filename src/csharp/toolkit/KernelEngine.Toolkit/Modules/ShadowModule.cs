@@ -59,7 +59,7 @@ public sealed class ShadowModule : IRuntimeModule
         {
             try
             {
-                var handle = renderer.CreateShadowMap(_resolution, _resolution).Value;
+                var handle = renderer.CreateShadowMap(_resolution, _resolution);
                 _ownedHandle    = handle;
                 resources.Handle = handle;
             }

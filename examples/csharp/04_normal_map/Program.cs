@@ -55,11 +55,11 @@ var services = new ServiceCollection()
             pixels[i + 3] = 255;
         }
 
-        var nm = renderer.CreateTexture(w, h, pixels).Value;
+        var nm = renderer.CreateTexture(w, h, pixels);
         Console.WriteLine($"[KernelEngine] NormalMap: handle={nm.Value} width={w} height={h}");
 
-        var matPlain  = renderer.CreateMaterial(Vector4.One, roughness: 0.3f).Value;
-        var matNormal = renderer.CreateMaterial(Vector4.One, roughness: 0.3f, normalMapHandle: nm).Value;
+        var matPlain  = renderer.CreateMaterial(Vector4.One, roughness: 0.3f);
+        var matNormal = renderer.CreateMaterial(Vector4.One, roughness: 0.3f, normalMapHandle: nm);
 
         tree.AddNode(
             new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },

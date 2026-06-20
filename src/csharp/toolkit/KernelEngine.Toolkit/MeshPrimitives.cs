@@ -20,7 +20,7 @@ public static class MeshPrimitives
             new() { X = -0.5f, Y = 0f, Z =  0.5f, Nx = 0, Ny = 1, Nz = 0, U = 0, V = 1, Tx = 1, Ty = 0, Tz = 0, Tw = 1 },
         };
         var indices = new ushort[] { 0, 1, 2, 0, 2, 3 };
-        return renderer.CreateMesh(verts, indices).Value;
+        return renderer.CreateMesh(verts, indices);
     }
 
     /// <summary>Unit XY quad centered at the origin, facing +Z.</summary>
@@ -34,7 +34,7 @@ public static class MeshPrimitives
             new() { X = -0.5f, Y =  0.5f, Z = 0f, Nx = 0, Ny = 0, Nz = 1, U = 0, V = 0, Tx = 1, Ty = 0, Tz = 0, Tw = 1 },
         };
         var indices = new ushort[] { 0, 1, 2, 0, 2, 3 };
-        return renderer.CreateMesh(verts, indices).Value;
+        return renderer.CreateMesh(verts, indices);
     }
 
     /// <summary>Unit cube centered at the origin, 24 verts (4 per face).</summary>
@@ -66,6 +66,6 @@ public static class MeshPrimitives
         Face(4,  0, 0, 1,  1, 0, 0, new(-h,-h,+h), new(+h,-h,+h), new(+h,+h,+h), new(-h,+h,+h));
         Face(5,  0, 0,-1, -1, 0, 0, new(+h,-h,-h), new(-h,-h,-h), new(-h,+h,-h), new(+h,+h,-h));
 
-        return renderer.CreateMesh(verts, idx).Value;
+        return renderer.CreateMesh(verts, idx);
     }
 }

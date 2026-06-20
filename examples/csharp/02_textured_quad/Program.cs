@@ -42,8 +42,8 @@ var services = new ServiceCollection()
             int  i = (y * (int)width + x) * 4;
             pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v; pixels[i + 3] = 255;
         }
-        var tex = renderer.CreateTexture(width, height, pixels).Value;
-        var mat = renderer.CreateMaterial(Vector4.One, textureHandle: tex).Value;
+        var tex = renderer.CreateTexture(width, height, pixels);
+        var mat = renderer.CreateMaterial(Vector4.One, textureHandle: tex);
 
         tree.AddNode(new DirectionalLight
         {

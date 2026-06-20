@@ -27,7 +27,7 @@ internal sealed class CameraContributor : IFrameContributor
         var tsp = _ecs.GetComponent<TransformComponent>(camEntity, _components.CidOf<TransformComponent>());
         if (!tsp.IsEmpty) transform = tsp[0];
 
-        var size   = _window.GetSize().Value;
+        var size   = _window.GetSize();
         var aspect = size.Height > 0 ? (float)size.Width / size.Height : 1f;
 
         Vector3 forward, up;

@@ -65,12 +65,12 @@ var services = new ServiceCollection()
             }
         }
 
-        var cubemap = renderer.CreateCubemap(faceSize, cubeData).Value;
+        var cubemap = renderer.CreateCubemap(faceSize, cubeData);
         Console.WriteLine($"[KernelEngine] Cubemap: handle={cubemap.Value} faceSize={faceSize}");
 
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
-        var mirrorMat = renderer.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f).Value;
+        var mirrorMat = renderer.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f);
         tree.AddNode(new MeshRenderer { MaterialHandle = mirrorMat }, "MirrorQuad");
 
         tree.AddNode(new DirectionalLight

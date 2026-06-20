@@ -43,5 +43,5 @@ public interface IWorld : IDisposable
     void UnregisterScript(ulong entity);
 
     /// <summary>Advances the simulation by one frame.</summary>
-    Result Update(IFramePacket? packet = null, IInputReader? input = null);
+    void Update(IFramePacket? packet = null, IInputReader? input = null);
 }

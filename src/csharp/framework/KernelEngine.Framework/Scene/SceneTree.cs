@@ -34,15 +34,18 @@ public sealed unsafe class SceneTree : INativeSceneTree
     {
         var bytes = Encoding.UTF8.GetBytes(name + "\0");
         fixed (byte* p = bytes)
-            return _native->create_node(_native, (sbyte*)p, parent);
+            return _native->create_node(_native, (sbyte*)p, parent, null);
     }
 
     /// <summary>
     /// Destroys a node and all its descendants. Fires on_destroy hooks in
     /// post-order (children before parents).
     /// </summary>
-    public Result DestroyNode(ulong entity)
-        => _native->destroy_node(_native, entity, null).ToManaged();
+    public void DestroyNode(ulong entity)
+    {
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(_native->destroy_node(_native, entity, &err), err, "destroy_node");
+    }
 
     /// <summary>Destroys all nodes. Used on scene shutdown.</summary>
     public void DestroyAll() => _native->destroy_all(_native);
@@ -55,7 +58,7 @@ public sealed unsafe class SceneTree : INativeSceneTree
     {
         var bytes = Encoding.UTF8.GetBytes(nameOrPath + "\0");
         fixed (byte* p = bytes)
-            return _native->find_node(_native, (sbyte*)p);
+            return _native->find_node(_native, (sbyte*)p, null);
     }
 
     /// <summary>

@@ -3,7 +3,7 @@ namespace KernelEngine.Kernel;
 public interface IWindow : IDisposable
 {
     bool ShouldClose();
-    Result PollEvents();
-    Result<(int Width, int Height)> GetSize();
+    void PollEvents();
+    (int Width, int Height) GetSize();
     nint GetNativeHandle();
 }

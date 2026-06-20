@@ -102,13 +102,6 @@ public class Application : IDisposable
         }
     }
 
-    private void CheckResult(Result res, string context)
-    {
-        if (res == KernelResult.GpuFatal)
-            throw new KernelException(res, context, GetGpuFatalError());
-        res.ThrowIfFailed();
-    }
-
     /// <summary>
     /// Sets the calling thread's name on both the kernel-side TLS (for ke_thread_assert_current
     /// from C plugins) and on the .NET runtime side (which since .NET 6 propagates the name to
@@ -189,12 +182,13 @@ public class Application : IDisposable
                 // Create the shadow map on ke.render (GPU creation requires this thread).
                 if (_shadowSystem != null)
                 {
-                    var shadowMap = Renderer.CreateShadowMap(1024, 1024);
-                    if (shadowMap.IsOk)
+                    try
                     {
-                        _shadowSystem.SetShadowMap(shadowMap.Value);
+                        var shadowMap = Renderer.CreateShadowMap(1024, 1024);
+                        _shadowSystem.SetShadowMap(shadowMap);
                         Logger?.Info("Application", "ke.render: shadow map created (1024x1024)");
                     }
+                    catch (KernelError) { /* shadow map unavailable — continue without it */ }
                 }
 
                 Logger?.Info("Application", "ke.render: renderer ready — signaling ke.sim");
@@ -219,8 +213,8 @@ public class Application : IDisposable
                     var packet = frameSync.BeginRead();
                     if (_cts.IsCancellationRequested) { packet.EndRead(); break; }
 
-                    CheckResult(Renderer.SubmitPacket(packet), "Renderer.SubmitPacket");
-                    CheckResult(Renderer.Frame(), "Renderer.Frame");
+                    Renderer.SubmitPacket(packet);
+                    Renderer.Frame();
 
                     packet.EndRead();
 
@@ -490,8 +484,8 @@ public class Application : IDisposable
         // Label rendering — polls current backbuffer size each frame so resizes propagate.
         ActiveWorld.AddSystem(new LabelRenderSystem(() =>
         {
-            var sz = Window.GetSize();
-            return sz.IsOk ? ((uint)sz.Value.Width, (uint)sz.Value.Height) : (0u, 0u);
+            try { var sz = Window.GetSize(); return ((uint)sz.Width, (uint)sz.Height); }
+            catch (KernelError) { return (0u, 0u); }
         }));
 
         _shadowSystem = new ShadowRenderSystem(dirLightCid, meshCid, xformCid);

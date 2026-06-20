@@ -56,7 +56,7 @@ var services = new ServiceCollection()
 
         var planeMesh = MeshPrimitives.Plane(renderer);
         var cubeMesh  = MeshPrimitives.Cube(renderer);
-        var mat       = renderer.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), roughness: 0.5f).Value;
+        var mat       = renderer.CreateMaterial(new Vector4(0.7f, 0.7f, 0.7f, 1f), roughness: 0.5f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = mat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(10f, 1f, 10f) };

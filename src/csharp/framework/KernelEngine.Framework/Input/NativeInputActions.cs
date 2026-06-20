@@ -42,9 +42,9 @@ public sealed unsafe class NativeInputActions : IDisposable
     /// <summary>Creates a native input-actions instance.</summary>
     public NativeInputActions()
     {
-        ke_input_actions_handle handle;
-        KernelException.ThrowIfFailed(
-            KernelEngine.Framework.Native.NativeMethods.input_actions_create(&handle, null).ToManaged());
+        ke_error* err = null;
+        var handle = KernelEngine.Framework.Native.NativeMethods.input_actions_create(&err);
+        if (handle.@ref == null) throw KernelError.FromNative(err, "input_actions_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -54,16 +54,17 @@ public sealed unsafe class NativeInputActions : IDisposable
     /// Clears any previously-registered actions.
     /// </summary>
     /// <exception cref="FileNotFoundException">File does not exist.</exception>
-    /// <exception cref="KernelException">Parse or other native failure.</exception>
+    /// <exception cref="KernelError">Parse or other native failure.</exception>
     public void Load(string path)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
         ArgumentException.ThrowIfNullOrEmpty(path);
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
-        ke_result result;
+        ke_error* err = null;
+        bool result;
         fixed (byte* p = bytes)
-            result = _native->load(_native, (sbyte*)p, null);
-        KernelException.ThrowIfFailed(result.ToManaged());
+            result = _native->load(_native, (sbyte*)p, &err);
+        KernelError.ThrowIfFailed(result, err, "load");
     }
 
     /// <summary>
@@ -96,15 +97,17 @@ public sealed unsafe class NativeInputActions : IDisposable
     public void BindKey(int actionId, ke_key key)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        KernelException.ThrowIfFailed(_native->bind_key(_native, actionId, key, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(_native->bind_key(_native, actionId, key, &err), err, "bind_key");
     }
 
     /// <summary>Attaches a mouse-button Button binding to <paramref name="actionId"/>.</summary>
     public void BindMouseButton(int actionId, ke_mouse_button button)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        KernelException.ThrowIfFailed(
-            _native->bind_mouse_button(_native, actionId, button, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(
+            _native->bind_mouse_button(_native, actionId, button, &err), err, "bind_mouse_button");
     }
 
     /// <summary>
@@ -114,8 +117,9 @@ public sealed unsafe class NativeInputActions : IDisposable
     public void BindKeyPair(int actionId, ke_key negative, ke_key positive)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        KernelException.ThrowIfFailed(
-            _native->bind_key_pair(_native, actionId, negative, positive, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(
+            _native->bind_key_pair(_native, actionId, negative, positive, &err), err, "bind_key_pair");
     }
 
     /// <summary>
@@ -125,8 +129,9 @@ public sealed unsafe class NativeInputActions : IDisposable
     public void BindKeyQuad(int actionId, ke_key up, ke_key down, ke_key left, ke_key right)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
-        KernelException.ThrowIfFailed(
-            _native->bind_key_quad(_native, actionId, up, down, left, right, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(
+            _native->bind_key_quad(_native, actionId, up, down, left, right, &err), err, "bind_key_quad");
     }
 
     /// <summary>
@@ -149,14 +154,15 @@ public sealed unsafe class NativeInputActions : IDisposable
         }
 
         s_pendingException = null;
-        ke_result result;
+        ke_error* err = null;
+        bool result;
         if (onEvent is not null)
-            result = _native->evaluate(_native, snapshot, &EventTrampoline, ctx, null);
+            result = _native->evaluate(_native, snapshot, &EventTrampoline, ctx, &err);
         else
-            result = _native->evaluate(_native, snapshot, null, null, null);
+            result = _native->evaluate(_native, snapshot, null, null, &err);
 
         if (s_pendingException is { } pending) { s_pendingException = null; throw pending; }
-        KernelException.ThrowIfFailed(result.ToManaged());
+        KernelError.ThrowIfFailed(result, err, "evaluate");
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]

@@ -58,24 +58,22 @@ public sealed unsafe class SceneLoader : IDisposable
         ArgumentNullException.ThrowIfNull(world);
 
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
-        ke_scene_loader_handle handle;
         fixed (byte* rootPtr = rootBytes)
         {
-            KernelException.ThrowIfFailed(
-                KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
-                    ((INativeWorld)world).Native,
-                    (sbyte*)rootPtr,
-                    &handle, null).ToManaged());
+            ke_error* err = null;
+            var handle = KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
+                ((INativeWorld)world).Native, (sbyte*)rootPtr, &err);
+            if (handle.@ref == null) throw KernelError.FromNative(err, "scene_loader_create");
+            _native = handle.@ref;
+            _destroy = handle.destroy;
         }
-        _native = handle.@ref;
-        _destroy = handle.destroy;
     }
 
     /// <summary>
     /// Loads the scene file at <paramref name="path"/> into the world. Blocking.
     /// </summary>
     /// <exception cref="FileNotFoundException">File not found or unparseable.</exception>
-    /// <exception cref="KernelException">Any other native failure.</exception>
+    /// <exception cref="KernelError">Any other native failure.</exception>
     public void Load(string path)
     {
         ObjectDisposedException.ThrowIf(_native == null, this);
@@ -83,16 +81,17 @@ public sealed unsafe class SceneLoader : IDisposable
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         s_pendingException = null;
-        ke_result result;
+        ke_error* err = null;
+        bool result;
         fixed (byte* p = bytes)
-            result = _native->load(_native, (sbyte*)p, null);
+            result = _native->load(_native, (sbyte*)p, &err);
 
         if (s_pendingException is { } pending)
         {
             s_pendingException = null;
             throw pending;
         }
-        KernelException.ThrowIfFailed(result.ToManaged());
+        KernelError.ThrowIfFailed(result, err, "load");
     }
 
     /// <summary>
@@ -111,12 +110,13 @@ public sealed unsafe class SceneLoader : IDisposable
         _scriptHandle  = GCHandle.Alloc(factory);
         var ctx        = GCHandle.ToIntPtr(_scriptHandle);
 
-        KernelException.ThrowIfFailed(
-            _native->register_script_factory(_native, &ScriptTrampoline, (void*)ctx, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(
+            _native->register_script_factory(_native, &ScriptTrampoline, (void*)ctx, &err), err, "register_script_factory");
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static ke_result ScriptTrampoline(void* ctx, ulong entity, sbyte* typeName)
+    private static bool ScriptTrampoline(void* ctx, ulong entity, sbyte* typeName, ke_error** out_error)
     {
         try
         {
@@ -124,14 +124,14 @@ public sealed unsafe class SceneLoader : IDisposable
             if (gch.Target is Func<ulong, string, bool> factory)
             {
                 var name = typeName != null ? Marshal.PtrToStringUTF8((IntPtr)typeName) ?? "" : "";
-                return factory(entity, name) ? ke_result.KE_OK : ke_result.KE_ERROR;
+                return factory(entity, name);
             }
         }
         catch (Exception ex)
         {
             s_pendingException ??= ex;
         }
-        return ke_result.KE_ERROR;
+        return false;
     }
 
     /// <inheritdoc cref="IDisposable.Dispose"/>

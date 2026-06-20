@@ -44,7 +44,7 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
 
-        var orangeMat = renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f)).Value;
+        var orangeMat = renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
         tree.AddNode(new SpinningQuad { MaterialHandle = orangeMat }, "Spinner");
     }));
 

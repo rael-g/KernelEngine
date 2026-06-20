@@ -27,7 +27,7 @@ public static class ModelExtensions
         for (int i = 0; i < model.Textures.Count; i++)
         {
             var tex = model.Textures[i];
-            textures[i] = renderer.CreateTexture(tex.Width, tex.Height, tex.Pixels.ToArray()).Value;
+            textures[i] = renderer.CreateTexture(tex.Width, tex.Height, tex.Pixels.ToArray());
         }
 
         var materials = new MaterialHandle[model.Materials.Count];
@@ -41,14 +41,14 @@ public static class ModelExtensions
                 textureHandle:   albedo,
                 metallic:        m.Metallic,
                 roughness:       m.Roughness,
-                normalMapHandle: normal).Value;
+                normalMapHandle: normal);
         }
 
         var nodes = new List<MeshRenderer>(model.Meshes.Count);
         for (int i = 0; i < model.Meshes.Count; i++)
         {
             var src      = model.Meshes[i];
-            var mesh     = renderer.CreateMesh(src.Vertices.ToArray(), src.Indices.ToArray()).Value;
+            var mesh     = renderer.CreateMesh(src.Vertices.ToArray(), src.Indices.ToArray());
             var material = src.MaterialIndex >= 0 ? materials[src.MaterialIndex] : default;
             var name     = string.IsNullOrEmpty(src.Name) ? $"{rootName}.Mesh_{i}" : $"{rootName}.{src.Name}";
             nodes.Add(nodeWorld.AddNode(new MeshRenderer { MeshHandle = mesh, MaterialHandle = material }, name));

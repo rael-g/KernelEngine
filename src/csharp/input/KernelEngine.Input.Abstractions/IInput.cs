@@ -7,7 +7,7 @@ namespace KernelEngine.Kernel;
 public interface IInput : IDisposable
 {
     /// <summary>Processes pending messages and updates internal state. Must run on ke.main.</summary>
-    Result Update();
+    void Update();
 
     /// <summary>Captures an immutable input snapshot for the current frame, marshalled to a
     /// managed <see cref="IInputReader"/>. Safe to publish across threads (e.g. via

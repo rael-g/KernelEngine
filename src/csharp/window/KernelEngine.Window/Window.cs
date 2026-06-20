@@ -1,6 +1,4 @@
-﻿using KernelEngine.Common.Native;
-
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Kernel;
 
 /// <summary>
 /// Manages the OS window. Takes ownership of a <c>ke_window*</c> created by a service factory,
@@ -28,21 +26,27 @@ public sealed unsafe class Window : IWindow, INativeWindow
         _native = handle.@ref;
         _destroy = handle.destroy;
         // In constructor we still throw because if initialization fails, the object is unusable.
-        KernelException.ThrowIfFailed(_native->on_initialize(_native, null).ToManaged());
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(_native->on_initialize(_native, &err), err, "on_initialize");
     }
 
     /// <summary>Returns <see langword="true"/> when the user has requested the window to close.</summary>
     public bool ShouldClose() => _native->should_close(_native) != 0;
 
     /// <summary>Processes pending OS events. Call once per frame.</summary>
-    public Result PollEvents() => _native->poll_events(_native, null).Wrap();
+    public void PollEvents()
+    {
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(_native->poll_events(_native, &err), err, "poll_events");
+    }
 
     /// <summary>Returns the current client area size in pixels.</summary>
-    public Result<(int Width, int Height)> GetSize()
+    public (int Width, int Height) GetSize()
     {
         int w, h;
-        var res = _native->get_size(_native, &w, &h, null);
-        return res.Wrap((w, h));
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(_native->get_size(_native, &w, &h, &err), err, "get_size");
+        return (w, h);
     }
 
     /// <summary>Returns the platform-specific native window handle (HWND, X11 Window, etc.).</summary>

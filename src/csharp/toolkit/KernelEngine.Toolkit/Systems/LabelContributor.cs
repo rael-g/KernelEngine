@@ -20,9 +20,9 @@ internal sealed class LabelContributor : IFrameContributor
         if (labels.Count == 0) return;
 
         var sizeResult = _window.GetSize();
-        if (sizeResult.Value.Width == 0 || sizeResult.Value.Height == 0) return;
-        float bbW = sizeResult.Value.Width;
-        float bbH = sizeResult.Value.Height;
+        if (sizeResult.Width == 0 || sizeResult.Height == 0) return;
+        float bbW = sizeResult.Width;
+        float bbH = sizeResult.Height;
 
         for (int i = 0; i < labels.Count; i++)
         {

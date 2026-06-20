@@ -43,7 +43,7 @@ var services = new ServiceCollection()
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 30f) };
 
         var cubeMesh = MeshPrimitives.Cube(renderer);
-        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f).Value;
+        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
         // 11Ã—11 cube wall facing the camera (z=0).
         for (int x = -15; x <= 15; x += 3)
