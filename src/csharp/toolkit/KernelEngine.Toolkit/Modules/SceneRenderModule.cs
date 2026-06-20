@@ -66,6 +66,8 @@ public sealed class SceneRenderModule : IRuntimeModule
             new LabelContributor(
                 sp.GetRequiredService<NodeWorld>(),
                 sp.GetRequiredService<IWindow>()));
+
+        services.AddSingleton<PrimitiveCache>();
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)

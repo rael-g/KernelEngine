@@ -136,6 +136,9 @@ void ke_framework_apply_directional_light(void *c, const ke_variant_table_entry 
           else if (strcmp(e[i].key, "r") == 0 && as_float(v, &f)) { l->r = f; }
           else if (strcmp(e[i].key, "g") == 0 && as_float(v, &f)) { l->g = f; }
           else if (strcmp(e[i].key, "b") == 0 && as_float(v, &f)) { l->b = f; }
+          else if (strcmp(e[i].key, "ambient") == 0 && v->type == KE_VARIANT_VEC3) {
+              l->ambient_r = v->v3.x; l->ambient_g = v->v3.y; l->ambient_b = v->v3.z;
+          }
     }
 }
 

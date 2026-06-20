@@ -24,6 +24,7 @@ extern "C"
         float dir_x, dir_y, dir_z;
         float r, g, b;
         float intensity;
+        float ambient_r, ambient_g, ambient_b;
     } ke_directional_light_component;
 
     typedef struct ke_point_light_component

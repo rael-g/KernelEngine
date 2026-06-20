@@ -3,7 +3,7 @@ Generated/
 --namespace
 KernelEngine.Text.StbTrueType.Native
 --libraryPath
-ke_text_stbtruetype
+ke_text_stb_truetype
 --include-directory
 ../../../../c/common/include
 --include-directory

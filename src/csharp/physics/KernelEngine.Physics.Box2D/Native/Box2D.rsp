@@ -3,7 +3,7 @@ Generated/
 --namespace
 KernelEngine.Physics.Box2D.Native
 --libraryPath
-ke_physics_box2d
+ke_physics_2d_box2d
 --include-directory
 ../../../../c/common/include
 --include-directory

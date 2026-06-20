@@ -31,7 +31,6 @@ public static class SceneServiceCollectionExtensions
                 sp.GetRequiredService<World>(),
                 AppContext.BaseDirectory));
 
-        services.AddSingleton<PrimitiveCache>();
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Camera>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<DirectionalLight>());
         services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<AmbientLight>());
