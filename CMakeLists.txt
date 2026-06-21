@@ -75,6 +75,7 @@ add_subdirectory(examples/c/06_triangle)
 add_subdirectory(examples/c/07_uniform)
 add_subdirectory(examples/c/08_vertex_buffer)
 add_subdirectory(examples/c/09_texture)
+add_subdirectory(examples/c/10_depth)
 
 enable_testing()
 add_subdirectory(tests/c/kernel)
