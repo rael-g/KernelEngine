@@ -206,6 +206,7 @@ fn toWgpuBlendOp(op: ke.ke_gpu_blend_op) wgpu.WGPUBlendOperation {
 
 fn toWgpuCompareFunction(f: ke.ke_gpu_compare_function) wgpu.WGPUCompareFunction {
     return switch (f) {
+        ke.KE_GPU_COMPARE_UNDEFINED     => wgpu.WGPUCompareFunction_Undefined,
         ke.KE_GPU_COMPARE_NEVER         => wgpu.WGPUCompareFunction_Never,
         ke.KE_GPU_COMPARE_LESS          => wgpu.WGPUCompareFunction_Less,
         ke.KE_GPU_COMPARE_EQUAL         => wgpu.WGPUCompareFunction_Equal,
@@ -214,7 +215,7 @@ fn toWgpuCompareFunction(f: ke.ke_gpu_compare_function) wgpu.WGPUCompareFunction
         ke.KE_GPU_COMPARE_NOT_EQUAL     => wgpu.WGPUCompareFunction_NotEqual,
         ke.KE_GPU_COMPARE_GREATER_EQUAL => wgpu.WGPUCompareFunction_GreaterEqual,
         ke.KE_GPU_COMPARE_ALWAYS        => wgpu.WGPUCompareFunction_Always,
-        else                            => wgpu.WGPUCompareFunction_Always,
+        else                            => wgpu.WGPUCompareFunction_Undefined,
     };
 }
 
@@ -591,19 +592,58 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params)
 
 fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params) callconv(.c) ke.ke_gpu_texture {
     const pp = @as(*const ke.ke_gpu_texture_params, @ptrCast(p));
+    const s = state(dev);
+    var usage = mapTextureUsage(pp.usage);
+    if (pp.initial_data != null) usage |= wgpu.WGPUTextureUsage_CopyDst;
+    const fmt = toWgpuTextureFormat(pp.format);
     const desc = wgpu.WGPUTextureDescriptor{
         .nextInChain     = null,
         .label           = .{ .data = null, .length = 0 },
-        .usage           = mapTextureUsage(pp.usage),
+        .usage           = usage,
         .dimension       = toWgpuTextureDimension(pp.dimension),
-        .size            = .{ .width = pp.width, .height = pp.height, .depthOrArrayLayers = pp.depth_or_array_layers },
-        .format          = toWgpuTextureFormat(pp.format),
-        .mipLevelCount   = pp.mip_level_count,
+        .size            = .{ .width = pp.width, .height = pp.height, .depthOrArrayLayers = if (pp.depth_or_array_layers == 0) 1 else pp.depth_or_array_layers },
+        .format          = fmt,
+        .mipLevelCount   = if (pp.mip_level_count == 0) 1 else pp.mip_level_count,
         .sampleCount     = if (pp.sample_count == 0) 1 else pp.sample_count,
         .viewFormatCount = 0,
         .viewFormats     = null,
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateTexture(state(dev).device, &desc));
+    const tex: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
+    if (pp.initial_data != null) {
+        const dst = wgpu.WGPUTexelCopyTextureInfo{
+            .texture  = tex,
+            .mipLevel = 0,
+            .origin   = .{ .x = 0, .y = 0, .z = 0 },
+            .aspect   = wgpu.WGPUTextureAspect_All,
+        };
+        // bytes_per_row must be a multiple of 256 (wgpu alignment requirement)
+        const bytes_per_pixel: u32 = 4; // assume RGBA8
+        const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
+        const bytes_per_row: u32 = (unaligned_bpr + 255) & ~@as(u32, 255);
+        const layout = wgpu.WGPUTexelCopyBufferLayout{
+            .offset        = 0,
+            .bytesPerRow   = bytes_per_row,
+            .rowsPerImage  = pp.height,
+        };
+        const extent = wgpu.WGPUExtent3D{ .width = pp.width, .height = pp.height, .depthOrArrayLayers = 1 };
+        // If rows are tightly packed we can write directly; otherwise we need a staging buffer.
+        if (bytes_per_row == unaligned_bpr) {
+            wgpu.wgpuQueueWriteTexture(s.queue, &dst, pp.initial_data, pp.initial_data_size, &layout, &extent);
+        } else {
+            const row_count = pp.height;
+            const staging_size = bytes_per_row * row_count;
+            const staging = std.heap.page_allocator.alloc(u8, staging_size) catch return @intFromPtr(tex);
+            defer std.heap.page_allocator.free(staging);
+            const src_bytes: [*]const u8 = @ptrCast(pp.initial_data);
+            for (0..row_count) |row| {
+                const src_off = row * unaligned_bpr;
+                const dst_off = row * bytes_per_row;
+                @memcpy(staging[dst_off .. dst_off + unaligned_bpr], src_bytes[src_off .. src_off + unaligned_bpr]);
+            }
+            wgpu.wgpuQueueWriteTexture(s.queue, &dst, staging.ptr, staging_size, &layout, &extent);
+        }
+    }
+    return @intFromPtr(tex);
 }
 
 fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]const ke.ke_gpu_texture_view_params) callconv(.c) ke.ke_gpu_texture_view {
@@ -615,9 +655,9 @@ fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]con
         .dimension       = toWgpuTextureViewDimension(pp.dimension),
         .aspect          = toWgpuTextureAspect(pp.aspect),
         .baseMipLevel    = pp.base_mip_level,
-        .mipLevelCount   = pp.mip_level_count,
+        .mipLevelCount   = if (pp.mip_level_count == 0) 1 else pp.mip_level_count,
         .baseArrayLayer  = pp.base_array_layer,
-        .arrayLayerCount = pp.array_layer_count,
+        .arrayLayerCount = if (pp.array_layer_count == 0) 1 else pp.array_layer_count,
     };
     const wgpu_tex: wgpu.WGPUTexture = @ptrFromInt(tex);
     return @intFromPtr(wgpu.wgpuTextureCreateView(wgpu_tex, &desc));

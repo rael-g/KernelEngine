@@ -49,14 +49,16 @@ typedef struct ke_gpu_buffer_params
 
 typedef struct ke_gpu_texture_params
 {
-    uint32_t               width;
-    uint32_t               height;
-    uint32_t               depth_or_array_layers;
-    ke_gpu_texture_format  format;
+    uint32_t                 width;
+    uint32_t                 height;
+    uint32_t                 depth_or_array_layers;
+    ke_gpu_texture_format    format;
     ke_gpu_texture_dimension dimension;
-    ke_gpu_texture_usage   usage;
-    uint8_t                mip_level_count;
-    uint8_t                sample_count;
+    ke_gpu_texture_usage     usage;
+    uint8_t                  mip_level_count;
+    uint8_t                  sample_count;
+    const void              *initial_data;      ///< Optional. Tightly-packed RGBA8 pixels (mip 0 only).
+    uint32_t                 initial_data_size; ///< Byte size of initial_data.
 } ke_gpu_texture_params;
 
 typedef struct ke_gpu_texture_view_params

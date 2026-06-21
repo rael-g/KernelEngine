@@ -129,6 +129,7 @@ typedef enum ke_gpu_address_mode
 
 typedef enum ke_gpu_compare_function
 {
+    KE_GPU_COMPARE_UNDEFINED = 0, ///< No comparison (default for samplers without shadow compare)
     KE_GPU_COMPARE_NEVER,
     KE_GPU_COMPARE_LESS,
     KE_GPU_COMPARE_EQUAL,
