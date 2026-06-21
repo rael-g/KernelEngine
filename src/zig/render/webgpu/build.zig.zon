@@ -1,0 +1,17 @@
+.{
+    .name = "ke_gpu_device_webgpu",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.14.0",
+
+    .dependencies = .{
+        // wgpu-native prebuilt via eliemichel/WebGPU-distribution.
+        // Run: zig fetch --save <release-tarball-url>
+        // and replace the placeholder hash below.
+        .webgpu_native = .{
+            .url = "https://github.com/eliemichel/WebGPU-distribution/archive/refs/heads/main.tar.gz",
+            .hash = "TODO: run `zig fetch --save` to fill this in",
+        },
+    },
+
+    .paths = .{"."},
+}
