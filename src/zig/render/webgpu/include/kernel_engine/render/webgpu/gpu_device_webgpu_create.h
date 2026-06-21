@@ -3,6 +3,8 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu_device.h>
 
+struct ke_window;
+
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_GPU_WEBGPU_EXPORT
         #define KE_GPU_WEBGPU_API __declspec(dllexport)
@@ -24,6 +26,7 @@ extern "C"
 typedef struct ke_gpu_device_webgpu_params
 {
     struct ke_logger *logger;
+    struct ke_window *window;          ///< Optional. When non-NULL, a presentable surface is created.
     ke_bool           enable_validation;
 } ke_gpu_device_webgpu_params;
 

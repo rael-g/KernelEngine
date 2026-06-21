@@ -184,6 +184,8 @@ typedef struct ke_gpu_render_pipeline_params
 {
     ke_gpu_shader_module             vertex_module;
     ke_gpu_shader_module             fragment_module;
+    const char                      *vertex_entry;    ///< NULL → "main"
+    const char                      *fragment_entry;  ///< NULL → "main"
     ke_gpu_primitive_topology        primitive_topology;
     ke_gpu_cull_mode                 cull_mode;
     ke_gpu_front_face                front_face;

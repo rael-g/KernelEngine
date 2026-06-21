@@ -1,9 +1,22 @@
 const std = @import("std");
-const wgpu = @cImport(@cInclude("webgpu.h"));
+const builtin = @import("builtin");
+const wgpu = @cImport({
+    @cInclude("webgpu/webgpu.h");
+    @cInclude("webgpu/wgpu.h");
+});
 const ke = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/render/gpu_device.h");
+    @cInclude("kernel_engine/window/window.h");
 });
+
+// ── Factory params (mirrors ke_gpu_device_webgpu_params in the factory header) ─
+
+const Params = extern struct {
+    logger:            ?*anyopaque,
+    window:            ?*ke.ke_window,
+    enable_validation: ke.ke_bool,
+};
 
 // ── Internal error set ─────────────────────────────────────────────────────
 
@@ -11,26 +24,32 @@ const GpuError = error{
     OutOfMemory,
     NoAdapter,
     DeviceCreationFailed,
+    SurfaceCreationFailed,
     NotImplemented,
 };
 
 // ── State ──────────────────────────────────────────────────────────────────
 
 const DeviceState = struct {
-    instance: wgpu.WGPUInstance,
-    adapter: wgpu.WGPUAdapter,
-    device: wgpu.WGPUDevice,
-    queue: wgpu.WGPUQueue,
+    instance:                wgpu.WGPUInstance,
+    adapter:                 wgpu.WGPUAdapter,
+    device:                  wgpu.WGPUDevice,
+    queue:                   wgpu.WGPUQueue,
+    surface:                 wgpu.WGPUSurface,
+    surface_format:          wgpu.WGPUTextureFormat,
+    current_surface_texture: wgpu.WGPUTexture, // null between frames
+    surface_ext:             ?*SurfaceExt,      // lazily created, owned by state
 };
 
-fn state(dev: *ke.ke_gpu_device) *DeviceState {
-    return @ptrCast(@alignCast(dev.handle));
+fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
+    return @ptrCast(dev);
 }
 
-// ── ke_error translation helpers ───────────────────────────────────────────
-//
-// All internal code uses Zig's error union (!T).
-// These helpers translate at the ABI seam only.
+fn state(dev: [*c]ke.ke_gpu_device) *DeviceState {
+    return @ptrCast(@alignCast(ptr(dev).handle));
+}
+
+// ── ke_error translation (ABI seam only) ──────────────────────────────────
 
 fn setError(
     out_error: ?*?*ke.ke_error,
@@ -38,107 +57,371 @@ fn setError(
     msg: [*c]const u8,
     src: std.builtin.SourceLocation,
 ) void {
-    const code: c_int = switch (err) {
-        GpuError.OutOfMemory => ke.KE_ERROR_OUT_OF_MEMORY,
-        GpuError.NoAdapter, GpuError.DeviceCreationFailed => ke.KE_ERROR_INVALID_OPERATION,
-        GpuError.NotImplemented => ke.KE_ERROR_NOT_IMPLEMENTED,
+    const etype: *const ke.ke_error_type = switch (err) {
+        GpuError.OutOfMemory           => &ke.KE_ERROR_OUT_OF_MEMORY,
+        GpuError.NoAdapter,
+        GpuError.DeviceCreationFailed,
+        GpuError.SurfaceCreationFailed => &ke.KE_ERROR_NOT_INITIALIZED,
+        GpuError.NotImplemented        => &ke.KE_ERROR_NOT_SUPPORTED,
     };
-    ke.ke_error_set(out_error, code, msg, src.file, @intCast(src.line));
+    ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
 
-// ── Factory (internal) ────────────────────────────────────────────────────
+// ── Enum mappings ke → wgpu ────────────────────────────────────────────────
+
+fn toWgpuTextureFormat(f: ke.ke_gpu_texture_format) wgpu.WGPUTextureFormat {
+    return switch (f) {
+        ke.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM        => wgpu.WGPUTextureFormat_RGBA8Unorm,
+        ke.KE_GPU_TEXTURE_FORMAT_RGBA8_SRGB         => wgpu.WGPUTextureFormat_RGBA8UnormSrgb,
+        ke.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM        => wgpu.WGPUTextureFormat_BGRA8Unorm,
+        ke.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT       => wgpu.WGPUTextureFormat_RGBA16Float,
+        ke.KE_GPU_TEXTURE_FORMAT_R32_FLOAT          => wgpu.WGPUTextureFormat_R32Float,
+        ke.KE_GPU_TEXTURE_FORMAT_R16_FLOAT          => wgpu.WGPUTextureFormat_R16Float,
+        ke.KE_GPU_TEXTURE_FORMAT_D16_UNORM          => wgpu.WGPUTextureFormat_Depth16Unorm,
+        ke.KE_GPU_TEXTURE_FORMAT_D24_UNORM_S8_UINT  => wgpu.WGPUTextureFormat_Depth24PlusStencil8,
+        ke.KE_GPU_TEXTURE_FORMAT_D32_FLOAT          => wgpu.WGPUTextureFormat_Depth32Float,
+        ke.KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT  => wgpu.WGPUTextureFormat_Depth32FloatStencil8,
+        ke.KE_GPU_TEXTURE_FORMAT_RGBA32_FLOAT       => wgpu.WGPUTextureFormat_RGBA32Float,
+        ke.KE_GPU_TEXTURE_FORMAT_RG32_FLOAT         => wgpu.WGPUTextureFormat_RG32Float,
+        ke.KE_GPU_TEXTURE_FORMAT_R8_UNORM           => wgpu.WGPUTextureFormat_R8Unorm,
+        ke.KE_GPU_TEXTURE_FORMAT_BC1_RGBA_UNORM     => wgpu.WGPUTextureFormat_BC1RGBAUnorm,
+        ke.KE_GPU_TEXTURE_FORMAT_BC3_RGBA_UNORM     => wgpu.WGPUTextureFormat_BC3RGBAUnorm,
+        ke.KE_GPU_TEXTURE_FORMAT_BC5_RG_UNORM       => wgpu.WGPUTextureFormat_BC5RGUnorm,
+        ke.KE_GPU_TEXTURE_FORMAT_BC7_RGBA_UNORM     => wgpu.WGPUTextureFormat_BC7RGBAUnorm,
+        else                                        => wgpu.WGPUTextureFormat_Undefined,
+    };
+}
+
+fn toWgpuTextureDimension(d: ke.ke_gpu_texture_dimension) wgpu.WGPUTextureDimension {
+    return switch (d) {
+        ke.KE_GPU_TEXTURE_DIM_1D   => wgpu.WGPUTextureDimension_1D,
+        ke.KE_GPU_TEXTURE_DIM_2D,
+        ke.KE_GPU_TEXTURE_DIM_CUBE => wgpu.WGPUTextureDimension_2D,
+        ke.KE_GPU_TEXTURE_DIM_3D   => wgpu.WGPUTextureDimension_3D,
+        else                       => wgpu.WGPUTextureDimension_2D,
+    };
+}
+
+fn toWgpuTextureViewDimension(d: ke.ke_gpu_texture_dimension) wgpu.WGPUTextureViewDimension {
+    return switch (d) {
+        ke.KE_GPU_TEXTURE_DIM_1D   => wgpu.WGPUTextureViewDimension_1D,
+        ke.KE_GPU_TEXTURE_DIM_2D   => wgpu.WGPUTextureViewDimension_2D,
+        ke.KE_GPU_TEXTURE_DIM_3D   => wgpu.WGPUTextureViewDimension_3D,
+        ke.KE_GPU_TEXTURE_DIM_CUBE => wgpu.WGPUTextureViewDimension_Cube,
+        else                       => wgpu.WGPUTextureViewDimension_2D,
+    };
+}
+
+fn toWgpuTextureAspect(a: ke.ke_gpu_texture_aspect) wgpu.WGPUTextureAspect {
+    if (a & ke.KE_GPU_TEXTURE_ASPECT_DEPTH != 0) return wgpu.WGPUTextureAspect_DepthOnly;
+    if (a & ke.KE_GPU_TEXTURE_ASPECT_STENCIL != 0) return wgpu.WGPUTextureAspect_StencilOnly;
+    return wgpu.WGPUTextureAspect_All;
+}
+
+fn toWgpuTextureUsage(u: ke.ke_gpu_texture_usage) wgpu.WGPUTextureUsage {
+    var r: wgpu.WGPUTextureUsage = 0;
+    if (u & ke.KE_GPU_TEXTURE_USAGE_SAMPLED != 0)      r |= wgpu.WGPUTextureUsage_TextureBinding;
+    if (u & ke.KE_GPU_TEXTURE_USAGE_STORAGE != 0)      r |= wgpu.WGPUTextureUsage_StorageBinding;
+    if (u & ke.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH != 0) r |= wgpu.WGPUTextureUsage_RenderAttachment;
+    if (u & ke.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH != 0) r |= wgpu.WGPUTextureUsage_RenderAttachment;
+    if (u & ke.KE_GPU_TEXTURE_USAGE_COPY_SRC != 0)     r |= wgpu.WGPUTextureUsage_CopySrc;
+    if (u & ke.KE_GPU_TEXTURE_USAGE_COPY_DST != 0)     r |= wgpu.WGPUTextureUsage_CopyDst;
+    return r;
+}
+
+fn toWgpuLoadOp(op: ke.ke_gpu_load_op) wgpu.WGPULoadOp {
+    return switch (op) {
+        ke.KE_GPU_LOAD_OP_LOAD      => wgpu.WGPULoadOp_Load,
+        ke.KE_GPU_LOAD_OP_CLEAR     => wgpu.WGPULoadOp_Clear,
+        ke.KE_GPU_LOAD_OP_DONT_CARE => wgpu.WGPULoadOp_Undefined,
+        else                        => wgpu.WGPULoadOp_Undefined,
+    };
+}
+
+fn toWgpuStoreOp(op: ke.ke_gpu_store_op) wgpu.WGPUStoreOp {
+    return switch (op) {
+        ke.KE_GPU_STORE_OP_STORE      => wgpu.WGPUStoreOp_Store,
+        ke.KE_GPU_STORE_OP_DONT_CARE  => wgpu.WGPUStoreOp_Discard,
+        else                          => wgpu.WGPUStoreOp_Discard,
+    };
+}
+
+fn toWgpuPrimitiveTopology(t: ke.ke_gpu_primitive_topology) wgpu.WGPUPrimitiveTopology {
+    return switch (t) {
+        ke.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST  => wgpu.WGPUPrimitiveTopology_TriangleList,
+        ke.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP => wgpu.WGPUPrimitiveTopology_TriangleStrip,
+        ke.KE_GPU_PRIMITIVE_TOPOLOGY_LINE_LIST      => wgpu.WGPUPrimitiveTopology_LineList,
+        ke.KE_GPU_PRIMITIVE_TOPOLOGY_LINE_STRIP     => wgpu.WGPUPrimitiveTopology_LineStrip,
+        ke.KE_GPU_PRIMITIVE_TOPOLOGY_POINT_LIST     => wgpu.WGPUPrimitiveTopology_PointList,
+        else                                        => wgpu.WGPUPrimitiveTopology_TriangleList,
+    };
+}
+
+fn toWgpuCullMode(m: ke.ke_gpu_cull_mode) wgpu.WGPUCullMode {
+    return switch (m) {
+        ke.KE_GPU_CULL_MODE_NONE  => wgpu.WGPUCullMode_None,
+        ke.KE_GPU_CULL_MODE_FRONT => wgpu.WGPUCullMode_Front,
+        ke.KE_GPU_CULL_MODE_BACK  => wgpu.WGPUCullMode_Back,
+        else                      => wgpu.WGPUCullMode_None,
+    };
+}
+
+fn toWgpuFrontFace(f: ke.ke_gpu_front_face) wgpu.WGPUFrontFace {
+    return switch (f) {
+        ke.KE_GPU_FRONT_FACE_CCW => wgpu.WGPUFrontFace_CCW,
+        ke.KE_GPU_FRONT_FACE_CW  => wgpu.WGPUFrontFace_CW,
+        else                     => wgpu.WGPUFrontFace_CCW,
+    };
+}
+
+fn toWgpuVertexFormat(f: ke.ke_gpu_vertex_format) wgpu.WGPUVertexFormat {
+    return switch (f) {
+        ke.KE_GPU_VERTEX_FORMAT_FLOAT32X2    => wgpu.WGPUVertexFormat_Float32x2,
+        ke.KE_GPU_VERTEX_FORMAT_FLOAT32X3    => wgpu.WGPUVertexFormat_Float32x3,
+        ke.KE_GPU_VERTEX_FORMAT_FLOAT32X4    => wgpu.WGPUVertexFormat_Float32x4,
+        ke.KE_GPU_VERTEX_FORMAT_SINT16X2     => wgpu.WGPUVertexFormat_Sint16x2,
+        ke.KE_GPU_VERTEX_FORMAT_SINT16X4     => wgpu.WGPUVertexFormat_Sint16x4,
+        ke.KE_GPU_VERTEX_FORMAT_UINT8X4_UNORM => wgpu.WGPUVertexFormat_Unorm8x4,
+        ke.KE_GPU_VERTEX_FORMAT_UINT8X4      => wgpu.WGPUVertexFormat_Uint8x4,
+        else                                 => wgpu.WGPUVertexFormat_Float32x4,
+    };
+}
+
+fn toWgpuBlendFactor(f: ke.ke_gpu_blend_factor) wgpu.WGPUBlendFactor {
+    return switch (f) {
+        ke.KE_GPU_BLEND_FACTOR_ZERO                  => wgpu.WGPUBlendFactor_Zero,
+        ke.KE_GPU_BLEND_FACTOR_ONE                   => wgpu.WGPUBlendFactor_One,
+        ke.KE_GPU_BLEND_FACTOR_SRC_ALPHA             => wgpu.WGPUBlendFactor_SrcAlpha,
+        ke.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA   => wgpu.WGPUBlendFactor_OneMinusSrcAlpha,
+        ke.KE_GPU_BLEND_FACTOR_DST_ALPHA             => wgpu.WGPUBlendFactor_DstAlpha,
+        ke.KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA   => wgpu.WGPUBlendFactor_OneMinusDstAlpha,
+        ke.KE_GPU_BLEND_FACTOR_SRC_COLOR             => wgpu.WGPUBlendFactor_Src,
+        ke.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR   => wgpu.WGPUBlendFactor_OneMinusSrc,
+        ke.KE_GPU_BLEND_FACTOR_DST_COLOR             => wgpu.WGPUBlendFactor_Dst,
+        ke.KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR   => wgpu.WGPUBlendFactor_OneMinusDst,
+        else                                         => wgpu.WGPUBlendFactor_Zero,
+    };
+}
+
+fn toWgpuBlendOp(op: ke.ke_gpu_blend_op) wgpu.WGPUBlendOperation {
+    return switch (op) {
+        ke.KE_GPU_BLEND_OP_ADD              => wgpu.WGPUBlendOperation_Add,
+        ke.KE_GPU_BLEND_OP_SUBTRACT         => wgpu.WGPUBlendOperation_Subtract,
+        ke.KE_GPU_BLEND_OP_REVERSE_SUBTRACT => wgpu.WGPUBlendOperation_ReverseSubtract,
+        ke.KE_GPU_BLEND_OP_MIN              => wgpu.WGPUBlendOperation_Min,
+        ke.KE_GPU_BLEND_OP_MAX              => wgpu.WGPUBlendOperation_Max,
+        else                                => wgpu.WGPUBlendOperation_Add,
+    };
+}
+
+fn toWgpuCompareFunction(f: ke.ke_gpu_compare_function) wgpu.WGPUCompareFunction {
+    return switch (f) {
+        ke.KE_GPU_COMPARE_NEVER         => wgpu.WGPUCompareFunction_Never,
+        ke.KE_GPU_COMPARE_LESS          => wgpu.WGPUCompareFunction_Less,
+        ke.KE_GPU_COMPARE_EQUAL         => wgpu.WGPUCompareFunction_Equal,
+        ke.KE_GPU_COMPARE_LESS_EQUAL    => wgpu.WGPUCompareFunction_LessEqual,
+        ke.KE_GPU_COMPARE_GREATER       => wgpu.WGPUCompareFunction_Greater,
+        ke.KE_GPU_COMPARE_NOT_EQUAL     => wgpu.WGPUCompareFunction_NotEqual,
+        ke.KE_GPU_COMPARE_GREATER_EQUAL => wgpu.WGPUCompareFunction_GreaterEqual,
+        ke.KE_GPU_COMPARE_ALWAYS        => wgpu.WGPUCompareFunction_Always,
+        else                            => wgpu.WGPUCompareFunction_Always,
+    };
+}
+
+fn toWgpuStencilOp(op: ke.ke_gpu_stencil_op) wgpu.WGPUStencilOperation {
+    return switch (op) {
+        ke.KE_GPU_STENCIL_OP_KEEP            => wgpu.WGPUStencilOperation_Keep,
+        ke.KE_GPU_STENCIL_OP_ZERO            => wgpu.WGPUStencilOperation_Zero,
+        ke.KE_GPU_STENCIL_OP_REPLACE         => wgpu.WGPUStencilOperation_Replace,
+        ke.KE_GPU_STENCIL_OP_INVERT          => wgpu.WGPUStencilOperation_Invert,
+        ke.KE_GPU_STENCIL_OP_INCREMENT_CLAMP => wgpu.WGPUStencilOperation_IncrementClamp,
+        ke.KE_GPU_STENCIL_OP_DECREMENT_CLAMP => wgpu.WGPUStencilOperation_DecrementClamp,
+        else                                 => wgpu.WGPUStencilOperation_Keep,
+    };
+}
+
+fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
+    return switch (m) {
+        ke.KE_GPU_VERTEX_STEP_MODE_VERTEX   => wgpu.WGPUVertexStepMode_Vertex,
+        ke.KE_GPU_VERTEX_STEP_MODE_INSTANCE => wgpu.WGPUVertexStepMode_Instance,
+        else                                => wgpu.WGPUVertexStepMode_Vertex,
+    };
+}
+
+// ── Factory (internal) ─────────────────────────────────────────────────────
 
 const gpa = std.heap.c_allocator;
 
-fn createDeviceState() GpuError!*DeviceState {
+fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
+    const native = window.get_native_handle.?(window) orelse return GpuError.SurfaceCreationFailed;
+
+    const desc: wgpu.WGPUSurfaceDescriptor = switch (builtin.os.tag) {
+        .windows => blk: {
+            const src = wgpu.WGPUSurfaceSourceWindowsHWND{
+                .chain     = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceWindowsHWND },
+                .hinstance = blk2: {
+                    const GetModuleHandleW = @extern(*const fn (?[*:0]const u16) callconv(.winapi) ?std.os.windows.HMODULE, .{ .name = "GetModuleHandleW" });
+                    break :blk2 GetModuleHandleW(null);
+                },
+                .hwnd = native,
+            };
+            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
+        },
+        .linux => blk: {
+            const x11 = @cImport(@cInclude("X11/Xlib.h"));
+            const src = wgpu.WGPUSurfaceSourceXlibWindow{
+                .chain   = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceXlibWindow },
+                .display = x11.XOpenDisplay(null),
+                .window  = @intFromPtr(native),
+            };
+            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
+        },
+        .macos => blk: {
+            const src = wgpu.WGPUSurfaceSourceMetalLayer{
+                .chain = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceMetalLayer },
+                .layer = native,
+            };
+            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
+        },
+        else => return GpuError.SurfaceCreationFailed,
+    };
+
+    return wgpu.wgpuInstanceCreateSurface(instance, &desc) orelse GpuError.SurfaceCreationFailed;
+}
+
+fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
     const s = gpa.create(DeviceState) catch return GpuError.OutOfMemory;
     errdefer gpa.destroy(s);
+    s.surface = null;
+    s.surface_format = wgpu.WGPUTextureFormat_Undefined;
+    s.current_surface_texture = null;
+    s.surface_ext = null;
 
     const instance_desc = wgpu.WGPUInstanceDescriptor{ .nextInChain = null };
     s.instance = wgpu.wgpuCreateInstance(&instance_desc) orelse
         return GpuError.DeviceCreationFailed;
     errdefer wgpu.wgpuInstanceRelease(s.instance);
 
+    if (window) |w| {
+        s.surface = try createSurface(s.instance, w);
+    }
+    errdefer if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
+
     const adapter_opts = wgpu.WGPURequestAdapterOptions{
-        .nextInChain = null,
-        .powerPreference = wgpu.WGPUPowerPreference_HighPerformance,
-        .backendType = wgpu.WGPUBackendType_Undefined,
+        .nextInChain          = null,
+        .compatibleSurface    = s.surface,
+        .powerPreference      = wgpu.WGPUPowerPreference_HighPerformance,
+        .backendType          = wgpu.WGPUBackendType_Undefined,
         .forceFallbackAdapter = 0,
-        .compatibleSurface = null,
     };
     var adapter: wgpu.WGPUAdapter = null;
-    wgpu.wgpuInstanceRequestAdapter(s.instance, &adapter_opts, adapterCallback, @ptrCast(&adapter));
+    _ = wgpu.wgpuInstanceRequestAdapter(s.instance, &adapter_opts, .{
+        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
+        .callback  = adapterCallback,
+        .userdata1 = @ptrCast(&adapter),
+        .userdata2 = null,
+    });
     s.adapter = adapter orelse return GpuError.NoAdapter;
     errdefer wgpu.wgpuAdapterRelease(s.adapter);
 
     var wgpu_device: wgpu.WGPUDevice = null;
-    wgpu.wgpuAdapterRequestDevice(s.adapter, null, deviceCallback, @ptrCast(&wgpu_device));
+    _ = wgpu.wgpuAdapterRequestDevice(s.adapter, null, .{
+        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
+        .callback  = deviceCallback,
+        .userdata1 = @ptrCast(&wgpu_device),
+        .userdata2 = null,
+    });
     s.device = wgpu_device orelse return GpuError.DeviceCreationFailed;
     errdefer wgpu.wgpuDeviceRelease(s.device);
 
     s.queue = wgpu.wgpuDeviceGetQueue(s.device);
+
+    if (s.surface) |surf| {
+        var caps: wgpu.WGPUSurfaceCapabilities = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
+        _ = wgpu.wgpuSurfaceGetCapabilities(surf, s.adapter, &caps);
+        s.surface_format = if (caps.formatCount > 0) caps.formats[0] else wgpu.WGPUTextureFormat_BGRA8Unorm;
+        wgpu.wgpuSurfaceCapabilitiesFreeMembers(caps);
+    }
+
     return s;
+}
+
+fn configureSurface(s: *DeviceState, width: u32, height: u32) void {
+    const surf = s.surface orelse return;
+    const config = wgpu.WGPUSurfaceConfiguration{
+        .nextInChain     = null,
+        .device          = s.device,
+        .format          = s.surface_format,
+        .usage           = wgpu.WGPUTextureUsage_RenderAttachment,
+        .viewFormatCount = 0,
+        .viewFormats     = null,
+        .alphaMode       = wgpu.WGPUCompositeAlphaMode_Auto,
+        .width           = width,
+        .height          = height,
+        .presentMode     = wgpu.WGPUPresentMode_Fifo,
+    };
+    wgpu.wgpuSurfaceConfigure(surf, &config);
 }
 
 fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
     const dev = gpa.create(ke.ke_gpu_device) catch return GpuError.OutOfMemory;
     dev.* = .{
-        .handle = s,
-        .get_default_queue = getDefaultQueue,
-        .queue_submit = queueSubmit,
-        .queue_present = queuePresent,
-        .queue_wait_idle = queueWaitIdle,
-        .create_fence = createFence,
-        .queue_signal_fence = queueSignalFence,
-        .wait_fence = waitFence,
-        .get_fence_value = getFenceValue,
-        .destroy_fence = destroyFence,
-        .create_buffer = createBuffer,
-        .create_texture = createTexture,
-        .create_texture_view = createTextureView,
-        .create_sampler = createSampler,
-        .create_shader_module = createShaderModule,
-        .create_render_pipeline = createRenderPipeline,
-        .create_compute_pipeline = createComputePipeline,
-        .create_bind_group_layout = createBindGroupLayout,
-        .create_bind_group = createBindGroup,
-        .destroy_buffer = destroyBuffer,
-        .destroy_texture = destroyTexture,
-        .destroy_texture_view = destroyTextureView,
-        .destroy_sampler = destroySampler,
-        .destroy_shader_module = destroyShaderModule,
-        .destroy_pipeline = destroyPipeline,
-        .destroy_bind_group_layout = destroyBindGroupLayout,
-        .destroy_bind_group = destroyBindGroup,
-        .encoder_create = encoderCreate,
-        .encoder_begin_render_pass = encoderBeginRenderPass,
-        .encoder_begin_compute_pass = encoderBeginComputePass,
-        .encoder_pipeline_barrier = encoderPipelineBarrier,
-        .encoder_copy_buffer_to_buffer = encoderCopyBufferToBuffer,
+        .handle                         = s,
+        .get_default_queue              = getDefaultQueue,
+        .queue_submit                   = queueSubmit,
+        .queue_present                  = queuePresent,
+        .queue_wait_idle                = queueWaitIdle,
+        .create_fence                   = createFence,
+        .queue_signal_fence             = queueSignalFence,
+        .wait_fence                     = waitFence,
+        .get_fence_value                = getFenceValue,
+        .destroy_fence                  = destroyFence,
+        .create_buffer                  = createBuffer,
+        .create_texture                 = createTexture,
+        .create_texture_view            = createTextureView,
+        .create_sampler                 = createSampler,
+        .create_shader_module           = createShaderModule,
+        .create_render_pipeline         = createRenderPipeline,
+        .create_compute_pipeline        = createComputePipeline,
+        .create_bind_group_layout       = createBindGroupLayout,
+        .create_bind_group              = createBindGroup,
+        .destroy_buffer                 = destroyBuffer,
+        .destroy_texture                = destroyTexture,
+        .destroy_texture_view           = destroyTextureView,
+        .destroy_sampler                = destroySampler,
+        .destroy_shader_module          = destroyShaderModule,
+        .destroy_pipeline               = destroyPipeline,
+        .destroy_bind_group_layout      = destroyBindGroupLayout,
+        .destroy_bind_group             = destroyBindGroup,
+        .encoder_create                 = encoderCreate,
+        .encoder_begin_render_pass      = encoderBeginRenderPass,
+        .encoder_begin_compute_pass     = encoderBeginComputePass,
+        .encoder_pipeline_barrier       = encoderPipelineBarrier,
+        .encoder_copy_buffer_to_buffer  = encoderCopyBufferToBuffer,
         .encoder_copy_buffer_to_texture = encoderCopyBufferToTexture,
-        .encoder_finish = encoderFinish,
-        .encoder_destroy = encoderDestroy,
-        .rp_set_pipeline = rpSetPipeline,
-        .rp_set_bind_group = rpSetBindGroup,
-        .rp_set_vertex_buffer = rpSetVertexBuffer,
-        .rp_set_index_buffer = rpSetIndexBuffer,
-        .rp_set_viewport = rpSetViewport,
-        .rp_set_scissor = rpSetScissor,
-        .rp_draw = rpDraw,
-        .rp_draw_indexed = rpDrawIndexed,
-        .rp_draw_indirect = rpDrawIndirect,
-        .rp_end = rpEnd,
-        .cp_set_pipeline = cpSetPipeline,
-        .cp_set_bind_group = cpSetBindGroup,
-        .cp_dispatch = cpDispatch,
-        .cp_dispatch_indirect = cpDispatchIndirect,
-        .cp_end = cpEnd,
-        .cmd_buffer_destroy = cmdBufferDestroy,
-        .map_buffer = mapBuffer,
-        .map_buffer_write = mapBufferWrite,
-        .unmap_buffer = unmapBuffer,
-        .get_capabilities = getCapabilities,
-        .query_extension = queryExtension,
+        .encoder_finish                 = encoderFinish,
+        .encoder_destroy                = encoderDestroy,
+        .rp_set_pipeline                = rpSetPipeline,
+        .rp_set_bind_group              = rpSetBindGroup,
+        .rp_set_vertex_buffer           = rpSetVertexBuffer,
+        .rp_set_index_buffer            = rpSetIndexBuffer,
+        .rp_set_viewport                = rpSetViewport,
+        .rp_set_scissor                 = rpSetScissor,
+        .rp_draw                        = rpDraw,
+        .rp_draw_indexed                = rpDrawIndexed,
+        .rp_draw_indirect               = rpDrawIndirect,
+        .rp_end                         = rpEnd,
+        .cp_set_pipeline                = cpSetPipeline,
+        .cp_set_bind_group              = cpSetBindGroup,
+        .cp_dispatch                    = cpDispatch,
+        .cp_dispatch_indirect           = cpDispatchIndirect,
+        .cp_end                         = cpEnd,
+        .cmd_buffer_destroy             = cmdBufferDestroy,
+        .map_buffer                     = mapBuffer,
+        .map_buffer_write               = mapBufferWrite,
+        .unmap_buffer                   = unmapBuffer,
+        .get_capabilities               = getCapabilities,
+        .query_extension                = queryExtension,
     };
     return dev;
 }
@@ -146,25 +429,31 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
 // ── ABI boundary — factory ─────────────────────────────────────────────────
 
 export fn ke_gpu_device_webgpu_create(
-    params: ?*const ke.ke_gpu_device_webgpu_params,
+    params: ?*const Params,
     out_error: ?*?*ke.ke_error,
 ) ke.ke_gpu_device_handle {
-    _ = params;
+    const window = if (params) |p| p.window else null;
 
-    const s = createDeviceState() catch |err| {
+    const s = createDeviceState(window) catch |err| {
         setError(out_error, err, "webgpu: device initialisation failed", @src());
         return .{ .ref = null, .destroy = null };
     };
-    errdefer {
+
+    if (window) |w| {
+        var width: i32 = 0;
+        var height: i32 = 0;
+        _ = w.get_size.?(w, &width, &height, null);
+        configureSurface(s, @intCast(@max(width, 1)), @intCast(@max(height, 1)));
+    }
+
+    const dev = createDeviceVtable(s) catch |err| {
+        setError(out_error, err, "webgpu: vtable allocation failed", @src());
+        if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
         wgpu.wgpuQueueRelease(s.queue);
         wgpu.wgpuDeviceRelease(s.device);
         wgpu.wgpuAdapterRelease(s.adapter);
         wgpu.wgpuInstanceRelease(s.instance);
         gpa.destroy(s);
-    }
-
-    const dev = createDeviceVtable(s) catch |err| {
-        setError(out_error, err, "webgpu: vtable allocation failed", @src());
         return .{ .ref = null, .destroy = null };
     };
 
@@ -173,321 +462,529 @@ export fn ke_gpu_device_webgpu_create(
 
 // ── Destroy ────────────────────────────────────────────────────────────────
 
-fn deviceDestroy(dev: *ke.ke_gpu_device) callconv(.C) void {
+fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     const s = state(dev);
     wgpu.wgpuQueueRelease(s.queue);
     wgpu.wgpuDeviceRelease(s.device);
     wgpu.wgpuAdapterRelease(s.adapter);
+    if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
     wgpu.wgpuInstanceRelease(s.instance);
+    if (s.surface_ext) |ext| gpa.destroy(ext);
     gpa.destroy(s);
-    gpa.destroy(dev);
+    gpa.destroy(ptr(dev));
 }
 
-// ── wgpu-native sync callbacks ─────────────────────────────────────────────
+// ── wgpu v24 sync callbacks ────────────────────────────────────────────────
 
 fn adapterCallback(
     _: wgpu.WGPURequestAdapterStatus,
     adapter: wgpu.WGPUAdapter,
-    _: [*c]const u8,
-    userdata: ?*anyopaque,
-) callconv(.C) void {
-    const out: *wgpu.WGPUAdapter = @ptrCast(@alignCast(userdata));
+    _: wgpu.WGPUStringView,
+    userdata1: ?*anyopaque,
+    _: ?*anyopaque,
+) callconv(.c) void {
+    const out: *wgpu.WGPUAdapter = @ptrCast(@alignCast(userdata1));
     out.* = adapter;
 }
 
 fn deviceCallback(
     _: wgpu.WGPURequestDeviceStatus,
     device: wgpu.WGPUDevice,
-    _: [*c]const u8,
-    userdata: ?*anyopaque,
-) callconv(.C) void {
-    const out: *wgpu.WGPUDevice = @ptrCast(@alignCast(userdata));
+    _: wgpu.WGPUStringView,
+    userdata1: ?*anyopaque,
+    _: ?*anyopaque,
+) callconv(.c) void {
+    const out: *wgpu.WGPUDevice = @ptrCast(@alignCast(userdata1));
     out.* = device;
 }
 
 // ── Queue ──────────────────────────────────────────────────────────────────
 
-fn getDefaultQueue(dev: *ke.ke_gpu_device) callconv(.C) ke.ke_gpu_queue {
+fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
     return @intFromPtr(state(dev).queue);
 }
 
 fn queueSubmit(
-    dev: *ke.ke_gpu_device,
+    dev: [*c]ke.ke_gpu_device,
     _: ke.ke_gpu_queue,
-    _: [*c]?*ke.ke_gpu_command_buffer,
-    _: u32,
-) callconv(.C) void {
-    _ = dev;
-    // TODO(R3): translate ke_gpu_command_buffer* array → WGPUCommandBuffer array
+    cmds: [*c]const ?*ke.ke_gpu_command_buffer,
+    cmd_count: u32,
+) callconv(.c) void {
+    if (cmd_count == 0) return;
+    var buf: [64]wgpu.WGPUCommandBuffer = undefined;
+    const n = @min(cmd_count, buf.len);
+    for (0..n) |i| buf[i] = @ptrCast(cmds[i]);
+    wgpu.wgpuQueueSubmit(state(dev).queue, @intCast(n), &buf);
 }
 
-fn queuePresent(dev: *ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.C) void {
-    _ = dev;
-    // TODO(R3): wgpuSurfacePresent
+fn queuePresent(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
+    const s = state(dev);
+    if (s.surface) |surf| {
+        _ = wgpu.wgpuSurfacePresent(surf);
+        if (s.current_surface_texture) |tex| {
+            wgpu.wgpuTextureRelease(tex);
+            s.current_surface_texture = null;
+        }
+    }
 }
 
-fn queueWaitIdle(dev: *ke.ke_gpu_device, q: ke.ke_gpu_queue) callconv(.C) void {
-    _ = dev;
-    wgpu.wgpuQueueOnSubmittedWorkDone(@ptrFromInt(q), 0, null, null);
-    // TODO(R3): proper poll-until-idle via wgpuDevicePoll
+fn queueWaitIdle(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
+    _ = wgpu.wgpuDevicePoll(state(dev).device, 1, null);
 }
 
 // ── Fence (timeline) ───────────────────────────────────────────────────────
-//
-// wgpu-native does not expose timeline semaphores via the core WebGPU API.
-// These stubs return error / sentinel until R3 adds the wgpu-native extension.
 
-fn createFence(_: *ke.ke_gpu_device, _: u64) callconv(.C) ke.ke_gpu_fence {
-    return ke.KE_GPU_INVALID_HANDLE;
-}
-
-fn queueSignalFence(_: *ke.ke_gpu_device, _: ke.ke_gpu_queue, _: ke.ke_gpu_fence, _: u64) callconv(.C) void {}
-
-fn waitFence(
-    _: *ke.ke_gpu_device,
-    _: ke.ke_gpu_fence,
-    _: u64,
-    _: u64,
-    out_error: ?*?*ke.ke_error,
-) callconv(.C) bool {
-    setError(out_error, GpuError.NotImplemented, "webgpu: timeline fences not yet implemented", @src());
+fn createFence(_: [*c]ke.ke_gpu_device, _: u64) callconv(.c) ke.ke_gpu_fence { return ke.KE_GPU_INVALID_HANDLE; }
+fn queueSignalFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue, _: ke.ke_gpu_fence, _: u64) callconv(.c) void {}
+fn waitFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence, _: u64, _: u64, out_error: ?*?*ke.ke_error) callconv(.c) bool {
+    setError(out_error, GpuError.NotImplemented, "webgpu: timeline fences not implemented", @src());
     return false;
 }
-
-fn getFenceValue(_: *ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.C) u64 {
-    return 0;
-}
-
-fn destroyFence(_: *ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.C) void {}
+fn getFenceValue(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.c) u64 { return 0; }
+fn destroyFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.c) void {}
 
 // ── Resource creation ──────────────────────────────────────────────────────
 
-fn createBuffer(dev: *ke.ke_gpu_device, p: *const ke.ke_gpu_buffer_params) callconv(.C) ke.ke_gpu_buffer {
+fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params) callconv(.c) ke.ke_gpu_buffer {
+    const pp = @as(*const ke.ke_gpu_buffer_params, @ptrCast(p));
+    var usage: wgpu.WGPUBufferUsage = @intCast(pp.usage);
+    // wgpu requires CopySrc|CopyDst when MAP_READ|MAP_WRITE are set
+    if (pp.usage & ke.KE_GPU_BUFFER_USAGE_MAP_READ != 0)  usage |= wgpu.WGPUBufferUsage_CopySrc;
+    if (pp.usage & ke.KE_GPU_BUFFER_USAGE_MAP_WRITE != 0) usage |= wgpu.WGPUBufferUsage_CopyDst;
     const desc = wgpu.WGPUBufferDescriptor{
-        .nextInChain = null,
-        .label = null,
-        .usage = @intCast(p.usage),
-        .size = p.size,
-        .mappedAtCreation = if (p.mapped_at_creation != 0) 1 else 0,
+        .nextInChain      = null,
+        .label            = .{ .data = null, .length = 0 },
+        .usage            = usage,
+        .size             = pp.size,
+        .mappedAtCreation = if (pp.mapped_at_creation != 0) 1 else 0,
     };
     return @intFromPtr(wgpu.wgpuDeviceCreateBuffer(state(dev).device, &desc));
 }
 
-fn createTexture(_: *ke.ke_gpu_device, _: *const ke.ke_gpu_texture_params) callconv(.C) ke.ke_gpu_texture {
-    return ke.KE_GPU_INVALID_HANDLE; // TODO(R3)
+fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params) callconv(.c) ke.ke_gpu_texture {
+    const pp = @as(*const ke.ke_gpu_texture_params, @ptrCast(p));
+    const desc = wgpu.WGPUTextureDescriptor{
+        .nextInChain     = null,
+        .label           = .{ .data = null, .length = 0 },
+        .usage           = toWgpuTextureUsage(pp.usage),
+        .dimension       = toWgpuTextureDimension(pp.dimension),
+        .size            = .{ .width = pp.width, .height = pp.height, .depthOrArrayLayers = pp.depth_or_array_layers },
+        .format          = toWgpuTextureFormat(pp.format),
+        .mipLevelCount   = pp.mip_level_count,
+        .sampleCount     = if (pp.sample_count == 0) 1 else pp.sample_count,
+        .viewFormatCount = 0,
+        .viewFormats     = null,
+    };
+    return @intFromPtr(wgpu.wgpuDeviceCreateTexture(state(dev).device, &desc));
 }
 
-fn createTextureView(_: *ke.ke_gpu_device, _: ke.ke_gpu_texture, _: *const ke.ke_gpu_texture_view_params) callconv(.C) ke.ke_gpu_texture_view {
-    return ke.KE_GPU_INVALID_HANDLE; // TODO(R3)
+fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]const ke.ke_gpu_texture_view_params) callconv(.c) ke.ke_gpu_texture_view {
+    const pp = @as(*const ke.ke_gpu_texture_view_params, @ptrCast(p));
+    const desc = wgpu.WGPUTextureViewDescriptor{
+        .nextInChain     = null,
+        .label           = .{ .data = null, .length = 0 },
+        .format          = toWgpuTextureFormat(pp.format),
+        .dimension       = toWgpuTextureViewDimension(pp.dimension),
+        .aspect          = toWgpuTextureAspect(pp.aspect),
+        .baseMipLevel    = pp.base_mip_level,
+        .mipLevelCount   = pp.mip_level_count,
+        .baseArrayLayer  = pp.base_array_layer,
+        .arrayLayerCount = pp.array_layer_count,
+    };
+    const wgpu_tex: wgpu.WGPUTexture = @ptrFromInt(tex);
+    return @intFromPtr(wgpu.wgpuTextureCreateView(wgpu_tex, &desc));
 }
 
-fn createSampler(_: *ke.ke_gpu_device, _: *const ke.ke_gpu_sampler_params) callconv(.C) ke.ke_gpu_sampler {
-    return ke.KE_GPU_INVALID_HANDLE; // TODO(R3)
+fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_params) callconv(.c) ke.ke_gpu_sampler {
+    const pp = @as(*const ke.ke_gpu_sampler_params, @ptrCast(p));
+    const desc = wgpu.WGPUSamplerDescriptor{
+        .nextInChain   = null,
+        .label         = .{ .data = null, .length = 0 },
+        .addressModeU  = @intCast(pp.address_mode_u),
+        .addressModeV  = @intCast(pp.address_mode_v),
+        .addressModeW  = @intCast(pp.address_mode_w),
+        .magFilter     = @intCast(pp.mag_filter),
+        .minFilter     = @intCast(pp.min_filter),
+        .mipmapFilter  = @intCast(pp.mipmap_filter),
+        .lodMinClamp   = pp.lod_min_clamp,
+        .lodMaxClamp   = pp.lod_max_clamp,
+        .compare       = toWgpuCompareFunction(pp.compare),
+        .maxAnisotropy = pp.max_anisotropy,
+    };
+    return @intFromPtr(wgpu.wgpuDeviceCreateSampler(state(dev).device, &desc));
 }
 
-fn createShaderModule(dev: *ke.ke_gpu_device, p: *const ke.ke_gpu_shader_module_params) callconv(.C) ke.ke_gpu_shader_module {
-    const spirv = wgpu.WGPUShaderModuleSPIRVDescriptor{
-        .chain = .{ .next = null, .sType = wgpu.WGPUSType_ShaderModuleSPIRVDescriptor },
-        .codeSize = @intCast(p.byte_size / 4),
-        .code = p.code,
+fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_module_params) callconv(.c) ke.ke_gpu_shader_module {
+    const pp = @as(*const ke.ke_gpu_shader_module_params, @ptrCast(p));
+    const spirv = wgpu.WGPUShaderSourceSPIRV{
+        .chain    = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceSPIRV },
+        .codeSize = @intCast(pp.byte_size / 4),
+        .code     = pp.code,
     };
     const desc = wgpu.WGPUShaderModuleDescriptor{
         .nextInChain = @ptrCast(&spirv),
-        .label = p.entry_point,
+        .label       = .{ .data = pp.entry_point, .length = wgpu.WGPU_STRLEN },
     };
     return @intFromPtr(wgpu.wgpuDeviceCreateShaderModule(state(dev).device, &desc));
 }
 
-fn createRenderPipeline(_: *ke.ke_gpu_device, _: *const ke.ke_gpu_render_pipeline_params) callconv(.C) ke.ke_gpu_pipeline {
-    return ke.KE_GPU_INVALID_HANDLE; // TODO(R3)
+fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
+    const pp = @as(*const ke.ke_gpu_render_pipeline_params, @ptrCast(p));
+
+    // Vertex attributes + buffer layouts
+    var wgpu_attrs: [32]wgpu.WGPUVertexAttribute = undefined;
+    var wgpu_bufs: [8]wgpu.WGPUVertexBufferLayout = undefined;
+    var attr_offset: usize = 0;
+    const buf_count = @min(pp.vertex_buffer_count, wgpu_bufs.len);
+
+    for (0..buf_count) |bi| {
+        const src_buf = @as(*const ke.ke_gpu_vertex_buffer_layout, @ptrCast(&pp.vertex_buffers[bi]));
+        const ac = @min(src_buf.attribute_count, 32 - attr_offset);
+        for (0..ac) |ai| {
+            const src_a = @as(*const ke.ke_gpu_vertex_attribute, @ptrCast(&src_buf.attributes[ai]));
+            wgpu_attrs[attr_offset + ai] = .{
+                .format         = toWgpuVertexFormat(src_a.format),
+                .offset         = src_a.offset,
+                .shaderLocation = src_a.shader_location,
+            };
+        }
+        wgpu_bufs[bi] = .{
+            .arrayStride    = src_buf.stride,
+            .stepMode       = toWgpuVertexStepMode(src_buf.step_mode),
+            .attributeCount = ac,
+            .attributes     = &wgpu_attrs[attr_offset],
+        };
+        attr_offset += ac;
+    }
+
+    // Color target (one output, format from surface or RGBA8)
+    const s = state(dev);
+    const color_fmt = if (s.surface_format != wgpu.WGPUTextureFormat_Undefined)
+        s.surface_format
+    else
+        wgpu.WGPUTextureFormat_BGRA8Unorm;
+
+    const bs = pp.blend_state;
+    const wgpu_blend = wgpu.WGPUBlendState{
+        .color = .{
+            .srcFactor = toWgpuBlendFactor(bs.src_color),
+            .dstFactor = toWgpuBlendFactor(bs.dst_color),
+            .operation = toWgpuBlendOp(bs.color_op),
+        },
+        .alpha = .{
+            .srcFactor = toWgpuBlendFactor(bs.src_alpha),
+            .dstFactor = toWgpuBlendFactor(bs.dst_alpha),
+            .operation = toWgpuBlendOp(bs.alpha_op),
+        },
+    };
+    const color_target = wgpu.WGPUColorTargetState{
+        .nextInChain = null,
+        .format      = color_fmt,
+        .blend       = if (bs.blend_enabled != 0) &wgpu_blend else null,
+        .writeMask   = pp.blend_state.write_mask,
+    };
+    const frag_state = wgpu.WGPUFragmentState{
+        .nextInChain  = null,
+        .module       = @ptrFromInt(pp.fragment_module),
+        .entryPoint   = .{ .data = if (pp.fragment_entry != null) pp.fragment_entry else "main", .length = wgpu.WGPU_STRLEN },
+        .constantCount = 0,
+        .constants    = null,
+        .targetCount  = 1,
+        .targets      = &color_target,
+    };
+
+    // Depth/stencil
+    const ds = pp.depth_stencil;
+    const ds_state = wgpu.WGPUDepthStencilState{
+        .nextInChain         = null,
+        .format              = wgpu.WGPUTextureFormat_Depth32Float,
+        .depthWriteEnabled   = if (ds.depth_write_enabled != 0) @intFromBool(true) else @intFromBool(false),
+        .depthCompare        = toWgpuCompareFunction(ds.depth_compare),
+        .stencilFront        = .{
+            .compare     = toWgpuCompareFunction(ds.stencil_front_compare),
+            .failOp      = toWgpuStencilOp(ds.stencil_front_fail),
+            .depthFailOp = toWgpuStencilOp(ds.stencil_front_depth_fail),
+            .passOp      = toWgpuStencilOp(ds.stencil_front_pass),
+        },
+        .stencilBack         = .{
+            .compare     = toWgpuCompareFunction(ds.stencil_back_compare),
+            .failOp      = toWgpuStencilOp(ds.stencil_back_fail),
+            .depthFailOp = toWgpuStencilOp(ds.stencil_back_depth_fail),
+            .passOp      = toWgpuStencilOp(ds.stencil_back_pass),
+        },
+        .stencilReadMask     = ds.stencil_read_mask,
+        .stencilWriteMask    = ds.stencil_write_mask,
+        .depthBias           = 0,
+        .depthBiasSlopeScale = 0.0,
+        .depthBiasClamp      = 0.0,
+    };
+
+    const desc = wgpu.WGPURenderPipelineDescriptor{
+        .nextInChain = null,
+        .label       = .{ .data = null, .length = 0 },
+        .layout      = null, // auto layout
+        .vertex      = .{
+            .nextInChain   = null,
+            .module        = @ptrFromInt(pp.vertex_module),
+            .entryPoint    = .{ .data = if (pp.vertex_entry != null) pp.vertex_entry else "main", .length = wgpu.WGPU_STRLEN },
+            .constantCount = 0,
+            .constants     = null,
+            .bufferCount   = buf_count,
+            .buffers       = if (buf_count > 0) &wgpu_bufs else null,
+        },
+        .primitive   = .{
+            .nextInChain      = null,
+            .topology         = toWgpuPrimitiveTopology(pp.primitive_topology),
+            .stripIndexFormat = wgpu.WGPUIndexFormat_Undefined,
+            .frontFace        = toWgpuFrontFace(pp.front_face),
+            .cullMode         = toWgpuCullMode(pp.cull_mode),
+        },
+        .depthStencil = if (ds.depth_test_enabled != 0) &ds_state else null,
+        .multisample  = .{
+            .nextInChain            = null,
+            .count                  = 1,
+            .mask                   = 0xFFFFFFFF,
+            .alphaToCoverageEnabled = if (pp.alpha_to_coverage_enabled != 0) 1 else 0,
+        },
+        .fragment = &frag_state,
+    };
+
+    return @intFromPtr(wgpu.wgpuDeviceCreateRenderPipeline(state(dev).device, &desc));
 }
 
-fn createComputePipeline(_: *ke.ke_gpu_device, _: *const ke.ke_gpu_compute_pipeline_params) callconv(.C) ke.ke_gpu_pipeline {
-    return ke.KE_GPU_INVALID_HANDLE; // TODO(R3)
-}
-
-fn createBindGroupLayout(_: *ke.ke_gpu_device, _: *const ke.ke_gpu_bind_group_layout_params) callconv(.C) ke.ke_gpu_bind_group_layout {
-    return ke.KE_GPU_INVALID_HANDLE; // TODO(R3)
-}
-
-fn createBindGroup(_: *ke.ke_gpu_device, _: *const ke.ke_gpu_bind_group_params) callconv(.C) ke.ke_gpu_bind_group {
-    return ke.KE_GPU_INVALID_HANDLE; // TODO(R3)
-}
+fn createComputePipeline(_: [*c]ke.ke_gpu_device, _: [*c]const ke.ke_gpu_compute_pipeline_params) callconv(.c) ke.ke_gpu_pipeline { return ke.KE_GPU_INVALID_HANDLE; }
+fn createBindGroupLayout(_: [*c]ke.ke_gpu_device, _: [*c]const ke.ke_gpu_bind_group_layout_params) callconv(.c) ke.ke_gpu_bind_group_layout { return ke.KE_GPU_INVALID_HANDLE; }
+fn createBindGroup(_: [*c]ke.ke_gpu_device, _: [*c]const ke.ke_gpu_bind_group_params) callconv(.c) ke.ke_gpu_bind_group { return ke.KE_GPU_INVALID_HANDLE; }
 
 // ── Resource destruction ───────────────────────────────────────────────────
 
-fn destroyBuffer(_: *ke.ke_gpu_device, h: ke.ke_gpu_buffer) callconv(.C) void {
+fn destroyBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer) callconv(.c) void {
     wgpu.wgpuBufferDestroy(@ptrFromInt(h));
     wgpu.wgpuBufferRelease(@ptrFromInt(h));
 }
-
-fn destroyTexture(_: *ke.ke_gpu_device, h: ke.ke_gpu_texture) callconv(.C) void {
+fn destroyTexture(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_texture) callconv(.c) void {
     wgpu.wgpuTextureDestroy(@ptrFromInt(h));
     wgpu.wgpuTextureRelease(@ptrFromInt(h));
 }
-
-fn destroyTextureView(_: *ke.ke_gpu_device, h: ke.ke_gpu_texture_view) callconv(.C) void {
-    wgpu.wgpuTextureViewRelease(@ptrFromInt(h));
-}
-
-fn destroySampler(_: *ke.ke_gpu_device, h: ke.ke_gpu_sampler) callconv(.C) void {
-    wgpu.wgpuSamplerRelease(@ptrFromInt(h));
-}
-
-fn destroyShaderModule(_: *ke.ke_gpu_device, h: ke.ke_gpu_shader_module) callconv(.C) void {
-    wgpu.wgpuShaderModuleRelease(@ptrFromInt(h));
-}
-
-fn destroyPipeline(_: *ke.ke_gpu_device, h: ke.ke_gpu_pipeline) callconv(.C) void {
-    wgpu.wgpuRenderPipelineRelease(@ptrFromInt(h));
-}
-
-fn destroyBindGroupLayout(_: *ke.ke_gpu_device, h: ke.ke_gpu_bind_group_layout) callconv(.C) void {
-    wgpu.wgpuBindGroupLayoutRelease(@ptrFromInt(h));
-}
-
-fn destroyBindGroup(_: *ke.ke_gpu_device, h: ke.ke_gpu_bind_group) callconv(.C) void {
-    wgpu.wgpuBindGroupRelease(@ptrFromInt(h));
-}
+fn destroyTextureView(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_texture_view) callconv(.c) void { wgpu.wgpuTextureViewRelease(@ptrFromInt(h)); }
+fn destroySampler(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_sampler) callconv(.c) void { wgpu.wgpuSamplerRelease(@ptrFromInt(h)); }
+fn destroyShaderModule(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_shader_module) callconv(.c) void { wgpu.wgpuShaderModuleRelease(@ptrFromInt(h)); }
+fn destroyPipeline(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_pipeline) callconv(.c) void { wgpu.wgpuRenderPipelineRelease(@ptrFromInt(h)); }
+fn destroyBindGroupLayout(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group_layout) callconv(.c) void { wgpu.wgpuBindGroupLayoutRelease(@ptrFromInt(h)); }
+fn destroyBindGroup(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group) callconv(.c) void { wgpu.wgpuBindGroupRelease(@ptrFromInt(h)); }
 
 // ── Encoder ────────────────────────────────────────────────────────────────
 
-fn encoderCreate(dev: *ke.ke_gpu_device) callconv(.C) ?*anyopaque {
-    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = null };
+fn encoderCreate(dev: [*c]ke.ke_gpu_device) callconv(.c) ?*anyopaque {
+    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
     return wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc);
 }
 
-fn encoderBeginRenderPass(_: *ke.ke_gpu_device, encoder: ?*anyopaque, _: *const ke.ke_gpu_render_pass_params) callconv(.C) ?*anyopaque {
-    _ = encoder;
-    return null; // TODO(R3): translate ke_gpu_render_pass_params → WGPURenderPassDescriptor
+fn encoderBeginRenderPass(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque, p: [*c]const ke.ke_gpu_render_pass_params) callconv(.c) ?*anyopaque {
+    const pp = @as(*const ke.ke_gpu_render_pass_params, @ptrCast(p));
+
+    var color_attachments: [8]wgpu.WGPURenderPassColorAttachment = undefined;
+    const color_count = @min(pp.color_attachment_count, color_attachments.len);
+    for (0..color_count) |i| {
+        const ca = @as(*const ke.ke_gpu_color_attachment, @ptrCast(&pp.color_attachments[i]));
+        color_attachments[i] = .{
+            .nextInChain   = null,
+            .view          = @ptrFromInt(ca.view),
+            .depthSlice    = wgpu.WGPU_DEPTH_SLICE_UNDEFINED,
+            .resolveTarget = null,
+            .loadOp        = toWgpuLoadOp(ca.load_op),
+            .storeOp       = toWgpuStoreOp(ca.store_op),
+            .clearValue    = .{ .r = ca.clear_value.color[0], .g = ca.clear_value.color[1], .b = ca.clear_value.color[2], .a = ca.clear_value.color[3] },
+        };
+    }
+
+    var ds_attach: wgpu.WGPURenderPassDepthStencilAttachment = undefined;
+    const has_ds = pp.depth_stencil_attachment != null;
+    if (has_ds) {
+        const dsa = @as(*const ke.ke_gpu_depth_stencil_attachment, @ptrCast(pp.depth_stencil_attachment));
+        ds_attach = .{
+            .view              = @ptrFromInt(dsa.view),
+            .depthLoadOp       = toWgpuLoadOp(dsa.depth_load_op),
+            .depthStoreOp      = toWgpuStoreOp(dsa.depth_store_op),
+            .depthClearValue   = dsa.clear_depth,
+            .depthReadOnly     = if (dsa.depth_read_only != 0) 1 else 0,
+            .stencilLoadOp     = wgpu.WGPULoadOp_Undefined,
+            .stencilStoreOp    = toWgpuStoreOp(dsa.stencil_store_op),
+            .stencilClearValue = dsa.clear_stencil,
+            .stencilReadOnly   = if (dsa.stencil_read_only != 0) 1 else 0,
+        };
+    }
+
+    const rp_desc = wgpu.WGPURenderPassDescriptor{
+        .nextInChain            = null,
+        .label                  = .{ .data = null, .length = 0 },
+        .colorAttachmentCount   = color_count,
+        .colorAttachments       = if (color_count > 0) &color_attachments else null,
+        .depthStencilAttachment = if (has_ds) &ds_attach else null,
+        .occlusionQuerySet      = null,
+        .timestampWrites        = null,
+    };
+
+    return wgpu.wgpuCommandEncoderBeginRenderPass(@ptrCast(encoder), &rp_desc);
 }
 
-fn encoderBeginComputePass(_: *ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.C) ?*anyopaque {
-    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = null, .timestampWrites = null };
+fn encoderBeginComputePass(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.c) ?*anyopaque {
+    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 }, .timestampWrites = null };
     return wgpu.wgpuCommandEncoderBeginComputePass(@ptrCast(encoder), &desc);
 }
-
-fn encoderPipelineBarrier(_: *ke.ke_gpu_device, _: ?*anyopaque, _: *const ke.ke_gpu_barrier) callconv(.C) void {
-    // WebGPU barriers are implicit in the resource model; no-op.
-}
-
-fn encoderCopyBufferToBuffer(_: *ke.ke_gpu_device, encoder: ?*anyopaque, src: ke.ke_gpu_buffer, src_offset: usize, dst: ke.ke_gpu_buffer, dst_offset: usize, size: usize) callconv(.C) void {
+fn encoderPipelineBarrier(_: [*c]ke.ke_gpu_device, _: ?*anyopaque, _: [*c]const ke.ke_gpu_barrier) callconv(.c) void {}
+fn encoderCopyBufferToBuffer(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque, src: ke.ke_gpu_buffer, src_offset: usize, dst: ke.ke_gpu_buffer, dst_offset: usize, size: usize) callconv(.c) void {
     wgpu.wgpuCommandEncoderCopyBufferToBuffer(@ptrCast(encoder), @ptrFromInt(src), src_offset, @ptrFromInt(dst), dst_offset, size);
 }
-
-fn encoderCopyBufferToTexture(_: *ke.ke_gpu_device, _: ?*anyopaque, _: ke.ke_gpu_buffer, _: usize, _: ke.ke_gpu_texture, _: u32, _: u32, _: u32, _: u32, _: u32) callconv(.C) void {
-    // TODO(R3): wgpuCommandEncoderCopyBufferToTexture
-}
-
-fn encoderFinish(_: *ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.C) ?*anyopaque {
-    const desc = wgpu.WGPUCommandBufferDescriptor{ .nextInChain = null, .label = null };
+fn encoderCopyBufferToTexture(_: [*c]ke.ke_gpu_device, _: ?*anyopaque, _: ke.ke_gpu_buffer, _: usize, _: ke.ke_gpu_texture, _: u32, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
+fn encoderFinish(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.c) ?*anyopaque {
+    const desc = wgpu.WGPUCommandBufferDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
     return wgpu.wgpuCommandEncoderFinish(@ptrCast(encoder), &desc);
 }
-
-fn encoderDestroy(_: *ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.C) void {
+fn encoderDestroy(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.c) void {
     wgpu.wgpuCommandEncoderRelease(@ptrCast(encoder));
 }
 
-// ── Render pass backing ────────────────────────────────────────────────────
+// ── Render pass ────────────────────────────────────────────────────────────
 
-fn rpSetPipeline(_: *ke.ke_gpu_device, rp: ?*anyopaque, pipe: ke.ke_gpu_pipeline) callconv(.C) void {
+fn rpSetPipeline(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetPipeline(@ptrCast(rp), @ptrFromInt(pipe));
 }
-
-fn rpSetBindGroup(_: *ke.ke_gpu_device, rp: ?*anyopaque, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.C) void {
+fn rpSetBindGroup(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetBindGroup(@ptrCast(rp), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
 }
-
-fn rpSetVertexBuffer(_: *ke.ke_gpu_device, rp: ?*anyopaque, slot: u32, b: ke.ke_gpu_buffer, offset: usize) callconv(.C) void {
+fn rpSetVertexBuffer(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, slot: u32, b: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetVertexBuffer(@ptrCast(rp), slot, @ptrFromInt(b), offset, wgpu.WGPU_WHOLE_SIZE);
 }
-
-fn rpSetIndexBuffer(_: *ke.ke_gpu_device, rp: ?*anyopaque, b: ke.ke_gpu_buffer, fmt: ke.ke_gpu_index_format, offset: usize) callconv(.C) void {
-    const wgpu_fmt: wgpu.WGPUIndexFormat = switch (fmt) {
+fn rpSetIndexBuffer(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, b: ke.ke_gpu_buffer, fmt: ke.ke_gpu_index_format, offset: usize) callconv(.c) void {
+    const wfmt: wgpu.WGPUIndexFormat = switch (fmt) {
         ke.KE_GPU_INDEX_FORMAT_UINT16 => wgpu.WGPUIndexFormat_Uint16,
         ke.KE_GPU_INDEX_FORMAT_UINT32 => wgpu.WGPUIndexFormat_Uint32,
         else => wgpu.WGPUIndexFormat_Undefined,
     };
-    wgpu.wgpuRenderPassEncoderSetIndexBuffer(@ptrCast(rp), @ptrFromInt(b), wgpu_fmt, offset, wgpu.WGPU_WHOLE_SIZE);
+    wgpu.wgpuRenderPassEncoderSetIndexBuffer(@ptrCast(rp), @ptrFromInt(b), wfmt, offset, wgpu.WGPU_WHOLE_SIZE);
 }
-
-fn rpSetViewport(_: *ke.ke_gpu_device, rp: ?*anyopaque, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) callconv(.C) void {
-    wgpu.wgpuRenderPassEncoderSetViewport(@ptrCast(rp), x, y, w, h, min_depth, max_depth);
+fn rpSetViewport(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, x: f32, y: f32, w: f32, h: f32, min_d: f32, max_d: f32) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderSetViewport(@ptrCast(rp), x, y, w, h, min_d, max_d);
 }
-
-fn rpSetScissor(_: *ke.ke_gpu_device, rp: ?*anyopaque, x: i32, y: i32, w: u32, h: u32) callconv(.C) void {
+fn rpSetScissor(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, x: i32, y: i32, w: u32, h: u32) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetScissorRect(@ptrCast(rp), @intCast(x), @intCast(y), w, h);
 }
-
-fn rpDraw(_: *ke.ke_gpu_device, rp: ?*anyopaque, vert_count: u32, inst_count: u32, first_vert: u32, first_inst: u32) callconv(.C) void {
+fn rpDraw(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, vert_count: u32, inst_count: u32, first_vert: u32, first_inst: u32) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderDraw(@ptrCast(rp), vert_count, inst_count, first_vert, first_inst);
 }
-
-fn rpDrawIndexed(_: *ke.ke_gpu_device, rp: ?*anyopaque, idx_count: u32, inst_count: u32, first_idx: u32, base_vert: i32, first_inst: u32) callconv(.C) void {
+fn rpDrawIndexed(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, idx_count: u32, inst_count: u32, first_idx: u32, base_vert: i32, first_inst: u32) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderDrawIndexed(@ptrCast(rp), idx_count, inst_count, first_idx, base_vert, first_inst);
 }
-
-fn rpDrawIndirect(_: *ke.ke_gpu_device, rp: ?*anyopaque, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.C) void {
+fn rpDrawIndirect(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderDrawIndirect(@ptrCast(rp), @ptrFromInt(indirect_buf), offset);
 }
-
-fn rpEnd(_: *ke.ke_gpu_device, rp: ?*anyopaque) callconv(.C) void {
+fn rpEnd(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderEnd(@ptrCast(rp));
     wgpu.wgpuRenderPassEncoderRelease(@ptrCast(rp));
 }
 
-// ── Compute pass backing ───────────────────────────────────────────────────
+// ── Compute pass ───────────────────────────────────────────────────────────
 
-fn cpSetPipeline(_: *ke.ke_gpu_device, cp: ?*anyopaque, pipe: ke.ke_gpu_pipeline) callconv(.C) void {
+fn cpSetPipeline(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuComputePassEncoderSetPipeline(@ptrCast(cp), @ptrFromInt(pipe));
 }
-
-fn cpSetBindGroup(_: *ke.ke_gpu_device, cp: ?*anyopaque, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.C) void {
+fn cpSetBindGroup(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
     wgpu.wgpuComputePassEncoderSetBindGroup(@ptrCast(cp), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
 }
-
-fn cpDispatch(_: *ke.ke_gpu_device, cp: ?*anyopaque, x: u32, y: u32, z: u32) callconv(.C) void {
+fn cpDispatch(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, x: u32, y: u32, z: u32) callconv(.c) void {
     wgpu.wgpuComputePassEncoderDispatchWorkgroups(@ptrCast(cp), x, y, z);
 }
-
-fn cpDispatchIndirect(_: *ke.ke_gpu_device, cp: ?*anyopaque, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.C) void {
+fn cpDispatchIndirect(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuComputePassEncoderDispatchWorkgroupsIndirect(@ptrCast(cp), @ptrFromInt(indirect_buf), offset);
 }
-
-fn cpEnd(_: *ke.ke_gpu_device, cp: ?*anyopaque) callconv(.C) void {
+fn cpEnd(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque) callconv(.c) void {
     wgpu.wgpuComputePassEncoderEnd(@ptrCast(cp));
     wgpu.wgpuComputePassEncoderRelease(@ptrCast(cp));
 }
 
 // ── Command buffer lifecycle ───────────────────────────────────────────────
 
-fn cmdBufferDestroy(_: *ke.ke_gpu_device, cmd_buf: ?*anyopaque) callconv(.C) void {
+fn cmdBufferDestroy(_: [*c]ke.ke_gpu_device, cmd_buf: ?*anyopaque) callconv(.c) void {
     wgpu.wgpuCommandBufferRelease(@ptrCast(cmd_buf));
 }
 
 // ── Mapped writes ──────────────────────────────────────────────────────────
 
-fn mapBuffer(_: *ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.C) ?*anyopaque {
+fn mapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
     return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
 }
-
-fn mapBufferWrite(_: *ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.C) ?*anyopaque {
+fn mapBufferWrite(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
     return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
 }
-
-fn unmapBuffer(_: *ke.ke_gpu_device, h: ke.ke_gpu_buffer) callconv(.C) void {
+fn unmapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer) callconv(.c) void {
     wgpu.wgpuBufferUnmap(@ptrFromInt(h));
 }
 
 // ── Capabilities ───────────────────────────────────────────────────────────
 
-fn getCapabilities(_: *ke.ke_gpu_device, out: *ke.ke_gpu_capabilities) callconv(.C) void {
-    out.* = std.mem.zeroes(ke.ke_gpu_capabilities);
-    // TODO(R3): wgpuAdapterGetLimits / wgpuDeviceGetLimits
+fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) callconv(.c) void {
+    const p = @as(*ke.ke_gpu_capabilities, @ptrCast(out));
+    p.* = std.mem.zeroes(ke.ke_gpu_capabilities);
+
+    var limits: wgpu.WGPULimits = std.mem.zeroes(wgpu.WGPULimits);
+    const status = wgpu.wgpuAdapterGetLimits(state(dev).adapter, &limits);
+    if (status != wgpu.WGPUStatus_Success) return;
+
+    p.max_texture_dimension_2d     = limits.maxTextureDimension2D;
+    p.max_texture_array_layers     = limits.maxTextureArrayLayers;
+    p.max_bind_groups              = limits.maxBindGroups;
+    p.max_vertex_attributes        = limits.maxVertexAttributes;
+    p.max_vertex_buffers           = limits.maxVertexBuffers;
+    p.max_uniform_buffer_size      = @truncate(limits.maxUniformBufferBindingSize);
+    p.max_storage_buffer_size      = @truncate(limits.maxStorageBufferBindingSize);
+    p.max_compute_workgroup_size_x = limits.maxComputeWorkgroupSizeX;
+    p.max_compute_workgroup_size_y = limits.maxComputeWorkgroupSizeY;
+    p.max_compute_workgroup_size_z = limits.maxComputeWorkgroupSizeZ;
+}
+
+// ── Surface extension ──────────────────────────────────────────────────────
+
+const SurfaceExt = extern struct {
+    acquire_current_texture_view: *const fn (*const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view,
+    reconfigure:                  *const fn (*const SurfaceExt, u32, u32) callconv(.c) void,
+    device_state:                 *DeviceState,
+};
+
+fn surfaceExtAcquire(self: *const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view {
+    const s = self.device_state;
+    const surf = s.surface orelse return ke.KE_GPU_INVALID_HANDLE;
+    var st: wgpu.WGPUSurfaceTexture = std.mem.zeroes(wgpu.WGPUSurfaceTexture);
+    wgpu.wgpuSurfaceGetCurrentTexture(surf, &st);
+    if (st.status != wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal and
+        st.status != wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal)
+    {
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    s.current_surface_texture = st.texture; // held until queuePresent releases it
+    return @intFromPtr(wgpu.wgpuTextureCreateView(st.texture, null));
+}
+
+fn surfaceExtReconfigure(self: *const SurfaceExt, width: u32, height: u32) callconv(.c) void {
+    configureSurface(self.device_state, width, height);
 }
 
 // ── Extension query ────────────────────────────────────────────────────────
 
-fn queryExtension(_: *ke.ke_gpu_device, _: [*c]const u8) callconv(.C) ?*const anyopaque {
+fn queryExtension(dev: [*c]ke.ke_gpu_device, name: [*c]const u8) callconv(.c) ?*const anyopaque {
+    const s = state(dev);
+    if (s.surface == null) return null;
+    if (std.mem.eql(u8, std.mem.span(name), "ke_gpu_surface_ext")) {
+        if (s.surface_ext == null) {
+            const ext = gpa.create(SurfaceExt) catch return null;
+            ext.* = .{
+                .acquire_current_texture_view = surfaceExtAcquire,
+                .reconfigure                  = surfaceExtReconfigure,
+                .device_state                 = s,
+            };
+            s.surface_ext = ext;
+        }
+        return s.surface_ext;
+    }
     return null;
 }
