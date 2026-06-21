@@ -118,16 +118,6 @@ fn toWgpuTextureAspect(a: ke.ke_gpu_texture_aspect) wgpu.WGPUTextureAspect {
     return wgpu.WGPUTextureAspect_All;
 }
 
-fn toWgpuTextureUsage(u: ke.ke_gpu_texture_usage) wgpu.WGPUTextureUsage {
-    var r: wgpu.WGPUTextureUsage = 0;
-    if (u & ke.KE_GPU_TEXTURE_USAGE_SAMPLED != 0)      r |= wgpu.WGPUTextureUsage_TextureBinding;
-    if (u & ke.KE_GPU_TEXTURE_USAGE_STORAGE != 0)      r |= wgpu.WGPUTextureUsage_StorageBinding;
-    if (u & ke.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH != 0) r |= wgpu.WGPUTextureUsage_RenderAttachment;
-    if (u & ke.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH != 0) r |= wgpu.WGPUTextureUsage_RenderAttachment;
-    if (u & ke.KE_GPU_TEXTURE_USAGE_COPY_SRC != 0)     r |= wgpu.WGPUTextureUsage_CopySrc;
-    if (u & ke.KE_GPU_TEXTURE_USAGE_COPY_DST != 0)     r |= wgpu.WGPUTextureUsage_CopyDst;
-    return r;
-}
 
 fn toWgpuLoadOp(op: ke.ke_gpu_load_op) wgpu.WGPULoadOp {
     return switch (op) {
@@ -417,6 +407,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .cp_dispatch_indirect           = cpDispatchIndirect,
         .cp_end                         = cpEnd,
         .cmd_buffer_destroy             = cmdBufferDestroy,
+        .write_buffer                   = writeBuffer,
         .map_buffer                     = mapBuffer,
         .map_buffer_write               = mapBufferWrite,
         .unmap_buffer                   = unmapBuffer,
@@ -545,12 +536,47 @@ fn destroyFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.c) void {
 
 // ── Resource creation ──────────────────────────────────────────────────────
 
+// ── Usage/stage flag converters ────────────────────────────────────────────
+
+fn mapBufferUsage(ke_usage: ke.ke_gpu_buffer_usage) wgpu.WGPUBufferUsage {
+    var u: wgpu.WGPUBufferUsage = wgpu.WGPUBufferUsage_None;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_MAP_READ  != 0) u |= wgpu.WGPUBufferUsage_MapRead;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_MAP_WRITE != 0) u |= wgpu.WGPUBufferUsage_MapWrite;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_COPY_SRC  != 0) u |= wgpu.WGPUBufferUsage_CopySrc;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_COPY_DST  != 0) u |= wgpu.WGPUBufferUsage_CopyDst;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_INDEX     != 0) u |= wgpu.WGPUBufferUsage_Index;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_VERTEX    != 0) u |= wgpu.WGPUBufferUsage_Vertex;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_UNIFORM   != 0) u |= wgpu.WGPUBufferUsage_Uniform;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_STORAGE   != 0) u |= wgpu.WGPUBufferUsage_Storage;
+    if (ke_usage & ke.KE_GPU_BUFFER_USAGE_INDIRECT  != 0) u |= wgpu.WGPUBufferUsage_Indirect;
+    return u;
+}
+
+fn mapTextureUsage(ke_usage: ke.ke_gpu_texture_usage) wgpu.WGPUTextureUsage {
+    var u: wgpu.WGPUTextureUsage = wgpu.WGPUTextureUsage_None;
+    if (ke_usage & ke.KE_GPU_TEXTURE_USAGE_COPY_SRC     != 0) u |= wgpu.WGPUTextureUsage_CopySrc;
+    if (ke_usage & ke.KE_GPU_TEXTURE_USAGE_COPY_DST     != 0) u |= wgpu.WGPUTextureUsage_CopyDst;
+    if (ke_usage & ke.KE_GPU_TEXTURE_USAGE_SAMPLED      != 0) u |= wgpu.WGPUTextureUsage_TextureBinding;
+    if (ke_usage & ke.KE_GPU_TEXTURE_USAGE_STORAGE      != 0) u |= wgpu.WGPUTextureUsage_StorageBinding;
+    if (ke_usage & ke.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH != 0) u |= wgpu.WGPUTextureUsage_RenderAttachment;
+    if (ke_usage & ke.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH != 0) u |= wgpu.WGPUTextureUsage_RenderAttachment;
+    return u;
+}
+
+fn mapShaderStage(ke_stage: ke.ke_gpu_shader_stage) wgpu.WGPUShaderStage {
+    var s: wgpu.WGPUShaderStage = wgpu.WGPUShaderStage_None;
+    if (ke_stage & ke.KE_GPU_SHADER_STAGE_VERTEX   != 0) s |= wgpu.WGPUShaderStage_Vertex;
+    if (ke_stage & ke.KE_GPU_SHADER_STAGE_FRAGMENT != 0) s |= wgpu.WGPUShaderStage_Fragment;
+    if (ke_stage & ke.KE_GPU_SHADER_STAGE_COMPUTE  != 0) s |= wgpu.WGPUShaderStage_Compute;
+    return s;
+}
+
 fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params) callconv(.c) ke.ke_gpu_buffer {
     const pp = @as(*const ke.ke_gpu_buffer_params, @ptrCast(p));
-    var usage: wgpu.WGPUBufferUsage = @intCast(pp.usage);
-    // wgpu requires CopySrc|CopyDst when MAP_READ|MAP_WRITE are set
-    if (pp.usage & ke.KE_GPU_BUFFER_USAGE_MAP_READ != 0)  usage |= wgpu.WGPUBufferUsage_CopySrc;
-    if (pp.usage & ke.KE_GPU_BUFFER_USAGE_MAP_WRITE != 0) usage |= wgpu.WGPUBufferUsage_CopyDst;
+    const s = state(dev);
+    var usage = mapBufferUsage(pp.usage);
+    // wgpuQueueWriteBuffer requires COPY_DST; add it automatically when uploading initial data.
+    if (pp.initial_data != null) usage |= wgpu.WGPUBufferUsage_CopyDst;
     const desc = wgpu.WGPUBufferDescriptor{
         .nextInChain      = null,
         .label            = .{ .data = null, .length = 0 },
@@ -558,7 +584,9 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params)
         .size             = pp.size,
         .mappedAtCreation = if (pp.mapped_at_creation != 0) 1 else 0,
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateBuffer(state(dev).device, &desc));
+    const buf: wgpu.WGPUBuffer = wgpu.wgpuDeviceCreateBuffer(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
+    if (pp.initial_data != null) wgpu.wgpuQueueWriteBuffer(s.queue, buf, 0, pp.initial_data, pp.size);
+    return @intFromPtr(buf);
 }
 
 fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params) callconv(.c) ke.ke_gpu_texture {
@@ -566,7 +594,7 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     const desc = wgpu.WGPUTextureDescriptor{
         .nextInChain     = null,
         .label           = .{ .data = null, .length = 0 },
-        .usage           = toWgpuTextureUsage(pp.usage),
+        .usage           = mapTextureUsage(pp.usage),
         .dimension       = toWgpuTextureDimension(pp.dimension),
         .size            = .{ .width = pp.width, .height = pp.height, .depthOrArrayLayers = pp.depth_or_array_layers },
         .format          = toWgpuTextureFormat(pp.format),
@@ -719,10 +747,26 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
         .depthBiasClamp      = 0.0,
     };
 
+    // Build explicit pipeline layout when bind group layouts are declared.
+    var pipeline_layout: wgpu.WGPUPipelineLayout = null;
+    if (pp.bind_group_layout_count > 0) {
+        var bgl_handles: [4]wgpu.WGPUBindGroupLayout = undefined;
+        const bgl_count = @min(pp.bind_group_layout_count, bgl_handles.len);
+        for (0..bgl_count) |i| bgl_handles[i] = @ptrFromInt(pp.bind_group_layouts[i]);
+        const layout_desc = wgpu.WGPUPipelineLayoutDescriptor{
+            .nextInChain          = null,
+            .label                = .{ .data = null, .length = 0 },
+            .bindGroupLayoutCount = bgl_count,
+            .bindGroupLayouts     = &bgl_handles,
+        };
+        pipeline_layout = wgpu.wgpuDeviceCreatePipelineLayout(state(dev).device, &layout_desc);
+    }
+    defer if (pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(pipeline_layout);
+
     const desc = wgpu.WGPURenderPipelineDescriptor{
         .nextInChain = null,
         .label       = .{ .data = null, .length = 0 },
-        .layout      = null, // auto layout
+        .layout      = pipeline_layout,
         .vertex      = .{
             .nextInChain   = null,
             .module        = @ptrFromInt(pp.vertex_module),
@@ -753,8 +797,86 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
 }
 
 fn createComputePipeline(_: [*c]ke.ke_gpu_device, _: [*c]const ke.ke_gpu_compute_pipeline_params) callconv(.c) ke.ke_gpu_pipeline { return ke.KE_GPU_INVALID_HANDLE; }
-fn createBindGroupLayout(_: [*c]ke.ke_gpu_device, _: [*c]const ke.ke_gpu_bind_group_layout_params) callconv(.c) ke.ke_gpu_bind_group_layout { return ke.KE_GPU_INVALID_HANDLE; }
-fn createBindGroup(_: [*c]ke.ke_gpu_device, _: [*c]const ke.ke_gpu_bind_group_params) callconv(.c) ke.ke_gpu_bind_group { return ke.KE_GPU_INVALID_HANDLE; }
+
+fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_layout_params) callconv(.c) ke.ke_gpu_bind_group_layout {
+    const pp = @as(*const ke.ke_gpu_bind_group_layout_params, @ptrCast(p));
+    const n = @min(pp.entry_count, 32);
+    var entries: [32]wgpu.WGPUBindGroupLayoutEntry = undefined;
+    for (0..n) |i| {
+        const src = @as(*const ke.ke_gpu_bind_group_layout_entry, @ptrCast(&pp.entries[i]));
+        entries[i] = std.mem.zeroes(wgpu.WGPUBindGroupLayoutEntry);
+        entries[i].binding    = src.binding;
+        entries[i].visibility = mapShaderStage(src.visibility);
+        switch (src.type) {
+            ke.KE_GPU_BINDING_TYPE_BUFFER => {
+                entries[i].buffer.type             = wgpu.WGPUBufferBindingType_Uniform;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.minBindingSize   = 0;
+            },
+            ke.KE_GPU_BINDING_TYPE_STORAGE_BUFFER => {
+                entries[i].buffer.type             = wgpu.WGPUBufferBindingType_Storage;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.minBindingSize   = 0;
+            },
+            ke.KE_GPU_BINDING_TYPE_SAMPLER => {
+                entries[i].sampler.type = wgpu.WGPUSamplerBindingType_Filtering;
+            },
+            ke.KE_GPU_BINDING_TYPE_TEXTURE => {
+                entries[i].texture.sampleType    = wgpu.WGPUTextureSampleType_Float;
+                entries[i].texture.viewDimension = wgpu.WGPUTextureViewDimension_2D;
+                entries[i].texture.multisampled  = 0;
+            },
+            ke.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE => {
+                entries[i].storageTexture.access        = wgpu.WGPUStorageTextureAccess_WriteOnly;
+                entries[i].storageTexture.format        = wgpu.WGPUTextureFormat_RGBA8Unorm;
+                entries[i].storageTexture.viewDimension = wgpu.WGPUTextureViewDimension_2D;
+            },
+            else => {},
+        }
+    }
+    const desc = wgpu.WGPUBindGroupLayoutDescriptor{
+        .nextInChain = null,
+        .label       = .{ .data = null, .length = 0 },
+        .entryCount  = n,
+        .entries     = if (n > 0) &entries else null,
+    };
+    return @intFromPtr(wgpu.wgpuDeviceCreateBindGroupLayout(state(dev).device, &desc));
+}
+
+fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_params) callconv(.c) ke.ke_gpu_bind_group {
+    const pp = @as(*const ke.ke_gpu_bind_group_params, @ptrCast(p));
+    const n = @min(pp.entry_count, 32);
+    var entries: [32]wgpu.WGPUBindGroupEntry = undefined;
+    for (0..n) |i| {
+        const src = @as(*const ke.ke_gpu_bind_group_entry, @ptrCast(&pp.entries[i]));
+        entries[i] = std.mem.zeroes(wgpu.WGPUBindGroupEntry);
+        entries[i].binding = src.binding;
+        switch (src.type) {
+            ke.KE_GPU_BINDING_TYPE_BUFFER,
+            ke.KE_GPU_BINDING_TYPE_STORAGE_BUFFER => {
+                entries[i].buffer = @ptrFromInt(src.buffer);
+                entries[i].offset = src.buffer_offset;
+                entries[i].size   = src.buffer_size;
+            },
+            ke.KE_GPU_BINDING_TYPE_SAMPLER => {
+                entries[i].sampler = @ptrFromInt(src.sampler);
+            },
+            ke.KE_GPU_BINDING_TYPE_TEXTURE,
+            ke.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE => {
+                entries[i].textureView = @ptrFromInt(src.texture_view);
+            },
+            else => {},
+        }
+    }
+    const desc = wgpu.WGPUBindGroupDescriptor{
+        .nextInChain = null,
+        .label       = .{ .data = null, .length = 0 },
+        .layout      = @ptrFromInt(pp.layout),
+        .entryCount  = n,
+        .entries     = if (n > 0) &entries else null,
+    };
+    return @intFromPtr(wgpu.wgpuDeviceCreateBindGroup(state(dev).device, &desc));
+}
 
 // ── Resource destruction ───────────────────────────────────────────────────
 
@@ -907,6 +1029,12 @@ fn cpEnd(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque) callconv(.c) void {
 
 fn cmdBufferDestroy(_: [*c]ke.ke_gpu_device, cmd_buf: ?*anyopaque) callconv(.c) void {
     wgpu.wgpuCommandBufferRelease(@ptrCast(cmd_buf));
+}
+
+// ── Immediate buffer write ─────────────────────────────────────────────────
+
+fn writeBuffer(dev: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
+    wgpu.wgpuQueueWriteBuffer(state(dev).queue, @ptrFromInt(h), offset, data, size);
 }
 
 // ── Mapped writes ──────────────────────────────────────────────────────────

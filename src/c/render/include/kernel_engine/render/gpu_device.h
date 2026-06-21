@@ -384,6 +384,10 @@ typedef struct ke_gpu_device
     // ── Command buffer lifecycle ───────────────────────────────────────────
     void (*cmd_buffer_destroy)(struct ke_gpu_device *self, void *cmd_buf);
 
+    // ── Immediate buffer write (queue upload, no map/unmap required) ──────────
+    void (*write_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
+                         uint64_t offset, const void *data, size_t size);
+
     // ── Mapped writes ──────────────────────────────────────────────────────
     void *(*map_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
                         size_t offset, size_t size);

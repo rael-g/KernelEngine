@@ -72,6 +72,8 @@ add_subdirectory(examples/c/01_minimal_log)
 add_subdirectory(examples/c/04_shader_compile)
 add_subdirectory(examples/c/05_gpu_device)
 add_subdirectory(examples/c/06_triangle)
+add_subdirectory(examples/c/07_uniform)
+add_subdirectory(examples/c/08_vertex_buffer)
 
 enable_testing()
 add_subdirectory(tests/c/kernel)

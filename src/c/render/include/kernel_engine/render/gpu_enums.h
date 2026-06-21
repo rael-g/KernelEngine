@@ -58,35 +58,35 @@ typedef uint32_t ke_gpu_texture_aspect;
 #define KE_GPU_TEXTURE_ASPECT_DEPTH   (1u << 1)
 #define KE_GPU_TEXTURE_ASPECT_STENCIL (1u << 2)
 
-// ── Texture usage (bitmask) ───────────────────────────────────────────────
+// ── Texture usage (bitmask) — values match WGPUTextureUsage ──────────────
 
 typedef uint32_t ke_gpu_texture_usage;
-#define KE_GPU_TEXTURE_USAGE_SAMPLED      (1u << 0)
-#define KE_GPU_TEXTURE_USAGE_STORAGE      (1u << 1)
-#define KE_GPU_TEXTURE_USAGE_COLOR_ATTACH (1u << 2)
-#define KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH (1u << 3)
-#define KE_GPU_TEXTURE_USAGE_COPY_SRC     (1u << 4)
-#define KE_GPU_TEXTURE_USAGE_COPY_DST     (1u << 5)
+#define KE_GPU_TEXTURE_USAGE_COPY_SRC     0x01u
+#define KE_GPU_TEXTURE_USAGE_COPY_DST     0x02u
+#define KE_GPU_TEXTURE_USAGE_SAMPLED      0x04u  ///< TextureBinding
+#define KE_GPU_TEXTURE_USAGE_STORAGE      0x08u  ///< StorageBinding
+#define KE_GPU_TEXTURE_USAGE_COLOR_ATTACH 0x10u  ///< RenderAttachment
+#define KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH 0x20u  ///< also maps to RenderAttachment in WebGPU
 
-// ── Buffer usage (bitmask) ────────────────────────────────────────────────
+// ── Buffer usage (bitmask) — values match WGPUBufferUsage ────────────────
 
 typedef uint32_t ke_gpu_buffer_usage;
-#define KE_GPU_BUFFER_USAGE_VERTEX    (1u << 0)
-#define KE_GPU_BUFFER_USAGE_INDEX     (1u << 1)
-#define KE_GPU_BUFFER_USAGE_UNIFORM   (1u << 2)
-#define KE_GPU_BUFFER_USAGE_STORAGE   (1u << 3)
-#define KE_GPU_BUFFER_USAGE_INDIRECT  (1u << 4)
-#define KE_GPU_BUFFER_USAGE_COPY_SRC  (1u << 5)
-#define KE_GPU_BUFFER_USAGE_COPY_DST  (1u << 6)
-#define KE_GPU_BUFFER_USAGE_MAP_READ  (1u << 7)
-#define KE_GPU_BUFFER_USAGE_MAP_WRITE (1u << 8)
+#define KE_GPU_BUFFER_USAGE_MAP_READ  0x0001u
+#define KE_GPU_BUFFER_USAGE_MAP_WRITE 0x0002u
+#define KE_GPU_BUFFER_USAGE_COPY_SRC  0x0004u
+#define KE_GPU_BUFFER_USAGE_COPY_DST  0x0008u
+#define KE_GPU_BUFFER_USAGE_INDEX     0x0010u
+#define KE_GPU_BUFFER_USAGE_VERTEX    0x0020u
+#define KE_GPU_BUFFER_USAGE_UNIFORM   0x0040u
+#define KE_GPU_BUFFER_USAGE_STORAGE   0x0080u
+#define KE_GPU_BUFFER_USAGE_INDIRECT  0x0100u
 
-// ── Shader stage (bitmask) ────────────────────────────────────────────────
+// ── Shader stage (bitmask) — values match WGPUShaderStage ────────────────
 
 typedef uint32_t ke_gpu_shader_stage;
-#define KE_GPU_SHADER_STAGE_VERTEX   (1u << 0)
-#define KE_GPU_SHADER_STAGE_FRAGMENT (1u << 1)
-#define KE_GPU_SHADER_STAGE_COMPUTE  (1u << 2)
+#define KE_GPU_SHADER_STAGE_VERTEX   0x1u
+#define KE_GPU_SHADER_STAGE_FRAGMENT 0x2u
+#define KE_GPU_SHADER_STAGE_COMPUTE  0x4u
 
 // ── Load / store op ───────────────────────────────────────────────────────
 
