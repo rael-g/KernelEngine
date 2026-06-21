@@ -1,7 +1,7 @@
-using KernelEngine.Kernel;
+﻿
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 public class NdcConventionTests
 {

@@ -1,7 +1,7 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>Directional light parameters published in the frame packet.</summary>
 [StructLayout(LayoutKind.Sequential)]

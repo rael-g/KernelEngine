@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Common;
 
 /// <summary>
 /// Static-mesh vertex format. Layout matches the engine's standard vertex

@@ -1,21 +1,22 @@
 ﻿using System.Runtime.InteropServices;
 using KernelEngine.Configuration;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx.Native;
 using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using KernelEngine.Window;
+using KernelEngine.Logger;
 
 namespace KernelEngine.Render.Bgfx;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers a bgfx-backed <see cref="KernelEngine.Kernel.Renderer"/> singleton.
+    /// Registers a bgfx-backed <see cref="KernelEngine.Render.Renderer"/> singleton.
     /// Reads <c>[runtime.renderer]</c> from Project.toml when present; otherwise uses
     /// <see cref="BgfxRendererOptions"/> defaults. Requires <c>AddKernel()</c> and a
-    /// registered <see cref="KernelEngine.Kernel.Window"/> to be called first.
+    /// registered <see cref="KernelEngine.Window.Window"/> to be called first.
     /// </summary>
     public static IServiceCollection AddBgfxRenderer(this IServiceCollection services)
     {
@@ -65,7 +66,7 @@ public static class ServiceCollectionExtensions
             ke_error* err = null;
             var handle = KernelEngine.Render.Bgfx.Native.NativeMethods.render_bgfx_create(&@params, &err);
             if (handle.@ref == null) throw KernelError.FromNative(err, "render_bgfx_create");
-            return new KernelEngine.Kernel.Renderer(handle);
+            return new KernelEngine.Render.Renderer(handle);
         }
         finally
         {

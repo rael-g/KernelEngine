@@ -1,8 +1,7 @@
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Kernel;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 public class ServiceCollectionTests
 {

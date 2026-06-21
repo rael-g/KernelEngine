@@ -1,6 +1,6 @@
-using Xunit;
+﻿using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 [Collection("Console")]
 public class ConsoleSinkTests

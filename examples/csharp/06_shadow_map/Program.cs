@@ -2,12 +2,16 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
 
 // 06_shadow_map â€” directional shadow casting onto a floor plane. A red cube
 // sits above a gray floor; the sun's azimuth sweeps over time so the cube's
@@ -15,7 +19,6 @@ using Microsoft.Extensions.DependencyInjection;
 // glance.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

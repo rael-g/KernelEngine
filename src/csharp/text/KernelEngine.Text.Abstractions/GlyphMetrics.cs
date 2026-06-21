@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Text;
 
 /// <summary>
 /// Per-glyph layout + atlas-sampling info, in pixels at the font's baked size. Mirrors

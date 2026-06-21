@@ -1,4 +1,4 @@
-using Tomlyn;
+﻿using Tomlyn;
 using Tomlyn.Model;
 
 namespace KernelEngine.Cli;
@@ -8,7 +8,7 @@ namespace KernelEngine.Cli;
 /// these per module their package exposes (see <c>src/csharp/KernelEngine.Kernel/Modules/*.ke-module</c>
 /// for examples). <see cref="ModuleCatalog"/> discovers all of them at command time.
 /// </summary>
-/// <param name="Id">Globally unique module id ("KernelEngine.Render.Bgfx", "KernelEngine.Kernel.Logger", …).</param>
+/// <param name="Id">Globally unique module id ("KernelEngine.Render.Bgfx", "KernelEngine.Logger.Logger", …).</param>
 /// <param name="Using">Namespace inserted at top of Program.cs.</param>
 /// <param name="Extension">IServiceCollection extension method appended to the services chain.</param>
 /// <param name="CsprojRef">Repo-relative path to the csproj this module ships in.</param>

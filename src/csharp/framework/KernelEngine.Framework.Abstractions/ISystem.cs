@@ -1,4 +1,6 @@
-namespace KernelEngine.Kernel;
+﻿using KernelEngine.Render;
+using KernelEngine.Input;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Declares which components a system intends to read from or write to.

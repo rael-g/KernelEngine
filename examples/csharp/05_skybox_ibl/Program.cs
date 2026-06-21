@@ -2,12 +2,17 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
+using KernelEngine.Input;
 
 // 05_skybox_ibl â€” procedural cubemap as both the visible skybox and the IBL
 // environment for a metallic quad. A free-look camera (arrow keys to rotate,
@@ -15,7 +20,6 @@ using Microsoft.Extensions.DependencyInjection;
 // every face and watch the IBL response on the metal surface.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()

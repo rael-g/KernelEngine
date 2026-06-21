@@ -1,6 +1,5 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Framework.Legacy;
-using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using Xunit;
 

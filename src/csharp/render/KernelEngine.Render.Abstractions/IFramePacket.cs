@@ -1,6 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Snapshot of one rendered frame, written by simulation systems and consumed by the renderer.

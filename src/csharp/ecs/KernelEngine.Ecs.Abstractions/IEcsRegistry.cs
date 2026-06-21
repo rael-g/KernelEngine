@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Ecs;
 
 /// <summary>
 /// Managed view over the ECS component registry. All accessors are safe (no <c>unsafe</c>

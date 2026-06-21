@@ -2,12 +2,16 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
 
 // 03_pbr_directional â€” three quads with different PBR materials lit by a
 // directional light that orbits around them. Showcases the NodeBehavior
@@ -19,7 +23,6 @@ const float metal1 = 1.0f; const float rough1 = 0.1f;
 const float metal2 = 0.5f; const float rough2 = 0.5f;
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

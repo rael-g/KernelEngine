@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Window;
 
 public interface IWindow : IDisposable
 {

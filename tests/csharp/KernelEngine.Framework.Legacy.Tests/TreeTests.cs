@@ -1,6 +1,5 @@
-using KernelEngine.Framework.Legacy;
+﻿using KernelEngine.Framework.Legacy;
 using KernelEngine.Framework.Legacy.Native;
-using KernelEngine.Kernel;
 using NSubstitute;
 using Xunit;
 

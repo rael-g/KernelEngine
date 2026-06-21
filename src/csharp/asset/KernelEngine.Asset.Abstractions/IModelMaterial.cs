@@ -1,6 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Asset;
 
 /// <summary>
 /// Read-only view of a PBR material loaded as part of an <see cref="IModel"/>.

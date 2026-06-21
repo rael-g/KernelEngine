@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Ecs;
 
 /// <summary>
 /// Managed apply callback invoked by the native scene loader when it encounters

@@ -2,6 +2,7 @@
 using System.Text;
 using KernelEngine.Common.Native;
 using KernelEngine.Input.Native;
+using KernelEngine.Input;
 
 namespace KernelEngine.Framework;
 

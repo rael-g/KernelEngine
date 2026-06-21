@@ -1,4 +1,4 @@
-using System.CommandLine;
+﻿using System.CommandLine;
 using KernelEngine.Cli;
 
 var projectOpt = new Option<string?>("--project") { Description = "Project directory (default: walk up from CWD)." };
@@ -7,7 +7,7 @@ var root = new RootCommand("ke — KernelEngine CLI. Manages references, scenes,
 root.Options.Add(projectOpt);
 
 // ── add module <id> ─────────────────────────────────────────────────────────
-var addModuleIdArg = new Argument<string>("id") { Description = "Module id from a .ke-module file (e.g. KernelEngine.Render.Bgfx, KernelEngine.Kernel.Logger)." };
+var addModuleIdArg = new Argument<string>("id") { Description = "Module id from a .ke-module file (e.g. KernelEngine.Render.Bgfx, KernelEngine.Logger.Logger)." };
 var addModuleCmd = new Command("module", "Add a module to the current project.")
 {
     addModuleIdArg,

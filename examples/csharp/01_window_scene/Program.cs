@@ -2,19 +2,22 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
 
 // 01_window_scene â€” a single orange quad spinning on the screen under a fixed
 // directional light. Smallest possible scene that exercises window + renderer
 // + framework + a scripted node behavior.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

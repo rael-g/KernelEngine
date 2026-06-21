@@ -1,5 +1,4 @@
 ﻿using KernelEngine.Ecs.Flecs;
-using KernelEngine.Kernel;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using Xunit;

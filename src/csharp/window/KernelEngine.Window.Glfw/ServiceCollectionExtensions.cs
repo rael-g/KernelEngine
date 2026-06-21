@@ -1,17 +1,18 @@
 ﻿using System.Runtime.InteropServices;
 using KernelEngine.Configuration;
-using KernelEngine.Kernel;
 using KernelEngine.Window.Glfw.Native;
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using KernelEngine.Input;
+using KernelEngine.Logger;
 
 namespace KernelEngine.Window.Glfw;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers a GLFW-backed <see cref="KernelEngine.Kernel.Window"/> singleton.
+    /// Registers a GLFW-backed <see cref="KernelEngine.Window.Window"/> singleton.
     /// Reads <c>[runtime.window]</c> from Project.toml when present; otherwise uses
     /// <see cref="WindowOptions"/> defaults. Requires <c>AddKernel()</c> to be called first.
     /// </summary>
@@ -65,7 +66,7 @@ public static class ServiceCollectionExtensions
             ke_error* err = null;
             var handle = KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &err);
             if (handle.@ref == null) throw KernelError.FromNative(err, "window_glfw_create");
-            return new KernelEngine.Kernel.Window(handle);
+            return new KernelEngine.Window.Window(handle);
         }
         finally
         {

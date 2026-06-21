@@ -1,4 +1,6 @@
-using KernelEngine.Kernel;
+﻿using KernelEngine.Ecs;
+using KernelEngine.Render;
+
 
 namespace KernelEngine.Framework;
 

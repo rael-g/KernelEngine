@@ -1,7 +1,7 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Input;
 
 /// <summary>
 /// One discrete action event, emitted by the action-layer dispatcher and propagated through the

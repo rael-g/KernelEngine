@@ -1,4 +1,5 @@
-using KernelEngine.Kernel;
+﻿using KernelEngine.Text;
+
 
 namespace KernelEngine.Framework.Legacy;
 

@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 

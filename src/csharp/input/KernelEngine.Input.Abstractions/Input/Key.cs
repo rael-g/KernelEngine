@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Input;
 
 /// <summary>
 /// Keyboard keys. Values match the GLFW key codes, which is what the input contract

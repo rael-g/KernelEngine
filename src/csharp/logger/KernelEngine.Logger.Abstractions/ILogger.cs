@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Logger;
 
 /// <summary>Managed logger interface. Implementations dispatch to one or more <see cref="ILoggerSink"/>s.</summary>
 public interface ILogger

@@ -1,7 +1,7 @@
 ﻿using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Managed wrapper for <c>ke_frame_sync</c>.

@@ -1,8 +1,10 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using KernelEngine.Common;
+using KernelEngine.Runtime;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Hardware-accelerated renderer. Takes ownership of a <c>ke_render*</c> created by a service factory,

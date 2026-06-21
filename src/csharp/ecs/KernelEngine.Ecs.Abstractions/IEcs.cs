@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Ecs;
 
 /// <summary>
 /// ECS storage contract — the engine's component database. Implementations

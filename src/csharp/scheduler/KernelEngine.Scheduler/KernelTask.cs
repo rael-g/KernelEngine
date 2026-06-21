@@ -1,6 +1,6 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Scheduler;
 
 /// <summary>
 /// A fire-and-forget task dispatched to the native thread pool.

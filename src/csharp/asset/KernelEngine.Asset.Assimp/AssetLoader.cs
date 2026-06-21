@@ -1,8 +1,10 @@
 ﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
+using KernelEngine.Common;
+using KernelEngine.Logger;
+using KernelEngine.Scheduler;
 
 namespace KernelEngine.Asset.Assimp;
 
@@ -139,9 +141,9 @@ internal sealed unsafe class AssetLoader : IAssetLoader
 {
     private ke_asset_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_asset_loader*, void> _destroy;
-    private readonly KernelEngine.Kernel.Scheduler _scheduler;
+    private readonly KernelEngine.Scheduler.Scheduler _scheduler;
 
-    internal AssetLoader(ke_asset_loader_handle handle, KernelEngine.Kernel.Scheduler scheduler)
+    internal AssetLoader(ke_asset_loader_handle handle, KernelEngine.Scheduler.Scheduler scheduler)
     {
         _native = handle.@ref;
         _destroy = handle.destroy;

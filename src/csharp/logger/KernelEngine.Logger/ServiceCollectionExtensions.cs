@@ -1,8 +1,8 @@
-using KernelEngine.Configuration;
+﻿using KernelEngine.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Logger;
 
 /// <summary>POCO bound to <c>[logging]</c> in the Project file. Default level matches the prior
 /// parameterless behavior (all levels through).</summary>

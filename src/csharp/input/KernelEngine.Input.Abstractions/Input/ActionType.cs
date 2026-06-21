@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Input;
 
 /// <summary>
 /// The kind of value an <see cref="InputAction"/> produces. Determines which value field

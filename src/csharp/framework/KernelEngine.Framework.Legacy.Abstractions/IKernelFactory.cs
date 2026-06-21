@@ -1,4 +1,5 @@
-namespace KernelEngine.Kernel;
+﻿using KernelEngine.Render;
+namespace KernelEngine.Framework.Legacy;
 
 /// <summary>
 /// Factory for kernel primitives that require access to the <c>KernelEngine.Kernel</c> implementation assembly.

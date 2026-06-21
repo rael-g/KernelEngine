@@ -2,19 +2,22 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
 
 // 10_hdr_bloom â€” single cube lit by an extremely bright orange directional
 // light. Bloom + ACES tonemapping turn the over-bright surface into a
 // glowing highlight that bleeds into neighboring pixels.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

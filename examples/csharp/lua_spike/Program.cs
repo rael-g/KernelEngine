@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using KernelEngine.Kernel;
 using LuaSpike;
 
 // ── Thread name (World.Update asserts ke.sim) ─────────────────────────────────

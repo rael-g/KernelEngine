@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Runtime;
 
 /// <summary>
 /// Scheduler-centric runtime that owns the simulation world, dispatches systems

@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Physics;
 
 /// <summary>
 /// Managed wrapper over a C kernel <c>ke_physics_2d*</c>. Constructed by physics plugins

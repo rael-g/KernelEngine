@@ -1,12 +1,16 @@
 ﻿using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
 
 // 02_textured_quad â€” procedural checkerboard texture on the built-in quad,
 // lit by one directional + ambient light. Same tree.AddNode shape as the
@@ -14,7 +18,6 @@ using Microsoft.Extensions.DependencyInjection;
 // and render contributors stream them into the per-frame packet.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

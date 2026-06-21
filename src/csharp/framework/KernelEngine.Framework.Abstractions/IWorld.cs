@@ -1,4 +1,7 @@
-namespace KernelEngine.Kernel;
+﻿using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Input;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// The ECS simulation world — owns the registry, drives the built-in C systems

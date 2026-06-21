@@ -1,6 +1,5 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 using NLua;
 

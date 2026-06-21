@@ -1,8 +1,10 @@
-using KernelEngine.Configuration;
+﻿using KernelEngine.Configuration;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Common;
 
 namespace KernelEngine.Render.Bgfx;
 
@@ -105,7 +107,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
 
         runtime.RegisterSystem("Bgfx.RenderFrame", RuntimePhase.PostUpdate, (_, _) =>
         {
-            var packet = (KernelEngine.Kernel.FramePacket)frameSync.BeginWrite();
+            var packet = (KernelEngine.Render.FramePacket)frameSync.BeginWrite();
             try
             {
                 if (resolvedClearColor is { } c)
@@ -119,7 +121,7 @@ public sealed class BgfxRenderModule : IRuntimeModule
                 packet.EndWrite();
             }
 
-            var readPacket = (KernelEngine.Kernel.FramePacket)frameSync.BeginRead();
+            var readPacket = (KernelEngine.Render.FramePacket)frameSync.BeginRead();
             try
             {
                 renderer.SubmitPacket(readPacket);

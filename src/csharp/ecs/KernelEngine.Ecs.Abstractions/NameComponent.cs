@@ -1,7 +1,7 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Ecs;
 
 /// <summary>
 /// ECS component that stores a UTF-8 entity name (up to 63 bytes plus terminator).

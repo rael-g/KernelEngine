@@ -1,11 +1,12 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Xunit;
+using SchedImpl = KernelEngine.Scheduler.Scheduler;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 /// <summary>
-/// Tests for <see cref="Scheduler"/>, <see cref="KernelTask"/>, and <see cref="KernelTask{T}"/>.
+/// Tests for <see cref="SchedImpl"/>, <see cref="KernelTask"/>, and <see cref="KernelTask{T}"/>.
 ///
 /// The native scheduler is mocked via a synthetic <c>ke_scheduler</c> struct
 /// whose function pointers execute work synchronously on the calling thread.
@@ -55,7 +56,7 @@ public sealed class SchedulerTests
     private sealed class MockSchedulerHandle : IDisposable
     {
         private unsafe ke_scheduler* _ptr;
-        public Scheduler Scheduler { get; }
+        public SchedImpl Scheduler { get; }
 
         public unsafe MockSchedulerHandle()
         {
@@ -67,7 +68,7 @@ public sealed class SchedulerTests
                 is_completed         = &AlwaysCompleted,
                 wait                 = &NoopWait,
             };
-            Scheduler = new Scheduler(new ke_scheduler_handle { @ref = _ptr, destroy = &NoopDestroy });
+            Scheduler = new SchedImpl(new ke_scheduler_handle { @ref = _ptr, destroy = &NoopDestroy });
         }
 
         public unsafe void Dispose()
@@ -178,7 +179,7 @@ public sealed class SchedulerTests
         using var mock = new MockSchedulerHandle();
         var s = mock.Scheduler;
 
-        static async Task<int> ComputeAsync(Scheduler s)
+        static async Task<int> ComputeAsync(SchedImpl s)
         {
             int a = await s.DispatchKernelTask(() => 10);
             int b = await s.DispatchKernelTask(() => 32);

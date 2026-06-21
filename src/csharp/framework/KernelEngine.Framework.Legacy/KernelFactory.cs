@@ -1,4 +1,6 @@
-namespace KernelEngine.Kernel;
+﻿using KernelEngine.Render;
+using KernelEngine.Common;
+namespace KernelEngine.Framework.Legacy;
 
 /// <summary>
 /// Default <see cref="IKernelFactory"/>: constructs concrete <c>KernelEngine.Kernel</c> primitives

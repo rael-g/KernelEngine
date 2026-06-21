@@ -1,5 +1,6 @@
-using KernelEngine.Kernel;
+﻿
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework.Legacy;
 

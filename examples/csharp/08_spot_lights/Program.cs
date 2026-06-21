@@ -2,12 +2,16 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
 
 // 08_spot_lights â€” three colored spot lights orbiting above a floor + grid of
 // cubes. Each spot's direction tracks the origin so the cones sweep across
@@ -15,7 +19,6 @@ using Microsoft.Extensions.DependencyInjection;
 // pairs with SpotLightComponent (position from transform, direction explicit).
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

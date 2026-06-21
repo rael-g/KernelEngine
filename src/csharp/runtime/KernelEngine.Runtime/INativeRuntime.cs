@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Runtime;
 
 /// <summary>
 /// Exposes the raw native runtime pointer. Implemented by the concrete Runtime type

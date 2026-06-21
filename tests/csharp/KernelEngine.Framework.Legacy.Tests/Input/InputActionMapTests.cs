@@ -1,7 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Xunit;
 using KernelEngine.Framework.Legacy;
-using KernelEngine.Kernel;
 using KernelEngine.Kernel.Native;
 
 namespace KernelEngine.Framework.Legacy.Tests;

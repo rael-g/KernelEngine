@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Input;
 
 /// <summary>Mouse buttons. Values match the GLFW mouse-button codes.</summary>
 public enum MouseButton

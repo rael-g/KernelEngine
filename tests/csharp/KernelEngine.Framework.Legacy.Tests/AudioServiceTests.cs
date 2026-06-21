@@ -1,6 +1,5 @@
-using Xunit;
+﻿using Xunit;
 using NSubstitute;
-using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework.Legacy.Tests;
 

@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Render;
 
 public readonly record struct MeshHandle(uint Value)
 {

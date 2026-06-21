@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Render;
 
 /// <summary>
 /// The clip-space (NDC) convention the active render backend expects matrices in. The engine's

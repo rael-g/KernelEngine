@@ -1,6 +1,6 @@
-using KernelEngine.Common.Native;
+﻿using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Scheduler;
 
 /// <summary>
 /// Exposes the raw native scheduler pointer. Implemented by the concrete

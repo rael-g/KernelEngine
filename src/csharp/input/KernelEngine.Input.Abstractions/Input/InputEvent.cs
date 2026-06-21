@@ -1,6 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Input;
 
 /// <summary>Discriminator for <see cref="InputEvent"/>.</summary>
 public enum InputEventKind

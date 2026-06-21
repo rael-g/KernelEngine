@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Common;
 
 /// <summary>
 /// Static helpers around the cross-language thread-name TLS slot in the C kernel

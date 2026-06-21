@@ -1,4 +1,5 @@
-using System.Numerics;
+﻿using System.Numerics;
+using KernelEngine.Common;
 
 namespace KernelEngine.Framework.Legacy;
 
@@ -27,7 +28,7 @@ public interface IAssetResolverBackend : IDisposable
 public sealed record TextureBuffer(uint Width, uint Height, byte[] Pixels);
 
 /// <summary>CPU mesh data: vertex array + index array.</summary>
-public sealed record MeshBuffer(KernelEngine.Kernel.Vertex[] Vertices, ushort[] Indices);
+public sealed record MeshBuffer(KernelEngine.Common.Vertex[] Vertices, ushort[] Indices);
 
 /// <summary>Material file spec: PBR parameters + path-string texture references.</summary>
 public sealed record MaterialSpec(

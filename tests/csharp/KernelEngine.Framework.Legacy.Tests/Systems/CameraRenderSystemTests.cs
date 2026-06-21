@@ -1,7 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 using Xunit;
 using NSubstitute;
-using KernelEngine.Kernel;
 using KernelEngine.Framework.Legacy.Internal;
 
 namespace KernelEngine.Framework.Legacy.Tests;

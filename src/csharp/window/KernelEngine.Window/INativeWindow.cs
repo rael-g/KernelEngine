@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Window;
 
 /// <summary>
 /// Exposes the raw native window pointer. Implemented by the concrete Window type

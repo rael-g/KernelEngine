@@ -1,4 +1,6 @@
-using KernelEngine.Kernel;
+﻿using KernelEngine.Render;
+using KernelEngine.Input;
+
 
 namespace KernelEngine.Framework.Legacy;
 

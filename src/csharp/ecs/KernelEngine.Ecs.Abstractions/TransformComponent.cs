@@ -1,7 +1,7 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Ecs;
 
 /// <summary>
 /// ECS component that stores the local spatial transform and the computed world matrix.

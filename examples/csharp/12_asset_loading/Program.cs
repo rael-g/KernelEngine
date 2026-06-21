@@ -3,12 +3,17 @@ using System.Numerics;
 using KernelEngine.Asset.Assimp;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
+using KernelEngine.Asset;
 
 // 12_asset_loading â€” loads `assets/Box.gltf` via the Assimp plugin and uploads
 // its meshes/materials/textures through tree.AddModel(...) (which is the
@@ -17,7 +22,6 @@ using Microsoft.Extensions.DependencyInjection;
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddAssimpAssetLoader()

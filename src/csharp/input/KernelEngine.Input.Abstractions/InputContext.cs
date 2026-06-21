@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Input;
 
 /// <summary>
 /// Thread-local accessor for the input reader of the current simulation frame.

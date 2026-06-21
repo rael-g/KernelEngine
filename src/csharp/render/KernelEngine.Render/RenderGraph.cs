@@ -1,6 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Managed wrapper around <c>ke_render_graph*</c>. Lets game / framework / plugin code add

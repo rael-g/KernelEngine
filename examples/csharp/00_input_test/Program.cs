@@ -1,11 +1,15 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Input;
 
 // 00_input_test — smoke test for the View-funneled input. The new Framework
 // exposes input via polling (`view.IsKeyDown(int)`); cross-frame edge
@@ -17,7 +21,6 @@ using Microsoft.Extensions.DependencyInjection;
 //   • Escape                          → quit
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()

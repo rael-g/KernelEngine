@@ -1,8 +1,8 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 public class Physics2DTests
 {

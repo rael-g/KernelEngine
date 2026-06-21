@@ -1,6 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Input;
 
 /// <summary>
 /// Read-only interface for per-frame input state. Used by the simulation thread.

@@ -1,10 +1,13 @@
 ﻿using KernelEngine.Ecs.Flecs;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
 
 // R3-mini / R4: window with a clear color, end-to-end via the runtime + module
 // pattern. No Application.cs. No Tree, no nodes, no scene. No manual render
@@ -12,7 +15,6 @@ using Microsoft.Extensions.DependencyInjection;
 // names "ke.render", scheduler dispatches them every tick.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

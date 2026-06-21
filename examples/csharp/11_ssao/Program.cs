@@ -2,12 +2,16 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
 
 // 11_ssao â€” 7Ã—4 cube wall on a floor. SSAO is requested via PostProcessModule
 // but the bgfx backend's SSAO path is currently a no-op (Kanban OBS.4/Z3), so
@@ -15,7 +19,6 @@ using Microsoft.Extensions.DependencyInjection;
 // occlusion. The scene is kept for the moment it works.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

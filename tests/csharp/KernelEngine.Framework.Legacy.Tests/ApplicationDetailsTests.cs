@@ -1,5 +1,4 @@
-using KernelEngine.Framework.Legacy;
-using KernelEngine.Kernel;
+﻿using KernelEngine.Framework.Legacy;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;

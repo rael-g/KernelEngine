@@ -1,8 +1,9 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Ecs.Flecs;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
 
 namespace KernelEngine.Runtime;
 
@@ -18,7 +19,7 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     private ke_runtime* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
     private readonly IEcs                               _ecs;            // not owned; consumer disposes separately
-    private readonly KernelEngine.Kernel.Scheduler  _taskScheduler;  // not owned
+    private readonly KernelEngine.Scheduler.Scheduler  _taskScheduler;  // not owned
 
     private readonly List<GCHandle> _moduleHandles = new();
     private readonly List<GCHandle> _systemHandles = new();
@@ -90,9 +91,9 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
             throw new ArgumentException(
                 $"Runtime currently requires {nameof(FlecsEcs)} as the {nameof(IEcs)} impl; got {ecs.GetType().Name}.",
                 nameof(ecs));
-        if (taskScheduler is not KernelEngine.Kernel.Scheduler tsConcrete)
+        if (taskScheduler is not KernelEngine.Scheduler.Scheduler tsConcrete)
             throw new ArgumentException(
-                $"Runtime currently requires {nameof(KernelEngine.Kernel.Scheduler)} (or a subclass) as the {nameof(IScheduler)} impl; got {taskScheduler.GetType().Name}.",
+                $"Runtime currently requires {nameof(KernelEngine.Scheduler.Scheduler)} (or a subclass) as the {nameof(IScheduler)} impl; got {taskScheduler.GetType().Name}.",
                 nameof(taskScheduler));
 
         _ecs           = ecs;

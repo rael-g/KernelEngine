@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Asset;
 
 /// <summary>
 /// A model loaded by an <see cref="IAssetLoader"/>. Owns the decoded mesh, material,

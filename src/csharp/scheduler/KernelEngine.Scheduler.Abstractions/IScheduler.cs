@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Scheduler;
 
 /// <summary>Native scheduler used by the world for parallel system execution.</summary>
 public interface IScheduler : IDisposable

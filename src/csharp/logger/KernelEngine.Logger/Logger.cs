@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 using LoggerNative = KernelEngine.Logger.Native.NativeMethods;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Logger;
 
 /// <summary>
 /// Structured logger. Dispatches events to registered sinks.

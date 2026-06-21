@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Ecs;
 
 /// <summary>
 /// ECS component that stores Tree-graph hierarchy links as entity IDs.

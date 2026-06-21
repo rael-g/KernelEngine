@@ -1,12 +1,17 @@
 ﻿using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Audio;
+using KernelEngine.Input;
 
 // 15_audio_test — kernel ke_audio → miniaudio plugin → IAudio C# wrapper.
 // Two short sine WAVs are generated to %TEMP% at startup (no committed binary
@@ -22,7 +27,6 @@ var beepPath = WriteSineWav(440, durationMs: 150);
 var bassPath = WriteSineWav(220, durationMs: 500);
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()

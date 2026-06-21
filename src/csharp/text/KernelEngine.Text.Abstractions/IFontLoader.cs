@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Text;
 
 /// <summary>
 /// Async font decoder. Mirrors <see cref="IImageLoader"/> — backends (stb_truetype, FreeType, …)

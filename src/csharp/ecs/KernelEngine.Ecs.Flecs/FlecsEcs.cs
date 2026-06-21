@@ -1,5 +1,4 @@
 ﻿using KernelEngine.Ecs.Flecs.Native;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
 
 namespace KernelEngine.Ecs.Flecs;

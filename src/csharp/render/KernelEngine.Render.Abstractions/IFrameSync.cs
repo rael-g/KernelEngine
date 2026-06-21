@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Render;
 
 /// <summary>
 /// Double-buffered handoff between the simulation thread (writer) and the render thread (reader).

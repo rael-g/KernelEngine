@@ -1,8 +1,10 @@
 ﻿using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
+using KernelEngine.Ecs;
+using KernelEngine.Runtime;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Managed wrapper over the native <c>ke_world</c> vtable. Exposes scene-level

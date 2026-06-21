@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Kind of work a pass performs. Mirrors <c>ke_pass_type</c>.

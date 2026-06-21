@@ -2,7 +2,6 @@
 using KernelEngine.Configuration;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
@@ -11,6 +10,12 @@ using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
 using Pong;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Audio;
+using KernelEngine.Input;
 
 // Pong — driven by Project + actions.input + scenes/Main.scene. Program.cs
 // just wires the engine modules and points the scene loader at Main.scene;
@@ -18,7 +23,6 @@ using Pong;
 // lives in the data files.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddProjectConfig()
     .AddLogger()
     .AddConsoleSink()

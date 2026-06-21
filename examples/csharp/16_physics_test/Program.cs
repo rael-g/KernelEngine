@@ -1,13 +1,19 @@
 ﻿using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
+using KernelEngine.Physics;
+using KernelEngine.Input;
 
 // 16_physics_test — kernel ke_physics_2d → Box2D plugin → IPhysics2D. Camera
 // at +Z looking at origin flattens the 3D scene into a 2D side-view. Cubes
@@ -21,7 +27,6 @@ const float FloorHalfW = 8f;
 const float FloorHalfH = 0.5f;
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()

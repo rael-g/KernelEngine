@@ -329,3 +329,29 @@ Phase 0 spike only — a throwaway branch:
 3. A 20-line C# `[DllImport]` smoke test calling `ke_spike_create`.
 
 Green spike = go. Then Phase 1. Nothing in `src/` changes until Phase 3.
+
+---
+
+## 10. Work log — where we paused (2026-06-20)
+
+**Branch:** `spike/zig-build` (stashed as "Phase 1 build.zig WIP" — the Phase 0 spike was already completed and work had begun on Phase 1).
+
+**What happened:** Before the spike began, a C# namespace cleanup was needed on `main`.
+The `feat/kernel-v2` merge had dissolved `KernelEngine.Kernel` into domain packages
+(`KernelEngine.Logger`, `KernelEngine.Ecs`, etc.) but left ~80 source files still
+declaring `namespace KernelEngine.Kernel;` and ~100 consumer files still
+`using KernelEngine.Kernel;`. Also, 22 example/test csproj files had a broken
+`<ProjectReference>` to the deleted `kernel/KernelEngine.Kernel/` path.
+
+All of that was cleaned up on `main` (session 2026-06-20):
+- All source files renamed to domain namespaces.
+- All consumer `using KernelEngine.Kernel;` directives replaced with domain usings.
+- Broken project references removed from all 22 csproj files.
+- Test namespace moved to `EngineTests` to avoid C# namespace-hierarchy ambiguity.
+- `dotnet build KernelEngine.slnx` → **0 errors, 0 warnings**.
+
+**Next step when resuming Zig work:**
+1. `git stash pop` on `spike/zig-build`.
+2. Begin §9 Phase 0 spike: write a minimal `build.zig` that compiles one C file and
+   produces `ke_spike.dll` exporting `ke_spike_create`.
+3. Validate triplet choice (Clang+GNU vs Clang+MSVC ABI) against glfw3 + bgfx link.

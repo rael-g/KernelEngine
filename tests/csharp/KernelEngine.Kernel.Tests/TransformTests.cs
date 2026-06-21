@@ -1,8 +1,7 @@
-using System.Numerics;
-using KernelEngine.Kernel;
+﻿using System.Numerics;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 [Collection("KernelRegistry")]
 public class TransformTests

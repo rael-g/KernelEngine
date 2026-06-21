@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
 using KernelEngine.Text.Native;
 

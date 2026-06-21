@@ -1,6 +1,7 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Logger;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Input;
 
 public static class InputServiceCollectionExtensions
 {

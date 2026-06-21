@@ -1,8 +1,9 @@
 ﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using KernelEngine.Common.Native;
+using KernelEngine.Logger;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Input;
 
 public sealed unsafe class InputSnapshotReader : IInputReader
 {

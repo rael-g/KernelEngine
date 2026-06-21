@@ -1,5 +1,6 @@
-using System.Numerics;
-using KernelEngine.Kernel;
+﻿using System.Numerics;
+using KernelEngine.Ecs;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -17,7 +18,7 @@ internal sealed class MeshContributor : IFrameContributor
     {
         _ecs        = ecs;
         _components = components;
-        _nativeTransformCid = ecs.RegisterComponent<KernelEngine.Kernel.TransformComponent>("transform");
+        _nativeTransformCid = ecs.RegisterComponent<TransformComponent>("transform");
     }
 
     public void Contribute(IFramePacket packet)
@@ -27,7 +28,7 @@ internal sealed class MeshContributor : IFrameContributor
         {
             ref var mesh = ref data[i];
             var world = Matrix4x4.Identity;
-            var tsp = _ecs.GetComponent<KernelEngine.Kernel.TransformComponent>(entities[i], _nativeTransformCid);
+            var tsp = _ecs.GetComponent<TransformComponent>(entities[i], _nativeTransformCid);
             if (!tsp.IsEmpty) world = tsp[0].WorldMatrix;
             packet.AddDrawCommand(mesh.Mesh, mesh.Material, world);
         }

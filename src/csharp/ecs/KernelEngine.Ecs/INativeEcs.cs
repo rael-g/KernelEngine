@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Ecs;
 
 /// <summary>
 /// Exposes the raw native ECS pointer. Implemented by ECS plugins (e.g. FlecsEcs)

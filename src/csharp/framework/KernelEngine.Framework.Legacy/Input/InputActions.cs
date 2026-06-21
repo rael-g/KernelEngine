@@ -1,6 +1,5 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Configuration;
-using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework.Legacy;

@@ -1,7 +1,7 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 public class FontLoaderTests
 {

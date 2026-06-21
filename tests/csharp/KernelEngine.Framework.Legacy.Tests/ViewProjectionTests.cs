@@ -1,6 +1,5 @@
-using System.Numerics;
+﻿using System.Numerics;
 using KernelEngine.Framework.Legacy.Internal;
-using KernelEngine.Kernel;
 using Xunit;
 
 namespace KernelEngine.Framework.Legacy.Tests;

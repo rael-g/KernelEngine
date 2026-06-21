@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Logger;
 
 /// <summary>
 /// Writes log events to <see cref="Console.Error"/> using the same

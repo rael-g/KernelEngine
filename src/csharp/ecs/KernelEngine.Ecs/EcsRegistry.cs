@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Ecs;
 
 /// <summary>
 /// Managed wrapper for <c>ke_ecs</c> (Tier S S5 — ECS vtable contract).

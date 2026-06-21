@@ -1,7 +1,7 @@
 ﻿using KernelEngine.Audio.MiniAudio.Native;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Logger;
 
 namespace KernelEngine.Audio.MiniAudio;
 
@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
                 ke_error* err = null;
                 var handle = KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_create(&@params, &err);
                 if (handle.@ref == null) throw KernelError.FromNative(err, "audio_miniaudio_create");
-                return new KernelEngine.Kernel.Audio(handle);
+                return new KernelEngine.Audio.Audio(handle);
             }
         });
         return services;

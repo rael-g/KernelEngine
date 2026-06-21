@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Audio;
 
 /// <summary>
 /// Managed wrapper over a C kernel <c>ke_audio*</c>. Constructed by audio plugins (e.g.

@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using System.Runtime.CompilerServices;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
+using KernelEngine.Input;
 
 namespace KernelEngine.Framework.Legacy;
 

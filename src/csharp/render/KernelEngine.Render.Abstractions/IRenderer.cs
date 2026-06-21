@@ -1,6 +1,7 @@
-using System.Numerics;
+﻿using System.Numerics;
+using KernelEngine.Common;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Native renderer interface. All operations run on <c>ke.render</c>.

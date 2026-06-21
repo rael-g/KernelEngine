@@ -1,6 +1,7 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
-using KernelEngine.Kernel;
+using KernelEngine.Ecs;
+using KernelEngine.Input;
 
 namespace KernelEngine.Framework.Legacy;
 

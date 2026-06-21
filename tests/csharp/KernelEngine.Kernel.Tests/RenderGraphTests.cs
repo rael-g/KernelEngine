@@ -1,9 +1,9 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Reflection;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 /// <summary>
 /// Smoke tests for the managed <see cref="RenderGraph"/> / <see cref="RenderPass"/> wrappers.

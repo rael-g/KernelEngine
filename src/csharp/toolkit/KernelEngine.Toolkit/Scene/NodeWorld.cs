@@ -1,5 +1,5 @@
-using System.Text;
-using KernelEngine.Kernel;
+﻿using System.Text;
+using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 
@@ -42,7 +42,7 @@ public sealed class NodeWorld
         _ecs        = ecs;
         _components = components;
         _nameCid            = ecs.RegisterComponent<NameComponent>("name");
-        _nativeTransformCid = ecs.RegisterComponent<KernelEngine.Kernel.TransformComponent>("transform");
+        _nativeTransformCid = ecs.RegisterComponent<TransformComponent>("transform");
         _hierarchyCid       = ecs.RegisterComponent<HierarchyComponent>("hierarchy");
     }
 
@@ -159,7 +159,7 @@ public sealed class NodeWorld
         // Seed node._transform from the native "transform" component so that
         // OnBind (called inside BindToNodeWorld) sees the position/scale the
         // scene loader applied before invoking the script factory.
-        var tsp = _ecs.GetComponent<KernelEngine.Kernel.TransformComponent>(entity, _nativeTransformCid);
+        var tsp = _ecs.GetComponent<TransformComponent>(entity, _nativeTransformCid);
         if (!tsp.IsEmpty)
         {
             ref readonly var kt = ref tsp[0];
@@ -236,6 +236,6 @@ public sealed class NodeWorld
     /// Reads the <c>[entity.properties]</c> block declared in the scene file for
     /// <paramref name="entity"/>. Delegates to <see cref="World.TryGetProperties"/>.
     /// </summary>
-    internal bool TryGetProperties(ulong entity, out KernelEngine.Kernel.VariantReader reader)
+    internal bool TryGetProperties(ulong entity, out VariantReader reader)
         => _world.TryGetProperties(entity, out reader);
 }

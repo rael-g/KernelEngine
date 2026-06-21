@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Runtime;
 
 /// <summary>
 /// Documentation attribute indicating that a method must only be called from a specific named thread.

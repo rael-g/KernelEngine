@@ -1,6 +1,5 @@
-using Xunit;
+﻿using Xunit;
 using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Kernel;
 
 namespace KernelEngine.Framework.Legacy.Tests;
 

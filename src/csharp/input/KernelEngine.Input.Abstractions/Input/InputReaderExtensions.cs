@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Input;
 
 /// <summary>
 /// Typed <see cref="Key"/>/<see cref="MouseButton"/> overloads over <see cref="IInputReader"/>'s

@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Text;
 
 /// <summary>
 /// CPU-side font data produced by an <see cref="IFontLoader"/>. Owns its atlas + metrics arrays

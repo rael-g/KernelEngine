@@ -1,6 +1,6 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Runtime;
 
 /// <summary>
 /// A pluggable unit of engine functionality registered with the runtime.

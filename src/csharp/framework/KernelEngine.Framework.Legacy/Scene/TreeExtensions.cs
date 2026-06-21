@@ -1,3 +1,4 @@
+﻿using KernelEngine.Ecs;
 namespace KernelEngine.Framework.Legacy;
 
 /// <summary>

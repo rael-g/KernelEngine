@@ -1,7 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Framework;
 
 /// <summary>
 /// Internal helpers that reinterpret-cast between the managed <see cref="Transform"/> struct

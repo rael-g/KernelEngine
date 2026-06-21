@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Input;
 
 /// <summary>Modifier keys held during an input event. Matches GLFW modifier bits.</summary>
 [System.Flags]

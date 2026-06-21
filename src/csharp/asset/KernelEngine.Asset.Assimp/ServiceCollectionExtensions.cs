@@ -1,6 +1,7 @@
 ﻿using KernelEngine.Common.Native;
-using KernelEngine.Kernel;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Scheduler;
+using KernelEngine.Logger;
 
 namespace KernelEngine.Asset.Assimp;
 
@@ -27,8 +28,8 @@ public static class ServiceCollectionExtensions
                 // Async loading uses the kernel scheduler; resolve via the
                 // interface so any IScheduler impl (EnkiScheduler,
                 // future alternatives) works. The concrete base class is
-                // KernelEngine.Kernel.Scheduler which both impls inherit.
-                var scheduler = (KernelEngine.Kernel.Scheduler)sp.GetRequiredService<IScheduler>();
+                // KernelEngine.Scheduler.Scheduler which both impls inherit.
+                var scheduler = (KernelEngine.Scheduler.Scheduler)sp.GetRequiredService<IScheduler>();
                 return new AssetLoader(handle, scheduler);
             }
         });

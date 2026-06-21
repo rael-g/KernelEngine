@@ -1,13 +1,18 @@
 ﻿using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
 using KernelEngine.Render.Bgfx;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
+using KernelEngine.Render;
+using KernelEngine.Text;
 
 // 14_ui_quad â€” UI overlay smoke test: three flat-color rectangles + three
 // stb_truetype-backed Labels positioned via anchor + offset. Validates the
@@ -15,7 +20,6 @@ using Microsoft.Extensions.DependencyInjection;
 // pipeline end-to-end.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .AddTextStbTrueType()

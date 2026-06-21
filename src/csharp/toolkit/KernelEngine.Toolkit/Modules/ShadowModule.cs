@@ -1,5 +1,9 @@
-using KernelEngine.Kernel;
+﻿
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
 
 namespace KernelEngine.Framework;
 

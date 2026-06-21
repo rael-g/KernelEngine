@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Managed view over a <c>ke_frame_packet*</c> owned by a <see cref="FrameSync"/> ring buffer.

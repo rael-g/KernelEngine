@@ -7,6 +7,7 @@ using KernelEngine.Asset.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Text.Native;
 using KernelEngine.Ecs.Native;
+using KernelEngine.Common;
 
 namespace KernelEngine.Framework;
 

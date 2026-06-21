@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Logger;
 
 /// <summary>
 /// Severity level for log events. Mirrors the kernel's native enum

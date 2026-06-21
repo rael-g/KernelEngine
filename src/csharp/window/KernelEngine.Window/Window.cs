@@ -1,4 +1,4 @@
-﻿namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Window;
 
 /// <summary>
 /// Manages the OS window. Takes ownership of a <c>ke_window*</c> created by a service factory,

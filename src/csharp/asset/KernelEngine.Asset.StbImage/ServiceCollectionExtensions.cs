@@ -1,4 +1,5 @@
-﻿using KernelEngine.Kernel;
+﻿using KernelEngine.Logger;
+
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 

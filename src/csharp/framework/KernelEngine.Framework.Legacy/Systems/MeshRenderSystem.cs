@@ -1,4 +1,7 @@
-using KernelEngine.Kernel;
+﻿using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Input;
+
 
 namespace KernelEngine.Framework.Legacy;
 

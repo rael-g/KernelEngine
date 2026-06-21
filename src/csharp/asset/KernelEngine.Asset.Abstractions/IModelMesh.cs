@@ -1,4 +1,5 @@
-namespace KernelEngine.Kernel;
+﻿using KernelEngine.Common;
+namespace KernelEngine.Asset;
 
 /// <summary>
 /// Read-only view of a mesh loaded as part of an <see cref="IModel"/>.

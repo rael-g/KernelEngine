@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Logger;
 
 /// <summary>
 /// Exposes the raw native logger pointer. Implemented by the concrete Logger type

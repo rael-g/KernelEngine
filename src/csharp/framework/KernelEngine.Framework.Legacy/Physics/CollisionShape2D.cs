@@ -1,4 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
+using KernelEngine.Physics;
+using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework.Legacy;
 

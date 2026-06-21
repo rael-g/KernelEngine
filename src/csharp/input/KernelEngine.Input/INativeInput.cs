@@ -1,6 +1,7 @@
 ﻿using KernelEngine.Common.Native;
+using KernelEngine.Logger;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Input;
 
 /// <summary>
 /// Exposes the raw native input pointer. Implemented by the concrete Input type

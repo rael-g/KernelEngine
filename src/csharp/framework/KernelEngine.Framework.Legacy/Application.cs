@@ -2,8 +2,15 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Asset;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Input;
+using KernelEngine.Logger;
+using KernelEngine.Common;
+using KernelEngine.Text;
+using KernelEngine.Physics;
+using KernelEngine.Window;
 
 namespace KernelEngine.Framework.Legacy;
 
@@ -111,7 +118,7 @@ public class Application : IDisposable
     private static void SetThreadName(string name)
     {
         System.Threading.Thread.CurrentThread.Name = name;
-        KernelEngine.Kernel.KernelThread.SetCurrentName(name);
+        KernelEngine.Common.KernelThread.SetCurrentName(name);
     }
 
     public void Run(IServiceCollection serviceCollection)

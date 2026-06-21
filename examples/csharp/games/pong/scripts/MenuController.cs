@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 using KernelEngine.Framework;
-using KernelEngine.Kernel;
+using KernelEngine.Text;
+using KernelEngine.Render;
 
 namespace Pong;
 

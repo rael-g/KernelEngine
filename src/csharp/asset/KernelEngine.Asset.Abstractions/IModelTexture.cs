@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Asset;
 
 /// <summary>
 /// Read-only view of a decoded RGBA8 texture loaded as part of an <see cref="IModel"/>.

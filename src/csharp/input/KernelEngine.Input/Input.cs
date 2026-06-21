@@ -1,16 +1,20 @@
 ﻿using System.Numerics;
+using KernelEngine.Logger;
+using KernelEngine.Common;
 
 using KernelEngine.Common.Native;
 using InputNative = KernelEngine.Input.Native.NativeMethods;
+using KernelEngine.Logger;
+using KernelEngine.Common;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Input;
 
 /// <summary>
 /// Tracks keyboard and mouse state. Reads messages from the <see cref="MessagePipe"/>.
 /// </summary>
 public sealed unsafe class Input : IInput, INativeInput
 {
-    // Per-frame current-reader accessor moved to KernelEngine.Kernel.InputContext (Abstractions) so
+    // Per-frame current-reader accessor moved to KernelEngine.Input.InputContext (Abstractions) so
     // the Framework can set it without referencing this concrete. Game code that polled Input.Current
     // should switch to InputContext.Current.
 

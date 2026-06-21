@@ -1,4 +1,4 @@
-using KernelEngine.Kernel;
+﻿
 using KernelEngine.Common.Native;
 using KernelEngine.Scheduler.Enki.Native;
 
@@ -10,12 +10,12 @@ namespace KernelEngine.Scheduler.Enki;
 /// <c>services.Add&lt;IScheduler, EnkiScheduler&gt;()</c>.
 /// </summary>
 /// <remarks>
-/// Inherits from <see cref="KernelEngine.Kernel.Scheduler"/> so all
+/// Inherits from <see cref="KernelEngine.Scheduler.Scheduler"/> so all
 /// existing managed APIs (DispatchKernelTask, async Task overloads) stay
 /// available without duplication. The native lifecycle is owned by this
 /// instance — destroy happens in the inherited Dispose.
 /// </remarks>
-public sealed unsafe class EnkiScheduler : KernelEngine.Kernel.Scheduler
+public sealed unsafe class EnkiScheduler : KernelEngine.Scheduler.Scheduler
 {
     public EnkiScheduler() : base(CreateNative())
     {

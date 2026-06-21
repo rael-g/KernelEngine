@@ -1,5 +1,7 @@
-using System.Numerics;
-using KernelEngine.Kernel;
+﻿using System.Numerics;
+using KernelEngine.Render;
+using KernelEngine.Logger;
+using KernelEngine.Common;
 
 namespace KernelEngine.Framework.Legacy;
 

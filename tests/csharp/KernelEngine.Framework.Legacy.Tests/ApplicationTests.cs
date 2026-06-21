@@ -1,6 +1,5 @@
-using Xunit;
+﻿using Xunit;
 using NSubstitute;
-using KernelEngine.Kernel;
 using KernelEngine.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;

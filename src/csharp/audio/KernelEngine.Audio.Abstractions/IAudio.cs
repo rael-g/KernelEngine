@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Audio;
 
 /// <summary>
 /// Managed mirror of the C kernel's <c>ke_audio</c> vtable — plays sounds loaded from disk.

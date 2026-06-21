@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Exposes the raw native renderer pointer. Implemented by the concrete Renderer type

@@ -1,11 +1,10 @@
-using Xunit;
+﻿using Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using KernelEngine.Kernel;
 using KernelEngine.Configuration;
 using NSubstitute;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 public class ServiceCollectionExtensionsTests
 {

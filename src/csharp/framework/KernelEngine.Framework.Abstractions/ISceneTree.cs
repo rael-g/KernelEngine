@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Framework;
 
 /// <summary>
 /// Language-agnostic scene tree contract (Tier S — S7, minimal).

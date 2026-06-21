@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Render;
 
 /// <summary>
 /// Provided to a <see cref="RenderPass"/> record callback during execution. Wraps the native

@@ -1,6 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Physics;
 
 /// <summary>
 /// Body kind in a 2D rigid-body world.

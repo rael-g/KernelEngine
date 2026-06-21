@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 
-namespace KernelEngine.Kernel;
+namespace KernelEngine.Ecs;
 
 /// <summary>
 /// Read-only view over a native variant-entry table, supplied to

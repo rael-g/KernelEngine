@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Asset;
 
 /// <summary>
 /// Loads 3D models from disk into an <see cref="IModel"/> the engine can upload to the GPU.

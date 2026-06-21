@@ -1,17 +1,19 @@
 ﻿using System.Diagnostics;
 using KernelEngine.Ecs.Flecs;
-using KernelEngine.Kernel;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
+using KernelEngine.Window;
+using KernelEngine.Logger;
 
 // Uniform Add<> pattern. Infrastructure (allocator/logger/ecs/scheduler/runtime)
 // + modules (window/render/etc.) go through one verb. Headless variants drop
 // modules they don't need; runtime never knows what's there.
 
 var services = new ServiceCollection()
-    .AddKernel()
     .AddLogger()
     .AddConsoleSink()
     .Add<IEcs, FlecsEcs>()

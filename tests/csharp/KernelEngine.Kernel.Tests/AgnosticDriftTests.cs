@@ -1,10 +1,10 @@
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 /// <summary>
 /// D.1 structural test: verifies that no backend-specific symbol has leaked into the

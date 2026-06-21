@@ -1,4 +1,4 @@
-namespace KernelEngine.Kernel;
+﻿namespace KernelEngine.Input;
 
 /// <summary>
 /// The input service that processes OS messages on <c>ke.main</c> and produces frame snapshots

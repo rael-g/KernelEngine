@@ -1,6 +1,7 @@
-using System.Runtime.CompilerServices;
-using KernelEngine.Kernel;
+﻿using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Ecs;
+using KernelEngine.Scheduler;
 
 namespace KernelEngine.Runtime;
 

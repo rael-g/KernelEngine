@@ -1,8 +1,8 @@
-using KernelEngine.Kernel;
+﻿
 using NSubstitute;
 using Xunit;
 
-namespace KernelEngine.Kernel.Tests;
+namespace EngineTests;
 
 public class LoggerSinkTests
 {

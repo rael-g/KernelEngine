@@ -1,9 +1,9 @@
 ﻿using KernelEngine.Configuration;
-using KernelEngine.Kernel;
 using KernelEngine.Common.Native;
 using KernelEngine.Physics.Box2D.Native;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using KernelEngine.Logger;
 
 namespace KernelEngine.Physics.Box2D;
 

@@ -1,5 +1,4 @@
-using System.Numerics;
-using KernelEngine.Kernel;
+﻿using System.Numerics;
 using NSubstitute;
 using Xunit;
 
