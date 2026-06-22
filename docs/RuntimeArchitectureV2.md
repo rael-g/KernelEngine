@@ -1090,7 +1090,7 @@ The `NodeBehavior` pattern (§15.3) already treats its fields as a component (`<
 
 ## 16. Future doctrine: component snapshot for sim/render pipelining
 
-Locked at design level 2026-06-10; impl deferred to R6-R7 (post Pong migration, when frame budget shows the need). This section records WHY we picked the shape, so future implementation doesn't re-litigate.
+Locked at design level 2026-06-10. **Impl scope: the render-v2 branch, before merge to main** (revised 2026-06-21). The runtime merged without it — it needs a multi-pass renderer to build and validate against — but it is part of the **same feature set as render v2**, not a later profiler-gated option. The only sequencing constraint is that it lands after the multi-pass renderer exists (≥ render phase G3). See `RenderArchitectureV2.md` §9.4. This section records WHY we picked the shape, so implementation doesn't re-litigate.
 
 ### 16.1 The problem
 
@@ -1136,6 +1136,15 @@ void (*swap_snapshots)(struct ke_ecs *self);
 
 The flecs impl behind this: each double-buffered component becomes two internal flecs components (`X_live` + `X_snap`). Swap rotates an index. Reads from render phase route to `X_snap`; reads from sim phases route to `X_live`. R/W metadata in `ke_runtime_system_params.access_list` becomes phase-aware: same `KE_ACCESS_READ` on Transform reads live in sim phases, snapshot in render phases.
 
+### 16.3.1 Why it pipelines — and the mental model it replaces
+
+The intuitive shape — *two OS threads, two full ECS copies (a "front world" the render thread reads, a "back world" the sim thread writes)* — is **not** what this is, on two counts:
+
+- **Not two ECS copies.** There is one ECS. Only components a render-phase system reads get an internal `X_live` + `X_snap` pair; everything sim-only stays single-buffered. The duplicated set is the render-relevant subset, sparse — never the whole world. The "front"/"back" distinction is per-component and interleaved, not two registries.
+- **Not two dedicated threads.** There is one unified scheduler over the shared worker pool. "Sim thread / render thread" becomes "sim-phase systems / render-phase systems" in the same `wave_builder`. Thread affinity (pinning) is an orthogonal knob, not the separation mechanism.
+
+The pipelining falls out of a single fact: **phase-aware routing makes a sim write and a render read of the same component land in different memory** (`X_live` vs `X_snap`). The `wave_builder` decides ordering by comparing access-list keys; under R4 a sim WRITE of Transform and a render READ of Transform share the key and serialize (write-before-read). With the snapshot they resolve to different keys → **no conflict → the `wave_builder` puts them in the same wave, in parallel.** Sim N+1 writes `live` while render N reads `snap`; the phase-boundary `swap_snapshots` hands one frame's `live` to the next frame's `snap`. That is the whole unlock — no extract copy, no packet, no lock, no second world. (The precise wave choreography of the overlap is an R6-R7 impl detail; the state separation that *enables* it is what this section locks.)
+
 ### 16.4 Inference, not manual marking
 
 Game devs must not be required to mark components. Inference:
@@ -1180,6 +1189,7 @@ R4 explicitly does NOT block pipelining. The `ke_ecs` extension in R6+ slots in 
 - Memory: `project_render_pipelining_decision.md`
 - Kanban: parking lot `[RENDER-PIPELINING]` (R6-R7 timing)
 - This doc remains the canonical design source.
+- **Merge-blocking scope of the render-v2 branch** — see `RenderArchitectureV2.md` §9.4 + §17. Not a later profiler-gated option: render v2 and this snapshot are one feature set, delivered together before merge to main. The only sequencing constraint is that it lands after the multi-pass renderer exists (≥ render phase G3) so it can be validated. The `[RENDER-PIPELINING]` parking-lot label is superseded by this committed scope.
 
 ---
 

@@ -30,18 +30,19 @@ This doc defines the **target renderer architecture** — what we build *alongsi
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  L7 — High-level capabilities (LOD selector, RT denoiser, GI,        │
-│       upscaler, hair, volumetric, etc. — each as a render-graph       │
-│       pass set or a `ke_render` vtable extension)                     │
+│       upscaler, hair, volumetric, etc.) — each ships as a render      │
+│       pass (or pass set) registered as a runtime system              │
 ├──────────────────────────────────────────────────────────────────────┤
-│  L6 — RenderGraph (already shipped — declares passes, resources,     │
-│       dependencies; chooses execution order; handles barriers)        │
+│  Passes — NOT a layer object. Each render pass is a plain runtime     │
+│       system (register_system); the runtime's wave-builder orders     │
+│       passes by access-list. No graph object, no Kahn topo-sort.      │
 ├──────────────────────────────────────────────────────────────────────┤
-│  L5 — Mid-level passes & helpers                                      │
-│       RenderPassBuilder / ComputePassHelper / ResourceUploader /      │
-│       MaterialBinding / CommandRecorder / PipelineCache               │
+│  L5 — Render core (C ABI service): pass context + resource registry   │
+│       + transient pool + barriers + PipelineCache / MaterialBinding   │
+│       / ResourceUploader / CommandRecorder. Owns no draw.             │
 ├──────────────────────────────────────────────────────────────────────┤
 │  L4 — Encoder & queue surface (CommandEncoder, RenderPass,           │
-│       ComputePass, CommandBuffer — typed objects)                     │
+│       ComputePass, CommandBuffer — typed objects, gpu_commands.h)     │
 ├──────────────────────────────────────────────────────────────────────┤
 │  L3 — `ke_gpu_device` C ABI (WebGPU-style — Device, Buffer,          │
 │       Texture, Sampler, ShaderModule, Pipeline, BindGroup)            │
@@ -58,12 +59,13 @@ This doc defines the **target renderer architecture** — what we build *alongsi
 ```
 
 **Rules of the road**:
-- Each layer talks only to the layer immediately below. L7 *never* calls L3 directly.
-- **L3 is the C ABI** — lives at `src/c/render/include/kernel_engine/render/gpu_device.h`, in the render domain alongside the existing `ke_render` (L7) contract. C ABI only; no privileged caller language (see §4.0).
+- Each layer talks only to the layer immediately below. A high-level pass *never* calls L3 core directly — extensions are the one sanctioned reach-through (§4.5, §7.2).
+- **L3 is the C ABI** — lives at `src/c/render/include/kernel_engine/render/gpu_device.h`, in the render domain. C ABI only; no privileged caller language (see §4.0).
 - L3 extensions (ray tracing, mesh shaders, bindless, etc.) are queried from the device via `query_extension` — the engine knows nothing about them individually. See §4.5.
-- **L4 and L5 are Zig** — they live in the render-v2 Zig core (location open, §13.2). They consume L3 in-language; they are *not* a second C ABI. A future C/C++ consumer of the device uses L3 directly.
-- L7 lives in plugins (`KernelEngine.Render.<Feature>`) or in the game itself (a game can register its own render passes).
-- L6 (RenderGraph) is **already shipped** — `src/c/render/include/kernel_engine/render/render_graph.h`. Reused as-is.
+- **L4 and L5 are C ABI** (Option A, §13.3). L4 (`gpu_commands.h`) is the typed recording surface — `ke_gpu_command_encoder` / `ke_gpu_render_pass` / `ke_gpu_compute_pass` are C structs the device fills via `create_command_encoder`. L5 (the render core: a `ke_render_core` service + the `ke_render_pass_ctx` handed to each pass) is a C ABI whose implementation is Zig. Any module — C, Zig, or C# — authors render passes against L4+L5.
+- **There is no render-graph object and no `ke_render` (L7 vtable) in V2.** A render pass is a plain runtime system; the runtime orders passes (§7). `render.h` / `render_graph.h` / `frame_packet.h` are V1 (bgfx) legacy — untouched by V2 and not part of this design.
+- High-level capabilities (L7) ship as render passes (or pass sets) registered as runtime systems — in plugins (`KernelEngine.Render.<Feature>`) or in the game itself.
+- The Zig source tree is `src/zig/render/` (backend + core); the C ABI headers live in `src/c/render/include/` (§13.2).
 
 ---
 
@@ -308,9 +310,11 @@ Caveat: wgpu-native is a Rust runtime under the hood (~5MB binary dependency). I
 
 ---
 
-## 5. Mid-level abstractions — the key insight (L5, Zig)
+## 5. Mid-level abstractions — the render core (L5, C ABI + Zig impl)
 
-This is where the architecture earns its keep. Every render technique above (RenderPass setup, draw issuance, resource binding) is **expressed in terms of these helpers, not directly against the device**. When we swap backends or evolve the device ABI, only a handful of Zig files change instead of 500 call sites. The helpers are Zig modules consuming the L3 C ABI in-language — they are not themselves a C ABI.
+This is where the architecture earns its keep. Every render technique above (RenderPass setup, draw issuance, resource binding) is **expressed in terms of these helpers, not directly against the device**. When we swap backends or evolve the device ABI, only a handful of Zig files change instead of 500 call sites.
+
+These helpers ship as the **render core**: a **C ABI service** (Option A, §13.3) — so any module, C/Zig/C#, can author render passes — whose implementation is Zig consuming the L3 C ABI in-language. The C ABI surface is two things: the `ke_render_core` service (resource registry + transient pool + barriers, §7) and the `ke_render_pass_ctx` handed to each pass's `execute` body (§7.2). The Zig helpers below (`RenderPassBuilder`, `MaterialBinding`, `PipelineCache`, …) are reached *through* that context — a pass calls `ke_render_core_begin_pass` and records against the returned `ke_render_pass_ctx`; it never constructs an encoder or touches the device.
 
 ### 5.1 `RenderPassBuilder`
 
@@ -515,13 +519,52 @@ Mechanism 1 alone is enough to ship M1-M2 demos. Mechanism 3 before any non-triv
 
 ---
 
-## 7. Render graph (already shipped) — recap & integration
+## 7. No render-graph object — the runtime IS the graph
 
-The render graph (`src/c/render/include/kernel_engine/render/render_graph.h` + impl) **stays as-is**, sitting at L6. Game code or feature modules declare passes; the graph resolves attachment dependencies, picks execution order, inserts barriers.
+The V1 render graph (`render_graph.h` with `add_pass` / `compile` / `execute`) **is eliminated in V2.** Its two jobs split cleanly, and only one of them was ever render-specific:
 
-The change V2 brings: each render-graph pass is built using the **L5 mid-level helpers** instead of direct device calls. Today, passes call into the renderer which calls `gpu_device->`. After V2, passes use `RenderPassBuilder` / `ComputePassHelper`, never seeing the device. **No render-graph API change** — pure internal refactor of pass implementations.
+- **Ordering** (topological sort over the pass DAG, barrier sequencing) → **moves to the runtime.** A render pass is a plain runtime system; the runtime's wave-builder already orders systems by their access list (write-before-read on shared keys). There is no Kahn sort in the render layer — the same dependency solver that orders sim systems orders render passes.
+- **Resource management** (transient render-target allocation + aliasing, barrier insertion, name→view resolution) → stays render-specific, and becomes the **render core** service (§5), not a graph object.
 
-**Integration with runtime**: each render-graph pass is registered as a runtime system (§9) pinned to the `ke.render` worker. The pass reads its input from `ke_ecs` via `ke_system_ctx` (camera/light/mesh by cid), the graph resolves attachment+barrier dependencies, the L5 helpers handle device-side recording. Post-R6, those reads route to the per-component snapshot back buffer automatically (§16 runtime doc); pre-R6, they read live storage and sim/render run serially.
+### 7.1 Render resources are tag-component cids
+
+The mechanism that lets the runtime order passes by *texture* dependency — not just by ECS-component dependency — is that **each render resource is registered as a zero-size tag component** in the ECS. `ke_render_core_declare("scene_color", …)` calls `ke_ecs_component_register(reg, "rg.scene_color", 0)` and gets back a real `ke_component_id`. The cid has no per-entity storage; nobody ever calls `ke_system_ctx_get` on it. It exists purely as a dependency key.
+
+A pass declares its resource reads/writes as access-list entries alongside its component reads:
+
+```
+add_pass "forward":  access = [ {Camera,R},{Mesh,R},{Light,R}, {rg.scene_color,W},{rg.depth,W} ]
+add_pass "bloom":    access = [ {rg.scene_color,R}, {rg.backbuffer,W} ]
+```
+
+The wave-builder sees `forward` WRITE `scene_color` and `bloom` READ `scene_color` → orders forward before bloom, by the identical write-before-read rule it applies to components. **Zero runtime changes**: the runtime's dependency solver is generic over cids and never distinguishes "real component" from "render-resource token".
+
+### 7.2 A pass is a plain runtime system
+
+```c
+runtime->register_system(rt, &(ke_runtime_system_params){
+    .name = "forward", .phase = KE_PHASE_UPDATE,
+    .access_list = forward_access, .access_count = 5,
+    .pinned_thread = 0,                 // unpinned → wave dispatcher places it (§9.7)
+    .user_data = &forward_pass,         // holds render_core* + its ke_pass_io
+    .execute = forward_execute,
+});
+
+void forward_execute(ke_system_ctx *ctx, void *user, float dt) {
+    forward_pass *p = user;
+    ke_render_pass_ctx *pc = ke_render_core_begin_pass(p->core, ctx, &p->io);
+    ke_gpu_render_pass *rp = pc->begin_render(pc);     // L4 recording object
+    /* read components via ctx, resolve resource→view via pc, issue draws */
+    rp->end(rp);
+    ke_render_core_end_pass(p->core, pc);
+}
+```
+
+`begin_pass` resolves the pass's declared resources to live `ke_gpu_texture_view`s, sets up the target attachments, and tracks each resource's state to insert the needed barrier at the wave boundary (producer in wave K, consumer in wave K+1). Because the runtime guarantees same-wave passes have disjoint access, the render core's per-resource state is touched by one pass at a time — **lock-free without trying to be.**
+
+**Extensions** (ray tracing, mesh shaders) are reached through the same context: `void *rt = pc->query_ext(pc, KE_GPU_EXT_RAYTRACING); rt->dispatch_rays(rt, pc->encoder(pc), &p);`. This is not layer-skipping — extensions are the open frontier L5 cannot pre-wrap (§4.5); the context supplies the encoder and resources the extension call needs. L5 wraps the universal core ergonomically (≈95%); extensions stay raw-but-reachable (the unbounded tail). That is what "infinite power without touching L3 core" means.
+
+This is **locked**. The `render_graph.h` object, its `compile()`/Kahn sort, and the `ke_render_pass_record_fn` / `get_renderer()` / frame-packet context are V1 legacy (bgfx renderer) — not part of V2.
 
 ---
 
@@ -765,12 +808,12 @@ Pinned per impl phase: full field lists for the non-`IMaterial` context types; e
 - **Component vocabulary.** `ke_camera_component`, the light components, `ke_mesh_component` are declared in the framework (`src/c/render/include/kernel_engine/render/components.h` + the framework's `ke_world_create` registration). The renderer **reads** these; it does not declare them.
 - **Entity lifecycle.** Scene tree owns entities (`RuntimeArchitectureV2.md` §17.1). The renderer queries; it never spawns or destroys.
 - **Scheduling.** The runtime owns phase ordering, wave building, dispatch. The renderer declares its systems' phase + access list + thread pinning.
-- **A render thread of its own making.** No `std::thread` / Zig thread in the module. The scheduler's enki worker pool is the only source of parallelism (`RuntimeArchitectureV2.md` §8.4, project rule 5). The module pins its systems to a worker named `ke.render` — that is the entirety of its threading contract.
+- **A render thread of its own making.** No `std::thread` / Zig thread in the module. The scheduler's enki worker pool is the only source of parallelism (`RuntimeArchitectureV2.md` §8.4, project rule 5). Unlike the bgfx renderer — which pinned every GPU call to a single `ke.render` worker because bgfx demands it — the V2 device records command buffers from many threads, so render passes are **unpinned** and the wave dispatcher parallelizes disjoint passes across the pool (§9.7, pending wgpu-native thread-safety validation).
 
 ### 9.2 What the render module DOES own
 
 - **The `ke_gpu_device` instance.** Created at module `on_load`, destroyed at `on_unload` (via the `ke_gpu_device_handle` owner-wrapper). Device + Queue + PipelineCache + the ResourceUploader's staging ring live here. Lifetime = module lifetime.
-- **The render-graph passes** declared as runtime systems. Each pass is one `register_system` with `phase = KE_PHASE_UPDATE`/`POST_UPDATE`, `pinned_thread = <ke.render>`, an `access_list` of the components it reads, and an `execute` callback that records draws via the L5 helpers.
+- **The render passes** declared as runtime systems (there is no render-graph object — §7). Each pass is one `register_system` with `phase = KE_PHASE_UPDATE`/`POST_UPDATE`, `pinned_thread = 0` (unpinned), an `access_list` mixing the components it reads with the render-resource tag-cids it reads/writes, and an `execute` callback that records draws through the render core's pass context (§7.2). The `ke_render_core` service (device + transient pool + barriers + PipelineCache + ResourceUploader staging ring) is created here at `on_load`.
 - **PSO compilation, shader hot reload, asset upload kickoff** — all dispatched to the shared `ke_task_scheduler` pool from inside pass execute bodies.
 
 ### 9.3 The component-snapshot boundary (R6+)
@@ -781,11 +824,21 @@ Locked in `RuntimeArchitectureV2.md` §16:
 - Render systems run in `Update`/`PostUpdate`. The scheduler infers from each render system's `access_list` that its reads route to the **snapshot** side.
 - At phase boundaries the scheduler atomically rotates the snapshot index. Sim N+1 writes the new live side while render N reads the new snapshot side. No lock, no copy, no frame-packet object.
 - Inference is automatic: any component touched by a render-phase system gets `KE_COMPONENT_DOUBLE_BUFFERED` on registration. Sim-only components stay single-buffered (zero overhead). Escape hatches `[NoDoubleBuffer]` / `[ForceDoubleBuffer]` for the rare exception.
-- The L5 helpers don't care which side they read — they consume entity + cid via `ke_system_ctx_get`; snapshot routing happens one layer below in the ecs vtable.
+- The L5 helpers don't care which side they read — they consume entity + cid via `ke_system_ctx_get`; snapshot routing happens one layer below in the ecs vtable. A render pass reads `Camera`/`Mesh`/`Light` exactly like any system and gets the snapshot side automatically — it never knows there are two buffers.
+- **Two orthogonal id mechanisms — never conflated.** The live/snap split (this section) is the *sim→render data handoff*: it double-buffers ECS component memory so sim N+1 ‖ render N. The render-resource **tag-cids** (§7.1) are *intra-render ordering*: they sequence render passes against each other (forward WRITEs `rg.scene_color`, bloom READs it) and are never double-buffered — no sim system touches them. One answers *when render reads sim data*; the other answers *which render pass runs before which*. Both ride the same `wave_builder`, by different keys, with zero special-casing in the scheduler.
 
-### 9.4 Pre-R6 transitional state
+### 9.4 Sim/render pipelining — merge-blocking scope of this branch
 
-R4 (current runtime scheduler) has no snapshot mechanism. Sim and render run serially; render-phase systems run on the pinned worker but read live storage. Functionally correct (render reads finalized sim state); leaves pipelining on the table. R6 lights it up by flipping the snapshot bits, transparently to render code written under §9.2.
+The runtime shipped (`feat/runtime-v2`, merged) with **no snapshot mechanism**: sim and render run serially within a tick on the single live world; render-phase systems read live storage. The component-snapshot pipelining (`RuntimeArchitectureV2.md` §16) was left at design level *because render v2 did not exist yet* — there was no multi-pass renderer to build and validate it against.
+
+> **COMMITTED SCOPE — implement the runtime snapshot (§16) on this branch, before merge to main.** It is **not** a later, profiler-gated, parking-lot option. Render v2 and the §16 snapshot are **one feature set, delivered together.** The only sequencing constraint is that it lands *after* the multi-pass renderer exists (≥ phase G3) so it can be validated — not *if* a profiler symptom appears.
+>
+> Deliverable (spec in `RuntimeArchitectureV2.md` §16):
+> - `ke_ecs` contract: `component_register_v3(name, size, flags)` + `KE_COMPONENT_DOUBLE_BUFFERED` + `swap_snapshots` (§16.3).
+> - flecs impl: `X_live` + `X_snap` per double-buffered component; phase-aware read routing (§16.3).
+> - startup inference: mark every cid a render-phase system reads (§16.4); scheduler calls `swap_snapshots` at the phase boundary.
+>
+> **Render-side cost of flipping it on: zero.** Passes read components via `ke_system_ctx` (§7.2); snapshot routing happens one layer below in the ecs vtable — the §16.6 guarantee. Before it lands, render v2 runs on the live world, sim/render serial within the tick (correct, not pipelined); **the branch does not merge to main until sim/render pipelines.**
 
 **frame_packet does not exist in either state.** The LEGACY `*_render_system.cpp` extract-and-write-packet pattern was deleted in C-phase 4 of the runtime arc (`RuntimeArchitectureV2.md` §17.6.1). Render passes read components directly. (The old V2 draft called frame_packet "stable" — retracted, §12.)
 
@@ -799,6 +852,23 @@ R4 (current runtime scheduler) has no snapshot mechanism. Sim and render run ser
 
 - Game code touches `Material`, `Mesh`, `Texture` (managed wrappers around opaque handles, refcounted, sim-safe). `meshNode.MeshHandle = ...` writes `MeshComponent.mesh` in the ecs — a sim-side write picked up next render frame via the snapshot.
 - Game code **NEVER** touches `ke_gpu_device`. The device handle stays inside `KernelEngine.Render.Modern`. Even custom user passes declare component access lists and use the L5 helpers, not the device.
+
+### 9.7 Parallel render passes + frames-in-flight (study — not yet locked)
+
+Two **independent** buffering schemes compose; conflating them is the trap.
+
+**Component snapshot (§16 runtime doc) — ECS data only.** Double-buffers `Transform`/`Mesh`/`Camera`/`Light` so sim N+1 writes the live side while render N reads the snapshot side. Runtime-owned; rotates at the phase boundary. It buffers *component memory*, nothing else.
+
+**Frames-in-flight ring — GPU resources.** The backbuffer, the transient render targets, and per-frame uniform buffers are **not** ECS components and are **not** covered by the component snapshot. They are buffered by the render core's own frames-in-flight ring + the swapchain:
+
+- The **backbuffer** is the swapchain's responsibility, not the snapshot's. A begin-frame render-core system acquires the next swapchain image (writes the `rg.backbuffer` tag-cid); the final pass writes it; an end-frame system presents it. The swapchain's own N-buffering + a per-frame fence give the GPU/CPU overlap — the component-snapshot index never touches the backbuffer. So the (N / N+1) split for the backbuffer is just: sim N+1 runs while render N records into and presents frame N's swapchain image; sim never touches the backbuffer, so there is no shared-state hazard to double-buffer at the render-core level.
+- **Transient targets + per-frame uniforms** declared via `declare_resource` carry a frames-in-flight multiplier: if the CPU may record frame N+1 while the GPU still executes frame N, each such resource needs `frames_in_flight` physical copies, indexed by a render-core ring counter — **distinct from, and rotating independently of, the component-snapshot index.** The `ResourceUploader` staging ring (§5.3) is one instance of this counter.
+
+**Parallelism within a frame.** Removing the single-thread pin (§9.1) lets the wave dispatcher run disjoint render passes concurrently on the pool. Each pass records into its **own** `ke_gpu_command_encoder` → `ke_gpu_command_buffer`; the render core collects them and submits in wave order (same-wave passes are disjoint, so submit order among them is free). The runtime's same-wave disjointness guarantee makes the render core's per-resource barrier-state tracking lock-free (§7.2).
+
+**Open before locking:**
+- wgpu-native thread-safety for parallel command-encoder recording (the WebGPU spec marks `Device`/`Queue` thread-safe; confirm the impl honors it). **Hard gate for unpinning by default.**
+- `frames_in_flight` depth (2 vs 3) and whether render itself pipelines N+1 CPU recording over N GPU execution, or only sim‖render overlaps. The render-core ring is sized by this choice; the component-snapshot index is unaffected either way.
 
 ---
 
@@ -814,13 +884,17 @@ Doc carried onto `feat/render-v2-zig`; Slang shaders + L3 C ABI headers ported a
 - The render-v2 `build.zig` links `eliemichel/WebGPU-distribution`; a Zig `ke_gpu_device_webgpu` fills enough of the L3 vtable to clear + present.
 - Render a triangle from a `.slang`-compiled module through the full L3 surface. No engine integration. **Hard gate: triangle renders.**
 
-### Phase G2 — L4/L5 mid-level (Zig) (3-5 sessions)
-- Implement `CommandEncoder`/`RenderPass`/`ComputePass` (L4) and `RenderPassBuilder`/`ComputePassHelper`/`ResourceUploader`/`MaterialBinding`/`CommandRecorder`/`PipelineCache` (L5) as Zig modules over L3.
-- Render-graph passes (L6, already shipped) re-pointed to use L5.
+### Phase G2 — L4/L5 render core (Zig impl behind C ABI) (3-5 sessions)
+- `gpu_commands.h` L4 typed objects (`CommandEncoder`/`RenderPass`/`ComputePass`) filled by the Zig device.
+- The **render core** (`ke_render_core` service + `ke_render_pass_ctx`, C ABI) with its Zig impl: resource registry (tag-cid minting), transient pool, barrier tracking, and the `RenderPassBuilder`/`MaterialBinding`/`PipelineCache`/`ResourceUploader` helpers reached through the pass context (§5, §7).
+- A throwaway pass registered as a runtime system proves the `register_system` → `begin_pass` → record → submit path end to end. No render-graph object.
 
 ### Phase G3 — Runtime module + first engine scene (2-3 sessions)
-- `KernelEngine.Render.Modern` runtime module: device at `on_load`, passes registered as systems pinned to `ke.render`, reads components via `ke_system_ctx`.
+- `KernelEngine.Render.Modern` runtime module: device + render core at `on_load`; each pass registered as an **unpinned** runtime system with an access list mixing component reads and render-resource tag-cids; reads components via `ke_system_ctx`.
 - `example_01` opts into Modern via DI; both renderers selectable. **Hard gate: example_01 visually matches Bgfx.**
+
+### Phase G3.5 — Runtime snapshot pipelining (runtime §16) — MERGE-BLOCKING (4-5 sessions)
+With a multi-pass scene now running (G3), implement the deferred `RuntimeArchitectureV2.md` §16 component snapshot — this branch's shared deliverable with render v2, not a later option (§9.4): `ke_ecs` double-buffer contract (`component_register_v3` + `KE_COMPONENT_DOUBLE_BUFFERED` + `swap_snapshots`), flecs `X_live`/`X_snap` impl + phase-aware routing, startup inference over render-system access lists, scheduler swap at the phase boundary. Render code is untouched (reads via `ke_system_ctx`). **Hard gate: sim N+1 ‖ render N pipelines; the branch does not merge to main without it.**
 
 ### Phase G4 — PSO Mechanism 1 (ubershader + magenta) (3-4 sessions)
 `PipelineCache` (RAM only); build-time ubershader (PBR forward + shadow + depth prepass); magenta placeholder; background compile via the worker pool; hot reload invalidates RAM entries. **Goal: dev iteration never stalls.**
@@ -894,12 +968,14 @@ Ships: **`FrustumCullPass`** (AABB-vs-6-planes, CPU SIMD first, ~50-100 LoC; com
 ## 13. Open questions (lock during the relevant phase)
 
 1. **Direct Vulkan/D3D12 backend** as a second `ke_gpu_device` impl after webgpu-native. Decided for now: webgpu-native first (§4.6). Revisit if a capability is missing or the Rust-runtime dependency becomes unacceptable. The §2 layering makes the second backend additive.
-2. **Zig source layout for L2/L4/L5.** No Zig source tree exists yet — this renderer is the first. Proposal: a `src/zig/render/` tree parallel to `src/c` / `src/cpp` (backend, core, module subdirs), with the C ABI headers staying in `src/c/render/include/`. **PO decision — no precedent to copy.**
-3. **L4/L5 surface confirmation.** This doc collapses the previous branch's double recording surface (§4.0.5) and inline forwarders (§4.0.1). Confirm before the headers are treated as final.
+2. **Zig source layout for L2/L4/L5 — DECIDED.** `src/zig/render/` parallel to `src/c` / `src/cpp`: `src/zig/render/webgpu/` (L2 backend, shipped) + `src/zig/render/core/` (L5 render core, to land), with the C ABI headers in `src/c/render/include/`. Backend done; core directory lands with the L5 headers.
+3. **L4/L5/L6 surface — LOCKED (was deferred).** L4 (`gpu_commands.h`) and L5 (the render core: `ke_render_core` service + `ke_render_pass_ctx`) are **C ABI** so any module — C, Zig, or C# — authors render passes; the Zig helpers are the implementation behind that contract (Option A). The L6 render-graph object is **eliminated**: a pass is a plain runtime system, ordering is the runtime's wave-builder, and render resources are zero-size tag-component cids in the access list (§7). The double recording surface (§4.0.5) and inline forwarders (§4.0.1) stay collapsed.
 4. **Disk PSO cache location** — per-user (`%LOCALAPPDATA%`) keyed by project + engine version. Lock during G4.1.
 5. **GPU handle type safety** — bare `uint64_t` (WebGPU style) vs struct-wrapped `{ uint64_t id; }` (engine `handles.h` style). Lock during G1.
 6. **Bindless** — WebGPU is conservative; Vulkan/D3D12 allow effectively-bindless descriptor sets. Exposed via the `ke_gpu_bindless` extension (§4.5). Lock the extension API shape when the first GPU-driven pass needs it.
 7. **Slang language version pinning** — pin a Slang version in the toolchain, bump deliberately. Document alongside the Zig version pin.
+8. **Render-pass parallelization + wgpu-native thread-safety (study, §9.7).** Removing the single-thread `ke.render` pin lets the wave dispatcher parallelize disjoint passes (each records its own command buffer; the render core submits in wave order). Gated on confirming wgpu-native records command encoders safely across threads. Lock before unpinning by default.
+9. **Frames-in-flight depth (study, §9.7).** How many physical copies of the backbuffer / transient targets / per-frame uniforms the render core rings, and whether render pipelines N+1-record over N-execute or only sim‖render overlaps. Independent of the component-snapshot index. Lock during the first multi-frame G3+ bring-up.
 
 ---
 
@@ -945,7 +1021,9 @@ The previous branch (`feat/render-v2`) was authored before the kernel include re
 
 - [x] Design carried onto `feat/render-v2-zig` from current `main`; conventions reconciled (§4.0); §9/§11/§12 already aligned with the runtime contracts on `main`.
 - [x] Slang shaders + L3 C ABI headers ported and reshaped.
-- [ ] Lock §13 open questions — chiefly the Zig source layout (§13.2) and the L4/L5 surface confirmation (§13.3) — before G1.
+- [x] Lock the structural §13 questions: Zig source layout (§13.2) and the L4/L5/L6 surface (§13.3) — **decided**: render core is C ABI (Option A), the render-graph object is eliminated, passes are runtime systems ordered by access-list, resources are tag-component cids (§7).
+- [ ] Validate wgpu-native thread-safety (§13.8) before unpinning render passes by default; pick `frames_in_flight` depth (§13.9) at first multi-frame bring-up.
+- [ ] **Runtime snapshot (§9.4) — MERGE-BLOCKING.** Implement `RuntimeArchitectureV2.md` §16 (`ke_ecs` double-buffer extension + inference + `swap_snapshots`) on this branch, sequenced after the multi-pass renderer exists (≥ G3). Render v2 and the §16 snapshot are one feature set; **the branch does not merge to main until sim/render pipelines.** Render code needs no change.
 - [ ] **Start G1**: render-v2 `build.zig` linking the webgpu distribution + a triangle through L3 from a `.slang` module.
 
 **This doc is the contract.** When G1-G3 ship, every word in §3 + §4 + §5 should match the code or this doc gets revised.
