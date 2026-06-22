@@ -247,6 +247,16 @@ typedef union ke_gpu_clear_value
 
 // ── Capabilities ──────────────────────────────────────────────────────────
 
+/// Shader source language a device accepts. Query via
+/// `ke_gpu_device::shader_language`; the shader-build layer compiles to it.
+typedef enum ke_gpu_shader_language
+{
+    KE_GPU_SHADER_LANG_WGSL  = 0,
+    KE_GPU_SHADER_LANG_SPIRV = 1,
+    KE_GPU_SHADER_LANG_MSL   = 2,
+    KE_GPU_SHADER_LANG_DXIL  = 3,
+} ke_gpu_shader_language;
+
 typedef struct ke_gpu_capabilities
 {
     uint32_t max_texture_dimension_2d;

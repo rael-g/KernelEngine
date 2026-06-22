@@ -9,10 +9,10 @@
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 
-#include "triangle_vert.h"
-#include "triangle_frag.h"
+#include "triangle_wgsl.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static void die(const char *msg, ke_error *err)
 {
@@ -46,14 +46,17 @@ int main(void)
     if (!core.ref) die("render core", err);
 
     // ── Triangle pipeline — engine-level setup via the device ────────────────
-    ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_vert_spv, .byte_size = sizeof(triangle_vert_spv), .entry_point = "main" });
-    ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_frag_spv, .byte_size = sizeof(triangle_frag_spv), .entry_point = "main" });
-    if (vs == KE_GPU_INVALID_HANDLE || fs == KE_GPU_INVALID_HANDLE) die("shaders", NULL);
+    // The backend advertises its shader language; this build feeds it WGSL
+    // (slangc compiled triangle.slang -> WGSL). One module, two entry points.
+    if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
+
+    ke_gpu_shader_module shader = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+        .code = triangle_wgsl, .byte_size = strlen(triangle_wgsl), .entry_point = "triangle" });
+    if (shader == KE_GPU_INVALID_HANDLE) die("shader", NULL);
 
     ke_gpu_render_pipeline_params pp = {
-        .vertex_module = vs, .fragment_module = fs,
+        .vertex_module = shader, .fragment_module = shader,
+        .vertex_entry = "vs_main", .fragment_entry = "fs_main",
         .primitive_topology = KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .cull_mode = KE_GPU_CULL_MODE_NONE, .front_face = KE_GPU_FRONT_FACE_CCW,
         .blend_state = { .blend_enabled = 0, .src_color = KE_GPU_BLEND_FACTOR_ONE,
@@ -65,8 +68,7 @@ int main(void)
     };
     ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
     if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", NULL);
-    gpu.ref->destroy_shader_module(gpu.ref, vs);
-    gpu.ref->destroy_shader_module(gpu.ref, fs);
+    gpu.ref->destroy_shader_module(gpu.ref, shader);
 
     // ── Pass I/O: this pass writes the backbuffer ────────────────────────────
     const char *writes[] = { "backbuffer" };

@@ -88,9 +88,11 @@ typedef struct ke_gpu_sampler_params
 
 typedef struct ke_gpu_shader_module_params
 {
-    const uint32_t *code;        ///< SPIR-V bytecode
-    size_t          byte_size;
-    const char     *entry_point; ///< e.g. "main"
+    const void *code;        ///< shader bytes in the device's accepted language
+                             ///< (query ke_gpu_device::shader_language); WGSL text
+                             ///< or SPIR-V binary etc.
+    size_t      byte_size;   ///< size in bytes (excluding any text terminator)
+    const char *entry_point; ///< debug label; per-stage entry is in pipeline params
 } ke_gpu_shader_module_params;
 
 // ── Vertex attribute / buffer layout ──────────────────────────────────────
@@ -350,6 +352,10 @@ typedef struct ke_gpu_device
     // ── Extension query ────────────────────────────────────────────────────
     /// Returns a typed extension vtable by name, or NULL if unsupported.
     const void *(*query_extension)(struct ke_gpu_device *self, const char *name);
+
+    /// Shader source language this device accepts in create_shader_module.
+    /// Appended at the tail so adding it never shifts existing slot offsets.
+    ke_gpu_shader_language (*shader_language)(struct ke_gpu_device *self);
 } ke_gpu_device;
 
 // ── Owner wrapper ──────────────────────────────────────────────────────────

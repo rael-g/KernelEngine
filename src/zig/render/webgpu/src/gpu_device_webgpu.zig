@@ -391,6 +391,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .map_buffer_write               = mapBufferWrite,
         .unmap_buffer                   = unmapBuffer,
         .get_capabilities               = getCapabilities,
+        .shader_language                = shaderLanguage,
         .query_extension                = queryExtension,
     };
     return dev;
@@ -660,17 +661,40 @@ fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_param
     return @intFromPtr(wgpu.wgpuDeviceCreateSampler(state(dev).device, &desc));
 }
 
+fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_language {
+    return ke.KE_GPU_SHADER_LANG_WGSL;
+}
+
+const SPIRV_MAGIC: u32 = 0x07230203;
+
 fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_module_params) callconv(.c) ke.ke_gpu_shader_module {
     const pp = @as(*const ke.ke_gpu_shader_module_params, @ptrCast(p));
-    const spirv = wgpu.WGPUShaderSourceSPIRV{
-        .chain    = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceSPIRV },
-        .codeSize = @intCast(pp.byte_size / 4),
-        .code     = pp.code,
-    };
-    const desc = wgpu.WGPUShaderModuleDescriptor{
-        .nextInChain = @ptrCast(&spirv),
+
+    // The backend speaks WGSL natively but also accepts SPIR-V via passthrough;
+    // disambiguate by the SPIR-V magic word in the first four bytes.
+    const is_spirv = pp.byte_size >= 4 and
+        @as(*align(1) const u32, @ptrCast(pp.code)).* == SPIRV_MAGIC;
+
+    var desc = wgpu.WGPUShaderModuleDescriptor{
+        .nextInChain = null,
         .label       = .{ .data = pp.entry_point, .length = wgpu.WGPU_STRLEN },
     };
+
+    if (is_spirv) {
+        const spirv = wgpu.WGPUShaderSourceSPIRV{
+            .chain    = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceSPIRV },
+            .codeSize = @intCast(pp.byte_size / 4),
+            .code     = @ptrCast(@alignCast(pp.code)),
+        };
+        desc.nextInChain = @ptrCast(&spirv);
+        return @intFromPtr(wgpu.wgpuDeviceCreateShaderModule(state(dev).device, &desc));
+    }
+
+    const wgsl = wgpu.WGPUShaderSourceWGSL{
+        .chain = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceWGSL },
+        .code  = .{ .data = @ptrCast(pp.code), .length = if (pp.byte_size != 0) pp.byte_size else wgpu.WGPU_STRLEN },
+    };
+    desc.nextInChain = @ptrCast(&wgsl);
     return @intFromPtr(wgpu.wgpuDeviceCreateShaderModule(state(dev).device, &desc));
 }
 
