@@ -11,6 +11,13 @@ pub const c = @cImport({
 
 const gpa = std.heap.c_allocator;
 
+// Fold the render module factory (ke_render_module_create) into this lib so it
+// calls ke_render_core_create in-lib — a separate Zig DLL can't link this one's
+// import lib on Windows. Force-referenced so its export fn is emitted.
+comptime {
+    _ = @import("render_module.zig");
+}
+
 const MAX_RESOURCES = 64;
 const MAX_CMD_BUFFERS = 64;
 const MAX_COLOR_ATTACH = 8;
@@ -258,7 +265,7 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
                 .view = r.view,
                 .load_op = c.KE_GPU_LOAD_OP_CLEAR,
                 .store_op = c.KE_GPU_STORE_OP_STORE,
-                .clear_value = .{ .color = .{ 0.0, 0.0, 0.0, 1.0 } },
+                .clear_value = .{ .color = .{ 0.10, 0.15, 0.30, 1.0 } },
             };
             color_count += 1;
         }
