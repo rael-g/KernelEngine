@@ -57,6 +57,7 @@ struct ke_system_ctx
     const ke_component_access *access_list;  // borrowed from the system's params
     uint32_t                   access_count;
     bool                       exclusive;
+    bool                       reads_snapshot; // render phase: reads route to snapshot side (§16)
     const char                *system_name;  // for diagnostics
     defer_queue               *defer;        // borrowed from the runtime
 };
@@ -218,7 +219,8 @@ const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity
 {
     if (!ctx || !ctx->ecs) return NULL;
 #ifndef NDEBUG
-    // Read OR write declaration covers a read access.
+    // Read OR write declaration covers a read access. Checked against the
+    // declared (live) cid, before any snapshot routing below.
     if (!ctx->exclusive &&
         !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_READ) &&
         !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
@@ -227,6 +229,10 @@ const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity
         return NULL;
     }
 #endif
+    // Render-phase reads land on the snapshot side of a double-buffered
+    // component; for everything else snapshot_cid returns cid unchanged (§16).
+    if (ctx->reads_snapshot && ctx->ecs->snapshot_cid)
+        cid = ctx->ecs->snapshot_cid(ctx->ecs, cid);
     return ctx->ecs->component_get(ctx->ecs, entity, cid);
 }
 
@@ -368,6 +374,11 @@ typedef struct runtime_state
     float fixed_dt;
     float fixed_dt_max_accum;
     float fixed_accumulator;
+
+    // §16 snapshot inference runs once, on the first tick, after all systems
+    // are registered: every cid a render-phase system reads is marked
+    // double-buffered so the sim→render swap has a back buffer to fill.
+    bool inference_done;
 } runtime_state;
 
 typedef struct runtime_handle
@@ -503,6 +514,7 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->ctx.access_list   = rs->params.access_list;
             pkg->ctx.access_count  = rs->params.access_count;
             pkg->ctx.exclusive     = rs->params.exclusive;
+            pkg->ctx.reads_snapshot = (phase == KE_PHASE_RENDER);
             pkg->ctx.system_name   = rs->params.name;
             pkg->ctx.defer         = NULL;  // task_pkg_run binds to &pkg->defer
             pkg->execute           = rs->params.execute;
@@ -538,6 +550,21 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             if (pkgs[t].defer.cmds)
                 ke_free(pkgs[t].defer.cmds);
         }
+    }
+}
+
+// Walk every render-phase system; mark each component it reads as
+// double-buffered so the sim→render swap has a back buffer to fill. Tag
+// components (size 0, e.g. render-resource cids) are skipped by the ecs impl.
+static void runtime_infer_snapshots(runtime_handle *h)
+{
+    if (!h->state.ecs->set_double_buffered) return;
+    for (size_t si = 0; si < h->state.system_count; si++)
+    {
+        registered_system *rs = &h->state.systems[si];
+        if (rs->params.phase != KE_PHASE_RENDER) continue;
+        for (uint32_t a = 0; a < rs->params.access_count; a++)
+            h->state.ecs->set_double_buffered(h->state.ecs, rs->params.access_list[a].cid);
     }
 }
 
@@ -577,6 +604,18 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
 
     runtime_run_phase(h, KE_PHASE_UPDATE,      dt);
     runtime_run_phase(h, KE_PHASE_POST_UPDATE, dt);
+
+    // Sim→render boundary (§16). One-time inference marks every component a
+    // render system reads as double-buffered; the swap then freezes the sim's
+    // just-written live side into the snapshot the render phase reads.
+    if (!h->state.inference_done)
+    {
+        runtime_infer_snapshots(h);
+        h->state.inference_done = true;
+    }
+    if (h->state.ecs->swap_snapshots)
+        h->state.ecs->swap_snapshots(h->state.ecs);
+    runtime_run_phase(h, KE_PHASE_RENDER, dt);
 
     return true;
 }

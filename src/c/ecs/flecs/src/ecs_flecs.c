@@ -73,10 +73,24 @@ typedef struct query_cache_entry
     size_t          element_size;
 } query_cache_entry;
 
+// A double-buffered component (RuntimeArchitectureV2.md §16): `live` is the cid
+// sim systems read/write; `snap` is the hidden back buffer render systems read.
+// swap_snapshots copies live → snap at the sim→render phase boundary.
+typedef struct snap_pair
+{
+    ke_component_id live;
+    ke_component_id snap;
+    size_t          element_size;
+} snap_pair;
+
 typedef struct ecs_flecs_state
 {
     ecs_world_t  *world;
     bool          world_corrupted; // set when KE_FLECS_GUARD catches a fatal
+
+    snap_pair *snaps;
+    size_t     snap_count;
+    size_t     snap_capacity;
 
     // Query cache — first call per cid creates the flecs query and we keep it.
     query_cache_entry *queries;
@@ -313,6 +327,104 @@ static void ecs_flecs_query(ke_ecs *self, ke_component_id component,
     KE_FLECS_GUARD_END();
 }
 
+// ── Snapshot (double-buffer) support ─────────────────────────────────────────
+
+static snap_pair *find_snap_pair(ecs_flecs_state *s, ke_component_id live)
+{
+    for (size_t i = 0; i < s->snap_count; i++)
+        if (s->snaps[i].live == live) return &s->snaps[i];
+    return NULL;
+}
+
+static void ecs_flecs_set_double_buffered(ke_ecs *self, ke_component_id cid)
+{
+    if (!self || !self->handle || cid == 0) return;
+    ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (find_snap_pair(&h->state, cid)) return; // already double-buffered
+
+    const ecs_type_info_t *ti = ecs_get_type_info(h->state.world, (ecs_id_t)cid);
+    size_t size = ti ? (size_t)ti->size : 0;
+    if (size == 0) return; // tag components (e.g. render-resource cids) are not buffered
+
+    KE_FLECS_GUARD("flecs fatal in set_double_buffered", { h->state.world_corrupted = true; return; });
+    ecs_entity_t snap_e = (ecs_entity_t)ecs_new_w_id(h->state.world, 0);
+    ecs_component_desc_t cdesc = {0};
+    cdesc.entity         = snap_e;
+    cdesc.type.size      = (ecs_size_t)size;
+    cdesc.type.alignment = (ecs_size_t)alignof(max_align_t);
+    ke_component_id snap_cid = (ke_component_id)ecs_component_init(h->state.world, &cdesc);
+    KE_FLECS_GUARD_END();
+
+    if (h->state.snap_count == h->state.snap_capacity)
+    {
+        size_t new_cap = h->state.snap_capacity ? h->state.snap_capacity * 2 : 8;
+        snap_pair *new_buf = (snap_pair *)ke_alloc(sizeof(snap_pair) * new_cap, alignof(snap_pair));
+        if (!new_buf) return;
+        if (h->state.snaps)
+        {
+            memcpy(new_buf, h->state.snaps, sizeof(snap_pair) * h->state.snap_count);
+            ke_free(h->state.snaps);
+        }
+        h->state.snaps         = new_buf;
+        h->state.snap_capacity = new_cap;
+    }
+    snap_pair *p     = &h->state.snaps[h->state.snap_count++];
+    p->live          = cid;
+    p->snap          = snap_cid;
+    p->element_size  = size;
+}
+
+static ke_component_id ecs_flecs_component_register_v3(ke_ecs *self, const char *name,
+                                                       size_t size, ke_component_flags flags)
+{
+    ke_component_id cid = ecs_flecs_component_register(self, name, size);
+    if (cid != 0 && (flags & KE_COMPONENT_DOUBLE_BUFFERED))
+        ecs_flecs_set_double_buffered(self, cid);
+    return cid;
+}
+
+static ke_component_id ecs_flecs_snapshot_cid(ke_ecs *self, ke_component_id cid)
+{
+    if (!self || !self->handle) return cid;
+    snap_pair *p = find_snap_pair(&((ecs_flecs_handle *)self->handle)->state, cid);
+    return p ? p->snap : cid;
+}
+
+static void ecs_flecs_swap_snapshots(ke_ecs *self)
+{
+    if (!self || !self->handle) return;
+    ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    KE_FLECS_GUARD("flecs fatal in swap_snapshots", { h->state.world_corrupted = true; return; });
+
+    for (size_t i = 0; i < h->state.snap_count; i++)
+    {
+        snap_pair *p = &h->state.snaps[i];
+
+        // Pass 1: collect entities carrying the live component (no world mutation).
+        query_cache_entry *entry = find_or_create_query(&h->state, p->live);
+        if (!entry || !entry->query) continue;
+        size_t total = 0;
+        ecs_iter_t it = ecs_query_iter(h->state.world, entry->query);
+        while (ecs_query_next(&it))
+        {
+            if (!grow_scratch_entities(&h->state, total + (size_t)it.count)) { total = 0; break; }
+            memcpy(h->state.scratch_entities + total, it.entities, sizeof(ecs_entity_t) * (size_t)it.count);
+            total += (size_t)it.count;
+        }
+
+        // Pass 2: copy live → snap per entity (adds snap on first swap; safe
+        // outside iteration even though it moves archetypes).
+        for (size_t e = 0; e < total; e++)
+        {
+            ecs_entity_t ent = (ecs_entity_t)h->state.scratch_entities[e];
+            void *live = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->live);
+            void *snap = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->snap);
+            if (live && snap) memcpy(snap, live, p->element_size);
+        }
+    }
+    KE_FLECS_GUARD_END();
+}
+
 static void ecs_flecs_destroy(ke_ecs *self)
 {
     if (!self || !self->handle) return;
@@ -334,6 +446,7 @@ static void ecs_flecs_destroy(ke_ecs *self)
     if (h->state.queries)        ke_free(h->state.queries);
     if (h->state.scratch_entities) ke_free(h->state.scratch_entities);
     if (h->state.scratch_data)     ke_free(h->state.scratch_data);
+    if (h->state.snaps)            ke_free(h->state.snaps);
 
     ke_free(h);
 }
@@ -372,6 +485,10 @@ ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     h->api.component_remove   = ecs_flecs_component_remove;
     h->api.component_get      = ecs_flecs_component_get;
     h->api.query              = ecs_flecs_query;
+    h->api.component_register_v3 = ecs_flecs_component_register_v3;
+    h->api.set_double_buffered   = ecs_flecs_set_double_buffered;
+    h->api.snapshot_cid          = ecs_flecs_snapshot_cid;
+    h->api.swap_snapshots        = ecs_flecs_swap_snapshots;
 
     return (ke_ecs_handle){ .ref = &h->api, .destroy = ecs_flecs_destroy };
 }

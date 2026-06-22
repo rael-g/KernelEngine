@@ -418,6 +418,84 @@ TEST_F(RuntimeSpike, DebugCheck_ExclusiveBypassesValidation)
     EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
 }
 
+// ── §16 sim/render component snapshot ────────────────────────────────────────
+
+TEST_F(RuntimeSpike, Snapshot_FreezesLiveSide)
+{
+    ke_component_id cid = ecs->component_register_v3(ecs, "Snap.Probe", sizeof(int),
+                                                     KE_COMPONENT_DOUBLE_BUFFERED);
+    ASSERT_NE(cid, 0u);
+    ke_component_id snap = ecs->snapshot_cid(ecs, cid);
+    EXPECT_NE(snap, cid);  // double-buffered → distinct snapshot cid
+
+    ke_entity e = ecs->entity_create(ecs);
+    int *live = static_cast<int *>(ecs->component_add(ecs, e, cid));
+    ASSERT_NE(live, nullptr);
+    *live = 100;
+
+    ecs->swap_snapshots(ecs);  // freeze live(100) → snapshot
+
+    int *snap_ptr = static_cast<int *>(ecs->component_get(ecs, e, snap));
+    ASSERT_NE(snap_ptr, nullptr);
+    EXPECT_EQ(*snap_ptr, 100);
+
+    // Mutate live WITHOUT swapping — the snapshot must stay frozen. This is the
+    // property that lets render N read a stable view while sim writes on.
+    static_cast<int *>(ecs->component_get(ecs, e, cid))[0] = 200;
+    EXPECT_EQ(static_cast<int *>(ecs->component_get(ecs, e, snap))[0], 100);
+    EXPECT_EQ(static_cast<int *>(ecs->component_get(ecs, e, cid))[0], 200);
+}
+
+TEST_F(RuntimeSpike, Snapshot_SingleBuffered_IsIdentity)
+{
+    ke_component_id cid = ecs->component_register(ecs, "Snap.Single", sizeof(int));
+    EXPECT_EQ(ecs->snapshot_cid(ecs, cid), cid);  // not double-buffered → identity
+}
+
+namespace {
+struct SnapE2E { ke_entity e; ke_component_id cid; int seen; };
+SnapE2E g_snap_e2e;
+}
+
+TEST_F(RuntimeSpike, SimWrites_RenderReadsSnapshot)
+{
+    ke_component_id cid = ecs->component_register(ecs, "E2E.Value", sizeof(int));
+    ke_entity e = ecs->entity_create(ecs);
+    int *v = static_cast<int *>(ecs->component_add(ecs, e, cid));
+    ASSERT_NE(v, nullptr);
+    *v = 0;
+    g_snap_e2e = { e, cid, -1 };
+
+    // Sim system (UPDATE): writes the live side = 42.
+    ke_component_access wacc[] = {{cid, KE_ACCESS_WRITE}};
+    ke_runtime_system_params sim{};
+    sim.name = "SimWriter"; sim.phase = KE_PHASE_UPDATE;
+    sim.access_list = wacc; sim.access_count = 1;
+    sim.execute = [](ke_system_ctx *ctx, void *, float) {
+        int *p = static_cast<int *>(ke_system_ctx_get_mut(ctx, g_snap_e2e.cid, g_snap_e2e.e));
+        if (p) *p = 42;
+    };
+    ASSERT_NE(runtime->register_system(runtime, &sim, nullptr), 0u);
+
+    // Render system (RENDER): reads cid — routed to the snapshot side.
+    ke_component_access racc[] = {{cid, KE_ACCESS_READ}};
+    ke_runtime_system_params rnd{};
+    rnd.name = "RenderReader"; rnd.phase = KE_PHASE_RENDER;
+    rnd.access_list = racc; rnd.access_count = 1;
+    rnd.execute = [](ke_system_ctx *ctx, void *, float) {
+        const int *p = static_cast<const int *>(ke_system_ctx_get(ctx, g_snap_e2e.cid, g_snap_e2e.e));
+        g_snap_e2e.seen = p ? *p : -999;
+    };
+    ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
+
+    ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
+
+    // Inference double-buffered cid (a render system reads it); the swap froze
+    // sim's just-written 42 into the snapshot the render system read.
+    EXPECT_NE(ecs->snapshot_cid(ecs, cid), cid);
+    EXPECT_EQ(g_snap_e2e.seen, 42);
+}
+
 // ── Wave builder (R/W conflict grouping) ────────────────────────────────────
 //
 // These tests don't need the RuntimeSpike fixture — they exercise the pure
