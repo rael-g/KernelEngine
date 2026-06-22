@@ -186,8 +186,8 @@ typedef struct ke_gpu_render_pipeline_params
 {
     ke_gpu_shader_module             vertex_module;
     ke_gpu_shader_module             fragment_module;
-    const char                      *vertex_entry;    ///< NULL → "main"
-    const char                      *fragment_entry;  ///< NULL → "main"
+    const char                      *vertex_entry;         ///< NULL → "main"
+    const char                      *fragment_entry;       ///< NULL → "main"
     ke_gpu_primitive_topology        primitive_topology;
     ke_gpu_cull_mode                 cull_mode;
     ke_gpu_front_face                front_face;
@@ -198,6 +198,7 @@ typedef struct ke_gpu_render_pipeline_params
     ke_gpu_bind_group_layout         bind_group_layouts[4];
     uint32_t                         bind_group_layout_count;
     ke_bool                          alpha_to_coverage_enabled;
+    ke_gpu_texture_format            color_target_format;  ///< 0 → swapchain surface format
 } ke_gpu_render_pipeline_params;
 
 // ── Compute pipeline ──────────────────────────────────────────────────────
@@ -329,62 +330,8 @@ typedef struct ke_gpu_device
     void (*destroy_bind_group_layout)(struct ke_gpu_device *self, ke_gpu_bind_group_layout h);
     void (*destroy_bind_group)(struct ke_gpu_device *self, ke_gpu_bind_group h);
 
-    // ── Encoder (backing primitives for L4 ke_gpu_command_encoder) ────────
-    void *(*encoder_create)(struct ke_gpu_device *self);
-    void *(*encoder_begin_render_pass)(struct ke_gpu_device *self, void *encoder,
-                                       const ke_gpu_render_pass_params *p);
-    void *(*encoder_begin_compute_pass)(struct ke_gpu_device *self, void *encoder);
-    void  (*encoder_pipeline_barrier)(struct ke_gpu_device *self, void *encoder,
-                                      const ke_gpu_barrier *b);
-    void  (*encoder_copy_buffer_to_buffer)(struct ke_gpu_device *self, void *encoder,
-                                           ke_gpu_buffer src, size_t src_offset,
-                                           ke_gpu_buffer dst, size_t dst_offset,
-                                           size_t size);
-    void  (*encoder_copy_buffer_to_texture)(struct ke_gpu_device *self, void *encoder,
-                                            ke_gpu_buffer src, size_t src_offset,
-                                            ke_gpu_texture dst,
-                                            uint32_t dst_x, uint32_t dst_y, uint32_t dst_z,
-                                            uint32_t width, uint32_t height);
-    void *(*encoder_finish)(struct ke_gpu_device *self, void *encoder);
-    void  (*encoder_destroy)(struct ke_gpu_device *self, void *encoder);
-
-    // ── Render pass (backing primitives for L4 ke_gpu_render_pass) ────────
-    void (*rp_set_pipeline)(struct ke_gpu_device *self, void *rp, ke_gpu_pipeline pipe);
-    void (*rp_set_bind_group)(struct ke_gpu_device *self, void *rp,
-                               uint32_t group_index, ke_gpu_bind_group bg,
-                               const uint32_t *dynamic_offsets, uint32_t dyn_count);
-    void (*rp_set_vertex_buffer)(struct ke_gpu_device *self, void *rp,
-                                  uint32_t slot, ke_gpu_buffer b, size_t offset);
-    void (*rp_set_index_buffer)(struct ke_gpu_device *self, void *rp,
-                                 ke_gpu_buffer b, ke_gpu_index_format fmt, size_t offset);
-    void (*rp_set_viewport)(struct ke_gpu_device *self, void *rp,
-                             float x, float y, float w, float h,
-                             float min_depth, float max_depth);
-    void (*rp_set_scissor)(struct ke_gpu_device *self, void *rp,
-                            int32_t x, int32_t y, uint32_t w, uint32_t h);
-    void (*rp_draw)(struct ke_gpu_device *self, void *rp,
-                    uint32_t vert_count, uint32_t inst_count,
-                    uint32_t first_vert, uint32_t first_inst);
-    void (*rp_draw_indexed)(struct ke_gpu_device *self, void *rp,
-                             uint32_t idx_count, uint32_t inst_count,
-                             uint32_t first_idx, int32_t base_vert, uint32_t first_inst);
-    void (*rp_draw_indirect)(struct ke_gpu_device *self, void *rp,
-                              ke_gpu_buffer indirect_buf, size_t offset);
-    void (*rp_end)(struct ke_gpu_device *self, void *rp);
-
-    // ── Compute pass (backing primitives for L4 ke_gpu_compute_pass) ──────
-    void (*cp_set_pipeline)(struct ke_gpu_device *self, void *cp, ke_gpu_pipeline pipe);
-    void (*cp_set_bind_group)(struct ke_gpu_device *self, void *cp,
-                               uint32_t group_index, ke_gpu_bind_group bg,
-                               const uint32_t *dynamic_offsets, uint32_t dyn_count);
-    void (*cp_dispatch)(struct ke_gpu_device *self, void *cp,
-                        uint32_t x, uint32_t y, uint32_t z);
-    void (*cp_dispatch_indirect)(struct ke_gpu_device *self, void *cp,
-                                  ke_gpu_buffer indirect_buf, size_t offset);
-    void (*cp_end)(struct ke_gpu_device *self, void *cp);
-
-    // ── Command buffer lifecycle ───────────────────────────────────────────
-    void (*cmd_buffer_destroy)(struct ke_gpu_device *self, void *cmd_buf);
+    // ── Command encoder factory (returns a fully populated L4 object) ────────
+    ke_gpu_command_encoder *(*create_command_encoder)(struct ke_gpu_device *self);
 
     // ── Immediate buffer write (queue upload, no map/unmap required) ──────────
     void (*write_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,

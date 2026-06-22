@@ -2,6 +2,7 @@
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/gpu_commands.h>
 #include <kernel_engine/render/gpu_enums.h>
 #include <kernel_engine/render/gpu_surface_ext.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
@@ -158,26 +159,26 @@ int main(void)
             .depth_stencil_attachment = &dsa,
         };
 
-        void *enc = gpu.ref->encoder_create(gpu.ref);
-        void *rp  = gpu.ref->encoder_begin_render_pass(gpu.ref, enc, &rpp);
-        gpu.ref->rp_set_pipeline(gpu.ref, rp, pipeline);
-        gpu.ref->rp_set_index_buffer(gpu.ref, rp, ibo, KE_GPU_INDEX_FORMAT_UINT16, 0);
+        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref);
+        ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
+        rp->set_pipeline(rp, pipeline);
+        rp->set_index_buffer(rp, ibo, KE_GPU_INDEX_FORMAT_UINT16, 0);
 
         // Draw back quad first (red, z=0.5)
-        gpu.ref->rp_set_vertex_buffer(gpu.ref, rp, 0, vbo_back, 0);
-        gpu.ref->rp_draw_indexed(gpu.ref, rp, 6, 1, 0, 0, 0);
+        rp->set_vertex_buffer(rp, 0, vbo_back, 0);
+        rp->draw_indexed(rp, 6, 1, 0, 0, 0);
 
         // Draw front quad (blue, z=0.2) — depth test ensures it wins
-        gpu.ref->rp_set_vertex_buffer(gpu.ref, rp, 0, vbo_front, 0);
-        gpu.ref->rp_draw_indexed(gpu.ref, rp, 6, 1, 0, 0, 0);
+        rp->set_vertex_buffer(rp, 0, vbo_front, 0);
+        rp->draw_indexed(rp, 6, 1, 0, 0, 0);
 
-        gpu.ref->rp_end(gpu.ref, rp);
+        rp->end(rp);
 
-        ke_gpu_command_buffer *cmd = gpu.ref->encoder_finish(gpu.ref, enc);
-        gpu.ref->encoder_destroy(gpu.ref, enc);
+        ke_gpu_command_buffer *cmd = enc->finish(enc);
+        enc->destroy(enc);
         ke_gpu_command_buffer *cmds[] = { cmd };
         gpu.ref->queue_submit(gpu.ref, q, cmds, 1);
-        gpu.ref->cmd_buffer_destroy(gpu.ref, cmd);
+        cmd->destroy(cmd);
         gpu.ref->queue_present(gpu.ref, q);
         gpu.ref->destroy_texture_view(gpu.ref, color_view);
     }

@@ -7,6 +7,7 @@ const wgpu = @cImport({
 const ke = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/render/gpu_device.h");
+    @cInclude("kernel_engine/render/gpu_commands.h");
     @cInclude("kernel_engine/window/window.h");
 });
 
@@ -384,30 +385,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .destroy_pipeline               = destroyPipeline,
         .destroy_bind_group_layout      = destroyBindGroupLayout,
         .destroy_bind_group             = destroyBindGroup,
-        .encoder_create                 = encoderCreate,
-        .encoder_begin_render_pass      = encoderBeginRenderPass,
-        .encoder_begin_compute_pass     = encoderBeginComputePass,
-        .encoder_pipeline_barrier       = encoderPipelineBarrier,
-        .encoder_copy_buffer_to_buffer  = encoderCopyBufferToBuffer,
-        .encoder_copy_buffer_to_texture = encoderCopyBufferToTexture,
-        .encoder_finish                 = encoderFinish,
-        .encoder_destroy                = encoderDestroy,
-        .rp_set_pipeline                = rpSetPipeline,
-        .rp_set_bind_group              = rpSetBindGroup,
-        .rp_set_vertex_buffer           = rpSetVertexBuffer,
-        .rp_set_index_buffer            = rpSetIndexBuffer,
-        .rp_set_viewport                = rpSetViewport,
-        .rp_set_scissor                 = rpSetScissor,
-        .rp_draw                        = rpDraw,
-        .rp_draw_indexed                = rpDrawIndexed,
-        .rp_draw_indirect               = rpDrawIndirect,
-        .rp_end                         = rpEnd,
-        .cp_set_pipeline                = cpSetPipeline,
-        .cp_set_bind_group              = cpSetBindGroup,
-        .cp_dispatch                    = cpDispatch,
-        .cp_dispatch_indirect           = cpDispatchIndirect,
-        .cp_end                         = cpEnd,
-        .cmd_buffer_destroy             = cmdBufferDestroy,
+        .create_command_encoder         = createCommandEncoder,
         .write_buffer                   = writeBuffer,
         .map_buffer                     = mapBuffer,
         .map_buffer_write               = mapBufferWrite,
@@ -497,16 +475,16 @@ fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
 }
 
 fn queueSubmit(
-    dev: [*c]ke.ke_gpu_device,
-    _: ke.ke_gpu_queue,
+    _: [*c]ke.ke_gpu_device,
+    q: ke.ke_gpu_queue,
     cmds: [*c]const ?*ke.ke_gpu_command_buffer,
     cmd_count: u32,
 ) callconv(.c) void {
     if (cmd_count == 0) return;
     var buf: [64]wgpu.WGPUCommandBuffer = undefined;
     const n = @min(cmd_count, buf.len);
-    for (0..n) |i| buf[i] = @ptrCast(cmds[i]);
-    wgpu.wgpuQueueSubmit(state(dev).queue, @intCast(n), &buf);
+    for (0..n) |i| buf[i] = @ptrCast(cmds[i].?.handle);
+    wgpu.wgpuQueueSubmit(@ptrFromInt(q), @intCast(n), &buf);
 }
 
 fn queuePresent(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
@@ -725,9 +703,11 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
         attr_offset += ac;
     }
 
-    // Color target (one output, format from surface or RGBA8)
+    // Color target (one output, explicit format overrides surface default)
     const s = state(dev);
-    const color_fmt = if (s.surface_format != wgpu.WGPUTextureFormat_Undefined)
+    const color_fmt = if (pp.color_target_format != ke.KE_GPU_TEXTURE_FORMAT_INVALID)
+        toWgpuTextureFormat(pp.color_target_format)
+    else if (s.surface_format != wgpu.WGPUTextureFormat_Undefined)
         s.surface_format
     else
         wgpu.WGPUTextureFormat_BGRA8Unorm;
@@ -935,14 +915,76 @@ fn destroyPipeline(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_pipeline) callconv(.c) 
 fn destroyBindGroupLayout(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group_layout) callconv(.c) void { wgpu.wgpuBindGroupLayoutRelease(@ptrFromInt(h)); }
 fn destroyBindGroup(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group) callconv(.c) void { wgpu.wgpuBindGroupRelease(@ptrFromInt(h)); }
 
-// ── Encoder ────────────────────────────────────────────────────────────────
+// ── L2 — render pass slot implementations ─────────────────────────────────
 
-fn encoderCreate(dev: [*c]ke.ke_gpu_device) callconv(.c) ?*anyopaque {
-    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
-    return wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc);
+fn rpSetPipeline(rp: [*c]ke.ke_gpu_render_pass, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderSetPipeline(@ptrCast(rp.*.handle), @ptrFromInt(pipe));
+}
+fn rpSetBindGroup(rp: [*c]ke.ke_gpu_render_pass, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderSetBindGroup(@ptrCast(rp.*.handle), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
+}
+fn rpSetVertexBuffer(rp: [*c]ke.ke_gpu_render_pass, slot: u32, b: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderSetVertexBuffer(@ptrCast(rp.*.handle), slot, @ptrFromInt(b), offset, wgpu.WGPU_WHOLE_SIZE);
+}
+fn rpSetIndexBuffer(rp: [*c]ke.ke_gpu_render_pass, b: ke.ke_gpu_buffer, fmt: ke.ke_gpu_index_format, offset: usize) callconv(.c) void {
+    const wfmt: wgpu.WGPUIndexFormat = switch (fmt) {
+        ke.KE_GPU_INDEX_FORMAT_UINT16 => wgpu.WGPUIndexFormat_Uint16,
+        ke.KE_GPU_INDEX_FORMAT_UINT32 => wgpu.WGPUIndexFormat_Uint32,
+        else => wgpu.WGPUIndexFormat_Undefined,
+    };
+    wgpu.wgpuRenderPassEncoderSetIndexBuffer(@ptrCast(rp.*.handle), @ptrFromInt(b), wfmt, offset, wgpu.WGPU_WHOLE_SIZE);
+}
+fn rpSetViewport(rp: [*c]ke.ke_gpu_render_pass, x: f32, y: f32, w: f32, h: f32, min_d: f32, max_d: f32) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderSetViewport(@ptrCast(rp.*.handle), x, y, w, h, min_d, max_d);
+}
+fn rpSetScissor(rp: [*c]ke.ke_gpu_render_pass, x: i32, y: i32, w: u32, h: u32) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderSetScissorRect(@ptrCast(rp.*.handle), @intCast(x), @intCast(y), w, h);
+}
+fn rpDraw(rp: [*c]ke.ke_gpu_render_pass, vert_count: u32, inst_count: u32, first_vert: u32, first_inst: u32) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderDraw(@ptrCast(rp.*.handle), vert_count, inst_count, first_vert, first_inst);
+}
+fn rpDrawIndexed(rp: [*c]ke.ke_gpu_render_pass, idx_count: u32, inst_count: u32, first_idx: u32, base_vert: i32, first_inst: u32) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderDrawIndexed(@ptrCast(rp.*.handle), idx_count, inst_count, first_idx, base_vert, first_inst);
+}
+fn rpDrawIndirect(rp: [*c]ke.ke_gpu_render_pass, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderDrawIndirect(@ptrCast(rp.*.handle), @ptrFromInt(indirect_buf), offset);
+}
+fn rpEnd(rp: [*c]ke.ke_gpu_render_pass) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderEnd(@ptrCast(rp.*.handle));
+    wgpu.wgpuRenderPassEncoderRelease(@ptrCast(rp.*.handle));
+    gpa.destroy(@as(*ke.ke_gpu_render_pass, @ptrCast(rp)));
 }
 
-fn encoderBeginRenderPass(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque, p: [*c]const ke.ke_gpu_render_pass_params) callconv(.c) ?*anyopaque {
+// ── L2 — compute pass slot implementations ────────────────────────────────
+
+fn cpSetPipeline(cp: [*c]ke.ke_gpu_compute_pass, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderSetPipeline(@ptrCast(cp.*.handle), @ptrFromInt(pipe));
+}
+fn cpSetBindGroup(cp: [*c]ke.ke_gpu_compute_pass, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderSetBindGroup(@ptrCast(cp.*.handle), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
+}
+fn cpDispatch(cp: [*c]ke.ke_gpu_compute_pass, x: u32, y: u32, z: u32) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderDispatchWorkgroups(@ptrCast(cp.*.handle), x, y, z);
+}
+fn cpDispatchIndirect(cp: [*c]ke.ke_gpu_compute_pass, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderDispatchWorkgroupsIndirect(@ptrCast(cp.*.handle), @ptrFromInt(indirect_buf), offset);
+}
+fn cpEnd(cp: [*c]ke.ke_gpu_compute_pass) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderEnd(@ptrCast(cp.*.handle));
+    wgpu.wgpuComputePassEncoderRelease(@ptrCast(cp.*.handle));
+    gpa.destroy(@as(*ke.ke_gpu_compute_pass, @ptrCast(cp)));
+}
+
+// ── L2 — command buffer ───────────────────────────────────────────────────
+
+fn cmdBufDestroy(cmd: [*c]ke.ke_gpu_command_buffer) callconv(.c) void {
+    wgpu.wgpuCommandBufferRelease(@ptrCast(cmd.*.handle));
+    gpa.destroy(@as(*ke.ke_gpu_command_buffer, @ptrCast(cmd)));
+}
+
+// ── L2 — command encoder slot implementations ─────────────────────────────
+
+fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu_render_pass_params) callconv(.c) [*c]ke.ke_gpu_render_pass {
     const pp = @as(*const ke.ke_gpu_render_pass_params, @ptrCast(p));
 
     var color_attachments: [8]wgpu.WGPURenderPassColorAttachment = undefined;
@@ -987,88 +1029,80 @@ fn encoderBeginRenderPass(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque, p: [*c]
         .timestampWrites        = null,
     };
 
-    return wgpu.wgpuCommandEncoderBeginRenderPass(@ptrCast(encoder), &rp_desc);
-}
-
-fn encoderBeginComputePass(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.c) ?*anyopaque {
-    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 }, .timestampWrites = null };
-    return wgpu.wgpuCommandEncoderBeginComputePass(@ptrCast(encoder), &desc);
-}
-fn encoderPipelineBarrier(_: [*c]ke.ke_gpu_device, _: ?*anyopaque, _: [*c]const ke.ke_gpu_barrier) callconv(.c) void {}
-fn encoderCopyBufferToBuffer(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque, src: ke.ke_gpu_buffer, src_offset: usize, dst: ke.ke_gpu_buffer, dst_offset: usize, size: usize) callconv(.c) void {
-    wgpu.wgpuCommandEncoderCopyBufferToBuffer(@ptrCast(encoder), @ptrFromInt(src), src_offset, @ptrFromInt(dst), dst_offset, size);
-}
-fn encoderCopyBufferToTexture(_: [*c]ke.ke_gpu_device, _: ?*anyopaque, _: ke.ke_gpu_buffer, _: usize, _: ke.ke_gpu_texture, _: u32, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
-fn encoderFinish(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.c) ?*anyopaque {
-    const desc = wgpu.WGPUCommandBufferDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
-    return wgpu.wgpuCommandEncoderFinish(@ptrCast(encoder), &desc);
-}
-fn encoderDestroy(_: [*c]ke.ke_gpu_device, encoder: ?*anyopaque) callconv(.c) void {
-    wgpu.wgpuCommandEncoderRelease(@ptrCast(encoder));
-}
-
-// ── Render pass ────────────────────────────────────────────────────────────
-
-fn rpSetPipeline(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderSetPipeline(@ptrCast(rp), @ptrFromInt(pipe));
-}
-fn rpSetBindGroup(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderSetBindGroup(@ptrCast(rp), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
-}
-fn rpSetVertexBuffer(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, slot: u32, b: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderSetVertexBuffer(@ptrCast(rp), slot, @ptrFromInt(b), offset, wgpu.WGPU_WHOLE_SIZE);
-}
-fn rpSetIndexBuffer(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, b: ke.ke_gpu_buffer, fmt: ke.ke_gpu_index_format, offset: usize) callconv(.c) void {
-    const wfmt: wgpu.WGPUIndexFormat = switch (fmt) {
-        ke.KE_GPU_INDEX_FORMAT_UINT16 => wgpu.WGPUIndexFormat_Uint16,
-        ke.KE_GPU_INDEX_FORMAT_UINT32 => wgpu.WGPUIndexFormat_Uint32,
-        else => wgpu.WGPUIndexFormat_Undefined,
+    const raw = wgpu.wgpuCommandEncoderBeginRenderPass(@ptrCast(enc.*.handle), &rp_desc) orelse return null;
+    const rp = gpa.create(ke.ke_gpu_render_pass) catch return null;
+    rp.* = .{
+        .handle            = raw,
+        .device            = enc.*.device,
+        .set_pipeline      = rpSetPipeline,
+        .set_bind_group    = rpSetBindGroup,
+        .set_vertex_buffer = rpSetVertexBuffer,
+        .set_index_buffer  = rpSetIndexBuffer,
+        .set_viewport      = rpSetViewport,
+        .set_scissor       = rpSetScissor,
+        .draw              = rpDraw,
+        .draw_indexed      = rpDrawIndexed,
+        .draw_indirect     = rpDrawIndirect,
+        .end               = rpEnd,
     };
-    wgpu.wgpuRenderPassEncoderSetIndexBuffer(@ptrCast(rp), @ptrFromInt(b), wfmt, offset, wgpu.WGPU_WHOLE_SIZE);
-}
-fn rpSetViewport(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, x: f32, y: f32, w: f32, h: f32, min_d: f32, max_d: f32) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderSetViewport(@ptrCast(rp), x, y, w, h, min_d, max_d);
-}
-fn rpSetScissor(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, x: i32, y: i32, w: u32, h: u32) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderSetScissorRect(@ptrCast(rp), @intCast(x), @intCast(y), w, h);
-}
-fn rpDraw(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, vert_count: u32, inst_count: u32, first_vert: u32, first_inst: u32) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderDraw(@ptrCast(rp), vert_count, inst_count, first_vert, first_inst);
-}
-fn rpDrawIndexed(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, idx_count: u32, inst_count: u32, first_idx: u32, base_vert: i32, first_inst: u32) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderDrawIndexed(@ptrCast(rp), idx_count, inst_count, first_idx, base_vert, first_inst);
-}
-fn rpDrawIndirect(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderDrawIndirect(@ptrCast(rp), @ptrFromInt(indirect_buf), offset);
-}
-fn rpEnd(_: [*c]ke.ke_gpu_device, rp: ?*anyopaque) callconv(.c) void {
-    wgpu.wgpuRenderPassEncoderEnd(@ptrCast(rp));
-    wgpu.wgpuRenderPassEncoderRelease(@ptrCast(rp));
+    return rp;
 }
 
-// ── Compute pass ───────────────────────────────────────────────────────────
-
-fn cpSetPipeline(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
-    wgpu.wgpuComputePassEncoderSetPipeline(@ptrCast(cp), @ptrFromInt(pipe));
-}
-fn cpSetBindGroup(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, group_index: u32, bg: ke.ke_gpu_bind_group, dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
-    wgpu.wgpuComputePassEncoderSetBindGroup(@ptrCast(cp), group_index, @ptrFromInt(bg), dyn_count, dynamic_offsets);
-}
-fn cpDispatch(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, x: u32, y: u32, z: u32) callconv(.c) void {
-    wgpu.wgpuComputePassEncoderDispatchWorkgroups(@ptrCast(cp), x, y, z);
-}
-fn cpDispatchIndirect(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
-    wgpu.wgpuComputePassEncoderDispatchWorkgroupsIndirect(@ptrCast(cp), @ptrFromInt(indirect_buf), offset);
-}
-fn cpEnd(_: [*c]ke.ke_gpu_device, cp: ?*anyopaque) callconv(.c) void {
-    wgpu.wgpuComputePassEncoderEnd(@ptrCast(cp));
-    wgpu.wgpuComputePassEncoderRelease(@ptrCast(cp));
+fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) [*c]ke.ke_gpu_compute_pass {
+    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 }, .timestampWrites = null };
+    const raw = wgpu.wgpuCommandEncoderBeginComputePass(@ptrCast(enc.*.handle), &desc) orelse return null;
+    const cp = gpa.create(ke.ke_gpu_compute_pass) catch return null;
+    cp.* = .{
+        .handle            = raw,
+        .device            = enc.*.device,
+        .set_pipeline      = cpSetPipeline,
+        .set_bind_group    = cpSetBindGroup,
+        .dispatch          = cpDispatch,
+        .dispatch_indirect = cpDispatchIndirect,
+        .end               = cpEnd,
+    };
+    return cp;
 }
 
-// ── Command buffer lifecycle ───────────────────────────────────────────────
+fn encPipelineBarrier(_: [*c]ke.ke_gpu_command_encoder, _: [*c]const ke.ke_gpu_barrier) callconv(.c) void {}
 
-fn cmdBufferDestroy(_: [*c]ke.ke_gpu_device, cmd_buf: ?*anyopaque) callconv(.c) void {
-    wgpu.wgpuCommandBufferRelease(@ptrCast(cmd_buf));
+fn encCopyBufferToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buffer, src_off: usize, dst: ke.ke_gpu_buffer, dst_off: usize, size: usize) callconv(.c) void {
+    wgpu.wgpuCommandEncoderCopyBufferToBuffer(@ptrCast(enc.*.handle), @ptrFromInt(src), src_off, @ptrFromInt(dst), dst_off, size);
+}
+
+fn encCopyBufferToTexture(_: [*c]ke.ke_gpu_command_encoder, _: ke.ke_gpu_buffer, _: usize, _: ke.ke_gpu_texture, _: u32, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
+
+fn encFinish(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) [*c]ke.ke_gpu_command_buffer {
+    const desc = wgpu.WGPUCommandBufferDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
+    const raw = wgpu.wgpuCommandEncoderFinish(@ptrCast(enc.*.handle), &desc) orelse return null;
+    const cmd = gpa.create(ke.ke_gpu_command_buffer) catch return null;
+    cmd.* = .{ .handle = raw, .device = enc.*.device, .destroy = cmdBufDestroy };
+    return cmd;
+}
+
+fn encDestroy(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) void {
+    wgpu.wgpuCommandEncoderRelease(@ptrCast(enc.*.handle));
+    gpa.destroy(@as(*ke.ke_gpu_command_encoder, @ptrCast(enc)));
+}
+
+// ── L2 — command encoder factory ──────────────────────────────────────────
+
+fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_command_encoder {
+    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
+    const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse return null;
+    const enc = gpa.create(ke.ke_gpu_command_encoder) catch return null;
+    enc.* = .{
+        .handle                 = raw,
+        .device                 = dev,
+        .begin_render_pass      = encBeginRenderPass,
+        .begin_compute_pass     = encBeginComputePass,
+        .pipeline_barrier       = encPipelineBarrier,
+        .copy_buffer_to_buffer  = encCopyBufferToBuffer,
+        .copy_buffer_to_texture = encCopyBufferToTexture,
+        .finish                 = encFinish,
+        .destroy                = encDestroy,
+    };
+    return enc;
 }
 
 // ── Immediate buffer write ─────────────────────────────────────────────────
