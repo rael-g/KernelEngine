@@ -7,7 +7,7 @@ add_library(ke_render_bgfx SHARED
 find_package(bgfx CONFIG REQUIRED)
 
 target_link_libraries(ke_render_bgfx PRIVATE
-    ke_render_core
+    ke_render_core_bgfx
     ke_render_bgfx_device
     ke_threading
     ke_allocator_malloc

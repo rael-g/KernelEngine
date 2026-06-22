@@ -23,7 +23,7 @@ target_include_directories(test_renderer_logic PRIVATE
 
 target_link_libraries(test_renderer_logic PRIVATE
     ke_render_bgfx
-    ke_render_core
+    ke_render_core_bgfx
     ke_allocator_malloc
     ke_logger_simple
     GTest::gtest_main

@@ -1,4 +1,4 @@
-add_library(ke_render_core STATIC
+add_library(ke_render_core_bgfx STATIC
     src/core_renderer.cpp
     src/geometry_manager.cpp
     src/texture_manager.cpp
@@ -10,18 +10,18 @@ add_library(ke_render_core STATIC
     src/render_graph_impl.cpp
 )
 
-set_property(TARGET ke_render_core PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET ke_render_core_bgfx PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(ke_render_core PUBLIC
+target_include_directories(ke_render_core_bgfx PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-target_include_directories(ke_render_core PRIVATE
+target_include_directories(ke_render_core_bgfx PRIVATE
     src
     ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
 )
 
-target_link_libraries(ke_render_core PUBLIC
+target_link_libraries(ke_render_core_bgfx PUBLIC
     ke_render
     ke_render_frame_packet
     ke_window
@@ -32,7 +32,7 @@ target_link_libraries(ke_render_core PUBLIC
     ke_logger
 )
 
-install(TARGETS ke_render_core
+install(TARGETS ke_render_core_bgfx
     EXPORT KernelEngineTargets
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
