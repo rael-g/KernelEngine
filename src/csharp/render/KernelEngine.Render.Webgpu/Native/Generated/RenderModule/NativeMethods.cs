@@ -1,0 +1,10 @@
+using KernelEngine.Common.Native;
+using System.Runtime.InteropServices;
+
+namespace KernelEngine.Render.Webgpu.Native;
+
+public static unsafe partial class NativeMethods
+{
+    [DllImport("ke_render_core", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_module_create", ExactSpelling = true)]
+    public static extern ke_render_module_handle render_module_create([NativeTypeName("ke_runtime *")] KernelEngine.Runtime.Native.ke_runtime* runtime, [NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_gpu_device* device, ke_error** out_error);
+}

@@ -19,6 +19,7 @@
     <Project Path="examples/csharp/14_ui_quad/14_ui_quad.csproj" />
     <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
     <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
+    <Project Path="examples/csharp/17_webgpu_clear/17_webgpu_clear.csproj" />
   </Folder>
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />
@@ -44,6 +45,7 @@
     <Project Path="src/csharp/physics/KernelEngine.Physics/KernelEngine.Physics.csproj" />
     <Project Path="src/csharp/physics/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render/KernelEngine.Render.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.Render.Webgpu/KernelEngine.Render.Webgpu.csproj" />
     <Project Path="src/csharp/runtime/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
     <Project Path="src/csharp/scheduler/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />
     <Project Path="src/csharp/scheduler/KernelEngine.Scheduler.Enki/KernelEngine.Scheduler.Enki.csproj" />

@@ -1,0 +1,12 @@
+using KernelEngine.Common.Native;
+
+namespace KernelEngine.Render.Webgpu.Native;
+
+public enum ke_gpu_binding_type
+{
+    KE_GPU_BINDING_TYPE_BUFFER,
+    KE_GPU_BINDING_TYPE_SAMPLER,
+    KE_GPU_BINDING_TYPE_TEXTURE,
+    KE_GPU_BINDING_TYPE_STORAGE_BUFFER,
+    KE_GPU_BINDING_TYPE_STORAGE_TEXTURE,
+}
