@@ -9,11 +9,30 @@
 extern "C" {
 #endif
 
-/// Error type singleton. Each domain declares its types as global const instances.
-/// Comparison is by pointer identity via ke_error_is() — never compare addresses directly.
+/// Error type singleton. Comparison is by identity via ke_error_is(), which walks
+/// the parent chain — never compare type addresses directly.
+///
+/// Error types form an inheritance tree. The generics below (KE_ERROR_*) are the
+/// shared roots; it is physically impossible to enumerate every error in existence
+/// here, so this header deliberately stays small. Each DOMAIN declares its own,
+/// more specific error types as global const instances next to its own API, and
+/// points each one's `parent` at a generic root (or another domain type) when the
+/// category fits — or leaves `parent` NULL when nothing fits.
+///
+/// A domain type therefore stays catchable both specifically and by category:
+///
+///     // in the render domain, beside the GPU device API:
+///     const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION = {
+///         .name = "ke.render.gpu.shader_compilation", .parent = &KE_ERROR_INVALID_ARGUMENT };
+///
+///     // a caller can match either the exact type or its whole category:
+///     if (ke_error_is(err, &KE_ERROR_GPU_SHADER_COMPILATION)) { ... }   // specific
+///     if (ke_error_is(err, &KE_ERROR_INVALID_ARGUMENT))       { ... }   // category
+///
+/// Names are dotted and domain-scoped: "ke.<domain>.<...>.<reason>".
 typedef struct ke_error_type {
     const char*                  name;    ///< e.g. "ke.window.not_initialized"
-    const struct ke_error_type*  parent;  ///< generic category, or NULL
+    const struct ke_error_type*  parent;  ///< more generic category, or NULL
 } ke_error_type;
 
 /// Rich error context filled by the failing callee via KE_ERROR_SET() / KE_ERROR_WRAP().

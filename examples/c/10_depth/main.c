@@ -97,9 +97,9 @@ int main(void)
     // ── Shaders ───────────────────────────────────────────────────────────────
 
     ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = depth_vert_spv, .byte_size = sizeof(depth_vert_spv), .entry_point = "main" });
+        .code = depth_vert_spv, .byte_size = sizeof(depth_vert_spv), .entry_point = "main" }, &err);
     ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = depth_frag_spv, .byte_size = sizeof(depth_frag_spv), .entry_point = "main" });
+        .code = depth_frag_spv, .byte_size = sizeof(depth_frag_spv), .entry_point = "main" }, &err);
 
     // ── Pipeline (depth write + less-or-equal test) ───────────────────────────
 

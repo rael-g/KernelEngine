@@ -22,6 +22,10 @@ extern "C"
 {
 #endif
 
+/// A shader module failed to compile/validate in wgpu-native. Inherits
+/// KE_ERROR_GPU_SHADER_COMPILATION; the message carries the wgpu validation text.
+KE_GPU_WEBGPU_API extern const ke_error_type KE_ERROR_WGPU_SHADER_COMPILATION;
+
 /// @brief Parameters for the WebGPU (wgpu-native) GPU device.
 typedef struct ke_gpu_device_webgpu_params
 {

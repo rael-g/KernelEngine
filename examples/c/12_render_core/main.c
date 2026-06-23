@@ -51,8 +51,8 @@ int main(void)
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
 
     ke_gpu_shader_module shader = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_wgsl, .byte_size = strlen(triangle_wgsl), .entry_point = "triangle" });
-    if (shader == KE_GPU_INVALID_HANDLE) die("shader", NULL);
+        .code = triangle_wgsl, .byte_size = strlen(triangle_wgsl), .entry_point = "triangle" }, &err);
+    if (shader == KE_GPU_INVALID_HANDLE) die("shader", err);
 
     ke_gpu_render_pipeline_params pp = {
         .vertex_module = shader, .fragment_module = shader,

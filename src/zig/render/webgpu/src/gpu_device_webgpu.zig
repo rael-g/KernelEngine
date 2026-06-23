@@ -667,8 +667,44 @@ fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_languag
 
 const SPIRV_MAGIC: u32 = 0x07230203;
 
-fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_module_params) callconv(.c) ke.ke_gpu_shader_module {
+// GPU-domain shader error (declared in gpu_device.h) and the wgpu-native
+// specialization (declared in gpu_device_webgpu_create.h) that inherits it.
+export const KE_ERROR_GPU_SHADER_COMPILATION: ke.ke_error_type = .{
+    .name = "ke.render.gpu.shader_compilation",
+    .parent = &ke.KE_ERROR_INVALID_ARGUMENT,
+};
+export const KE_ERROR_WGPU_SHADER_COMPILATION: ke.ke_error_type = .{
+    .name = "ke.render.gpu.wgpu.shader_compilation",
+    .parent = &KE_ERROR_GPU_SHADER_COMPILATION,
+};
+
+const ScopeError = struct {
+    captured: bool,
+    buf: [512]u8,
+};
+
+fn popErrorCallback(
+    _: wgpu.WGPUPopErrorScopeStatus,
+    etype: wgpu.WGPUErrorType,
+    message: wgpu.WGPUStringView,
+    ud1: ?*anyopaque,
+    _: ?*anyopaque,
+) callconv(.c) void {
+    const se: *ScopeError = @ptrCast(@alignCast(ud1));
+    if (etype == wgpu.WGPUErrorType_NoError) return;
+    se.captured = true;
+    if (message.data != null and message.length > 0) {
+        const n = @min(message.length, se.buf.len - 1);
+        @memcpy(se.buf[0..n], message.data[0..n]);
+        se.buf[n] = 0;
+    } else {
+        se.buf[0] = 0;
+    }
+}
+
+fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_module_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_shader_module {
     const pp = @as(*const ke.ke_gpu_shader_module_params, @ptrCast(p));
+    const device = state(dev).device;
 
     // The backend speaks WGSL natively but also accepts SPIR-V via passthrough;
     // disambiguate by the SPIR-V magic word in the first four bytes.
@@ -679,23 +715,37 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
         .nextInChain = null,
         .label       = .{ .data = pp.entry_point, .length = wgpu.WGPU_STRLEN },
     };
-
-    if (is_spirv) {
-        const spirv = wgpu.WGPUShaderSourceSPIRV{
-            .chain    = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceSPIRV },
-            .codeSize = @intCast(pp.byte_size / 4),
-            .code     = @ptrCast(@alignCast(pp.code)),
-        };
-        desc.nextInChain = @ptrCast(&spirv);
-        return @intFromPtr(wgpu.wgpuDeviceCreateShaderModule(state(dev).device, &desc));
-    }
-
+    const spirv = wgpu.WGPUShaderSourceSPIRV{
+        .chain    = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceSPIRV },
+        .codeSize = @intCast(pp.byte_size / 4),
+        .code     = @ptrCast(@alignCast(pp.code)),
+    };
     const wgsl = wgpu.WGPUShaderSourceWGSL{
         .chain = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceWGSL },
         .code  = .{ .data = @ptrCast(pp.code), .length = if (pp.byte_size != 0) pp.byte_size else wgpu.WGPU_STRLEN },
     };
-    desc.nextInChain = @ptrCast(&wgsl);
-    return @intFromPtr(wgpu.wgpuDeviceCreateShaderModule(state(dev).device, &desc));
+    desc.nextInChain = if (is_spirv) @ptrCast(&spirv) else @ptrCast(&wgsl);
+
+    // Scope the validation so a bad source surfaces as a described ke_error
+    // instead of firing the device's uncaptured-error path (a hard panic).
+    wgpu.wgpuDevicePushErrorScope(device, wgpu.WGPUErrorFilter_Validation);
+    const handle = wgpu.wgpuDeviceCreateShaderModule(device, &desc);
+    var se = ScopeError{ .captured = false, .buf = undefined };
+    _ = wgpu.wgpuDevicePopErrorScope(device, .{
+        .nextInChain = null,
+        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
+        .callback  = popErrorCallback,
+        .userdata1 = &se,
+        .userdata2 = null,
+    });
+    _ = wgpu.wgpuDevicePoll(device, 1, null);
+
+    if (se.captured) {
+        ke.ke_error_set(out_error, &KE_ERROR_WGPU_SHADER_COMPILATION, &se.buf, @src().file, @intCast(@src().line), null);
+        if (handle != null) wgpu.wgpuShaderModuleRelease(handle);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(handle);
 }
 
 fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {

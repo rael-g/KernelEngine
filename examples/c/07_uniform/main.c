@@ -120,14 +120,14 @@ int main(void)
         .byte_size   = sizeof(rotate_vert_spv),
         .entry_point = "main",
     };
-    ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &vsp);
+    ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &vsp, &err);
 
     ke_gpu_shader_module_params fsp = {
         .code        = rotate_frag_spv,
         .byte_size   = sizeof(rotate_frag_spv),
         .entry_point = "main",
     };
-    ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &fsp);
+    ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &fsp, &err);
 
     if (vs == KE_GPU_INVALID_HANDLE) die("vertex shader creation failed", NULL);
     if (fs == KE_GPU_INVALID_HANDLE) die("fragment shader creation failed", NULL);

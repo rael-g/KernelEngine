@@ -35,6 +35,16 @@ typedef struct ke_gpu_compute_pass    ke_gpu_compute_pass;
 
 typedef struct ke_gpu_device ke_gpu_device;
 
+// ── GPU-domain error types ────────────────────────────────────────────────
+// Backend-agnostic GPU error vocabulary. The active device plugin provides the
+// singletons. A backend declares more specific types that inherit from these
+// (e.g. KE_ERROR_WGPU_SHADER_COMPILATION in gpu_device_webgpu_create.h), so a
+// caller can match the backend type, this GPU category, or the generic root —
+// all via ke_error_is().
+
+/// A shader module failed to compile/validate (source rejected by the backend).
+extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
+
 // ══════════════════════════════════════════════════════════════════════════
 // Params structs
 // ══════════════════════════════════════════════════════════════════════════
@@ -312,7 +322,8 @@ typedef struct ke_gpu_device
     ke_gpu_sampler         (*create_sampler)(struct ke_gpu_device *self,
                                              const ke_gpu_sampler_params *p);
     ke_gpu_shader_module   (*create_shader_module)(struct ke_gpu_device *self,
-                                                   const ke_gpu_shader_module_params *p);
+                                                   const ke_gpu_shader_module_params *p,
+                                                   ke_error **out_error);
     ke_gpu_pipeline        (*create_render_pipeline)(struct ke_gpu_device *self,
                                                      const ke_gpu_render_pipeline_params *p);
     ke_gpu_pipeline        (*create_compute_pipeline)(struct ke_gpu_device *self,
