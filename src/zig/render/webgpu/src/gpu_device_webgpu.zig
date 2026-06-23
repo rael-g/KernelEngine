@@ -392,6 +392,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .unmap_buffer                   = unmapBuffer,
         .get_capabilities               = getCapabilities,
         .shader_language                = shaderLanguage,
+        .get_ndc_convention             = getNdcConvention,
         .query_extension                = queryExtension,
     };
     return dev;
@@ -663,6 +664,12 @@ fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_param
 
 fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_language {
     return ke.KE_GPU_SHADER_LANG_WGSL;
+}
+
+fn getNdcConvention(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_ndc_convention {
+    // WebGPU NDC: z in [0,1], y-up (no projection flip, unlike Vulkan),
+    // left-handed clip space (x-right, y-up, z away from viewer).
+    return .{ .z_zero_to_one = 1, .y_flip = 0, .left_handed = 1 };
 }
 
 const SPIRV_MAGIC: u32 = 0x07230203;

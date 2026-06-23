@@ -45,6 +45,17 @@ typedef struct ke_gpu_device ke_gpu_device;
 /// A shader module failed to compile/validate (source rejected by the backend).
 extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
 
+// ── Clip-space (NDC) convention ───────────────────────────────────────────
+// The one math-adjacent fact only the backend knows. The engine implements no
+// matrix math; a consumer queries this and builds its projection with its own
+// library (System.Numerics / GLM / zmath) so the result is correct per backend.
+typedef struct ke_ndc_convention
+{
+    ke_bool z_zero_to_one; ///< 1 = clip z in [0,1] (Vulkan/D3D/WebGPU), 0 = [-1,1] (GL)
+    ke_bool y_flip;        ///< 1 = framebuffer origin top-left needs Y flip in projection
+    ke_bool left_handed;   ///< 1 = left-handed clip space, 0 = right-handed
+} ke_ndc_convention;
+
 // ══════════════════════════════════════════════════════════════════════════
 // Params structs
 // ══════════════════════════════════════════════════════════════════════════
@@ -367,6 +378,9 @@ typedef struct ke_gpu_device
     /// Shader source language this device accepts in create_shader_module.
     /// Appended at the tail so adding it never shifts existing slot offsets.
     ke_gpu_shader_language (*shader_language)(struct ke_gpu_device *self);
+
+    /// Clip-space convention this backend expects projections built in.
+    ke_ndc_convention (*get_ndc_convention)(struct ke_gpu_device *self);
 } ke_gpu_device;
 
 // ── Owner wrapper ──────────────────────────────────────────────────────────

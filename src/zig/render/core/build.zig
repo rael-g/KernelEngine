@@ -29,6 +29,11 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("ke_common", .{});
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
 
+    // Matrix math for the forward pass (view-proj). The engine implements no
+    // math; this Zig module brings its own via the package manager (zmath).
+    const zmath = b.dependency("zmath", .{});
+    mod.addImport("zmath", zmath.module("root"));
+
     const lib = b.addLibrary(.{
         .name = "ke_render_core",
         .root_module = mod,
