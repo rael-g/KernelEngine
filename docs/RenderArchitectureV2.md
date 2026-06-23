@@ -308,6 +308,43 @@ The webgpu distribution ships **pre-built** (a linking constraint tracked jointl
 
 Caveat: wgpu-native is a Rust runtime under the hood (~5MB binary dependency). If we ever want zero non-engine runtime in the device, the §2 layered architecture lets us write a **direct Vulkan backend in Zig** as a second `ke_gpu_device` impl — the L4/L5/L6/L7 stack above it never changes. That is a deliberate later project, not the starting point (§13.1).
 
+### 4.7 Math ownership + the NDC convention (locked 2026-06-22)
+
+**The engine implements zero matrix math.** Linear algebra is decentralized — every module/language brings its own library, exactly as it brings its own anything-else:
+
+| Consumer | Math library |
+|---|---|
+| C# game / framework | `System.Numerics` (BCL — `CreatePerspectiveFieldOfView`, `CreateLookAt`, …) |
+| C++ game / plugin | GLM (added by that project) |
+| Zig module (render core, passes) | **zmath** (zig-gamedev) — SIMD, `[0,1]`-depth perspective builders |
+
+`ke_mat4 { float[16] }` in `common/math.h` is purely an **ABI carrier** — a POD struct that crosses the boundary, never a math API. `math.h` stays types-only and may shrink (the two legacy inline helpers move out to their consumers over time). Zig std has no linear algebra (only scalar `std.math` + the `@Vector` builtin), which is why a Zig module that computes brings zmath; this is not a gap to fill in-engine.
+
+**The single centralization point is the NDC convention** — the one math-adjacent fact only the backend knows. Ported from the legacy `render.h`, it lives on the L3 device:
+
+```c
+typedef struct ke_ndc_convention {
+    ke_bool z_zero_to_one; // 1 = clip z in [0,1] (Vulkan/D3D/WebGPU), 0 = [-1,1] (GL)
+    ke_bool y_flip;        // 1 = framebuffer origin top-left needs Y flip in projection
+    ke_bool left_handed;   // 1 = left-handed clip space, 0 = right-handed
+} ke_ndc_convention;
+
+ke_ndc_convention (*get_ndc_convention)(struct ke_gpu_device *self);
+```
+
+This is the **same pattern as `shader_language()`** (§4.2): the backend *advertises a convention the consumer must respect*; the engine computes nothing. The consumer queries it and configures its own library's projection builder accordingly.
+
+**Matrices are built in the pass, not the consumer.** The forward pass (Zig + zmath) is one hop from L3, so it queries `get_ndc_convention` once and builds the projection correctly in **one place** — instead of spreading NDC-correctness across every consumer (C#, a C++ game, a Lua script), each of which could get it wrong. The split by owner:
+
+| Matrix | Producer | How it reaches the pass |
+|---|---|---|
+| **Model (world)** | transform / scene-hierarchy system (upstream) | already in `Transform.world_matrix` as `float[16]` — the pass **reads** it, never computes it |
+| **View + Projection** | **the pass** | reads `Camera` + the camera's `Transform` + device NDC → zmath |
+
+So a consumer stays **render-math-free**: it sets `Camera { fov, near, far }` + `Transform { position, rotation }` components and nothing else. The pass owns view-proj; the transform system already owns world matrices.
+
+**Escape hatch (noted, not built):** V1 gave C# full control via `SetViewTransform(view, proj)`. Model B trades that for simplicity, so for exotic projections (oblique frustum, custom ortho) the `Camera` component carries an optional explicit view-proj override that, when set, supersedes the in-pass build. Keeps the common case simple without closing the door on the advanced one.
+
 ---
 
 ## 5. Mid-level abstractions — the render core (L5, C ABI + Zig impl)
@@ -870,6 +907,8 @@ Two **independent** buffering schemes compose; conflating them is the trap.
 - wgpu-native thread-safety for parallel command-encoder recording (the WebGPU spec marks `Device`/`Queue` thread-safe; confirm the impl honors it). **Hard gate for unpinning by default.**
 - `frames_in_flight` depth (2 vs 3) and whether render itself pipelines N+1 CPU recording over N GPU execution, or only sim‖render overlaps. The render-core ring is sized by this choice; the component-snapshot index is unaffected either way.
 
+**Decided (2026-06-22) — remove pinning when bgfx is replaced.** Parallel command *recording* is universal across every target (Vulkan per-thread command pools, D3D12 per-thread allocators, Metal multiple command buffers / `MTLParallelRenderCommandEncoder`, wgpu thread-safe objects, and PS5/Switch/Xbox — multi-thread command building is a core feature of low-level APIs). The only serialization the GPU requires is **per-queue submit/present**, and the wave-builder already provides it: `render.begin_frame` / `clear` / `end_frame` are single systems serialized through the backbuffer tag-cid, so queue ops never run concurrently. bgfx-style pinning exists only because bgfx serializes its *entire* API behind one render thread — an artifact of bgfx's threading model, not a GPU requirement. So `ke_runtime_system_params.pinned_thread` can leave the scheduler in favor of access-list serialization. **One caveat:** keep a narrow "present on the window thread" affinity for **macOS** (`NSWindow`/`CAMetalLayer` mutation requires the main thread); X11/Wayland have lighter constraints. Verify the present-thread requirement per platform when porting; everything else unpins.
+
 ---
 
 ## 10. Migration plan — parallel build, Zig greenfield alongside CMake
@@ -905,8 +944,30 @@ With a multi-pass scene now running (G3), implement the deferred `RuntimeArchite
 ### Phase G4.2 — PSO Mechanism 2 (build-time manifest) (3-4 sessions)
 `ke build manifest` CLI verb; walk materials; cartesian product → `psos.manifest`; first-launch compile pass; coverage metric vs examples.
 
-### Phase G5 — Feature parity sweep (open-ended)
-Port one feature at a time: PBR materials, shadow mapping, IBL, tone mapping, post chain. Each = (a) port the Slang shader, (b) port the render-graph pass to Modern. Bgfx untouched; Modern bugs roll back via DI.
+### Phase G5 — Slang + feature parity, example-by-example (locked plan, 2026-06-22)
+
+Slang is built **incrementally** — do NOT stand up §6 (PSO three-mechanism) or the full §8 (`IMaterial` templates) before the first lit mesh draws. The order:
+
+**G5.0 — minimal Slang path.** `slangc` in the toolchain; `compile_shaders.py` gains a `.slang` → SPIR-V path (§8.2); a direct "compile shader module → create pipeline" path — no ubershader / manifest / disk cache yet.
+
+**G5.1 — forward mesh pass.** A render pass that reads `Mesh`/`Transform`/`Camera` from components and draws a lit mesh with a Slang material. Convert `examples/csharp/01` first (the first 3D scene) — this proves Slang + forward + component reads through the render core.
+
+**G5.2+ — feature-by-feature, converting `examples/csharp` one at a time, in order.** Each conversion pulls a new pass/material capability; the bgfx equivalent is deleted at parity (Bgfx stays selectable via DI until then, §12):
+
+| Example | Capability the conversion adds |
+|---|---|
+| 01 basic scene      | forward mesh + minimal material (G5.1) |
+| 02 textured quad    | texture sampling in materials |
+| 03 pbr directional  | PBR GGX + directional light |
+| 04 normal map       | tangent-space normal mapping |
+| 05 skybox / IBL     | cubemap skybox + image-based lighting |
+| 06 shadow map       | shadow-caster pass + directional shadow |
+| 07 / 08 / 09 lights | point/spot, then clustered forward + light culling for many lights |
+| 10 hdr bloom        | HDR target + bloom chain — **first cross-pass *sampling*** → needs render-core barriers (the §9.4 follow-up) |
+| 11 ssao             | Hi-Z + SSAO pass |
+| 12 / 13 assets+scene| asset-driven materials end to end |
+
+§6 (ubershader → build-time manifest → per-machine disk cache) and §8 (the template authoring surface) layer in **after** the direct path proves out — §6 before any non-trivial game ships, §8 as the authoring surface matures. The first concrete step is G5.0: verify `slangc` availability, compile a test `.slang` to SPIR-V, create a pipeline with it.
 
 ### Phase G6 — Cut over default; deprecate Bgfx
 Default DI swap. Bgfx becomes "legacy stable" (critical fixes only). Delete after 3+ months of Modern as default with no regressions.
