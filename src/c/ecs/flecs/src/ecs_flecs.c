@@ -209,6 +209,15 @@ static ke_component_id ecs_flecs_component_register(ke_ecs *self, const char *na
     edesc.name = name;
     ecs_entity_t e = ecs_entity_init(h->state.world, &edesc);
 
+    // A zero-size component is a tag (entity id, no data). flecs asserts if asked
+    // to init a component with size 0, so register it as a pure tag — valid in
+    // add/has/query and as a dependency key (render-resource cids are tags).
+    if (size == 0)
+    {
+        KE_FLECS_GUARD_END();
+        return (ke_component_id)e;
+    }
+
     ecs_component_desc_t cdesc = {0};
     cdesc.entity = e;
     cdesc.type.size      = (ecs_size_t)size;

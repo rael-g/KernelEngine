@@ -734,24 +734,27 @@ TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
 
 // ── Abort interception ───────────────────────────────────────────────────────
 
-// Registering a component with size=0 triggers a flecs internal assertion.
-// Without KE_FLECS_GUARD the process would abort; with it, component_register
-// must return 0 and ke_ecs_flecs_get_last_fatal_message() must be non-null.
-// Uses its own ecs handle — after a fatal the world is corrupted and must not
-// be reused; the fixture ecs is untouched.
-TEST(FlecsAbortInterceptionTest, ZeroSizeComponent_ReturnsZeroNoAbort)
+// A zero-size component registers as a tag (entity id, no data): valid in
+// add/has/query and used as a render-resource dependency key. It must register
+// cleanly — not abort and not corrupt the world (a fatal here silently broke
+// every later ecs op, e.g. the forward render pass's component queries).
+TEST(FlecsTagTest, ZeroSizeComponent_RegistersAsUsableTag)
 {
     ke_ecs_flecs_params p{};
     ke_ecs_handle h{};
     h = ke_ecs_flecs_create(&p, nullptr); ASSERT_NE(h.ref, nullptr);
 
-    ke_component_id cid = h.ref->component_register(h.ref, "ZeroSizeAbortTest", 0);
-    EXPECT_EQ(cid, (ke_component_id)0) << "Expected 0 return after flecs fatal";
+    ke_component_id tag = h.ref->component_register(h.ref, "ZeroSizeTag", 0);
+    EXPECT_NE(tag, (ke_component_id)0) << "zero-size component should be a valid tag";
 
-    const char *msg = ke_ecs_flecs_get_last_fatal_message();
-    EXPECT_NE(msg, nullptr) << "Expected a captured flecs fatal message";
+    // The world must stay usable: add the tag + a sized component, then query.
+    ke_entity e = h.ref->entity_create(h.ref);
+    h.ref->component_add(h.ref, e, tag);
 
-    // Destroy must not abort even though the world is corrupted.
+    ke_entity *ents = nullptr; void *data = nullptr; size_t count = 0;
+    h.ref->query(h.ref, tag, &ents, &data, &count);
+    EXPECT_EQ(count, (size_t)1) << "entity carrying the tag should be found";
+
     h.destroy(h.ref);
 }
 
