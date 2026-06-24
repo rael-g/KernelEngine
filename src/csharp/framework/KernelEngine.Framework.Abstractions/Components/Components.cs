@@ -13,22 +13,11 @@ public struct MeshRendererComponent
     public MaterialHandle Material;
 }
 
-/// <summary>
-/// Camera component. First entity with this drives the per-frame view/proj.
-/// Memory layout matches <c>ke_camera_component</c> exactly so the native
-/// scene-loader apply callback and the managed contributor share one ECS slot.
-/// </summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-public struct CameraComponent
-{
-    public float Fov;
-    public float NearPlane;
-    public float FarPlane;
-    /// <summary>Half the vertical extent in world units (ortho only).</summary>
-    public float OrthographicSize;
-    /// <summary>Non-zero = orthographic projection; zero = perspective.</summary>
-    public byte  Orthographic;
-}
+// CameraComponent and MeshComponent are the render-layer vocabulary (mirroring
+// the kernel's render/components.h) and live in KernelEngine.Render.Abstractions
+// — both raw-ECS games and the framework consume them from there (imported via
+// `using KernelEngine.Render`). The framework-only structs below have no kernel
+// counterpart and stay here.
 
 /// <summary>Single directional light + ambient. First entity wins (single-light pass).</summary>
 public struct DirectionalLightComponent

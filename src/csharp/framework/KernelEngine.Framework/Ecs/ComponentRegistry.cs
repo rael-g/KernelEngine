@@ -1,4 +1,5 @@
 ﻿using KernelEngine.Ecs;
+using KernelEngine.Render;
 
 
 namespace KernelEngine.Framework;
@@ -21,10 +22,13 @@ public sealed class ComponentRegistry : IComponentRegistry
         // managed contributors share one ECS slot per component type.
         Register<TransformComponent>(ecs, "transform");
         Register<CameraComponent>(ecs, "camera");
+        Register<MeshComponent>(ecs, "mesh");
         Register<DirectionalLightComponent>(ecs, "directional_light");
         Register<PointLightComponent>(ecs, "point_light");
         Register<SpotLightComponent>(ecs, "spot_light");
         // Framework-only components (no kernel counterpart) keep their own names.
+        // MeshRendererComponent is the legacy bgfx material-based path; the v2
+        // forward pass reads the "mesh" slot above instead.
         Register<MeshRendererComponent>(ecs, "MeshRenderer");
         Register<SkyboxComponent>(ecs, "Skybox");
         Register<AmbientLightComponent>(ecs, "AmbientLight");

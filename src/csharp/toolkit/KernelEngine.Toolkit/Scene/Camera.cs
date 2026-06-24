@@ -1,3 +1,5 @@
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>
