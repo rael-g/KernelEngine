@@ -216,6 +216,7 @@ fn beginFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callcon
     const st = coreOf(self);
     st.cmd_count = 0;
     if (st.surface) |surf| {
+        surf.current_size.?(surf, &st.backbuffer_w, &st.backbuffer_h);
         const view = surf.acquire_current_texture_view.?(surf);
         if (view == c.KE_GPU_INVALID_HANDLE) return 0;
         if (st.find("backbuffer")) |bb| bb.view = view;
@@ -384,6 +385,9 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     const st = gpa.create(CoreState) catch return .{ .ref = null, .destroy = null };
     const surf_raw = dev.query_extension.?(dev, c.KE_GPU_SURFACE_EXT_NAME);
     const surf: ?*const c.ke_gpu_surface_ext = if (surf_raw) |p| @ptrCast(@alignCast(p)) else null;
+    var bb_w: u32 = 0;
+    var bb_h: u32 = 0;
+    if (surf) |s| s.current_size.?(s, &bb_w, &bb_h);
     st.* = .{
         .device = dev,
         .ecs = e,
@@ -391,8 +395,8 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .queue = dev.get_default_queue.?(dev),
         .resources = undefined,
         .resource_count = 0,
-        .backbuffer_w = 0,
-        .backbuffer_h = 0,
+        .backbuffer_w = bb_w,
+        .backbuffer_h = bb_h,
         .cmd_bufs = undefined,
         .cmd_count = 0,
         .meshes = undefined,

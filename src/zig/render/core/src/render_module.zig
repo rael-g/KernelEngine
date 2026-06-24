@@ -245,14 +245,15 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .entries = &bg_entry,
     });
 
-    // Transient depth target (stopgap fixed size until the core tracks backbuffer size).
+    // Transient depth target, sized to the backbuffer (the core resolves the
+    // scale against its current swapchain size).
     const depth_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
         .name = "depth",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
-        .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
-        .width = 800,
-        .height = 600,
+        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+        .width = 0,
+        .height = 0,
         .scale_x = 1.0,
         .scale_y = 1.0,
     }, null);

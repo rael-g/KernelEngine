@@ -23,6 +23,10 @@ typedef struct ke_gpu_surface_ext
 
     /// Reconfigure the swapchain to a new size. Call after a window resize.
     void (*reconfigure)(const struct ke_gpu_surface_ext *self, uint32_t width, uint32_t height);
+
+    /// Current configured swapchain size in pixels. Lets consumers size
+    /// backbuffer-relative resources without owning the window.
+    void (*current_size)(const struct ke_gpu_surface_ext *self, uint32_t *out_width, uint32_t *out_height);
 } ke_gpu_surface_ext;
 
 #ifdef __cplusplus

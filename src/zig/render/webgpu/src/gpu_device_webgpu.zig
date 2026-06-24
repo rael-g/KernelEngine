@@ -40,6 +40,8 @@ const DeviceState = struct {
     surface_format:          wgpu.WGPUTextureFormat,
     current_surface_texture: wgpu.WGPUTexture, // null between frames
     surface_ext:             ?*SurfaceExt,      // lazily created, owned by state
+    surface_w:               u32,               // last configured swapchain size
+    surface_h:               u32,
 };
 
 fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
@@ -288,6 +290,8 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
     s.surface_format = wgpu.WGPUTextureFormat_Undefined;
     s.current_surface_texture = null;
     s.surface_ext = null;
+    s.surface_w = 0;
+    s.surface_h = 0;
 
     const instance_desc = wgpu.WGPUInstanceDescriptor{ .nextInChain = null };
     s.instance = wgpu.wgpuCreateInstance(&instance_desc) orelse
@@ -353,6 +357,8 @@ fn configureSurface(s: *DeviceState, width: u32, height: u32) void {
         .presentMode     = wgpu.WGPUPresentMode_Fifo,
     };
     wgpu.wgpuSurfaceConfigure(surf, &config);
+    s.surface_w = width;
+    s.surface_h = height;
 }
 
 fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
@@ -1231,6 +1237,7 @@ fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) c
 const SurfaceExt = extern struct {
     acquire_current_texture_view: *const fn (*const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view,
     reconfigure:                  *const fn (*const SurfaceExt, u32, u32) callconv(.c) void,
+    current_size:                 *const fn (*const SurfaceExt, [*c]u32, [*c]u32) callconv(.c) void,
     device_state:                 *DeviceState,
 };
 
@@ -1252,6 +1259,12 @@ fn surfaceExtReconfigure(self: *const SurfaceExt, width: u32, height: u32) callc
     configureSurface(self.device_state, width, height);
 }
 
+fn surfaceExtCurrentSize(self: *const SurfaceExt, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+    const s = self.device_state;
+    if (out_w != null) out_w.* = s.surface_w;
+    if (out_h != null) out_h.* = s.surface_h;
+}
+
 // ── Extension query ────────────────────────────────────────────────────────
 
 fn queryExtension(dev: [*c]ke.ke_gpu_device, name: [*c]const u8) callconv(.c) ?*const anyopaque {
@@ -1263,6 +1276,7 @@ fn queryExtension(dev: [*c]ke.ke_gpu_device, name: [*c]const u8) callconv(.c) ?*
             ext.* = .{
                 .acquire_current_texture_view = surfaceExtAcquire,
                 .reconfigure                  = surfaceExtReconfigure,
+                .current_size                 = surfaceExtCurrentSize,
                 .device_state                 = s,
             };
             s.surface_ext = ext;
