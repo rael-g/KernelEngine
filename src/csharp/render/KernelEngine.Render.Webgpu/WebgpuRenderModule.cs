@@ -96,7 +96,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <inheritdoc/>
-    public MaterialHandle CreateMaterial(System.Numerics.Vector4 baseColor, TextureHandle albedo = default)
+    public MaterialHandle CreateMaterial(System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f, TextureHandle albedo = default)
     {
         if (_core == null)
             throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
@@ -104,7 +104,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         ke_error* err = null;
         ke_material_handle h;
         var albedoH = new ke_texture_handle { idx = albedo.Value };
-        h = _core->create_material(_core, &baseColor.X, albedoH, &err);
+        h = _core->create_material(_core, &baseColor.X, metallic, roughness, albedoH, &err);
         if (h.idx == uint.MaxValue)
             throw Fail("create_material failed", err);
         return new MaterialHandle(h.idx);

@@ -24,8 +24,9 @@ public interface IRenderResources
     TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba);
 
     /// <summary>
-    /// Creates a material: a glTF-style base-color factor multiplied by an albedo
-    /// texture. A default (<c>TextureHandle.White</c>) albedo yields a flat color.
+    /// Creates a glTF metallic-roughness material: a base-color factor multiplied
+    /// by an albedo texture (default <c>TextureHandle.White</c> = flat color), plus
+    /// metallic (0 = dielectric, 1 = metal) and roughness (0 = mirror, 1 = matte).
     /// </summary>
-    MaterialHandle CreateMaterial(Vector4 baseColor, TextureHandle albedo = default);
+    MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f, TextureHandle albedo = default);
 }
