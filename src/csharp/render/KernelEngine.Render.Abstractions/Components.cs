@@ -13,11 +13,13 @@ public struct MeshVertex
 {
     public Vector3 Position;
     public Vector3 Normal;
+    public Vector2 UV;
 
-    public MeshVertex(Vector3 position, Vector3 normal)
+    public MeshVertex(Vector3 position, Vector3 normal, Vector2 uv)
     {
         Position = position;
         Normal   = normal;
+        UV       = uv;
     }
 }
 
@@ -47,8 +49,8 @@ public struct PrimitiveTag
 
 /// <summary>
 /// ECS mesh component. Memory layout matches <c>ke_mesh_component</c>; a render
-/// system resolves <see cref="Mesh"/> to GPU buffers and draws it tinted by
-/// <see cref="Color"/>.
+/// system resolves <see cref="Mesh"/> to GPU buffers and <see cref="Material"/>
+/// to its surface appearance (base color + albedo).
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct MeshComponent
@@ -59,5 +61,4 @@ public struct MeshComponent
     public MeshHandle     Mesh;
     public MaterialHandle Material;
     public PrimitiveTag   Primitive;
-    public Vector4        Color;
 }

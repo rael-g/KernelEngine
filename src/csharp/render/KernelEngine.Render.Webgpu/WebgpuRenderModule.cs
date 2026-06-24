@@ -15,7 +15,7 @@ namespace KernelEngine.Render.Webgpu;
 /// just ticks the runtime — no render calls in the loop. Coexists with
 /// BgfxRenderModule as an alternate DI choice.
 /// </summary>
-public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IMeshUploader
+public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 {
     private ke_gpu_device_handle _device;
     private ke_render_module_handle _module;
@@ -28,9 +28,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IMeshUploader
 
     public string Name => "Webgpu.Render";
 
-    /// <summary>Exposes this module as the scene's <see cref="IMeshUploader"/>.</summary>
+    /// <summary>Exposes this module as the scene's <see cref="IRenderResources"/>.</summary>
     public void Configure(IServiceCollection services)
-        => services.AddSingleton<IMeshUploader>(this);
+        => services.AddSingleton<IRenderResources>(this);
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
@@ -78,6 +78,36 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IMeshUploader
         if (h.idx == uint.MaxValue)
             throw Fail("upload_mesh failed", err);
         return new MeshHandle(h.idx);
+    }
+
+    /// <inheritdoc/>
+    public TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba)
+    {
+        if (_core == null)
+            throw new InvalidOperationException("UploadTexture called before the render module was loaded");
+
+        ke_error* err = null;
+        ke_texture_handle h;
+        fixed (byte* p = rgba)
+            h = _core->upload_texture(_core, width, height, p, &err);
+        if (h.idx == uint.MaxValue)
+            throw Fail("upload_texture failed", err);
+        return new TextureHandle(h.idx);
+    }
+
+    /// <inheritdoc/>
+    public MaterialHandle CreateMaterial(System.Numerics.Vector4 baseColor, TextureHandle albedo = default)
+    {
+        if (_core == null)
+            throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
+
+        ke_error* err = null;
+        ke_material_handle h;
+        var albedoH = new ke_texture_handle { idx = albedo.Value };
+        h = _core->create_material(_core, &baseColor.X, albedoH, &err);
+        if (h.idx == uint.MaxValue)
+            throw Fail("create_material failed", err);
+        return new MaterialHandle(h.idx);
     }
 
     private static InvalidOperationException Fail(string what, ke_error* err)
