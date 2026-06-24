@@ -34,8 +34,9 @@ var ecs     = sp.GetRequiredService<IEcs>();
 
 runtime.LoadModules(sp);
 
-// ── Upload the cube + populate the scene (camera + one mesh entity) ──────────
-var cube = MeshPrimitives.Cube(render);
+// ── Upload the cube + material, populate the scene (camera + one mesh entity) ─
+var cube   = MeshPrimitives.Cube(render);
+var orange = render.CreateMaterial(new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
 EcsRegistry reg;
 unsafe { reg = new EcsRegistry(((INativeEcs)ecs).Native); }
@@ -56,7 +57,7 @@ ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
 entT = TransformComponent.Identity;
 entT.WorldMatrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
-entM = new MeshComponent { Mesh = cube, Material = MaterialHandle.None, Color = new Vector4(0.85f, 0.35f, 0.2f, 1.0f) };
+entM = new MeshComponent { Mesh = cube, Material = orange };
 
 Console.WriteLine("[18_webgpu_mesh] Drawing a lit cube. Close the window to exit.");
 

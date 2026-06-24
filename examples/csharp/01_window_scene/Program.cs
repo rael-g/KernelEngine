@@ -31,7 +31,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var uploader = sp.GetRequiredService<IMeshUploader>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 01_window_scene");
         Console.WriteLine("[KernelEngine] Features: window, renderer, single_quad, spinner_behavior");
 
@@ -45,8 +45,9 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(uploader);
-        tree.AddNode(new SpinningQuad { MeshHandle = quad, Color = new Vector4(1f, 0.5f, 0f, 1f) }, "Spinner");
+        var quad   = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        var orange = resources.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
+        tree.AddNode(new SpinningQuad { MeshHandle = quad, MaterialHandle = orange }, "Spinner");
     }));
 
 using var sp = services.BuildServiceProvider();
