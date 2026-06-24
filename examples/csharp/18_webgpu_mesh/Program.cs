@@ -35,7 +35,7 @@ var ecs     = sp.GetRequiredService<IEcs>();
 runtime.LoadModules(sp);
 
 // ── Upload the cube + populate the scene (camera + one mesh entity) ──────────
-var cube = render.UploadMesh(CubeMesh.Vertices, CubeMesh.Indices);
+var cube = MeshPrimitives.Cube(render);
 
 EcsRegistry reg;
 unsafe { reg = new EcsRegistry(((INativeEcs)ecs).Native); }
@@ -49,7 +49,7 @@ ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
 camT = TransformComponent.Identity;
 camT.Position = new Vector3(1.5f, 1.5f, -3.0f);
 ref var camC = ref reg.AddComponent<CameraComponent>(cam, cameraCid)[0];
-camC = new CameraComponent { Fov = 1.0f, NearPlane = 0.1f, FarPlane = 100.0f };
+camC = new CameraComponent { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f };
 
 var ent = reg.CreateEntity();
 ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
@@ -70,35 +70,3 @@ while (!window.ShouldClose())
 }
 
 Console.WriteLine("[18_webgpu_mesh] Exited cleanly.");
-
-// Interleaved position + normal, unit cube centred at the origin.
-static class CubeMesh
-{
-    public static readonly MeshVertex[] Vertices =
-    {
-        // +Z
-        new(new(-0.5f,-0.5f, 0.5f), new(0,0, 1)), new(new( 0.5f,-0.5f, 0.5f), new(0,0, 1)),
-        new(new( 0.5f, 0.5f, 0.5f), new(0,0, 1)), new(new(-0.5f, 0.5f, 0.5f), new(0,0, 1)),
-        // -Z
-        new(new( 0.5f,-0.5f,-0.5f), new(0,0,-1)), new(new(-0.5f,-0.5f,-0.5f), new(0,0,-1)),
-        new(new(-0.5f, 0.5f,-0.5f), new(0,0,-1)), new(new( 0.5f, 0.5f,-0.5f), new(0,0,-1)),
-        // +X
-        new(new( 0.5f,-0.5f, 0.5f), new(1,0, 0)), new(new( 0.5f,-0.5f,-0.5f), new(1,0, 0)),
-        new(new( 0.5f, 0.5f,-0.5f), new(1,0, 0)), new(new( 0.5f, 0.5f, 0.5f), new(1,0, 0)),
-        // -X
-        new(new(-0.5f,-0.5f,-0.5f), new(-1,0, 0)), new(new(-0.5f,-0.5f, 0.5f), new(-1,0, 0)),
-        new(new(-0.5f, 0.5f, 0.5f), new(-1,0, 0)), new(new(-0.5f, 0.5f,-0.5f), new(-1,0, 0)),
-        // +Y
-        new(new(-0.5f, 0.5f, 0.5f), new(0,1, 0)), new(new( 0.5f, 0.5f, 0.5f), new(0,1, 0)),
-        new(new( 0.5f, 0.5f,-0.5f), new(0,1, 0)), new(new(-0.5f, 0.5f,-0.5f), new(0,1, 0)),
-        // -Y
-        new(new(-0.5f,-0.5f,-0.5f), new(0,-1,0)), new(new( 0.5f,-0.5f,-0.5f), new(0,-1,0)),
-        new(new( 0.5f,-0.5f, 0.5f), new(0,-1,0)), new(new(-0.5f,-0.5f, 0.5f), new(0,-1,0)),
-    };
-
-    public static readonly ushort[] Indices =
-    {
-         0, 1, 2,  0, 2, 3,   4, 5, 6,  4, 6, 7,   8, 9,10,  8,10,11,
-        12,13,14, 12,14,15,  16,17,18, 16,18,19,  20,21,22, 20,22,23,
-    };
-}

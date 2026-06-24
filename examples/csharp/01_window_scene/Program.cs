@@ -2,7 +2,7 @@
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -13,9 +13,10 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 01_window_scene â€” a single orange quad spinning on the screen under a fixed
+// 01_window_scene — a single orange quad spinning on the screen under a fixed
 // directional light. Smallest possible scene that exercises window + renderer
-// + framework + a scripted node behavior.
+// + framework + a scripted node behavior. Render v2 (webgpu): the forward pass
+// reads the scene's ECS components directly — no IRenderer, no contributors.
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -23,17 +24,14 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 01 Window/Tree"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.15f, 0.15f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))
+    // Render module before the scene module: its OnLoad creates the render core
+    // (so mesh upload works) before the scene setup callback runs.
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.15f, 0.15f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new PostProcessModule(tonemapping: true))
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var uploader = sp.GetRequiredService<IMeshUploader>();
         Console.WriteLine("[KernelEngine] Example: 01_window_scene");
         Console.WriteLine("[KernelEngine] Features: window, renderer, single_quad, spinner_behavior");
 
@@ -47,8 +45,8 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
 
-        var orangeMat = renderer.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
-        tree.AddNode(new SpinningQuad { MaterialHandle = orangeMat }, "Spinner");
+        var quad = KernelEngine.Render.MeshPrimitives.Quad(uploader);
+        tree.AddNode(new SpinningQuad { MeshHandle = quad, Color = new Vector4(1f, 0.5f, 0f, 1f) }, "Spinner");
     }));
 
 using var sp = services.BuildServiceProvider();
