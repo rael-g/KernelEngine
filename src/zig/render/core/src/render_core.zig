@@ -77,6 +77,7 @@ const CoreState = struct {
     material_count: u32,
     sampler: c.ke_gpu_sampler, // shared linear-repeat sampler
     material_bgl: c.ke_gpu_bind_group_layout, // set 1 layout
+    default_normal: c.ke_texture_handle, // built-in flat (0,0,1) normal map
 
     fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
         if (idx >= self.mesh_count) return null;
@@ -361,7 +362,7 @@ fn uploadTexture(self: [*c]c.ke_render_core, width: u32, height: u32,
 
 fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
                   metallic: f32, roughness: f32, albedo: c.ke_texture_handle,
-                  out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
+                  normal: c.ke_texture_handle, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     _ = out_error;
     const st = coreOf(self);
     if (st.material_count >= MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
@@ -378,18 +379,22 @@ fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
         .mapped_at_creation = 0,
     });
 
-    // Unknown / none albedo resolves to the built-in white texture (index 0).
-    const tex_idx = if (albedo.idx == c.KE_HANDLE_NONE) 0 else albedo.idx;
-    const view = (st.textureAt(tex_idx) orelse &st.textures[0]).view;
+    // Unknown / none albedo resolves to the built-in white texture (index 0);
+    // none normal resolves to the built-in flat (0,0,1) normal map.
+    const alb_idx = if (albedo.idx == c.KE_HANDLE_NONE) 0 else albedo.idx;
+    const alb_view = (st.textureAt(alb_idx) orelse &st.textures[0]).view;
+    const nrm_idx = if (normal.idx == c.KE_HANDLE_NONE) st.default_normal.idx else normal.idx;
+    const nrm_view = (st.textureAt(nrm_idx) orelse &st.textures[st.default_normal.idx]).view;
 
     const entries = [_]c.ke_gpu_bind_group_entry{
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 32, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
+        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = alb_view, .sampler = 0 },
         .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
+        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = nrm_view, .sampler = 0 },
     };
     const bg = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
         .layout = st.material_bgl,
-        .entry_count = 3,
+        .entry_count = 4,
         .entries = &entries,
     });
 
@@ -538,6 +543,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .material_count = 0,
         .sampler = c.KE_GPU_INVALID_HANDLE,
         .material_bgl = c.KE_GPU_INVALID_HANDLE,
+        .default_normal = .{ .idx = c.KE_HANDLE_NONE },
     };
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
@@ -593,15 +599,18 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0 },
         .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0 },
         .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0 },
+        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0 },
     };
     st.material_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 3,
+        .entry_count = 4,
         .entries = &mat_bgl_entries,
     });
     const white_px = [_]u8{ 255, 255, 255, 255 };
-    _ = uploadTexture(core, 1, 1, &white_px, null);
+    _ = uploadTexture(core, 1, 1, &white_px, null); // texture 0 = white albedo
+    const flat_normal_px = [_]u8{ 128, 128, 255, 255 }; // (0,0,1) in tangent space
+    st.default_normal = uploadTexture(core, 1, 1, &flat_normal_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    _ = createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, null);
+    _ = createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }

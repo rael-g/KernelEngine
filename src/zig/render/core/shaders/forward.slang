@@ -1,22 +1,24 @@
-// Forward PBR (Cook-Torrance GGX metallic-roughness) with a single directional
-// light. Descriptor sets split by update frequency (Vulkan/WebGPU convention):
-// set 0 = per-frame (camera + light), set 1 = per-material (glTF base color +
-// metallic/roughness + albedo), set 2 = per-object (transform, dynamic offset).
-// Matrices arrive row-major (row-vector convention) so Slang's mul(M, v) lowers
-// to WGSL correctly. Inline Reinhard + gamma is transitional until the tonemap
-// pass (example 10) owns it.
+// Forward PBR (Cook-Torrance GGX metallic-roughness) with tangent-space normal
+// mapping and a single directional light. Descriptor sets split by update
+// frequency (Vulkan/WebGPU convention): set 0 = per-frame (camera + light),
+// set 1 = per-material (glTF base color + metallic/roughness + albedo + normal),
+// set 2 = per-object (transform, dynamic offset). Matrices arrive row-major
+// (row-vector convention) so Slang's mul(M, v) lowers to WGSL correctly. Inline
+// Reinhard + gamma is transitional until the tonemap pass (example 10).
 
 struct VsIn {
     float3 position : POSITION;
     float3 normal   : NORMAL;
     float2 uv       : TEXCOORD0;
+    float3 tangent  : TANGENT;
 };
 
 struct VsOut {
     float4 clip : SV_Position;
-    [[vk::location(0)]] float3 world_normal : NORMAL;
-    [[vk::location(1)]] float3 world_pos    : POSITION;
-    [[vk::location(2)]] float2 uv           : TEXCOORD0;
+    [[vk::location(0)]] float3 world_normal  : NORMAL;
+    [[vk::location(1)]] float3 world_pos     : POSITION;
+    [[vk::location(2)]] float2 uv            : TEXCOORD0;
+    [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
 // Set 0 — per frame: camera + single directional light.
@@ -28,7 +30,7 @@ struct PerFrame {
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
 
-// Set 1 — per material: glTF metallic-roughness.
+// Set 1 — per material: glTF metallic-roughness + albedo + tangent-space normal.
 struct Material {
     float4 base_color;
     float  metallic;
@@ -37,7 +39,8 @@ struct Material {
 };
 [[vk::binding(0, 1)]] ConstantBuffer<Material> mat;
 [[vk::binding(1, 1)]] Texture2D    albedo;
-[[vk::binding(2, 1)]] SamplerState albedo_sampler;
+[[vk::binding(2, 1)]] SamplerState tex_sampler;
+[[vk::binding(3, 1)]] Texture2D    normal_map; // tangent-space, RGB = (n+1)/2
 
 // Set 2 — per object: transform.
 struct PerObject {
@@ -71,20 +74,27 @@ float geometry_smith(float3 n, float3 v, float3 l, float rough) {
 [shader("vertex")]
 VsOut vs_main(VsIn input) {
     VsOut o;
-    o.clip         = mul(obj.mvp, float4(input.position, 1.0));
-    o.world_normal = mul((float3x3)obj.model, input.normal);
-    o.world_pos    = mul(obj.model, float4(input.position, 1.0)).xyz;
-    o.uv           = input.uv;
+    o.clip          = mul(obj.mvp, float4(input.position, 1.0));
+    o.world_normal  = mul((float3x3)obj.model, input.normal);
+    o.world_tangent = mul((float3x3)obj.model, input.tangent);
+    o.world_pos     = mul(obj.model, float4(input.position, 1.0)).xyz;
+    o.uv            = input.uv;
     return o;
 }
 
 [shader("fragment")]
 float4 fs_main(VsOut input) : SV_Target {
-    float3 albedo_c = mat.base_color.rgb * albedo.Sample(albedo_sampler, input.uv).rgb;
+    float3 albedo_c = mat.base_color.rgb * albedo.Sample(tex_sampler, input.uv).rgb;
     float  metallic = mat.metallic;
     float  rough    = mat.roughness;
 
-    float3 n = normalize(input.world_normal);
+    // Tangent-space normal -> world. Default flat-normal map (0,0,1) leaves n = geo normal.
+    float3 ng = normalize(input.world_normal);
+    float3 t  = normalize(input.world_tangent - ng * dot(ng, input.world_tangent)); // Gram-Schmidt
+    float3 b  = cross(ng, t);
+    float3 tn = normal_map.Sample(tex_sampler, input.uv).rgb * 2.0 - 1.0;
+    float3 n  = normalize(t * tn.x + b * tn.y + ng * tn.z);
+
     float3 v = normalize(frame.camera_pos.xyz - input.world_pos);
     float3 l = -normalize(frame.light_dir.xyz);
     float3 h = normalize(v + l);

@@ -248,11 +248,12 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
         .{ .shader_location = 1, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 3 * @sizeOf(f32) },
         .{ .shader_location = 2, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = 6 * @sizeOf(f32) },
+        .{ .shader_location = 3, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 8 * @sizeOf(f32) },
     };
     const vbl = c.ke_gpu_vertex_buffer_layout{
-        .stride = 8 * @sizeOf(f32),
+        .stride = 11 * @sizeOf(f32),
         .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX,
-        .attribute_count = 3,
+        .attribute_count = 4,
         .attributes = &attrs,
     };
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);

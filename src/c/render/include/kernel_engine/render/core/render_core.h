@@ -127,6 +127,7 @@ struct ke_render_core
                                           const float *base_color, // rgba (4 floats)
                                           float metallic, float roughness,
                                           ke_texture_handle albedo,
+                                          ke_texture_handle normal, // KE_TEXTURE_NONE = flat
                                           ke_error **out_error);
     // The per-material bind-group layout (descriptor set 1) a forward pipeline
     // must declare so its set-1 bind groups (from material_bind_group) are valid.
