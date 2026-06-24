@@ -35,15 +35,17 @@ static double now_seconds(void)
 #endif
 }
 
-// Interleaved position(3) + normal(3), unit cube centred at the origin.
-typedef struct { float px, py, pz, nx, ny, nz; } vtx;
+// Interleaved position(3) + normal(3) + uv(2), unit cube centred at the origin.
+// The uv (per-face 0,1 / 1,1 / 1,0 / 0,0) matters only for the vertex stride the
+// forward pipeline expects (8 floats); this example uses the white material.
+typedef struct { float px, py, pz, nx, ny, nz, u, v; } vtx;
 static const vtx cube[] = {
-    {-0.5f,-0.5f, 0.5f, 0,0, 1},{ 0.5f,-0.5f, 0.5f, 0,0, 1},{ 0.5f, 0.5f, 0.5f, 0,0, 1},{-0.5f, 0.5f, 0.5f, 0,0, 1}, // +Z
-    { 0.5f,-0.5f,-0.5f, 0,0,-1},{-0.5f,-0.5f,-0.5f, 0,0,-1},{-0.5f, 0.5f,-0.5f, 0,0,-1},{ 0.5f, 0.5f,-0.5f, 0,0,-1}, // -Z
-    { 0.5f,-0.5f, 0.5f, 1,0, 0},{ 0.5f,-0.5f,-0.5f, 1,0, 0},{ 0.5f, 0.5f,-0.5f, 1,0, 0},{ 0.5f, 0.5f, 0.5f, 1,0, 0}, // +X
-    {-0.5f,-0.5f,-0.5f,-1,0, 0},{-0.5f,-0.5f, 0.5f,-1,0, 0},{-0.5f, 0.5f, 0.5f,-1,0, 0},{-0.5f, 0.5f,-0.5f,-1,0, 0}, // -X
-    {-0.5f, 0.5f, 0.5f, 0,1, 0},{ 0.5f, 0.5f, 0.5f, 0,1, 0},{ 0.5f, 0.5f,-0.5f, 0,1, 0},{-0.5f, 0.5f,-0.5f, 0,1, 0}, // +Y
-    {-0.5f,-0.5f,-0.5f, 0,-1,0},{ 0.5f,-0.5f,-0.5f, 0,-1,0},{ 0.5f,-0.5f, 0.5f, 0,-1,0},{-0.5f,-0.5f, 0.5f, 0,-1,0}, // -Y
+    {-0.5f,-0.5f, 0.5f, 0,0, 1, 0,1},{ 0.5f,-0.5f, 0.5f, 0,0, 1, 1,1},{ 0.5f, 0.5f, 0.5f, 0,0, 1, 1,0},{-0.5f, 0.5f, 0.5f, 0,0, 1, 0,0}, // +Z
+    { 0.5f,-0.5f,-0.5f, 0,0,-1, 0,1},{-0.5f,-0.5f,-0.5f, 0,0,-1, 1,1},{-0.5f, 0.5f,-0.5f, 0,0,-1, 1,0},{ 0.5f, 0.5f,-0.5f, 0,0,-1, 0,0}, // -Z
+    { 0.5f,-0.5f, 0.5f, 1,0, 0, 0,1},{ 0.5f,-0.5f,-0.5f, 1,0, 0, 1,1},{ 0.5f, 0.5f,-0.5f, 1,0, 0, 1,0},{ 0.5f, 0.5f, 0.5f, 1,0, 0, 0,0}, // +X
+    {-0.5f,-0.5f,-0.5f,-1,0, 0, 0,1},{-0.5f,-0.5f, 0.5f,-1,0, 0, 1,1},{-0.5f, 0.5f, 0.5f,-1,0, 0, 1,0},{-0.5f, 0.5f,-0.5f,-1,0, 0, 0,0}, // -X
+    {-0.5f, 0.5f, 0.5f, 0,1, 0, 0,1},{ 0.5f, 0.5f, 0.5f, 0,1, 0, 1,1},{ 0.5f, 0.5f,-0.5f, 0,1, 0, 1,0},{-0.5f, 0.5f,-0.5f, 0,1, 0, 0,0}, // +Y
+    {-0.5f,-0.5f,-0.5f, 0,-1,0, 0,1},{ 0.5f,-0.5f,-0.5f, 0,-1,0, 1,1},{ 0.5f,-0.5f, 0.5f, 0,-1,0, 1,0},{-0.5f,-0.5f, 0.5f, 0,-1,0, 0,0}, // -Y
 };
 static const uint16_t cube_idx[] = {
      0, 1, 2,  0, 2, 3,   4, 5, 6,  4, 6, 7,   8, 9,10,  8,10,11,
@@ -88,7 +90,7 @@ int main(void)
     if (!ke_mesh_is_valid(cube_h)) die("upload_mesh", err);
 
     const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };
-    ke_material_handle mat = core->create_material(core, orange, KE_TEXTURE_NONE, &err);
+    ke_material_handle mat = core->create_material(core, orange, 0.0f, 0.5f, KE_TEXTURE_NONE, &err);
     if (!ke_material_is_valid(mat)) die("create_material", err);
 
     ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component));

@@ -125,6 +125,7 @@ struct ke_render_core
     // KE_MATERIAL_NONE on failure.
     ke_material_handle (*create_material)(struct ke_render_core *self,
                                           const float *base_color, // rgba (4 floats)
+                                          float metallic, float roughness,
                                           ke_texture_handle albedo,
                                           ke_error **out_error);
     // The per-material bind-group layout (descriptor set 1) a forward pipeline

@@ -360,14 +360,20 @@ fn uploadTexture(self: [*c]c.ke_render_core, width: u32, height: u32,
 }
 
 fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
-                  albedo: c.ke_texture_handle, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
+                  metallic: f32, roughness: f32, albedo: c.ke_texture_handle,
+                  out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     _ = out_error;
     const st = coreOf(self);
     if (st.material_count >= MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
 
+    // std140: float4 base_color + (metallic, roughness) packed into the next slot.
+    const mat_data = [8]f32{
+        base_color[0], base_color[1], base_color[2], base_color[3],
+        metallic,      roughness,     0.0,           0.0,
+    };
     const ubo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
-        .initial_data = base_color,
-        .size = 16, // float4 base_color
+        .initial_data = &mat_data,
+        .size = 32,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     });
@@ -377,7 +383,7 @@ fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
     const view = (st.textureAt(tex_idx) orelse &st.textures[0]).view;
 
     const entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 32, .texture_view = 0, .sampler = 0 },
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
         .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
     };
@@ -595,7 +601,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     const white_px = [_]u8{ 255, 255, 255, 255 };
     _ = uploadTexture(core, 1, 1, &white_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    _ = createMaterial(core, &white_color, .{ .idx = c.KE_HANDLE_NONE }, null);
+    _ = createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }

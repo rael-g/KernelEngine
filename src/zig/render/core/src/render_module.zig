@@ -30,12 +30,26 @@ const forward_fs_wgsl = @embedFile("forward.fs.wgsl");
 const MAX_DRAWS = 64;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
-// Per-object uniform (set 0); matches forward.slang's PerObject. Base color +
-// albedo are per-material (set 1, owned by the render core), not here.
-const Uniform = extern struct {
+// Set 2 — per-object transform (dynamic offset). Matches forward.slang PerObject.
+const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
+};
+
+// Set 0 — per-frame camera + directional light. Matches forward.slang PerFrame.
+const PerFrame = extern struct {
+    camera_pos: [4]f32,
     light_dir: [4]f32,
+    light_color: [4]f32, // rgb, w = intensity
+    ambient: [4]f32,
+};
+
+// Mirrors ke_directional_light_component (10 floats, see render/components.h).
+const DirLight = extern struct {
+    dir: [3]f32,
+    rgb: [3]f32,
+    intensity: f32,
+    ambient: [3]f32,
 };
 
 // The device is borrowed (caller-owned); only the render core is owned here.
@@ -50,14 +64,17 @@ const ModuleState = struct {
 
     // Forward pass
     fwd_pipeline: c.ke_gpu_pipeline,
-    fwd_bind_group: c.ke_gpu_bind_group,
-    fwd_uniform: c.ke_gpu_buffer,
+    fwd_obj_bind_group: c.ke_gpu_bind_group, // set 2, per-object (dynamic offset)
+    fwd_obj_uniform: c.ke_gpu_buffer,
+    fwd_frame_bind_group: c.ke_gpu_bind_group, // set 0, per-frame
+    fwd_frame_uniform: c.ke_gpu_buffer,
     fwd_writes: [2][*c]const u8,
     fwd_io: c.ke_render_pass_io,
-    fwd_access: [5]c.ke_component_access,
+    fwd_access: [6]c.ke_component_access,
     mesh_cid: c.ke_component_id,
     transform_cid: c.ke_component_id,
     camera_cid: c.ke_component_id,
+    light_cid: c.ke_component_id,
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
@@ -117,6 +134,25 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const proj = zm.perspectiveFovLh(fov_rad, aspect, cam.near_plane, cam.far_plane);
     const view_proj = zm.mul(view, proj);
 
+    // Per-frame: camera + first directional light (defaults when none present).
+    var frame: PerFrame = .{
+        .camera_pos = .{ cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0 },
+        .light_dir = .{ -0.4, -1.0, -0.3, 0.0 },
+        .light_color = .{ 1.0, 1.0, 1.0, 1.0 },
+        .ambient = .{ 0.03, 0.03, 0.03, 0.0 },
+    };
+    var li_ents: [*c]c.ke_entity = undefined;
+    var li_data: ?*anyopaque = undefined;
+    var li_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.light_cid, &li_ents, &li_data, &li_count);
+    if (li_count != 0) {
+        const dl: *const DirLight = @ptrCast(@alignCast(li_data));
+        frame.light_dir = .{ dl.dir[0], dl.dir[1], dl.dir[2], 0.0 };
+        frame.light_color = .{ dl.rgb[0], dl.rgb[1], dl.rgb[2], dl.intensity };
+        frame.ambient = .{ dl.ambient[0], dl.ambient[1], dl.ambient[2], 0.0 };
+    }
+    dev.write_buffer.?(dev, st.fwd_frame_uniform, 0, &frame, @sizeOf(PerFrame));
+
     // Meshes: build + upload one uniform region per draw (queue writes land before
     // the recorded draws, so each dynamic offset reads its own object).
     var ents: [*c]c.ke_entity = undefined;
@@ -133,15 +169,15 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         const model = zm.loadMat(tc.world_matrix.m[0..]);
         const mvp = zm.mul(model, view_proj);
 
-        var u: Uniform = undefined;
+        var u: PerObject = undefined;
         zm.storeMat(u.mvp[0..], mvp);
         zm.storeMat(u.model[0..], model);
-        u.light_dir = .{ -0.4, -1.0, -0.3, 0.0 };
-        dev.write_buffer.?(dev, st.fwd_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(Uniform));
+        dev.write_buffer.?(dev, st.fwd_obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(PerObject));
     }
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, st.fwd_pipeline);
+    rp.*.set_bind_group.?(rp, 0, st.fwd_frame_bind_group, null, 0); // set 0: per-frame
     i = 0;
     while (i < n) : (i += 1) {
         var vbo: c.ke_gpu_buffer = 0;
@@ -149,9 +185,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         var idx_count: u32 = 0;
         if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
         const offset: u32 = i * UNIFORM_STRIDE;
-        rp.*.set_bind_group.?(rp, 0, st.fwd_bind_group, &offset, 1);
         const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
-        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
+        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
+        rp.*.set_bind_group.?(rp, 2, st.fwd_obj_bind_group, &offset, 1); // set 2: per-object
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -166,6 +202,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.mesh_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_MESH, @sizeOf(c.ke_mesh_component));
     st.transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
     st.camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
+    st.light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
 
     const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
         .code = @ptrCast(forward_vs_wgsl),
@@ -183,15 +220,28 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
     defer dev.destroy_shader_module.?(dev, fs);
 
-    const bgl_entry = c.ke_gpu_bind_group_layout_entry{
+    // Set 2 — per-object transform (dynamic offset, vertex stage).
+    const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0,
-        .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+        .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
         .type = c.KE_GPU_BINDING_TYPE_BUFFER,
         .has_dynamic_offset = 1,
     };
-    const bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+    const obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
         .entry_count = 1,
-        .entries = &bgl_entry,
+        .entries = &obj_bgl_entry,
+    });
+
+    // Set 0 — per-frame camera + light (fragment stage).
+    const frame_bgl_entry = c.ke_gpu_bind_group_layout_entry{
+        .binding = 0,
+        .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT,
+        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
+        .has_dynamic_offset = 0,
+    };
+    const frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .entry_count = 1,
+        .entries = &frame_bgl_entry,
     });
 
     const attrs = [_]c.ke_gpu_vertex_attribute{
@@ -219,9 +269,10 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 1;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    pp.bind_group_layouts[0] = bgl; // set 0: per-object (transform + light)
+    pp.bind_group_layouts[0] = frame_bgl; // set 0: per-frame (camera + light)
     pp.bind_group_layouts[1] = st.core.ref.*.material_layout.?(st.core.ref); // set 1: per-material
-    pp.bind_group_layout_count = 2;
+    pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object (transform)
+    pp.bind_group_layout_count = 3;
     pp.color_target_format = 0; // swapchain
     st.fwd_pipeline = dev.create_render_pipeline.?(dev, &pp);
     if (st.fwd_pipeline == c.KE_GPU_INVALID_HANDLE) {
@@ -229,26 +280,48 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         return false;
     }
 
-    st.fwd_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    // Set 2 — per-object ring (one dynamic-offset region per draw).
+    st.fwd_obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
         .size = UNIFORM_STRIDE * MAX_DRAWS,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     });
-
-    const bg_entry = c.ke_gpu_bind_group_entry{
+    const obj_bg_entry = c.ke_gpu_bind_group_entry{
         .binding = 0,
         .type = c.KE_GPU_BINDING_TYPE_BUFFER,
-        .buffer = st.fwd_uniform,
+        .buffer = st.fwd_obj_uniform,
         .buffer_offset = 0,
-        .buffer_size = @sizeOf(Uniform),
+        .buffer_size = @sizeOf(PerObject),
         .texture_view = 0,
         .sampler = 0,
     };
-    st.fwd_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .layout = bgl,
+    st.fwd_obj_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = obj_bgl,
         .entry_count = 1,
-        .entries = &bg_entry,
+        .entries = &obj_bg_entry,
+    });
+
+    // Set 0 — per-frame uniform (written once per pass).
+    st.fwd_frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = @sizeOf(PerFrame),
+        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    });
+    const frame_bg_entry = c.ke_gpu_bind_group_entry{
+        .binding = 0,
+        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
+        .buffer = st.fwd_frame_uniform,
+        .buffer_offset = 0,
+        .buffer_size = @sizeOf(PerFrame),
+        .texture_view = 0,
+        .sampler = 0,
+    };
+    st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = frame_bgl,
+        .entry_count = 1,
+        .entries = &frame_bg_entry,
     });
 
     // Transient depth target, sized to the backbuffer (the core resolves the
@@ -276,6 +349,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.mesh_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ },
     };
     return true;
 }
