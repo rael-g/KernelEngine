@@ -155,7 +155,6 @@ TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)
 name = "Crate"
 [entity.components.mesh]
 primitive = "cube"
-color = [0.8, 0.3, 0.2, 1.0]
 )");
     ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
     ke_entity e = tree->find_node(tree, "Crate", NULL);
@@ -166,8 +165,6 @@ color = [0.8, 0.3, 0.2, 1.0]
     auto *m = (ke_mesh_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(m, nullptr);
     EXPECT_STREQ(m->primitive, "cube");
-    EXPECT_FLOAT_EQ(m->color[0], 0.8f);
-    EXPECT_FLOAT_EQ(m->color[3], 1.0f);
 }
 
 TEST_F(SceneLoaderTest, CameraComponent_FovDegreesAlias)

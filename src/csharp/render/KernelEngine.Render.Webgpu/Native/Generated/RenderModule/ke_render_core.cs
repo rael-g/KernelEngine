@@ -35,4 +35,16 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("void (*)(struct ke_render_core *, float, float, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, float, float, float, float, void> set_clear_color;
+
+    [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *, uint32_t, uint32_t, const void *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, uint, uint, void*, ke_error**, ke_texture_handle> upload_texture;
+
+    [NativeTypeName("ke_material_handle (*)(struct ke_render_core *, const float *, ke_texture_handle, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, float*, ke_texture_handle, ke_error**, ke_material_handle> create_material;
+
+    [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_render_core *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ulong> material_layout;
+
+    [NativeTypeName("ke_gpu_bind_group (*)(struct ke_render_core *, ke_material_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_material_handle, ulong> material_bind_group;
 }

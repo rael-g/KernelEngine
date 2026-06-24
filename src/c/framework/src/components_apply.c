@@ -105,15 +105,9 @@ void ke_framework_apply_mesh(void *c, const ke_variant_table_entry *e, uint32_t 
             if (len >= sizeof(m->primitive)) len = sizeof(m->primitive) - 1;
             memcpy(m->primitive, v->s, len);
             m->primitive[len] = '\0';
-        } else if (strcmp(e[i].key, "color") == 0) {
-            if (v->type == KE_VARIANT_VEC4) {
-                m->color[0] = v->v4.x; m->color[1] = v->v4.y;
-                m->color[2] = v->v4.z; m->color[3] = v->v4.w;
-            } else if (v->type == KE_VARIANT_VEC3) {
-                m->color[0] = v->v3.x; m->color[1] = v->v3.y;
-                m->color[2] = v->v3.z; m->color[3] = 1.0f;
-            }
         }
+        // Color is a material property (base-color factor), not a mesh-component
+        // field — scene-file material specification is a future loader feature.
     }
 }
 

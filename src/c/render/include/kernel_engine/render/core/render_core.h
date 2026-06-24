@@ -113,6 +113,26 @@ struct ke_render_core
     // The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).
     // Defaults to a dark blue; the render module sets it from its config.
     void (*set_clear_color)(struct ke_render_core *self, float r, float g, float b, float a);
+
+    // ── Material resources (glTF base color factor × albedo texture) ──────
+    // Uploads an RGBA8 texture (width*height*4 bytes, row-major). Handle 0 is a
+    // built-in 1×1 white texture. KE_TEXTURE_NONE on failure.
+    ke_texture_handle (*upload_texture)(struct ke_render_core *self,
+                                        uint32_t width, uint32_t height,
+                                        const void *rgba, ke_error **out_error);
+    // Creates a material: base_color factor multiplied by the albedo texture
+    // (KE_TEXTURE_NONE / handle 0 = white). Handle 0 is a built-in white material.
+    // KE_MATERIAL_NONE on failure.
+    ke_material_handle (*create_material)(struct ke_render_core *self,
+                                          const float *base_color, // rgba (4 floats)
+                                          ke_texture_handle albedo,
+                                          ke_error **out_error);
+    // The per-material bind-group layout (descriptor set 1) a forward pipeline
+    // must declare so its set-1 bind groups (from material_bind_group) are valid.
+    ke_gpu_bind_group_layout (*material_layout)(struct ke_render_core *self);
+    // The set-1 bind group for a material handle; an unknown handle resolves to
+    // the built-in white material (handle 0).
+    ke_gpu_bind_group (*material_bind_group)(struct ke_render_core *self, ke_material_handle h);
 };
 
 typedef struct ke_render_core_handle

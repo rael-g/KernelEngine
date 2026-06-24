@@ -22,11 +22,23 @@ const MAX_RESOURCES = 64;
 const MAX_CMD_BUFFERS = 64;
 const MAX_COLOR_ATTACH = 8;
 const MAX_MESHES = 256;
+const MAX_TEXTURES = 256;
+const MAX_MATERIALS = 256;
 
 const Mesh = struct {
     vbo: c.ke_gpu_buffer,
     ibo: c.ke_gpu_buffer,
     index_count: u32,
+};
+
+const Texture = struct {
+    tex: c.ke_gpu_texture,
+    view: c.ke_gpu_texture_view,
+};
+
+const Material = struct {
+    ubo: c.ke_gpu_buffer, // base_color uniform
+    bind_group: c.ke_gpu_bind_group, // set 1: base_color + albedo + sampler
 };
 
 const Resource = struct {
@@ -59,9 +71,27 @@ const CoreState = struct {
 
     clear_color: [4]f32,
 
+    textures: [MAX_TEXTURES]Texture,
+    texture_count: u32,
+    materials: [MAX_MATERIALS]Material,
+    material_count: u32,
+    sampler: c.ke_gpu_sampler, // shared linear-repeat sampler
+    material_bgl: c.ke_gpu_bind_group_layout, // set 1 layout
+
     fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
         if (idx >= self.mesh_count) return null;
         return &self.meshes[idx];
+    }
+
+    fn textureAt(self: *CoreState, idx: u32) ?*Texture {
+        if (idx >= self.texture_count) return null;
+        return &self.textures[idx];
+    }
+
+    fn materialAt(self: *CoreState, idx: u32) *Material {
+        // Unknown handle falls back to the built-in white material (index 0).
+        if (idx >= self.material_count) return &self.materials[0];
+        return &self.materials[idx];
     }
 
     fn find(self: *CoreState, name: [*c]const u8) ?*Resource {
@@ -293,6 +323,84 @@ fn setClearColor(self: [*c]c.ke_render_core, r: f32, g: f32, b: f32, a: f32) cal
     coreOf(self).clear_color = .{ r, g, b, a };
 }
 
+fn uploadTexture(self: [*c]c.ke_render_core, width: u32, height: u32,
+                 rgba: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_texture_handle {
+    _ = out_error;
+    const st = coreOf(self);
+    if (st.texture_count >= MAX_TEXTURES) return .{ .idx = c.KE_HANDLE_NONE };
+
+    const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
+        .width = width,
+        .height = height,
+        .depth_or_array_layers = 1,
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
+        .dimension = c.KE_GPU_TEXTURE_DIM_2D,
+        .usage = c.KE_GPU_TEXTURE_USAGE_SAMPLED,
+        .mip_level_count = 1,
+        .sample_count = 1,
+        .initial_data = rgba,
+        .initial_data_size = width * height * 4,
+    });
+    if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .idx = c.KE_HANDLE_NONE };
+
+    const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
+        .dimension = c.KE_GPU_TEXTURE_DIM_2D,
+        .aspect = c.KE_GPU_TEXTURE_ASPECT_COLOR,
+        .base_mip_level = 0,
+        .mip_level_count = 1,
+        .base_array_layer = 0,
+        .array_layer_count = 1,
+    });
+
+    const idx = st.texture_count;
+    st.textures[idx] = .{ .tex = tex, .view = view };
+    st.texture_count += 1;
+    return .{ .idx = idx };
+}
+
+fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
+                  albedo: c.ke_texture_handle, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
+    _ = out_error;
+    const st = coreOf(self);
+    if (st.material_count >= MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
+
+    const ubo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+        .initial_data = base_color,
+        .size = 16, // float4 base_color
+        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    });
+
+    // Unknown / none albedo resolves to the built-in white texture (index 0).
+    const tex_idx = if (albedo.idx == c.KE_HANDLE_NONE) 0 else albedo.idx;
+    const view = (st.textureAt(tex_idx) orelse &st.textures[0]).view;
+
+    const entries = [_]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
+        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
+    };
+    const bg = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
+        .layout = st.material_bgl,
+        .entry_count = 3,
+        .entries = &entries,
+    });
+
+    const idx = st.material_count;
+    st.materials[idx] = .{ .ubo = ubo, .bind_group = bg };
+    st.material_count += 1;
+    return .{ .idx = idx };
+}
+
+fn materialLayout(self: [*c]c.ke_render_core) callconv(.c) c.ke_gpu_bind_group_layout {
+    return coreOf(self).material_bgl;
+}
+
+fn materialBindGroup(self: [*c]c.ke_render_core, h: c.ke_material_handle) callconv(.c) c.ke_gpu_bind_group {
+    return coreOf(self).materialAt(h.idx).bind_group;
+}
+
 // ── ke_render_pass_ctx slots ────────────────────────────────────────────────
 
 fn ctxRead(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
@@ -379,6 +487,16 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
         st.device.destroy_buffer.?(st.device, st.meshes[m].vbo);
         st.device.destroy_buffer.?(st.device, st.meshes[m].ibo);
     }
+    var t: u32 = 0;
+    while (t < st.texture_count) : (t += 1) {
+        st.device.destroy_texture_view.?(st.device, st.textures[t].view);
+        st.device.destroy_texture.?(st.device, st.textures[t].tex);
+    }
+    var mat: u32 = 0;
+    while (mat < st.material_count) : (mat += 1) {
+        st.device.destroy_buffer.?(st.device, st.materials[mat].ubo);
+    }
+    if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_core, @ptrCast(self)));
 }
@@ -408,6 +526,12 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .meshes = undefined,
         .mesh_count = 0,
         .clear_color = .{ 0.10, 0.15, 0.30, 1.0 },
+        .textures = undefined,
+        .texture_count = 0,
+        .materials = undefined,
+        .material_count = 0,
+        .sampler = c.KE_GPU_INVALID_HANDLE,
+        .material_bgl = c.KE_GPU_INVALID_HANDLE,
     };
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
@@ -439,6 +563,39 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .upload_mesh = uploadMesh,
         .mesh_buffers = meshBuffers,
         .set_clear_color = setClearColor,
+        .upload_texture = uploadTexture,
+        .create_material = createMaterial,
+        .material_layout = materialLayout,
+        .material_bind_group = materialBindGroup,
     };
+
+    // Material system: shared sampler + set-1 layout + built-in white texture (0)
+    // and white material (0) so untextured/unmaterialed draws still resolve.
+    st.sampler = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
+        .min_filter = c.KE_GPU_FILTER_LINEAR,
+        .mag_filter = c.KE_GPU_FILTER_LINEAR,
+        .mipmap_filter = c.KE_GPU_SAMPLER_MIPMAP_NEAREST,
+        .address_mode_u = c.KE_GPU_ADDRESS_MODE_REPEAT,
+        .address_mode_v = c.KE_GPU_ADDRESS_MODE_REPEAT,
+        .address_mode_w = c.KE_GPU_ADDRESS_MODE_REPEAT,
+        .lod_min_clamp = 0.0,
+        .lod_max_clamp = 1.0,
+        .compare = c.KE_GPU_COMPARE_UNDEFINED,
+        .max_anisotropy = 1,
+    });
+    const mat_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0 },
+        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0 },
+        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0 },
+    };
+    st.material_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .entry_count = 3,
+        .entries = &mat_bgl_entries,
+    });
+    const white_px = [_]u8{ 255, 255, 255, 255 };
+    _ = uploadTexture(core, 1, 1, &white_px, null);
+    const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
+    _ = createMaterial(core, &white_color, .{ .idx = c.KE_HANDLE_NONE }, null);
+
     return .{ .ref = core, .destroy = destroyCore };
 }

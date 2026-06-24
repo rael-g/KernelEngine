@@ -87,6 +87,10 @@ int main(void)
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &err);
     if (!ke_mesh_is_valid(cube_h)) die("upload_mesh", err);
 
+    const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };
+    ke_material_handle mat = core->create_material(core, orange, KE_TEXTURE_NONE, &err);
+    if (!ke_material_is_valid(mat)) die("create_material", err);
+
     ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component));
     ke_component_id camera_cid    = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_CAMERA,    sizeof(ke_camera_component));
     ke_component_id mesh_cid      = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_MESH,      sizeof(ke_mesh_component));
@@ -97,13 +101,13 @@ int main(void)
     ke_transform_component *cam_t = ecs.ref->component_add(ecs.ref, cam, transform_cid);
     *cam_t = (ke_transform_component){ .position = { 1.5f, 1.5f, -3.0f }, .world_matrix = identity };
     ke_camera_component *cam_c = ecs.ref->component_add(ecs.ref, cam, camera_cid);
-    *cam_c = (ke_camera_component){ .fov = 1.0f, .near_plane = 0.1f, .far_plane = 100.0f };
+    *cam_c = (ke_camera_component){ .fov = 60.0f, .near_plane = 0.1f, .far_plane = 100.0f };
 
     ke_entity ent = ecs.ref->entity_create(ecs.ref);
     ke_transform_component *ent_t = ecs.ref->component_add(ecs.ref, ent, transform_cid);
     *ent_t = (ke_transform_component){ .world_matrix = identity };
     ke_mesh_component *ent_m = ecs.ref->component_add(ecs.ref, ent, mesh_cid);
-    *ent_m = (ke_mesh_component){ .mesh = cube_h, .color = { 0.85f, 0.35f, 0.2f, 1.0f } };
+    *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat };
 
     printf("Drawing a lit cube. Close the window to exit.\n");
     double prev = now_seconds();

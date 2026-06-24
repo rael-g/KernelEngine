@@ -30,12 +30,12 @@ const forward_fs_wgsl = @embedFile("forward.fs.wgsl");
 const MAX_DRAWS = 64;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
-// Per-object uniform; layout matches forward.slang's Globals (std140).
+// Per-object uniform (set 0); matches forward.slang's PerObject. Base color +
+// albedo are per-material (set 1, owned by the render core), not here.
 const Uniform = extern struct {
     mvp: [16]f32,
     model: [16]f32,
     light_dir: [4]f32,
-    base_color: [4]f32,
 };
 
 // The device is borrowed (caller-owned); only the render core is owned here.
@@ -137,7 +137,6 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         zm.storeMat(u.mvp[0..], mvp);
         zm.storeMat(u.model[0..], model);
         u.light_dir = .{ -0.4, -1.0, -0.3, 0.0 };
-        u.base_color = meshes[i].color;
         dev.write_buffer.?(dev, st.fwd_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(Uniform));
     }
 
@@ -151,6 +150,8 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
         const offset: u32 = i * UNIFORM_STRIDE;
         rp.*.set_bind_group.?(rp, 0, st.fwd_bind_group, &offset, 1);
+        const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
+        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -196,11 +197,12 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     const attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
         .{ .shader_location = 1, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 3 * @sizeOf(f32) },
+        .{ .shader_location = 2, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = 6 * @sizeOf(f32) },
     };
     const vbl = c.ke_gpu_vertex_buffer_layout{
-        .stride = 6 * @sizeOf(f32),
+        .stride = 8 * @sizeOf(f32),
         .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX,
-        .attribute_count = 2,
+        .attribute_count = 3,
         .attributes = &attrs,
     };
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
@@ -217,8 +219,9 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 1;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    pp.bind_group_layouts[0] = bgl;
-    pp.bind_group_layout_count = 1;
+    pp.bind_group_layouts[0] = bgl; // set 0: per-object (transform + light)
+    pp.bind_group_layouts[1] = st.core.ref.*.material_layout.?(st.core.ref); // set 1: per-material
+    pp.bind_group_layout_count = 2;
     pp.color_target_format = 0; // swapchain
     st.fwd_pipeline = dev.create_render_pipeline.?(dev, &pp);
     if (st.fwd_pipeline == c.KE_GPU_INVALID_HANDLE) {

@@ -49,7 +49,6 @@ extern "C"
         ke_mesh_handle     mesh;
         ke_material_handle material;
         char               primitive[32];
-        float              color[4];
     } ke_mesh_component;
 
 #define KE_COMPONENT_NAME_CAMERA            "camera"
