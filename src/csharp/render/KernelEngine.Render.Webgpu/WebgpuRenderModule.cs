@@ -37,7 +37,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule
         if (_device.@ref == null)
             throw new InvalidOperationException("webgpu device create failed");
 
-        _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, &err);
+        _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, 1, &err);
         if (_module.@ref == null)
             throw new InvalidOperationException("render module create failed");
     }

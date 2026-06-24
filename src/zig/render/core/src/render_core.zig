@@ -21,6 +21,13 @@ comptime {
 const MAX_RESOURCES = 64;
 const MAX_CMD_BUFFERS = 64;
 const MAX_COLOR_ATTACH = 8;
+const MAX_MESHES = 256;
+
+const Mesh = struct {
+    vbo: c.ke_gpu_buffer,
+    ibo: c.ke_gpu_buffer,
+    index_count: u32,
+};
 
 const Resource = struct {
     name: [*c]const u8,
@@ -46,6 +53,14 @@ const CoreState = struct {
 
     cmd_bufs: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer,
     cmd_count: u32,
+
+    meshes: [MAX_MESHES]Mesh,
+    mesh_count: u32,
+
+    fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
+        if (idx >= self.mesh_count) return null;
+        return &self.meshes[idx];
+    }
 
     fn find(self: *CoreState, name: [*c]const u8) ?*Resource {
         var i: u32 = 0;
@@ -230,6 +245,47 @@ fn endFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callconv(
     return 1;
 }
 
+fn uploadMesh(self: [*c]c.ke_render_core, vertices: ?*const anyopaque, vertices_size: usize,
+              indices: [*c]const u16, index_count: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_mesh_handle {
+    _ = out_error;
+    const st = coreOf(self);
+    if (st.mesh_count >= MAX_MESHES) return .{ .idx = c.KE_HANDLE_NONE };
+
+    const vbo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+        .initial_data = vertices,
+        .size = vertices_size,
+        .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    });
+    if (vbo == c.KE_GPU_INVALID_HANDLE) return .{ .idx = c.KE_HANDLE_NONE };
+
+    const ibo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+        .initial_data = @ptrCast(indices),
+        .size = index_count * @sizeOf(u16),
+        .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    });
+    if (ibo == c.KE_GPU_INVALID_HANDLE) {
+        st.device.destroy_buffer.?(st.device, vbo);
+        return .{ .idx = c.KE_HANDLE_NONE };
+    }
+
+    const idx = st.mesh_count;
+    st.meshes[idx] = .{ .vbo = vbo, .ibo = ibo, .index_count = index_count };
+    st.mesh_count += 1;
+    return .{ .idx = idx };
+}
+
+fn meshBuffers(self: [*c]c.ke_render_core, h: c.ke_mesh_handle, out_vbo: [*c]c.ke_gpu_buffer,
+               out_ibo: [*c]c.ke_gpu_buffer, out_index_count: [*c]u32) callconv(.c) c.ke_bool {
+    const st = coreOf(self);
+    const m = st.meshAt(h.idx) orelse return 0;
+    out_vbo.* = m.vbo;
+    out_ibo.* = m.ibo;
+    out_index_count.* = m.index_count;
+    return 1;
+}
+
 // ── ke_render_pass_ctx slots ────────────────────────────────────────────────
 
 fn ctxRead(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
@@ -311,6 +367,11 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
             if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
         }
     }
+    var m: u32 = 0;
+    while (m < st.mesh_count) : (m += 1) {
+        st.device.destroy_buffer.?(st.device, st.meshes[m].vbo);
+        st.device.destroy_buffer.?(st.device, st.meshes[m].ibo);
+    }
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_core, @ptrCast(self)));
 }
@@ -334,6 +395,8 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .backbuffer_h = 0,
         .cmd_bufs = undefined,
         .cmd_count = 0,
+        .meshes = undefined,
+        .mesh_count = 0,
     };
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
@@ -362,6 +425,8 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .end_pass = endPass,
         .begin_frame = beginFrame,
         .end_frame = endFrame,
+        .upload_mesh = uploadMesh,
+        .mesh_buffers = meshBuffers,
     };
     return .{ .ref = core, .destroy = destroyCore };
 }

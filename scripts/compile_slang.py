@@ -52,26 +52,38 @@ def main():
     ap = argparse.ArgumentParser(description="Compile a .slang shader to an embedded C header.")
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)
-    ap.add_argument("--name", required=True, help="C identifier for the embedded array")
+    ap.add_argument("--name", help="C identifier for the embedded array (C-header mode)")
     ap.add_argument("--target", default="wgsl")
+    ap.add_argument("--entry", help="Single entry-point name (with --stage). Emitting one "
+                                    "entry point per module avoids duplicate shared "
+                                    "declarations when a uniform is used across stages.")
+    ap.add_argument("--stage", help="Shader stage for --entry (vertex|fragment|compute).")
+    ap.add_argument("--raw", action="store_true",
+                    help="Write the raw compiled source (e.g. for Zig @embedFile) "
+                         "instead of a C-string header.")
     args = ap.parse_args()
+    if not args.raw and not args.name:
+        print("Error: --name is required unless --raw is set.", file=sys.stderr)
+        sys.exit(1)
 
     slangc = find_slangc()
     if not slangc:
         print("Error: slangc not found on PATH or under $VULKAN_SDK.", file=sys.stderr)
         sys.exit(1)
 
-    result = subprocess.run(
-        [slangc, args.input, "-target", args.target],
-        capture_output=True, text=True,
-    )
+    cmd = [slangc, args.input, "-target", args.target]
+    if args.entry:
+        cmd += ["-entry", args.entry]
+    if args.stage:
+        cmd += ["-stage", args.stage]
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"slangc failed for {args.input}:\n{result.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     with open(args.output, "w", newline="\n") as f:
-        f.write(embed_c_string(args.name, result.stdout))
+        f.write(result.stdout if args.raw else embed_c_string(args.name, result.stdout))
 
 
 if __name__ == "__main__":

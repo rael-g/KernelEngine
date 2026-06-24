@@ -36,6 +36,7 @@ ke_result
 ke_bool
 ke_runtime
 ke_ecs
+ke_render_module_core
 --config
 multi-file
 latest-codegen

@@ -4,6 +4,7 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/handles.h>
 #include <kernel_engine/render/core/pass_context.h>
 #include <stdint.h>
 
@@ -90,6 +91,20 @@ struct ke_render_core
     // command buffers in the order the runtime ran them, then presents.
     ke_bool (*begin_frame)(struct ke_render_core *self, ke_error **out_error);
     ke_bool (*end_frame)(struct ke_render_core *self, ke_error **out_error);
+
+    // ── Mesh resources (handle-keyed GPU buffers owned by the core) ────────
+    // Uploads interleaved vertices (position float3 + normal float3) and 16-bit
+    // indices to device buffers; returns a handle a ke_mesh_component references.
+    // The forward pass resolves the handle to draw. KE_MESH_NONE on failure.
+    ke_mesh_handle (*upload_mesh)(struct ke_render_core *self,
+                                  const void *vertices, size_t vertices_size,
+                                  const uint16_t *indices, uint32_t index_count,
+                                  ke_error **out_error);
+    // Resolves a mesh handle to its GPU buffers (for a pass to bind + draw).
+    // Returns false if the handle is unknown.
+    ke_bool (*mesh_buffers)(struct ke_render_core *self, ke_mesh_handle h,
+                            ke_gpu_buffer *out_vbo, ke_gpu_buffer *out_ibo,
+                            uint32_t *out_index_count);
 };
 
 typedef struct ke_render_core_handle

@@ -79,6 +79,7 @@ add_subdirectory(examples/c/09_texture)
 add_subdirectory(examples/c/10_depth)
 add_subdirectory(examples/c/12_render_core)
 add_subdirectory(examples/c/13_runtime_clear)
+add_subdirectory(examples/c/14_forward_mesh)
 
 enable_testing()
 add_subdirectory(tests/c/kernel)
