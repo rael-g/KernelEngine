@@ -109,6 +109,10 @@ struct ke_render_core
     ke_bool (*mesh_buffers)(struct ke_render_core *self, ke_mesh_handle h,
                             ke_gpu_buffer *out_vbo, ke_gpu_buffer *out_ibo,
                             uint32_t *out_index_count);
+
+    // The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).
+    // Defaults to a dark blue; the render module sets it from its config.
+    void (*set_clear_color)(struct ke_render_core *self, float r, float g, float b, float a);
 };
 
 typedef struct ke_render_core_handle

@@ -32,4 +32,7 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("ke_bool (*)(struct ke_render_core *, ke_mesh_handle, ke_gpu_buffer *, ke_gpu_buffer *, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_mesh_handle, ulong*, ulong*, uint*, byte> mesh_buffers;
+
+    [NativeTypeName("void (*)(struct ke_render_core *, float, float, float, float)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, float, float, float, float, void> set_clear_color;
 }

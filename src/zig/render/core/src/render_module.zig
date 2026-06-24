@@ -112,7 +112,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
 
     const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
     const view = zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
-    const proj = zm.perspectiveFovLh(cam.fov, aspect, cam.near_plane, cam.far_plane);
+    // ke_camera_component.fov is in degrees (the cross-backend convention).
+    const fov_rad = cam.fov * @as(f32, std.math.pi / 180.0);
+    const proj = zm.perspectiveFovLh(fov_rad, aspect, cam.near_plane, cam.far_plane);
     const view_proj = zm.mul(view, proj);
 
     // Meshes: build + upload one uniform region per draw (queue writes land before

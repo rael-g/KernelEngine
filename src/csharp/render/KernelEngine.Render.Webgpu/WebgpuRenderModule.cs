@@ -15,13 +15,22 @@ namespace KernelEngine.Render.Webgpu;
 /// just ticks the runtime — no render calls in the loop. Coexists with
 /// BgfxRenderModule as an alternate DI choice.
 /// </summary>
-public sealed unsafe class WebgpuRenderModule : IRuntimeModule
+public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IMeshUploader
 {
     private ke_gpu_device_handle _device;
     private ke_render_module_handle _module;
     private ke_render_core* _core;
+    private readonly System.Numerics.Vector4 _clearColor;
+
+    /// <param name="clearColor">Background color the default passes clear to (RGBA).</param>
+    public WebgpuRenderModule(System.Numerics.Vector4 clearColor = default)
+        => _clearColor = clearColor == default ? new(0.10f, 0.15f, 0.30f, 1.0f) : clearColor;
 
     public string Name => "Webgpu.Render";
+
+    /// <summary>Exposes this module as the scene's <see cref="IMeshUploader"/>.</summary>
+    public void Configure(IServiceCollection services)
+        => services.AddSingleton<IMeshUploader>(this);
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
@@ -44,6 +53,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule
             throw Fail("render module create failed", err);
 
         _core = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_core(_module.@ref);
+        _core->set_clear_color(_core, _clearColor.X, _clearColor.Y, _clearColor.Z, _clearColor.W);
     }
 
     /// <summary>

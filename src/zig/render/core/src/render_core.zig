@@ -57,6 +57,8 @@ const CoreState = struct {
     meshes: [MAX_MESHES]Mesh,
     mesh_count: u32,
 
+    clear_color: [4]f32,
+
     fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
         if (idx >= self.mesh_count) return null;
         return &self.meshes[idx];
@@ -287,6 +289,10 @@ fn meshBuffers(self: [*c]c.ke_render_core, h: c.ke_mesh_handle, out_vbo: [*c]c.k
     return 1;
 }
 
+fn setClearColor(self: [*c]c.ke_render_core, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+    coreOf(self).clear_color = .{ r, g, b, a };
+}
+
 // ── ke_render_pass_ctx slots ────────────────────────────────────────────────
 
 fn ctxRead(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
@@ -322,7 +328,7 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
                 .view = r.view,
                 .load_op = c.KE_GPU_LOAD_OP_CLEAR,
                 .store_op = c.KE_GPU_STORE_OP_STORE,
-                .clear_value = .{ .color = .{ 0.10, 0.15, 0.30, 1.0 } },
+                .clear_value = .{ .color = ps.core.clear_color },
             };
             color_count += 1;
         }
@@ -401,6 +407,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .cmd_count = 0,
         .meshes = undefined,
         .mesh_count = 0,
+        .clear_color = .{ 0.10, 0.15, 0.30, 1.0 },
     };
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
@@ -431,6 +438,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .end_frame = endFrame,
         .upload_mesh = uploadMesh,
         .mesh_buffers = meshBuffers,
+        .set_clear_color = setClearColor,
     };
     return .{ .ref = core, .destroy = destroyCore };
 }
