@@ -5,7 +5,9 @@
 #include <kernel_engine/render/gpu_enums.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/core/render_core.h>
+#include <kernel_engine/render/core/pass_context.h>
 #include <kernel_engine/render/core/render_core_create.h>
+#include <kernel_engine/render/gpu_commands.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 

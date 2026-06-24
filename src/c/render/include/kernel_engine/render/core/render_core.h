@@ -5,7 +5,6 @@
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/gpu_device.h>
 #include <kernel_engine/render/handles.h>
-#include <kernel_engine/render/core/pass_context.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -15,6 +14,11 @@ extern "C"
 
 // Opaque — the runtime's per-system component funnel (kernel_engine/runtime/system_ctx.h).
 typedef struct ke_system_ctx ke_system_ctx;
+
+// Opaque — the per-pass recording context (kernel_engine/render/core/pass_context.h).
+// Forward-declared here so this header stays light; pass impls include the full
+// definition. Mirrors how gpu_device.h forward-declares its encoder/render-pass.
+typedef struct ke_render_pass_ctx ke_render_pass_ctx;
 
 // ══════════════════════════════════════════════════════════════════════════
 // L5 — Render core service

@@ -19,6 +19,8 @@ ke_render_core
 --file
 ../../../../zig/render/core/include/kernel_engine/render/core/render_module_create.h
 --traverse
+../../../../c/render/include/kernel_engine/render/handles.h
+../../../../c/render/include/kernel_engine/render/core/render_core.h
 ../../../../zig/render/core/include/kernel_engine/render/core/render_module_create.h
 --methodClassName
 NativeMethods
@@ -36,7 +38,6 @@ ke_result
 ke_bool
 ke_runtime
 ke_ecs
-ke_render_module_core
 --config
 multi-file
 latest-codegen

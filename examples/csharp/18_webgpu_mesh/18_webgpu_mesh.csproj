@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\csharp\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler.Enki\KernelEngine.Scheduler.Enki.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
+  </ItemGroup>
+
+</Project>

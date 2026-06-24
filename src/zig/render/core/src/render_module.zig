@@ -13,6 +13,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/gpu_device.h");
     @cInclude("kernel_engine/render/gpu_commands.h");
     @cInclude("kernel_engine/render/core/render_core.h");
+    @cInclude("kernel_engine/render/core/pass_context.h");
     @cInclude("kernel_engine/render/core/render_core_create.h");
     @cInclude("kernel_engine/render/core/render_module_create.h");
 });

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Render.Webgpu.Native;
@@ -18,6 +19,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule
 {
     private ke_gpu_device_handle _device;
     private ke_render_module_handle _module;
+    private ke_render_core* _core;
 
     public string Name => "Webgpu.Render";
 
@@ -35,11 +37,48 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule
         var dp = new ke_gpu_device_webgpu_params { window = win, enable_validation = 1 };
         _device = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, &err);
         if (_device.@ref == null)
-            throw new InvalidOperationException("webgpu device create failed");
+            throw Fail("webgpu device create failed", err);
 
         _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, 1, &err);
         if (_module.@ref == null)
-            throw new InvalidOperationException("render module create failed");
+            throw Fail("render module create failed", err);
+
+        _core = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_core(_module.@ref);
+    }
+
+    /// <summary>
+    /// Uploads an interleaved mesh (position + normal vertices, 16-bit indices)
+    /// to GPU buffers owned by the render core, returning a handle a
+    /// <see cref="MeshComponent"/> references. Valid only after the module is
+    /// loaded. Throws on failure — a bad upload is never swallowed.
+    /// </summary>
+    public MeshHandle UploadMesh(ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices)
+    {
+        if (_core == null)
+            throw new InvalidOperationException("UploadMesh called before the render module was loaded");
+
+        ke_error* err = null;
+        ke_mesh_handle h;
+        fixed (MeshVertex* v = vertices)
+        fixed (ushort* i = indices)
+        {
+            h = _core->upload_mesh(_core, v, (nuint)(vertices.Length * sizeof(MeshVertex)),
+                                   i, (uint)indices.Length, &err);
+        }
+        if (h.idx == uint.MaxValue)
+            throw Fail("upload_mesh failed", err);
+        return new MeshHandle(h.idx);
+    }
+
+    private static InvalidOperationException Fail(string what, ke_error* err)
+    {
+        if (err != null)
+        {
+            var msg = Marshal.PtrToStringUTF8((IntPtr)err->message) ?? "(no message)";
+            var name = err->type != null ? Marshal.PtrToStringUTF8((IntPtr)err->type->name) ?? "?" : "?";
+            return new InvalidOperationException($"{what} [{name}]: {msg}");
+        }
+        return new InvalidOperationException(what);
     }
 
     public void OnUnload(IRuntime runtime, IServiceProvider services)
