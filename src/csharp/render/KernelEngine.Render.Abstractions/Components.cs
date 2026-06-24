@@ -14,12 +14,14 @@ public struct MeshVertex
     public Vector3 Position;
     public Vector3 Normal;
     public Vector2 UV;
+    public Vector3 Tangent;
 
-    public MeshVertex(Vector3 position, Vector3 normal, Vector2 uv)
+    public MeshVertex(Vector3 position, Vector3 normal, Vector2 uv, Vector3 tangent)
     {
         Position = position;
         Normal   = normal;
         UV       = uv;
+        Tangent  = tangent;
     }
 }
 

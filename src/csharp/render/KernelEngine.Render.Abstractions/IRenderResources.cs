@@ -26,7 +26,9 @@ public interface IRenderResources
     /// <summary>
     /// Creates a glTF metallic-roughness material: a base-color factor multiplied
     /// by an albedo texture (default <c>TextureHandle.White</c> = flat color), plus
-    /// metallic (0 = dielectric, 1 = metal) and roughness (0 = mirror, 1 = matte).
+    /// metallic (0 = dielectric, 1 = metal), roughness (0 = mirror, 1 = matte), and
+    /// an optional tangent-space normal map (<c>null</c> = flat / no perturbation).
     /// </summary>
-    MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f, TextureHandle albedo = default);
+    MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
+                                  TextureHandle albedo = default, TextureHandle? normalMap = null);
 }

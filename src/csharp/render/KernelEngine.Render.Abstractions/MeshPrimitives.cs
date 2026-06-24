@@ -5,19 +5,21 @@ namespace KernelEngine.Render;
 /// <summary>
 /// Procedural mesh factories for the v2 render path. Each call uploads vertex +
 /// index buffers through an <see cref="IRenderResources"/> and returns a handle.
-/// Call from the render worker (GPU upload has thread affinity).
+/// Vertices carry position + normal + uv + tangent (the tangent is the +U
+/// direction, for tangent-space normal mapping). Call from the render worker.
 /// </summary>
 public static class MeshPrimitives
 {
     /// <summary>Unit XY quad centered at the origin, facing +Z.</summary>
     public static MeshHandle Quad(IRenderResources resources)
     {
+        var t = new Vector3(1, 0, 0); // +U
         ReadOnlySpan<MeshVertex> verts = stackalloc MeshVertex[]
         {
-            new(new(-0.5f, -0.5f, 0f), new(0, 0, 1), new(0, 1)),
-            new(new( 0.5f, -0.5f, 0f), new(0, 0, 1), new(1, 1)),
-            new(new( 0.5f,  0.5f, 0f), new(0, 0, 1), new(1, 0)),
-            new(new(-0.5f,  0.5f, 0f), new(0, 0, 1), new(0, 0)),
+            new(new(-0.5f, -0.5f, 0f), new(0, 0, 1), new(0, 1), t),
+            new(new( 0.5f, -0.5f, 0f), new(0, 0, 1), new(1, 1), t),
+            new(new( 0.5f,  0.5f, 0f), new(0, 0, 1), new(1, 0), t),
+            new(new(-0.5f,  0.5f, 0f), new(0, 0, 1), new(0, 0), t),
         };
         ReadOnlySpan<ushort> indices = stackalloc ushort[] { 0, 1, 2, 0, 2, 3 };
         return resources.UploadMesh(verts, indices);
@@ -34,10 +36,11 @@ public static class MeshPrimitives
                          Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
         {
             int v = f * 4;
-            verts[v + 0] = new(p0, n, new(0, 1));
-            verts[v + 1] = new(p1, n, new(1, 1));
-            verts[v + 2] = new(p2, n, new(1, 0));
-            verts[v + 3] = new(p3, n, new(0, 0));
+            var t = Vector3.Normalize(p1 - p0); // +U direction
+            verts[v + 0] = new(p0, n, new(0, 1), t);
+            verts[v + 1] = new(p1, n, new(1, 1), t);
+            verts[v + 2] = new(p2, n, new(1, 0), t);
+            verts[v + 3] = new(p3, n, new(0, 0), t);
             int i = f * 6;
             idx[i + 0] = (ushort)(v + 0); idx[i + 1] = (ushort)(v + 1); idx[i + 2] = (ushort)(v + 2);
             idx[i + 3] = (ushort)(v + 0); idx[i + 4] = (ushort)(v + 2); idx[i + 5] = (ushort)(v + 3);
