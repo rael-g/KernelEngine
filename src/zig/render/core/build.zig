@@ -18,6 +18,8 @@ pub fn build(b: *std.Build) void {
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
     const forward_vs_wgsl = b.option([]const u8, "forward-vs-wgsl",   "generated forward vertex WGSL path")  orelse @panic("-Dforward-vs-wgsl required");
     const forward_fs_wgsl = b.option([]const u8, "forward-fs-wgsl",   "generated forward fragment WGSL path") orelse @panic("-Dforward-fs-wgsl required");
+    const skybox_vs_wgsl  = b.option([]const u8, "skybox-vs-wgsl",    "generated skybox vertex WGSL path")   orelse @panic("-Dskybox-vs-wgsl required");
+    const skybox_fs_wgsl  = b.option([]const u8, "skybox-fs-wgsl",    "generated skybox fragment WGSL path") orelse @panic("-Dskybox-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/render_core.zig"),
@@ -42,6 +44,8 @@ pub fn build(b: *std.Build) void {
     // stage), embedded here.
     mod.addAnonymousImport("forward.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = forward_vs_wgsl } });
     mod.addAnonymousImport("forward.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = forward_fs_wgsl } });
+    mod.addAnonymousImport("skybox.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = skybox_vs_wgsl } });
+    mod.addAnonymousImport("skybox.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = skybox_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_core",

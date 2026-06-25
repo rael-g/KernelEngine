@@ -135,6 +135,19 @@ struct ke_render_core
     // The set-1 bind group for a material handle; an unknown handle resolves to
     // the built-in white material (handle 0).
     ke_gpu_bind_group (*material_bind_group)(struct ke_render_core *self, ke_material_handle h);
+
+    // ── Environment cubemap (skybox + image-based lighting) ──────────────
+    // Uploads an RGBA8 cubemap: 6 faces of face_size×face_size, +X,-X,+Y,-Y,+Z,-Z
+    // concatenated. Returns a texture handle whose view is cube-dimensioned.
+    // KE_TEXTURE_NONE on failure.
+    ke_texture_handle (*upload_cubemap)(struct ke_render_core *self,
+                                        uint32_t face_size, const void *faces,
+                                        ke_error **out_error);
+    // The GPU view for a texture/cubemap handle (for a pass to bind it). An
+    // unknown handle resolves to the built-in white texture (handle 0).
+    ke_gpu_texture_view (*texture_view)(struct ke_render_core *self, ke_texture_handle h);
+    // The shared filtering sampler the core creates (linear, repeat).
+    ke_gpu_sampler (*sampler)(struct ke_render_core *self);
 };
 
 typedef struct ke_render_core_handle

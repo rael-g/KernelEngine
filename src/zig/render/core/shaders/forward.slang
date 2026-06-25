@@ -21,14 +21,17 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-// Set 0 — per frame: camera + single directional light.
+// Set 0 — per frame: camera + light + environment cubemap (skybox / IBL).
 struct PerFrame {
-    float4 camera_pos;  // xyz
-    float4 light_dir;   // xyz = direction the light travels (normalized)
-    float4 light_color; // rgb, w = intensity
-    float4 ambient;     // rgb
+    float4   camera_pos;    // xyz
+    float4   light_dir;     // xyz = direction the light travels (normalized)
+    float4   light_color;   // rgb, w = intensity
+    float4   ambient;       // rgb
+    float4x4 sky_view_proj; // rotation-only view*proj — used by the skybox pass
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
+[[vk::binding(1, 0)]] TextureCube  env;         // environment (black 1×1 when no skybox)
+[[vk::binding(2, 0)]] SamplerState env_sampler;
 
 // Set 1 — per material: glTF metallic-roughness + albedo + tangent-space normal.
 struct Material {
@@ -112,8 +115,19 @@ float4 fs_main(VsOut input) : SV_Target {
 
     float3 diffuse = kd * albedo_c / PI;
     float3 lit     = (diffuse + specular) * radiance * ndotl;
-    float3 ambient = frame.ambient.rgb * albedo_c;
-    float3 color   = ambient + lit;
+
+    // Image-based lighting — direct environment sampling (simple; the split-sum
+    // approximation is deferred debt). Specular = env reflected off the surface,
+    // diffuse = env at the normal. Env is a 1×1 black cube when no skybox is set.
+    float3 f_ibl       = fresnel_schlick(max(dot(n, v), 0.0), f0);
+    float3 ibl_spec    = env.Sample(env_sampler, reflect(-v, n)).rgb * f_ibl;
+    float3 ibl_diffuse = env.Sample(env_sampler, n).rgb * albedo_c * (1.0 - metallic) * (1.0 - f_ibl);
+    float3 ibl         = ibl_spec + ibl_diffuse;
+
+    // Flat ambient is a diffuse fill (for scenes without an IBL environment); it
+    // must not wash out metals, so gate it by (1 - metallic).
+    float3 ambient = frame.ambient.rgb * albedo_c * (1.0 - metallic);
+    float3 color   = ambient + lit + ibl;
 
     color = color / (color + 1.0);                       // Reinhard tonemap (transitional)
     color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)); // linear -> display (UNORM swapchain)

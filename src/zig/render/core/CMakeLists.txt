@@ -28,6 +28,24 @@ add_custom_command(
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward.slang" "${COMPILE_SLANG}"
     VERBATIM
 )
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/skybox.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang"
+            --output "${SHADER_GEN_DIR}/skybox.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang" "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/skybox.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang"
+            --output "${SHADER_GEN_DIR}/skybox.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang" "${COMPILE_SLANG}"
+    VERBATIM
+)
 
 add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
@@ -43,6 +61,8 @@ add_custom_command(
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
         "-Dforward-vs-wgsl=${SHADER_GEN_DIR}/forward.vs.wgsl"
         "-Dforward-fs-wgsl=${SHADER_GEN_DIR}/forward.fs.wgsl"
+        "-Dskybox-vs-wgsl=${SHADER_GEN_DIR}/skybox.vs.wgsl"
+        "-Dskybox-fs-wgsl=${SHADER_GEN_DIR}/skybox.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
@@ -51,6 +71,8 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
         "${SHADER_GEN_DIR}/forward.vs.wgsl"
         "${SHADER_GEN_DIR}/forward.fs.wgsl"
+        "${SHADER_GEN_DIR}/skybox.vs.wgsl"
+        "${SHADER_GEN_DIR}/skybox.fs.wgsl"
         ke_common
         ke_runtime
     VERBATIM

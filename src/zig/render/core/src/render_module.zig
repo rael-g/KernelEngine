@@ -26,6 +26,8 @@ const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) voi
 // stage; a cross-stage uniform can't be declared twice in one WGSL module).
 const forward_vs_wgsl = @embedFile("forward.vs.wgsl");
 const forward_fs_wgsl = @embedFile("forward.fs.wgsl");
+const skybox_vs_wgsl = @embedFile("skybox.vs.wgsl");
+const skybox_fs_wgsl = @embedFile("skybox.fs.wgsl");
 
 const MAX_DRAWS = 64;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
@@ -36,12 +38,27 @@ const PerObject = extern struct {
     model: [16]f32,
 };
 
-// Set 0 — per-frame camera + directional light. Matches forward.slang PerFrame.
+// Set 0 — per-frame camera + light + skybox view. Matches forward.slang PerFrame.
 const PerFrame = extern struct {
     camera_pos: [4]f32,
     light_dir: [4]f32,
     light_color: [4]f32, // rgb, w = intensity
     ambient: [4]f32,
+    sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
+};
+
+// Unit cube positions (8 corners) + indices for the skybox.
+const sky_verts = [_]f32{
+    -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1,
+    -1, -1, 1,  1, -1, 1,  1, 1, 1,  -1, 1, 1,
+};
+const sky_idx = [_]u16{
+    0, 1, 2, 0, 2, 3, // -Z
+    4, 6, 5, 4, 7, 6, // +Z
+    0, 4, 5, 0, 5, 1, // -Y
+    3, 2, 6, 3, 6, 7, // +Y
+    0, 3, 7, 0, 7, 4, // -X
+    1, 5, 6, 1, 6, 2, // +X
 };
 
 // Mirrors ke_directional_light_component (10 floats, see render/components.h).
@@ -70,12 +87,24 @@ const ModuleState = struct {
     fwd_frame_uniform: c.ke_gpu_buffer,
     fwd_writes: [2][*c]const u8,
     fwd_io: c.ke_render_pass_io,
-    fwd_access: [6]c.ke_component_access,
+    fwd_access: [7]c.ke_component_access,
     mesh_cid: c.ke_component_id,
     transform_cid: c.ke_component_id,
     camera_cid: c.ke_component_id,
     light_cid: c.ke_component_id,
+    skybox_cid: c.ke_component_id,
+
+    // Skybox (drawn inside the forward pass: clear → meshes → skybox depth-LEQUAL)
+    sky_pipeline: c.ke_gpu_pipeline,
+    sky_vbo: c.ke_gpu_buffer,
+    sky_ibo: c.ke_gpu_buffer,
+    frame_bgl: c.ke_gpu_bind_group_layout, // set 0 layout (rebuild bind group on env change)
+    env_cubemap: c.ke_texture_handle, // currently bound env (default until a skybox is set)
 };
+
+// Mirrors the framework SkyboxComponent (registered under "Skybox"): a cubemap
+// texture handle.
+const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
     return @alignCast(@ptrCast(user.?));
@@ -128,11 +157,45 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
     const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const view = zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
+    const q = cam_tc.rotation;
+    // No rotation → look at the origin (the convention examples 01-04 rely on);
+    // a rotated camera (free-look) derives its view from the rotation.
+    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
+        zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
+    else blk: {
+        const rot = zm.f32x4(q.x, q.y, q.z, q.w);
+        const fwd = zm.rotate(rot, zm.f32x4(0, 0, -1, 0));
+        const up = zm.rotate(rot, zm.f32x4(0, 1, 0, 0));
+        break :blk zm.lookToLh(eye, fwd, up);
+    };
     // ke_camera_component.fov is in degrees (the cross-backend convention).
     const fov_rad = cam.fov * @as(f32, std.math.pi / 180.0);
     const proj = zm.perspectiveFovLh(fov_rad, aspect, cam.near_plane, cam.far_plane);
     const view_proj = zm.mul(view, proj);
+
+    // Skybox view: rotation-only (translation zeroed) × proj, so the cube stays
+    // centred on the camera (infinite background).
+    var vm: [16]f32 = undefined;
+    zm.storeMat(vm[0..], view);
+    vm[12] = 0;
+    vm[13] = 0;
+    vm[14] = 0;
+    const sky_vp = zm.mul(zm.loadMat(vm[0..]), proj);
+
+    // Environment cubemap from the first skybox entity (default black otherwise);
+    // rebuild set 0 only when the bound environment changes.
+    var sky_ents: [*c]c.ke_entity = undefined;
+    var sky_data: ?*anyopaque = undefined;
+    var sky_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.skybox_cid, &sky_ents, &sky_data, &sky_count);
+    const want_env: c.ke_texture_handle = if (sky_count != 0)
+        (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_data)))).cubemap
+    else
+        .{ .idx = c.KE_HANDLE_NONE };
+    if (want_env.idx != st.env_cubemap.idx) {
+        st.env_cubemap = want_env;
+        rebuildFrameBindGroup(st);
+    }
 
     // Per-frame: camera + first directional light (defaults when none present).
     var frame: PerFrame = .{
@@ -140,7 +203,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         .light_dir = .{ -0.4, -1.0, -0.3, 0.0 },
         .light_color = .{ 1.0, 1.0, 1.0, 1.0 },
         .ambient = .{ 0.03, 0.03, 0.03, 0.0 },
+        .sky_view_proj = undefined,
     };
+    zm.storeMat(frame.sky_view_proj[0..], sky_vp);
     var li_ents: [*c]c.ke_entity = undefined;
     var li_data: ?*anyopaque = undefined;
     var li_count: usize = 0;
@@ -192,8 +257,36 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
     }
+
+    // Skybox last — depth LEQUAL, no depth write: fills only the background pixels
+    // the opaque meshes did not cover, within the same render pass (no load-op).
+    rp.*.set_pipeline.?(rp, st.sky_pipeline);
+    rp.*.set_bind_group.?(rp, 0, st.fwd_frame_bind_group, null, 0);
+    rp.*.set_vertex_buffer.?(rp, 0, st.sky_vbo, 0);
+    rp.*.set_index_buffer.?(rp, st.sky_ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
+    rp.*.draw_indexed.?(rp, sky_idx.len, 1, 0, 0, 0);
+
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+}
+
+// Builds set 0 (per-frame uniform + env cubemap + sampler). Called at setup and
+// whenever the bound environment cubemap changes (rare — at scene load).
+fn rebuildFrameBindGroup(st: *ModuleState) void {
+    const dev = st.device;
+    const core = st.core.ref;
+    const env_view = core.*.texture_view.?(core, st.env_cubemap);
+    const smp = core.*.sampler.?(core);
+    const entries = [_]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.fwd_frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 },
+        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
+        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
+    };
+    st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = st.frame_bgl,
+        .entry_count = 3,
+        .entries = &entries,
+    });
 }
 
 fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) bool {
@@ -203,6 +296,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
     st.camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
     st.light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
+    st.skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(SkyboxComp));
+    st.env_cubemap = .{ .idx = c.KE_HANDLE_NONE }; // default (black) cube until a skybox is set
 
     const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
         .code = @ptrCast(forward_vs_wgsl),
@@ -226,23 +321,25 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
         .type = c.KE_GPU_BINDING_TYPE_BUFFER,
         .has_dynamic_offset = 1,
+        .view_dimension = 0,
     };
     const obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
         .entry_count = 1,
         .entries = &obj_bgl_entry,
     });
 
-    // Set 0 — per-frame camera + light (fragment stage).
-    const frame_bgl_entry = c.ke_gpu_bind_group_layout_entry{
-        .binding = 0,
-        .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT,
-        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
-        .has_dynamic_offset = 0,
+    // Set 0 — per-frame uniform (vs reads sky_view_proj; fs reads camera/light) +
+    // environment cubemap + sampler (fs, for skybox + IBL).
+    const frame_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
+        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     const frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 1,
-        .entries = &frame_bgl_entry,
+        .entry_count = 3,
+        .entries = &frame_bgl_entries,
     });
+    st.frame_bgl = frame_bgl;
 
     const attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -303,26 +400,72 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .entries = &obj_bg_entry,
     });
 
-    // Set 0 — per-frame uniform (written once per pass).
+    // Set 0 — per-frame uniform + env cubemap + sampler. The bind group is rebuilt
+    // (rebuildFrameBindGroup) whenever the bound environment cubemap changes.
     st.fwd_frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
         .size = @sizeOf(PerFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     });
-    const frame_bg_entry = c.ke_gpu_bind_group_entry{
-        .binding = 0,
-        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
-        .buffer = st.fwd_frame_uniform,
-        .buffer_offset = 0,
-        .buffer_size = @sizeOf(PerFrame),
-        .texture_view = 0,
-        .sampler = 0,
+    rebuildFrameBindGroup(st);
+
+    // Skybox pipeline (set 0 only): position-only cube, depth LEQUAL, no write.
+    const sky_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(skybox_vs_wgsl),
+        .byte_size = skybox_vs_wgsl.len,
+        .entry_point = "skybox.vs",
+    }, out_error);
+    if (sky_vs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, sky_vs);
+    const sky_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(skybox_fs_wgsl),
+        .byte_size = skybox_fs_wgsl.len,
+        .entry_point = "skybox.fs",
+    }, out_error);
+    if (sky_fs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, sky_fs);
+
+    const sky_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
+    const sky_vbl = c.ke_gpu_vertex_buffer_layout{
+        .stride = 3 * @sizeOf(f32),
+        .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX,
+        .attribute_count = 1,
+        .attributes = &sky_attr,
     };
-    st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .layout = frame_bgl,
-        .entry_count = 1,
-        .entries = &frame_bg_entry,
+    var skp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    skp.vertex_module = sky_vs;
+    skp.fragment_module = sky_fs;
+    skp.vertex_entry = "vs_main";
+    skp.fragment_entry = "fs_main";
+    skp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    skp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
+    skp.front_face = c.KE_GPU_FRONT_FACE_CCW;
+    skp.vertex_buffer_count = 1;
+    skp.vertex_buffers = &sky_vbl;
+    skp.blend_state.write_mask = 0x0F;
+    skp.depth_stencil.depth_test_enabled = 1;
+    skp.depth_stencil.depth_write_enabled = 0; // skybox never occludes
+    skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
+    skp.bind_group_layouts[0] = frame_bgl;
+    skp.bind_group_layout_count = 1;
+    skp.color_target_format = 0;
+    st.sky_pipeline = dev.create_render_pipeline.?(dev, &skp);
+    if (st.sky_pipeline == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+    st.sky_vbo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = &sky_verts,
+        .size = @sizeOf(@TypeOf(sky_verts)),
+        .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    });
+    st.sky_ibo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = &sky_idx,
+        .size = @sizeOf(@TypeOf(sky_idx)),
+        .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
     });
 
     // Transient depth target, sized to the backbuffer (the core resolves the
@@ -351,6 +494,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.skybox_cid, .access = c.KE_ACCESS_READ },
     };
     return true;
 }

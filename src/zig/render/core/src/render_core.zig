@@ -78,6 +78,7 @@ const CoreState = struct {
     sampler: c.ke_gpu_sampler, // shared linear-repeat sampler
     material_bgl: c.ke_gpu_bind_group_layout, // set 1 layout
     default_normal: c.ke_texture_handle, // built-in flat (0,0,1) normal map
+    default_cubemap: c.ke_texture_handle, // built-in 1×1 black env cubemap
 
     fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
         if (idx >= self.mesh_count) return null;
@@ -412,6 +413,54 @@ fn materialBindGroup(self: [*c]c.ke_render_core, h: c.ke_material_handle) callco
     return coreOf(self).materialAt(h.idx).bind_group;
 }
 
+fn uploadCubemap(self: [*c]c.ke_render_core, face_size: u32, faces: ?*const anyopaque,
+                 out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_texture_handle {
+    _ = out_error;
+    const st = coreOf(self);
+    if (st.texture_count >= MAX_TEXTURES) return .{ .idx = c.KE_HANDLE_NONE };
+
+    const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
+        .width = face_size,
+        .height = face_size,
+        .depth_or_array_layers = 6,
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
+        .dimension = c.KE_GPU_TEXTURE_DIM_CUBE,
+        .usage = c.KE_GPU_TEXTURE_USAGE_SAMPLED,
+        .mip_level_count = 1,
+        .sample_count = 1,
+        .initial_data = faces,
+        .initial_data_size = face_size * face_size * 4 * 6,
+    });
+    if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .idx = c.KE_HANDLE_NONE };
+
+    const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
+        .dimension = c.KE_GPU_TEXTURE_DIM_CUBE,
+        .aspect = c.KE_GPU_TEXTURE_ASPECT_COLOR,
+        .base_mip_level = 0,
+        .mip_level_count = 1,
+        .base_array_layer = 0,
+        .array_layer_count = 6,
+    });
+
+    const idx = st.texture_count;
+    st.textures[idx] = .{ .tex = tex, .view = view };
+    st.texture_count += 1;
+    return .{ .idx = idx };
+}
+
+fn textureView(self: [*c]c.ke_render_core, h: c.ke_texture_handle) callconv(.c) c.ke_gpu_texture_view {
+    const st = coreOf(self);
+    // texture_view is used to bind the environment cubemap; an unset/none handle
+    // resolves to the built-in default (black) cubemap so the binding stays valid.
+    const idx = if (h.idx == c.KE_HANDLE_NONE) st.default_cubemap.idx else h.idx;
+    return (st.textureAt(idx) orelse &st.textures[st.default_cubemap.idx]).view;
+}
+
+fn samplerOf(self: [*c]c.ke_render_core) callconv(.c) c.ke_gpu_sampler {
+    return coreOf(self).sampler;
+}
+
 // ── ke_render_pass_ctx slots ────────────────────────────────────────────────
 
 fn ctxRead(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
@@ -544,6 +593,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .sampler = c.KE_GPU_INVALID_HANDLE,
         .material_bgl = c.KE_GPU_INVALID_HANDLE,
         .default_normal = .{ .idx = c.KE_HANDLE_NONE },
+        .default_cubemap = .{ .idx = c.KE_HANDLE_NONE },
     };
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
@@ -579,6 +629,9 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .create_material = createMaterial,
         .material_layout = materialLayout,
         .material_bind_group = materialBindGroup,
+        .upload_cubemap = uploadCubemap,
+        .texture_view = textureView,
+        .sampler = samplerOf,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)
@@ -596,10 +649,10 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .max_anisotropy = 1,
     });
     const mat_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0 },
-        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0 },
-        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0 },
-        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0 },
+        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     st.material_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
         .entry_count = 4,
@@ -609,6 +662,8 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     _ = uploadTexture(core, 1, 1, &white_px, null); // texture 0 = white albedo
     const flat_normal_px = [_]u8{ 128, 128, 255, 255 }; // (0,0,1) in tangent space
     st.default_normal = uploadTexture(core, 1, 1, &flat_normal_px, null);
+    const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
+    st.default_cubemap = uploadCubemap(core, 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
     _ = createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, null);
 
