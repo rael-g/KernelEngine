@@ -28,6 +28,10 @@ const forward_vs_wgsl = @embedFile("forward.vs.wgsl");
 const forward_fs_wgsl = @embedFile("forward.fs.wgsl");
 const skybox_vs_wgsl = @embedFile("skybox.vs.wgsl");
 const skybox_fs_wgsl = @embedFile("skybox.fs.wgsl");
+const shadow_vs_wgsl = @embedFile("shadow.vs.wgsl");
+const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
+
+const SHADOW_RES = 1024; // shadow map resolution
 
 const MAX_DRAWS = 64;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
@@ -45,6 +49,8 @@ const PerFrame = extern struct {
     light_color: [4]f32, // rgb, w = intensity
     ambient: [4]f32,
     sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
+    light_vp: [16]f32, // directional light view*proj (for shadow sampling)
+    shadow_params: [4]f32, // x = 1 when a shadow map is active
 };
 
 // Unit cube positions (8 corners) + indices for the skybox.
@@ -76,8 +82,14 @@ const ModuleState = struct {
 
     bb_writes: [1][*c]const u8,
     io: c.ke_render_pass_io,
-    bb_write_access: [1]c.ke_component_access,
-    bb_read_access: [1]c.ke_component_access,
+    // Frame barrier: begin_frame WRITES "frame", every pass READS it, end_frame
+    // WRITES it (write-after-read). W→R→W brackets all passes into one frame so
+    // begin (clears the slot table + acquires the backbuffer) strictly precedes
+    // every pass and end (submits) strictly follows; passes stay parallel (R/R).
+    frame_cid: c.ke_component_id,
+    begin_access: [2]c.ke_component_access, // WRITE backbuffer, WRITE frame
+    clear_access: [2]c.ke_component_access, // WRITE backbuffer, READ frame
+    end_access: [2]c.ke_component_access, // READ backbuffer, WRITE frame
 
     // Forward pass
     fwd_pipeline: c.ke_gpu_pipeline,
@@ -86,8 +98,9 @@ const ModuleState = struct {
     fwd_frame_bind_group: c.ke_gpu_bind_group, // set 0, per-frame
     fwd_frame_uniform: c.ke_gpu_buffer,
     fwd_writes: [2][*c]const u8,
+    fwd_reads: [1][*c]const u8,
     fwd_io: c.ke_render_pass_io,
-    fwd_access: [7]c.ke_component_access,
+    fwd_access: [9]c.ke_component_access,
     mesh_cid: c.ke_component_id,
     transform_cid: c.ke_component_id,
     camera_cid: c.ke_component_id,
@@ -100,7 +113,21 @@ const ModuleState = struct {
     sky_ibo: c.ke_gpu_buffer,
     frame_bgl: c.ke_gpu_bind_group_layout, // set 0 layout (rebuild bind group on env change)
     env_cubemap: c.ke_texture_handle, // currently bound env (default until a skybox is set)
+    shadow_view: c.ke_gpu_texture_view, // the shadow map's view (for set 0 binding)
+
+    // Shadow-depth pass (renders casters from the light POV into shadow_map)
+    shadow_pipeline: c.ke_gpu_pipeline,
+    shadow_lvp_uniform: c.ke_gpu_buffer, // set 0: light view-proj
+    shadow_lvp_bg: c.ke_gpu_bind_group,
+    shadow_obj_uniform: c.ke_gpu_buffer, // set 1: per-object model (dynamic offset)
+    shadow_obj_bg: c.ke_gpu_bind_group,
+    shadow_writes: [2][*c]const u8,
+    shadow_io: c.ke_render_pass_io,
+    shadow_access: [6]c.ke_component_access,
 };
+
+// Per-object model for the shadow pass (set 1).
+const ShadowObj = extern struct { model: [16]f32 };
 
 // Mirrors the framework SkyboxComponent (registered under "Skybox"): a cubemap
 // texture handle.
@@ -129,6 +156,77 @@ fn clearSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void
 fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st = stateOf(user);
     _ = st.core.ref.*.end_frame.?(st.core.ref, null);
+}
+
+// ── Shadow-depth pass ─────────────────────────────────────────────────────────
+// Orthographic light view-proj; the light source sits opposite the travel
+// direction. Matches the legacy bgfx ShadowRenderSystem (frustum 20, far 50).
+fn lightViewProj(ldir_in: zm.Vec) zm.Mat {
+    const ldir = zm.normalize3(ldir_in);
+    const eye3 = ldir * zm.f32x4s(-25.0);
+    const eye = zm.f32x4(eye3[0], eye3[1], eye3[2], 1.0);
+    const up = if (@abs(ldir[1]) > 0.99) zm.f32x4(0, 0, 1, 0) else zm.f32x4(0, 1, 0, 0);
+    const lview = zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), up);
+    const lproj = zm.orthographicLh(20.0, 20.0, 0.1, 50.0);
+    return zm.mul(lview, lproj);
+}
+
+fn lightDirOf(ctx: ?*c.ke_system_ctx, st: *ModuleState) zm.Vec {
+    var ents: [*c]c.ke_entity = undefined;
+    var data: ?*anyopaque = undefined;
+    var count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.light_cid, &ents, &data, &count);
+    if (count == 0) return zm.f32x4(-0.4, -1.0, -0.3, 0.0);
+    const dl: *const DirLight = @ptrCast(@alignCast(data));
+    return zm.f32x4(dl.dir[0], dl.dir[1], dl.dir[2], 0.0);
+}
+
+fn shadowSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+    const st = stateOf(user);
+    const core = st.core.ref;
+    const dev = st.device;
+
+    const lvp = lightViewProj(lightDirOf(ctx, st));
+    var lvp_arr: [16]f32 = undefined;
+    zm.storeMat(lvp_arr[0..], lvp);
+    dev.write_buffer.?(dev, st.shadow_lvp_uniform, 0, &lvp_arr, 64);
+
+    const pc = core.*.begin_pass.?(core, ctx, &st.shadow_io);
+    if (pc == null) return;
+
+    var ents: [*c]c.ke_entity = undefined;
+    var data: ?*anyopaque = undefined;
+    var count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.mesh_cid, &ents, &data, &count);
+    const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(data));
+    const n: u32 = @intCast(@min(count, MAX_DRAWS));
+
+    var i: u32 = 0;
+    while (i < n) : (i += 1) {
+        const tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, ents[i]) orelse continue;
+        const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
+        var u: ShadowObj = undefined;
+        @memcpy(u.model[0..], tc.world_matrix.m[0..16]);
+        dev.write_buffer.?(dev, st.shadow_obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(ShadowObj));
+    }
+
+    const rp = pc.*.begin_render.?(pc);
+    rp.*.set_pipeline.?(rp, st.shadow_pipeline);
+    rp.*.set_bind_group.?(rp, 0, st.shadow_lvp_bg, null, 0);
+    i = 0;
+    while (i < n) : (i += 1) {
+        var vbo: c.ke_gpu_buffer = 0;
+        var ibo: c.ke_gpu_buffer = 0;
+        var idx_count: u32 = 0;
+        if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
+        const offset: u32 = i * UNIFORM_STRIDE;
+        rp.*.set_bind_group.?(rp, 1, st.shadow_obj_bg, &offset, 1);
+        rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
+        rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
+        rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
+    }
+    rp.*.end.?(rp);
+    core.*.end_pass.?(core, pc);
 }
 
 // ── Forward mesh pass ─────────────────────────────────────────────────────────
@@ -204,8 +302,12 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         .light_color = .{ 1.0, 1.0, 1.0, 1.0 },
         .ambient = .{ 0.03, 0.03, 0.03, 0.0 },
         .sky_view_proj = undefined,
+        .light_vp = undefined,
+        .shadow_params = .{ 1.0, 0.0, 0.0, 0.0 }, // x = shadow active
     };
     zm.storeMat(frame.sky_view_proj[0..], sky_vp);
+    // Same light view-proj the shadow pass used, for the forward's shadow lookup.
+    zm.storeMat(frame.light_vp[0..], lightViewProj(lightDirOf(ctx, st)));
     var li_ents: [*c]c.ke_entity = undefined;
     var li_data: ?*anyopaque = undefined;
     var li_count: usize = 0;
@@ -281,10 +383,11 @@ fn rebuildFrameBindGroup(st: *ModuleState) void {
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.fwd_frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 },
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
         .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
+        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 },
     };
     st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = st.frame_bgl,
-        .entry_count = 3,
+        .entry_count = 4,
         .entries = &entries,
     });
 }
@@ -334,9 +437,10 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
         .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }, // shadow map (2D R32F)
     };
     const frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 3,
+        .entry_count = 4,
         .entries = &frame_bgl_entries,
     });
     st.frame_bgl = frame_bgl;
@@ -400,8 +504,91 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .entries = &obj_bg_entry,
     });
 
-    // Set 0 — per-frame uniform + env cubemap + sampler. The bind group is rebuilt
-    // (rebuildFrameBindGroup) whenever the bound environment cubemap changes.
+    // ── Shadow-depth pass: targets + pipeline + uniforms ──────────────────
+    const shadow_map_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
+        .name = "shadow_map",
+        .type = c.KE_RENDER_RESOURCE_TEXTURE,
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, // filterable; depth in .r
+        .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
+        .width = SHADOW_RES,
+        .height = SHADOW_RES,
+        .scale_x = 1.0,
+        .scale_y = 1.0,
+    }, null);
+    const shadow_depth_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
+        .name = "shadow_depth",
+        .type = c.KE_RENDER_RESOURCE_TEXTURE,
+        .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
+        .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
+        .width = SHADOW_RES,
+        .height = SHADOW_RES,
+        .scale_x = 1.0,
+        .scale_y = 1.0,
+    }, null);
+    st.shadow_view = st.core.ref.*.resource_view.?(st.core.ref, "shadow_map");
+
+    const sh_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_vs_wgsl), .byte_size = shadow_vs_wgsl.len, .entry_point = "shadow.vs" }, out_error);
+    if (sh_vs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, sh_vs);
+    const sh_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_fs_wgsl), .byte_size = shadow_fs_wgsl.len, .entry_point = "shadow.fs" }, out_error);
+    if (sh_fs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, sh_fs);
+
+    const sh_lvp_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
+    const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_lvp_entry });
+    const sh_obj_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 1, .view_dimension = 0 };
+    const sh_obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_obj_entry });
+
+    const sh_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
+    const sh_vbl = c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = &sh_attr };
+    var shp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    shp.vertex_module = sh_vs;
+    shp.fragment_module = sh_fs;
+    shp.vertex_entry = "vs_main";
+    shp.fragment_entry = "fs_main";
+    shp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    shp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
+    shp.front_face = c.KE_GPU_FRONT_FACE_CCW;
+    shp.vertex_buffer_count = 1;
+    shp.vertex_buffers = &sh_vbl;
+    shp.blend_state.write_mask = 0x0F;
+    shp.depth_stencil.depth_test_enabled = 1;
+    shp.depth_stencil.depth_write_enabled = 1;
+    shp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
+    shp.bind_group_layouts[0] = sh_lvp_bgl;
+    shp.bind_group_layouts[1] = sh_obj_bgl;
+    shp.bind_group_layout_count = 2;
+    shp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    st.shadow_pipeline = dev.create_render_pipeline.?(dev, &shp);
+    if (st.shadow_pipeline == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "shadow pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+
+    st.shadow_lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 });
+    const sh_lvp_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
+    st.shadow_lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry });
+
+    st.shadow_obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 });
+    const sh_obj_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_obj_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ShadowObj), .texture_view = 0, .sampler = 0 };
+    st.shadow_obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry });
+
+    st.shadow_writes = .{ "shadow_map", "shadow_depth" };
+    st.shadow_io = std.mem.zeroes(c.ke_render_pass_io);
+    st.shadow_io.writes = @ptrCast(&st.shadow_writes);
+    st.shadow_io.writes_count = 2;
+    st.shadow_io.cmd_slot = 1; // shadow pass → frame command slot 1 (before forward)
+    st.shadow_access = .{
+        .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
+        .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },
+        .{ .cid = st.mesh_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
+    };
+
+    // Set 0 — per-frame uniform + env cubemap + sampler + shadow map. The bind
+    // group is rebuilt (rebuildFrameBindGroup) when the bound environment changes.
     st.fwd_frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
         .size = @sizeOf(PerFrame),
@@ -482,9 +669,13 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     }, null);
 
     st.fwd_writes = .{ "backbuffer", "depth" };
+    st.fwd_reads = .{"shadow_map"};
     st.fwd_io = std.mem.zeroes(c.ke_render_pass_io);
     st.fwd_io.writes = @ptrCast(&st.fwd_writes);
     st.fwd_io.writes_count = 2;
+    st.fwd_io.reads = @ptrCast(&st.fwd_reads);
+    st.fwd_io.reads_count = 1;
+    st.fwd_io.cmd_slot = 2; // forward pass → frame command slot 2 (after shadow)
 
     const bb_cid = st.core.ref.*.cid.?(st.core.ref, "backbuffer");
     st.fwd_access = .{
@@ -495,6 +686,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.skybox_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.core.ref.*.cid.?(st.core.ref, "shadow_map"), .access = c.KE_ACCESS_READ },
+        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
     };
     return true;
 }
@@ -544,10 +737,23 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.io = std.mem.zeroes(c.ke_render_pass_io);
     st.io.writes = @ptrCast(&st.bb_writes);
     st.io.writes_count = 1;
+    st.io.cmd_slot = 0; // clear pass → frame command slot 0
 
     const bb_cid = core_h.ref.*.cid.?(core_h.ref, "backbuffer");
-    st.bb_write_access = .{.{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE }};
-    st.bb_read_access = .{.{ .cid = bb_cid, .access = c.KE_ACCESS_READ }};
+    // Zero-size tag for the frame barrier (see ModuleState.frame_cid).
+    st.frame_cid = e.component_register.?(e, "render.frame", 0);
+    st.begin_access = .{
+        .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
+        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE },
+    };
+    st.clear_access = .{
+        .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
+        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
+    };
+    st.end_access = .{
+        .{ .cid = bb_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE },
+    };
 
     // No pass is imposed. default_passes registers the conventional chain;
     // otherwise the game wires its own passes. A failed setup (e.g. a bad shader)
@@ -558,10 +764,11 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        registerSys(rt, "render.begin_frame", &st.bb_write_access, 1, st, beginFrameSys);
-        registerSys(rt, "render.clear", &st.bb_write_access, 1, st, clearSys);
+        registerSys(rt, "render.begin_frame", &st.begin_access, st.begin_access.len, st, beginFrameSys);
+        registerSys(rt, "render.clear", &st.clear_access, st.clear_access.len, st, clearSys);
+        registerSys(rt, "render.shadow", &st.shadow_access, st.shadow_access.len, st, shadowSys);
         registerSys(rt, "render.forward", &st.fwd_access, st.fwd_access.len, st, forwardSys);
-        registerSys(rt, "render.end_frame", &st.bb_read_access, 1, st, endFrameSys);
+        registerSys(rt, "render.end_frame", &st.end_access, st.end_access.len, st, endFrameSys);
     }
 
     return .{ .ref = @ptrCast(st), .destroy = destroyModule };

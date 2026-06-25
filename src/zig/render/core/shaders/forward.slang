@@ -21,17 +21,32 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-// Set 0 — per frame: camera + light + environment cubemap (skybox / IBL).
+// Set 0 — per frame: camera + light + environment cubemap (skybox / IBL) + shadow map.
 struct PerFrame {
     float4   camera_pos;    // xyz
     float4   light_dir;     // xyz = direction the light travels (normalized)
     float4   light_color;   // rgb, w = intensity
     float4   ambient;       // rgb
     float4x4 sky_view_proj; // rotation-only view*proj — used by the skybox pass
+    float4x4 light_vp;      // directional light view*proj — for the shadow lookup
+    float4   shadow_params; // x = 1 when the shadow map is active
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
 [[vk::binding(1, 0)]] TextureCube  env;         // environment (black 1×1 when no skybox)
 [[vk::binding(2, 0)]] SamplerState env_sampler;
+[[vk::binding(3, 0)]] Texture2D    shadow_map;  // R32F light-space depth
+
+// Translated from the legacy bgfx ComputeShadow: project into light clip space,
+// to UV, compare the fragment's depth against the stored nearest occluder.
+float compute_shadow(float3 world_pos) {
+    float4 sc = mul(frame.light_vp, float4(world_pos, 1.0));
+    float3 coord = sc.xyz / sc.w;
+    coord.x = coord.x * 0.5 + 0.5;
+    coord.y = -coord.y * 0.5 + 0.5;
+    if (any(coord < 0.0) || any(coord > 1.0)) return 1.0;
+    float closest = shadow_map.Sample(env_sampler, coord.xy).r;
+    return (coord.z - 0.005 > closest) ? 0.3 : 1.0;
+}
 
 // Set 1 — per material: glTF metallic-roughness + albedo + tangent-space normal.
 struct Material {
@@ -113,8 +128,9 @@ float4 fs_main(VsOut input) : SV_Target {
     float3 kd = (float3(1.0, 1.0, 1.0) - f) * (1.0 - metallic);
     float  ndotl = max(dot(n, l), 0.0);
 
+    float  shadow  = (frame.shadow_params.x > 0.5) ? compute_shadow(input.world_pos) : 1.0;
     float3 diffuse = kd * albedo_c / PI;
-    float3 lit     = (diffuse + specular) * radiance * ndotl;
+    float3 lit     = (diffuse + specular) * radiance * ndotl * shadow;
 
     // Image-based lighting — direct environment sampling (simple; the split-sum
     // approximation is deferred debt). Specular = env reflected off the surface,

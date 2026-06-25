@@ -63,8 +63,11 @@ const CoreState = struct {
     backbuffer_w: u32,
     backbuffer_h: u32,
 
+    // Per-pass command-buffer slots. Each pass writes its own slot (io.cmd_slot),
+    // so passes that run in parallel never share a counter — no atomic, no race.
+    // begin_frame clears `cmd_valid`; end_frame submits the valid slots in order.
     cmd_bufs: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer,
-    cmd_count: u32,
+    cmd_valid: [MAX_CMD_BUFFERS]bool,
 
     meshes: [MAX_MESHES]Mesh,
     mesh_count: u32,
@@ -237,9 +240,11 @@ fn endPass(self: [*c]c.ke_render_core, ctx: [*c]c.ke_render_pass_ctx) callconv(.
     const ps = passOf(ctx);
     const cmd = ps.encoder.finish.?(ps.encoder);
     ps.encoder.destroy.?(ps.encoder);
-    if (st.cmd_count < MAX_CMD_BUFFERS) {
-        st.cmd_bufs[st.cmd_count] = cmd;
-        st.cmd_count += 1;
+    // Each pass owns a distinct slot, so this write never races a parallel pass.
+    const slot = ps.io.cmd_slot;
+    if (slot < MAX_CMD_BUFFERS) {
+        st.cmd_bufs[slot] = cmd;
+        st.cmd_valid[slot] = true;
     }
     gpa.destroy(ps);
     gpa.destroy(@as(*c.ke_render_pass_ctx, @ptrCast(ctx)));
@@ -248,7 +253,7 @@ fn endPass(self: [*c]c.ke_render_core, ctx: [*c]c.ke_render_pass_ctx) callconv(.
 fn beginFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = coreOf(self);
-    st.cmd_count = 0;
+    @memset(st.cmd_valid[0..], false); // open the frame: no pass has recorded yet
     if (st.surface) |surf| {
         surf.current_size.?(surf, &st.backbuffer_w, &st.backbuffer_h);
         const view = surf.acquire_current_texture_view.?(surf);
@@ -261,14 +266,25 @@ fn beginFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callcon
 fn endFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = coreOf(self);
-    if (st.cmd_count > 0) {
-        st.device.queue_submit.?(st.device, st.queue, &st.cmd_bufs, st.cmd_count);
+    // Compact the populated slots into submission order (ascending slot index =
+    // dependency order; sparse slots from passes that didn't run are skipped).
+    var submit: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer = undefined;
+    var n: u32 = 0;
+    var s: u32 = 0;
+    while (s < MAX_CMD_BUFFERS) : (s += 1) {
+        if (st.cmd_valid[s]) {
+            submit[n] = st.cmd_bufs[s];
+            n += 1;
+        }
+    }
+    if (n > 0) {
+        st.device.queue_submit.?(st.device, st.queue, &submit, n);
         var i: u32 = 0;
-        while (i < st.cmd_count) : (i += 1) {
-            const cmd = st.cmd_bufs[i];
+        while (i < n) : (i += 1) {
+            const cmd = submit[i];
             cmd.*.destroy.?(cmd);
         }
-        st.cmd_count = 0;
+        @memset(st.cmd_valid[0..], false);
     }
     st.device.queue_present.?(st.device, st.queue);
     if (st.find("backbuffer")) |bb| {
@@ -461,6 +477,11 @@ fn samplerOf(self: [*c]c.ke_render_core) callconv(.c) c.ke_gpu_sampler {
     return coreOf(self).sampler;
 }
 
+fn resourceView(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
+    const r = coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
+    return r.view;
+}
+
 // ── ke_render_pass_ctx slots ────────────────────────────────────────────────
 
 fn ctxRead(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
@@ -492,11 +513,17 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
             };
             has_depth = true;
         } else if (color_count < MAX_COLOR_ATTACH) {
+            // The shadow map (RGBA16F, depth in .r) clears to 1.0 = far; ordinary
+            // color targets clear to the scene color.
+            const cv: [4]f32 = if (r.format == c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT)
+                .{ 1.0, 1.0, 1.0, 1.0 }
+            else
+                ps.core.clear_color;
             colors[color_count] = .{
                 .view = r.view,
                 .load_op = c.KE_GPU_LOAD_OP_CLEAR,
                 .store_op = c.KE_GPU_STORE_OP_STORE,
-                .clear_value = .{ .color = ps.core.clear_color },
+                .clear_value = .{ .color = cv },
             };
             color_count += 1;
         }
@@ -582,7 +609,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .backbuffer_w = bb_w,
         .backbuffer_h = bb_h,
         .cmd_bufs = undefined,
-        .cmd_count = 0,
+        .cmd_valid = std.mem.zeroes([MAX_CMD_BUFFERS]bool),
         .meshes = undefined,
         .mesh_count = 0,
         .clear_color = .{ 0.10, 0.15, 0.30, 1.0 },
@@ -632,6 +659,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .upload_cubemap = uploadCubemap,
         .texture_view = textureView,
         .sampler = samplerOf,
+        .resource_view = resourceView,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)

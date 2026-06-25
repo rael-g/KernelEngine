@@ -66,6 +66,12 @@ typedef struct ke_render_pass_io
     uint32_t           reads_count;
     const char *const *writes;
     uint32_t           writes_count;
+    // The frame command-buffer slot this pass records into. Each pass owns a
+    // distinct slot, so passes that run in parallel append without a shared
+    // counter (no atomic, no race). end_frame submits the populated slots in
+    // ascending order, so the module must assign slots in dependency order
+    // (a pass whose output a later pass samples gets the lower slot).
+    uint32_t           cmd_slot;
 } ke_render_pass_io;
 
 struct ke_render_core
@@ -91,8 +97,9 @@ struct ke_render_core
 
     // ── Frame boundary (module wires these as the first/last render systems) ─
     // begin_frame acquires the backbuffer — a built-in resource named
-    // "backbuffer", auto-declared at create. end_frame submits the passes'
-    // command buffers in the order the runtime ran them, then presents.
+    // "backbuffer", auto-declared at create — and clears the per-pass command
+    // slot table. end_frame submits the populated command slots in ascending
+    // slot order (the module assigns slots in dependency order), then presents.
     ke_bool (*begin_frame)(struct ke_render_core *self, ke_error **out_error);
     ke_bool (*end_frame)(struct ke_render_core *self, ke_error **out_error);
 
@@ -148,6 +155,11 @@ struct ke_render_core
     ke_gpu_texture_view (*texture_view)(struct ke_render_core *self, ke_texture_handle h);
     // The shared filtering sampler the core creates (linear, repeat).
     ke_gpu_sampler (*sampler)(struct ke_render_core *self);
+
+    // The GPU view of a declared transient resource by name (so one pass can bind
+    // another pass's output, e.g. the forward sampling the shadow map).
+    // KE_GPU_INVALID_HANDLE if no resource with that name was declared.
+    ke_gpu_texture_view (*resource_view)(struct ke_render_core *self, const char *name);
 };
 
 typedef struct ke_render_core_handle
