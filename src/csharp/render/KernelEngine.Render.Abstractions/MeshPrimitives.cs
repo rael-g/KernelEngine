@@ -25,6 +25,22 @@ public static class MeshPrimitives
         return resources.UploadMesh(verts, indices);
     }
 
+    /// <summary>Unit XZ plane centered at the origin, facing +Y (a floor).</summary>
+    public static MeshHandle Plane(IRenderResources resources)
+    {
+        var n = new Vector3(0, 1, 0);
+        var t = new Vector3(1, 0, 0);
+        ReadOnlySpan<MeshVertex> verts = stackalloc MeshVertex[]
+        {
+            new(new(-0.5f, 0f, -0.5f), n, new(0, 0), t),
+            new(new( 0.5f, 0f, -0.5f), n, new(1, 0), t),
+            new(new( 0.5f, 0f,  0.5f), n, new(1, 1), t),
+            new(new(-0.5f, 0f,  0.5f), n, new(0, 1), t),
+        };
+        ReadOnlySpan<ushort> indices = stackalloc ushort[] { 0, 1, 2, 0, 2, 3 };
+        return resources.UploadMesh(verts, indices);
+    }
+
     /// <summary>Unit cube centered at the origin, 24 verts (4 per face).</summary>
     public static MeshHandle Cube(IRenderResources resources)
     {
