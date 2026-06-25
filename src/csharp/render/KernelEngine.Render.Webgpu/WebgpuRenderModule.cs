@@ -96,6 +96,21 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <inheritdoc/>
+    public TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces)
+    {
+        if (_core == null)
+            throw new InvalidOperationException("UploadCubemap called before the render module was loaded");
+
+        ke_error* err = null;
+        ke_texture_handle h;
+        fixed (byte* p = faces)
+            h = _core->upload_cubemap(_core, faceSize, p, &err);
+        if (h.idx == uint.MaxValue)
+            throw Fail("upload_cubemap failed", err);
+        return new TextureHandle(h.idx);
+    }
+
+    /// <inheritdoc/>
     public MaterialHandle CreateMaterial(System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                          TextureHandle albedo = default, TextureHandle? normalMap = null)
     {

@@ -24,6 +24,13 @@ public interface IRenderResources
     TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba);
 
     /// <summary>
+    /// Uploads an RGBA8 cubemap: 6 faces of <paramref name="faceSize"/>² in the
+    /// order +X,-X,+Y,-Y,+Z,-Z (concatenated). Used as a skybox background and the
+    /// image-based-lighting environment. Throws on failure.
+    /// </summary>
+    TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces);
+
+    /// <summary>
     /// Creates a glTF metallic-roughness material: a base-color factor multiplied
     /// by an albedo texture (default <c>TextureHandle.White</c> = flat color), plus
     /// metallic (0 = dielectric, 1 = metal), roughness (0 = mirror, 1 = matte), and
