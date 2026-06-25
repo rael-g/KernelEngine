@@ -175,6 +175,9 @@ typedef struct ke_gpu_bind_group_layout_entry
     ke_gpu_shader_stage visibility;
     ke_gpu_binding_type type;
     ke_bool             has_dynamic_offset;
+    /// For TEXTURE bindings: KE_GPU_TEXTURE_DIM_CUBE selects a cubemap binding;
+    /// any other value (incl. zero-init) is a 2D texture.
+    ke_gpu_texture_dimension view_dimension;
 } ke_gpu_bind_group_layout_entry;
 
 typedef struct ke_gpu_bind_group_layout_params

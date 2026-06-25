@@ -596,37 +596,41 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     };
     const tex: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
     if (pp.initial_data != null) {
-        const dst = wgpu.WGPUTexelCopyTextureInfo{
-            .texture  = tex,
-            .mipLevel = 0,
-            .origin   = .{ .x = 0, .y = 0, .z = 0 },
-            .aspect   = wgpu.WGPUTextureAspect_All,
-        };
-        // bytes_per_row must be a multiple of 256 (wgpu alignment requirement)
+        // bytes_per_row must be a multiple of 256 (wgpu alignment requirement).
         const bytes_per_pixel: u32 = 4; // assume RGBA8
         const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
         const bytes_per_row: u32 = (unaligned_bpr + 255) & ~@as(u32, 255);
+        const face_bytes: usize = @as(usize, unaligned_bpr) * pp.height; // tightly packed source per layer
+        const layers: u32 = if (pp.depth_or_array_layers == 0) 1 else pp.depth_or_array_layers;
+        const src_bytes: [*]const u8 = @ptrCast(pp.initial_data);
         const layout = wgpu.WGPUTexelCopyBufferLayout{
-            .offset        = 0,
-            .bytesPerRow   = bytes_per_row,
-            .rowsPerImage  = pp.height,
+            .offset       = 0,
+            .bytesPerRow  = bytes_per_row,
+            .rowsPerImage = pp.height,
         };
         const extent = wgpu.WGPUExtent3D{ .width = pp.width, .height = pp.height, .depthOrArrayLayers = 1 };
-        // If rows are tightly packed we can write directly; otherwise we need a staging buffer.
-        if (bytes_per_row == unaligned_bpr) {
-            wgpu.wgpuQueueWriteTexture(s.queue, &dst, pp.initial_data, pp.initial_data_size, &layout, &extent);
-        } else {
-            const row_count = pp.height;
-            const staging_size = bytes_per_row * row_count;
-            const staging = std.heap.page_allocator.alloc(u8, staging_size) catch return @intFromPtr(tex);
-            defer std.heap.page_allocator.free(staging);
-            const src_bytes: [*]const u8 = @ptrCast(pp.initial_data);
-            for (0..row_count) |row| {
-                const src_off = row * unaligned_bpr;
-                const dst_off = row * bytes_per_row;
-                @memcpy(staging[dst_off .. dst_off + unaligned_bpr], src_bytes[src_off .. src_off + unaligned_bpr]);
+        var layer: u32 = 0;
+        while (layer < layers) : (layer += 1) {
+            const dst = wgpu.WGPUTexelCopyTextureInfo{
+                .texture  = tex,
+                .mipLevel = 0,
+                .origin   = .{ .x = 0, .y = 0, .z = layer },
+                .aspect   = wgpu.WGPUTextureAspect_All,
+            };
+            const src_off = @as(usize, layer) * face_bytes;
+            if (bytes_per_row == unaligned_bpr) {
+                wgpu.wgpuQueueWriteTexture(s.queue, &dst, src_bytes + src_off, face_bytes, &layout, &extent);
+            } else {
+                const staging_size = bytes_per_row * pp.height;
+                const staging = std.heap.page_allocator.alloc(u8, staging_size) catch return @intFromPtr(tex);
+                defer std.heap.page_allocator.free(staging);
+                for (0..pp.height) |row| {
+                    const so = src_off + row * unaligned_bpr;
+                    const do = row * bytes_per_row;
+                    @memcpy(staging[do .. do + unaligned_bpr], src_bytes[so .. so + unaligned_bpr]);
+                }
+                wgpu.wgpuQueueWriteTexture(s.queue, &dst, staging.ptr, staging_size, &layout, &extent);
             }
-            wgpu.wgpuQueueWriteTexture(s.queue, &dst, staging.ptr, staging_size, &layout, &extent);
         }
     }
     return @intFromPtr(tex);
@@ -930,7 +934,10 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
             },
             ke.KE_GPU_BINDING_TYPE_TEXTURE => {
                 entries[i].texture.sampleType    = wgpu.WGPUTextureSampleType_Float;
-                entries[i].texture.viewDimension = wgpu.WGPUTextureViewDimension_2D;
+                entries[i].texture.viewDimension = if (src.view_dimension == ke.KE_GPU_TEXTURE_DIM_CUBE)
+                    wgpu.WGPUTextureViewDimension_Cube
+                else
+                    wgpu.WGPUTextureViewDimension_2D;
                 entries[i].texture.multisampled  = 0;
             },
             ke.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE => {
