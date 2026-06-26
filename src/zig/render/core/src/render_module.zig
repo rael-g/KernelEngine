@@ -79,6 +79,7 @@ const DirLight = extern struct {
 const ModuleState = struct {
     core: c.ke_render_core_handle,
     device: *c.ke_gpu_device,
+    ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
 
     bb_writes: [1][*c]const u8,
     io: c.ke_render_pass_io,
@@ -137,6 +138,30 @@ inline fn stateOf(user: ?*anyopaque) *ModuleState {
     return @alignCast(@ptrCast(user.?));
 }
 
+// ── Projection helpers (consume the backend NDC convention) ──────────────────
+// The view is always built left-handed (the engine owns the world convention).
+// The projection absorbs the backend's clip-space quirks: the depth range
+// (z[0,1] vs OpenGL z[-1,1]) and the Y flip (Vulkan's top-left framebuffer
+// origin). A right-handed-clip backend is rejected at setup (it would need a
+// right-handed world convention), so only the Lh family is used here.
+fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
+    var p = if (ndc.z_zero_to_one != 0)
+        zm.perspectiveFovLh(fovy, aspect, near, far)
+    else
+        zm.perspectiveFovLhGl(fovy, aspect, near, far);
+    if (ndc.y_flip != 0) p[1][1] = -p[1][1];
+    return p;
+}
+
+fn makeOrtho(ndc: c.ke_ndc_convention, w: f32, h: f32, near: f32, far: f32) zm.Mat {
+    var p = if (ndc.z_zero_to_one != 0)
+        zm.orthographicLh(w, h, near, far)
+    else
+        zm.orthographicLhGl(w, h, near, far);
+    if (ndc.y_flip != 0) p[1][1] = -p[1][1];
+    return p;
+}
+
 // ── Frame-boundary systems (ordered by the backbuffer tag-cid) ────────────────
 
 fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
@@ -161,13 +186,13 @@ fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) voi
 // ── Shadow-depth pass ─────────────────────────────────────────────────────────
 // Orthographic light view-proj; the light source sits opposite the travel
 // direction. Matches the legacy bgfx ShadowRenderSystem (frustum 20, far 50).
-fn lightViewProj(ldir_in: zm.Vec) zm.Mat {
+fn lightViewProj(ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
     const ldir = zm.normalize3(ldir_in);
     const eye3 = ldir * zm.f32x4s(-25.0);
     const eye = zm.f32x4(eye3[0], eye3[1], eye3[2], 1.0);
     const up = if (@abs(ldir[1]) > 0.99) zm.f32x4(0, 0, 1, 0) else zm.f32x4(0, 1, 0, 0);
     const lview = zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), up);
-    const lproj = zm.orthographicLh(20.0, 20.0, 0.1, 50.0);
+    const lproj = makeOrtho(ndc, 20.0, 20.0, 0.1, 50.0);
     return zm.mul(lview, lproj);
 }
 
@@ -186,7 +211,7 @@ fn shadowSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) voi
     const core = st.core.ref;
     const dev = st.device;
 
-    const lvp = lightViewProj(lightDirOf(ctx, st));
+    const lvp = lightViewProj(st.ndc, lightDirOf(ctx, st));
     var lvp_arr: [16]f32 = undefined;
     zm.storeMat(lvp_arr[0..], lvp);
     dev.write_buffer.?(dev, st.shadow_lvp_uniform, 0, &lvp_arr, 64);
@@ -274,7 +299,7 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     };
     // ke_camera_component.fov is in degrees (the cross-backend convention).
     const fov_rad = cam.fov * @as(f32, std.math.pi / 180.0);
-    const proj = zm.perspectiveFovLh(fov_rad, aspect, cam.near_plane, cam.far_plane);
+    const proj = makePerspective(st.ndc, fov_rad, aspect, cam.near_plane, cam.far_plane);
     const view_proj = zm.mul(view, proj);
 
     // Skybox view: rotation-only (translation zeroed) × proj, so the cube stays
@@ -313,7 +338,7 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     };
     zm.storeMat(frame.sky_view_proj[0..], sky_vp);
     // Same light view-proj the shadow pass used, for the forward's shadow lookup.
-    zm.storeMat(frame.light_vp[0..], lightViewProj(lightDirOf(ctx, st)));
+    zm.storeMat(frame.light_vp[0..], lightViewProj(st.ndc, lightDirOf(ctx, st)));
     var li_ents: [*c]c.ke_entity = undefined;
     var li_data: ?*anyopaque = undefined;
     var li_count: usize = 0;
@@ -400,6 +425,16 @@ fn rebuildFrameBindGroup(st: *ModuleState) void {
 
 fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) bool {
     const dev = st.device;
+
+    // Clip-space convention of the active backend. The view stays left-handed
+    // (the engine's world convention); makePerspective/makeOrtho absorb the z
+    // range + Y flip. A right-handed-clip backend would require a right-handed
+    // world convention — reject it loudly rather than rendering mirrored.
+    st.ndc = dev.get_ndc_convention.?(dev);
+    if (st.ndc.left_handed == 0) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: right-handed clip-space backend not supported (engine world convention is left-handed)", @src().file, @intCast(@src().line), null);
+        return false;
+    }
 
     st.mesh_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_MESH, @sizeOf(c.ke_mesh_component));
     st.transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
