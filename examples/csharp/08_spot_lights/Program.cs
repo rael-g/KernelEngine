@@ -1,8 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -13,10 +13,11 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 08_spot_lights â€” three colored spot lights orbiting above a floor + grid of
-// cubes. Each spot's direction tracks the origin so the cones sweep across
-// the floor and cubes. Showcases the multi-spot-light path; SpotLight node
-// pairs with SpotLightComponent (position from transform, direction explicit).
+// 08_spot_lights — three colored spot lights orbiting above a floor + grid of
+// cubes. Each spot's direction tracks the origin so the cones sweep across the
+// floor and cubes. Render v2 (webgpu): the forward pass accumulates each
+// SpotLightComponent (position from its transform, direction explicit) with
+// distance × cone falloff.
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -24,18 +25,13 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 08 Spot Lights"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.01f, 0.01f, 0.01f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 08 Spot Lights"))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.01f, 0.01f, 0.01f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 08_spot_lights");
-        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: spot_lights, multi_light_accumulation, cone_falloff");
 
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
@@ -43,11 +39,11 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
 
-        var planeMesh = MeshPrimitives.Plane(renderer);
-        var cubeMesh  = MeshPrimitives.Cube(renderer);
+        var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
+        var cubeMesh  = KernelEngine.Render.MeshPrimitives.Cube(resources);
 
-        var floorMat = renderer.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f);
-        var cubeMat  = renderer.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
+        var floorMat = resources.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f);
+        var cubeMat  = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(30f, 1f, 30f) };
@@ -59,35 +55,24 @@ var services = new ServiceCollection()
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, 1f, z) };
         }
 
-        tree.AddNode(new OrbitingSpot
+        (Vector3 color, float offset)[] spots =
+        [
+            (new(1f, 0f, 0f), 0f),
+            (new(0f, 1f, 0f), MathF.PI * 2f / 3f),
+            (new(0f, 0f, 1f), MathF.PI * 4f / 3f),
+        ];
+        foreach (var (color, offset) in spots)
         {
-            Color         = new(1f, 0f, 0f),
-            Intensity     = 25f,
-            Range         = 60f,
-            InnerAngleDeg = 12f,
-            OuterAngleDeg = 25f,
-            Offset        = 0f,
-        }, "Spot_Red");
-
-        tree.AddNode(new OrbitingSpot
-        {
-            Color         = new(0f, 1f, 0f),
-            Intensity     = 25f,
-            Range         = 60f,
-            InnerAngleDeg = 12f,
-            OuterAngleDeg = 25f,
-            Offset        = MathF.PI * 2f / 3f,
-        }, "Spot_Green");
-
-        tree.AddNode(new OrbitingSpot
-        {
-            Color         = new(0f, 0f, 1f),
-            Intensity     = 25f,
-            Range         = 60f,
-            InnerAngleDeg = 12f,
-            OuterAngleDeg = 25f,
-            Offset        = MathF.PI * 4f / 3f,
-        }, "Spot_Blue");
+            tree.AddNode(new OrbitingSpot
+            {
+                Color         = color,
+                Intensity     = 25f,
+                Range         = 60f,
+                InnerAngleDeg = 12f,
+                OuterAngleDeg = 25f,
+                Offset        = offset,
+            }, $"Spot_{color}");
+        }
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -100,30 +85,18 @@ Console.WriteLine("[08_spot_lights] Loop running. Close the window to exit.");
 
 var clock = Stopwatch.StartNew();
 double prev = clock.Elapsed.TotalSeconds;
-int frameCount = 0;
-double fpsWindowStart = 0;
-
 while (!window.ShouldClose())
 {
     double now = clock.Elapsed.TotalSeconds;
     runtime.Tick((float)(now - prev));
     prev = now;
-
-    frameCount++;
-    if (now - fpsWindowStart >= 5.0)
-    {
-        double fps = frameCount / (now - fpsWindowStart);
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: 0p 3s 0d");
-        frameCount     = 0;
-        fpsWindowStart = now;
-    }
 }
 
 runtime.UnloadModules(sp);
 
 Console.WriteLine("[08_spot_lights] Exited cleanly.");
 
-// â”€â”€ Orbiting spot light â€” position circles, direction points at the origin â”€â”€â”€
+// ── Orbiting spot light — position circles, direction points at the origin ───
 
 sealed class OrbitingSpot : SpotLight
 {
