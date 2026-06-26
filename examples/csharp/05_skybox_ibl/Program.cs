@@ -112,15 +112,18 @@ sealed class FreeLook : Camera
     {
         float dt = view.DeltaTime;
 
-        if (view.IsKeyDown(262)) _yaw   -= RotateDeg * dt; // Right arrow
-        if (view.IsKeyDown(263)) _yaw   += RotateDeg * dt; // Left arrow
+        // The engine's camera looks down local −Z with a left-handed view, so its
+        // right axis is −localX (cross(up, forward)). Yaw therefore increases to
+        // the right and the strafe axis is −UnitX — matching what the view shows.
+        if (view.IsKeyDown(262)) _yaw   += RotateDeg * dt; // Right arrow
+        if (view.IsKeyDown(263)) _yaw   -= RotateDeg * dt; // Left arrow
         if (view.IsKeyDown(265)) _pitch += RotateDeg * dt; // Up arrow
         if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt; // Down arrow
         _pitch = Math.Clamp(_pitch, -89f, 89f);
 
         var rot     = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
         var forward = Vector3.Transform(-Vector3.UnitZ, rot);
-        var right   = Vector3.Transform( Vector3.UnitX, rot);
+        var right   = Vector3.Transform(-Vector3.UnitX, rot);
 
         var move = Vector3.Zero;
         if (view.IsKeyDown(87))  move += forward;        // W
