@@ -21,15 +21,25 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
+// Brute-force point light cap (matches the per-frame uniform array below).
+static const uint MAX_POINT_LIGHTS = 16;
+
+// A point light packed for the per-frame uniform.
+struct PointLight {
+    float4 pos_radius;       // xyz = world position, w = radius
+    float4 color_intensity;  // rgb = color, w = intensity
+};
+
 // Set 0 — per frame: camera + light + environment cubemap (skybox / IBL) + shadow map.
 struct PerFrame {
     float4   camera_pos;    // xyz
-    float4   light_dir;     // xyz = direction the light travels (normalized)
+    float4   light_dir;     // xyz = direction the directional light travels (normalized)
     float4   light_color;   // rgb, w = intensity
     float4   ambient;       // rgb
     float4x4 sky_view_proj; // rotation-only view*proj — used by the skybox pass
     float4x4 light_vp;      // directional light view*proj — for the shadow lookup
-    float4   shadow_params; // x = 1 when the shadow map is active
+    float4   shadow_params; // x = shadow active, y = point light count, z = directional active
+    PointLight point_lights[MAX_POINT_LIGHTS];
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
 [[vk::binding(1, 0)]] TextureCube  env;         // environment (black 1×1 when no skybox)
@@ -89,6 +99,22 @@ float geometry_smith(float3 n, float3 v, float3 l, float rough) {
            geometry_schlick_ggx(max(dot(n, l), 0.0), rough);
 }
 
+// Cook-Torrance contribution of one light (L = surface→light, radiance already
+// attenuated). Translated from the legacy bgfx PbrDirect.
+float3 pbr_direct(float3 n, float3 v, float3 l, float3 albedo_c, float3 f0,
+                  float metallic, float rough, float3 radiance) {
+    float ndotl = max(dot(n, l), 0.0);
+    if (ndotl <= 0.0) return float3(0.0, 0.0, 0.0);
+    float3 h   = normalize(v + l);
+    float  ndf = distribution_ggx(n, h, rough);
+    float  g   = geometry_smith(n, v, l, rough);
+    float3 f   = fresnel_schlick(max(dot(h, v), 0.0), f0);
+    float3 spec = (ndf * g * f) / (4.0 * max(dot(n, v), 0.0) * ndotl + 1e-4);
+    float3 kd   = (float3(1.0, 1.0, 1.0) - f) * (1.0 - metallic);
+    float3 diff = kd * albedo_c / PI;
+    return (diff + spec) * radiance * ndotl;
+}
+
 [shader("vertex")]
 VsOut vs_main(VsIn input) {
     VsOut o;
@@ -113,24 +139,34 @@ float4 fs_main(VsOut input) : SV_Target {
     float3 tn = normal_map.Sample(tex_sampler, input.uv).rgb * 2.0 - 1.0;
     float3 n  = normalize(t * tn.x + b * tn.y + ng * tn.z);
 
-    float3 v = normalize(frame.camera_pos.xyz - input.world_pos);
-    float3 l = -normalize(frame.light_dir.xyz);
-    float3 h = normalize(v + l);
-
-    float3 radiance = frame.light_color.rgb * frame.light_color.w;
+    float3 v  = normalize(frame.camera_pos.xyz - input.world_pos);
     float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo_c, metallic);
 
-    float  ndf = distribution_ggx(n, h, rough);
-    float  g   = geometry_smith(n, v, l, rough);
-    float3 f   = fresnel_schlick(max(dot(h, v), 0.0), f0);
+    float3 lit = float3(0.0, 0.0, 0.0);
 
-    float3 specular = (ndf * g * f) / (4.0 * max(dot(n, v), 0.0) * max(dot(n, l), 0.0) + 1e-4);
-    float3 kd = (float3(1.0, 1.0, 1.0) - f) * (1.0 - metallic);
-    float  ndotl = max(dot(n, l), 0.0);
+    // Directional light — only when a directional light is present (z gate);
+    // its shadow map darkens the lit term when active.
+    if (frame.shadow_params.z > 0.5) {
+        float3 l        = -normalize(frame.light_dir.xyz);
+        float3 radiance = frame.light_color.rgb * frame.light_color.w;
+        float  shadow   = (frame.shadow_params.x > 0.5) ? compute_shadow(input.world_pos) : 1.0;
+        lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance) * shadow;
+    }
 
-    float  shadow  = (frame.shadow_params.x > 0.5) ? compute_shadow(input.world_pos) : 1.0;
-    float3 diffuse = kd * albedo_c / PI;
-    float3 lit     = (diffuse + specular) * radiance * ndotl * shadow;
+    // Point lights — brute force, distance-attenuated (clamp(1 - d/radius)² from
+    // the legacy bgfx path).
+    uint pcount = (uint)frame.shadow_params.y;
+    for (uint i = 0u; i < pcount; i++) {
+        float3 to_l   = frame.point_lights[i].pos_radius.xyz - input.world_pos;
+        float  dist   = length(to_l);
+        float  radius = frame.point_lights[i].pos_radius.w;
+        float3 l      = to_l / max(dist, 1e-4);
+        float  att    = clamp(1.0 - dist / max(radius, 1e-4), 0.0, 1.0);
+        att *= att;
+        float3 radiance = frame.point_lights[i].color_intensity.rgb *
+                          frame.point_lights[i].color_intensity.w * att;
+        lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
+    }
 
     // Image-based lighting — direct environment sampling (simple; the split-sum
     // approximation is deferred debt). Specular = env reflected off the surface,

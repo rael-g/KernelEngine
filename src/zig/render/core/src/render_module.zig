@@ -42,6 +42,14 @@ const PerObject = extern struct {
     model: [16]f32,
 };
 
+const MAX_POINT_LIGHTS = 16; // brute-force cap; matches forward.slang
+
+// One point light packed for the per-frame uniform (matches forward.slang PointLight).
+const PointLightGpu = extern struct {
+    pos_radius: [4]f32, // xyz = world position, w = radius
+    color_intensity: [4]f32, // rgb = color, w = intensity
+};
+
 // Set 0 — per-frame camera + light + skybox view. Matches forward.slang PerFrame.
 const PerFrame = extern struct {
     camera_pos: [4]f32,
@@ -50,8 +58,21 @@ const PerFrame = extern struct {
     ambient: [4]f32,
     sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
     light_vp: [16]f32, // directional light view*proj (for shadow sampling)
-    shadow_params: [4]f32, // x = 1 when a shadow map is active
+    shadow_params: [4]f32, // x = shadow active, y = point light count, z = directional active
+    point_lights: [MAX_POINT_LIGHTS]PointLightGpu,
 };
+
+// Mirrors the C# PointLightComponent { Vector3 Color, float Intensity, float Radius }
+// (registered as "point_light"). NOTE the field order is the C# struct's, not the
+// kernel ke_point_light_component header (which orders them differently).
+const PointLightComp = extern struct {
+    color: [3]f32,
+    intensity: f32,
+    radius: f32,
+};
+
+// Mirrors the C# AmbientLightComponent { Vector3 Color } (registered "AmbientLight").
+const AmbientComp = extern struct { color: [3]f32 };
 
 // Unit cube positions (8 corners) + indices for the skybox.
 const sky_verts = [_]f32{
@@ -101,11 +122,13 @@ const ModuleState = struct {
     fwd_writes: [2][*c]const u8,
     fwd_reads: [1][*c]const u8,
     fwd_io: c.ke_render_pass_io,
-    fwd_access: [9]c.ke_component_access,
+    fwd_access: [11]c.ke_component_access,
     mesh_cid: c.ke_component_id,
     transform_cid: c.ke_component_id,
     camera_cid: c.ke_component_id,
     light_cid: c.ke_component_id,
+    point_light_cid: c.ke_component_id,
+    ambient_cid: c.ke_component_id,
     skybox_cid: c.ke_component_id,
 
     // Skybox (drawn inside the forward pass: clear → meshes → skybox depth-LEQUAL)
@@ -326,19 +349,24 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         rebuildFrameBindGroup(st);
     }
 
-    // Per-frame: camera + first directional light (defaults when none present).
+    // Per-frame: camera + lights. All light terms default off; each present light
+    // turns on its contribution (a scene with only point lights has no directional).
     var frame: PerFrame = .{
         .camera_pos = .{ cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0 },
         .light_dir = .{ -0.4, -1.0, -0.3, 0.0 },
         .light_color = .{ 1.0, 1.0, 1.0, 1.0 },
-        .ambient = .{ 0.03, 0.03, 0.03, 0.0 },
+        .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
         .sky_view_proj = undefined,
         .light_vp = undefined,
-        .shadow_params = .{ 1.0, 0.0, 0.0, 0.0 }, // x = shadow active
+        .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow active, y=point count, z=directional active
+        .point_lights = undefined,
     };
     zm.storeMat(frame.sky_view_proj[0..], sky_vp);
     // Same light view-proj the shadow pass used, for the forward's shadow lookup.
     zm.storeMat(frame.light_vp[0..], lightViewProj(st.ndc, lightDirOf(ctx, st)));
+
+    // Directional light (first entity). Present → enable the directional term +
+    // its shadow map; its ambient seeds the scene ambient.
     var li_ents: [*c]c.ke_entity = undefined;
     var li_data: ?*anyopaque = undefined;
     var li_count: usize = 0;
@@ -348,7 +376,39 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         frame.light_dir = .{ dl.dir[0], dl.dir[1], dl.dir[2], 0.0 };
         frame.light_color = .{ dl.rgb[0], dl.rgb[1], dl.rgb[2], dl.intensity };
         frame.ambient = .{ dl.ambient[0], dl.ambient[1], dl.ambient[2], 0.0 };
+        frame.shadow_params[0] = 1.0; // shadow active
+        frame.shadow_params[2] = 1.0; // directional active
     }
+
+    // Standalone ambient light (overrides the directional's ambient when present).
+    var am_ents: [*c]c.ke_entity = undefined;
+    var am_data: ?*anyopaque = undefined;
+    var am_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.ambient_cid, &am_ents, &am_data, &am_count);
+    if (am_count != 0) {
+        const al: *const AmbientComp = @ptrCast(@alignCast(am_data));
+        frame.ambient = .{ al.color[0], al.color[1], al.color[2], 0.0 };
+    }
+
+    // Point lights (brute force). World position from each light's transform.
+    var pl_ents: [*c]c.ke_entity = undefined;
+    var pl_data: ?*anyopaque = undefined;
+    var pl_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.point_light_cid, &pl_ents, &pl_data, &pl_count);
+    const pls: [*c]const PointLightComp = @ptrCast(@alignCast(pl_data));
+    const pn: u32 = @intCast(@min(pl_count, MAX_POINT_LIGHTS));
+    var pli: u32 = 0;
+    while (pli < pn) : (pli += 1) {
+        const ptc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, pl_ents[pli]) orelse continue;
+        const ptc: *const c.ke_transform_component = @ptrCast(@alignCast(ptc_raw));
+        const m = ptc.world_matrix.m;
+        frame.point_lights[pli] = .{
+            .pos_radius = .{ m[12], m[13], m[14], pls[pli].radius },
+            .color_intensity = .{ pls[pli].color[0], pls[pli].color[1], pls[pli].color[2], pls[pli].intensity },
+        };
+    }
+    frame.shadow_params[1] = @floatFromInt(pn); // point light count
+
     dev.write_buffer.?(dev, st.fwd_frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
     // Meshes: build + upload one uniform region per draw (queue writes land before
@@ -440,6 +500,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
     st.camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
     st.light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
+    st.point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(PointLightComp));
+    st.ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(AmbientComp));
     st.skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(SkyboxComp));
     st.env_cubemap = .{ .idx = c.KE_HANDLE_NONE }; // default (black) cube until a skybox is set
 
@@ -729,6 +791,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.skybox_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.core.ref.*.cid.?(st.core.ref, "shadow_map"), .access = c.KE_ACCESS_READ },
         .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.point_light_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.ambient_cid, .access = c.KE_ACCESS_READ },
     };
     return true;
 }
