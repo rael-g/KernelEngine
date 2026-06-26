@@ -257,13 +257,19 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
     const q = cam_tc.rotation;
     // No rotation → look at the origin (the convention examples 01-04 rely on);
-    // a rotated camera (free-look) derives its view from the rotation.
+    // a rotated camera (free-look) derives its view from the world-matrix basis.
     const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
         zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
     else blk: {
-        const rot = zm.f32x4(q.x, q.y, q.z, q.w);
-        const fwd = zm.rotate(rot, zm.f32x4(0, 0, -1, 0));
-        const up = zm.rotate(rot, zm.f32x4(0, 1, 0, 0));
+        // Row-vector world matrix: row 0 = right, row 1 = up, row 2 = local +Z.
+        // The camera looks down local −Z, so forward = −row2. This reuses
+        // ke_mat4_from_transform's quaternion convention (identical to
+        // System.Numerics CreateFromQuaternion), so the view agrees with the C#
+        // movement vectors — zmath's own quaternion rotate applies the opposite
+        // sense, which is what inverted free-look (look + movement) before.
+        const m = cam_tc.world_matrix.m;
+        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+        const up = zm.f32x4(m[4], m[5], m[6], 0);
         break :blk zm.lookToLh(eye, fwd, up);
     };
     // ke_camera_component.fov is in degrees (the cross-backend convention).
