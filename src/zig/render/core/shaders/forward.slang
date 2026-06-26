@@ -21,13 +21,22 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-// Brute-force point light cap (matches the per-frame uniform array below).
+// Brute-force light caps (match the per-frame uniform arrays below).
 static const uint MAX_POINT_LIGHTS = 16;
+static const uint MAX_SPOT_LIGHTS  = 16;
 
 // A point light packed for the per-frame uniform.
 struct PointLight {
     float4 pos_radius;       // xyz = world position, w = radius
     float4 color_intensity;  // rgb = color, w = intensity
+};
+
+// A spot light packed for the per-frame uniform (cone cosines precomputed).
+struct SpotLight {
+    float4 pos_range;        // xyz = world position, w = range
+    float4 dir_cos_inner;    // xyz = cone axis direction, w = cos(inner angle)
+    float4 color_intensity;  // rgb = color, w = intensity
+    float4 cone;             // x = cos(outer angle); yzw pad
 };
 
 // Set 0 — per frame: camera + light + environment cubemap (skybox / IBL) + shadow map.
@@ -38,8 +47,9 @@ struct PerFrame {
     float4   ambient;       // rgb
     float4x4 sky_view_proj; // rotation-only view*proj — used by the skybox pass
     float4x4 light_vp;      // directional light view*proj — for the shadow lookup
-    float4   shadow_params; // x = shadow active, y = point light count, z = directional active
+    float4   shadow_params; // x = shadow active, y = point count, z = directional active, w = spot count
     PointLight point_lights[MAX_POINT_LIGHTS];
+    SpotLight  spot_lights[MAX_SPOT_LIGHTS];
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
 [[vk::binding(1, 0)]] TextureCube  env;         // environment (black 1×1 when no skybox)
@@ -165,6 +175,26 @@ float4 fs_main(VsOut input) : SV_Target {
         att *= att;
         float3 radiance = frame.point_lights[i].color_intensity.rgb *
                           frame.point_lights[i].color_intensity.w * att;
+        lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
+    }
+
+    // Spot lights — point-light distance falloff × a cone term (smooth between
+    // the inner and outer angle), translated from the legacy bgfx spot loop.
+    uint scount = (uint)frame.shadow_params.w;
+    for (uint s = 0u; s < scount; s++) {
+        float3 to_l  = frame.spot_lights[s].pos_range.xyz - input.world_pos;
+        float  dist  = length(to_l);
+        float  range = frame.spot_lights[s].pos_range.w;
+        float3 l     = to_l / max(dist, 1e-4);
+        float  datt  = clamp(1.0 - dist / max(range, 1e-4), 0.0, 1.0);
+        datt *= datt;
+        float3 sdir     = normalize(frame.spot_lights[s].dir_cos_inner.xyz);
+        float  cos_in   = frame.spot_lights[s].dir_cos_inner.w;
+        float  cos_out  = frame.spot_lights[s].cone.x;
+        float  cos_a    = dot(-l, sdir); // light→surface vs cone axis
+        float  catt     = clamp((cos_a - cos_out) / max(cos_in - cos_out, 1e-3), 0.0, 1.0);
+        float3 radiance = frame.spot_lights[s].color_intensity.rgb *
+                          frame.spot_lights[s].color_intensity.w * datt * catt;
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
     }
 

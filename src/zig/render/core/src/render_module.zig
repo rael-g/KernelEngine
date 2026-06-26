@@ -42,12 +42,21 @@ const PerObject = extern struct {
     model: [16]f32,
 };
 
-const MAX_POINT_LIGHTS = 16; // brute-force cap; matches forward.slang
+const MAX_POINT_LIGHTS = 16; // brute-force caps; match forward.slang
+const MAX_SPOT_LIGHTS = 16;
 
 // One point light packed for the per-frame uniform (matches forward.slang PointLight).
 const PointLightGpu = extern struct {
     pos_radius: [4]f32, // xyz = world position, w = radius
     color_intensity: [4]f32, // rgb = color, w = intensity
+};
+
+// One spot light packed for the per-frame uniform (matches forward.slang SpotLight).
+const SpotLightGpu = extern struct {
+    pos_range: [4]f32, // xyz = world position, w = range
+    dir_cos_inner: [4]f32, // xyz = cone axis, w = cos(inner angle)
+    color_intensity: [4]f32, // rgb = color, w = intensity
+    cone: [4]f32, // x = cos(outer angle); yzw pad
 };
 
 // Set 0 — per-frame camera + light + skybox view. Matches forward.slang PerFrame.
@@ -58,8 +67,9 @@ const PerFrame = extern struct {
     ambient: [4]f32,
     sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
     light_vp: [16]f32, // directional light view*proj (for shadow sampling)
-    shadow_params: [4]f32, // x = shadow active, y = point light count, z = directional active
+    shadow_params: [4]f32, // x = shadow active, y = point count, z = directional active, w = spot count
     point_lights: [MAX_POINT_LIGHTS]PointLightGpu,
+    spot_lights: [MAX_SPOT_LIGHTS]SpotLightGpu,
 };
 
 // Mirrors the C# PointLightComponent { Vector3 Color, float Intensity, float Radius }
@@ -69,6 +79,18 @@ const PointLightComp = extern struct {
     color: [3]f32,
     intensity: f32,
     radius: f32,
+};
+
+// Mirrors the C# SpotLightComponent { Vector3 Direction, Vector3 Color, float
+// Intensity, float Range, float InnerAngleDeg, float OuterAngleDeg } (registered
+// "spot_light"). Field order is the C# struct's, not the kernel header's.
+const SpotLightComp = extern struct {
+    dir: [3]f32,
+    color: [3]f32,
+    intensity: f32,
+    range: f32,
+    inner_deg: f32,
+    outer_deg: f32,
 };
 
 // Mirrors the C# AmbientLightComponent { Vector3 Color } (registered "AmbientLight").
@@ -122,12 +144,13 @@ const ModuleState = struct {
     fwd_writes: [2][*c]const u8,
     fwd_reads: [1][*c]const u8,
     fwd_io: c.ke_render_pass_io,
-    fwd_access: [11]c.ke_component_access,
+    fwd_access: [12]c.ke_component_access,
     mesh_cid: c.ke_component_id,
     transform_cid: c.ke_component_id,
     camera_cid: c.ke_component_id,
     light_cid: c.ke_component_id,
     point_light_cid: c.ke_component_id,
+    spot_light_cid: c.ke_component_id,
     ambient_cid: c.ke_component_id,
     skybox_cid: c.ke_component_id,
 
@@ -358,8 +381,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
         .sky_view_proj = undefined,
         .light_vp = undefined,
-        .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow active, y=point count, z=directional active
+        .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow, y=point count, z=directional, w=spot count
         .point_lights = undefined,
+        .spot_lights = undefined,
     };
     zm.storeMat(frame.sky_view_proj[0..], sky_vp);
     // Same light view-proj the shadow pass used, for the forward's shadow lookup.
@@ -408,6 +432,30 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         };
     }
     frame.shadow_params[1] = @floatFromInt(pn); // point light count
+
+    // Spot lights (brute force). Position from transform; cone cosines precomputed.
+    var sl_ents: [*c]c.ke_entity = undefined;
+    var sl_data: ?*anyopaque = undefined;
+    var sl_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.spot_light_cid, &sl_ents, &sl_data, &sl_count);
+    const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(sl_data));
+    const sn: u32 = @intCast(@min(sl_count, MAX_SPOT_LIGHTS));
+    const deg2rad: f32 = std.math.pi / 180.0;
+    var sli: u32 = 0;
+    while (sli < sn) : (sli += 1) {
+        const stc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, sl_ents[sli]) orelse continue;
+        const stc: *const c.ke_transform_component = @ptrCast(@alignCast(stc_raw));
+        const m = stc.world_matrix.m;
+        const cos_in = std.math.cos(sls[sli].inner_deg * deg2rad);
+        const cos_out = std.math.cos(sls[sli].outer_deg * deg2rad);
+        frame.spot_lights[sli] = .{
+            .pos_range = .{ m[12], m[13], m[14], sls[sli].range },
+            .dir_cos_inner = .{ sls[sli].dir[0], sls[sli].dir[1], sls[sli].dir[2], cos_in },
+            .color_intensity = .{ sls[sli].color[0], sls[sli].color[1], sls[sli].color[2], sls[sli].intensity },
+            .cone = .{ cos_out, 0.0, 0.0, 0.0 },
+        };
+    }
+    frame.shadow_params[3] = @floatFromInt(sn); // spot light count
 
     dev.write_buffer.?(dev, st.fwd_frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
@@ -501,6 +549,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
     st.light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
     st.point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(PointLightComp));
+    st.spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(SpotLightComp));
     st.ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(AmbientComp));
     st.skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(SkyboxComp));
     st.env_cubemap = .{ .idx = c.KE_HANDLE_NONE }; // default (black) cube until a skybox is set
@@ -792,6 +841,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.core.ref.*.cid.?(st.core.ref, "shadow_map"), .access = c.KE_ACCESS_READ },
         .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.point_light_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.spot_light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.ambient_cid, .access = c.KE_ACCESS_READ },
     };
     return true;
