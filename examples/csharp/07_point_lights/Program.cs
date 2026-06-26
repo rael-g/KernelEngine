@@ -1,8 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -13,10 +13,10 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 07_point_lights â€” 36-quad grid lit by four moving colored point lights, no
-// directional light. Showcases the multi-point-light path: each PointLight
-// node is its own entity with PointLightComponent, the contributor packs them
-// into the per-frame packet up to the renderer's per-frame cap.
+// 07_point_lights — a 6×6 quad grid lit by four moving colored point lights, no
+// directional light. Render v2 (webgpu): the forward pass accumulates each
+// PointLightComponent (position from its transform) with distance attenuation;
+// an AmbientLight fills the unlit areas.
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -24,18 +24,13 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 07 Point Lights"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.02f, 0.02f, 0.02f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 07 Point Lights"))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.02f, 0.02f, 0.02f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 07_point_lights");
-        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
         Console.WriteLine("[KernelEngine] Features: point_lights, multi_light_accumulation");
 
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
@@ -43,13 +38,14 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
 
-        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
+        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        var mat  = resources.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
-        // Grid of quads at z=0, x,y âˆˆ {-5, -3, -1, 1, 3, 5}.
+        // Grid of quads at z=0, x,y ∈ {-5, -3, -1, 1, 3, 5}.
         for (int x = -5; x <= 5; x += 2)
         for (int y = -5; y <= 5; y += 2)
         {
-            var n = tree.AddNode(new MeshRenderer { MaterialHandle = mat }, $"Quad_{x}_{y}");
+            var n = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat }, $"Quad_{x}_{y}");
             n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, y, 0f) };
         }
 
@@ -76,30 +72,18 @@ Console.WriteLine("[07_point_lights] Loop running. Close the window to exit.");
 
 var clock = Stopwatch.StartNew();
 double prev = clock.Elapsed.TotalSeconds;
-int frameCount = 0;
-double fpsWindowStart = 0;
-
 while (!window.ShouldClose())
 {
     double now = clock.Elapsed.TotalSeconds;
     runtime.Tick((float)(now - prev));
     prev = now;
-
-    frameCount++;
-    if (now - fpsWindowStart >= 5.0)
-    {
-        double fps = frameCount / (now - fpsWindowStart);
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: 4p 0s 0d");
-        frameCount     = 0;
-        fpsWindowStart = now;
-    }
 }
 
 runtime.UnloadModules(sp);
 
 Console.WriteLine("[07_point_lights] Exited cleanly.");
 
-// â”€â”€ Moving point light â€” orbits the origin with per-instance phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Moving point light — orbits the origin with per-instance phase ───────────
 
 sealed class MovingPointLight : PointLight
 {
