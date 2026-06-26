@@ -377,6 +377,13 @@ fn uploadTexture(self: [*c]c.ke_render_core, width: u32, height: u32,
     return .{ .idx = idx };
 }
 
+// sRGB → linear (IEC 61966-2-1). Authored base colors are sRGB; lighting runs in
+// linear space, so the factor is linearized once here (the final pass re-encodes
+// to sRGB on output). Alpha is not a color channel and stays as-is.
+fn srgbToLinear(cs: f32) f32 {
+    return if (cs <= 0.04045) cs / 12.92 else std.math.pow(f32, (cs + 0.055) / 1.055, 2.4);
+}
+
 fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
                   metallic: f32, roughness: f32, albedo: c.ke_texture_handle,
                   normal: c.ke_texture_handle, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
@@ -384,10 +391,10 @@ fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
     const st = coreOf(self);
     if (st.material_count >= MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
 
-    // std140: float4 base_color + (metallic, roughness) packed into the next slot.
+    // std140: float4 base_color (linearized) + (metallic, roughness) packed next.
     const mat_data = [8]f32{
-        base_color[0], base_color[1], base_color[2], base_color[3],
-        metallic,      roughness,     0.0,           0.0,
+        srgbToLinear(base_color[0]), srgbToLinear(base_color[1]), srgbToLinear(base_color[2]), base_color[3],
+        metallic,                    roughness,                   0.0,                         0.0,
     };
     const ubo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
         .initial_data = &mat_data,
