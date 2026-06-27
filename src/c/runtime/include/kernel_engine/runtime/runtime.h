@@ -4,6 +4,7 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/ecs/ke_ecs.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -39,6 +40,14 @@ typedef struct ke_component_access {
     ke_access       access;
 } ke_component_access;
 
+/// A query a system reads through: a tuple of components (matched together) with
+/// the access mode the scheduler uses to order waves. Resolved into archetype
+/// segments before the wave; the system body reads them via ke_system_ctx_view.
+typedef struct ke_query_decl {
+    ke_component_access terms[KE_QUERY_MAX_TERMS];
+    uint32_t            term_count;
+} ke_query_decl;
+
 typedef struct ke_runtime_module_params {
     const char *name;
     void       *user_data;
@@ -50,6 +59,15 @@ typedef struct ke_runtime_system_params {
     const char *name;
     ke_phase    phase;
 
+    /// Queries the system reads through (the parallel-safe path). When set, the
+    /// runtime registers them, derives the scheduling access list from their
+    /// terms, and resolves them into segments the body reads via ke_system_ctx_view.
+    const ke_query_decl *queries;
+    uint32_t             query_count;
+
+    /// Direct access declaration. Used when no queries are declared; the body then
+    /// reads through ke_system_ctx_query/get, which is not safe across a parallel
+    /// wave and is being phased out in favor of queries.
     const ke_component_access *access_list;
     uint32_t                   access_count;
 

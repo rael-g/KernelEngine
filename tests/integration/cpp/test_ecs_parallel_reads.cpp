@@ -6,21 +6,10 @@
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/scheduler/enki/enki_scheduler.h>
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Phase 0 gate for the ECS memory-safety refactor.
-//
-// This reproduces the exact hazard that corrupted memory in the clustered-forward
-// render: two systems whose access lists only READ a component land in the SAME
-// parallel wave and both touch the storage (query + per-entity get) at once.
-//
-// The contract says no ke_ecs storage call may run concurrently during a wave.
-// The funnel's concurrency-overlap guard counts violations into
-// ke_system_ctx_check_failures(). TODAY this test is RED — either the guard
-// reports overlap (> 0) or the concurrent flecs access crashes the run. The ECS
-// refactor (resolve queries single-threaded before the wave; bodies touch only
-// resolved memory) is what turns it GREEN, and under TSan on the linux preset the
-// race is reported deterministically.
-// ─────────────────────────────────────────────────────────────────────────────
+// Asserts the contract invariant that ke_ecs storage is never touched
+// concurrently during a parallel wave. Two systems that only READ a component
+// share one wave (read/read has no conflict) and both access the storage at once;
+// the funnel's overlap guard must report zero concurrent-access violations.
 
 namespace {
 
@@ -29,21 +18,20 @@ struct Pos
     float x, y, z;
 };
 
-// The cull/shadow access pattern: query the component, then a per-entity get for
-// each hit. Several ke_ecs reads per tick — two of these in one wave overlap.
-void reader_body(ke_system_ctx *ctx, void *ud, float)
+// Reads a component through the resolved view: walk the archetype segments and
+// the aligned column. No ke_ecs call happens here, so two of these in one wave
+// never touch the storage concurrently.
+void reader_body(ke_system_ctx *ctx, void *, float)
 {
-    ke_component_id cid = *static_cast<ke_component_id *>(ud);
-    ke_entity      *ents = nullptr;
-    void           *data = nullptr;
-    size_t          count = 0;
-    ke_system_ctx_query(ctx, cid, &ents, &data, &count);
+    size_t                seg_count = 0;
+    const ke_ecs_segment *segs      = ke_system_ctx_view(ctx, 0, &seg_count);
 
     volatile float sink = 0.0f;
-    for (size_t i = 0; i < count; ++i)
+    for (size_t s = 0; s < seg_count; ++s)
     {
-        const void *p = ke_system_ctx_get(ctx, cid, ents[i]);
-        if (p) sink += static_cast<const Pos *>(p)->x;
+        const Pos *col = static_cast<const Pos *>(segs[s].columns[0]);
+        for (size_t i = 0; i < segs[s].count; ++i)
+            if (col) sink += col[i].x;
     }
     (void)sink;
 }
@@ -101,15 +89,16 @@ TEST_F(EcsParallelReads, TwoReadersSameWave_NoConcurrentStorageAccess)
         p->z = 0.0f;
     }
 
-    ke_component_access read_pos[1] = {{pos, KE_ACCESS_READ}};
+    ke_query_decl read_pos{};
+    read_pos.terms[0]  = {pos, KE_ACCESS_READ};
+    read_pos.term_count = 1;
 
     ke_runtime_system_params a{};
-    a.name         = "ReaderA";
-    a.phase        = KE_PHASE_UPDATE;
-    a.access_list  = read_pos;
-    a.access_count = 1;
-    a.user_data    = &pos;
-    a.execute      = reader_body;
+    a.name        = "ReaderA";
+    a.phase       = KE_PHASE_UPDATE;
+    a.queries     = &read_pos;
+    a.query_count = 1;
+    a.execute     = reader_body;
 
     ke_runtime_system_params b = a;
     b.name                     = "ReaderB";
@@ -118,8 +107,8 @@ TEST_F(EcsParallelReads, TwoReadersSameWave_NoConcurrentStorageAccess)
     ASSERT_NE(runtime->register_system(runtime, &b, nullptr), 0u);
 
     // Both only READ pos → no write conflict → the wave-builder must place them in
-    // the SAME wave (i.e. they run in parallel). If that ever stops being true the
-    // test no longer exercises the hazard.
+    // the same wave, so they run in parallel. If that stops being true the test no
+    // longer exercises concurrent reads.
     ke_runtime_system_params sysz[2] = {a, b};
     uint32_t                  waves[2] = {0, 0};
     uint32_t                  wave_count = 0;
@@ -130,7 +119,7 @@ TEST_F(EcsParallelReads, TwoReadersSameWave_NoConcurrentStorageAccess)
     for (int t = 0; t < 300; ++t)
         ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
 
-    // The gate: the storage was never touched concurrently. RED until the refactor.
+    // The invariant: the storage was never touched concurrently during the wave.
     EXPECT_EQ(ke_system_ctx_check_failures(), 0u)
         << "two reader systems touched ke_ecs storage concurrently during a wave";
 }

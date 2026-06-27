@@ -52,6 +52,10 @@ typedef struct defer_queue {
     size_t         capacity;
 } defer_queue;
 
+// Per-system limits for the resolved-query path.
+#define KE_MAX_QUERIES_PER_SYSTEM 8
+#define KE_MAX_SEGMENTS_PER_QUERY 32
+
 struct ke_system_ctx
 {
     ke_ecs                    *ecs;          // borrowed; alive while the system runs
@@ -61,6 +65,12 @@ struct ke_system_ctx
     bool                       reads_snapshot; // render phase: reads route to snapshot side (§16)
     const char                *system_name;  // for diagnostics
     defer_queue               *defer;        // borrowed from the runtime
+
+    // Resolved query views (borrowed from the registered_system). seg_storage holds
+    // KE_MAX_SEGMENTS_PER_QUERY segments per query, contiguous by query index.
+    const ke_ecs_segment      *seg_storage;
+    const size_t              *seg_counts;
+    uint32_t                   view_query_count;
 };
 
 // Debug-only check infrastructure. Compiled in only when NDEBUG is undefined;
@@ -73,8 +83,8 @@ static uint32_t s_check_failures = 0;
 // Concurrency-overlap guard. The contract says no ke_ecs storage call happens
 // concurrently during a wave (reads are resolved single-threaded; bodies touch
 // only resolved memory). This detects a violation directly: a thread entering a
-// funnel storage call while another is already inside it = the exact hazard that
-// corrupted memory. Counted (atomically), never aborted, so tests can assert it.
+// funnel storage call while another is already inside it. Counted (atomically),
+// never aborted, so tests can assert it.
 static atomic_uint s_ecs_call_depth       = 0;
 static atomic_uint s_concurrency_failures = 0;
 
@@ -134,19 +144,59 @@ void ke_system_ctx_reset_check_failures(void)
 // wave until a conflict forces a barrier. Two systems conflict iff they share
 // at least one component cid where at least one declares WRITE.
 
+// Whether a system accesses cid, and (via out_writes) whether any such access is
+// a write. Reads the query terms when the system declares queries, else its direct
+// access list — so both declaration styles feed the same conflict check.
+static bool params_accesses(const ke_runtime_system_params *p, ke_component_id cid, bool *out_writes)
+{
+    bool any = false, writes = false;
+    if (p->queries && p->query_count > 0)
+    {
+        for (uint32_t q = 0; q < p->query_count; q++)
+            for (uint32_t t = 0; t < p->queries[q].term_count; t++)
+                if (p->queries[q].terms[t].cid == cid)
+                {
+                    any = true;
+                    if (p->queries[q].terms[t].access & KE_ACCESS_WRITE) writes = true;
+                }
+    }
+    else
+    {
+        for (uint32_t i = 0; i < p->access_count; i++)
+            if (p->access_list[i].cid == cid)
+            {
+                any = true;
+                if (p->access_list[i].access & KE_ACCESS_WRITE) writes = true;
+            }
+    }
+    if (out_writes) *out_writes = writes;
+    return any;
+}
+
+static bool conflict_on_term(const ke_runtime_system_params *b, ke_component_id cid, bool a_writes)
+{
+    bool b_writes = false;
+    return params_accesses(b, cid, &b_writes) && (a_writes || b_writes);
+}
+
 static bool systems_conflict(const ke_runtime_system_params *a,
                               const ke_runtime_system_params *b)
 {
-    for (uint32_t i = 0; i < a->access_count; i++)
+    if (a->queries && a->query_count > 0)
     {
-        ke_component_id  cid_a = a->access_list[i].cid;
-        ke_access        acc_a = a->access_list[i].access;
-        bool             a_writes = (acc_a & KE_ACCESS_WRITE) != 0;
-        for (uint32_t j = 0; j < b->access_count; j++)
+        for (uint32_t q = 0; q < a->query_count; q++)
+            for (uint32_t t = 0; t < a->queries[q].term_count; t++)
+            {
+                bool a_writes = (a->queries[q].terms[t].access & KE_ACCESS_WRITE) != 0;
+                if (conflict_on_term(b, a->queries[q].terms[t].cid, a_writes)) return true;
+            }
+    }
+    else
+    {
+        for (uint32_t i = 0; i < a->access_count; i++)
         {
-            if (b->access_list[j].cid != cid_a) continue;
-            bool b_writes = (b->access_list[j].access & KE_ACCESS_WRITE) != 0;
-            if (a_writes || b_writes) return true;  // W/W or W/R conflict
+            bool a_writes = (a->access_list[i].access & KE_ACCESS_WRITE) != 0;
+            if (conflict_on_term(b, a->access_list[i].cid, a_writes)) return true;
         }
     }
     return false;
@@ -285,6 +335,14 @@ void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
 #endif
 }
 
+const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx, uint32_t query_index, size_t *out_count)
+{
+    if (out_count) *out_count = 0;
+    if (!ctx || !ctx->seg_storage || query_index >= ctx->view_query_count) return NULL;
+    if (out_count) *out_count = ctx->seg_counts[query_index];
+    return &ctx->seg_storage[(size_t)query_index * KE_MAX_SEGMENTS_PER_QUERY];
+}
+
 // Grow defer queue capacity by doubling. Returns false on OOM.
 static bool defer_reserve(defer_queue *q, size_t needed)
 {
@@ -393,6 +451,17 @@ void     ke_system_ctx_reset_defer_applied(void) { s_defer_applied_total = 0; }
 typedef struct registered_system
 {
     ke_runtime_system_params params;
+
+    // Resolved-query state. Built at registration when params.queries is set:
+    // each query is registered with the ECS, the union of their terms becomes the
+    // derived access list (params.access_list is repointed to it), and seg_storage
+    // holds the segments each frame's resolve fills (read by this system's body).
+    ke_query_id     query_ids[KE_MAX_QUERIES_PER_SYSTEM];
+    uint32_t        query_count;
+    ke_ecs_segment *seg_storage; // KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY
+    size_t          seg_counts[KE_MAX_QUERIES_PER_SYSTEM];
+    ke_component_access derived_access[KE_MAX_QUERIES_PER_SYSTEM * KE_QUERY_MAX_TERMS];
+    uint32_t            derived_access_count;
 } registered_system;
 
 typedef struct runtime_state
@@ -476,8 +545,70 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
         h->state.system_capacity = new_cap;
     }
 
-    registered_system *rs = &h->state.systems[h->state.system_count++];
-    rs->params            = *p;
+    registered_system *rs   = &h->state.systems[h->state.system_count++];
+    rs->params              = *p;
+    rs->query_count         = 0;
+    rs->seg_storage         = NULL;
+    rs->derived_access_count = 0;
+
+    if (p->queries && p->query_count > 0)
+    {
+        uint32_t qn = p->query_count;
+        if (qn > KE_MAX_QUERIES_PER_SYSTEM) qn = KE_MAX_QUERIES_PER_SYSTEM;
+
+        for (uint32_t q = 0; q < qn; q++)
+        {
+            const ke_query_decl *qd = &p->queries[q];
+            uint32_t tn = qd->term_count;
+            if (tn > KE_QUERY_MAX_TERMS) tn = KE_QUERY_MAX_TERMS;
+
+            ke_component_id cids[KE_QUERY_MAX_TERMS];
+            for (uint32_t t = 0; t < tn; t++)
+            {
+                cids[t] = qd->terms[t].cid;
+                // Fold into the derived access list: dedup the cid, OR the modes.
+                bool found = false;
+                for (uint32_t d = 0; d < rs->derived_access_count; d++)
+                {
+                    if (rs->derived_access[d].cid == qd->terms[t].cid)
+                    {
+                        rs->derived_access[d].access |= qd->terms[t].access;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found && rs->derived_access_count < KE_MAX_QUERIES_PER_SYSTEM * KE_QUERY_MAX_TERMS)
+                {
+                    rs->derived_access[rs->derived_access_count].cid    = qd->terms[t].cid;
+                    rs->derived_access[rs->derived_access_count].access = qd->terms[t].access;
+                    rs->derived_access_count++;
+                }
+            }
+
+            rs->query_ids[q] = h->state.ecs->query_register
+                                   ? h->state.ecs->query_register(h->state.ecs, cids, tn)
+                                   : KE_QUERY_INVALID;
+        }
+        rs->query_count = qn;
+
+        // The wave-builder and the funnel guard read this derived list. Drop the
+        // caller's queries pointer — its lifetime is not ours; the resolved query
+        // ids and segment storage are owned by this registered_system.
+        rs->params.access_list  = rs->derived_access;
+        rs->params.access_count = rs->derived_access_count;
+        rs->params.queries      = NULL;
+        rs->params.query_count  = 0;
+
+        rs->seg_storage = (ke_ecs_segment *)ke_alloc(
+            sizeof(ke_ecs_segment) * KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY,
+            alignof(ke_ecs_segment));
+        if (!rs->seg_storage)
+        {
+            h->state.system_count--;
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "query segment storage allocation failed");
+            return 0;
+        }
+    }
 
     return ++h->state.next_system_id;
 }
@@ -585,6 +716,30 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->ctx.reads_snapshot = (phase == KE_PHASE_RENDER);
             pkg->ctx.system_name   = rs->params.name;
             pkg->ctx.defer         = NULL;  // task_pkg_run binds to &pkg->defer
+
+            // Resolve this system's queries here — single-threaded, before the wave
+            // dispatches — so the parallel body reads only the resolved segments and
+            // never touches the storage concurrently.
+            if (rs->query_count > 0 && rs->seg_storage && h->state.ecs->query_resolve)
+            {
+                for (uint32_t q = 0; q < rs->query_count; q++)
+                {
+                    ke_ecs_segment *dst = &rs->seg_storage[(size_t)q * KE_MAX_SEGMENTS_PER_QUERY];
+                    size_t          cnt = 0;
+                    h->state.ecs->query_resolve(h->state.ecs, rs->query_ids[q], dst,
+                                                KE_MAX_SEGMENTS_PER_QUERY, &cnt);
+                    rs->seg_counts[q] = cnt;
+                }
+                pkg->ctx.seg_storage      = rs->seg_storage;
+                pkg->ctx.seg_counts       = rs->seg_counts;
+                pkg->ctx.view_query_count = rs->query_count;
+            }
+            else
+            {
+                pkg->ctx.seg_storage      = NULL;
+                pkg->ctx.seg_counts       = NULL;
+                pkg->ctx.view_query_count = 0;
+            }
             pkg->execute           = rs->params.execute;
             pkg->user_data         = rs->params.user_data;
             pkg->dt                = dt;
@@ -687,7 +842,12 @@ static void runtime_destroy(ke_runtime *self)
     if (!self || !self->handle) return;
     runtime_handle *h = (runtime_handle *)self->handle;
 
-    if (h->state.systems) ke_free(h->state.systems);
+    if (h->state.systems)
+    {
+        for (size_t i = 0; i < h->state.system_count; i++)
+            if (h->state.systems[i].seg_storage) ke_free(h->state.systems[i].seg_storage);
+        ke_free(h->state.systems);
+    }
     // Per-task defer queues are stack-allocated; freed at the wave barrier.
     // h->state.ecs and h->state.scheduler are borrowed — NOT destroyed here.
     ke_free(h);
