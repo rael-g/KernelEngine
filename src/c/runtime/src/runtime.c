@@ -4,6 +4,7 @@
 #include <kernel_engine/allocator/allocator.h>
 
 #include <stdalign.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,6 +70,24 @@ struct ke_system_ctx
 #ifndef NDEBUG
 static uint32_t s_check_failures = 0;
 
+// Concurrency-overlap guard. The contract says no ke_ecs storage call happens
+// concurrently during a wave (reads are resolved single-threaded; bodies touch
+// only resolved memory). This detects a violation directly: a thread entering a
+// funnel storage call while another is already inside it = the exact hazard that
+// corrupted memory. Counted (atomically), never aborted, so tests can assert it.
+static atomic_uint s_ecs_call_depth       = 0;
+static atomic_uint s_concurrency_failures = 0;
+
+static void ecs_call_enter(void)
+{
+    if (atomic_fetch_add(&s_ecs_call_depth, 1u) != 0u)
+        atomic_fetch_add(&s_concurrency_failures, 1u);
+}
+static void ecs_call_leave(void)
+{
+    atomic_fetch_sub(&s_ecs_call_depth, 1u);
+}
+
 static bool access_list_contains(const ke_component_access *list, uint32_t n,
                                   ke_component_id cid, ke_access required)
 {
@@ -94,7 +113,7 @@ static void log_violation(const char *system_name, ke_component_id cid, const ch
 uint32_t ke_system_ctx_check_failures(void)
 {
 #ifndef NDEBUG
-    return s_check_failures;
+    return s_check_failures + atomic_load(&s_concurrency_failures);
 #else
     return 0;
 #endif
@@ -104,6 +123,8 @@ void ke_system_ctx_reset_check_failures(void)
 {
 #ifndef NDEBUG
     s_check_failures = 0;
+    atomic_store(&s_concurrency_failures, 0u);
+    atomic_store(&s_ecs_call_depth, 0u);
 #endif
 }
 
@@ -211,8 +232,13 @@ void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity e
         log_violation(ctx->system_name, cid, "MUT");
         return NULL;
     }
-#endif
+    ecs_call_enter();
+    void *r = ctx->ecs->component_get(ctx->ecs, entity, cid);
+    ecs_call_leave();
+    return r;
+#else
     return ctx->ecs->component_get(ctx->ecs, entity, cid);
+#endif
 }
 
 const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
@@ -233,7 +259,14 @@ const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity
     // component; for everything else snapshot_cid returns cid unchanged (§16).
     if (ctx->reads_snapshot && ctx->ecs->snapshot_cid)
         cid = ctx->ecs->snapshot_cid(ctx->ecs, cid);
+#ifndef NDEBUG
+    ecs_call_enter();
+    const void *r = ctx->ecs->component_get(ctx->ecs, entity, cid);
+    ecs_call_leave();
+    return r;
+#else
     return ctx->ecs->component_get(ctx->ecs, entity, cid);
+#endif
 }
 
 void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
@@ -243,7 +276,13 @@ void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
     if (out_data)     *out_data     = NULL;
     if (out_count)    *out_count    = 0;
     if (!ctx || !ctx->ecs) return;
+#ifndef NDEBUG
+    ecs_call_enter();
     ctx->ecs->query(ctx->ecs, cid, out_entities, out_data, out_count);
+    ecs_call_leave();
+#else
+    ctx->ecs->query(ctx->ecs, cid, out_entities, out_data, out_count);
+#endif
 }
 
 // Grow defer queue capacity by doubling. Returns false on OOM.

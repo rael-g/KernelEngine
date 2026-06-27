@@ -19,6 +19,7 @@ add_executable(test_integration_cpp
     test_box2d_physics.cpp
     test_stb_font.cpp
     test_runtime.cpp
+    test_ecs_parallel_reads.cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
