@@ -6,6 +6,7 @@
 #include <flecs.h>
 
 #include <stdalign.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,18 +93,42 @@ typedef struct ecs_flecs_state
     size_t     snap_count;
     size_t     snap_capacity;
 
-    // Query cache — first call per cid creates the flecs query and we keep it.
+    // Query cache — populated eagerly at component_register (so the parallel
+    // wave never creates a query, which flecs forbids in readonly mode). During
+    // a wave the cache is read-only, so concurrent lookups are safe.
     query_cache_entry *queries;
     size_t             query_count;
     size_t             query_capacity;
-
-    // Scratch buffers for query results: entities flat array + component data
-    // packed contiguously. Reused on every query call.
-    ke_entity *scratch_entities;
-    size_t     scratch_entity_capacity;
-    char      *scratch_data;
-    size_t     scratch_data_capacity;
 } ecs_flecs_state;
+
+// Per-thread query scratch. A query packs its results into a contiguous buffer
+// and returns a pointer to it; with parallel systems each worker needs its own,
+// so the scratch is thread-local. The buffers are registered in a lock-free pool
+// (atomic-bumped slot, no mutex) so destroy can free them all.
+#define KE_FLECS_MAX_THREADS 64
+
+typedef struct thread_scratch
+{
+    ke_entity *entities;
+    size_t     entity_capacity;
+    char      *data;
+    size_t     data_capacity;
+} thread_scratch;
+
+static thread_scratch    g_scratch[KE_FLECS_MAX_THREADS];
+static _Atomic unsigned  g_scratch_count = 0;
+static _Thread_local int t_scratch_slot  = -1;
+
+static thread_scratch *scratch_for_thread(void)
+{
+    if (t_scratch_slot < 0)
+    {
+        unsigned slot = atomic_fetch_add(&g_scratch_count, 1u);
+        if (slot >= KE_FLECS_MAX_THREADS) return NULL;
+        t_scratch_slot = (int)slot;
+    }
+    return &g_scratch[t_scratch_slot];
+}
 
 typedef struct ecs_flecs_handle
 {
@@ -149,29 +174,29 @@ static query_cache_entry *find_or_create_query(ecs_flecs_state *s, ke_component_
     return entry;
 }
 
-static bool grow_scratch_entities(ecs_flecs_state *s, size_t needed)
+static bool grow_scratch_entities(thread_scratch *ts, size_t needed)
 {
-    if (needed <= s->scratch_entity_capacity) return true;
-    size_t new_cap = s->scratch_entity_capacity ? s->scratch_entity_capacity * 2 : 16;
+    if (needed <= ts->entity_capacity) return true;
+    size_t new_cap = ts->entity_capacity ? ts->entity_capacity * 2 : 16;
     while (new_cap < needed) new_cap *= 2;
     ke_entity *new_buf = (ke_entity *)ke_alloc(sizeof(ke_entity) * new_cap, alignof(ke_entity));
     if (!new_buf) return false;
-    if (s->scratch_entities) ke_free(s->scratch_entities);
-    s->scratch_entities         = new_buf;
-    s->scratch_entity_capacity  = new_cap;
+    if (ts->entities) ke_free(ts->entities);
+    ts->entities        = new_buf;
+    ts->entity_capacity = new_cap;
     return true;
 }
 
-static bool grow_scratch_data(ecs_flecs_state *s, size_t needed_bytes)
+static bool grow_scratch_data(thread_scratch *ts, size_t needed_bytes)
 {
-    if (needed_bytes <= s->scratch_data_capacity) return true;
-    size_t new_cap = s->scratch_data_capacity ? s->scratch_data_capacity * 2 : 256;
+    if (needed_bytes <= ts->data_capacity) return true;
+    size_t new_cap = ts->data_capacity ? ts->data_capacity * 2 : 256;
     while (new_cap < needed_bytes) new_cap *= 2;
     char *new_buf = (char *)ke_alloc(new_cap, alignof(max_align_t));
     if (!new_buf) return false;
-    if (s->scratch_data) ke_free(s->scratch_data);
-    s->scratch_data          = new_buf;
-    s->scratch_data_capacity = new_cap;
+    if (ts->data) ke_free(ts->data);
+    ts->data          = new_buf;
+    ts->data_capacity = new_cap;
     return true;
 }
 
@@ -203,7 +228,7 @@ static ke_component_id ecs_flecs_component_register(ke_ecs *self, const char *na
 
     // Reuse if already registered with the same name (idempotent for module reloads).
     ecs_entity_t existing = ecs_lookup(h->state.world, name);
-    if (existing != 0) { KE_FLECS_GUARD_END(); return (ke_component_id)existing; }
+    if (existing != 0) { find_or_create_query(&h->state, (ke_component_id)existing); KE_FLECS_GUARD_END(); return (ke_component_id)existing; }
 
     ecs_entity_desc_t edesc = {0};
     edesc.name = name;
@@ -214,6 +239,9 @@ static ke_component_id ecs_flecs_component_register(ke_ecs *self, const char *na
     // add/has/query and as a dependency key (render-resource cids are tags).
     if (size == 0)
     {
+        // Warm the query now: creating a query is forbidden once the world enters
+        // readonly mode during a parallel wave, so all queries must exist upfront.
+        find_or_create_query(&h->state, (ke_component_id)e);
         KE_FLECS_GUARD_END();
         return (ke_component_id)e;
     }
@@ -224,6 +252,7 @@ static ke_component_id ecs_flecs_component_register(ke_ecs *self, const char *na
     cdesc.type.alignment = (ecs_size_t)alignof(max_align_t);
     ke_component_id cid = (ke_component_id)ecs_component_init(h->state.world, &cdesc);
 
+    find_or_create_query(&h->state, cid); // warm before any readonly wave (see above)
     KE_FLECS_GUARD_END();
     return cid;
 }
@@ -285,11 +314,15 @@ static void *ecs_flecs_component_get(ke_ecs *self, ke_entity entity, ke_componen
 {
     if (!self || !self->handle || entity == 0 || component == 0) return NULL;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
-    // Guard against unregistered components or dead entities — ecs_get_mut_id
-    // asserts in both cases; ke_ecs contract says "returns NULL if not found."
+    // Guard against unregistered components or dead entities.
     if (!ecs_is_alive(h->state.world, (ecs_entity_t)entity)) return NULL;
     if (!ecs_has_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component)) return NULL;
-    return ecs_get_mut_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
+    // ecs_get_id (const) — NOT ecs_get_mut_id — so this is safe inside readonly
+    // mode (parallel reads). The mut variant requires a stage and asserts in
+    // readonly. The returned pointer is the live storage; the contract exposes it
+    // as void* (sim writes through it directly — a plain memory write, not a
+    // flecs op, so it is allowed and never adds the component structurally).
+    return (void *)ecs_get_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)component);
 }
 
 static void ecs_flecs_query(ke_ecs *self, ke_component_id component,
@@ -301,6 +334,9 @@ static void ecs_flecs_query(ke_ecs *self, ke_component_id component,
     if (!self || !self->handle || component == 0) return;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
 
+    thread_scratch *ts = scratch_for_thread(); // per-thread → parallel-safe
+    if (!ts) return;
+
     KE_FLECS_GUARD("flecs fatal in query", { h->state.world_corrupted = true; return; });
     query_cache_entry *entry = find_or_create_query(&h->state, component);
     if (!entry || !entry->query) return;
@@ -310,11 +346,11 @@ static void ecs_flecs_query(ke_ecs *self, ke_component_id component,
     ecs_iter_t it = ecs_query_iter(h->state.world, entry->query);
     while (ecs_query_next(&it))
     {
-        if (!grow_scratch_entities(&h->state, total + (size_t)it.count)) return;
+        if (!grow_scratch_entities(ts, total + (size_t)it.count)) return;
         if (entry->element_size > 0 &&
-            !grow_scratch_data(&h->state, (total + (size_t)it.count) * entry->element_size)) return;
+            !grow_scratch_data(ts, (total + (size_t)it.count) * entry->element_size)) return;
 
-        memcpy(h->state.scratch_entities + total, it.entities, sizeof(ecs_entity_t) * (size_t)it.count);
+        memcpy(ts->entities + total, it.entities, sizeof(ecs_entity_t) * (size_t)it.count);
 
         if (entry->element_size > 0)
         {
@@ -323,15 +359,15 @@ static void ecs_flecs_query(ke_ecs *self, ke_component_id component,
             void *src = ecs_field_w_size(&it, entry->element_size, 1);
             if (src)
             {
-                memcpy(h->state.scratch_data + total * entry->element_size, src,
+                memcpy(ts->data + total * entry->element_size, src,
                        entry->element_size * (size_t)it.count);
             }
         }
         total += (size_t)it.count;
     }
 
-    if (out_entities) *out_entities = h->state.scratch_entities;
-    if (out_data)     *out_data     = h->state.scratch_data;
+    if (out_entities) *out_entities = ts->entities;
+    if (out_data)     *out_data     = ts->data;
     if (out_count)    *out_count    = total;
     KE_FLECS_GUARD_END();
 }
@@ -362,6 +398,9 @@ static void ecs_flecs_set_double_buffered(ke_ecs *self, ke_component_id cid)
     cdesc.type.size      = (ecs_size_t)size;
     cdesc.type.alignment = (ecs_size_t)alignof(max_align_t);
     ke_component_id snap_cid = (ke_component_id)ecs_component_init(h->state.world, &cdesc);
+    // Warm the snapshot's query now — render systems read the snapshot cid inside
+    // the readonly parallel wave, where creating a query is forbidden.
+    find_or_create_query(&h->state, snap_cid);
     KE_FLECS_GUARD_END();
 
     if (h->state.snap_count == h->state.snap_capacity)
@@ -404,6 +443,8 @@ static void ecs_flecs_swap_snapshots(ke_ecs *self)
     if (!self || !self->handle) return;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
     KE_FLECS_GUARD("flecs fatal in swap_snapshots", { h->state.world_corrupted = true; return; });
+    thread_scratch *ts = scratch_for_thread(); // serial caller (phase boundary)
+    if (!ts) return;
 
     for (size_t i = 0; i < h->state.snap_count; i++)
     {
@@ -416,8 +457,8 @@ static void ecs_flecs_swap_snapshots(ke_ecs *self)
         ecs_iter_t it = ecs_query_iter(h->state.world, entry->query);
         while (ecs_query_next(&it))
         {
-            if (!grow_scratch_entities(&h->state, total + (size_t)it.count)) { total = 0; break; }
-            memcpy(h->state.scratch_entities + total, it.entities, sizeof(ecs_entity_t) * (size_t)it.count);
+            if (!grow_scratch_entities(ts, total + (size_t)it.count)) { total = 0; break; }
+            memcpy(ts->entities + total, it.entities, sizeof(ecs_entity_t) * (size_t)it.count);
             total += (size_t)it.count;
         }
 
@@ -425,12 +466,29 @@ static void ecs_flecs_swap_snapshots(ke_ecs *self)
         // outside iteration even though it moves archetypes).
         for (size_t e = 0; e < total; e++)
         {
-            ecs_entity_t ent = (ecs_entity_t)h->state.scratch_entities[e];
+            ecs_entity_t ent = (ecs_entity_t)ts->entities[e];
             void *live = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->live);
             void *snap = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->snap);
             if (live && snap) memcpy(snap, live, p->element_size);
         }
     }
+    KE_FLECS_GUARD_END();
+}
+
+static void ecs_flecs_concurrent_reads(ke_ecs *self, void (*body)(void *ctx), void *ctx)
+{
+    if (!body) return;
+    if (!self || !self->handle) { body(ctx); return; }
+    ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (h->state.world_corrupted) { body(ctx); return; }
+
+    // Readonly mode lets the world be read from multiple threads (queries + gets)
+    // with no internal mutation. Structural changes are forbidden here — the
+    // runtime defers writes and applies them serially after this returns.
+    KE_FLECS_GUARD("flecs fatal in concurrent_reads", { h->state.world_corrupted = true; return; });
+    ecs_readonly_begin(h->state.world);
+    body(ctx);
+    ecs_readonly_end(h->state.world);
     KE_FLECS_GUARD_END();
 }
 
@@ -452,10 +510,18 @@ static void ecs_flecs_destroy(ke_ecs *self)
         if (h->state.world) ecs_fini(h->state.world);
     }
     // Always free our own allocations regardless of world state.
-    if (h->state.queries)        ke_free(h->state.queries);
-    if (h->state.scratch_entities) ke_free(h->state.scratch_entities);
-    if (h->state.scratch_data)     ke_free(h->state.scratch_data);
-    if (h->state.snaps)            ke_free(h->state.snaps);
+    if (h->state.queries) ke_free(h->state.queries);
+    if (h->state.snaps)   ke_free(h->state.snaps);
+
+    // Free the per-thread scratch pool (one ECS per process; all worker threads
+    // have stopped querying by the time the ECS is destroyed).
+    unsigned scratch_n = atomic_load(&g_scratch_count);
+    if (scratch_n > KE_FLECS_MAX_THREADS) scratch_n = KE_FLECS_MAX_THREADS;
+    for (unsigned i = 0; i < scratch_n; i++)
+    {
+        if (g_scratch[i].entities) { ke_free(g_scratch[i].entities); g_scratch[i].entities = NULL; g_scratch[i].entity_capacity = 0; }
+        if (g_scratch[i].data)     { ke_free(g_scratch[i].data);     g_scratch[i].data = NULL;     g_scratch[i].data_capacity = 0; }
+    }
 
     ke_free(h);
 }
@@ -498,6 +564,7 @@ ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     h->api.set_double_buffered   = ecs_flecs_set_double_buffered;
     h->api.snapshot_cid          = ecs_flecs_snapshot_cid;
     h->api.swap_snapshots        = ecs_flecs_swap_snapshots;
+    h->api.concurrent_reads      = ecs_flecs_concurrent_reads;
 
     return (ke_ecs_handle){ .ref = &h->api, .destroy = ecs_flecs_destroy };
 }

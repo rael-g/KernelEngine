@@ -76,6 +76,14 @@ extern "C"
         // column. Called by the scheduler at the sim→render phase boundary.
         void (*swap_snapshots)(struct ke_ecs *self);
 
+        // Runs body(ctx) with the world made safe for concurrent reads from
+        // multiple threads (the scheduler dispatches a wave of parallel systems
+        // inside it). No structural changes happen here — the runtime defers
+        // writes and applies them serially after this returns. Implementation-
+        // agnostic: a natively read-thread-safe backend may just call body(ctx).
+        // Kept last so adding it does not shift existing vtable slot offsets.
+        void (*concurrent_reads)(struct ke_ecs *self, void (*body)(void *ctx), void *ctx);
+
     } ke_ecs;
 
     typedef struct ke_ecs_handle

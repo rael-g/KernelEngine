@@ -469,6 +469,33 @@ static void task_pkg_run(void *data)
     pkg->execute(&pkg->ctx, pkg->user_data, pkg->dt);
 }
 
+// Dispatches a wave's tasks and joins them. Run inside the ECS concurrent-read
+// scope so the parallel system bodies read the world safely.
+typedef struct wave_run_ctx
+{
+    runtime_handle *h;
+    task_pkg       *pkgs;
+    ke_task       **tasks;
+    uint32_t       *pinned; // per-task pinned_thread (0 = load-balanced)
+    uint32_t        wave_size;
+} wave_run_ctx;
+
+static void run_wave_body(void *ctx)
+{
+    wave_run_ctx *wc = (wave_run_ctx *)ctx;
+    for (uint32_t t = 0; t < wc->wave_size; t++)
+    {
+        if (wc->pinned[t] > 0)
+            wc->tasks[t] = wc->h->state.scheduler->dispatch_pinned(
+                wc->h->state.scheduler, wc->pinned[t], task_pkg_run, &wc->pkgs[t]);
+        else
+            wc->tasks[t] = wc->h->state.scheduler->dispatch(
+                wc->h->state.scheduler, task_pkg_run, &wc->pkgs[t]);
+    }
+    for (uint32_t t = 0; t < wc->wave_size; t++)
+        wc->h->state.scheduler->wait(wc->h->state.scheduler, wc->tasks[t]);
+}
+
 // Filter systems by phase, compute wave layout, dispatch wave-by-wave via the
 // shared task scheduler. Each system's ke_system_ctx + defer queue lives in a
 // task_pkg on this stack frame; the worker thread reads them concurrently with
@@ -499,11 +526,13 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
 
     task_pkg pkgs[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
     ke_task *tasks[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
+    uint32_t pinned[KE_RUNTIME_MAX_SYSTEMS_PER_PHASE];
 
     for (uint32_t w = 0; w < wave_count; w++)
     {
         uint32_t wave_size = 0;
 
+        // Package the wave's systems (no ECS reads yet — just struct setup).
         for (uint32_t k = 0; k < phase_count; k++)
         {
             if (wave_assignments[k] != w) continue;
@@ -523,29 +552,23 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->defer.cmds        = NULL;
             pkg->defer.count       = 0;
             pkg->defer.capacity    = 0;
-
-            // Route via dispatch_pinned when the system requested a specific
-            // worker; the regular dispatch load-balances across all workers.
-            if (rs->params.pinned_thread > 0)
-            {
-                tasks[wave_size] = h->state.scheduler->dispatch_pinned(
-                    h->state.scheduler, rs->params.pinned_thread,
-                    task_pkg_run, pkg);
-            }
-            else
-            {
-                tasks[wave_size] = h->state.scheduler->dispatch(
-                    h->state.scheduler, task_pkg_run, pkg);
-            }
+            pinned[wave_size]      = rs->params.pinned_thread;
             wave_size++;
         }
 
-        // Wave barrier: join every worker, then flush each system's defer
-        // queue in registration order. Defer flushes touch ke_ecs serially
-        // through the same thread that drove the tick — no race.
+        // Dispatch + join inside the ECS concurrent-read scope, so the parallel
+        // system bodies read the world safely (the ECS makes reads thread-safe;
+        // structural changes go to each system's defer queue, flushed below).
+        wave_run_ctx wc = { h, pkgs, tasks, pinned, wave_size };
+        if (h->state.ecs->concurrent_reads)
+            h->state.ecs->concurrent_reads(h->state.ecs, run_wave_body, &wc);
+        else
+            run_wave_body(&wc);
+
+        // Wave barrier: flush each system's deferred structural changes in
+        // registration order, serially on this thread (outside the read scope).
         for (uint32_t t = 0; t < wave_size; t++)
         {
-            h->state.scheduler->wait(h->state.scheduler, tasks[t]);
             defer_flush(&pkgs[t].defer, h->state.ecs);
             if (pkgs[t].defer.cmds)
                 ke_free(pkgs[t].defer.cmds);
