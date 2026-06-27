@@ -150,8 +150,7 @@ void ke_system_ctx_reset_check_failures(void)
 static bool params_accesses(const ke_runtime_system_params *p, ke_component_id cid, bool *out_writes)
 {
     bool any = false, writes = false;
-    if (p->queries && p->query_count > 0)
-    {
+    if (p->queries)
         for (uint32_t q = 0; q < p->query_count; q++)
             for (uint32_t t = 0; t < p->queries[q].term_count; t++)
                 if (p->queries[q].terms[t].cid == cid)
@@ -159,16 +158,13 @@ static bool params_accesses(const ke_runtime_system_params *p, ke_component_id c
                     any = true;
                     if (p->queries[q].terms[t].access & KE_ACCESS_WRITE) writes = true;
                 }
-    }
-    else
-    {
+    if (p->access_list)
         for (uint32_t i = 0; i < p->access_count; i++)
             if (p->access_list[i].cid == cid)
             {
                 any = true;
                 if (p->access_list[i].access & KE_ACCESS_WRITE) writes = true;
             }
-    }
     if (out_writes) *out_writes = writes;
     return any;
 }
@@ -182,23 +178,19 @@ static bool conflict_on_term(const ke_runtime_system_params *b, ke_component_id 
 static bool systems_conflict(const ke_runtime_system_params *a,
                               const ke_runtime_system_params *b)
 {
-    if (a->queries && a->query_count > 0)
-    {
+    if (a->queries)
         for (uint32_t q = 0; q < a->query_count; q++)
             for (uint32_t t = 0; t < a->queries[q].term_count; t++)
             {
                 bool a_writes = (a->queries[q].terms[t].access & KE_ACCESS_WRITE) != 0;
                 if (conflict_on_term(b, a->queries[q].terms[t].cid, a_writes)) return true;
             }
-    }
-    else
-    {
+    if (a->access_list)
         for (uint32_t i = 0; i < a->access_count; i++)
         {
             bool a_writes = (a->access_list[i].access & KE_ACCESS_WRITE) != 0;
             if (conflict_on_term(b, a->access_list[i].cid, a_writes)) return true;
         }
-    }
     return false;
 }
 
@@ -590,6 +582,26 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
                                    : KE_QUERY_INVALID;
         }
         rs->query_count = qn;
+
+        // Fold any direct access entries (ordering-only tags a query doesn't read,
+        // e.g. render-resource markers) into the derived list so the wave-builder
+        // sees them too.
+        for (uint32_t i = 0; i < p->access_count; i++)
+        {
+            bool found = false;
+            for (uint32_t d = 0; d < rs->derived_access_count; d++)
+                if (rs->derived_access[d].cid == p->access_list[i].cid)
+                {
+                    rs->derived_access[d].access |= p->access_list[i].access;
+                    found = true;
+                    break;
+                }
+            if (!found && rs->derived_access_count < KE_MAX_QUERIES_PER_SYSTEM * KE_QUERY_MAX_TERMS)
+            {
+                rs->derived_access[rs->derived_access_count] = p->access_list[i];
+                rs->derived_access_count++;
+            }
+        }
 
         // The wave-builder and the funnel guard read this derived list. Drop the
         // caller's queries pointer — its lifetime is not ours; the resolved query
