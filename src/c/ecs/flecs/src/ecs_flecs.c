@@ -74,6 +74,16 @@ typedef struct query_cache_entry
     size_t          element_size;
 } query_cache_entry;
 
+// A multi-term query registered via query_register — the parallel-safe read path.
+// query_resolve walks it single-threaded into ke_ecs_segment lists; the wave
+// bodies then read those segments as plain memory (no flecs call).
+typedef struct registered_query
+{
+    ecs_query_t *query;
+    size_t       elem_sizes[KE_QUERY_MAX_TERMS]; // 0 for a tag term (no column)
+    size_t       term_count;
+} registered_query;
+
 // A double-buffered component (RuntimeArchitectureV2.md §16): `live` is the cid
 // sim systems read/write; `snap` is the hidden back buffer render systems read.
 // swap_snapshots copies live → snap at the sim→render phase boundary.
@@ -99,6 +109,11 @@ typedef struct ecs_flecs_state
     query_cache_entry *queries;
     size_t             query_count;
     size_t             query_capacity;
+
+    // Multi-term registered queries (the parallel-safe path; see registered_query).
+    registered_query *rqueries;
+    size_t            rquery_count;
+    size_t            rquery_capacity;
 } ecs_flecs_state;
 
 // Per-thread query scratch. A query packs its results into a contiguous buffer
@@ -372,6 +387,83 @@ static void ecs_flecs_query(ke_ecs *self, ke_component_id component,
     KE_FLECS_GUARD_END();
 }
 
+// ── Resolved multi-term queries (parallel-safe read path) ────────────────────
+
+static ke_query_id ecs_flecs_query_register(ke_ecs *self, const ke_component_id *cids, size_t cid_count)
+{
+    if (!self || !self->handle || !cids || cid_count == 0 || cid_count > KE_QUERY_MAX_TERMS)
+        return KE_QUERY_INVALID;
+    ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (h->state.world_corrupted) return KE_QUERY_INVALID;
+
+    KE_FLECS_GUARD("flecs fatal in query_register", { h->state.world_corrupted = true; return KE_QUERY_INVALID; });
+
+    ecs_query_desc_t desc = {0};
+    for (size_t i = 0; i < cid_count; i++)
+        desc.filter.terms[i].id = (ecs_id_t)cids[i];
+    ecs_query_t *q = ecs_query_init(h->state.world, &desc);
+    if (!q) { KE_FLECS_GUARD_END(); return KE_QUERY_INVALID; }
+
+    if (h->state.rquery_count == h->state.rquery_capacity)
+    {
+        size_t new_cap = h->state.rquery_capacity ? h->state.rquery_capacity * 2 : 8;
+        registered_query *nb = (registered_query *)ke_alloc(sizeof(registered_query) * new_cap, alignof(registered_query));
+        if (!nb) { ecs_query_fini(q); KE_FLECS_GUARD_END(); return KE_QUERY_INVALID; }
+        if (h->state.rqueries)
+        {
+            memcpy(nb, h->state.rqueries, sizeof(registered_query) * h->state.rquery_count);
+            ke_free(h->state.rqueries);
+        }
+        h->state.rqueries        = nb;
+        h->state.rquery_capacity = new_cap;
+    }
+
+    registered_query *rq = &h->state.rqueries[h->state.rquery_count];
+    rq->query      = q;
+    rq->term_count = cid_count;
+    for (size_t i = 0; i < cid_count; i++)
+    {
+        const ecs_type_info_t *ti = ecs_get_type_info(h->state.world, (ecs_id_t)cids[i]);
+        rq->elem_sizes[i] = ti ? (size_t)ti->size : 0;
+    }
+    ke_query_id id = (ke_query_id)(h->state.rquery_count + 1);
+    h->state.rquery_count++;
+    KE_FLECS_GUARD_END();
+    return id;
+}
+
+static void ecs_flecs_query_resolve(ke_ecs *self, ke_query_id query,
+                                    ke_ecs_segment *out_segments, size_t max_segments, size_t *out_count)
+{
+    if (out_count) *out_count = 0;
+    if (!self || !self->handle || query == KE_QUERY_INVALID || !out_segments || max_segments == 0) return;
+    ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (h->state.world_corrupted) return;
+    size_t idx = (size_t)query - 1;
+    if (idx >= h->state.rquery_count) return;
+    registered_query *rq = &h->state.rqueries[idx];
+    if (!rq->query) return;
+
+    KE_FLECS_GUARD("flecs fatal in query_resolve", { h->state.world_corrupted = true; return; });
+
+    size_t seg = 0;
+    ecs_iter_t it = ecs_query_iter(h->state.world, rq->query);
+    while (ecs_query_next(&it))
+    {
+        if (seg >= max_segments) { ecs_iter_fini(&it); break; }
+        ke_ecs_segment *s = &out_segments[seg];
+        s->entities = (const ke_entity *)it.entities;
+        s->count    = (size_t)it.count;
+        for (size_t t = 0; t < rq->term_count; t++)
+            s->columns[t] = rq->elem_sizes[t] ? ecs_field_w_size(&it, rq->elem_sizes[t], (int32_t)(t + 1)) : NULL;
+        for (size_t t = rq->term_count; t < KE_QUERY_MAX_TERMS; t++)
+            s->columns[t] = NULL;
+        seg++;
+    }
+    if (out_count) *out_count = seg;
+    KE_FLECS_GUARD_END();
+}
+
 // ── Snapshot (double-buffer) support ─────────────────────────────────────────
 
 static snap_pair *find_snap_pair(ecs_flecs_state *s, ke_component_id live)
@@ -507,11 +599,16 @@ static void ecs_flecs_destroy(ke_ecs *self)
                 if (h->state.queries[i].query) ecs_query_fini(h->state.queries[i].query);
             }
         }
+        for (size_t i = 0; i < h->state.rquery_count; i++)
+        {
+            if (h->state.rqueries[i].query) ecs_query_fini(h->state.rqueries[i].query);
+        }
         if (h->state.world) ecs_fini(h->state.world);
     }
     // Always free our own allocations regardless of world state.
-    if (h->state.queries) ke_free(h->state.queries);
-    if (h->state.snaps)   ke_free(h->state.snaps);
+    if (h->state.queries)  ke_free(h->state.queries);
+    if (h->state.rqueries) ke_free(h->state.rqueries);
+    if (h->state.snaps)    ke_free(h->state.snaps);
 
     // Free the per-thread scratch pool (one ECS per process; all worker threads
     // have stopped querying by the time the ECS is destroyed).
@@ -565,6 +662,8 @@ ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     h->api.snapshot_cid          = ecs_flecs_snapshot_cid;
     h->api.swap_snapshots        = ecs_flecs_swap_snapshots;
     h->api.concurrent_reads      = ecs_flecs_concurrent_reads;
+    h->api.query_register        = ecs_flecs_query_register;
+    h->api.query_resolve         = ecs_flecs_query_resolve;
 
     return (ke_ecs_handle){ .ref = &h->api, .destroy = ecs_flecs_destroy };
 }

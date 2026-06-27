@@ -20,6 +20,30 @@ extern "C"
         KE_COMPONENT_DOUBLE_BUFFERED = 1 << 0,
     } ke_component_flags;
 
+    // ── Resolved queries ─────────────────────────────────────────────────────
+    // A query is a component tuple registered once. It is resolved (single-thread)
+    // into archetype segments before a parallel wave; the wave bodies then read
+    // those segments as plain memory and make no ke_ecs call, so the storage is
+    // only ever touched from one thread at a time and concurrent reads are safe by
+    // construction. See docs/RuntimeArchitectureV2.md §15.
+
+    typedef uint64_t ke_query_id;
+#define KE_QUERY_INVALID ((ke_query_id)0)
+#define KE_QUERY_MAX_TERMS 8
+
+    // One archetype's slice of a query match: the matched entities, plus one column
+    // base pointer per query term (term order = the order passed to query_register;
+    // columns[i] is the storage for cids[i], aligned 1:1 with entities). A tag term
+    // (zero-size component) has columns[i] == NULL. Pointers stay valid until the
+    // next structural change — deferred to the wave barrier — so they are stable
+    // for the whole parallel wave.
+    typedef struct ke_ecs_segment
+    {
+        const ke_entity *entities;
+        void            *columns[KE_QUERY_MAX_TERMS];
+        size_t           count;
+    } ke_ecs_segment;
+
     typedef struct ke_ecs
     {
         void *handle;
@@ -83,6 +107,25 @@ extern "C"
         // agnostic: a natively read-thread-safe backend may just call body(ctx).
         // Kept last so adding it does not shift existing vtable slot offsets.
         void (*concurrent_reads)(struct ke_ecs *self, void (*body)(void *ctx), void *ctx);
+
+        // Register a query over a component tuple (entities matching ALL cids).
+        // Single-threaded (e.g. at system registration). The backend may cache the
+        // match set. Returns KE_QUERY_INVALID on failure. cids[i] maps to a
+        // resolved segment's columns[i].
+        ke_query_id (*query_register)(struct ke_ecs       *self,
+                                       const ke_component_id *cids,
+                                       size_t                 cid_count);
+
+        // Resolve a query into archetype segments. MUST be called single-threaded,
+        // before a parallel wave. Walks the match once and fills out_segments (up
+        // to max_segments); sets *out_count to the segment count produced. After it
+        // returns, iterating the segments touches NO backend state — pure memory.
+        // This is the only place the backend is touched during a frame's reads.
+        void (*query_resolve)(struct ke_ecs   *self,
+                              ke_query_id       query,
+                              ke_ecs_segment   *out_segments,
+                              size_t            max_segments,
+                              size_t           *out_count);
 
     } ke_ecs;
 
