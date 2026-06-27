@@ -64,6 +64,15 @@ add_custom_command(
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow.slang" "${COMPILE_SLANG}"
     VERBATIM
 )
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry cs_main --stage compute
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang"
+            --output "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang" "${COMPILE_SLANG}"
+    VERBATIM
+)
 
 add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
@@ -83,6 +92,7 @@ add_custom_command(
         "-Dskybox-fs-wgsl=${SHADER_GEN_DIR}/skybox.fs.wgsl"
         "-Dshadow-vs-wgsl=${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "-Dshadow-fs-wgsl=${SHADER_GEN_DIR}/shadow.fs.wgsl"
+        "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
@@ -95,6 +105,7 @@ add_custom_command(
         "${SHADER_GEN_DIR}/skybox.fs.wgsl"
         "${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "${SHADER_GEN_DIR}/shadow.fs.wgsl"
+        "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         ke_common
         ke_runtime
     VERBATIM

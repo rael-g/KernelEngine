@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) void {
     const skybox_fs_wgsl  = b.option([]const u8, "skybox-fs-wgsl",    "generated skybox fragment WGSL path") orelse @panic("-Dskybox-fs-wgsl required");
     const shadow_vs_wgsl  = b.option([]const u8, "shadow-vs-wgsl",    "generated shadow vertex WGSL path")   orelse @panic("-Dshadow-vs-wgsl required");
     const shadow_fs_wgsl  = b.option([]const u8, "shadow-fs-wgsl",    "generated shadow fragment WGSL path") orelse @panic("-Dshadow-fs-wgsl required");
+    const cluster_cull_cs_wgsl = b.option([]const u8, "cluster-cull-cs-wgsl", "generated cluster cull compute WGSL path") orelse @panic("-Dcluster-cull-cs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/render_core.zig"),
@@ -50,6 +51,7 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("skybox.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = skybox_fs_wgsl } });
     mod.addAnonymousImport("shadow.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = shadow_vs_wgsl } });
     mod.addAnonymousImport("shadow.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = shadow_fs_wgsl } });
+    mod.addAnonymousImport("cluster_cull.cs.wgsl", .{ .root_source_file = .{ .cwd_relative = cluster_cull_cs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_core",

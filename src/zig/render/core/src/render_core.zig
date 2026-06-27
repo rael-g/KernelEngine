@@ -20,10 +20,24 @@ comptime {
 
 const MAX_RESOURCES = 64;
 const MAX_CMD_BUFFERS = 64;
+const NUM_PRECREATED_ENCODERS = 8; // command encoders pre-created per frame (≥ pass count)
 const MAX_COLOR_ATTACH = 8;
 const MAX_MESHES = 256;
 const MAX_TEXTURES = 256;
 const MAX_MATERIALS = 256;
+const MAX_UPLOADS = 4096; // deferred buffer uploads per frame
+const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024; // per-frame staging for upload data copies
+
+// A deferred buffer upload. wgpuQueueWriteBuffer is NOT safe to call concurrently
+// with render-pass recording on wgpu-native (it deadlocks), so `upload` records
+// here lock-free from any pass thread and end_frame replays the writes single-
+// threaded before the submit (queue-ordered, so the data lands before the draws).
+const UploadRecord = struct {
+    buffer: c.ke_gpu_buffer,
+    gpu_offset: u64,
+    arena_offset: usize,
+    size: usize,
+};
 
 const Mesh = struct {
     vbo: c.ke_gpu_buffer,
@@ -51,6 +65,26 @@ const Resource = struct {
     is_transient: bool, // owns texture+view → destroyed on core destroy
 };
 
+// Accumulated compute-pass recording. On wgpu-native, recording a compute pass
+// concurrently with a render pass deadlocks; render-pass recording across distinct
+// encoders is safe. So begin_compute hands back a recording proxy that appends the
+// commands to one of these (pure CPU writes, safe on any pass thread); end_frame
+// replays them into a real compute pass single-threaded. The pass author calls the
+// same ke_gpu_compute_pass interface and never sees the difference.
+const MAX_COMPUTE_CMDS = 32;
+const ComputeCmd = union(enum) {
+    set_pipeline: c.ke_gpu_pipeline,
+    set_bind_group: struct { index: u32, bg: c.ke_gpu_bind_group, offsets: [4]u32, count: u32 },
+    dispatch: struct { x: u32, y: u32, z: u32 },
+    dispatch_indirect: struct { buf: c.ke_gpu_buffer, offset: usize },
+};
+const ComputeRecord = struct {
+    pass: c.ke_gpu_compute_pass, // synthesized object handed to the pass body
+    cmds: [MAX_COMPUTE_CMDS]ComputeCmd,
+    count: u32,
+    valid: bool, // a compute pass recorded into this slot this frame
+};
+
 const CoreState = struct {
     device: *c.ke_gpu_device,
     ecs: *c.ke_ecs,
@@ -63,11 +97,22 @@ const CoreState = struct {
     backbuffer_w: u32,
     backbuffer_h: u32,
 
-    // Per-pass command-buffer slots. Each pass writes its own slot (io.cmd_slot),
-    // so passes that run in parallel never share a counter — no atomic, no race.
-    // begin_frame clears `cmd_valid`; end_frame submits the valid slots in order.
-    cmd_bufs: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer,
-    cmd_valid: [MAX_CMD_BUFFERS]bool,
+    // Per-pass slots: each pass records into its own encoder (parallel-safe) and
+    // parks it here by io.cmd_slot. end_frame FINISHES them single-threaded (the
+    // device's command-buffer registry is not thread-safe) and submits in order.
+    cmd_encoders: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_encoder,
+    cmd_valid: [MAX_CMD_BUFFERS]bool, // a render pass parked a recorded encoder here
+
+    // Per-slot accumulated compute recording (replayed single-threaded in end_frame).
+    compute_records: [MAX_CMD_BUFFERS]ComputeRecord,
+
+    // Deferred uploads — parallel passes record here lock-free (atomic-bumped index
+    // + arena offset); end_frame flushes them single-threaded before submit, so the
+    // non-thread-safe GPU queue is never written concurrently with pass recording.
+    upload_records: [MAX_UPLOADS]UploadRecord,
+    upload_count: std.atomic.Value(u32),
+    upload_arena: []u8,
+    upload_arena_offset: std.atomic.Value(usize),
 
     meshes: [MAX_MESHES]Mesh,
     mesh_count: u32,
@@ -114,6 +159,7 @@ const PassState = struct {
     core: *CoreState,
     io: c.ke_render_pass_io,
     encoder: *c.ke_gpu_command_encoder,
+    is_compute: bool, // set when begin_compute was called → recording was accumulated
 };
 
 inline fn coreOf(self: [*c]c.ke_render_core) *CoreState {
@@ -213,10 +259,15 @@ fn beginPass(self: [*c]c.ke_render_core, sys: ?*c.ke_system_ctx, io: [*c]const c
     _ = sys;
     const st = coreOf(self);
     const ps = gpa.create(PassState) catch return null;
+    // Use this pass's pre-created encoder (made serially in begin_frame) so the
+    // non-thread-safe create_command_encoder never runs on parallel pass threads.
+    const slot = io.*.cmd_slot;
+    const enc = if (slot < NUM_PRECREATED_ENCODERS) st.cmd_encoders[slot] else st.device.create_command_encoder.?(st.device);
     ps.* = .{
         .core = st,
         .io = io.*,
-        .encoder = st.device.create_command_encoder.?(st.device),
+        .encoder = enc,
+        .is_compute = false,
     };
     const ctx = gpa.create(c.ke_render_pass_ctx) catch {
         gpa.destroy(ps);
@@ -238,13 +289,17 @@ fn beginPass(self: [*c]c.ke_render_core, sys: ?*c.ke_system_ctx, io: [*c]const c
 fn endPass(self: [*c]c.ke_render_core, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
     const st = coreOf(self);
     const ps = passOf(ctx);
-    const cmd = ps.encoder.finish.?(ps.encoder);
-    ps.encoder.destroy.?(ps.encoder);
-    // Each pass owns a distinct slot, so this write never races a parallel pass.
+    // Park the encoder in this pass's slot; end_frame finishes it single-threaded.
+    // The encoder outlives this call (it is NOT destroyed here). Distinct slots →
+    // no race with a parallel pass. A compute pass recorded nothing into the encoder
+    // (its commands were accumulated in compute_records[slot]); cmd_valid stays false
+    // so end_frame replays the compute record into this slot's encoder instead.
     const slot = ps.io.cmd_slot;
     if (slot < MAX_CMD_BUFFERS) {
-        st.cmd_bufs[slot] = cmd;
-        st.cmd_valid[slot] = true;
+        st.cmd_encoders[slot] = ps.encoder;
+        st.cmd_valid[slot] = !ps.is_compute;
+    } else {
+        ps.encoder.destroy.?(ps.encoder); // unreachable in practice; avoid a leak
     }
     gpa.destroy(ps);
     gpa.destroy(@as(*c.ke_render_pass_ctx, @ptrCast(ctx)));
@@ -254,6 +309,18 @@ fn beginFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callcon
     _ = out_error;
     const st = coreOf(self);
     @memset(st.cmd_valid[0..], false); // open the frame: no pass has recorded yet
+    for (&st.compute_records) |*r| {
+        r.valid = false;
+        r.count = 0;
+    }
+    st.upload_count.store(0, .monotonic); // reset the deferred-upload collector
+    st.upload_arena_offset.store(0, .monotonic);
+    // Pre-create this frame's command encoders single-threaded; parallel passes
+    // record into theirs without calling the non-thread-safe create function.
+    var pe: u32 = 0;
+    while (pe < NUM_PRECREATED_ENCODERS) : (pe += 1) {
+        st.cmd_encoders[pe] = st.device.create_command_encoder.?(st.device);
+    }
     if (st.surface) |surf| {
         surf.current_size.?(surf, &st.backbuffer_w, &st.backbuffer_h);
         const view = surf.acquire_current_texture_view.?(surf);
@@ -266,25 +333,64 @@ fn beginFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callcon
 fn endFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = coreOf(self);
-    // Compact the populated slots into submission order (ascending slot index =
-    // dependency order; sparse slots from passes that didn't run are skipped).
+
+    // Flush the frame's deferred uploads single-threaded — wgpuQueueWriteBuffer is
+    // not safe concurrently with pass recording, so this is the only place it runs.
+    // Queue writes are ordered before the submit below, so the data lands in time.
+    const ucount = @min(st.upload_count.load(.monotonic), MAX_UPLOADS);
+    var u: u32 = 0;
+    while (u < ucount) : (u += 1) {
+        const r = st.upload_records[u];
+        st.device.write_buffer.?(st.device, r.buffer, r.gpu_offset, &st.upload_arena[r.arena_offset], r.size);
+    }
+
+    // Build the frame's command buffers single-threaded (the device's command-buffer
+    // registry is not thread-safe), in ascending slot order = dependency order. A
+    // render slot finishes its parked encoder; a compute slot replays its accumulated
+    // recording into that slot's encoder here — the one place compute recording runs,
+    // so it never races a concurrently-recording render pass.
     var submit: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer = undefined;
     var n: u32 = 0;
     var s: u32 = 0;
     while (s < MAX_CMD_BUFFERS) : (s += 1) {
         if (st.cmd_valid[s]) {
-            submit[n] = st.cmd_bufs[s];
+            const enc = st.cmd_encoders[s];
+            submit[n] = enc.*.finish.?(enc);
+            n += 1;
+        } else if (st.compute_records[s].valid) {
+            const enc = st.cmd_encoders[s];
+            const rec = &st.compute_records[s];
+            const cp = enc.*.begin_compute_pass.?(enc);
+            var ci: u32 = 0;
+            while (ci < rec.count) : (ci += 1) {
+                switch (rec.cmds[ci]) {
+                    .set_pipeline => |p| cp.*.set_pipeline.?(cp, p),
+                    .set_bind_group => |b| {
+                        if (b.count > 0)
+                            cp.*.set_bind_group.?(cp, b.index, b.bg, &b.offsets, b.count)
+                        else
+                            cp.*.set_bind_group.?(cp, b.index, b.bg, null, 0);
+                    },
+                    .dispatch => |d| cp.*.dispatch.?(cp, d.x, d.y, d.z),
+                    .dispatch_indirect => |d| cp.*.dispatch_indirect.?(cp, d.buf, d.offset),
+                }
+            }
+            cp.*.end.?(cp);
+            submit[n] = enc.*.finish.?(enc);
             n += 1;
         }
     }
     if (n > 0) {
         st.device.queue_submit.?(st.device, st.queue, &submit, n);
         var i: u32 = 0;
-        while (i < n) : (i += 1) {
-            const cmd = submit[i];
-            cmd.*.destroy.?(cmd);
-        }
+        while (i < n) : (i += 1) submit[i].*.destroy.?(submit[i]);
         @memset(st.cmd_valid[0..], false);
+    }
+    // Release this frame's pre-created encoders (whether or not a pass used them).
+    var pe: u32 = 0;
+    while (pe < NUM_PRECREATED_ENCODERS) : (pe += 1) {
+        const enc = st.cmd_encoders[pe];
+        enc.*.destroy.?(enc);
     }
     st.device.queue_present.?(st.device, st.queue);
     if (st.find("backbuffer")) |bb| {
@@ -294,6 +400,22 @@ fn endFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callconv(
         }
     }
     return 1;
+}
+
+// Records a deferred upload — lock-free, callable from any pass thread. The index
+// and the arena slice are each reserved with an atomic bump, then the data is copied
+// in. end_frame replays the records single-threaded (wgpuQueueWriteBuffer is unsafe
+// concurrently with pass recording on wgpu-native).
+fn uploadBuffer(self: [*c]c.ke_render_core, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
+    if (size == 0 or data == null) return;
+    const st = coreOf(self);
+    const idx = st.upload_count.fetchAdd(1, .monotonic);
+    if (idx >= MAX_UPLOADS) return; // overflow — raise MAX_UPLOADS if ever hit
+    const aoff = st.upload_arena_offset.fetchAdd(size, .monotonic);
+    if (aoff + size > st.upload_arena.len) return; // arena overflow — raise the size
+    const src: [*]const u8 = @ptrCast(data);
+    @memcpy(st.upload_arena[aoff .. aoff + size], src[0..size]);
+    st.upload_records[idx] = .{ .buffer = buffer, .gpu_offset = offset, .arena_offset = aoff, .size = size };
 }
 
 fn uploadMesh(self: [*c]c.ke_render_core, vertices: ?*const anyopaque, vertices_size: usize,
@@ -544,9 +666,57 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     return ps.encoder.begin_render_pass.?(ps.encoder, &params);
 }
 
+// Opens compute recording. Instead of a live device compute pass (recording one
+// concurrently with a render pass deadlocks on wgpu-native), it hands back a proxy
+// that appends the commands to this slot's compute_records; end_frame replays them
+// single-threaded. The pass body uses the same ke_gpu_compute_pass interface.
 fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_compute_pass {
     const ps = passOf(self);
-    return ps.encoder.begin_compute_pass.?(ps.encoder);
+    ps.is_compute = true;
+    const slot = ps.io.cmd_slot;
+    if (slot >= MAX_CMD_BUFFERS) return null;
+    const rec = &ps.core.compute_records[slot];
+    rec.count = 0;
+    rec.valid = true;
+    rec.pass = .{
+        .handle = rec,
+        .device = ps.core.device,
+        .set_pipeline = cpSetPipeline,
+        .set_bind_group = cpSetBindGroup,
+        .dispatch = cpDispatch,
+        .dispatch_indirect = cpDispatchIndirect,
+        .end = cpEnd,
+    };
+    return &rec.pass;
+}
+
+inline fn recOf(self: [*c]c.ke_gpu_compute_pass) *ComputeRecord {
+    return @alignCast(@ptrCast(self.*.handle));
+}
+fn cpAppend(rec: *ComputeRecord, cmd: ComputeCmd) void {
+    if (rec.count >= MAX_COMPUTE_CMDS) return; // overflow — raise MAX_COMPUTE_CMDS
+    rec.cmds[rec.count] = cmd;
+    rec.count += 1;
+}
+fn cpSetPipeline(self: [*c]c.ke_gpu_compute_pass, pipe: c.ke_gpu_pipeline) callconv(.c) void {
+    cpAppend(recOf(self), .{ .set_pipeline = pipe });
+}
+fn cpSetBindGroup(self: [*c]c.ke_gpu_compute_pass, group_index: u32, bg: c.ke_gpu_bind_group,
+                  dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
+    var off: [4]u32 = .{ 0, 0, 0, 0 };
+    const n = @min(dyn_count, 4);
+    var i: u32 = 0;
+    while (i < n) : (i += 1) off[i] = dynamic_offsets[i];
+    cpAppend(recOf(self), .{ .set_bind_group = .{ .index = group_index, .bg = bg, .offsets = off, .count = dyn_count } });
+}
+fn cpDispatch(self: [*c]c.ke_gpu_compute_pass, x: u32, y: u32, z: u32) callconv(.c) void {
+    cpAppend(recOf(self), .{ .dispatch = .{ .x = x, .y = y, .z = z } });
+}
+fn cpDispatchIndirect(self: [*c]c.ke_gpu_compute_pass, indirect_buf: c.ke_gpu_buffer, offset: usize) callconv(.c) void {
+    cpAppend(recOf(self), .{ .dispatch_indirect = .{ .buf = indirect_buf, .offset = offset } });
+}
+fn cpEnd(self: [*c]c.ke_gpu_compute_pass) callconv(.c) void {
+    _ = self; // end is implicit — the replay in end_frame ends the real pass
 }
 
 fn ctxEncoder(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_command_encoder {
@@ -591,6 +761,7 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
         st.device.destroy_buffer.?(st.device, st.materials[mat].ubo);
     }
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
+    gpa.free(st.upload_arena);
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_core, @ptrCast(self)));
 }
@@ -601,6 +772,10 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     const e = ecs orelse return .{ .ref = null, .destroy = null };
 
     const st = gpa.create(CoreState) catch return .{ .ref = null, .destroy = null };
+    const upload_arena = gpa.alloc(u8, UPLOAD_ARENA_SIZE) catch {
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    };
     const surf_raw = dev.query_extension.?(dev, c.KE_GPU_SURFACE_EXT_NAME);
     const surf: ?*const c.ke_gpu_surface_ext = if (surf_raw) |p| @ptrCast(@alignCast(p)) else null;
     var bb_w: u32 = 0;
@@ -615,8 +790,13 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .resource_count = 0,
         .backbuffer_w = bb_w,
         .backbuffer_h = bb_h,
-        .cmd_bufs = undefined,
+        .cmd_encoders = undefined,
         .cmd_valid = std.mem.zeroes([MAX_CMD_BUFFERS]bool),
+        .compute_records = undefined,
+        .upload_records = undefined,
+        .upload_count = std.atomic.Value(u32).init(0),
+        .upload_arena = upload_arena,
+        .upload_arena_offset = std.atomic.Value(usize).init(0),
         .meshes = undefined,
         .mesh_count = 0,
         .clear_color = .{ 0.10, 0.15, 0.30, 1.0 },
@@ -656,6 +836,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .end_pass = endPass,
         .begin_frame = beginFrame,
         .end_frame = endFrame,
+        .upload = uploadBuffer,
         .upload_mesh = uploadMesh,
         .mesh_buffers = meshBuffers,
         .set_clear_color = setClearColor,

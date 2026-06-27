@@ -907,7 +907,38 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
     return @intFromPtr(wgpu.wgpuDeviceCreateRenderPipeline(state(dev).device, &desc));
 }
 
-fn createComputePipeline(_: [*c]ke.ke_gpu_device, _: [*c]const ke.ke_gpu_compute_pipeline_params) callconv(.c) ke.ke_gpu_pipeline { return ke.KE_GPU_INVALID_HANDLE; }
+fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compute_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
+    const pp = @as(*const ke.ke_gpu_compute_pipeline_params, @ptrCast(p));
+
+    var pipeline_layout: wgpu.WGPUPipelineLayout = null;
+    if (pp.bind_group_layout_count > 0) {
+        var bgl_handles: [4]wgpu.WGPUBindGroupLayout = undefined;
+        const bgl_count = @min(pp.bind_group_layout_count, bgl_handles.len);
+        for (0..bgl_count) |i| bgl_handles[i] = @ptrFromInt(pp.bind_group_layouts[i]);
+        const layout_desc = wgpu.WGPUPipelineLayoutDescriptor{
+            .nextInChain          = null,
+            .label                = .{ .data = null, .length = 0 },
+            .bindGroupLayoutCount = bgl_count,
+            .bindGroupLayouts     = &bgl_handles,
+        };
+        pipeline_layout = wgpu.wgpuDeviceCreatePipelineLayout(state(dev).device, &layout_desc);
+    }
+    defer if (pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(pipeline_layout);
+
+    const desc = wgpu.WGPUComputePipelineDescriptor{
+        .nextInChain = null,
+        .label       = .{ .data = null, .length = 0 },
+        .layout      = pipeline_layout,
+        .compute     = .{
+            .nextInChain   = null,
+            .module        = @ptrFromInt(pp.compute_module),
+            .entryPoint    = .{ .data = if (pp.compute_entry != null) pp.compute_entry else "main", .length = wgpu.WGPU_STRLEN },
+            .constantCount = 0,
+            .constants     = null,
+        },
+    };
+    return @intFromPtr(wgpu.wgpuDeviceCreateComputePipeline(state(dev).device, &desc));
+}
 
 fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_layout_params) callconv(.c) ke.ke_gpu_bind_group_layout {
     const pp = @as(*const ke.ke_gpu_bind_group_layout_params, @ptrCast(p));
@@ -926,6 +957,11 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
             },
             ke.KE_GPU_BINDING_TYPE_STORAGE_BUFFER => {
                 entries[i].buffer.type             = wgpu.WGPUBufferBindingType_Storage;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.minBindingSize   = 0;
+            },
+            ke.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER => {
+                entries[i].buffer.type             = wgpu.WGPUBufferBindingType_ReadOnlyStorage;
                 entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
                 entries[i].buffer.minBindingSize   = 0;
             },
@@ -967,7 +1003,8 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
         entries[i].binding = src.binding;
         switch (src.type) {
             ke.KE_GPU_BINDING_TYPE_BUFFER,
-            ke.KE_GPU_BINDING_TYPE_STORAGE_BUFFER => {
+            ke.KE_GPU_BINDING_TYPE_STORAGE_BUFFER,
+            ke.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER => {
                 entries[i].buffer = @ptrFromInt(src.buffer);
                 entries[i].offset = src.buffer_offset;
                 entries[i].size   = src.buffer_size;

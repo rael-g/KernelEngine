@@ -30,8 +30,17 @@ const skybox_vs_wgsl = @embedFile("skybox.vs.wgsl");
 const skybox_fs_wgsl = @embedFile("skybox.fs.wgsl");
 const shadow_vs_wgsl = @embedFile("shadow.vs.wgsl");
 const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
+const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
 
 const SHADOW_RES = 1024; // shadow map resolution
+
+// Clustered forward grid (froxels): numX×numY screen tiles × numZ depth slices.
+const GRID_X = 16;
+const GRID_Y = 8;
+const GRID_Z = 24;
+const NUM_CLUSTERS = GRID_X * GRID_Y * GRID_Z;
+const MAX_LIGHTS_PER_CLUSTER = 64;
+const MAX_LIGHTS = 256; // total point or spot lights culled per frame
 
 const MAX_DRAWS = 64;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
@@ -42,16 +51,13 @@ const PerObject = extern struct {
     model: [16]f32,
 };
 
-const MAX_POINT_LIGHTS = 16; // brute-force caps; match forward.slang
-const MAX_SPOT_LIGHTS = 16;
-
-// One point light packed for the per-frame uniform (matches forward.slang PointLight).
+// One point light in the storage buffer (matches cluster_cull/forward PointLight).
 const PointLightGpu = extern struct {
     pos_radius: [4]f32, // xyz = world position, w = radius
     color_intensity: [4]f32, // rgb = color, w = intensity
 };
 
-// One spot light packed for the per-frame uniform (matches forward.slang SpotLight).
+// One spot light in the storage buffer (cone cosines precomputed).
 const SpotLightGpu = extern struct {
     pos_range: [4]f32, // xyz = world position, w = range
     dir_cos_inner: [4]f32, // xyz = cone axis, w = cos(inner angle)
@@ -67,9 +73,18 @@ const PerFrame = extern struct {
     ambient: [4]f32,
     sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
     light_vp: [16]f32, // directional light view*proj (for shadow sampling)
-    shadow_params: [4]f32, // x = shadow active, y = point count, z = directional active, w = spot count
-    point_lights: [MAX_POINT_LIGHTS]PointLightGpu,
-    spot_lights: [MAX_SPOT_LIGHTS]SpotLightGpu,
+    shadow_params: [4]f32, // x = shadow active, z = directional active
+    view: [16]f32, // world→view (for the fragment's cluster z slice)
+    cluster_grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
+    cluster_viewport: [4]f32, // screen W, screen H, near, far
+};
+
+// The cull compute uniform (matches cluster_cull.slang ClusterParams).
+const ClusterParams = extern struct {
+    grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
+    counts: [4]f32, // pointCount, spotCount, 0, 0
+    proj: [4]f32, // tan(fovY/2), aspect, near, far
+    view: [16]f32, // world → view
 };
 
 // Mirrors the C# PointLightComponent { Vector3 Color, float Intensity, float Radius }
@@ -144,7 +159,7 @@ const ModuleState = struct {
     fwd_writes: [2][*c]const u8,
     fwd_reads: [1][*c]const u8,
     fwd_io: c.ke_render_pass_io,
-    fwd_access: [12]c.ke_component_access,
+    fwd_access: [13]c.ke_component_access,
     mesh_cid: c.ke_component_id,
     transform_cid: c.ke_component_id,
     camera_cid: c.ke_component_id,
@@ -171,6 +186,26 @@ const ModuleState = struct {
     shadow_writes: [2][*c]const u8,
     shadow_io: c.ke_render_pass_io,
     shadow_access: [6]c.ke_component_access,
+
+    // Set 3 — clustered light lists (forward reads what the cull pass wrote).
+    light_set_bgl: c.ke_gpu_bind_group_layout,
+    fwd_light_bind_group: c.ke_gpu_bind_group,
+
+    // Storage buffers shared by the cull pass (writes) and the forward (reads).
+    point_lights_sb: c.ke_gpu_buffer,
+    spot_lights_sb: c.ke_gpu_buffer,
+    point_indices_sb: c.ke_gpu_buffer,
+    point_counts_sb: c.ke_gpu_buffer,
+    spot_indices_sb: c.ke_gpu_buffer,
+    spot_counts_sb: c.ke_gpu_buffer,
+
+    // Light cull compute pass.
+    cull_pipeline: c.ke_gpu_pipeline,
+    cull_uniform: c.ke_gpu_buffer,
+    cull_bind_group: c.ke_gpu_bind_group,
+    cull_io: c.ke_render_pass_io,
+    cull_access: [6]c.ke_component_access,
+    clusters_cid: c.ke_component_id, // tag: cull WRITES, forward READS (ordering)
 };
 
 // Per-object model for the shadow pass (set 1).
@@ -252,15 +287,112 @@ fn lightDirOf(ctx: ?*c.ke_system_ctx, st: *ModuleState) zm.Vec {
     return zm.f32x4(dl.dir[0], dl.dir[1], dl.dir[2], 0.0);
 }
 
+// Left-handed view from a camera transform (identity rotation → look at origin;
+// otherwise the world-matrix basis, looking down local −Z). Shared by the
+// forward and the cull pass so both agree on view space.
+fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
+    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
+    const q = cam_tc.rotation;
+    if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
+        return zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
+    const m = cam_tc.world_matrix.m;
+    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+    const up = zm.f32x4(m[4], m[5], m[6], 0);
+    return zm.lookToLh(eye, fwd, up);
+}
+
+// ── Light cull compute pass ───────────────────────────────────────────────────
+// Packs the scene's point + spot lights into storage buffers, then dispatches one
+// thread per cluster to bin them (the forward reads the result). Ordered before
+// the forward by the "light_clusters" tag. Translated from the legacy bgfx host +
+// cs_light_cull (which was authored but never wired on the host side).
+fn cullSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+    const st = stateOf(user);
+    const core = st.core.ref;
+    const deg2rad: f32 = std.math.pi / 180.0;
+
+    // Pack point lights (world position from each light's transform).
+    var pl_ents: [*c]c.ke_entity = undefined;
+    var pl_data: ?*anyopaque = undefined;
+    var pl_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.point_light_cid, &pl_ents, &pl_data, &pl_count);
+    const pls: [*c]const PointLightComp = @ptrCast(@alignCast(pl_data));
+    const pn: u32 = @intCast(@min(pl_count, MAX_LIGHTS));
+    var pi: u32 = 0;
+    while (pi < pn) : (pi += 1) {
+        const tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, pl_ents[pi]) orelse continue;
+        const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
+        const m = tc.world_matrix.m;
+        const pg = PointLightGpu{
+            .pos_radius = .{ m[12], m[13], m[14], pls[pi].radius },
+            .color_intensity = .{ pls[pi].color[0], pls[pi].color[1], pls[pi].color[2], pls[pi].intensity },
+        };
+        core.*.upload.?(core, st.point_lights_sb, pi * @sizeOf(PointLightGpu), &pg, @sizeOf(PointLightGpu));
+    }
+
+    // Pack spot lights (cone cosines precomputed).
+    var sl_ents: [*c]c.ke_entity = undefined;
+    var sl_data: ?*anyopaque = undefined;
+    var sl_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.spot_light_cid, &sl_ents, &sl_data, &sl_count);
+    const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(sl_data));
+    const sn: u32 = @intCast(@min(sl_count, MAX_LIGHTS));
+    var si: u32 = 0;
+    while (si < sn) : (si += 1) {
+        const tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, sl_ents[si]) orelse continue;
+        const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
+        const m = tc.world_matrix.m;
+        const sg = SpotLightGpu{
+            .pos_range = .{ m[12], m[13], m[14], sls[si].range },
+            .dir_cos_inner = .{ sls[si].dir[0], sls[si].dir[1], sls[si].dir[2], std.math.cos(sls[si].inner_deg * deg2rad) },
+            .color_intensity = .{ sls[si].color[0], sls[si].color[1], sls[si].color[2], sls[si].intensity },
+            .cone = .{ std.math.cos(sls[si].outer_deg * deg2rad), 0.0, 0.0, 0.0 },
+        };
+        core.*.upload.?(core, st.spot_lights_sb, si * @sizeOf(SpotLightGpu), &sg, @sizeOf(SpotLightGpu));
+    }
+
+    // Camera → view + projection params (must match the forward's).
+    var cam_ents: [*c]c.ke_entity = undefined;
+    var cam_data: ?*anyopaque = undefined;
+    var cam_count: usize = 0;
+    c.ke_system_ctx_query(ctx, st.camera_cid, &cam_ents, &cam_data, &cam_count);
+    if (cam_count == 0) return;
+    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_data));
+    const cam_tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, cam_ents[0]) orelse return;
+    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_tc_raw));
+
+    const pc = core.*.begin_pass.?(core, ctx, &st.cull_io);
+    if (pc == null) return;
+    var bw: u32 = 0;
+    var bh: u32 = 0;
+    pc.*.backbuffer_size.?(pc, &bw, &bh);
+    const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
+
+    var params: ClusterParams = .{
+        .grid = .{ GRID_X, GRID_Y, GRID_Z, MAX_LIGHTS_PER_CLUSTER },
+        .counts = .{ @floatFromInt(pn), @floatFromInt(sn), 0.0, 0.0 },
+        .proj = .{ std.math.tan(cam.fov * deg2rad * 0.5), aspect, cam.near_plane, cam.far_plane },
+        .view = undefined,
+    };
+    zm.storeMat(params.view[0..], cameraView(cam_tc));
+    core.*.upload.?(core, st.cull_uniform, 0, &params, @sizeOf(ClusterParams));
+
+    const cp = pc.*.begin_compute.?(pc);
+    cp.*.set_pipeline.?(cp, st.cull_pipeline);
+    cp.*.set_bind_group.?(cp, 0, st.cull_bind_group, null, 0);
+    cp.*.dispatch.?(cp, (NUM_CLUSTERS + 63) / 64, 1, 1);
+    cp.*.end.?(cp);
+    core.*.end_pass.?(core, pc);
+}
+
 fn shadowSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st = stateOf(user);
     const core = st.core.ref;
-    const dev = st.device;
 
     const lvp = lightViewProj(st.ndc, lightDirOf(ctx, st));
     var lvp_arr: [16]f32 = undefined;
     zm.storeMat(lvp_arr[0..], lvp);
-    dev.write_buffer.?(dev, st.shadow_lvp_uniform, 0, &lvp_arr, 64);
+    core.*.upload.?(core, st.shadow_lvp_uniform, 0, &lvp_arr, 64);
 
     const pc = core.*.begin_pass.?(core, ctx, &st.shadow_io);
     if (pc == null) return;
@@ -278,7 +410,7 @@ fn shadowSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) voi
         const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
         var u: ShadowObj = undefined;
         @memcpy(u.model[0..], tc.world_matrix.m[0..16]);
-        dev.write_buffer.?(dev, st.shadow_obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(ShadowObj));
+        core.*.upload.?(core, st.shadow_obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(ShadowObj));
     }
 
     const rp = pc.*.begin_render.?(pc);
@@ -305,7 +437,6 @@ fn shadowSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) voi
 fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st = stateOf(user);
     const core = st.core.ref;
-    const dev = st.device;
 
     // Camera: take the first camera entity + its transform.
     var cam_ents: [*c]c.ke_entity = undefined;
@@ -325,24 +456,7 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    // No rotation → look at the origin (the convention examples 01-04 rely on);
-    // a rotated camera (free-look) derives its view from the world-matrix basis.
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        // Row-vector world matrix: row 0 = right, row 1 = up, row 2 = local +Z.
-        // The camera looks down local −Z, so forward = −row2. This reuses
-        // ke_mat4_from_transform's quaternion convention (identical to
-        // System.Numerics CreateFromQuaternion), so the view agrees with the C#
-        // movement vectors — zmath's own quaternion rotate applies the opposite
-        // sense, which is what inverted free-look (look + movement) before.
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToLh(eye, fwd, up);
-    };
+    const view = cameraView(cam_tc);
     // ke_camera_component.fov is in degrees (the cross-backend convention).
     const fov_rad = cam.fov * @as(f32, std.math.pi / 180.0);
     const proj = makePerspective(st.ndc, fov_rad, aspect, cam.near_plane, cam.far_plane);
@@ -381,16 +495,19 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
         .sky_view_proj = undefined,
         .light_vp = undefined,
-        .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow, y=point count, z=directional, w=spot count
-        .point_lights = undefined,
-        .spot_lights = undefined,
+        .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow active, z=directional active
+        .view = undefined,
+        .cluster_grid = .{ GRID_X, GRID_Y, GRID_Z, MAX_LIGHTS_PER_CLUSTER },
+        .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), cam.near_plane, cam.far_plane },
     };
     zm.storeMat(frame.sky_view_proj[0..], sky_vp);
+    zm.storeMat(frame.view[0..], view); // for the fragment's cluster z slice
     // Same light view-proj the shadow pass used, for the forward's shadow lookup.
     zm.storeMat(frame.light_vp[0..], lightViewProj(st.ndc, lightDirOf(ctx, st)));
 
     // Directional light (first entity). Present → enable the directional term +
-    // its shadow map; its ambient seeds the scene ambient.
+    // its shadow map; its ambient seeds the scene ambient. Point/spot lights are
+    // accumulated from the clustered storage buffers (the cull pass binned them).
     var li_ents: [*c]c.ke_entity = undefined;
     var li_data: ?*anyopaque = undefined;
     var li_count: usize = 0;
@@ -414,50 +531,7 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         frame.ambient = .{ al.color[0], al.color[1], al.color[2], 0.0 };
     }
 
-    // Point lights (brute force). World position from each light's transform.
-    var pl_ents: [*c]c.ke_entity = undefined;
-    var pl_data: ?*anyopaque = undefined;
-    var pl_count: usize = 0;
-    c.ke_system_ctx_query(ctx, st.point_light_cid, &pl_ents, &pl_data, &pl_count);
-    const pls: [*c]const PointLightComp = @ptrCast(@alignCast(pl_data));
-    const pn: u32 = @intCast(@min(pl_count, MAX_POINT_LIGHTS));
-    var pli: u32 = 0;
-    while (pli < pn) : (pli += 1) {
-        const ptc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, pl_ents[pli]) orelse continue;
-        const ptc: *const c.ke_transform_component = @ptrCast(@alignCast(ptc_raw));
-        const m = ptc.world_matrix.m;
-        frame.point_lights[pli] = .{
-            .pos_radius = .{ m[12], m[13], m[14], pls[pli].radius },
-            .color_intensity = .{ pls[pli].color[0], pls[pli].color[1], pls[pli].color[2], pls[pli].intensity },
-        };
-    }
-    frame.shadow_params[1] = @floatFromInt(pn); // point light count
-
-    // Spot lights (brute force). Position from transform; cone cosines precomputed.
-    var sl_ents: [*c]c.ke_entity = undefined;
-    var sl_data: ?*anyopaque = undefined;
-    var sl_count: usize = 0;
-    c.ke_system_ctx_query(ctx, st.spot_light_cid, &sl_ents, &sl_data, &sl_count);
-    const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(sl_data));
-    const sn: u32 = @intCast(@min(sl_count, MAX_SPOT_LIGHTS));
-    const deg2rad: f32 = std.math.pi / 180.0;
-    var sli: u32 = 0;
-    while (sli < sn) : (sli += 1) {
-        const stc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, sl_ents[sli]) orelse continue;
-        const stc: *const c.ke_transform_component = @ptrCast(@alignCast(stc_raw));
-        const m = stc.world_matrix.m;
-        const cos_in = std.math.cos(sls[sli].inner_deg * deg2rad);
-        const cos_out = std.math.cos(sls[sli].outer_deg * deg2rad);
-        frame.spot_lights[sli] = .{
-            .pos_range = .{ m[12], m[13], m[14], sls[sli].range },
-            .dir_cos_inner = .{ sls[sli].dir[0], sls[sli].dir[1], sls[sli].dir[2], cos_in },
-            .color_intensity = .{ sls[sli].color[0], sls[sli].color[1], sls[sli].color[2], sls[sli].intensity },
-            .cone = .{ cos_out, 0.0, 0.0, 0.0 },
-        };
-    }
-    frame.shadow_params[3] = @floatFromInt(sn); // spot light count
-
-    dev.write_buffer.?(dev, st.fwd_frame_uniform, 0, &frame, @sizeOf(PerFrame));
+    core.*.upload.?(core, st.fwd_frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
     // Meshes: build + upload one uniform region per draw (queue writes land before
     // the recorded draws, so each dynamic offset reads its own object).
@@ -478,12 +552,13 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         var u: PerObject = undefined;
         zm.storeMat(u.mvp[0..], mvp);
         zm.storeMat(u.model[0..], model);
-        dev.write_buffer.?(dev, st.fwd_obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(PerObject));
+        core.*.upload.?(core, st.fwd_obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(PerObject));
     }
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, st.fwd_pipeline);
     rp.*.set_bind_group.?(rp, 0, st.fwd_frame_bind_group, null, 0); // set 0: per-frame
+    rp.*.set_bind_group.?(rp, 3, st.fwd_light_bind_group, null, 0); // set 3: clustered lights
     i = 0;
     while (i < n) : (i += 1) {
         var vbo: c.ke_gpu_buffer = 0;
@@ -623,10 +698,14 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 1;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
+    // Clustered light culling: storage buffers + cull compute pipeline + the
+    // forward's set-3 light bind group (the layout is needed for this pipeline).
+    if (!clusterSetup(st, e, out_error)) return false;
     pp.bind_group_layouts[0] = frame_bgl; // set 0: per-frame (camera + light)
     pp.bind_group_layouts[1] = st.core.ref.*.material_layout.?(st.core.ref); // set 1: per-material
     pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object (transform)
-    pp.bind_group_layout_count = 3;
+    pp.bind_group_layouts[3] = st.light_set_bgl; // set 3: clustered light lists
+    pp.bind_group_layout_count = 4;
     pp.color_target_format = 0; // swapchain
     st.fwd_pipeline = dev.create_render_pipeline.?(dev, &pp);
     if (st.fwd_pipeline == c.KE_GPU_INVALID_HANDLE) {
@@ -827,7 +906,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.fwd_io.writes_count = 2;
     st.fwd_io.reads = @ptrCast(&st.fwd_reads);
     st.fwd_io.reads_count = 1;
-    st.fwd_io.cmd_slot = 2; // forward pass → frame command slot 2 (after shadow)
+    st.fwd_io.cmd_slot = 3; // forward pass → frame command slot 3 (after cull)
 
     const bb_cid = st.core.ref.*.cid.?(st.core.ref, "backbuffer");
     st.fwd_access = .{
@@ -843,6 +922,140 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.point_light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.spot_light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.ambient_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.clusters_cid, .access = c.KE_ACCESS_READ }, // after the cull pass
+    };
+    return true;
+}
+
+fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize) c.ke_gpu_buffer {
+    return dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = size,
+        .usage = c.KE_GPU_BUFFER_USAGE_STORAGE | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    });
+}
+
+// Storage buffers + the cull compute pipeline + the forward's set-3 light bind
+// group. The cull pass writes the per-cluster index lists; the forward reads them.
+fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) bool {
+    const dev = st.device;
+
+    const point_lights_bytes = MAX_LIGHTS * @sizeOf(PointLightGpu);
+    const spot_lights_bytes = MAX_LIGHTS * @sizeOf(SpotLightGpu);
+    const indices_bytes = NUM_CLUSTERS * MAX_LIGHTS_PER_CLUSTER * @sizeOf(u32);
+    const counts_bytes = NUM_CLUSTERS * @sizeOf(u32);
+
+    st.point_lights_sb = makeStorageBuffer(dev, point_lights_bytes);
+    st.spot_lights_sb = makeStorageBuffer(dev, spot_lights_bytes);
+    st.point_indices_sb = makeStorageBuffer(dev, indices_bytes);
+    st.point_counts_sb = makeStorageBuffer(dev, counts_bytes);
+    st.spot_indices_sb = makeStorageBuffer(dev, indices_bytes);
+    st.spot_counts_sb = makeStorageBuffer(dev, counts_bytes);
+
+    // Set 3 — the forward's read-only view of the light + cluster buffers.
+    const ro = c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
+    const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
+    const light_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 1, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 2, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 3, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 4, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 5, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+    };
+    st.light_set_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .entry_count = 6,
+        .entries = &light_bgl_entries,
+    });
+    const light_bg_entries = [_]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 1, .type = ro, .buffer = st.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 2, .type = ro, .buffer = st.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 3, .type = ro, .buffer = st.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 4, .type = ro, .buffer = st.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 5, .type = ro, .buffer = st.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
+    };
+    st.fwd_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = st.light_set_bgl,
+        .entry_count = 6,
+        .entries = &light_bg_entries,
+    });
+
+    // Cull compute: uniform + read-only lights + read-write index/count buffers.
+    const rw = c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER;
+    const comp = c.KE_GPU_SHADER_STAGE_COMPUTE;
+    const cull_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = comp, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 1, .visibility = comp, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 2, .visibility = comp, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 3, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 4, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 5, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 6, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
+    };
+    const cull_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .entry_count = 7,
+        .entries = &cull_bgl_entries,
+    });
+
+    st.cull_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = @sizeOf(ClusterParams),
+        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    });
+    const cull_bg_entries = [_]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.cull_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterParams), .texture_view = 0, .sampler = 0 },
+        .{ .binding = 1, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 2, .type = ro, .buffer = st.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 3, .type = rw, .buffer = st.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 4, .type = rw, .buffer = st.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 5, .type = rw, .buffer = st.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 6, .type = rw, .buffer = st.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
+    };
+    st.cull_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = cull_bgl,
+        .entry_count = 7,
+        .entries = &cull_bg_entries,
+    });
+
+    const cs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(cluster_cull_cs_wgsl),
+        .byte_size = cluster_cull_cs_wgsl.len,
+        .entry_point = "cluster.cs",
+    }, out_error);
+    if (cs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, cs);
+
+    const cull_layouts = [_]c.ke_gpu_bind_group_layout{ cull_bgl, 0, 0, 0 };
+    st.cull_pipeline = dev.create_compute_pipeline.?(dev, &c.ke_gpu_compute_pipeline_params{
+        .compute_module = cs,
+        .compute_entry = "cs_main",
+        .bind_group_layouts = cull_layouts,
+        .bind_group_layout_count = 1,
+    });
+    if (st.cull_pipeline == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "cull pass: compute pipeline creation failed", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+
+    // Ordering tag: the cull pass WRITES it, the forward READS it (cull → forward).
+    st.clusters_cid = e.component_register.?(e, "light_clusters", 0);
+    st.cull_io = std.mem.zeroes(c.ke_render_pass_io);
+    st.cull_io.cmd_slot = 2; // cull → frame command slot 2 (before forward)
+    // The cull WRITES light_clusters and the forward READS it (cull → forward) —
+    // the only ordering the cull needs. It may share a wave with the clear/shadow
+    // render passes: the render core accumulates this compute pass's recording into
+    // a CPU command list and replays it single-threaded at end_frame, so the unsafe
+    // compute∥render recording never actually happens concurrently.
+    st.cull_access = .{
+        .{ .cid = st.clusters_cid, .access = c.KE_ACCESS_WRITE },
+        .{ .cid = st.point_light_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.spot_light_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
     };
     return true;
 }
@@ -854,7 +1067,7 @@ fn registerSys(rt: *c.ke_runtime, name: [*c]const u8, access: [*c]c.ke_component
     params.phase = c.KE_PHASE_RENDER;
     params.access_list = access;
     params.access_count = access_count;
-    params.pinned_thread = 0;
+    params.pinned_thread = 0; // render systems run in parallel (sim ‖ render + parallel passes)
     params.user_data = user;
     params.execute = exec;
     _ = rt.register_system.?(rt, &params, null);
@@ -922,6 +1135,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         registerSys(rt, "render.begin_frame", &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", &st.clear_access, st.clear_access.len, st, clearSys);
         registerSys(rt, "render.shadow", &st.shadow_access, st.shadow_access.len, st, shadowSys);
+        registerSys(rt, "render.cull", &st.cull_access, st.cull_access.len, st, cullSys);
         registerSys(rt, "render.forward", &st.fwd_access, st.fwd_access.len, st, forwardSys);
         registerSys(rt, "render.end_frame", &st.end_access, st.end_access.len, st, endFrameSys);
     }

@@ -160,6 +160,16 @@ struct ke_render_core
     // another pass's output, e.g. the forward sampling the shadow map).
     // KE_GPU_INVALID_HANDLE if no resource with that name was declared.
     ke_gpu_texture_view (*resource_view)(struct ke_render_core *self, const char *name);
+
+    // Records a buffer upload to be flushed single-threaded at end_frame (before
+    // submit). Render passes call this instead of the device's write_buffer so
+    // parallel passes never touch the non-thread-safe GPU queue concurrently. The
+    // data is copied, so the caller's buffer need not outlive the call. Queue
+    // writes are ordered before the frame's submit, so deferring is correct.
+    // NOTE: kept last in the vtable so adding it does not shift existing slot
+    // offsets (C# bindings index the vtable by position).
+    void (*upload)(struct ke_render_core *self, ke_gpu_buffer buffer,
+                   uint64_t offset, const void *data, size_t size);
 };
 
 typedef struct ke_render_core_handle

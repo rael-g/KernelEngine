@@ -21,17 +21,13 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-// Brute-force light caps (match the per-frame uniform arrays below).
-static const uint MAX_POINT_LIGHTS = 16;
-static const uint MAX_SPOT_LIGHTS  = 16;
-
-// A point light packed for the per-frame uniform.
+// A point light in the storage buffer (matches cluster_cull.slang PointLight).
 struct PointLight {
     float4 pos_radius;       // xyz = world position, w = radius
     float4 color_intensity;  // rgb = color, w = intensity
 };
 
-// A spot light packed for the per-frame uniform (cone cosines precomputed).
+// A spot light in the storage buffer (cone cosines precomputed).
 struct SpotLight {
     float4 pos_range;        // xyz = world position, w = range
     float4 dir_cos_inner;    // xyz = cone axis direction, w = cos(inner angle)
@@ -47,14 +43,40 @@ struct PerFrame {
     float4   ambient;       // rgb
     float4x4 sky_view_proj; // rotation-only view*proj — used by the skybox pass
     float4x4 light_vp;      // directional light view*proj — for the shadow lookup
-    float4   shadow_params; // x = shadow active, y = point count, z = directional active, w = spot count
-    PointLight point_lights[MAX_POINT_LIGHTS];
-    SpotLight  spot_lights[MAX_SPOT_LIGHTS];
+    float4   shadow_params; // x = shadow active, z = directional active
+    float4x4 view;          // world → view (for the fragment's cluster z slice)
+    float4   cluster_grid;  // x=numX, y=numY, z=numZ, w=maxLightsPerCluster
+    float4   cluster_viewport; // x=screen W, y=screen H, z=near, w=far
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
 [[vk::binding(1, 0)]] TextureCube  env;         // environment (black 1×1 when no skybox)
 [[vk::binding(2, 0)]] SamplerState env_sampler;
 [[vk::binding(3, 0)]] Texture2D    shadow_map;  // R32F light-space depth
+
+// Set 3 — clustered light lists: the full light arrays + the per-cluster index
+// lists the cull compute pass wrote (read-only storage).
+[[vk::binding(0, 3)]] StructuredBuffer<PointLight> point_lights;
+[[vk::binding(1, 3)]] StructuredBuffer<SpotLight>  spot_lights;
+[[vk::binding(2, 3)]] StructuredBuffer<uint>       point_indices;
+[[vk::binding(3, 3)]] StructuredBuffer<uint>       point_counts;
+[[vk::binding(4, 3)]] StructuredBuffer<uint>       spot_indices;
+[[vk::binding(5, 3)]] StructuredBuffer<uint>       spot_counts;
+
+// The fragment's cluster index — screen tile (from SV_Position) × exponential
+// depth slice (from the view-space z). Must match cluster_cull.slang's froxel
+// decomposition exactly.
+uint cluster_index(float2 frag_xy, float view_z) {
+    uint numX = (uint)frame.cluster_grid.x;
+    uint numY = (uint)frame.cluster_grid.y;
+    uint numZ = (uint)frame.cluster_grid.z;
+    float near = frame.cluster_viewport.z;
+    float far  = frame.cluster_viewport.w;
+    uint ix = (uint)clamp(frag_xy.x / frame.cluster_viewport.x * (float)numX, 0.0, (float)(numX - 1u));
+    uint iy = (uint)clamp(frag_xy.y / frame.cluster_viewport.y * (float)numY, 0.0, (float)(numY - 1u));
+    float zs = (float)numZ * log(max(view_z, near) / near) / log(far / near);
+    uint iz = (uint)clamp(zs, 0.0, (float)(numZ - 1u));
+    return iz * numX * numY + iy * numX + ix;
+}
 
 // Translated from the legacy bgfx ComputeShadow: project into light clip space,
 // to UV, compare the fragment's depth against the stored nearest occluder.
@@ -163,38 +185,44 @@ float4 fs_main(VsOut input) : SV_Target {
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance) * shadow;
     }
 
-    // Point lights — brute force, distance-attenuated (clamp(1 - d/radius)² from
-    // the legacy bgfx path).
-    uint pcount = (uint)frame.shadow_params.y;
+    // Clustered point + spot lights — find this fragment's cluster, then loop only
+    // the lights the cull pass binned into it.
+    float  view_z    = mul(frame.view, float4(input.world_pos, 1.0)).z;
+    uint   ci        = cluster_index(input.clip.xy, view_z);
+    uint   maxLights = (uint)frame.cluster_grid.w;
+
+    // Point lights — distance attenuation clamp(1 - d/radius)² (legacy bgfx).
+    uint pcount = point_counts[ci];
     for (uint i = 0u; i < pcount; i++) {
-        float3 to_l   = frame.point_lights[i].pos_radius.xyz - input.world_pos;
+        uint   li     = point_indices[ci * maxLights + i];
+        float3 to_l   = point_lights[li].pos_radius.xyz - input.world_pos;
         float  dist   = length(to_l);
-        float  radius = frame.point_lights[i].pos_radius.w;
+        float  radius = point_lights[li].pos_radius.w;
         float3 l      = to_l / max(dist, 1e-4);
         float  att    = clamp(1.0 - dist / max(radius, 1e-4), 0.0, 1.0);
         att *= att;
-        float3 radiance = frame.point_lights[i].color_intensity.rgb *
-                          frame.point_lights[i].color_intensity.w * att;
+        float3 radiance = point_lights[li].color_intensity.rgb *
+                          point_lights[li].color_intensity.w * att;
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
     }
 
-    // Spot lights — point-light distance falloff × a cone term (smooth between
-    // the inner and outer angle), translated from the legacy bgfx spot loop.
-    uint scount = (uint)frame.shadow_params.w;
+    // Spot lights — distance falloff × cone term (legacy bgfx spot loop).
+    uint scount = spot_counts[ci];
     for (uint s = 0u; s < scount; s++) {
-        float3 to_l  = frame.spot_lights[s].pos_range.xyz - input.world_pos;
+        uint   li    = spot_indices[ci * maxLights + s];
+        float3 to_l  = spot_lights[li].pos_range.xyz - input.world_pos;
         float  dist  = length(to_l);
-        float  range = frame.spot_lights[s].pos_range.w;
+        float  range = spot_lights[li].pos_range.w;
         float3 l     = to_l / max(dist, 1e-4);
         float  datt  = clamp(1.0 - dist / max(range, 1e-4), 0.0, 1.0);
         datt *= datt;
-        float3 sdir     = normalize(frame.spot_lights[s].dir_cos_inner.xyz);
-        float  cos_in   = frame.spot_lights[s].dir_cos_inner.w;
-        float  cos_out  = frame.spot_lights[s].cone.x;
+        float3 sdir     = normalize(spot_lights[li].dir_cos_inner.xyz);
+        float  cos_in   = spot_lights[li].dir_cos_inner.w;
+        float  cos_out  = spot_lights[li].cone.x;
         float  cos_a    = dot(-l, sdir); // light→surface vs cone axis
         float  catt     = clamp((cos_a - cos_out) / max(cos_in - cos_out, 1e-3), 0.0, 1.0);
-        float3 radiance = frame.spot_lights[s].color_intensity.rgb *
-                          frame.spot_lights[s].color_intensity.w * datt * catt;
+        float3 radiance = spot_lights[li].color_intensity.rgb *
+                          spot_lights[li].color_intensity.w * datt * catt;
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
     }
 

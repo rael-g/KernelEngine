@@ -232,6 +232,7 @@ typedef struct ke_gpu_render_pipeline_params
 typedef struct ke_gpu_compute_pipeline_params
 {
     ke_gpu_shader_module     compute_module;
+    const char              *compute_entry; // WGSL entry function name (NULL = "main")
     ke_gpu_bind_group_layout bind_group_layouts[4];
     uint32_t                 bind_group_layout_count;
 } ke_gpu_compute_pipeline_params;

@@ -1,8 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -13,10 +13,10 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 09_many_lights â€” stress test: 121-cube wall lit by 200 randomly moving
-// colored point lights. Tests the contributor's per-frame light loop and the
-// renderer's per-frame light cap (lights past the cap are dropped silently â€”
-// behavior we want visible at this scale).
+// 09_many_lights — stress test: an 11×11 cube wall lit by 200 randomly moving
+// colored point lights. Render v2 (webgpu): a clustered forward pipeline — a
+// compute pass bins the lights into a 16×8×24 froxel grid, and the forward only
+// shades each fragment with the lights in its cluster.
 
 const int LightCount = 200;
 
@@ -26,29 +26,24 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 09 Many Lights Stress Test"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.01f, 0.01f, 0.01f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 09 Many Lights Stress Test"))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.01f, 0.01f, 0.01f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 09_many_lights");
-        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
-        Console.WriteLine($"[KernelEngine] Features: stress_test, {LightCount} point_lights");
+        Console.WriteLine($"[KernelEngine] Features: clustered_forward, {LightCount} point_lights");
 
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 30f) };
 
-        var cubeMesh = MeshPrimitives.Cube(renderer);
-        var mat = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
+        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        var mat = resources.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
-        // 11Ã—11 cube wall facing the camera (z=0).
+        // 11×11 cube wall facing the camera (z=0).
         for (int x = -15; x <= 15; x += 3)
         for (int y = -15; y <= 15; y += 3)
         {
@@ -93,7 +88,7 @@ while (!window.ShouldClose())
     if (now - fpsWindowStart >= 5.0)
     {
         double fps = frameCount / (now - fpsWindowStart);
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: {LightCount}p 0s 0d");
+        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: {LightCount}p");
         frameCount     = 0;
         fpsWindowStart = now;
     }
@@ -103,7 +98,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[09_many_lights] Exited cleanly.");
 
-// â”€â”€ Random moving point light â€” per-instance seed picked at construction â”€â”€â”€â”€â”€
+// ── Random moving point light — per-instance seed picked at construction ─────
 
 sealed class RandomMovingLight : PointLight
 {
