@@ -71,7 +71,6 @@ typedef struct ke_runtime_system_params {
     const ke_component_access *access_list;
     uint32_t                   access_count;
 
-    bool     exclusive;
     uint32_t pinned_thread;
 
     void *user_data;

@@ -69,7 +69,6 @@ struct ke_system_ctx
     ke_ecs                    *ecs;          // borrowed; alive while the system runs
     const ke_component_access *access_list;  // borrowed from the system's params
     uint32_t                   access_count;
-    bool                       exclusive;
     bool                       reads_snapshot; // render phase: reads route to snapshot side (§16)
     const char                *system_name;  // for diagnostics
     defer_queue               *defer;        // borrowed from the runtime
@@ -121,8 +120,7 @@ static void log_violation(const char *system_name, ke_component_id cid, const ch
 {
     fprintf(stderr,
             "[ke_system_ctx] system '%s' accessed component %u (%s) without declared "
-            "access; add a ke_component_access entry to ke_runtime_system_params.access_list "
-            "or set .exclusive=true if the system intentionally bypasses parallelization.\n",
+            "access; add a ke_component_access entry to ke_runtime_system_params.access_list.\n",
             system_name ? system_name : "<unnamed>", cid, kind);
     s_check_failures++;
 }
@@ -223,41 +221,20 @@ void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
     {
         if (i == 0)
         {
-            // System 0 lands in wave 0. If it's exclusive, close wave 0 so
-            // the next system starts wave 1.
             out_wave_assignments[0] = 0;
-            if (systems[0].exclusive)
-            {
-                // Already on its own; nothing else to do — next iteration
-                // will see no compatible wave to join.
-            }
             continue;
         }
 
+        // Conflict with any system in the current wave? Any pair-wise
+        // read/write conflict closes the wave and opens a new one.
         bool open_new = false;
-
-        if (systems[i].exclusive)
+        for (uint32_t j = wave_start; j < i; j++)
         {
-            open_new = true;
-        }
-        else
-        {
-            // Conflict with any system in the current wave?
-            for (uint32_t j = wave_start; j < i; j++)
+            if (out_wave_assignments[j] != current_wave) continue;
+            if (systems_conflict(&systems[i], &systems[j]))
             {
-                if (out_wave_assignments[j] != current_wave) continue;
-                if (systems[j].exclusive)
-                {
-                    // Should not happen — exclusive systems sit alone — but
-                    // guard anyway: conflict.
-                    open_new = true;
-                    break;
-                }
-                if (systems_conflict(&systems[i], &systems[j]))
-                {
-                    open_new = true;
-                    break;
-                }
+                open_new = true;
+                break;
             }
         }
 
@@ -276,8 +253,7 @@ void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity e
 {
     if (!ctx || !ctx->ecs) return NULL;
 #ifndef NDEBUG
-    if (!ctx->exclusive &&
-        !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
+    if (!access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
     {
         log_violation(ctx->system_name, cid, "MUT");
         return NULL;
@@ -297,8 +273,7 @@ const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity
 #ifndef NDEBUG
     // Read OR write declaration covers a read access. Checked against the
     // declared (live) cid, before any snapshot routing below.
-    if (!ctx->exclusive &&
-        !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_READ) &&
+    if (!access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_READ) &&
         !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
     {
         log_violation(ctx->system_name, cid, "GET");
@@ -785,7 +760,6 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->ctx.ecs           = h->state.ecs;
             pkg->ctx.access_list   = rs->params.access_list;
             pkg->ctx.access_count  = rs->params.access_count;
-            pkg->ctx.exclusive     = rs->params.exclusive;
             pkg->ctx.reads_snapshot = (phase == KE_PHASE_RENDER);
             pkg->ctx.system_name   = rs->params.name;
             pkg->ctx.defer         = NULL;  // task_pkg_run binds to &pkg->defer
@@ -829,12 +803,8 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
         // Dispatch + join inside the ECS concurrent-read scope, so the parallel
         // system bodies read the world safely (the ECS makes reads thread-safe;
         // structural changes go to each system's defer queue, flushed below).
-        // Exception: exclusive systems sit alone in their wave and are permitted
-        // to mutate the world directly (e.g. create/destroy entities), so they
-        // skip concurrent_reads.
-        bool wave_exclusive = (wave_size == 1 && pkgs[0].ctx.exclusive);
         wave_run_ctx wc = { h, pkgs, tasks, pinned, wave_size };
-        if (!wave_exclusive && h->state.ecs->concurrent_reads)
+        if (h->state.ecs->concurrent_reads)
             h->state.ecs->concurrent_reads(h->state.ecs, run_wave_body, &wc);
         else
             run_wave_body(&wc);

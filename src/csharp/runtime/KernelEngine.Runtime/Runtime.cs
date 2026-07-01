@@ -145,11 +145,11 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     }
 
     public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
-                                 uint pinnedThread = 0, bool exclusive = false)
+                                 uint pinnedThread = 0)
     {
         ArgumentNullException.ThrowIfNull(execute);
         return RegisterSystemEntry(name, phase, new SystemEntry { Owner = this, Execute = execute },
-                                    pinnedThread, exclusive);
+                                    pinnedThread);
     }
 
     /// <summary>
@@ -160,15 +160,15 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     /// to managed code; forward it to APIs that accept a system context.
     /// </summary>
     public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
-                                 uint pinnedThread = 0, bool exclusive = false)
+                                 uint pinnedThread = 0)
     {
         ArgumentNullException.ThrowIfNull(execute);
         return RegisterSystemEntry(name, phase, new SystemEntry { Owner = this, ExecuteCtx = execute },
-                                    pinnedThread, exclusive);
+                                    pinnedThread);
     }
 
     private ulong RegisterSystemEntry(string name, RuntimePhase phase, SystemEntry entry,
-                                       uint pinnedThread, bool exclusive)
+                                       uint pinnedThread)
     {
         ThrowIfDisposed();
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -184,7 +184,6 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
             p.name           = (sbyte*)namePtr;
             p.phase          = (ke_phase)phase;
             p.pinned_thread  = pinnedThread;
-            p.exclusive      = exclusive;
             p.user_data      = (void*)GCHandle.ToIntPtr(handle);
             p.execute        = (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void>)
                                 &SystemExecuteTrampoline;

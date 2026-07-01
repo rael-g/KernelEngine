@@ -31,7 +31,7 @@ public interface IRuntime : IDisposable
     /// calls pinned to a worker the render module names "ke.render").
     /// </param>
     ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
-                          uint pinnedThread = 0, bool exclusive = false);
+                          uint pinnedThread = 0);
 
     /// <summary>
     /// Registers a system whose callback also receives the native system-context
@@ -41,7 +41,7 @@ public interface IRuntime : IDisposable
     /// pointer is opaque to managed code — forward it to APIs that accept one.
     /// </summary>
     ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
-                          uint pinnedThread = 0, bool exclusive = false);
+                          uint pinnedThread = 0);
 
     /// <summary>Drives one frame: PreUpdate → FixedUpdate×N → Update → PostUpdate.</summary>
     void Tick(float dt);

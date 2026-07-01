@@ -398,26 +398,6 @@ TEST_F(RuntimeSpike, DebugCheck_PassesWhenAccessDeclared)
     EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
 }
 
-TEST_F(RuntimeSpike, DebugCheck_ExclusiveBypassesValidation)
-{
-    ke_system_ctx_reset_check_failures();
-
-    ke_runtime_system_params sys{};
-    sys.name      = "Exclusive";
-    sys.phase     = KE_PHASE_UPDATE;
-    sys.exclusive = true;  // bypass — opaque code path
-    sys.execute = [](ke_system_ctx *ctx, void *, float) {
-        // Even with no access_list, exclusive systems get through.
-        (void)ke_system_ctx_get_mut(ctx, 7u, 1u);
-        (void)ke_system_ctx_get(ctx, 8u, 2u);
-    };
-    ASSERT_NE(runtime->register_system(runtime, &sys, nullptr), (ke_system_id)0);
-
-    ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
-
-    EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
-}
-
 // ── §16 sim/render component snapshot ────────────────────────────────────────
 
 TEST_F(RuntimeSpike, Snapshot_FreezesLiveSide)
@@ -504,14 +484,13 @@ TEST_F(RuntimeSpike, SimWrites_RenderReadsSnapshot)
 
 namespace wave_test {
 
-ke_runtime_system_params make_system(const ke_component_access *list, uint32_t count, bool exclusive = false)
+ke_runtime_system_params make_system(const ke_component_access *list, uint32_t count)
 {
     ke_runtime_system_params s{};
     s.name         = "Synthetic";
     s.phase        = KE_PHASE_UPDATE;
     s.access_list  = list;
     s.access_count = count;
-    s.exclusive    = exclusive;
     s.execute      = [](ke_system_ctx *, void *, float) {};
     return s;
 }
@@ -609,28 +588,6 @@ TEST(WaveBuilder, ReadReadSameCid_SameWave)
     EXPECT_EQ(assignments[1], 0u);
 }
 
-TEST(WaveBuilder, ExclusiveSystem_AlwaysAlone)
-{
-    // Three systems, none conflict. Middle one is exclusive → forces split.
-    ke_component_access a[] = {{1u, KE_ACCESS_READ}};
-    ke_component_access b[] = {{2u, KE_ACCESS_READ}};
-    ke_component_access c[] = {{3u, KE_ACCESS_READ}};
-    ke_runtime_system_params sys[] = {
-        wave_test::make_system(a, 1),
-        wave_test::make_system(b, 1, /*exclusive=*/true),
-        wave_test::make_system(c, 1),
-    };
-
-    uint32_t assignments[3] = {99, 99, 99};
-    uint32_t wave_count = 0;
-    ke_runtime_debug_compute_waves(sys, 3, assignments, &wave_count);
-
-    EXPECT_EQ(wave_count, 3u);
-    EXPECT_EQ(assignments[0], 0u);
-    EXPECT_EQ(assignments[1], 1u);
-    EXPECT_EQ(assignments[2], 2u);
-}
-
 TEST(WaveBuilder, ChainOfConflicts_GreedyGrouping)
 {
     // A writes T, B reads T → conflict. C writes U (disjoint from A, B) → can
@@ -674,7 +631,6 @@ TEST_F(RuntimeSpike, DeferSpawn_AppliedAtWaveBarrier)
     ke_runtime_system_params sys{};
     sys.name      = "Spawner";
     sys.phase     = KE_PHASE_UPDATE;
-    sys.exclusive = true;
     sys.user_data = &spawn_calls;
     sys.execute   = [](ke_system_ctx *ctx, void *ud, float) {
         auto *count = static_cast<int *>(ud);
@@ -699,7 +655,6 @@ TEST_F(RuntimeSpike, DeferAttachDetachDespawn_AppliedAtBarrier)
     ke_runtime_system_params sys{};
     sys.name      = "Mutator";
     sys.phase     = KE_PHASE_UPDATE;
-    sys.exclusive = true;
     sys.user_data = &payload;
     sys.execute   = [](ke_system_ctx *ctx, void *ud, float) {
         EXPECT_TRUE(ke_system_ctx_attach(ctx, 42u, 5u, ud, 1));
@@ -719,7 +674,6 @@ TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
     ke_runtime_system_params sys{};
     sys.name      = "RepeatSpawner";
     sys.phase     = KE_PHASE_UPDATE;
-    sys.exclusive = true;
     sys.execute   = [](ke_system_ctx *ctx, void *, float) {
         ke_entity e = ke_system_ctx_spawn(ctx);
         (void)e;
