@@ -30,22 +30,27 @@ public sealed unsafe class SceneTree : INativeSceneTree
     /// <summary>
     /// Creates a new node attached under <paramref name="parent"/>
     /// (<c>0</c> = root). Returns the new entity ID, or <c>0</c> on failure.
+    /// When called from inside a running system, pass the system context
+    /// (<paramref name="systemCtx"/>) so the structural change is deferred to the
+    /// wave barrier; pass <c>null</c> (the default) for immediate creation.
     /// </summary>
-    public ulong CreateNode(string name, ulong parent = 0)
+    public ulong CreateNode(string name, ulong parent = 0, nint systemCtx = default)
     {
         var bytes = Encoding.UTF8.GetBytes(name + "\0");
         fixed (byte* p = bytes)
-            return _native->create_node(_native, (sbyte*)p, parent, null);
+            return _native->create_node(_native, (sbyte*)p, parent, (void*)systemCtx, null);
     }
 
     /// <summary>
     /// Destroys a node and all its descendants. Fires on_destroy hooks in
-    /// post-order (children before parents).
+    /// post-order (children before parents). When called from inside a running
+    /// system, pass the system context (<paramref name="systemCtx"/>) so the
+    /// teardown is deferred to the wave barrier; pass <c>null</c> for immediate.
     /// </summary>
-    public void DestroyNode(ulong entity)
+    public void DestroyNode(ulong entity, nint systemCtx = default)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(_native->destroy_node(_native, entity, &err), err, "destroy_node");
+        KernelError.ThrowIfFailed(_native->destroy_node(_native, entity, (void*)systemCtx, &err), err, "destroy_node");
     }
 
     /// <summary>Destroys all nodes. Used on scene shutdown.</summary>

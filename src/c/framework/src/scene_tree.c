@@ -8,6 +8,7 @@
 #include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/runtime/system_ctx.h>
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -51,15 +52,13 @@ static ke_entity vt_root(ke_scene_tree *self) {
 
 // ── vtable: create_node ─────────────────────────────────────────────────────
 
-static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity parent, ke_error **out_error) {
-    (void)out_error;
-    if (!self || !self->handle) return KE_ENTITY_INVALID;
-    scene_tree_state *s = (scene_tree_state *)self->handle;
-    if (parent == KE_ENTITY_INVALID) parent = s->root;
-
-    ke_entity entity = s->ecs->entity_create(s->ecs);
-    if (entity == KE_ENTITY_INVALID) return KE_ENTITY_INVALID;
-
+// Attach the three scene-graph components to an already-created (or reserved)
+// entity, populate them, and prepend into parent's child list. Runs the full
+// structural work; safe only where structural changes are legal (outside a wave,
+// or at the wave barrier via the deferred callback below). Returns false if the
+// component adds fail (entity is destroyed in that case).
+static bool populate_node(scene_tree_state *s, ke_entity entity,
+                          const char *name, ke_entity parent) {
     // Add all three components FIRST so the entity's archetype is stable. Each
     // component_add in flecs can move the entity to a new archetype and
     // invalidate any pointer captured from an earlier add — only after all
@@ -68,7 +67,7 @@ static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity
         !s->ecs->component_add(s->ecs, entity, s->hierarchy_cid) ||
         !s->ecs->component_add(s->ecs, entity, s->name_cid)) {
         s->ecs->entity_destroy(s->ecs, entity);
-        return KE_ENTITY_INVALID;
+        return false;
     }
 
     ke_transform_component *t = (ke_transform_component *)s->ecs->component_get(
@@ -99,8 +98,6 @@ static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity
     }
 
     // Prepend into parent's child list (doubly-linked, O(1)).
-    // Re-fetch h: the sibling fixup may need fresh pointers (touching the
-    // parent doesn't move our archetype, but defensive re-reads cost nothing).
     h = get_hierarchy(s, entity);
     ke_hierarchy_component *ph = get_hierarchy(s, parent);
     if (ph && h) {
@@ -111,7 +108,59 @@ static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity
         }
         ph->first_child = entity;
     }
+    return true;
+}
 
+// Deferred create: a reserved entity finalized at the wave barrier. Carries its
+// own name copy so the payload is self-contained after the arena copy.
+typedef struct pending_create {
+    scene_tree_state *s;
+    ke_entity         entity;
+    ke_entity         parent;
+    char              name[64];
+} pending_create;
+
+static void cb_create_node(ke_ecs *ecs, void *user) {
+    (void)ecs;
+    pending_create *p = (pending_create *)user;
+    populate_node(p->s, p->entity, p->name, p->parent);
+}
+
+static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity parent,
+                                ke_system_ctx *ctx, ke_error **out_error) {
+    (void)out_error;
+    if (!self || !self->handle) return KE_ENTITY_INVALID;
+    scene_tree_state *s = (scene_tree_state *)self->handle;
+    if (parent == KE_ENTITY_INVALID) parent = s->root;
+
+    // Inside a system body (ctx set): the world is mid-wave and structural changes
+    // are illegal here. Reserve a real id now (safe, atomic) and defer the
+    // component adds + parent linking to the wave barrier, where they run serially
+    // in registration order — so sibling links stay consistent even across
+    // multiple creations under the same parent this tick.
+    if (ctx) {
+        ke_entity entity = ke_system_ctx_reserve(ctx);
+        if (entity == KE_ENTITY_INVALID) return KE_ENTITY_INVALID;
+        pending_create pc;
+        pc.s      = s;
+        pc.entity = entity;
+        pc.parent = parent;
+        if (name && *name) {
+            size_t len = 0;
+            while (name[len] && len < sizeof(pc.name) - 1) { pc.name[len] = name[len]; ++len; }
+            pc.name[len] = '\0';
+        } else {
+            pc.name[0] = '\0';
+        }
+        if (!ke_system_ctx_defer(ctx, cb_create_node, &pc, sizeof pc))
+            return KE_ENTITY_INVALID;
+        return entity;
+    }
+
+    // Immediate path (scene load, setup, tests): outside any wave.
+    ke_entity entity = s->ecs->entity_create(s->ecs);
+    if (entity == KE_ENTITY_INVALID) return KE_ENTITY_INVALID;
+    if (!populate_node(s, entity, name, parent)) return KE_ENTITY_INVALID;
     return entity;
 }
 
@@ -193,23 +242,15 @@ static void destroy_entities_recursive(scene_tree_state *s, ke_entity e) {
     s->ecs->entity_destroy(s->ecs, e);
 }
 
-static bool vt_destroy_node(ke_scene_tree *self, ke_entity entity, ke_error **out_error) {
-    if (!self || !self->handle || entity == KE_ENTITY_INVALID) {
-        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
-        return false;
-    }
-    scene_tree_state *s = (scene_tree_state *)self->handle;
-
-    if (!get_hierarchy(s, entity)) {
-        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "entity not found");
-        return false;
-    }
-
+// Unlink from parent's child list, then destroy the subtree. The structural part
+// (entity_destroy) is legal only outside a wave or at the wave barrier.
+static void destroy_subtree(scene_tree_state *s, ke_entity entity) {
     // Detach from parent's child list before tearing the subtree down.
     // Snapshot the navigation fields up-front because the subsequent
     // get_hierarchy calls (for parent + siblings) may move flecs archetypes
     // and invalidate `h`.
     ke_hierarchy_component *h = get_hierarchy(s, entity);
+    if (!h) return;
     ke_entity h_prev = h->prev_sibling, h_next = h->next_sibling, h_parent = h->parent;
     if (h_parent != KE_ENTITY_INVALID) {
         ke_hierarchy_component *ph = get_hierarchy(s, h_parent);
@@ -227,6 +268,44 @@ static bool vt_destroy_node(ke_scene_tree *self, ke_entity entity, ke_error **ou
     }
 
     destroy_entities_recursive(s, entity);
+}
+
+typedef struct pending_destroy {
+    scene_tree_state *s;
+    ke_entity         entity;
+} pending_destroy;
+
+static void cb_destroy_node(ke_ecs *ecs, void *user) {
+    (void)ecs;
+    pending_destroy *p = (pending_destroy *)user;
+    destroy_subtree(p->s, p->entity);
+}
+
+static bool vt_destroy_node(ke_scene_tree *self, ke_entity entity,
+                            ke_system_ctx *ctx, ke_error **out_error) {
+    if (!self || !self->handle || entity == KE_ENTITY_INVALID) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return false;
+    }
+    scene_tree_state *s = (scene_tree_state *)self->handle;
+
+    if (!get_hierarchy(s, entity)) {
+        KE_ERROR_SET(out_error, &KE_ERROR_NOT_FOUND, "entity not found");
+        return false;
+    }
+
+    // Inside a system body: entity_destroy is structural and illegal mid-wave.
+    // Defer the whole unlink + teardown to the wave barrier.
+    if (ctx) {
+        pending_destroy pd = { s, entity };
+        if (!ke_system_ctx_defer(ctx, cb_destroy_node, &pd, sizeof pd)) {
+            KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "defer failed");
+            return false;
+        }
+        return true;
+    }
+
+    destroy_subtree(s, entity);
     return true;
 }
 

@@ -31,10 +31,11 @@
 // real impl uses a typed command buffer with per-attach payload arena.
 
 typedef enum defer_kind {
-    DEFER_SPAWN   = 1,
-    DEFER_ATTACH  = 2,
-    DEFER_DETACH  = 3,
-    DEFER_DESPAWN = 4,
+    DEFER_SPAWN    = 1,
+    DEFER_ATTACH   = 2,
+    DEFER_DETACH   = 3,
+    DEFER_DESPAWN  = 4,
+    DEFER_CALLBACK = 5,
 } defer_kind;
 
 typedef struct defer_command {
@@ -42,14 +43,21 @@ typedef struct defer_command {
     ke_entity      entity;        // SPAWN: filled at flush with new id
     ke_entity     *spawn_out;     // SPAWN: writeback slot caller provided
     ke_component_id cid;          // ATTACH/DETACH
-    const void    *attach_data;   // ATTACH: payload pointer (caller owns lifetime until flush)
-    size_t         attach_size;
+    size_t         attach_offset; // ATTACH/CALLBACK: byte offset into the payload arena
+    size_t         attach_size;   // ATTACH/CALLBACK: payload byte count
+    ke_defer_fn    fn;            // CALLBACK: run at the barrier with arena payload
 } defer_command;
 
+// Owns a bump arena for ATTACH payloads: attach copies the caller's component
+// value in immediately, so the pointer's lifetime need not survive to the wave
+// barrier (scene-tree fills stack locals). Both grow-and-retain across waves.
 typedef struct defer_queue {
     defer_command *cmds;
     size_t         count;
     size_t         capacity;
+    unsigned char *arena;         // payload bytes
+    size_t         arena_used;
+    size_t         arena_capacity;
 } defer_queue;
 
 // Per-system limits for the resolved-query path.
@@ -354,6 +362,53 @@ static bool defer_reserve(defer_queue *q, size_t needed)
     return true;
 }
 
+// Grow the payload arena and copy the given bytes in, returning the byte offset
+// where they landed (SIZE_MAX on OOM). Offsets survive arena reallocation; the
+// pointer is resolved at flush as q->arena + offset.
+static size_t defer_arena_push(defer_queue *q, const void *data, size_t size)
+{
+    if (size == 0) return 0;
+    if (q->arena_used + size > q->arena_capacity)
+    {
+        size_t new_cap = q->arena_capacity ? q->arena_capacity * 2 : 256;
+        while (new_cap < q->arena_used + size) new_cap *= 2;
+        unsigned char *buf = (unsigned char *)ke_alloc(new_cap, 16);
+        if (!buf) return (size_t)-1;
+        if (q->arena)
+        {
+            memcpy(buf, q->arena, q->arena_used);
+            ke_free(q->arena);
+        }
+        q->arena          = buf;
+        q->arena_capacity = new_cap;
+    }
+    size_t offset = q->arena_used;
+    if (data) memcpy(q->arena + offset, data, size);
+    q->arena_used += size;
+    return offset;
+}
+
+ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx)
+{
+    if (!ctx || !ctx->ecs || !ctx->ecs->entity_reserve) return KE_ENTITY_INVALID;
+    return ctx->ecs->entity_reserve(ctx->ecs);
+}
+
+bool ke_system_ctx_defer(ke_system_ctx *ctx, ke_defer_fn fn,
+                          const void *user, size_t user_size)
+{
+    if (!ctx || !ctx->defer || !fn) return false;
+    size_t offset = defer_arena_push(ctx->defer, user, user_size);
+    if (offset == (size_t)-1) return false;
+    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
+    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    cmd->kind          = DEFER_CALLBACK;
+    cmd->fn            = fn;
+    cmd->attach_offset = offset;
+    cmd->attach_size   = user_size;
+    return true;
+}
+
 ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx)
 {
     if (!ctx || !ctx->defer) return KE_ENTITY_INVALID;
@@ -370,13 +425,15 @@ bool ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                            ke_component_id cid, const void *data, size_t size)
 {
     if (!ctx || !ctx->defer) return false;
+    size_t offset = defer_arena_push(ctx->defer, data, size);
+    if (offset == (size_t)-1) return false;
     if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
     defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
-    cmd->kind        = DEFER_ATTACH;
-    cmd->entity      = entity;
-    cmd->cid         = cid;
-    cmd->attach_data = data;
-    cmd->attach_size = size;
+    cmd->kind          = DEFER_ATTACH;
+    cmd->entity        = entity;
+    cmd->cid           = cid;
+    cmd->attach_offset = offset;
+    cmd->attach_size   = size;
     return true;
 }
 
@@ -419,8 +476,8 @@ static void defer_flush(defer_queue *q, ke_ecs *ecs)
         }
         case DEFER_ATTACH: {
             void *slot = ecs->component_add(ecs, cmd->entity, cmd->cid);
-            if (slot && cmd->attach_data && cmd->attach_size > 0)
-                memcpy(slot, cmd->attach_data, cmd->attach_size);
+            if (slot && cmd->attach_size > 0)
+                memcpy(slot, q->arena + cmd->attach_offset, cmd->attach_size);
             break;
         }
         case DEFER_DETACH:
@@ -429,10 +486,14 @@ static void defer_flush(defer_queue *q, ke_ecs *ecs)
         case DEFER_DESPAWN:
             ecs->entity_destroy(ecs, cmd->entity);
             break;
+        case DEFER_CALLBACK:
+            if (cmd->fn) cmd->fn(ecs, q->arena + cmd->attach_offset);
+            break;
         }
         s_defer_applied_total++;
     }
-    q->count = 0;  // drain — capacity retained for reuse next wave
+    q->count      = 0;  // drain — capacity retained for reuse next wave
+    q->arena_used = 0;  // payload arena rewinds; capacity retained too
 }
 
 uint32_t ke_system_ctx_defer_applied_count(void) { return s_defer_applied_total; }
@@ -755,9 +816,12 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->execute           = rs->params.execute;
             pkg->user_data         = rs->params.user_data;
             pkg->dt                = dt;
-            pkg->defer.cmds        = NULL;
-            pkg->defer.count       = 0;
-            pkg->defer.capacity    = 0;
+            pkg->defer.cmds           = NULL;
+            pkg->defer.count          = 0;
+            pkg->defer.capacity       = 0;
+            pkg->defer.arena          = NULL;
+            pkg->defer.arena_used     = 0;
+            pkg->defer.arena_capacity = 0;
             pinned[wave_size]      = rs->params.pinned_thread;
             wave_size++;
         }
@@ -782,6 +846,8 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             defer_flush(&pkgs[t].defer, h->state.ecs);
             if (pkgs[t].defer.cmds)
                 ke_free(pkgs[t].defer.cmds);
+            if (pkgs[t].defer.arena)
+                ke_free(pkgs[t].defer.arena);
         }
     }
 }

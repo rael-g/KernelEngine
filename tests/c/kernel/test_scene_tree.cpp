@@ -41,15 +41,15 @@ TEST_F(SceneTreeTest, Root_IsValid)
 
 TEST_F(SceneTreeTest, CreateNode_AttachesToRootWhenParentInvalid)
 {
-    ke_entity child = tree->create_node(tree, "X", KE_ENTITY_INVALID, NULL);
+    ke_entity child = tree->create_node(tree, "X", KE_ENTITY_INVALID, NULL, NULL);
     EXPECT_NE(child, KE_ENTITY_INVALID);
     EXPECT_EQ(tree->find_node(tree, "X", NULL), child);
 }
 
 TEST_F(SceneTreeTest, CreateNode_AcceptsExplicitParent)
 {
-    ke_entity parent = tree->create_node(tree, "Parent", KE_ENTITY_INVALID, NULL);
-    ke_entity child  = tree->create_node(tree, "Child",  parent, NULL);
+    ke_entity parent = tree->create_node(tree, "Parent", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity child  = tree->create_node(tree, "Child",  parent, NULL, NULL);
     EXPECT_NE(child, KE_ENTITY_INVALID);
     EXPECT_EQ(tree->find_node(tree, "Parent/Child", NULL), child);
 }
@@ -70,21 +70,21 @@ TEST_F(SceneTreeTest, FindNode_MissReturnsInvalid)
 
 TEST_F(SceneTreeTest, FindNode_ByName_FindsDirectChild)
 {
-    ke_entity child = tree->create_node(tree, "Player", KE_ENTITY_INVALID, NULL);
+    ke_entity child = tree->create_node(tree, "Player", KE_ENTITY_INVALID, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "Player", NULL), child);
 }
 
 TEST_F(SceneTreeTest, FindNode_ByName_FindsNestedFirstMatch)
 {
-    ke_entity inter  = tree->create_node(tree, "Intermediate", KE_ENTITY_INVALID, NULL);
-    ke_entity target = tree->create_node(tree, "Target",       inter, NULL);
+    ke_entity inter  = tree->create_node(tree, "Intermediate", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity target = tree->create_node(tree, "Target",       inter, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "Target", NULL), target);
 }
 
 TEST_F(SceneTreeTest, FindNode_ByPath_NavigatesSegments)
 {
-    ke_entity world  = tree->create_node(tree, "World",  KE_ENTITY_INVALID, NULL);
-    ke_entity player = tree->create_node(tree, "Player", world, NULL);
+    ke_entity world  = tree->create_node(tree, "World",  KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity player = tree->create_node(tree, "Player", world, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "/World/Player",  NULL), player);
     EXPECT_EQ(tree->find_node(tree, "World/Player",   NULL), player);
     EXPECT_EQ(tree->find_node(tree, "./World/Player", NULL), player);
@@ -92,33 +92,33 @@ TEST_F(SceneTreeTest, FindNode_ByPath_NavigatesSegments)
 
 TEST_F(SceneTreeTest, FindNode_ByPath_NonexistentSegmentReturnsInvalid)
 {
-    tree->create_node(tree, "World", KE_ENTITY_INVALID, NULL);
+    tree->create_node(tree, "World", KE_ENTITY_INVALID, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "/World/Missing", NULL), KE_ENTITY_INVALID);
 }
 
 TEST_F(SceneTreeTest, FindNode_ByPath_HandlesLeadingDot)
 {
-    ke_entity world_node = tree->create_node(tree, "World", KE_ENTITY_INVALID, NULL);
+    ke_entity world_node = tree->create_node(tree, "World", KE_ENTITY_INVALID, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "./World", NULL), world_node);
 }
 
 TEST_F(SceneTreeTest, FindNode_ByPath_TrailingSlash_Works)
 {
-    ke_entity world_node = tree->create_node(tree, "World", KE_ENTITY_INVALID, NULL);
+    ke_entity world_node = tree->create_node(tree, "World", KE_ENTITY_INVALID, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "/World/", NULL), world_node);
 }
 
 TEST_F(SceneTreeTest, FindNode_ByPath_DeepRelative_Works)
 {
-    ke_entity a = tree->create_node(tree, "A", KE_ENTITY_INVALID, NULL);
-    ke_entity b = tree->create_node(tree, "B", a, NULL);
-    ke_entity c = tree->create_node(tree, "C", b, NULL);
+    ke_entity a = tree->create_node(tree, "A", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity b = tree->create_node(tree, "B", a, NULL, NULL);
+    ke_entity c = tree->create_node(tree, "C", b, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "A/B/C", NULL), c);
 }
 
 TEST_F(SceneTreeTest, FindNode_ByPath_EmptySegments_AreSkipped)
 {
-    ke_entity a = tree->create_node(tree, "A", KE_ENTITY_INVALID, NULL);
+    ke_entity a = tree->create_node(tree, "A", KE_ENTITY_INVALID, NULL, NULL);
     EXPECT_EQ(tree->find_node(tree, "//A///", NULL), a);
 }
 
@@ -126,16 +126,16 @@ TEST_F(SceneTreeTest, FindNode_ByPath_EmptySegments_AreSkipped)
 
 TEST_F(SceneTreeTest, DestroyNode_RejectsInvalidEntity)
 {
-    EXPECT_FALSE(tree->destroy_node(tree, KE_ENTITY_INVALID, NULL));
+    EXPECT_FALSE(tree->destroy_node(tree, KE_ENTITY_INVALID, NULL, NULL));
 }
 
 TEST_F(SceneTreeTest, DestroyNode_DestroysSubtree)
 {
-    ke_entity world_node = tree->create_node(tree, "World",  KE_ENTITY_INVALID, NULL);
-    tree->create_node(tree, "Player", world_node, NULL);
-    tree->create_node(tree, "Enemy",  world_node, NULL);
+    ke_entity world_node = tree->create_node(tree, "World",  KE_ENTITY_INVALID, NULL, NULL);
+    tree->create_node(tree, "Player", world_node, NULL, NULL);
+    tree->create_node(tree, "Enemy",  world_node, NULL, NULL);
 
-    EXPECT_TRUE(tree->destroy_node(tree, world_node, NULL));
+    EXPECT_TRUE(tree->destroy_node(tree, world_node, NULL, NULL));
     EXPECT_EQ(tree->find_node(tree, "World",  NULL), KE_ENTITY_INVALID);
     EXPECT_EQ(tree->find_node(tree, "Player", NULL), KE_ENTITY_INVALID);
     EXPECT_EQ(tree->find_node(tree, "Enemy",  NULL), KE_ENTITY_INVALID);
@@ -143,19 +143,19 @@ TEST_F(SceneTreeTest, DestroyNode_DestroysSubtree)
 
 TEST_F(SceneTreeTest, DestroyNode_UnlinksFromParent)
 {
-    ke_entity child = tree->create_node(tree, "X", KE_ENTITY_INVALID, NULL);
-    EXPECT_TRUE(tree->destroy_node(tree, child, NULL));
+    ke_entity child = tree->create_node(tree, "X", KE_ENTITY_INVALID, NULL, NULL);
+    EXPECT_TRUE(tree->destroy_node(tree, child, NULL, NULL));
     EXPECT_EQ(tree->find_node(tree, "X", NULL), KE_ENTITY_INVALID);
 }
 
 TEST_F(SceneTreeTest, DestroyNode_UnlinksFromMiddleOfChain)
 {
     // Create 3 nodes; create_node prepends, so list is Root -> 3 -> 2 -> 1.
-    tree->create_node(tree, "1", KE_ENTITY_INVALID, NULL);
-    ke_entity c2 = tree->create_node(tree, "2", KE_ENTITY_INVALID, NULL);
-    tree->create_node(tree, "3", KE_ENTITY_INVALID, NULL);
+    tree->create_node(tree, "1", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity c2 = tree->create_node(tree, "2", KE_ENTITY_INVALID, NULL, NULL);
+    tree->create_node(tree, "3", KE_ENTITY_INVALID, NULL, NULL);
 
-    EXPECT_TRUE(tree->destroy_node(tree, c2, NULL));
+    EXPECT_TRUE(tree->destroy_node(tree, c2, NULL, NULL));
 
     // 1 and 3 should still resolve.
     EXPECT_NE(tree->find_node(tree, "1", NULL), KE_ENTITY_INVALID);
@@ -165,8 +165,8 @@ TEST_F(SceneTreeTest, DestroyNode_UnlinksFromMiddleOfChain)
 
 TEST_F(SceneTreeTest, DestroyAll_ClearsChildrenButKeepsRoot)
 {
-    tree->create_node(tree, "A", KE_ENTITY_INVALID, NULL);
-    tree->create_node(tree, "B", KE_ENTITY_INVALID, NULL);
+    tree->create_node(tree, "A", KE_ENTITY_INVALID, NULL, NULL);
+    tree->create_node(tree, "B", KE_ENTITY_INVALID, NULL, NULL);
 
     tree->destroy_all(tree);
 

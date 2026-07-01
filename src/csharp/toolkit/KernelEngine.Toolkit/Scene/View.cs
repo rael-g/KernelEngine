@@ -25,6 +25,13 @@ public readonly ref struct View
     private readonly IInputReader? _prevInput;
 
     /// <summary>
+    /// The native system context for this tick. Opaque handle forwarded to
+    /// structural operations (node create/destroy) so they defer safely to the
+    /// wave barrier. Zero outside a running system.
+    /// </summary>
+    internal nint SystemContext { get; }
+
+    /// <summary>
     /// True if the given key was held down when input was last sampled.
     /// Returns false when no input service is registered.
     /// Key codes follow the GLFW convention (e.g. 87='W', 262=Right Arrow).
@@ -38,11 +45,13 @@ public readonly ref struct View
     public bool IsKeyJustPressed(int key)
         => (_input?.IsKeyDown(key) ?? false) && !(_prevInput?.IsKeyDown(key) ?? false);
 
-    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input, IInputReader? prevInput = null)
+    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input,
+                  IInputReader? prevInput = null, nint systemCtx = default)
     {
-        NodeWorld  = nodeWorld;
-        DeltaTime  = deltaTime;
-        _input     = input;
-        _prevInput = prevInput;
+        NodeWorld     = nodeWorld;
+        DeltaTime     = deltaTime;
+        _input        = input;
+        _prevInput    = prevInput;
+        SystemContext = systemCtx;
     }
 }

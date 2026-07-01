@@ -227,6 +227,20 @@ static ke_entity ecs_flecs_entity_create(ke_ecs *self)
     return result;
 }
 
+static ke_entity ecs_flecs_entity_reserve(ke_ecs *self)
+{
+    if (!self || !self->handle) return 0;
+    ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (h->state.world_corrupted) return 0;
+    // ecs_new_id is the atomic id allocator: safe to call while the world is in
+    // readonly mode (a parallel wave) from any thread. It returns an empty, alive
+    // entity — component storage is added later through the defer queue.
+    KE_FLECS_GUARD("flecs fatal in entity_reserve", { h->state.world_corrupted = true; return 0; });
+    ke_entity result = (ke_entity)ecs_new_id(h->state.world);
+    KE_FLECS_GUARD_END();
+    return result;
+}
+
 static void ecs_flecs_entity_destroy(ke_ecs *self, ke_entity entity)
 {
     if (!self || !self->handle || entity == 0) return;
@@ -664,6 +678,7 @@ ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
 
     h->api.handle             = h;
     h->api.entity_create      = ecs_flecs_entity_create;
+    h->api.entity_reserve     = ecs_flecs_entity_reserve;
     h->api.entity_destroy     = ecs_flecs_entity_destroy;
     h->api.component_register = ecs_flecs_component_register;
     h->api.component_lookup   = ecs_flecs_component_lookup;

@@ -128,6 +128,15 @@ extern "C"
                               size_t            max_segments,
                               size_t           *out_count);
 
+        // Reserve a fresh, empty entity id without creating component storage.
+        // Unlike entity_create + component_add (structural, unsafe while the world
+        // is inside concurrent_reads), this only allocates an id and is safe to
+        // call from any wave thread during a parallel dispatch. The entity is alive
+        // immediately and may be referenced (e.g. as a parent) and have components
+        // attached through the runtime defer queue, applied at the wave barrier.
+        // Kept last so adding it does not shift existing vtable slot offsets.
+        ke_entity (*entity_reserve)(struct ke_ecs *self);
+
     } ke_ecs;
 
     typedef struct ke_ecs_handle

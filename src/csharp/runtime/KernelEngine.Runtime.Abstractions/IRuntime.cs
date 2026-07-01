@@ -33,6 +33,16 @@ public interface IRuntime : IDisposable
     ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
                           uint pinnedThread = 0, bool exclusive = false);
 
+    /// <summary>
+    /// Registers a system whose callback also receives the native system-context
+    /// pointer (as an <see cref="nint"/>) for the current tick. Use this when the
+    /// system needs to create or destroy entities from its body: the context is the
+    /// safe channel that defers the structural change to the wave barrier. The
+    /// pointer is opaque to managed code — forward it to APIs that accept one.
+    /// </summary>
+    ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
+                          uint pinnedThread = 0, bool exclusive = false);
+
     /// <summary>Drives one frame: PreUpdate → FixedUpdate×N → Update → PostUpdate.</summary>
     void Tick(float dt);
 }

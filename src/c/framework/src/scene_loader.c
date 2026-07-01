@@ -411,7 +411,7 @@ static bool process_entity(loader_state *s, const char *base_dir,
         return true;
     }
 
-    ke_entity entity = tree->create_node(tree, effective_name, parent, out_error);
+    ke_entity entity = tree->create_node(tree, effective_name, parent, NULL, out_error);
     if (entity == KE_ENTITY_INVALID) {
         if (name_d.ok) free(name_d.u.s);
         KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "failed to create node");

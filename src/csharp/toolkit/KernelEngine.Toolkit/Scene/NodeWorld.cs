@@ -26,6 +26,32 @@ public sealed class NodeWorld
     internal IReadOnlyList<Node>  Behaviors => _behaviors;
     internal IReadOnlyList<Label> Labels    => _labels;
 
+    // The native system context for the tick currently executing. Set by the
+    // behavior system around its OnUpdate loop so node create/destroy issued from
+    // a behavior defers its structural change to the wave barrier. Zero (default)
+    // outside a tick — creation then happens immediately (scene setup, load).
+    private nint _systemCtx;
+
+    /// <summary>
+    /// Scopes <see cref="AddNode{T}"/>/<see cref="DestroyNode"/> to a running
+    /// system's context for the duration of the returned handle, so structural
+    /// changes defer to the wave barrier. Restores the prior value on dispose.
+    /// </summary>
+    internal SystemCtxScope EnterSystem(nint ctx) => new(this, ctx);
+
+    internal readonly ref struct SystemCtxScope
+    {
+        private readonly NodeWorld _world;
+        private readonly nint      _previous;
+        public SystemCtxScope(NodeWorld world, nint ctx)
+        {
+            _world      = world;
+            _previous   = world._systemCtx;
+            world._systemCtx = ctx;
+        }
+        public void Dispose() => _world._systemCtx = _previous;
+    }
+
     internal void RegisterBehavior(Node node) => _behaviors.Add(node);
     internal void RegisterLabel(Label label)  => _labels.Add(label);
 
@@ -58,7 +84,7 @@ public sealed class NodeWorld
             throw new InvalidOperationException(
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
-        var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0);
+        var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
         node.Name  = name;
         node.BindToNodeWorld(this, entity);
         parent?.AttachChild(node);
@@ -81,7 +107,7 @@ public sealed class NodeWorld
             throw new InvalidOperationException(
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
-        var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0);
+        var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
         node.Name  = name;
         node.PreBind(this, entity);
         parent?.AttachChild(node);
@@ -124,7 +150,7 @@ public sealed class NodeWorld
         if (node is Label l)    _labels.Remove(l);
         _allNodes.Remove(node);
         _byEntity.Remove(node.Entity);
-        _world.SceneTree.DestroyNode(node.Entity);
+        _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
         node.UnbindFromNodeWorld();
     }
 
@@ -208,7 +234,18 @@ public sealed class NodeWorld
 
     internal void Set<T>(ulong entity, in T value) where T : unmanaged
     {
-        var sp = _ecs.AddComponent<T>(entity, _components.CidOf<T>());
+        var cid = _components.CidOf<T>();
+        if (_systemCtx != 0)
+        {
+            // Inside a running system. If the entity already carries the component,
+            // this is a plain data write (safe mid-wave). If not, adding it is a
+            // structural change that must defer to the wave barrier.
+            var existing = _ecs.GetComponent<T>(entity, cid);
+            if (!existing.IsEmpty) { existing[0] = value; return; }
+            if (Runtime.SystemContext.Attach(_systemCtx, entity, cid, in value)) return;
+            // No context / defer failed: fall through to the immediate path.
+        }
+        var sp = _ecs.AddComponent<T>(entity, cid);
         if (!sp.IsEmpty) sp[0] = value;
     }
 

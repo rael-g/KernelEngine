@@ -48,7 +48,10 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
         {
             var handle = GCHandle.FromIntPtr((nint)userData);
             var entry = (SystemEntry)handle.Target!;
-            entry.Execute(entry.Owner, dt);
+            if (entry.ExecuteCtx is not null)
+                entry.ExecuteCtx(entry.Owner, (nint)ctx, dt);
+            else
+                entry.Execute!(entry.Owner, dt);
         }
         catch (Exception ex)
         {
@@ -73,7 +76,8 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     private sealed class SystemEntry
     {
         public required Runtime Owner { get; init; }
-        public required Action<IRuntime, float> Execute { get; init; }
+        public Action<IRuntime, float>? Execute { get; init; }
+        public Action<IRuntime, nint, float>? ExecuteCtx { get; init; }
     }
 
     ke_runtime* INativeRuntime.Native => _native;
@@ -143,11 +147,32 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
                                  uint pinnedThread = 0, bool exclusive = false)
     {
+        ArgumentNullException.ThrowIfNull(execute);
+        return RegisterSystemEntry(name, phase, new SystemEntry { Owner = this, Execute = execute },
+                                    pinnedThread, exclusive);
+    }
+
+    /// <summary>
+    /// Registers a system whose callback also receives the native system-context
+    /// pointer (as an <see cref="nint"/>) for the current tick. The context is the
+    /// only safe channel for structural world mutation (node create/destroy) from
+    /// inside a running system — it defers the change to the wave barrier. Opaque
+    /// to managed code; forward it to APIs that accept a system context.
+    /// </summary>
+    public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
+                                 uint pinnedThread = 0, bool exclusive = false)
+    {
+        ArgumentNullException.ThrowIfNull(execute);
+        return RegisterSystemEntry(name, phase, new SystemEntry { Owner = this, ExecuteCtx = execute },
+                                    pinnedThread, exclusive);
+    }
+
+    private ulong RegisterSystemEntry(string name, RuntimePhase phase, SystemEntry entry,
+                                       uint pinnedThread, bool exclusive)
+    {
         ThrowIfDisposed();
         ArgumentException.ThrowIfNullOrEmpty(name);
-        ArgumentNullException.ThrowIfNull(execute);
 
-        var entry = new SystemEntry { Owner = this, Execute = execute };
         var handle = GCHandle.Alloc(entry);
         _systemHandles.Add(handle);
 

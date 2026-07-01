@@ -50,6 +50,30 @@ KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
                                                           uint32_t query_index,
                                                           size_t *out_count);
 
+// Reserve a real, usable entity id immediately (routes to ke_ecs->entity_reserve).
+// Safe to call inside a system body during a parallel wave. Unlike spawn (whose
+// id is only assigned at the wave barrier), the returned id is valid at once and
+// can be referenced — used as a parent, stored, or given components via attach
+// (applied at the barrier). This is the entry point for structural creation that
+// needs the id synchronously (e.g. scene-tree node creation from a system).
+KE_RUNTIME_API ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx);
+
+// A deferred structural operation, run serially at the wave barrier (main thread,
+// outside concurrent_reads) where entity creation/destruction and archetype moves
+// are legal. `user` points to the copied payload the caller passed to
+// ke_system_ctx_defer. `ecs` is the live world.
+typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
+
+// Enqueue an arbitrary structural mutation to run at the wave barrier. The engine
+// copies `user_size` bytes of `user` into an internal arena, so the caller's
+// buffer need not outlive this call. This is the generic escape valve a builder
+// (e.g. the scene tree) uses to perform read-modify-write structural work — such
+// as creating a node and linking it into its parent's child list — that the fixed
+// spawn/attach/despawn verbs cannot express, while still honoring the "no
+// structural change inside a wave" rule. Returns false on OOM.
+KE_RUNTIME_API bool ke_system_ctx_defer(ke_system_ctx *ctx, ke_defer_fn fn,
+                                          const void *user, size_t user_size);
+
 KE_RUNTIME_API ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx);
 KE_RUNTIME_API bool     ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                                                ke_component_id cid, const void *data, size_t size);

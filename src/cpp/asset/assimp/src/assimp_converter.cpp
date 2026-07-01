@@ -77,7 +77,10 @@ bool ConvertMesh(const aiMesh* am, ke_mesh_data* md)
         {
             // Compute a tangent perpendicular to the vertex normal.
             // Cross with world-up; fall back to world-right for near-vertical normals.
-            const aiVector3D &N = am->mNormals[vi];
+            // Use the normal already resolved above (v.n*), which defaults to
+            // (0,0,1) when the mesh carries no normals — reading am->mNormals here
+            // would dereference null for a normal-less mesh.
+            aiVector3D N(v.nx, v.ny, v.nz);
             aiVector3D up(0.f, 1.f, 0.f);
             float dot_up = N.x * up.x + N.y * up.y + N.z * up.z;
             if (dot_up > 0.9f || dot_up < -0.9f)

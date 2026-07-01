@@ -53,19 +53,24 @@ public sealed class SceneNodesModule : IRuntimeModule
         var scheduler = services.GetRequiredService<IScheduler>();
 
         IInputReader? prevSnapshot = null;
-        // Exclusive so OnUpdate callbacks can create/destroy nodes safely
-        // (entity creation is forbidden inside concurrent_reads/ecs_readonly_begin).
-        runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, dt) =>
+        // The ctx-aware overload hands each tick its system context. Node create/
+        // destroy issued from a behavior routes through it and defers the structural
+        // change to the wave barrier — so this runs as an ordinary parallel-wave
+        // system with no exclusive bypass.
+        runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, ctx, dt) =>
         {
             input?.Update();
             sceneTree.PropagateTransforms();
             var snapshot  = input?.CaptureSnapshot();
-            var view      = new View(nodeWorld, dt, snapshot, prevSnapshot);
+            var view      = new View(nodeWorld, dt, snapshot, prevSnapshot, ctx);
             var behaviors = nodeWorld.Behaviors;
-            for (int i = 0; i < behaviors.Count; i++)
-                behaviors[i].OnUpdate(in view);
+            using (nodeWorld.EnterSystem(ctx))
+            {
+                for (int i = 0; i < behaviors.Count; i++)
+                    behaviors[i].OnUpdate(in view);
+            }
             prevSnapshot = snapshot;
-        }, pinnedThread: 1, exclusive: true);
+        }, pinnedThread: 1);
 
         // Scene setup runs on the render worker (GPU upload has thread affinity),
         // after the render module's OnLoad created the core + registered components.
