@@ -12,7 +12,7 @@ public partial struct ke_gpu_clear_value
     public _color_e__FixedBuffer color;
 
     [FieldOffset(0)]
-    [NativeTypeName("__AnonymousRecord_gpu_enums_L245_C5")]
+    [NativeTypeName("__AnonymousRecord_gpu_enums_L246_C5")]
     public _depth_stencil_e__Struct depth_stencil;
 
     public partial struct _depth_stencil_e__Struct

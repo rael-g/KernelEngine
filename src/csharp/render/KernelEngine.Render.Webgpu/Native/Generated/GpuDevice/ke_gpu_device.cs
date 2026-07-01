@@ -45,8 +45,8 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("ke_gpu_sampler (*)(struct ke_gpu_device *, const ke_gpu_sampler_params *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_sampler_params*, ulong> create_sampler;
 
-    [NativeTypeName("ke_gpu_shader_module (*)(struct ke_gpu_device *, const ke_gpu_shader_module_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_shader_module_params*, ulong> create_shader_module;
+    [NativeTypeName("ke_gpu_shader_module (*)(struct ke_gpu_device *, const ke_gpu_shader_module_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_shader_module_params*, ke_error**, ulong> create_shader_module;
 
     [NativeTypeName("ke_gpu_pipeline (*)(struct ke_gpu_device *, const ke_gpu_render_pipeline_params *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_render_pipeline_params*, ulong> create_render_pipeline;
@@ -104,4 +104,10 @@ public unsafe partial struct ke_gpu_device
 
     [NativeTypeName("const void *(*)(struct ke_gpu_device *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, sbyte*, void*> query_extension;
+
+    [NativeTypeName("ke_gpu_shader_language (*)(struct ke_gpu_device *)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_shader_language> shader_language;
+
+    [NativeTypeName("ke_ndc_convention (*)(struct ke_gpu_device *)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_ndc_convention> get_ndc_convention;
 }

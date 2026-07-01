@@ -14,4 +14,6 @@ public partial struct ke_gpu_bind_group_layout_entry
 
     [NativeTypeName("ke_bool")]
     public byte has_dynamic_offset;
+
+    public ke_gpu_texture_dimension view_dimension;
 }

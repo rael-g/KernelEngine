@@ -9,6 +9,12 @@ public unsafe partial struct ke_runtime_system_params
 
     public ke_phase phase;
 
+    [NativeTypeName("const ke_query_decl *")]
+    public ke_query_decl* queries;
+
+    [NativeTypeName("uint32_t")]
+    public uint query_count;
+
     [NativeTypeName("const ke_component_access *")]
     public ke_component_access* access_list;
 

@@ -17,4 +17,10 @@ public partial struct ke_directional_light_component
     public float b;
 
     public float intensity;
+
+    public float ambient_r;
+
+    public float ambient_g;
+
+    public float ambient_b;
 }

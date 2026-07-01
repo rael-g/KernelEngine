@@ -123,3 +123,66 @@ TEST_F(EcsParallelReads, TwoReadersSameWave_NoConcurrentStorageAccess)
     EXPECT_EQ(ke_system_ctx_check_failures(), 0u)
         << "two reader systems touched ke_ecs storage concurrently during a wave";
 }
+
+namespace {
+struct Vel { float x, y, z; };
+double g_pv_sum = 0.0;
+
+void posvel_body(ke_system_ctx *ctx, void *, float)
+{
+    size_t                seg_count = 0;
+    const ke_ecs_segment *segs      = ke_system_ctx_view(ctx, 0, &seg_count);
+    for (size_t s = 0; s < seg_count; ++s)
+    {
+        const Pos *pc = static_cast<const Pos *>(segs[s].columns[0]);
+        const Vel *vc = static_cast<const Vel *>(segs[s].columns[1]);
+        for (size_t i = 0; i < segs[s].count; ++i)
+            g_pv_sum += static_cast<double>(pc[i].x) + static_cast<double>(vc[i].x);
+    }
+}
+}  // namespace
+
+// A two-term query must hand the body both columns aligned 1:1 with the entities,
+// so columns[0][i] and columns[1][i] belong to the same entity.
+TEST_F(EcsParallelReads, MultiTermQuery_AlignedColumns)
+{
+    ke_component_id pos = ecs->component_register(ecs, "pos2", sizeof(Pos));
+    ke_component_id vel = ecs->component_register(ecs, "vel2", sizeof(Vel));
+    ASSERT_NE(pos, 0u);
+    ASSERT_NE(vel, 0u);
+
+    double expect = 0.0;
+    for (int i = 0; i < 100; ++i)
+    {
+        ke_entity e = ecs->entity_create(ecs);
+        ecs->component_add(ecs, e, pos);
+        ecs->component_add(ecs, e, vel);
+        // Re-fetch after both adds: the second add moves the entity to a new
+        // archetype, so a pointer from the first add would be stale.
+        Pos *p = static_cast<Pos *>(ecs->component_get(ecs, e, pos));
+        Vel *v = static_cast<Vel *>(ecs->component_get(ecs, e, vel));
+        ASSERT_NE(p, nullptr);
+        ASSERT_NE(v, nullptr);
+        p->x = static_cast<float>(i);
+        v->x = static_cast<float>(i * 2);
+        expect += static_cast<double>(i) + static_cast<double>(i * 2);
+    }
+
+    ke_query_decl q{};
+    q.terms[0]   = {pos, KE_ACCESS_READ};
+    q.terms[1]   = {vel, KE_ACCESS_READ};
+    q.term_count = 2;
+
+    ke_runtime_system_params s{};
+    s.name        = "PosVel";
+    s.phase       = KE_PHASE_UPDATE;
+    s.queries     = &q;
+    s.query_count = 1;
+    s.execute     = posvel_body;
+    ASSERT_NE(runtime->register_system(runtime, &s, nullptr), 0u);
+
+    g_pv_sum = 0.0;
+    ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
+    EXPECT_DOUBLE_EQ(g_pv_sum, expect) << "aligned columns must read the right per-entity data";
+    EXPECT_EQ(ke_system_ctx_check_failures(), 0u);
+}

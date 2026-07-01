@@ -205,6 +205,7 @@ const ModuleState = struct {
     cull_bind_group: c.ke_gpu_bind_group,
     cull_io: c.ke_render_pass_io,
     cull_access: [6]c.ke_component_access,
+    cull_queries: [3]c.ke_query_decl, // [point_light,transform], [spot_light,transform], [camera,transform]
     clusters_cid: c.ke_component_id, // tag: cull WRITES, forward READS (ordering)
 };
 
@@ -303,63 +304,65 @@ fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
 
 // ── Light cull compute pass ───────────────────────────────────────────────────
 // Packs the scene's point + spot lights into storage buffers, then dispatches one
-// thread per cluster to bin them (the forward reads the result). Ordered before
-// the forward by the "light_clusters" tag. Translated from the legacy bgfx host +
-// cs_light_cull (which was authored but never wired on the host side).
+// thread per cluster to bin them. The forward reads the result; the "light_clusters"
+// tag orders this pass before it.
 fn cullSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st = stateOf(user);
     const core = st.core.ref;
     const deg2rad: f32 = std.math.pi / 180.0;
-
-    // Pack point lights (world position from each light's transform).
-    var pl_ents: [*c]c.ke_entity = undefined;
-    var pl_data: ?*anyopaque = undefined;
-    var pl_count: usize = 0;
-    c.ke_system_ctx_query(ctx, st.point_light_cid, &pl_ents, &pl_data, &pl_count);
-    const pls: [*c]const PointLightComp = @ptrCast(@alignCast(pl_data));
-    const pn: u32 = @intCast(@min(pl_count, MAX_LIGHTS));
-    var pi: u32 = 0;
-    while (pi < pn) : (pi += 1) {
-        const tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, pl_ents[pi]) orelse continue;
-        const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
-        const m = tc.world_matrix.m;
-        const pg = PointLightGpu{
-            .pos_radius = .{ m[12], m[13], m[14], pls[pi].radius },
-            .color_intensity = .{ pls[pi].color[0], pls[pi].color[1], pls[pi].color[2], pls[pi].intensity },
-        };
-        core.*.upload.?(core, st.point_lights_sb, pi * @sizeOf(PointLightGpu), &pg, @sizeOf(PointLightGpu));
+    // Pack point lights — view 0 = [point_light, transform], columns aligned.
+    var pn: u32 = 0;
+    {
+        var segc: usize = 0;
+        const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+        var s: usize = 0;
+        while (s < segc) : (s += 1) {
+            const pls: [*c]const PointLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
+            const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+            var i: usize = 0;
+            while (i < segs[s].count and pn < MAX_LIGHTS) : (i += 1) {
+                const m = tcs[i].world_matrix.m;
+                const pg = PointLightGpu{
+                    .pos_radius = .{ m[12], m[13], m[14], pls[i].radius },
+                    .color_intensity = .{ pls[i].color[0], pls[i].color[1], pls[i].color[2], pls[i].intensity },
+                };
+                core.*.upload.?(core, st.point_lights_sb, pn * @sizeOf(PointLightGpu), &pg, @sizeOf(PointLightGpu));
+                pn += 1;
+            }
+        }
     }
 
-    // Pack spot lights (cone cosines precomputed).
-    var sl_ents: [*c]c.ke_entity = undefined;
-    var sl_data: ?*anyopaque = undefined;
-    var sl_count: usize = 0;
-    c.ke_system_ctx_query(ctx, st.spot_light_cid, &sl_ents, &sl_data, &sl_count);
-    const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(sl_data));
-    const sn: u32 = @intCast(@min(sl_count, MAX_LIGHTS));
-    var si: u32 = 0;
-    while (si < sn) : (si += 1) {
-        const tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, sl_ents[si]) orelse continue;
-        const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
-        const m = tc.world_matrix.m;
-        const sg = SpotLightGpu{
-            .pos_range = .{ m[12], m[13], m[14], sls[si].range },
-            .dir_cos_inner = .{ sls[si].dir[0], sls[si].dir[1], sls[si].dir[2], std.math.cos(sls[si].inner_deg * deg2rad) },
-            .color_intensity = .{ sls[si].color[0], sls[si].color[1], sls[si].color[2], sls[si].intensity },
-            .cone = .{ std.math.cos(sls[si].outer_deg * deg2rad), 0.0, 0.0, 0.0 },
-        };
-        core.*.upload.?(core, st.spot_lights_sb, si * @sizeOf(SpotLightGpu), &sg, @sizeOf(SpotLightGpu));
+    // Pack spot lights — view 1 = [spot_light, transform]; cone cosines precomputed.
+    var sn: u32 = 0;
+    {
+        var segc: usize = 0;
+        const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+        var s: usize = 0;
+        while (s < segc) : (s += 1) {
+            const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
+            const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+            var i: usize = 0;
+            while (i < segs[s].count and sn < MAX_LIGHTS) : (i += 1) {
+                const m = tcs[i].world_matrix.m;
+                const sg = SpotLightGpu{
+                    .pos_range = .{ m[12], m[13], m[14], sls[i].range },
+                    .dir_cos_inner = .{ sls[i].dir[0], sls[i].dir[1], sls[i].dir[2], std.math.cos(sls[i].inner_deg * deg2rad) },
+                    .color_intensity = .{ sls[i].color[0], sls[i].color[1], sls[i].color[2], sls[i].intensity },
+                    .cone = .{ std.math.cos(sls[i].outer_deg * deg2rad), 0.0, 0.0, 0.0 },
+                };
+                core.*.upload.?(core, st.spot_lights_sb, sn * @sizeOf(SpotLightGpu), &sg, @sizeOf(SpotLightGpu));
+                sn += 1;
+            }
+        }
     }
 
-    // Camera → view + projection params (must match the forward's).
-    var cam_ents: [*c]c.ke_entity = undefined;
-    var cam_data: ?*anyopaque = undefined;
-    var cam_count: usize = 0;
-    c.ke_system_ctx_query(ctx, st.camera_cid, &cam_ents, &cam_data, &cam_count);
-    if (cam_count == 0) return;
-    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_data));
-    const cam_tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, cam_ents[0]) orelse return;
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_tc_raw));
+    // Camera → view + projection params (must match the forward's). View 2 =
+    // [camera, transform]; the first match is the active camera.
+    var cam_segc: usize = 0;
+    const cam_segs = c.ke_system_ctx_view(ctx, 2, &cam_segc);
+    if (cam_segc == 0 or cam_segs[0].count == 0) return;
+    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
+    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &st.cull_io);
     if (pc == null) return;
@@ -1057,14 +1060,33 @@ fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
     };
+
+    // Data the cull body reads through resolved views: each light kind paired with
+    // its transform, and the camera paired with its transform. Index order here is
+    // the query_index the body passes to ke_system_ctx_view.
+    const rd = c.KE_ACCESS_READ;
+    st.cull_queries = std.mem.zeroes([3]c.ke_query_decl);
+    st.cull_queries[0].terms[0] = .{ .cid = st.point_light_cid, .access = rd };
+    st.cull_queries[0].terms[1] = .{ .cid = st.transform_cid, .access = rd };
+    st.cull_queries[0].term_count = 2;
+    st.cull_queries[1].terms[0] = .{ .cid = st.spot_light_cid, .access = rd };
+    st.cull_queries[1].terms[1] = .{ .cid = st.transform_cid, .access = rd };
+    st.cull_queries[1].term_count = 2;
+    st.cull_queries[2].terms[0] = .{ .cid = st.camera_cid, .access = rd };
+    st.cull_queries[2].terms[1] = .{ .cid = st.transform_cid, .access = rd };
+    st.cull_queries[2].term_count = 2;
     return true;
 }
 
-fn registerSys(rt: *c.ke_runtime, name: [*c]const u8, access: [*c]c.ke_component_access,
-               access_count: u32, user: *ModuleState, exec: ExecFn) void {
+fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
+               queries: [*c]const c.ke_query_decl, query_count: u32,
+               access: [*c]const c.ke_component_access, access_count: u32,
+               user: *ModuleState, exec: ExecFn) void {
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = name;
     params.phase = c.KE_PHASE_RENDER;
+    params.queries = queries;
+    params.query_count = query_count;
     params.access_list = access;
     params.access_count = access_count;
     params.pinned_thread = 0; // render systems run in parallel (sim ‖ render + parallel passes)
@@ -1132,12 +1154,12 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        registerSys(rt, "render.begin_frame", &st.begin_access, st.begin_access.len, st, beginFrameSys);
-        registerSys(rt, "render.clear", &st.clear_access, st.clear_access.len, st, clearSys);
-        registerSys(rt, "render.shadow", &st.shadow_access, st.shadow_access.len, st, shadowSys);
-        registerSys(rt, "render.cull", &st.cull_access, st.cull_access.len, st, cullSys);
-        registerSys(rt, "render.forward", &st.fwd_access, st.fwd_access.len, st, forwardSys);
-        registerSys(rt, "render.end_frame", &st.end_access, st.end_access.len, st, endFrameSys);
+        registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
+        registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
+        registerSys(rt, "render.shadow", null, 0, &st.shadow_access, st.shadow_access.len, st, shadowSys);
+        registerSys(rt, "render.cull", &st.cull_queries, 3, &st.cull_access, st.cull_access.len, st, cullSys);
+        registerSys(rt, "render.forward", null, 0, &st.fwd_access, st.fwd_access.len, st, forwardSys);
+        registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
 
     return .{ .ref = @ptrCast(st), .destroy = destroyModule };

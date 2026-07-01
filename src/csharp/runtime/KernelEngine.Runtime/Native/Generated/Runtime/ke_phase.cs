@@ -9,5 +9,6 @@ public enum ke_phase
     KE_PHASE_FIXED_UPDATE = 2,
     KE_PHASE_UPDATE = 3,
     KE_PHASE_POST_UPDATE = 4,
-    KE_PHASE_SHUTDOWN = 5,
+    KE_PHASE_RENDER = 5,
+    KE_PHASE_SHUTDOWN = 6,
 }
