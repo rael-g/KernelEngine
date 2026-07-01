@@ -48,3 +48,9 @@ void ke_error_set(ke_error** out_error, const ke_error_type* type,
     e->message = s_messages[slot];
     if (out_error) *out_error = e;
 }
+
+const ke_error* ke_error_last(void) {
+    // s_slot was already advanced past the last write; the filled slot is 1-s_slot.
+    int last = 1 - s_slot;
+    return s_errors[last].type ? &s_errors[last] : NULL;
+}

@@ -59,6 +59,10 @@ KE_COMMON_API extern const ke_error_type KE_ERROR_ALREADY_EXISTS;
 /// Returns true if err->type matches type or any ancestor in its parent chain.
 KE_COMMON_API bool ke_error_is(const ke_error* err, const ke_error_type* type);
 
+/// Returns a pointer to the most-recently set error on this thread, or NULL if
+/// no error has been set yet. Valid until the next ke_error_set() call on this thread.
+KE_COMMON_API const ke_error* ke_error_last(void);
+
 /// Low-level: fill a thread-local error slot and write to *out_error if non-NULL.
 /// Prefer the KE_ERROR_SET / KE_ERROR_WRAP macros which inject __FILE__ and __LINE__.
 KE_COMMON_API void ke_error_set(ke_error** out_error, const ke_error_type* type,

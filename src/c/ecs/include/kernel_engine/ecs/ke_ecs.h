@@ -98,7 +98,8 @@ extern "C"
 
         // Copies every double-buffered component's live column into its snapshot
         // column. Called by the scheduler at the sim→render phase boundary.
-        void (*swap_snapshots)(struct ke_ecs *self);
+        // Returns false and sets *out_error on failure (e.g. underlying storage fatal).
+        bool (*swap_snapshots)(struct ke_ecs *self, ke_error **out_error);
 
         // Runs body(ctx) with the world made safe for concurrent reads from
         // multiple threads (the scheduler dispatches a wave of parallel systems
