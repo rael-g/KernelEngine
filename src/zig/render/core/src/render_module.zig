@@ -42,7 +42,7 @@ const NUM_CLUSTERS = GRID_X * GRID_Y * GRID_Z;
 const MAX_LIGHTS_PER_CLUSTER = 64;
 const MAX_LIGHTS = 256; // total point or spot lights culled per frame
 
-const MAX_DRAWS = 64;
+const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
 // Set 2 — per-object transform (dynamic offset). Matches forward.slang PerObject.

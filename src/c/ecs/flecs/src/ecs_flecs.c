@@ -396,7 +396,9 @@ static ke_query_id ecs_flecs_query_register(ke_ecs *self, const ke_component_id 
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
     if (h->state.world_corrupted) return KE_QUERY_INVALID;
 
-    KE_FLECS_GUARD("flecs fatal in query_register", { h->state.world_corrupted = true; return KE_QUERY_INVALID; });
+    KE_FLECS_GUARD("flecs fatal in query_register", {
+        h->state.world_corrupted = true; return KE_QUERY_INVALID;
+    });
 
     ecs_query_desc_t desc = {0};
     for (size_t i = 0; i < cid_count; i++)
@@ -483,13 +485,16 @@ static void ecs_flecs_set_double_buffered(ke_ecs *self, ke_component_id cid)
     size_t size = ti ? (size_t)ti->size : 0;
     if (size == 0) return; // tag components (e.g. render-resource cids) are not buffered
 
-    KE_FLECS_GUARD("flecs fatal in set_double_buffered", { h->state.world_corrupted = true; return; });
+    KE_FLECS_GUARD("flecs fatal in set_double_buffered", {
+        h->state.world_corrupted = true; return;
+    });
     ecs_entity_t snap_e = (ecs_entity_t)ecs_new_w_id(h->state.world, 0);
     ecs_component_desc_t cdesc = {0};
     cdesc.entity         = snap_e;
     cdesc.type.size      = (ecs_size_t)size;
     cdesc.type.alignment = (ecs_size_t)alignof(max_align_t);
     ke_component_id snap_cid = (ke_component_id)ecs_component_init(h->state.world, &cdesc);
+    if (snap_cid == 0) { KE_FLECS_GUARD_END(); return; } // ecs_component_init failed
     // Warm the snapshot's query now — render systems read the snapshot cid inside
     // the readonly parallel wave, where creating a query is forbidden.
     find_or_create_query(&h->state, snap_cid);
@@ -530,13 +535,19 @@ static ke_component_id ecs_flecs_snapshot_cid(ke_ecs *self, ke_component_id cid)
     return p ? p->snap : cid;
 }
 
-static void ecs_flecs_swap_snapshots(ke_ecs *self)
+static bool ecs_flecs_swap_snapshots(ke_ecs *self, ke_error **out_error)
 {
-    if (!self || !self->handle) return;
+    if (!self || !self->handle) return true;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
-    KE_FLECS_GUARD("flecs fatal in swap_snapshots", { h->state.world_corrupted = true; return; });
+    KE_FLECS_GUARD("flecs fatal in swap_snapshots", {
+        h->state.world_corrupted = true;
+        KE_ERROR_SET(out_error, &KE_ERROR_ECS_FLECS_FATAL,
+                     ke_abort_guard_last_message() ? ke_abort_guard_last_message()
+                                                   : "flecs fatal in swap_snapshots");
+        return false;
+    });
     thread_scratch *ts = scratch_for_thread(); // serial caller (phase boundary)
-    if (!ts) return;
+    if (!ts) { KE_FLECS_GUARD_END(); return true; }
 
     for (size_t i = 0; i < h->state.snap_count; i++)
     {
@@ -556,15 +567,18 @@ static void ecs_flecs_swap_snapshots(ke_ecs *self)
 
         // Pass 2: copy live → snap per entity (adds snap on first swap; safe
         // outside iteration even though it moves archetypes).
+        if (p->snap == 0) continue; // snap creation failed; skip to avoid ecs abort
         for (size_t e = 0; e < total; e++)
         {
             ecs_entity_t ent = (ecs_entity_t)ts->entities[e];
+            if (!ecs_is_alive(h->state.world, ent)) continue;
             void *live = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->live);
             void *snap = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->snap);
             if (live && snap) memcpy(snap, live, p->element_size);
         }
     }
     KE_FLECS_GUARD_END();
+    return true;
 }
 
 static void ecs_flecs_concurrent_reads(ke_ecs *self, void (*body)(void *ctx), void *ctx)

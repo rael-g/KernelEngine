@@ -843,7 +843,10 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
         h->state.inference_done = true;
     }
     if (h->state.ecs->swap_snapshots)
-        h->state.ecs->swap_snapshots(h->state.ecs);
+    {
+        if (!h->state.ecs->swap_snapshots(h->state.ecs, out_error))
+            return false;
+    }
     runtime_run_phase(h, KE_PHASE_RENDER, dt);
 
     return true;
