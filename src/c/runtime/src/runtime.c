@@ -765,8 +765,12 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
         // Dispatch + join inside the ECS concurrent-read scope, so the parallel
         // system bodies read the world safely (the ECS makes reads thread-safe;
         // structural changes go to each system's defer queue, flushed below).
+        // Exception: exclusive systems sit alone in their wave and are permitted
+        // to mutate the world directly (e.g. create/destroy entities), so they
+        // skip concurrent_reads.
+        bool wave_exclusive = (wave_size == 1 && pkgs[0].ctx.exclusive);
         wave_run_ctx wc = { h, pkgs, tasks, pinned, wave_size };
-        if (h->state.ecs->concurrent_reads)
+        if (!wave_exclusive && h->state.ecs->concurrent_reads)
             h->state.ecs->concurrent_reads(h->state.ecs, run_wave_body, &wc);
         else
             run_wave_body(&wc);

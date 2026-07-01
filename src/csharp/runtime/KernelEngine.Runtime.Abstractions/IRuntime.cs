@@ -31,7 +31,7 @@ public interface IRuntime : IDisposable
     /// calls pinned to a worker the render module names "ke.render").
     /// </param>
     ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
-                          uint pinnedThread = 0);
+                          uint pinnedThread = 0, bool exclusive = false);
 
     /// <summary>Drives one frame: PreUpdate → FixedUpdate×N → Update → PostUpdate.</summary>
     void Tick(float dt);

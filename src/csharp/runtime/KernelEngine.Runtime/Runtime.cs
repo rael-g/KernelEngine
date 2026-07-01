@@ -141,7 +141,7 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
     }
 
     public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
-                                 uint pinnedThread = 0)
+                                 uint pinnedThread = 0, bool exclusive = false)
     {
         ThrowIfDisposed();
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -159,6 +159,7 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
             p.name           = (sbyte*)namePtr;
             p.phase          = (ke_phase)phase;
             p.pinned_thread  = pinnedThread;
+            p.exclusive      = exclusive;
             p.user_data      = (void*)GCHandle.ToIntPtr(handle);
             p.execute        = (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void>)
                                 &SystemExecuteTrampoline;

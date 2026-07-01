@@ -53,6 +53,8 @@ public sealed class SceneNodesModule : IRuntimeModule
         var scheduler = services.GetRequiredService<IScheduler>();
 
         IInputReader? prevSnapshot = null;
+        // Exclusive so OnUpdate callbacks can create/destroy nodes safely
+        // (entity creation is forbidden inside concurrent_reads/ecs_readonly_begin).
         runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, dt) =>
         {
             input?.Update();
@@ -63,7 +65,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             for (int i = 0; i < behaviors.Count; i++)
                 behaviors[i].OnUpdate(in view);
             prevSnapshot = snapshot;
-        }, pinnedThread: 1);
+        }, pinnedThread: 1, exclusive: true);
 
         // Scene setup runs on the render worker (GPU upload has thread affinity),
         // after the render module's OnLoad created the core + registered components.

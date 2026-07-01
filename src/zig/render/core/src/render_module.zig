@@ -458,13 +458,26 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     var cam_data: ?*anyopaque = undefined;
     var cam_count: usize = 0;
     c.ke_system_ctx_query(ctx, st.camera_cid, &cam_ents, &cam_data, &cam_count);
-    if (cam_count == 0) return;
-    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_data));
-    const cam_tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, cam_ents[0]) orelse return;
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_tc_raw));
 
     const pc = core.*.begin_pass.?(core, ctx, &st.fwd_io);
     if (pc == null) return;
+
+    // No camera — open/close the pass so the hdr target is cleared, then bail.
+    if (cam_count == 0) {
+        const rp0 = pc.*.begin_render.?(pc);
+        rp0.*.end.?(rp0);
+        core.*.end_pass.?(core, pc);
+        return;
+    }
+
+    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_data));
+    const cam_tc_raw = c.ke_system_ctx_get(ctx, st.transform_cid, cam_ents[0]) orelse {
+        const rp0 = pc.*.begin_render.?(pc);
+        rp0.*.end.?(rp0);
+        core.*.end_pass.?(core, pc);
+        return;
+    };
+    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_tc_raw));
 
     var bw: u32 = 0;
     var bh: u32 = 0;
