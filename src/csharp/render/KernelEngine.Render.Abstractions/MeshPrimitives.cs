@@ -71,4 +71,45 @@ public static class MeshPrimitives
 
         return resources.UploadMesh(verts, idx);
     }
+
+    /// <summary>UV sphere of the given radius, centered at the origin.</summary>
+    public static MeshHandle UvSphere(IRenderResources resources, float radius = 0.5f, int rings = 24, int segments = 32)
+    {
+        int vertCount = (rings + 1) * (segments + 1);
+        int idxCount  = rings * segments * 6;
+        Span<MeshVertex> verts = vertCount <= 2048 ? stackalloc MeshVertex[vertCount] : new MeshVertex[vertCount];
+        Span<ushort>     idx   = idxCount  <= 8192 ? stackalloc ushort[idxCount]      : new ushort[idxCount];
+
+        int vi = 0;
+        for (int r = 0; r <= rings; r++)
+        {
+            float phi = MathF.PI * r / rings;          // 0 → π (top to bottom)
+            float y   = MathF.Cos(phi);
+            float sinP = MathF.Sin(phi);
+            for (int s = 0; s <= segments; s++)
+            {
+                float theta = 2f * MathF.PI * s / segments;
+                var n = new Vector3(sinP * MathF.Cos(theta), y, sinP * MathF.Sin(theta));
+                var t = new Vector3(-MathF.Sin(theta), 0f, MathF.Cos(theta)); // +U = d/dTheta
+                var uv = new Vector2((float)s / segments, (float)r / rings);
+                verts[vi++] = new(n * radius, n, uv, t);
+            }
+        }
+
+        int ii = 0;
+        for (int r = 0; r < rings; r++)
+        {
+            for (int s = 0; s < segments; s++)
+            {
+                int a = r * (segments + 1) + s;
+                int b = a + 1;
+                int c = (r + 1) * (segments + 1) + s;
+                int d = c + 1;
+                idx[ii++] = (ushort)a; idx[ii++] = (ushort)c; idx[ii++] = (ushort)b;
+                idx[ii++] = (ushort)b; idx[ii++] = (ushort)c; idx[ii++] = (ushort)d;
+            }
+        }
+
+        return resources.UploadMesh(verts, idx);
+    }
 }

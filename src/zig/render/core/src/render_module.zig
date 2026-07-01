@@ -31,6 +31,8 @@ const skybox_fs_wgsl = @embedFile("skybox.fs.wgsl");
 const shadow_vs_wgsl = @embedFile("shadow.vs.wgsl");
 const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
 const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
+const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
+const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
 
 const SHADOW_RES = 1024; // shadow map resolution
 
@@ -207,6 +209,16 @@ const ModuleState = struct {
     cull_access: [6]c.ke_component_access,
     cull_queries: [3]c.ke_query_decl, // [point_light,transform], [spot_light,transform], [camera,transform]
     clusters_cid: c.ke_component_id, // tag: cull WRITES, forward READS (ordering)
+
+    // ACES tonemapping pass — reads "hdr" (Rgba16Float), writes "backbuffer".
+    tonemap_pipeline: c.ke_gpu_pipeline,
+    tonemap_bgl: c.ke_gpu_bind_group_layout,
+    tonemap_bind_group: c.ke_gpu_bind_group,
+    tonemap_writes: [1][*c]const u8,
+    tonemap_reads: [1][*c]const u8,
+    tonemap_io: c.ke_render_pass_io,
+    tonemap_access: [2]c.ke_component_access,
+    hdr_cid: c.ke_component_id,
 };
 
 // Per-object model for the shadow pass (set 1).
@@ -709,7 +721,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object (transform)
     pp.bind_group_layouts[3] = st.light_set_bgl; // set 3: clustered light lists
     pp.bind_group_layout_count = 4;
-    pp.color_target_format = 0; // swapchain
+    pp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
     st.fwd_pipeline = dev.create_render_pipeline.?(dev, &pp);
     if (st.fwd_pipeline == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
@@ -748,6 +760,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .height = SHADOW_RES,
         .scale_x = 1.0,
         .scale_y = 1.0,
+        .clear_value = .{ 1.0, 1.0, 1.0, 1.0 }, // R=1 = far depth; alpha≠0 → override
     }, null);
     const shadow_depth_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
         .name = "shadow_depth",
@@ -870,7 +883,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
     skp.bind_group_layouts[0] = frame_bgl;
     skp.bind_group_layout_count = 1;
-    skp.color_target_format = 0;
+    skp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
     st.sky_pipeline = dev.create_render_pipeline.?(dev, &skp);
     if (st.sky_pipeline == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox: render pipeline creation failed", @src().file, @intCast(@src().line), null);
@@ -902,7 +915,21 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .scale_y = 1.0,
     }, null);
 
-    st.fwd_writes = .{ "backbuffer", "depth" };
+    // HDR intermediate buffer (Rgba16Float). The forward renders here; the
+    // tonemap pass resolves it to the swapchain (backbuffer).
+    st.hdr_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
+        .name = "hdr",
+        .type = c.KE_RENDER_RESOURCE_TEXTURE,
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
+        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+        .width = 0,
+        .height = 0,
+        .scale_x = 1.0,
+        .scale_y = 1.0,
+    }, null);
+
+    // Forward writes to "hdr" (not directly to backbuffer); tonemap resolves.
+    st.fwd_writes = .{ "hdr", "depth" };
     st.fwd_reads = .{"shadow_map"};
     st.fwd_io = std.mem.zeroes(c.ke_render_pass_io);
     st.fwd_io.writes = @ptrCast(&st.fwd_writes);
@@ -911,9 +938,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.fwd_io.reads_count = 1;
     st.fwd_io.cmd_slot = 3; // forward pass → frame command slot 3 (after cull)
 
-    const bb_cid = st.core.ref.*.cid.?(st.core.ref, "backbuffer");
     st.fwd_access = .{
-        .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
+        .{ .cid = st.hdr_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = depth_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = st.mesh_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
@@ -926,6 +952,98 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .cid = st.spot_light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.ambient_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = st.clusters_cid, .access = c.KE_ACCESS_READ }, // after the cull pass
+    };
+    return true;
+}
+
+// ── ACES tonemapping pass ─────────────────────────────────────────────────────
+// Reads the HDR buffer written by the forward pass and resolves it to the
+// swapchain via the ACES fitted curve (Narkowicz 2015).
+
+fn tonemapSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+    const st = stateOf(user);
+    const core = st.core.ref;
+    const dev = st.device;
+
+    const pc = core.*.begin_pass.?(core, ctx, &st.tonemap_io);
+    if (pc == null) return;
+
+    // Resolve the HDR texture view for this frame and rebuild the bind group.
+    const hdr_view = pc.*.read.?(pc, "hdr");
+    const samp = core.*.sampler.?(core);
+    const entries = [2]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_view, .sampler = 0 },
+        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = samp },
+    };
+    // Destroy the previous frame's bind group before creating the new one.
+    if (st.tonemap_bind_group != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group.?(dev, st.tonemap_bind_group);
+    st.tonemap_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = st.tonemap_bgl,
+        .entry_count = 2,
+        .entries = &entries,
+    });
+
+    const rp = pc.*.begin_render.?(pc);
+    rp.*.set_pipeline.?(rp, st.tonemap_pipeline);
+    rp.*.set_bind_group.?(rp, 0, st.tonemap_bind_group, null, 0);
+    rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle — no vertex buffer needed
+    rp.*.end.?(rp);
+    core.*.end_pass.?(core, pc);
+}
+
+fn tonemapSetup(st: *ModuleState, out_error: [*c][*c]c.ke_error) bool {
+    const dev = st.device;
+
+    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(tonemap_vs_wgsl), .byte_size = tonemap_vs_wgsl.len, .entry_point = "tonemap.vs" }, out_error);
+    defer dev.destroy_shader_module.?(dev, vs);
+    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(tonemap_fs_wgsl), .byte_size = tonemap_fs_wgsl.len, .entry_point = "tonemap.fs" }, out_error);
+    defer dev.destroy_shader_module.?(dev, fs);
+
+    // Set 0: { texture2D t_hdr @binding(0), sampler s_hdr @binding(1) }
+    const bgl_entries = [2]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_2D },
+        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+    };
+    const bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .entry_count = 2,
+        .entries = &bgl_entries,
+    });
+
+    st.tonemap_bgl = bgl; // kept alive for per-frame bind group creation in tonemapSys
+    var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    pp.vertex_module   = vs;
+    pp.vertex_entry    = "vs_main";
+    pp.fragment_module = fs;
+    pp.fragment_entry  = "fs_main";
+    pp.bind_group_layouts[0] = bgl;
+    pp.bind_group_layout_count = 1;
+    pp.color_target_format = 0; // swapchain surface format
+    pp.blend_state.write_mask = 0x0F;
+    // no depth test — fullscreen triangle pass over backbuffer
+    pp.depth_stencil.depth_test_enabled = 0;
+    pp.depth_stencil.depth_write_enabled = 0;
+    pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
+    st.tonemap_pipeline = dev.create_render_pipeline.?(dev, &pp);
+    if (st.tonemap_pipeline == c.KE_GPU_INVALID_HANDLE) {
+        dev.destroy_bind_group_layout.?(dev, bgl);
+        return false;
+    }
+
+    st.tonemap_bind_group = c.KE_GPU_INVALID_HANDLE;
+
+    st.tonemap_writes = .{"backbuffer"};
+    st.tonemap_reads  = .{"hdr"};
+    st.tonemap_io = std.mem.zeroes(c.ke_render_pass_io);
+    st.tonemap_io.writes = @ptrCast(&st.tonemap_writes);
+    st.tonemap_io.writes_count = 1;
+    st.tonemap_io.reads = @ptrCast(&st.tonemap_reads);
+    st.tonemap_io.reads_count = 1;
+    st.tonemap_io.cmd_slot = 4; // after forward (slot 3)
+
+    st.tonemap_access = .{
+        .{ .cid = st.hdr_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.core.ref.*.cid.?(st.core.ref, "backbuffer"), .access = c.KE_ACCESS_WRITE },
     };
     return true;
 }
@@ -1102,6 +1220,11 @@ export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.k
 
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
+    const dev = st.device;
+    if (st.tonemap_bind_group != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group.?(dev, st.tonemap_bind_group);
+    if (st.tonemap_bgl != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group_layout.?(dev, st.tonemap_bgl);
     if (st.core.destroy) |d| d(st.core.ref);
     gpa.destroy(st);
 }
@@ -1154,11 +1277,17 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
+        if (!tonemapSetup(st, out_error)) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
         registerSys(rt, "render.shadow", null, 0, &st.shadow_access, st.shadow_access.len, st, shadowSys);
         registerSys(rt, "render.cull", &st.cull_queries, 3, &st.cull_access, st.cull_access.len, st, cullSys);
         registerSys(rt, "render.forward", null, 0, &st.fwd_access, st.fwd_access.len, st, forwardSys);
+        registerSys(rt, "render.tonemap", null, 0, &st.tonemap_access, st.tonemap_access.len, st, tonemapSys);
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
 

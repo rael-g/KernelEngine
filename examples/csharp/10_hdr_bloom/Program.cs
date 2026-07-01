@@ -1,8 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -13,9 +13,11 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 10_hdr_bloom â€” single cube lit by an extremely bright orange directional
-// light. Bloom + ACES tonemapping turn the over-bright surface into a
-// glowing highlight that bleeds into neighboring pixels.
+// 10_hdr_tonemapping — a very bright point light sits close to three spheres
+// and a floor plane. 1/r² falloff makes the near sphere's specular peak far
+// exceed 1.0; the ACES Narkowicz curve rolls it to a warm glow rather than
+// clipping flat. The floor shows the falloff gradient: bright under the lamp,
+// nearly black at the edges.
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -23,41 +25,62 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 10 HDR & Bloom"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.01f, 0.01f, 0.01f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 10 HDR Tonemapping"))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.0f, 0.0f, 0.0f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new PostProcessModule(
-        tonemapping: true, tonemappingExposure: 1.0f, tonemappingGamma: 2.2f,
-        bloom:       true, bloomThreshold:      0.8f, bloomIntensity:   1.5f))
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
-        Console.WriteLine("[KernelEngine] Example: 10_hdr_bloom");
-        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
-        Console.WriteLine("[KernelEngine] Features: hdr_rendering, bloom, aces_tonemapping");
+        var resources = sp.GetRequiredService<IRenderResources>();
+        Console.WriteLine("[KernelEngine] Example: 10_hdr_tonemapping");
+        Console.WriteLine("[KernelEngine] Features: hdr_intermediate, aces_tonemapping");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 10f) };
+        // Camera looking slightly down at the scene from behind and above.
+        var cam = tree.AddNode(new Camera { Fov = 55f, Near = 0.1f, Far = 200f }, "Camera");
+        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 4f, 12f) };
 
-        var cubeMesh = MeshPrimitives.Cube(renderer);
-        var mat      = renderer.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
+        var sphere = KernelEngine.Render.MeshPrimitives.UvSphere(resources, radius: 1f, rings: 32, segments: 48);
+        var floor  = KernelEngine.Render.MeshPrimitives.Plane(resources);
 
-        var glow = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = mat }, "GlowCube");
-        glow.LocalTransform = glow.LocalTransform with { Scale = new Vector3(2f, 2f, 2f) };
+        // Very smooth materials — tight specular lobe pushes the peak far past 1.0,
+        // making the ACES gradient obvious. Rough materials spread the energy too
+        // wide and the highlight stays below the tonemapping threshold.
+        var matGray   = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.0f, roughness: 0.05f);
+        var matCopper = resources.CreateMaterial(new Vector4(0.9f, 0.5f, 0.2f, 1f), metallic: 0.9f, roughness: 0.08f);
+        var matBlue   = resources.CreateMaterial(new Vector4(0.2f, 0.4f, 0.9f, 1f), metallic: 0.0f, roughness: 0.12f);
+        var matFloor  = resources.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), metallic: 0.0f, roughness: 0.9f);
 
-        // Direction points toward the +Z hemisphere (light comes from +Z) so
-        // the cube's front face catches a very high-intensity orange light â€”
-        // pixel output goes well past 1.0, triggering the bloom threshold.
-        tree.AddNode(new DirectionalLight
+        // Floor — large enough to show the falloff halo.
+        var floorNode = tree.AddNode(new MeshRenderer { MeshHandle = floor, MaterialHandle = matFloor }, "Floor");
+        floorNode.LocalTransform = floorNode.LocalTransform with
         {
-            Direction = new Vector3(0f, 0f, 1f),
-            Color     = new Vector3(1f, 0.5f, 0.2f),
-            Intensity = 50f,
-        }, "BrightSun");
+            Position = new Vector3(0f, -1f, 0f),
+            Scale    = new Vector3(20f, 1f, 20f),
+        };
+
+        // Three spheres; near sphere is 1.5 units from the light, far is ~7.
+        var s0 = tree.AddNode(new MeshRenderer { MeshHandle = sphere, MaterialHandle = matGray   }, "SphereNear");
+        var s1 = tree.AddNode(new MeshRenderer { MeshHandle = sphere, MaterialHandle = matCopper }, "SphereMid");
+        var s2 = tree.AddNode(new MeshRenderer { MeshHandle = sphere, MaterialHandle = matBlue   }, "SphereFar");
+        s0.LocalTransform = s0.LocalTransform with { Position = new Vector3(-3f, 0f, 0f) };
+        s1.LocalTransform = s1.LocalTransform with { Position = new Vector3( 0f, 0f, 0f) };
+        s2.LocalTransform = s2.LocalTransform with { Position = new Vector3( 3f, 0f, 0f) };
+
+        // Negligible ambient — the demo relies on the point light falloff being
+        // visible, so the background must stay near-black.
+        tree.AddNode(new AmbientLight { Color = new Vector3(0.01f, 0.01f, 0.015f) }, "Ambient");
+
+        // Lamp 2.5 units from the near sphere. Intensity 5 keeps the diffuse
+        // in the 0.3–0.7 range so the sphere body shows its colour; the GGX
+        // specular peak for roughness 0.05 is ~127× the irradiance, pushing
+        // the highlight well past 1.0. ACES maps that to a warm glow with a
+        // visible gradient — the body colour and the hot spot are both legible.
+        var light = tree.AddNode(new PointLight
+        {
+            Color     = new Vector3(1f, 0.92f, 0.80f),
+            Intensity = 5f,
+            Radius    = 20f,
+        }, "Lamp");
+        light.LocalTransform = light.LocalTransform with { Position = new Vector3(-3f, 2f, 1.5f) };
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -66,29 +89,18 @@ var runtime  = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 
-Console.WriteLine("[10_hdr_bloom] Loop running. Close the window to exit.");
+Console.WriteLine("[10_hdr_tonemapping] Loop running. Close the window to exit.");
 
 var clock = Stopwatch.StartNew();
 double prev = clock.Elapsed.TotalSeconds;
-int frameCount = 0;
-double fpsWindowStart = 0;
 
 while (!window.ShouldClose())
 {
     double now = clock.Elapsed.TotalSeconds;
     runtime.Tick((float)(now - prev));
     prev = now;
-
-    frameCount++;
-    if (now - fpsWindowStart >= 5.0)
-    {
-        double fps = frameCount / (now - fpsWindowStart);
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}");
-        frameCount     = 0;
-        fpsWindowStart = now;
-    }
 }
 
 runtime.UnloadModules(sp);
 
-Console.WriteLine("[10_hdr_bloom] Exited cleanly.");
+Console.WriteLine("[10_hdr_tonemapping] Exited cleanly.");

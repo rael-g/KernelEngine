@@ -63,6 +63,8 @@ const Resource = struct {
     view: c.ke_gpu_texture_view,
     is_backbuffer: bool,
     is_transient: bool, // owns texture+view → destroyed on core destroy
+    // Per-resource clear color. [3]==0 (default) defers to core's global clear_color.
+    clear_value: [4]f32,
 };
 
 // Accumulated compute-pass recording. On wgpu-native, recording a compute pass
@@ -226,6 +228,7 @@ fn declare(self: [*c]c.ke_render_core, desc: [*c]const c.ke_render_resource_desc
         .view = view,
         .is_backbuffer = false,
         .is_transient = true,
+        .clear_value = desc.*.clear_value,
     };
     st.resource_count += 1;
     return cid;
@@ -244,6 +247,7 @@ fn importTexture(self: [*c]c.ke_render_core, name: [*c]const u8, tex: c.ke_gpu_t
         .view = c.KE_GPU_INVALID_HANDLE, // view creation needs a format — refinement
         .is_backbuffer = false,
         .is_transient = false,
+        .clear_value = .{ 0, 0, 0, 0 },
     };
     st.resource_count += 1;
     return cid;
@@ -642,10 +646,10 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
             };
             has_depth = true;
         } else if (color_count < MAX_COLOR_ATTACH) {
-            // The shadow map (RGBA16F, depth in .r) clears to 1.0 = far; ordinary
-            // color targets clear to the scene color.
-            const cv: [4]f32 = if (r.format == c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT)
-                .{ 1.0, 1.0, 1.0, 1.0 }
+            // Use per-resource clear when alpha != 0 (explicit override); otherwise
+            // fall back to the core's global scene clear color.
+            const cv: [4]f32 = if (r.clear_value[3] != 0.0)
+                r.clear_value
             else
                 ps.core.clear_color;
             colors[color_count] = .{
@@ -820,6 +824,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .view = c.KE_GPU_INVALID_HANDLE,
         .is_backbuffer = true,
         .is_transient = false,
+        .clear_value = .{ 0, 0, 0, 0 }, // defer to core's global clear_color
     };
     st.resource_count = 1;
 

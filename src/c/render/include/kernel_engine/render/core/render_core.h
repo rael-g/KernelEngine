@@ -55,6 +55,9 @@ typedef struct ke_render_resource_desc
     uint32_t                height;
     float                   scale_x; // used when size_mode = RELATIVE_TO_BACKBUFFER
     float                   scale_y;
+    // Per-resource clear color. Alpha == 0 (default/zeroed) defers to the core's
+    // global clear color set via set_clear_color(). Alpha != 0 uses these values.
+    float                   clear_value[4];
 } ke_render_resource_desc;
 
 // A pass's declared resource I/O by name. The module turns these names into

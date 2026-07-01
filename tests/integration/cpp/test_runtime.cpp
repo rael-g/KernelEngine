@@ -433,7 +433,7 @@ TEST_F(RuntimeSpike, Snapshot_FreezesLiveSide)
     ASSERT_NE(live, nullptr);
     *live = 100;
 
-    ecs->swap_snapshots(ecs);  // freeze live(100) → snapshot
+    ecs->swap_snapshots(ecs, nullptr);  // freeze live(100) → snapshot
 
     int *snap_ptr = static_cast<int *>(ecs->component_get(ecs, e, snap));
     ASSERT_NE(snap_ptr, nullptr);
