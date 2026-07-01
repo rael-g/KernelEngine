@@ -1,7 +1,7 @@
 ﻿using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -35,13 +35,9 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(640, 200, "KernelEngine — 15 Audio Test (click window, then Space)"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.05f, 0.08f, 0.10f, 1.0f)))
-        .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new System.Numerics.Vector4(0.05f, 0.08f, 0.10f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
         Console.WriteLine("[KernelEngine] Example: 15_audio_test");
         Console.WriteLine("[KernelEngine] Features: miniaudio, sine_synth, edge_keys");

@@ -1,5 +1,5 @@
 ﻿using KernelEngine.Ecs.Flecs;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -21,10 +21,7 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Runtime Clear Color"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.15f, 0.20f, 0.35f, 1.0f)));
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new System.Numerics.Vector4(0.15f, 0.20f, 0.35f, 1.0f)));
 
 using var sp = services.BuildServiceProvider();
 var window   = sp.GetRequiredService<IWindow>();

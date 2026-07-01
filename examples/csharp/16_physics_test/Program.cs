@@ -2,7 +2,7 @@
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Physics.Box2D;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -35,15 +35,11 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 16 Physics Test (Space drops cube, R resets)"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.08f, 0.08f, 0.12f, 1.0f)))
-        .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.08f, 0.08f, 0.12f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 16_physics_test");
         Console.WriteLine("[KernelEngine] Features: box2d, dynamic_bodies, spawn_and_reset");
 
@@ -54,14 +50,14 @@ var services = new ServiceCollection()
 
         tree.AddNode(new DirectionalLight
         {
-            Direction = Vector3.Normalize(new Vector3(0.3f, 1f, 0.5f)),
+            Direction = Vector3.Normalize(new Vector3(0.3f, -1.0f, -0.5f)),
             Color     = Vector3.One,
             Intensity = 5f,
         }, "Sun");
 
-        var cubeMesh = MeshPrimitives.Cube(renderer);
-        var floorMat = renderer.CreateMaterial(new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f);
-        var ballMat  = renderer.CreateMaterial(new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
+        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        var floorMat = resources.CreateMaterial(new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f);
+        var ballMat  = resources.CreateMaterial(new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with

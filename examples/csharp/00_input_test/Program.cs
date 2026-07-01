@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -28,13 +28,9 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(640, 160, "KernelEngine — 00 Input Test (click window, then type)"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.05f, 0.05f, 0.08f, 1.0f)))
-        .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule(tree =>
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new System.Numerics.Vector4(0.05f, 0.05f, 0.08f, 1.0f)))
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneNodesModule(tree =>
     {
         Console.WriteLine("[KernelEngine] Example: 00_input_test");
         Console.WriteLine("[KernelEngine] Features: input_polling, key_edge_detection");
