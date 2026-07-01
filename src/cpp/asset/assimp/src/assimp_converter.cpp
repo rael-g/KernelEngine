@@ -75,7 +75,22 @@ bool ConvertMesh(const aiMesh* am, ke_mesh_data* md)
         }
         else
         {
-            v.tx = 1.f; v.ty = 0.f; v.tz = 0.f; v.tw = 1.f;
+            // Compute a tangent perpendicular to the vertex normal.
+            // Cross with world-up; fall back to world-right for near-vertical normals.
+            const aiVector3D &N = am->mNormals[vi];
+            aiVector3D up(0.f, 1.f, 0.f);
+            float dot_up = N.x * up.x + N.y * up.y + N.z * up.z;
+            if (dot_up > 0.9f || dot_up < -0.9f)
+                up = aiVector3D(0.f, 0.f, 1.f);
+            aiVector3D t;
+            dot_up = N.x * up.x + N.y * up.y + N.z * up.z;
+            t.x = up.x - N.x * dot_up;
+            t.y = up.y - N.y * dot_up;
+            t.z = up.z - N.z * dot_up;
+            float len = sqrtf(t.x * t.x + t.y * t.y + t.z * t.z);
+            if (len > 1e-4f) { t.x /= len; t.y /= len; t.z /= len; }
+            else              { t = aiVector3D(1.f, 0.f, 0.f); }
+            v.tx = t.x; v.ty = t.y; v.tz = t.z; v.tw = 1.f;
         }
     }
 

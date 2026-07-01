@@ -1,9 +1,9 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Asset.Assimp;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -15,10 +15,9 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-// 13_full_scene â€” every stabilized feature in one scene: ground plane,
-// loaded model (Box.gltf), directional + ambient + 8 orbiting point lights,
-// shadows, ACES tonemapping, bloom. SSAO is requested but stays a no-op
-// (Kanban Z3 â€” bgfx SSAO path is empty).
+// 13_full_scene — ground plane, a loaded Box.gltf, directional + ambient light,
+// and 8 point lights orbiting the model. Exercises ACES tonemapping (built into
+// the render-v2 pipeline) and animated node behavior via OnUpdate.
 
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
@@ -29,44 +28,34 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 13 Full Scene"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.05f, 0.05f, 0.08f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 13 Full Scene"))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.05f, 0.05f, 0.08f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new ShadowModule(resolution: 1024, frustumSize: 30f, farPlane: 60f))
-    .Add<IRuntimeModule>(new PostProcessModule(
-        tonemapping: true, tonemappingExposure: 1.0f, tonemappingGamma: 2.2f,
-        bloom:       true, bloomThreshold:      0.9f, bloomIntensity:   1.0f,
-        ssao:        true, ssaoRadius:          0.5f, ssaoBias:         0.025f, ssaoStrength: 1.5f))
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 13_full_scene");
-        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
-        Console.WriteLine("[KernelEngine] Features: shadows, hdr, bloom, ssao*, model_loading, 8_orbiting_point_lights");
+        Console.WriteLine("[KernelEngine] Renderer: webgpu/render-v2");
+        Console.WriteLine("[KernelEngine] Features: aces_tonemapping, model_loading, 8_orbiting_point_lights");
 
         tree.AddNode(new AmbientLight { Color = new(0.02f, 0.02f, 0.02f) }, "Ambient");
 
-        var cam     = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "MainCamera");
-        var eye     = new Vector3(8f, 8f, 15f);
-        var target  = new Vector3(0f, 2f, 0f);
+        var cam    = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "MainCamera");
+        var eye    = new Vector3(8f, 8f, 15f);
+        var target = new Vector3(0f, 2f, 0f);
         var lookRot = Quaternion.CreateFromRotationMatrix(
             Matrix4x4.CreateWorld(eye, Vector3.Normalize(target - eye), Vector3.UnitY));
         cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
 
         tree.AddNode(new DirectionalLight
         {
-            Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
+            Direction = Vector3.Normalize(new Vector3(0.3f, -1.0f, -0.5f)),
             Color     = new Vector3(1f, 0.95f, 0.8f),
             Intensity = 4f,
         }, "Sun");
 
-        // Floor: a Plane primitive (XZ, normal +Y) scaled out for a 50-unit ground.
-        var planeMesh = MeshPrimitives.Plane(renderer);
-        var floorMat  = renderer.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
+        var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
+        var floorMat  = resources.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
         var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 1f, 50f) };
 
@@ -76,9 +65,7 @@ var services = new ServiceCollection()
             Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
             using var model = loader.LoadModel(modelPath);
             Console.WriteLine($"[KernelEngine] Model: {model.Meshes.Count} meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-            var meshNodes = tree.AddModel(model, renderer, rootName: "CenterBox");
-
-            // Lift + scale the model. Flat hierarchy for now â€” apply per-node.
+            var meshNodes = tree.AddModel(model, resources, rootName: "CenterBox");
             for (int i = 0; i < meshNodes.Count; i++)
             {
                 meshNodes[i].LocalTransform = meshNodes[i].LocalTransform with
@@ -97,8 +84,8 @@ var services = new ServiceCollection()
         {
             tree.AddNode(new OrbitingLight
             {
-                Color       = i % 2 == 0 ? Vector3.UnitX : Vector3.UnitZ,
-                Intensity   = 40f,
+                Color       = i % 2 == 0 ? new Vector3(1f, 0.2f, 0.2f) : new Vector3(0.2f, 0.4f, 1f),
+                Intensity   = 8f,
                 Radius      = 18f,
                 OrbitRadius = 5f,
                 Speed       = 0.5f + i * 0.1f,
@@ -130,7 +117,7 @@ while (!window.ShouldClose())
     if (now - fpsWindowStart >= 5.0)
     {
         double fps = frameCount / (now - fpsWindowStart);
-        Console.WriteLine($"[KernelEngine] FPS: {fps:F2}  Lights: 8p 0s 1d");
+        Console.WriteLine($"[13_full_scene] FPS: {fps:F2}  Lights: 8p 1d");
         frameCount     = 0;
         fpsWindowStart = now;
     }
@@ -140,7 +127,7 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[13_full_scene] Exited cleanly.");
 
-// â”€â”€ Orbiting point light â€” circles the origin at fixed height â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Orbiting point light — circles the origin at fixed height ────────────────
 
 sealed class OrbitingLight : PointLight
 {

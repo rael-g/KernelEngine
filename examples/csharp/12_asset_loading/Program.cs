@@ -1,9 +1,9 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Asset.Assimp;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window.Glfw;
@@ -15,9 +15,9 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-// 12_asset_loading â€” loads `assets/Box.gltf` via the Assimp plugin and uploads
-// its meshes/materials/textures through tree.AddModel(...) (which is the
-// new-Framework equivalent of the legacy Tree.Add(model, ...) one-liner).
+// 12_asset_loading — loads assets/Box.gltf via the Assimp plugin and places it
+// in a lit scene. Exercises the IRenderResources overload of AddModel so
+// textures, materials and meshes flow through the render-v2 upload path.
 
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
@@ -28,20 +28,14 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine â€” 12 Asset Loading"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.1f, 0.1f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 12 Asset Loading"))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.1f, 0.1f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new ShadowModule())
-    .Add<IRuntimeModule>(new PostProcessModule(tonemapping: true))
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 12_asset_loading");
-        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Renderer: webgpu/render-v2");
         Console.WriteLine("[KernelEngine] Features: assimp_loader, model_to_scene");
 
         tree.AddNode(new AmbientLight { Color = new(0.05f, 0.05f, 0.05f) }, "Ambient");
@@ -51,7 +45,7 @@ var services = new ServiceCollection()
 
         tree.AddNode(new DirectionalLight
         {
-            Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)),
+            Direction = Vector3.Normalize(new Vector3(0.3f, -1.0f, -0.5f)),
             Color     = Vector3.One,
             Intensity = 3f,
         }, "Sun");
@@ -60,7 +54,7 @@ var services = new ServiceCollection()
         var loader = sp.GetRequiredService<IAssetLoader>();
         using var model = loader.LoadModel(modelPath);
         Console.WriteLine($"[KernelEngine] Model loaded: {model.Meshes.Count} sub-meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-        var nodes = tree.AddModel(model, renderer, rootName: "Box");
+        var nodes = tree.AddModel(model, resources, rootName: "Box");
         Console.WriteLine($"[KernelEngine] Added {nodes.Count} mesh nodes to the scene.");
     }));
 
