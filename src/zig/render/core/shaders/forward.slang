@@ -239,7 +239,10 @@ float4 fs_main(VsOut input) : SV_Target {
     float3 ambient = frame.ambient.rgb * albedo_c * (1.0 - metallic);
     float3 color   = ambient + lit + ibl;
 
-    color = color / (color + 1.0);                       // Reinhard tonemap (transitional)
-    color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)); // linear -> display (UNORM swapchain)
+    // Linear HDR out — this writes to the Rgba16Float intermediate; the ACES
+    // tonemap pass (tonemap.slang) does the tone curve + display gamma on the
+    // resolve to the swapchain. Do not tonemap/gamma-correct here: doing both
+    // here and in the tonemap pass double-compresses the image (washed-out,
+    // intensity-insensitive colors).
     return float4(color, 1.0);
 }

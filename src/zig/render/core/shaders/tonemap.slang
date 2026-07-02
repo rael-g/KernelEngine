@@ -37,5 +37,9 @@ float3 aces(float3 x)
 float4 fs_main(VsOut i) : SV_Target0
 {
     float3 hdr = t_hdr.Sample(s_hdr, i.uv).rgb;
-    return float4(aces(hdr), 1.0);
+    float3 ldr = aces(hdr);
+    // Display gamma — the swapchain is a UNORM (non-sRGB) surface, so this pass
+    // owns the linear -> display encode as the final resolve step.
+    ldr = pow(ldr, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+    return float4(ldr, 1.0);
 }

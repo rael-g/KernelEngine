@@ -335,7 +335,22 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
     if (s.surface) |surf| {
         var caps: wgpu.WGPUSurfaceCapabilities = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
         _ = wgpu.wgpuSurfaceGetCapabilities(surf, s.adapter, &caps);
-        s.surface_format = if (caps.formatCount > 0) caps.formats[0] else wgpu.WGPUTextureFormat_BGRA8Unorm;
+        // Prefer a plain (non-sRGB) format: the tonemap pass owns the linear ->
+        // display gamma encode explicitly (tonemap.slang). caps.formats[0] is
+        // driver-ordered and commonly an *Srgb variant on Windows/Vulkan/D3D12 —
+        // taking it blindly stacks a second (hardware) gamma encode on top of the
+        // shader's, washing out colors regardless of light intensity.
+        s.surface_format = wgpu.WGPUTextureFormat_BGRA8Unorm;
+        var i: usize = 0;
+        while (i < caps.formatCount) : (i += 1) {
+            const f = caps.formats[i];
+            if (f == wgpu.WGPUTextureFormat_BGRA8Unorm or f == wgpu.WGPUTextureFormat_RGBA8Unorm) {
+                s.surface_format = f;
+                break;
+            }
+        } else if (caps.formatCount > 0) {
+            s.surface_format = caps.formats[0]; // no plain UNORM offered — fall back
+        }
         wgpu.wgpuSurfaceCapabilitiesFreeMembers(caps);
     }
 

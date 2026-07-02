@@ -37,8 +37,13 @@ const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
 const SHADOW_RES = 1024; // shadow map resolution
 
 // Clustered forward grid (froxels): numX×numY screen tiles × numZ depth slices.
-const GRID_X = 16;
-const GRID_Y = 8;
+// Finer than the original 16x8: a coarse grid makes a single face's light set
+// jump discretely at a tile boundary (visible seam) when few, brightly colored
+// lights move independently — narrowing tiles reduces how different two
+// neighboring tiles' light sets can be. Cull compute cost stays trivial (few ms
+// even at this resolution for hundreds of lights).
+const GRID_X = 32;
+const GRID_Y = 18;
 const GRID_Z = 24;
 const NUM_CLUSTERS = GRID_X * GRID_Y * GRID_Z;
 const MAX_LIGHTS_PER_CLUSTER = 64;
