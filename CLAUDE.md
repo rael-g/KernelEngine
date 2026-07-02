@@ -31,12 +31,12 @@ dotnet test KernelEngine.slnx
 ### Scripts
 
 ```bash
-python scripts/compile_shaders.py    # compile all bgfx shaders to SPIR-V
+python scripts/compile_slang.py      # compile a render-v2 .slang shader to WGSL (see src/zig/render/core/CMakeLists.txt for the driven build)
 python scripts/generate_bindings.py  # regenerate all C# P/Invoke bindings via ClangSharp
 python scripts/coverage.py           # C/C++ + C# tests with unified coverage report (clean | report subcommands)
 ```
 
-Shaders compile to `src/cpp/render/bgfx/shaders/compiled/spirv/`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
+Shaders compile to `src/zig/render/core/shaders/` (`.slang` sources) → generated WGSL under the CMake build's shader-gen directory, embedded into `ke_render_core` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
 ### Running examples after a native rebuild
 
@@ -76,7 +76,7 @@ Active plugins:
 - `src/c/runtime/` → `ke_runtime_create` — scheduler
 - `src/c/ecs/flecs/` → `ke_ecs_flecs_create` — flecs-backed storage
 - `src/c/framework/` → `ke_world_create`, `ke_asset_resolver_create`, `ke_scene_tree_create`, `ke_scene_loader_create`, `ke_input_actions_create` — the engine's opinionated composition layer (vocabulary + scene file format + lifecycle aggregator)
-- `src/cpp/render/bgfx/` → `ke_render_bgfx_create` — bgfx renderer (the only renderer today; a V2 modern renderer is planned in `docs/RenderArchitectureV2.md`)
+- `src/zig/render/core/` + `src/zig/render/webgpu/` → `ke_render_core_create` / `ke_gpu_device_webgpu_create` — the render-v2 forward renderer (WebGPU via wgpu-native). The only renderer; the legacy bgfx backend was removed once every example had migrated (see `docs/RenderArchitectureV2.md`).
 - `src/cpp/window/glfw/` → `ke_window_glfw_create` — GLFW window
 - `src/cpp/asset/assimp/`, `src/cpp/asset/stb_image/` — asset loaders
 - `src/cpp/task_scheduler/enki/` → `ke_task_scheduler_enki_create` — enkiTS worker pool
@@ -138,7 +138,7 @@ Two named workers exposed by the scheduler:
 
 ```
 ke.sim    — runtime tick loop; runs every sim system + the window/input poll
-ke.render — pinned render-thread work; bgfx APIs are called here only
+ke.render — pinned render-thread work; WebGPU device/queue calls are made here only
 ```
 
 `ke.main` from the older Application.cs model is folded into `ke.sim`. There is no separate input thread; GLFW poll runs at the top of each tick before the scheduler dispatches.

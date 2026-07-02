@@ -7,7 +7,7 @@ var root = new RootCommand("ke — KernelEngine CLI. Manages references, scenes,
 root.Options.Add(projectOpt);
 
 // ── add module <id> ─────────────────────────────────────────────────────────
-var addModuleIdArg = new Argument<string>("id") { Description = "Module id from a .ke-module file (e.g. KernelEngine.Render.Bgfx, KernelEngine.Logger.Logger)." };
+var addModuleIdArg = new Argument<string>("id") { Description = "Module id from a .ke-module file (e.g. KernelEngine.Render.Webgpu, KernelEngine.Logger.Logger)." };
 var addModuleCmd = new Command("module", "Add a module to the current project.")
 {
     addModuleIdArg,

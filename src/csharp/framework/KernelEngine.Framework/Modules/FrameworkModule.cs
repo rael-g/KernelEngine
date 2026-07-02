@@ -57,7 +57,7 @@ public sealed class FrameworkModule : IRuntimeModule
             // (40 bytes). If scene_tree runs second, flecs stores transform at 40 bytes
             // and C writes of ke_transform_component (104 bytes) corrupt adjacent heap.
             // This guarantee must live in the factory so it holds no matter who triggers
-            // ComponentRegistry first (e.g. BgfxRenderModule resolving IFrameContributors).
+            // ComponentRegistry first (e.g. SceneRenderModule resolving IFrameContributors).
             _ = sp.GetRequiredService<World>();
             return new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>());
         });

@@ -13,7 +13,6 @@
     <Project Path="examples/csharp/08_spot_lights/08_spot_lights.csproj" />
     <Project Path="examples/csharp/09_many_lights/09_many_lights.csproj" />
     <Project Path="examples/csharp/10_hdr_bloom/10_hdr_bloom.csproj" />
-    <Project Path="examples/csharp/11_ssao/11_ssao.csproj" />
     <Project Path="examples/csharp/12_asset_loading/12_asset_loading.csproj" />
     <Project Path="examples/csharp/13_full_scene/13_full_scene.csproj" />
     <Project Path="examples/csharp/14_ui_quad/14_ui_quad.csproj" />

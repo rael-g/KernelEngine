@@ -37,7 +37,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers <paramref name="instance"/> as the singleton for
     /// <typeparamref name="TContract"/>. Use when the impl carries config that
-    /// only the caller knows (e.g. <c>new BgfxRenderModule("shaders/")</c>).
+    /// only the caller knows (e.g. <c>new WebgpuRenderModule(clearColor: ...)</c>).
     /// If the instance also implements <see cref="IRuntimeModule"/>, its
     /// <see cref="IRuntimeModule.Configure"/> runs immediately so the module can
     /// register its own contracts before the service provider is built.

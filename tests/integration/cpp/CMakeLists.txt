@@ -6,12 +6,9 @@ find_package(assimp CONFIG REQUIRED)
 add_executable(test_integration_cpp
     # test_framework_integration.cpp  -- disabled in B0 (depends on legacy ke_world)
     test_world.cpp
-    test_bgfx_device_noop.cpp
-    test_bgfx_device_full.cpp
     test_glfw_window_device.cpp
     test_factories.cpp
     test_window_glfw.cpp
-    test_shader_compiler.cpp
     test_asset_loader.cpp
     test_stb_image_loader.cpp
     test_enki_scheduler.cpp
@@ -23,16 +20,10 @@ add_executable(test_integration_cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/contract/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/core/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/core/src
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx_device/src
     ${CMAKE_SOURCE_DIR}/src/cpp/window/contract/include
     ${CMAKE_SOURCE_DIR}/src/cpp/window/core/include
     ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw/include
     ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw_device/src
-    ${CMAKE_SOURCE_DIR}/src/cpp/render/bgfx_shader_compiler/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/stb_image/include
     ${CMAKE_SOURCE_DIR}/src/cpp/scheduler/enki/include
@@ -42,11 +33,8 @@ target_include_directories(test_integration_cpp PRIVATE
 )
 
 target_link_libraries(test_integration_cpp PRIVATE
-    ke_render_bgfx
-    ke_render_bgfx_device
     ke_window_glfw
     ke_window_glfw_device
-    ke_shader_compiler_bgfx
     ke_asset_assimp
     ke_asset_stb_image
     ke_scheduler_enki

@@ -12,8 +12,7 @@ namespace KernelEngine.Render.Webgpu;
 /// Render v2 (webgpu) as an <see cref="IRuntimeModule"/>. Creates the GPU device
 /// from the window and installs the render path (ke_render_module) which
 /// registers begin/clear/end as KE_PHASE_RENDER systems on the runtime. The host
-/// just ticks the runtime — no render calls in the loop. Coexists with
-/// BgfxRenderModule as an alternate DI choice.
+/// just ticks the runtime — no render calls in the loop.
 /// </summary>
 public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 {

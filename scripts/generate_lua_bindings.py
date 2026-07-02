@@ -30,8 +30,6 @@ KERNEL_INCLUDE = ROOT / "src" / "c" / "kernel" / "include"
 PLUGIN_INCLUDES = [
     ROOT / "src" / "cpp" / "window"  / "contract" / "include",
     ROOT / "src" / "cpp" / "window"  / "glfw"     / "include",
-    ROOT / "src" / "cpp" / "render"  / "contract" / "include",
-    ROOT / "src" / "cpp" / "render"  / "bgfx"     / "include",
 ]
 
 # Headers fed to clang. The compiler pulls in everything they transitively
@@ -64,7 +62,6 @@ HEADERS = [
     "kernel_engine/framework/mesh_asset_system.h",
     "kernel_engine/kernel/world/variant.h",
     "kernel_engine/framework/scene_loader.h",
-    "kernel_engine/render/bgfx/bgfx_render.h",
     "kernel_engine/window/glfw/glfw_window.h",
 ]
 
