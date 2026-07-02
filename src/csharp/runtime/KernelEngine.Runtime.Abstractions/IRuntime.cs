@@ -55,5 +55,6 @@ public enum RuntimePhase
     FixedUpdate = 2,
     Update      = 3,
     PostUpdate  = 4,
-    Shutdown    = 5,
+    Render      = 5,
+    Shutdown    = 6,
 }

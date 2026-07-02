@@ -3,7 +3,7 @@ using KernelEngine.Configuration;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Physics.Box2D;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Text.StbTrueType;
@@ -35,11 +35,11 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule())
-    .Add<IRuntimeModule>(new BgfxRenderModule())
-        .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
+    .Add<IRuntimeModule>(new WebgpuRenderModule())
+    .Add<IRuntimeModule>(new FrameworkModule())
+    .Add<IRuntimeModule>(new SceneNodesModule(_ => { })) // scene entities come entirely from Main.scene
     .Add<IRuntimeModule>(new PongModule())
-    .Add<IRuntimeModule>(new SceneRouterModule());  // initial scene comes from Project's default_scene
+    .Add<IRuntimeModule>(new SceneRouterModule(sceneModuleDependency: typeof(SceneNodesModule)));  // initial scene comes from Project's default_scene
 
 using var sp = services.BuildServiceProvider();
 var window  = sp.GetRequiredService<IWindow>();

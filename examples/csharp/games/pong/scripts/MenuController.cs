@@ -15,25 +15,25 @@ public sealed class MenuController : Node
     private readonly IInputActionMap<PongAction> _actions;
     private readonly ISceneRouter                _router;
     private readonly IFontLoader                 _fontLoader;
-    private readonly IRenderer                   _renderer;
+    private readonly IRenderResources             _resources;
 
     private Font? _font;
     private bool _prevLaunch;
     private bool _prevQuit;
 
     public MenuController(IInputActionMap<PongAction> actions, ISceneRouter router, IFontLoader fontLoader,
-                          IRenderer renderer)
+                          IRenderResources resources)
     {
         _actions    = actions;
         _router     = router;
         _fontLoader = fontLoader;
-        _renderer   = renderer;
+        _resources  = resources;
     }
 
     protected override void OnBind(NodeWorld nodeWorld)
     {
         var fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
-        _font = Font.Load(_renderer, _fontLoader, fontPath, pixelSize: 72f);
+        _font = Font.Load(_resources, _fontLoader, fontPath, pixelSize: 72f);
 
         nodeWorld.AddNode(new Label
         {
@@ -53,8 +53,6 @@ public sealed class MenuController : Node
             Offset = new Vector2(0f, -120f),
         }, "Hint", parent: this);
     }
-
-    protected override void OnUnbind() => _font?.Dispose();
 
     protected override void OnUpdate(in View view)
     {

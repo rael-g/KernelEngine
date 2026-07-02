@@ -93,6 +93,25 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/ui.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang"
+            --output "${SHADER_GEN_DIR}/ui.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang" "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/ui.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang"
+            --output "${SHADER_GEN_DIR}/ui.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang" "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
@@ -113,6 +132,8 @@ add_custom_command(
         "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "-Dtonemap-vs-wgsl=${SHADER_GEN_DIR}/tonemap.vs.wgsl"
         "-Dtonemap-fs-wgsl=${SHADER_GEN_DIR}/tonemap.fs.wgsl"
+        "-Dui-vs-wgsl=${SHADER_GEN_DIR}/ui.vs.wgsl"
+        "-Dui-fs-wgsl=${SHADER_GEN_DIR}/ui.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
@@ -128,6 +149,8 @@ add_custom_command(
         "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "${SHADER_GEN_DIR}/tonemap.vs.wgsl"
         "${SHADER_GEN_DIR}/tonemap.fs.wgsl"
+        "${SHADER_GEN_DIR}/ui.vs.wgsl"
+        "${SHADER_GEN_DIR}/ui.fs.wgsl"
         ke_common
         ke_runtime
     VERBATIM

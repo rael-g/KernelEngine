@@ -219,6 +219,13 @@ const ModuleState = struct {
     tonemap_io: c.ke_render_pass_io,
     tonemap_access: [2]c.ke_component_access,
     hdr_cid: c.ke_component_id,
+
+    // UI overlay — screen-space quads (Font/Label text, solid rects) composited
+    // over the tonemapped scene. Loads (doesn't clear) the backbuffer; the core
+    // owns the pipeline + per-frame quad list (ke_render_core.ui_quad/ui_draw).
+    ui_writes: [1][*c]const u8,
+    ui_io: c.ke_render_pass_io,
+    ui_access: [1]c.ke_component_access,
 };
 
 // Per-object model for the shadow pass (set 1).
@@ -1005,6 +1012,14 @@ fn tonemapSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     core.*.end_pass.?(core, pc);
 }
 
+// UI overlay pass — draws whatever ui_quad calls (Font/Label systems, game HUD
+// code) queued this frame. The core owns the pipeline and quad list entirely;
+// this just forwards ctx/io so ui_draw can begin/end its own pass.
+fn uiSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+    const st = stateOf(user);
+    st.core.ref.*.ui_draw.?(st.core.ref, ctx, &st.ui_io);
+}
+
 fn tonemapSetup(st: *ModuleState, out_error: [*c][*c]c.ke_error) bool {
     const dev = st.device;
 
@@ -1295,12 +1310,26 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
+
+        // UI overlay pass: loads (doesn't clear) the backbuffer tonemap just wrote,
+        // so text/quads composite on top. cmd_slot 5 = after tonemap's slot 4.
+        st.ui_writes = .{"backbuffer"};
+        st.ui_io = std.mem.zeroes(c.ke_render_pass_io);
+        st.ui_io.writes = @ptrCast(&st.ui_writes);
+        st.ui_io.writes_count = 1;
+        st.ui_io.cmd_slot = 5;
+        st.ui_io.load = 1;
+        st.ui_access = .{
+            .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
+        };
+
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
         registerSys(rt, "render.shadow", null, 0, &st.shadow_access, st.shadow_access.len, st, shadowSys);
         registerSys(rt, "render.cull", &st.cull_queries, 3, &st.cull_access, st.cull_access.len, st, cullSys);
         registerSys(rt, "render.forward", null, 0, &st.fwd_access, st.fwd_access.len, st, forwardSys);
         registerSys(rt, "render.tonemap", null, 0, &st.tonemap_access, st.tonemap_access.len, st, tonemapSys);
+        registerSys(rt, "render.ui", null, 0, &st.ui_access, st.ui_access.len, st, uiSys);
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
 

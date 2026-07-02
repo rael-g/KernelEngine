@@ -1,7 +1,7 @@
-﻿using System.Numerics;
+using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Bgfx;
+using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Text.StbTrueType;
@@ -14,10 +14,10 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Text;
 
-// 14_ui_quad â€” UI overlay smoke test: three flat-color rectangles + three
+// 14_ui_quad — UI overlay smoke test: one flat-color rectangle + three
 // stb_truetype-backed Labels positioned via anchor + offset. Validates the
-// view 7 ortho pixel pass, the SubmitUiQuad path, and the Label / glyph atlas
-// pipeline end-to-end.
+// render-v2 UI pass (screen-space quads composited after tonemap) and the
+// Label / glyph atlas pipeline end-to-end.
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -26,23 +26,19 @@ var services = new ServiceCollection()
     .Add<IEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine â€” 14 UI Quad"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(
-        shaderPath: Path.Combine(AppContext.BaseDirectory, "shaders"),
-        vsync:      true,
-        clearColor: (0.10f, 0.12f, 0.16f, 1.0f)))
+    .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 14 UI Quad"))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.10f, 0.12f, 0.16f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneRenderModule())
-    .Add<IRuntimeModule>(new SceneModule((tree, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var renderer = sp.GetRequiredService<IRenderer>();
+        var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 14_ui_quad");
-        Console.WriteLine("[KernelEngine] Renderer: bgfx/Vulkan");
+        Console.WriteLine("[KernelEngine] Renderer: webgpu/render-v2");
         Console.WriteLine("[KernelEngine] Features: ui_overlay_pass, labels, stb_truetype");
 
         var fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
         var loader   = sp.GetRequiredService<IFontLoader>();
-        var font     = Font.Load(renderer, loader, fontPath, pixelSize: 48f);
+        var font     = Font.Load(resources, loader, fontPath, pixelSize: 48f);
         Console.WriteLine($"[KernelEngine] Font: {fontPath}, lineHeight={font.LineHeight:F1} ascent={font.Ascent:F1}");
 
         tree.AddNode(new Label
@@ -71,8 +67,9 @@ var services = new ServiceCollection()
             Anchor = new Vector2(1f, 1f),
             Offset = new Vector2(-20, -20),
         }, "BottomRight");
-    }))
-    .AddSingleton<IFrameContributor, UiQuadContributor>();
+
+        tree.AddNode(new BackgroundQuad(resources), "BackgroundQuad");
+    }));
 
 using var sp = services.BuildServiceProvider();
 var window  = sp.GetRequiredService<IWindow>();
@@ -96,15 +93,21 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[14_ui_quad] Exited cleanly.");
 
-// â”€â”€ Background quads emitted every frame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Solid-color background quad, queued every frame via IRenderResources.UiQuad ──
 
-sealed class UiQuadContributor : IFrameContributor
+sealed class BackgroundQuad : Node
 {
-    public void Contribute(IFramePacket packet)
+    private readonly IRenderResources _resources;
+
+    public BackgroundQuad(IRenderResources resources) => _resources = resources;
+
+    protected override void OnBind(NodeWorld nodeWorld) { /* nothing to materialize — this node only carries behavior */ }
+
+    protected override void OnUpdate(in View view)
     {
-        packet.AddUiQuadCommand(TextureHandle.None,
+        _resources.UiQuad(TextureHandle.None,
             dstX: 360, dstY: 220, dstW: 240, dstH: 100,
             u0: 0, v0: 0, u1: 1, v1: 1,
-            r: 0.20f * 0.5f, g: 0.85f * 0.5f, b: 0.30f * 0.5f, a: 0.5f);
+            premultipliedColor: new Vector4(0.20f * 0.5f, 0.85f * 0.5f, 0.30f * 0.5f, 0.5f));
     }
 }

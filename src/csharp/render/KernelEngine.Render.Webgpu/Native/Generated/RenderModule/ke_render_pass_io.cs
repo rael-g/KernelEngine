@@ -18,4 +18,7 @@ public unsafe partial struct ke_render_pass_io
 
     [NativeTypeName("uint32_t")]
     public uint cmd_slot;
+
+    [NativeTypeName("uint32_t")]
+    public uint load;
 }

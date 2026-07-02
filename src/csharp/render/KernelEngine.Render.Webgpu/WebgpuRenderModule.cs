@@ -127,6 +127,18 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         return new MaterialHandle(h.idx);
     }
 
+    /// <inheritdoc/>
+    public void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
+                       float u0, float v0, float u1, float v1, System.Numerics.Vector4 premultipliedColor)
+    {
+        if (_core == null)
+            throw new InvalidOperationException("UiQuad called before the render module was loaded");
+
+        var texH = new ke_texture_handle { idx = texture.Value };
+        _core->ui_quad(_core, texH, dstX, dstY, dstW, dstH, u0, v0, u1, v1,
+                       premultipliedColor.X, premultipliedColor.Y, premultipliedColor.Z, premultipliedColor.W);
+    }
+
     private static InvalidOperationException Fail(string what, ke_error* err)
     {
         if (err != null)

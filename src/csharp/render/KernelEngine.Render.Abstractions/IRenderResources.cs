@@ -38,4 +38,16 @@ public interface IRenderResources
     /// </summary>
     MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                   TextureHandle albedo = default, TextureHandle? normalMap = null);
+
+    /// <summary>
+    /// Queues a screen-space UI quad for this frame, drawn after tonemap so it
+    /// composites over the rendered scene. <paramref name="dstX"/>/<paramref name="dstY"/>
+    /// are pixel coordinates (top-left origin); <paramref name="texture"/> defaults to
+    /// a built-in white pixel, so a flat-color quad just needs a color and no texture.
+    /// UV selects a sub-region of the texture (glyph atlas lookup for text). Color is
+    /// premultiplied alpha. Call from a render-phase system, before the frame's UI
+    /// pass runs.
+    /// </summary>
+    void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
+               float u0, float v0, float u1, float v1, Vector4 premultipliedColor);
 }

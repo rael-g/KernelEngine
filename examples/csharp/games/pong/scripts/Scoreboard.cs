@@ -12,8 +12,8 @@ namespace Pong;
 /// </summary>
 public sealed class Scoreboard : Node
 {
-    private readonly IFontLoader _fontLoader;
-    private readonly IRenderer   _renderer;
+    private readonly IFontLoader     _fontLoader;
+    private readonly IRenderResources _resources;
 
     private Font?  _font;
     private Label? _left;
@@ -28,10 +28,10 @@ public sealed class Scoreboard : Node
     public int Right { get; private set; }
     public int Total => Left + Right;
 
-    public Scoreboard(IFontLoader fontLoader, IRenderer renderer)
+    public Scoreboard(IFontLoader fontLoader, IRenderResources resources)
     {
         _fontLoader = fontLoader;
-        _renderer   = renderer;
+        _resources  = resources;
     }
 
     protected override void OnBind(NodeWorld nodeWorld)
@@ -39,7 +39,7 @@ public sealed class Scoreboard : Node
         var path = string.IsNullOrEmpty(FontPath)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf")
             : FontPath;
-        _font = Font.Load(_renderer, _fontLoader, path, pixelSize: FontSize);
+        _font = Font.Load(_resources, _fontLoader, path, pixelSize: FontSize);
 
         _left  = nodeWorld.AddNode(new Label
         {

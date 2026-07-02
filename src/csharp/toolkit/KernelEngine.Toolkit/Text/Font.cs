@@ -7,22 +7,25 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// A loaded font ready to render. Owns its GPU atlas <see cref="AtlasHandle"/>
 /// and an in-memory glyph table built from the CPU-side font data the loader
-/// produced. Create via <see cref="Load"/> from inside a SceneModule callback
-/// (render worker thread).
+/// produced. Create via <see cref="Load"/> from inside a scene setup callback
+/// (render worker thread — GPU resource creation has thread affinity).
 /// </summary>
-public sealed class Font : IDisposable
+/// <remarks>
+/// render-v2 (<see cref="IRenderResources"/>) has no texture-destroy path — GPU
+/// resources it owns live for the render module's lifetime, so this type is not
+/// <see cref="IDisposable"/> here (the legacy bgfx <c>IRenderer</c> path, which
+/// does support destroy, is a separate build).
+/// </remarks>
+public sealed class Font
 {
     private readonly Dictionary<uint, GlyphMetrics> _glyphs;
-    private readonly IRenderer                      _renderer;
-    private bool _disposed;
 
     public TextureHandle AtlasHandle { get; }
     public float         LineHeight  { get; }
     public float         Ascent      { get; }
 
-    private Font(IRenderer renderer, TextureHandle atlas, GlyphMetrics[] glyphs, float lineHeight, float ascent)
+    private Font(TextureHandle atlas, GlyphMetrics[] glyphs, float lineHeight, float ascent)
     {
-        _renderer   = renderer;
         AtlasHandle = atlas;
         LineHeight  = lineHeight;
         Ascent      = ascent;
@@ -32,16 +35,16 @@ public sealed class Font : IDisposable
 
     /// <summary>
     /// Synchronously bakes <paramref name="path"/> at <paramref name="pixelSize"/>
-    /// and uploads the atlas through the renderer. MUST be called from the
-    /// render worker because the texture upload is pinned there.
+    /// and uploads the atlas through <paramref name="resources"/>. MUST be called
+    /// from the render worker because the texture upload is pinned there.
     /// </summary>
-    public static Font Load(IRenderer renderer, IFontLoader loader, string path, float pixelSize,
+    public static Font Load(IRenderResources resources, IFontLoader loader, string path, float pixelSize,
                             uint atlasSize = 512, uint firstCodepoint = 32, uint codepointCount = 95)
     {
         using var data = loader.LoadFontAsync(path, pixelSize, atlasSize, firstCodepoint, codepointCount)
                                .GetAwaiter().GetResult();
-        var atlas = renderer.CreateTexture(data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
-        return new Font(renderer, atlas, data.Glyphs, data.LineHeight, data.Ascent);
+        var atlas = resources.UploadTexture(data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
+        return new Font(atlas, data.Glyphs, data.LineHeight, data.Ascent);
     }
 
     public bool TryGlyph(uint codepoint, out GlyphMetrics metrics) =>
@@ -54,12 +57,5 @@ public sealed class Font : IDisposable
         for (int i = 0; i < text.Length; i++)
             if (_glyphs.TryGetValue(text[i], out var g)) w += g.AdvanceX;
         return w;
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _renderer.DestroyTexture(AtlasHandle);
     }
 }

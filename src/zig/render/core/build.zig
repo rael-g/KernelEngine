@@ -25,6 +25,8 @@ pub fn build(b: *std.Build) void {
     const cluster_cull_cs_wgsl = b.option([]const u8, "cluster-cull-cs-wgsl", "generated cluster cull compute WGSL path") orelse @panic("-Dcluster-cull-cs-wgsl required");
     const tonemap_vs_wgsl = b.option([]const u8, "tonemap-vs-wgsl", "generated tonemap vertex WGSL path")   orelse @panic("-Dtonemap-vs-wgsl required");
     const tonemap_fs_wgsl = b.option([]const u8, "tonemap-fs-wgsl", "generated tonemap fragment WGSL path") orelse @panic("-Dtonemap-fs-wgsl required");
+    const ui_vs_wgsl = b.option([]const u8, "ui-vs-wgsl", "generated ui vertex WGSL path")   orelse @panic("-Dui-vs-wgsl required");
+    const ui_fs_wgsl = b.option([]const u8, "ui-fs-wgsl", "generated ui fragment WGSL path") orelse @panic("-Dui-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/render_core.zig"),
@@ -56,6 +58,8 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("cluster_cull.cs.wgsl", .{ .root_source_file = .{ .cwd_relative = cluster_cull_cs_wgsl } });
     mod.addAnonymousImport("tonemap.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = tonemap_vs_wgsl } });
     mod.addAnonymousImport("tonemap.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = tonemap_fs_wgsl } });
+    mod.addAnonymousImport("ui.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_vs_wgsl } });
+    mod.addAnonymousImport("ui.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_core",

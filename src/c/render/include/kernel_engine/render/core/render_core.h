@@ -75,6 +75,10 @@ typedef struct ke_render_pass_io
     // ascending order, so the module must assign slots in dependency order
     // (a pass whose output a later pass samples gets the lower slot).
     uint32_t           cmd_slot;
+    // When non-zero, color attachments load their existing contents instead of
+    // clearing. An overlay pass (e.g. UI on top of the tonemapped scene) sets
+    // this so it composites rather than wipes the target. Default 0 = clear.
+    uint32_t           load;
 } ke_render_pass_io;
 
 struct ke_render_core
@@ -169,10 +173,29 @@ struct ke_render_core
     // parallel passes never touch the non-thread-safe GPU queue concurrently. The
     // data is copied, so the caller's buffer need not outlive the call. Queue
     // writes are ordered before the frame's submit, so deferring is correct.
-    // NOTE: kept last in the vtable so adding it does not shift existing slot
-    // offsets (C# bindings index the vtable by position).
     void (*upload)(struct ke_render_core *self, ke_gpu_buffer buffer,
                    uint64_t offset, const void *data, size_t size);
+
+    // ── UI overlay (screen-space textured quads, drawn after tonemap) ─────
+    // Appends one screen-space quad to this frame's UI draw list. Coordinates
+    // are pixels (top-left origin); uv selects a region of `texture` (0/none =
+    // built-in white, so a flat-color quad just samples white*color); color is
+    // premultiplied alpha RGBA. Call from any render-phase system body, before
+    // the "render.ui" pass runs (the module orders it last). Silently dropped
+    // past the per-frame quad/batch limits.
+    void (*ui_quad)(struct ke_render_core *self,
+                    ke_texture_handle texture,
+                    float dst_x, float dst_y, float dst_w, float dst_h,
+                    float u0, float v0, float u1, float v1,
+                    float r, float g, float b, float a);
+    // Draws every quad accumulated by ui_quad this frame, batched by texture.
+    // Owns the whole pass (begin_pass/begin_render/draw/end/end_pass) — the
+    // caller (the module's "render.ui" system) just forwards its ctx and io.
+    // A no-op if no quads were queued.
+    // NOTE: kept last in the vtable so adding it does not shift existing slot
+    // offsets (C# bindings index the vtable by position).
+    void (*ui_draw)(struct ke_render_core *self, ke_system_ctx *sys,
+                    const ke_render_pass_io *io);
 };
 
 typedef struct ke_render_core_handle

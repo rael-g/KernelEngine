@@ -14,14 +14,22 @@ public sealed class SceneRouterModule : IRuntimeModule
     private const uint RenderWorker = 1;
 
     private readonly string? _initialSceneOverride;
+    private readonly Type    _sceneModuleDependency;
 
     public string Name => "Scene.Router";
 
-    public IEnumerable<Type> Dependencies => new[] { typeof(SceneRenderModule) };
+    public IEnumerable<Type> Dependencies => new[] { _sceneModuleDependency };
 
-    public SceneRouterModule(string? initialScene = null)
+    /// <param name="initialScene">Overrides the project's default scene, if set.</param>
+    /// <param name="sceneModuleDependency">
+    /// The module that must load first because it registers <see cref="NodeWorld"/> and
+    /// drives the behavior system — <see cref="SceneRenderModule"/> (legacy bgfx) by
+    /// default, or <see cref="SceneNodesModule"/> for the render-v2 path.
+    /// </param>
+    public SceneRouterModule(string? initialScene = null, Type? sceneModuleDependency = null)
     {
-        _initialSceneOverride = initialScene;
+        _initialSceneOverride  = initialScene;
+        _sceneModuleDependency = sceneModuleDependency ?? typeof(SceneRenderModule);
     }
 
     public void Configure(IServiceCollection services)
