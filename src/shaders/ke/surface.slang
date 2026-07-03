@@ -50,6 +50,20 @@ interface IMaterial {
     void fragment(inout SurfaceState s);
 }
 
+// Feature <-> pass seam (§8.12 of RenderArchitectureV2.md): a shading pass calls
+// visibility() generically and never names the feature that implements it.
+// FullyLit is the no-op default (no shadow module present -> zero shadow
+// bindings compiled into the pipeline). A shadow module contributes its own
+// conformance (e.g. ShadowMapVisibility) owning its own texture/sampler/matrix,
+// linked in only when that module is composed into the scene.
+interface ILightVisibility {
+    float visibility(float3 worldPos);
+}
+
+struct FullyLit : ILightVisibility {
+    float visibility(float3 worldPos) { return 1.0; }
+}
+
 interface IUnlitMaterial {
     void vertex(inout VertexInfo v);
     float4 fragment(inout VertexInfo v);
