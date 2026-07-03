@@ -1,6 +1,10 @@
 # 16 — Configuration Service
 
-> **Status**: 📋 Architectural decision. Not implemented yet. This chapter freezes the *shape* of the runtime configuration service so plugins, serialization (chapter 15), and the editor/agent surface (chapter 14) all agree on how settings flow.
+> **Status**: 📋 Architectural decision — **partially superseded 2026-07-02.** This chapter froze the *shape* of the config service as a **C#-only** service (`IProjectConfig` + `IOptions<T>` via `Microsoft.Extensions.Options`). Two decisions here are **reversed** by the native-config decision (authoritative source: [`RenderArchitectureV2.md` §9.9](../RenderArchitectureV2.md)):
+> - **§2 framing (C#/`IOptions<T>`)** → configuration is now a **native `ke_configuration` C-ABI contract** (kernel primitive + TOML loader plugin); C# becomes a thin wrapper. This is a **multi-language engine — C# is not special**, and settings are too important to be C#-exclusive.
+> - **§2.3 (boot-time snapshot, `IOptionsMonitor` rejected)** → **reversed.** Runtime change *is* supported, opt-in per module, via a native change subscription (the `IOptionsMonitor.OnChange` equivalent). Applied at the owning system's own execution point, never on the callback thread, never via pinning.
+>
+> The **still-valid** decisions below: §2.1 (plugins own their settings POCO/struct), §2.2 (plugins depend on config, not vice-versa), §2.4 (defaults live on the POCO/params), §2.5 (typed + stringly-typed access), §2.6 (section→type mapping). Read those as the enduring shape; read §2 framing and §2.3 through the amendment above.
 
 ## 1. The problem
 
@@ -69,7 +73,7 @@ config.Window.Fullscreen = true; // ❌ no effect on a running window
 
 When a developer wants to *persist* the live state back to disk, the editor lib offers `config.Snapshot()` to capture the current state of all plugins and `config.Save()` to write it back to `Project`. That is a deliberate save, not a reactive sync.
 
-**Rejected:** `IOptionsMonitor<T>` style with change notifications. Adds cross-thread notification, "which frame does this apply on" questions, reentrancy hazards. Covers maybe 10% of use cases; the other 90% is "load at boot, never change". Revisit if a real need emerges.
+**Rejected (originally) — REVERSED 2026-07-02:** this section originally rejected `IOptionsMonitor<T>` change notifications as covering "maybe 10% of use cases". That call is overturned: runtime reconfiguration (e.g. a settings menu changing shadow resolution) is now a first-class, **opt-in per module** capability via the native change subscription (`ke_configuration.subscribe`, the `OnChange` equivalent). The "which frame does this apply on / reentrancy" hazards the original rejection named are real and are answered by the **latch-then-apply** rule: the callback only latches a pending value; the module applies it at the top of its *own* system's next run, where the wave-builder already grants exclusive access to the affected resource — no cross-thread GPU mutation, no pinning. Authoritative: [`RenderArchitectureV2.md` §9.9](../RenderArchitectureV2.md). Boot-time-only modules simply never subscribe and keep the original snapshot behavior.
 
 ### 2.4 Defaults — the plugin's Options POCO is the default
 

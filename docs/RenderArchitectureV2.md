@@ -834,6 +834,8 @@ Locked now (shader-authoring contract, frozen at template semver): the **seven c
 
 Pinned per impl phase: full field lists for the non-`IMaterial` context types; exact Slang generic signatures for vertex-layout/feature axes; the `.material.toml` grammar; the `ke shader new` CLI ship point.
 
+**Status (2026-07-02):** first vertical slice shipped for the flat case — `ke.surface`'s `SurfaceState` carries the read-only context fields (`uv`/`worldPos`/`tbn`) the pass body needs; `forward_lit.slang` is the engine `ForwardLit` pass, generic over `T : IMaterial`, calling `material.vertex()`/`material.fragment()` before running the same Cook-Torrance/clustered-light/IBL body as `forward.slang`; `mat_test_flat.slang` is a hand-written material conformance (stand-in for future `ke shader new` codegen) proving the composition compiles to valid WGSL with byte-identical set-0/1/2/3 bind-group + vertex layouts to `forward.slang` — zero C ABI / C# binding change. `forward.slang` stays wired as the fallback-of-record; nothing deleted. Not yet shipped: reflection-driven variable material layouts, `.material.toml`, `ke shader new`, the remaining six templates, and Mechanisms 2/3 below.
+
 ---
 
 ## 9. Threading + runtime integration
@@ -909,6 +911,51 @@ Two **independent** buffering schemes compose; conflating them is the trap.
 
 **Decided (2026-06-22) — remove pinning when bgfx is replaced.** Parallel command *recording* is universal across every target (Vulkan per-thread command pools, D3D12 per-thread allocators, Metal multiple command buffers / `MTLParallelRenderCommandEncoder`, wgpu thread-safe objects, and PS5/Switch/Xbox — multi-thread command building is a core feature of low-level APIs). The only serialization the GPU requires is **per-queue submit/present**, and the wave-builder already provides it: `render.begin_frame` / `clear` / `end_frame` are single systems serialized through the backbuffer tag-cid, so queue ops never run concurrently. bgfx-style pinning exists only because bgfx serializes its *entire* API behind one render thread — an artifact of bgfx's threading model, not a GPU requirement. So `ke_runtime_system_params.pinned_thread` can leave the scheduler in favor of access-list serialization. **One caveat:** keep a narrow "present on the window thread" affinity for **macOS** (`NSWindow`/`CAMetalLayer` mutation requires the main thread); X11/Wayland have lighter constraints. Verify the present-thread requirement per platform when porting; everything else unpins.
 
+### 9.8 Module decomposition — every feature is opt-in, nothing is baked
+
+**Current deviation (2026-07-02).** The Zig `render_module.zig` is a **monolith**: one `ModuleState` that unconditionally creates the shadow map, the skybox pipeline, IBL sampling, the clustered-forward grid + cull, the tonemap pass, and the forward/forward_lit/magenta pipelines — regardless of whether a given game uses any of them. This was a G3/G5 parity shortcut (get the examples rendering fast), and it violates §2 and §7: *L7 features ship as opt-in passes/modules registered as runtime systems (`KernelEngine.Render.<Feature>` or in the game), the engine does not pick the combination.* It is tracked here as debt, not a design.
+
+**Target.** A game that has no shadows must contain **no** shadow code, shadow shader, or shadow GPU resource — not a disabled branch, not an unused embed. The decomposition:
+
+| Bucket | Passes | Rule |
+|---|---|---|
+| **Core-mandatory** | forward (opaque draw) + present/swapchain acquire-and-present | Always present; the minimum that puts pixels on screen. |
+| **Opt-in feature modules** | shadow, skybox + IBL, clustered-forward + light cull, bloom, tonemap | Each is a separately-composable module the host adds. Absent module ⇒ absent code + shaders + resources. |
+
+The **host decides** the combination at composition time (DI registration); the module ships sane **defaults**; the module — not the render core — owns its config and its GPU resources. The render core and the runtime **configure nothing** because by themselves they *do* nothing — only modules have knobs.
+
+**Two monoliths, distinguished.** The C# module layer is *already* partly decomposed (`ShadowModule`, `SceneRenderModule` are separate `IRuntimeModule`s). The **Zig `render_module.zig` is the monolith that remains** — it still runs every pass regardless of which C# modules were added. Decomposing it (so adding/removing a C# module actually adds/removes the Zig pass + its resources) is the substance of this work; the C# opt-in surface mostly exists.
+
+**Pilot: shadow.** Extract the shadow pass first — it is the only feature that exercises *both* the opt-in decomposition *and* the per-module config surface (§9.9); its config (resolution/frustum/far-plane) is the canonical example. The shadow↔forward coupling is expressed the way §7 already mandates: a `rg.shadow_map` tag-cid in both passes' access lists (shadow WRITES, forward READS), so the wave-builder orders them with zero special-casing. Skybox/IBL, clustered-forward+cull, bloom, tonemap follow the same shape afterward, on demand — not now.
+
+**Deferred (debt).** Splitting each module into its own plugin DLL (`KernelEngine.Render.Shadow`) is a later step; a module may live *inside* the same render lib first. The plugin-boundary split does not block the opt-in doctrine.
+
+### 9.9 Per-module configuration — a **native** `ke_configuration` contract
+
+Configuration is a **renderer prerequisite** (a module cannot own its knobs without it) but it is a **cross-cutting engine capability**, and this is a **multi-language engine — C# is not special.** Settings are far too important to be C#-exclusive. Therefore configuration is a **C-ABI contract**, exactly like `ke_ecs` / `ke_allocator` / `ke_resource_cache`; the C# side is a thin wrapper, and Lua/Rust/future hosts consume the same vtable.
+
+**Current deviation (2026-07-02).** `KernelEngine.Configuration` (`IProjectConfig` + `TomlOptionsBinder` + `Microsoft.Extensions.Options`) is a good prototype of the *shape* but is **pure C# (Layer 4)** — the wrong home for a universal capability. It is retargeted to a native contract with C# as wrapper. This is debt to pay before the config surface is relied upon.
+
+**The contract (decided 2026-07-02).**
+
+- **`ke_configuration` is a kernel primitive, format-agnostic** — a typed section/key store + a **change subscription** (`subscribe(section, callback_fn, user_ctx) → subscription`; the native equivalent of `IOptionsMonitor.OnChange`). It mirrors `ke_resource_cache`: a generic kernel built-in that knows nothing about file formats.
+- **TOML parsing lives in a loader plugin, not the kernel** — the framework plugin already vendors **tomlc99**; a loader reads `Project.toml` and populates `ke_configuration`. Same pattern as "an asset loader populates `ke_resource_cache`". The kernel never sees TOML.
+- **Typed access = typed getters (decided): `get_uint` / `get_float` / `get_string` / `get_bool` / arrays**, each taking a default. A module reads its section at init and stores the values. *(Debt / alternative — see below.)*
+- **C# `KernelEngine.Configuration` becomes a thin wrapper** — a custom `IOptionsMonitor<T>` backed by `ke_configuration`, so C# game devs keep the idiomatic `IOptionsMonitor<ShadowOptions>` while the capability is native. Precedent: `Allocator` wraps `ke_allocator*`.
+
+**Rules.**
+
+1. **Opt-in is DI/module registration, never TOML-section presence.** Adding the module in code (`AddShadowModule()` / `new ShadowModule()`) is what makes the feature exist; the `[shadow]` section only *tunes* an already-composed module. A stray TOML section must never conjure a feature — otherwise the "no shadow code in a game without shadows" guarantee (§9.8) is lost.
+2. **Runtime change is applied at the owning system's own execution point — no pinning.** The `subscribe` callback **latches** a pending value; the module applies it (e.g. destroy+recreate the shadow map at the new resolution) at the top of its *own* render system's next run, where the wave-builder already grants exclusive access to the resource tag-cid (§7.2, §9.7). The callback fires from an arbitrary thread (a settings menu, later a file watcher) and must **never** touch GPU resources directly, and must **never** reach for `DispatchPinned` — reintroducing a pin here would contradict §9.7's "remove pinning" direction. Latch-then-apply is the whole mechanism.
+3. **Defaults live on the module** (the params struct / POCO), applied when the section or a key is absent. `ke_configuration` holds no default catalog.
+
+**Debts / deferred, recorded so they are not rediscovered as regressions:**
+
+- **Descriptor-based binding** — a field-descriptor table (offset + type + key) per options struct + a single `bind(section, descriptor, out_struct)`, i.e. the native analogue of `TomlOptionsBinder`'s reflection. **Possibly cleaner and more ergonomic than typed getters**; deliberately *not* chosen for the first cut (more machinery to prove the contract). Revisit as sugar once the getter path is proven — it may well be the better long-term surface.
+- **File-driven reload-on-save** (edit `Project.toml` → change fires) belongs to a **future hot-reload arc** — noted, not built. The near-term change path is **programmatic** (a settings API calling the config), which is the more common real use case anyway. Aligns with chapter 16 §5's "Hot reload" open question.
+- **Hardcoded consts migrate to module config** — `SHADOW_RES`, `GRID_X/Y/Z`, `MAX_LIGHTS_PER_CLUSTER` in `render_module.zig` are exactly the "module decides for the user" values this system replaces; they move to their module's config (with defaults) as each module is extracted.
+- **Native DI container is a separate, later arc.** The same multi-language logic that makes config native applies to dependency injection — today DI is `Microsoft.Extensions.DependencyInjection` in C# (composition root) with native plugins receiving deps via factory params ("manual DI"). A native IoC container (codegen-based, or a typed service registry keyed by interface-id — more refined than a raw service locator) is desirable but out of scope here. **Short-term stance:** MS.DI stays the C# composition root; native modules get deps by params. Config does **not** block on DI.
+
 ---
 
 ## 10. Migration plan — parallel build, Zig greenfield alongside CMake
@@ -937,6 +984,10 @@ With a multi-pass scene now running (G3), implement the deferred `RuntimeArchite
 
 ### Phase G4 — PSO Mechanism 1 (ubershader + magenta) (3-4 sessions)
 `PipelineCache` (RAM only); build-time ubershader (PBR forward + shadow + depth prepass); magenta placeholder; background compile via the worker pool; hot reload invalidates RAM entries. **Goal: dev iteration never stalls.**
+
+**Status (2026-07-02): partial, and deliberately not the load-bearing path.** Magenta placeholder + the has-material/no-material PSO selector are wired in `render_module.zig`'s `forwardSys`/`forwardSetup` (see §8.10 status note for the IMaterial half). No ubershader, no `PipelineCache`, no background compile, no runtime PSO-miss detection — every mesh with a material draws through the single `forward_lit` pipeline built at engine-build time; magenta today only fires for the hardcoded "no material assigned" case, not a real cache-miss path.
+
+**This is not yet the anti-stutter system.** The doctrine's actual answer to the Godot problem (§6 intro) is **Mechanism 2** — the build-time manifest that makes the full PSO set statically derivable, so nothing compiles during gameplay. Mechanism 2 is **0% built**: no `ke build manifest` CLI, no cartesian-product walk, no `psos.manifest`, no per-machine disk cache (Mechanism 3) to serve it from. Mechanism 1 (this phase) exists only as the *safety net* for cases the manifest legitimately can't predict ahead of time (modder content, dev-iteration staleness) — it is never meant to be the primary path in a shipped game, and today it isn't exercised as a fallback at all (no live cache-miss scenario exists yet to trigger it). Sequencing per §6.6 remains: Mechanism 1 → Mechanism 3 → Mechanism 2, with Mechanism 2 required before shipping any release game.
 
 ### Phase G4.1 — PSO Mechanism 3 (disk cache + driver hash) (2 sessions)
 `driver_hash` at boot; cache dir per (game, engine_ver, driver); lazy load → create_pipeline_from_blob; write on compile success; invalidate on hash change.
@@ -971,6 +1022,9 @@ Slang is built **incrementally** — do NOT stand up §6 (PSO three-mechanism) o
 
 ### Phase G6 — Cut over default; deprecate Bgfx
 Default DI swap. Bgfx becomes "legacy stable" (critical fixes only). Delete after 3+ months of Modern as default with no regressions.
+
+### Phase G7 — Modularity + native configuration (renderer modularity; **prerequisite for "done")**
+Decompose the `render_module.zig` monolith into core-mandatory + opt-in feature modules (§9.8), and land the native `ke_configuration` contract (§9.9) that lets each module own its knobs across languages. Sequencing: **native contract first, pilot on top** — building the pilot on the current C#-only config would plant exactly the layer debt this phase removes. Slice: (1) doc (done — §9.8/§9.9); (2) minimal `ke_configuration` (kernel primitive: load, typed getters, subscribe) + TOML loader in the framework plugin; (3) **shadow pilot** — extract the shadow pass out of the monolith, consume `ke_configuration` through the thin C# wrapper, reconfigure at the shadow render system's own execution point (no pinning). Skybox/IBL, clustered-forward+cull, bloom, tonemap follow the same shape on demand. Native DI container is explicitly **not** in scope (§9.9 debt).
 
 ### Risk gates
 - G1: webgpu triangle renders. **Hard gate.**
