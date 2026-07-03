@@ -834,11 +834,78 @@ Locked now (shader-authoring contract, frozen at template semver): the **seven c
 
 Pinned per impl phase: full field lists for the non-`IMaterial` context types; exact Slang generic signatures for vertex-layout/feature axes; the `.material.toml` grammar; the `ke shader new` CLI ship point.
 
-**Status (2026-07-02):** first vertical slice shipped for the flat case — `ke.surface`'s `SurfaceState` carries the read-only context fields (`uv`/`worldPos`/`tbn`) the pass body needs; `forward_lit.slang` is the engine `ForwardLit` pass, generic over `T : IMaterial`, calling `material.vertex()`/`material.fragment()` before running the same Cook-Torrance/clustered-light/IBL body as `forward.slang`; `mat_test_flat.slang` is a hand-written material conformance (stand-in for future `ke shader new` codegen) proving the composition compiles to valid WGSL with byte-identical set-0/1/2/3 bind-group + vertex layouts to `forward.slang` — zero C ABI / C# binding change. `forward.slang` stays wired as the fallback-of-record; nothing deleted. Not yet shipped: reflection-driven variable material layouts, `.material.toml`, `ke shader new`, the remaining six templates, and Mechanisms 2/3 below.
+**Status (2026-07-02):** first vertical slice shipped for the flat case — `ke.surface`'s `SurfaceState` carries the read-only context fields (`uv`/`worldPos`/`tbn`) the pass body needs; `forward_lit.slang` is the engine `ForwardLit` pass, generic over `T : IMaterial`, calling `material.vertex()`/`material.fragment()` before running the same Cook-Torrance/clustered-light/IBL body as `forward.slang`; `mat_test_flat.slang` is a hand-written material conformance (stand-in for future `ke shader new` codegen) proving the composition compiles to valid WGSL with byte-identical set-0/1/2/3 bind-group + vertex layouts to `forward.slang` — zero C ABI / C# binding change. `forward.slang` stays wired as the fallback-of-record; nothing deleted. Not yet shipped: reflection-driven variable material layouts, `.material.toml`, `ke shader new`, the remaining six templates, the contribution-interface seam (§8.11–§8.13), and Mechanisms 2/3 below.
 
----
+### 8.11 The three composition seams — material, feature, pass
 
-## 9. Threading + runtime integration
+The `IMaterial` seam (§8.4–§8.6) is **one** of three. Naming all three is what makes a *dumb* forward — one that does not know shadows, clustering, IBL, or any pass — a precise design goal rather than an aspiration.
+
+| # | Seam | Interface | Who implements | Who consumes |
+|---|---|---|---|---|
+| 1 | **user ↔ pass** | `IMaterial` (surface) | game material shader | a shading pass |
+| 2 | **feature ↔ pass** | contribution interfaces (§8.12) | a feature module (shadow, IBL, clustering) | a shading pass |
+| 3 | **pass ↔ core** | the pass *is a runtime system* (§7, §9.2) | a render module | nothing — the core owns no pass |
+
+The load-bearing consequences:
+
+- **The core (L5) owns no pass.** `ke_render_core` is resource registry + pass context + transient pool + barriers (§5, §7). `forward` is a system a module registers — exactly as `shadow` or `tonemap` is. Forward is **not** privileged; the monolithic `render_module.zig` bundling every pass is the current deviation (§9.8), not the design.
+- **The shading math is a shared library, not a pass.** `ke.pbr` (Cook-Torrance BRDF), `SurfaceState`, and the contribution *interfaces* live in the core shader library (`ke.*`). Whichever pass performs shading — a forward fragment, or a deferred-lighting fullscreen pass — calls the **same** library. No pass owns lighting; lighting is a library the shading pass invokes.
+- Three tiers, each ignorant of the tier above the seam:
+  - **Core shader library** (`ke.*`): math, BRDF, `SurfaceState`, contribution interfaces. Knows no feature, no pass.
+  - **Feature components** (shadow / IBL / clustering): each implements one interface, knows only itself.
+  - **Passes** (`forward`, `gbuffer`, `deferred_lighting`, `shadow_depth`, `tonemap`, …): each is a module/system that composes `{material} × {enabled features}` and dispatches. Knows the *structure* of its shading (inline vs fullscreen-from-G-buffer), never the *features*.
+
+### 8.12 Contribution interfaces — the feature ↔ pass seam
+
+A shading pass is authored **generic over abstract contribution hooks**, each with a no-op default. The pass source names the *abstraction*, never the *feature*.
+
+```hlsl
+// core library (ke.*) — declares the seam, implements nothing feature-specific
+interface ILightVisibility { float visibility(LightInput l, SurfaceState s); }  // shadow
+interface ILightIterator   { void  forEachLight(SurfaceState s, inout Accum a); } // clustering
+interface IIndirect        { float3 ambient(SurfaceState s); }                    // IBL / ambient
+
+struct FullyLit  : ILightVisibility { float visibility(LightInput l, SurfaceState s) { return 1.0; } }
+struct SimpleLoop: ILightIterator   { /* iterate every light, no culling */ }
+struct NoIndirect: IIndirect        { float3 ambient(SurfaceState s) { return float3(0); } }
+```
+
+The forward fragment computes `radiance *= vis.visibility(l, s)` — `vis` is a generic parameter. **Forward's source has zero `shadow` references.** The shadow module supplies `struct ShadowMapVisibility : ILightVisibility { /* sample the shadow map */ }`, linked at composition time **only when the shadow module is present**; otherwise `FullyLit` links and the shadow-map binding does not exist in the layout at all. Clustering supplies an `ILightIterator` (froxel lookup) vs the default `SimpleLoop`; IBL supplies an `IIndirect`. This is the mechanism the `IMaterial` slice already proved (`slangc` generics → valid WGSL) and is precisely what Slang's "shader components" was designed for.
+
+**The access-list follows the linked feature set.** Enabling the shadow module adds three things that appear and disappear *together*: (a) the `shadow_depth` pass that produces the shadow map; (b) the `ShadowMapVisibility` impl linked into the shading program; (c) the `rg.shadow_map` **read** on the shading pass's access list (so the wave-builder orders shadow-depth before shading — §7.1). Without the module, none of the three exist; the shading pass declares no shadow dependency.
+
+**The honest execution nuance.** "Forward doesn't know shadows" is total at the **source / authoring** level. At the **linked-binary** level the visibility sampling runs inside forward's fragment — because forward shading is where `light × visibility` happens — but it got there by *composition*, not *authoring*. Two distinct pieces wrongly both called "shadow": the shadow-map **generation** (`shadow_depth` pass) is a fully independent pass forward never references; only the shadow **sampling** is a component linked into shading. Removing even the sampling from forward's binary would require a screen-space shadow-mask pass (extra pass + bandwidth, poor with many shadowed lights) — the component-linked path is the standard, cheaper answer and what Slang optimizes for.
+
+### 8.13 Pass as module — forward is not special; forward ↔ deferred
+
+Because the core owns no pass (§8.11), swapping the renderer's topology is swapping which pass-modules are registered — not touching the core.
+
+- **`SurfaceState` is the topology pivot.** The material's `fragment()` always writes the same `SurfaceState`. **Forward**: the pass reads it and shades inline. **Deferred**: a `gbuffer` pass encodes `SurfaceState` into the G-buffer MRTs; a `deferred_lighting` pass decodes it and shades using the **same** shading library + contribution interfaces (§8.12). §8.6 already lists GBuffer as an `IMaterial`-consuming pass. Neither forward nor deferred knows shadow; both call the shared shading library, and shadow plugs into the hook.
+- **The deferred G-buffer limit is universal, not ours.** *Any* deferred renderer serializes the surface into a bounded G-buffer, so it cannot carry an arbitrary `SurfaceState`: extended lobes (clearcoat, sheen, anisotropy, subsurface) either fatten the G-buffer (bandwidth/memory), require a *shading-model ID* that reinterprets channels (Unreal's approach; generalized by Substrate/Strata), or are unsupported in deferred. Our architecture neither worsens nor fixes this — it makes the seam explicit: the `gbuffer` pass is the encode/decode point, and "which `SurfaceState` fields survive" is a property of the G-buffer-encoder variant. Forward carries the full `SurfaceState` because it shades inline, no serialization.
+- **Deferred-clustered is possible; the cull is largely shared.** Clustered light-binning (froxel cull, Olsson 2012) is topology-independent — the **cull compute pass is shareable** between forward+ and clustered-deferred. The difference is the per-pixel froxel **lookup**: forward reads depth from the rasterized fragment, deferred reads it from the G-buffer; the froxel-index math is identical. Deferred additionally *may* run a tighter **tile depth-bounds** cull (it has the full depth buffer) that forward+ typically cannot. So `ILightIterator` impls can be pass-aware, and cull passes are swappable modules producing the same light-list resource.
+- **"Render nothing" is register no draw passes.** The core and runtime do nothing by themselves; the only quasi-mandatory plumbing is the frame bracket (`begin_frame` / `clear` / `end_frame` / present), serialized via the backbuffer tag-cid (§9.7), and only when a swapchain exists.
+
+**Status: design-level, unbuilt.** No contribution interface, no deferred pass, no pass-aware iterator exists yet. The `IMaterial` generics slice (§8.10) de-risks the composition mechanism; §8.11–§8.13 are the doctrine the module decomposition (§9.8) builds toward. Deferred is **not** a near-term deliverable — it is documented so the pass↔core seam is proven sound against a second topology, keeping forward from re-privileging itself.
+
+### 8.14 End-state — deferred **+** forward, never deferred **vs** forward
+
+The mature real-time pipeline is not a choice between topologies; it is a **hybrid**, and every AAA engine converges on it:
+
+- **Opaque** shades through **deferred** (classic G-buffer *or* a visibility buffer — thin ID+barycentrics re-fetched at shade time, Nanite-style). Deferred's real value is **decoupling visibility from shading** (shade once per pixel; enables decoupled shading rate, micro-poly geometry), not merely "more lights" — with a shared clustered cull, forward+ scales to many lights too.
+- **Transparency** shades through **clustered forward** — unavoidable: a G-buffer / visibility buffer stores exactly one surface per pixel, so N-layer order-dependent blending cannot be represented in deferred. This is universal.
+- **Both halves share the clustered light cull** (§8.13) and, crucially, **the same materials and the same shading library** — the opaque deferred-lighting pass and the transparent forward pass each consume one `IMaterial`'s `SurfaceState` and the same `ke.pbr` + contribution interfaces.
+
+**What we guarantee from now (the invariants that keep the hybrid reachable), even though none of it is built:**
+
+1. **Materials never assume a shading topology** — always write `SurfaceState`, never shade themselves. One material must be able to instantiate into forward-shade, gbuffer/vis-buffer write, deferred-lighting, *and* transparent-forward.
+2. **The shading library + contribution interfaces never assume they are inside a forward pass** — the same code runs in a forward fragment and a deferred-lighting fullscreen dispatch.
+
+Hold these two and the hybrid is later a matter of *registering more pass-modules* (gbuffer / vis-buffer / deferred-lighting / transparent-forward) — the core (§8.11) never changes.
+
+**Left deliberately open (guarantee the seam, not the form):**
+
+- **Which deferred form** — classic fat G-buffer vs visibility buffer — is undecided. We commit to neither; the material/shading contract must not presume either. Picking one belongs to whenever deferred is actually built.
+- **`SurfaceState` stays evolvable (semver, §8.5)** as the plug point where a richer surface representation lands later. The industry answer to "a fixed G-buffer can only carry one shading model per pixel" is a composable layered-BSDF material with variable-footprint encoding — **Unreal's Substrate (née Strata)**. Substrate generalizes *surface expressiveness in deferred* only; it does **not** address transparency (still forward) and is **not** the hybrid itself. It is a future enrichment that plugs into the `SurfaceState` seam — so the contribution interfaces must be able to migrate from "here is albedo/metallic/roughness" to "evaluate this BSDF" without breaking passes. Not near-term; recorded so the seam is not frozen shut.
 
 `KernelEngine.Render.Modern` is a **runtime Module** (`IRuntimeModule` in C#, `ke_runtime_module_params` at the C ABI) — the same shape `KernelEngine.Render.Bgfx` uses today. The V2 renderer doesn't invent a new integration pattern; it slots into the locked one.
 
@@ -926,7 +993,7 @@ The **host decides** the combination at composition time (DI registration); the 
 
 **Two monoliths, distinguished.** The C# module layer is *already* partly decomposed (`ShadowModule`, `SceneRenderModule` are separate `IRuntimeModule`s). The **Zig `render_module.zig` is the monolith that remains** — it still runs every pass regardless of which C# modules were added. Decomposing it (so adding/removing a C# module actually adds/removes the Zig pass + its resources) is the substance of this work; the C# opt-in surface mostly exists.
 
-**Pilot: shadow.** Extract the shadow pass first — it is the only feature that exercises *both* the opt-in decomposition *and* the per-module config surface (§9.9); its config (resolution/frustum/far-plane) is the canonical example. The shadow↔forward coupling is expressed the way §7 already mandates: a `rg.shadow_map` tag-cid in both passes' access lists (shadow WRITES, forward READS), so the wave-builder orders them with zero special-casing. Skybox/IBL, clustered-forward+cull, bloom, tonemap follow the same shape afterward, on demand — not now.
+**Pilot: shadow.** Extract the shadow pass first — it is the only feature that exercises *both* the opt-in decomposition *and* the per-module config surface (§9.9); its config (resolution/frustum/far-plane) is the canonical example. The shadow↔forward coupling is expressed the way §8.12 mandates, not by teaching forward about shadows: the shadow module contributes an `ILightVisibility` impl linked into the shading program, and — together with it — a `rg.shadow_map` tag-cid **read** on the shading pass's access list (shadow_depth WRITES it), so the wave-builder orders shadow-depth before shading with zero special-casing. Forward's *source* stays shadow-agnostic; enabling/disabling the module makes the visibility impl, the `shadow_depth` pass, and the access-list read all appear/disappear together. **This is why the pilot must ride on the §8.12 contribution-interface seam, not a dummy-white-texture hack** — the hack would leave forward omniscient (a shadow binding always present, fed a no-op), the exact coupling this work removes. Skybox/IBL (`IIndirect`), clustered-forward+cull (`ILightIterator`), bloom, tonemap follow the same shape afterward, on demand — not now.
 
 **Deferred (debt).** Splitting each module into its own plugin DLL (`KernelEngine.Render.Shadow`) is a later step; a module may live *inside* the same render lib first. The plugin-boundary split does not block the opt-in doctrine.
 
