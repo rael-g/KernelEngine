@@ -112,6 +112,62 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/magenta.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/magenta.slang"
+            --output "${SHADER_GEN_DIR}/magenta.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/magenta.slang" "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/magenta.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/magenta.slang"
+            --output "${SHADER_GEN_DIR}/magenta.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/magenta.slang" "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+# Material-authored forward path: the built-in flat material (mat_test_flat)
+# binds a concrete IMaterial into the engine's generic ForwardLit pass
+# (forward_lit.slang). Both import the canonical `ke` surface contract, so these
+# compile with two include dirs: the shared shader library (src/shaders) and this
+# core shaders dir (for `import forward_lit`).
+set(KE_SHADER_LIB_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
@@ -134,6 +190,10 @@ add_custom_command(
         "-Dtonemap-fs-wgsl=${SHADER_GEN_DIR}/tonemap.fs.wgsl"
         "-Dui-vs-wgsl=${SHADER_GEN_DIR}/ui.vs.wgsl"
         "-Dui-fs-wgsl=${SHADER_GEN_DIR}/ui.fs.wgsl"
+        "-Dmat-test-flat-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
+        "-Dmat-test-flat-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+        "-Dmagenta-vs-wgsl=${SHADER_GEN_DIR}/magenta.vs.wgsl"
+        "-Dmagenta-fs-wgsl=${SHADER_GEN_DIR}/magenta.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
@@ -151,6 +211,10 @@ add_custom_command(
         "${SHADER_GEN_DIR}/tonemap.fs.wgsl"
         "${SHADER_GEN_DIR}/ui.vs.wgsl"
         "${SHADER_GEN_DIR}/ui.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+        "${SHADER_GEN_DIR}/magenta.vs.wgsl"
+        "${SHADER_GEN_DIR}/magenta.fs.wgsl"
         ke_common
         ke_runtime
     VERBATIM

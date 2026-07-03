@@ -58,6 +58,9 @@ def main():
                                     "entry point per module avoids duplicate shared "
                                     "declarations when a uniform is used across stages.")
     ap.add_argument("--stage", help="Shader stage for --entry (vertex|fragment|compute).")
+    ap.add_argument("--include", action="append", default=[],
+                    help="Additional include search path (repeatable) — passed to slangc as -I. "
+                         "Needed when a shader uses 'import ke;' or imports an engine pass module.")
     ap.add_argument("--raw", action="store_true",
                     help="Write the raw compiled source (e.g. for Zig @embedFile) "
                          "instead of a C-string header.")
@@ -72,6 +75,8 @@ def main():
         sys.exit(1)
 
     cmd = [slangc, args.input, "-target", args.target]
+    for inc in args.include:
+        cmd += ["-I", inc]
     if args.entry:
         cmd += ["-entry", args.entry]
     if args.stage:

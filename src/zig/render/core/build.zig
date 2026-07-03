@@ -27,6 +27,10 @@ pub fn build(b: *std.Build) void {
     const tonemap_fs_wgsl = b.option([]const u8, "tonemap-fs-wgsl", "generated tonemap fragment WGSL path") orelse @panic("-Dtonemap-fs-wgsl required");
     const ui_vs_wgsl = b.option([]const u8, "ui-vs-wgsl", "generated ui vertex WGSL path")   orelse @panic("-Dui-vs-wgsl required");
     const ui_fs_wgsl = b.option([]const u8, "ui-fs-wgsl", "generated ui fragment WGSL path") orelse @panic("-Dui-fs-wgsl required");
+    const mat_test_flat_vs_wgsl = b.option([]const u8, "mat-test-flat-vs-wgsl", "generated flat-material vertex WGSL path")   orelse @panic("-Dmat-test-flat-vs-wgsl required");
+    const mat_test_flat_fs_wgsl = b.option([]const u8, "mat-test-flat-fs-wgsl", "generated flat-material fragment WGSL path") orelse @panic("-Dmat-test-flat-fs-wgsl required");
+    const magenta_vs_wgsl = b.option([]const u8, "magenta-vs-wgsl", "generated magenta placeholder vertex WGSL path")   orelse @panic("-Dmagenta-vs-wgsl required");
+    const magenta_fs_wgsl = b.option([]const u8, "magenta-fs-wgsl", "generated magenta placeholder fragment WGSL path") orelse @panic("-Dmagenta-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/render_core.zig"),
@@ -60,6 +64,10 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("tonemap.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = tonemap_fs_wgsl } });
     mod.addAnonymousImport("ui.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_vs_wgsl } });
     mod.addAnonymousImport("ui.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_fs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_vs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_fs_wgsl } });
+    mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });
+    mod.addAnonymousImport("magenta.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_core",

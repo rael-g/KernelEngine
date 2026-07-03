@@ -10,13 +10,18 @@ struct VertexInfo {
 };
 
 struct SurfaceState {
-    float3 albedo;
-    float3 normal;     // world-space normal (post fragment())
-    float  metallic;
-    float  roughness;
-    float  ao;
-    float  alpha;
-    float  emissive;
+    // ── Read-only context (engine-populated before fragment()) ──
+    float2   uv;        // texcoord0
+    float3   worldPos;  // world-space fragment position
+    float3x3 tbn;       // tangent -> world basis, for normal-map decode
+    // ── Author-writable surface (PBR metallic-roughness) ──
+    float3 albedo;      // default (1,1,1)
+    float  metallic;    // default 0
+    float  roughness;   // default 0.5
+    float3 normal;      // world-space; default = geometric normal
+    float3 emissive;    // default 0
+    float  ao;          // default 1
+    float  alpha;       // default 1
 };
 
 struct LightInput {

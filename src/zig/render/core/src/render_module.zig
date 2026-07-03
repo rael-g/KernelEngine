@@ -33,6 +33,11 @@ const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
 const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
 const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
 const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
+// Material-authored forward path + magenta miss placeholder (§6/§8).
+const mat_test_flat_vs_wgsl = @embedFile("mat_test_flat.vs.wgsl");
+const mat_test_flat_fs_wgsl = @embedFile("mat_test_flat.fs.wgsl");
+const magenta_vs_wgsl = @embedFile("magenta.vs.wgsl");
+const magenta_fs_wgsl = @embedFile("magenta.fs.wgsl");
 
 const SHADOW_RES = 1024; // shadow map resolution
 
@@ -159,6 +164,12 @@ const ModuleState = struct {
 
     // Forward pass
     fwd_pipeline: c.ke_gpu_pipeline,
+    // Material-authored path: forward_lit composed with the built-in flat
+    // material (§8). Scene meshes draw through this; fwd_pipeline (the monolithic
+    // forward.slang) stays created as the fallback-of-record until parity is
+    // proven. magenta_pipeline is the Mechanism-1 "never silent" miss placeholder.
+    fwd_lit_pipeline: c.ke_gpu_pipeline,
+    magenta_pipeline: c.ke_gpu_pipeline,
     fwd_obj_bind_group: c.ke_gpu_bind_group, // set 2, per-object (dynamic offset)
     fwd_obj_uniform: c.ke_gpu_buffer,
     fwd_frame_bind_group: c.ke_gpu_bind_group, // set 0, per-frame
@@ -596,7 +607,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     }
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, st.fwd_pipeline);
+    // Sets 0 and 3 (per-frame + clustered lights) share the same layout across the
+    // forward_lit and magenta pipelines, so they stay bound while the per-mesh
+    // pipeline switches below.
     rp.*.set_bind_group.?(rp, 0, st.fwd_frame_bind_group, null, 0); // set 0: per-frame
     rp.*.set_bind_group.?(rp, 3, st.fwd_light_bind_group, null, 0); // set 3: clustered lights
     i = 0;
@@ -606,6 +619,10 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         var idx_count: u32 = 0;
         if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
         const offset: u32 = i * UNIFORM_STRIDE;
+        // PSO selection (§6 Mechanism 1): a mesh with no assigned material draws
+        // magenta ("never silent"); an assigned material draws the IMaterial path.
+        const has_material = meshes[i].material.idx != c.KE_HANDLE_NONE;
+        rp.*.set_pipeline.?(rp, if (has_material) st.fwd_lit_pipeline else st.magenta_pipeline);
         const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
         rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
         rp.*.set_bind_group.?(rp, 2, st.fwd_obj_bind_group, &offset, 1); // set 2: per-object
@@ -613,6 +630,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
     }
+    // Skybox needs the monolithic-forward-compatible pipeline state re-established
+    // via its own pipeline below; the per-mesh selection above left fwd_lit/magenta
+    // bound, which is fine — the skybox sets its own pipeline next.
 
     // Skybox last — depth LEQUAL, no depth write: fills only the background pixels
     // the opaque meshes did not cover, within the same render pass (no load-op).
@@ -750,6 +770,57 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.fwd_pipeline = dev.create_render_pipeline.?(dev, &pp);
     if (st.fwd_pipeline == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+
+    // Material-authored path: same pipeline state as fwd_pipeline, but the shader
+    // is the engine ForwardLit pass composed with the built-in flat material via
+    // IMaterial (§8). Byte-identical bind-group + vertex layouts, so pp is reused
+    // verbatim with only the shader modules swapped.
+    const lit_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(mat_test_flat_vs_wgsl),
+        .byte_size = mat_test_flat_vs_wgsl.len,
+        .entry_point = "mat_test_flat.vs",
+    }, out_error);
+    if (lit_vs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, lit_vs);
+    const lit_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(mat_test_flat_fs_wgsl),
+        .byte_size = mat_test_flat_fs_wgsl.len,
+        .entry_point = "mat_test_flat.fs",
+    }, out_error);
+    if (lit_fs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, lit_fs);
+    pp.vertex_module = lit_vs;
+    pp.fragment_module = lit_fs;
+    st.fwd_lit_pipeline = dev.create_render_pipeline.?(dev, &pp);
+    if (st.fwd_lit_pipeline == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward_lit pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+
+    // Magenta placeholder — Mechanism 1 "never silent" miss fallback. Same
+    // pipeline layout (so the draw loop binds it uniformly) + vertex layout;
+    // fragment outputs solid magenta.
+    const mag_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(magenta_vs_wgsl),
+        .byte_size = magenta_vs_wgsl.len,
+        .entry_point = "magenta.vs",
+    }, out_error);
+    if (mag_vs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, mag_vs);
+    const mag_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(magenta_fs_wgsl),
+        .byte_size = magenta_fs_wgsl.len,
+        .entry_point = "magenta.fs",
+    }, out_error);
+    if (mag_fs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, mag_fs);
+    pp.vertex_module = mag_vs;
+    pp.fragment_module = mag_fs;
+    st.magenta_pipeline = dev.create_render_pipeline.?(dev, &pp);
+    if (st.magenta_pipeline == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "magenta placeholder: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }
 
