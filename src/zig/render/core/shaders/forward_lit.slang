@@ -242,7 +242,9 @@ float4 ke_forward_fs<T : IMaterial>(T material, VsOut input) {
     float3 color   = ambient + lit + s.emissive;
     color += ibl;
 
-    color = color / (color + 1.0);
-    color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+    // Linear HDR out — the ACES tonemap pass (tonemap.slang) does the tone
+    // curve + display gamma on the resolve to the swapchain. Do not
+    // tonemap/gamma-correct here: doing both here and in the tonemap pass
+    // double-compresses the image (washed-out, intensity-insensitive colors).
     return float4(color, s.alpha);
 }
