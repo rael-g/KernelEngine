@@ -63,6 +63,20 @@ KE_COMMON_API bool ke_error_is(const ke_error* err, const ke_error_type* type);
 /// no error has been set yet. Valid until the next ke_error_set() call on this thread.
 KE_COMMON_API const ke_error* ke_error_last(void);
 
+/// Deep-copies `src` into a heap-owned error that stays valid after the
+/// originating thread has moved past its thread-local slots — for carrying an
+/// error across a thread boundary (e.g. into an async task's result) or holding
+/// it beyond the depth-2 ring. The message and the whole cause chain are copied
+/// into owned storage; `type`/`file` are program-lifetime pointers, copied as-is.
+/// Returns NULL if `src` is NULL or on allocation failure (never aborts).
+/// Release with ke_error_free().
+KE_COMMON_API ke_error* ke_error_copy(const ke_error* src);
+
+/// Releases an error returned by ke_error_copy(), including its owned message and
+/// cause chain. Must NOT be called on a thread-local error (one from
+/// ke_error_last() or written to *out_error by ke_error_set()).
+KE_COMMON_API void ke_error_free(ke_error* err);
+
 /// Low-level: fill a thread-local error slot and write to *out_error if non-NULL.
 /// Prefer the KE_ERROR_SET / KE_ERROR_WRAP macros which inject __FILE__ and __LINE__.
 KE_COMMON_API void ke_error_set(ke_error** out_error, const ke_error_type* type,
@@ -77,6 +91,19 @@ KE_COMMON_API void ke_error_set(ke_error** out_error, const ke_error_type* type,
 /// Like KE_ERROR_SET but chains an inner error as the cause.
 #define KE_ERROR_WRAP(out_error, type, message, cause) \
     ke_error_set(out_error, type, message, __FILE__, __LINE__, cause)
+
+/// Prints the full error chain (type name, message, file:line, then each
+/// `cause` in turn) to stderr and terminates the process.
+///
+/// This is the engine's only sanctioned "give up and end the program" path.
+/// It exists for the caller who has already decided — after a `ke_error`
+/// reached them with nowhere left to propagate to — that there is no
+/// recourse but to end the process; it is never called automatically inside
+/// engine code. Unlike abort()/raise()/__builtin_trap(), it never triggers an
+/// OS crash dialog (Windows Error Reporting, Watson, etc.) and always prints
+/// a readable message before exiting, matching the "never silent" doctrine.
+/// `err` may be NULL (falls back to a generic message). Does not return.
+KE_COMMON_API _Noreturn void ke_error_fatal(const ke_error* err);
 
 #ifdef __cplusplus
 }

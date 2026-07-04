@@ -14,6 +14,12 @@ extern "C"
     typedef struct ke_scheduler ke_scheduler;
     typedef struct ke_task ke_task;
 
+    // TODO: a task carries no built-in result/error today — async operations
+    // write outcomes into their own `data` ctx, read after wait(). A typed
+    // result/error slot on ke_task would let cross-thread async failures
+    // propagate through the scheduler without each caller reinventing that
+    // convention. Errors are thread-local (see kernel_engine/common/error.h);
+    // ke_error_copy() snapshots one into owned storage for a ctx in the meantime.
     typedef void (*ke_task_func)(void *data);
     typedef void (*ke_task_on_complete_func)(ke_task *task, void *user_data);
 

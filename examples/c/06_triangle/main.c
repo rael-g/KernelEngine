@@ -14,11 +14,9 @@
 
 static void die(const char *msg, ke_error *err)
 {
-    if (err)
-        fprintf(stderr, "ERROR [%s]: %s\n", err->type->name, err->message);
-    else
-        fprintf(stderr, "ERROR: %s\n", msg);
-    __builtin_trap();
+    if (err) { ke_error_fatal(err); }
+    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
+    ke_error_fatal(&fallback);
 }
 
 int main(void)

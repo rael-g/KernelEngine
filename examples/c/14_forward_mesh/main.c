@@ -20,9 +20,9 @@
 
 static void die(const char *msg, ke_error *err)
 {
-    if (err) fprintf(stderr, "ERROR [%s]: %s\n", err->type->name, err->message);
-    else     fprintf(stderr, "ERROR: %s\n", msg);
-    __builtin_trap();
+    if (err) { ke_error_fatal(err); }
+    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
+    ke_error_fatal(&fallback);
 }
 
 static double now_seconds(void)
@@ -81,7 +81,7 @@ int main(void)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, 1, &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, 1, NULL, NULL, &err);
     if (!render.ref) die("render module", err);
     ke_render_core *core = ke_render_module_core(render.ref);
 

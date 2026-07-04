@@ -8,6 +8,9 @@ else()
     target_compile_definitions(ke_common PRIVATE KE_COMMON_EXPORT)
 endif()
 
+# ke_error_copy() heap-owns an error snapshot via the internal allocator.
+target_link_libraries(ke_common PRIVATE ke_allocator ke_allocator_malloc)
+
 target_include_directories(ke_common PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
