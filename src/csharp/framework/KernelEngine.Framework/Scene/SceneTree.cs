@@ -38,7 +38,7 @@ public sealed unsafe class SceneTree : INativeSceneTree
     {
         var bytes = Encoding.UTF8.GetBytes(name + "\0");
         fixed (byte* p = bytes)
-            return _native->create_node(_native, (sbyte*)p, parent, (void*)systemCtx, null);
+            return _native->create_node(_native, (sbyte*)p, parent, (ke_system_ctx*)systemCtx, null);
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ public sealed unsafe class SceneTree : INativeSceneTree
     public void DestroyNode(ulong entity, nint systemCtx = default)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(_native->destroy_node(_native, entity, (void*)systemCtx, &err), err, "destroy_node");
+        KernelError.ThrowIfFailed(_native->destroy_node(_native, entity, (ke_system_ctx*)systemCtx, &err), err, "destroy_node");
     }
 
     /// <summary>Destroys all nodes. Used on scene shutdown.</summary>

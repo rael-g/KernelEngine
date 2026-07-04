@@ -1,4 +1,5 @@
 using KernelEngine.Common.Native;
+using System.Runtime.CompilerServices;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
@@ -22,4 +23,13 @@ public unsafe partial struct ke_render_resource_desc
     public float scale_x;
 
     public float scale_y;
+
+    [NativeTypeName("float[4]")]
+    public _clear_value_e__FixedBuffer clear_value;
+
+    [InlineArray(4)]
+    public partial struct _clear_value_e__FixedBuffer
+    {
+        public float e0;
+    }
 }

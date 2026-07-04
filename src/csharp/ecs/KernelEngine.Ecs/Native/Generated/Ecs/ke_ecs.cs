@@ -39,8 +39,8 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("ke_component_id (*)(struct ke_ecs *, ke_component_id)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, uint, uint> snapshot_cid;
 
-    [NativeTypeName("void (*)(struct ke_ecs *)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, void> swap_snapshots;
+    [NativeTypeName("bool (*)(struct ke_ecs *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, ke_error**, bool> swap_snapshots;
 
     [NativeTypeName("void (*)(struct ke_ecs *, void (*)(void *), void *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, delegate* unmanaged[Cdecl]<void*, void>, void*, void> concurrent_reads;
@@ -50,4 +50,7 @@ public unsafe partial struct ke_ecs
 
     [NativeTypeName("void (*)(struct ke_ecs *, ke_query_id, ke_ecs_segment *, size_t, size_t *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, ke_ecs_segment*, nuint, nuint*, void> query_resolve;
+
+    [NativeTypeName("ke_entity (*)(struct ke_ecs *)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, ulong> entity_reserve;
 }
