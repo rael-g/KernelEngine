@@ -1,9 +1,8 @@
-// Environment/IBL feature component — an IIndirect conformance (§8.12 of
-// RenderArchitectureV2.md). forward_lit.slang never imports this file and
-// knows nothing about an environment cubemap or IBL math; only a material
-// wrapper that DOES want ambient/reflection contribution (see
-// mat_test_flat.slang) imports it and specializes ke_forward_fs with
-// IndirectIBL.
+// Environment/IBL feature component — an IIndirect conformance. forward_lit.slang
+// never imports this file and knows nothing about an environment cubemap or
+// IBL math; only a material wrapper that DOES want ambient/reflection
+// contribution (see mat_test_flat.slang) imports it and specializes
+// ke_forward_fs with IndirectIBL.
 //
 // Resources are pinned module-scope globals in set 0 (bindings 7-8, continuing
 // after the shadow feature's 4-6 — see shadow_feature.slang for why pinning

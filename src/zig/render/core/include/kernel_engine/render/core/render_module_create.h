@@ -2,11 +2,14 @@
 
 #include <kernel_engine/render/core/render_core_create.h>
 #include <kernel_engine/runtime/runtime.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+struct ke_logger;
 
 typedef struct ke_render_module ke_render_module;
 
@@ -16,16 +19,38 @@ typedef struct ke_render_module_handle
     void (*destroy)(ke_render_module *self);
 } ke_render_module_handle;
 
+// Clustered-forward froxel grid + per-froxel light-list shape. These are
+// workload-tuning values, not engine-imposed limits: a 0 field means "use the
+// engine's default" (32x18x24 grid, 256 lights/froxel), but any caller running
+// a denser scene than the default sweet spot can raise them — the engine never
+// silently caps a scene's fidelity without a way to opt out.
+typedef struct ke_render_cluster_params
+{
+    uint32_t grid_x;                  // screen-tile columns; 0 = default (32)
+    uint32_t grid_y;                  // screen-tile rows; 0 = default (18)
+    uint32_t grid_z;                  // depth slices; 0 = default (24)
+    uint32_t max_lights_per_cluster;   // per-froxel index-list cap; 0 = default (256)
+    // When non-zero, materials draw through a brute-force "classic forward"
+    // light loop (every fragment iterates every light) instead of the
+    // per-froxel cluster cull — no cull compute dispatch runs. Exists to
+    // compare the two at the same light count; not a shipping quality knob.
+    ke_bool  classic_lighting;
+} ke_render_cluster_params;
+
 // Installs the render path into a runtime: builds the render core over the
 // shared ecs + a caller-created GPU device. No pass is imposed — when
 // default_passes is non-zero it registers the conventional chain (begin → clear
 // → forward → end) as KE_PHASE_RENDER systems, ordered by the runtime via the
 // backbuffer tag-cid; otherwise the game wires its own passes. The app drives it
 // by ticking the runtime. Inputs are borrowed (the device stays caller-owned)
-// and must outlive the handle; ref is NULL on failure.
+// and must outlive the handle; ref is NULL on failure. `logger` is optional
+// (NULL is valid) — when present, the module routes its own runtime
+// diagnostics (e.g. a scene exceeding a fixed resource cap) through it instead
+// of staying silent. `cluster_params` is optional (NULL = all defaults).
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
-                        ke_bool default_passes, ke_error **out_error);
+                        ke_bool default_passes, struct ke_logger *logger,
+                        const ke_render_cluster_params *cluster_params, ke_error **out_error);
 
 // Borrows the render core the module owns — used to upload meshes and declare
 // resources. Valid for the module's lifetime; the caller must not destroy it.

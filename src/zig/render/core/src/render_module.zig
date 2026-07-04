@@ -16,16 +16,15 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/core/pass_context.h");
     @cInclude("kernel_engine/render/core/render_core_create.h");
     @cInclude("kernel_engine/render/core/render_module_create.h");
+    @cInclude("kernel_engine/logger/logger.h");
 });
 
 const gpa = std.heap.c_allocator;
 
 const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) void;
 
-// The forward pass shaders, compiled Slang -> WGSL by CMake (one module per
-// stage; a cross-stage uniform can't be declared twice in one WGSL module).
-const forward_vs_wgsl = @embedFile("forward.vs.wgsl");
-const forward_fs_wgsl = @embedFile("forward.fs.wgsl");
+// Pass shaders, compiled Slang -> WGSL by CMake (one module per stage; a
+// cross-stage uniform can't be declared twice in one WGSL module).
 const skybox_vs_wgsl = @embedFile("skybox.vs.wgsl");
 const skybox_fs_wgsl = @embedFile("skybox.fs.wgsl");
 const shadow_vs_wgsl = @embedFile("shadow.vs.wgsl");
@@ -33,9 +32,11 @@ const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
 const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
 const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
 const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
-// Material-authored forward path + magenta miss placeholder (§6/§8).
+// Material-authored forward path + magenta miss placeholder.
 const mat_test_flat_vs_wgsl = @embedFile("mat_test_flat.vs.wgsl");
 const mat_test_flat_fs_wgsl = @embedFile("mat_test_flat.fs.wgsl");
+const mat_test_flat_classic_vs_wgsl = @embedFile("mat_test_flat_classic.vs.wgsl");
+const mat_test_flat_classic_fs_wgsl = @embedFile("mat_test_flat_classic.fs.wgsl");
 const magenta_vs_wgsl = @embedFile("magenta.vs.wgsl");
 const magenta_fs_wgsl = @embedFile("magenta.fs.wgsl");
 
@@ -47,12 +48,27 @@ const SHADOW_RES = 1024; // shadow map resolution
 // lights move independently — narrowing tiles reduces how different two
 // neighboring tiles' light sets can be. Cull compute cost stays trivial (few ms
 // even at this resolution for hundreds of lights).
-const GRID_X = 32;
-const GRID_Y = 18;
-const GRID_Z = 24;
-const NUM_CLUSTERS = GRID_X * GRID_Y * GRID_Z;
-const MAX_LIGHTS_PER_CLUSTER = 64;
-const MAX_LIGHTS = 256; // total point or spot lights culled per frame
+// Clustered-forward grid + per-froxel cap defaults. These are workload-tuning
+// values the caller can override via ke_render_cluster_params (0 field = keep
+// the default below) — not engine-imposed limits. A froxel holding more
+// concurrently overlapping lights than max_lights_per_cluster silently drops
+// the excess (a real correctness limit of the algorithm), so a caller running
+// a denser scene than these defaults suit should raise the field rather than
+// hit that ceiling.
+const DEFAULT_GRID_X: u32 = 32;
+const DEFAULT_GRID_Y: u32 = 18;
+const DEFAULT_GRID_Z: u32 = 24;
+const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
+// MAX_LIGHTS is a storage-buffer capacity ceiling, not a performance limit —
+// the brute-force cull (O(clusters × lights), no spatial acceleration) has no
+// throughput cliff of its own; it degrades linearly. The real ceiling for how
+// many lights run acceptably is discovered empirically (frame time), which is
+// the point of a stress-test scene — so this stays generous (a few tens of MB
+// of GPU memory) rather than a guessed small number.
+const MAX_LIGHTS = 1_000_000; // point (or spot) lights the storage buffers can hold, each type independently
+// Lights packed into a stack chunk and uploaded whole, bounding both stack use
+// (SpotLightGpu is 64B → 64KB here) and the number of per-frame upload records.
+const UPLOAD_CHUNK = 1024;
 
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
@@ -84,12 +100,18 @@ const PerFrame = extern struct {
     light_color: [4]f32, // rgb, w = intensity
     ambient: [4]f32,
     sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
-    // light_vp moved to the shadow feature's own UBO (reuses shadow_lvp_uniform,
-    // set 4 — §8.12). shadow_params.x (shadow active) is vestigial now that
-    // which ILightVisibility is linked decides this at compile time; kept for
+    // light_vp moved to the shadow feature's own UBO (reuses shadow_lvp_uniform).
+    // shadow_params.x (shadow active) is vestigial now that which
+    // ILightVisibility is linked decides this at compile time; kept for
     // forward.slang (dead pipeline) compatibility, harmless either way.
     shadow_params: [4]f32, // x = shadow active (vestigial), z = directional active
     view: [16]f32, // world→view (for the fragment's cluster z slice)
+};
+
+// The clustered-lights feature's own UBO (cluster_feature.slang, set 3 binding
+// 6) — moved out of PerFrame: a scene with no dynamic-light module needs no
+// cluster grid data at all.
+const ClusterGridUniform = extern struct {
     cluster_grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
     cluster_viewport: [4]f32, // screen W, screen H, near, far
 };
@@ -153,6 +175,15 @@ const ModuleState = struct {
     core: c.ke_render_core_handle,
     device: *c.ke_gpu_device,
     ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
+    logger: ?*c.ke_logger, // borrowed, optional — runtime diagnostics route through it when present
+
+    // Clustered-forward grid + per-froxel cap — caller-configurable workload
+    // shape (see ke_render_cluster_params), not an engine-imposed limit.
+    grid_x: u32,
+    grid_y: u32,
+    grid_z: u32,
+    num_clusters: u32,
+    max_lights_per_cluster: u32,
 
     bb_writes: [1][*c]const u8,
     io: c.ke_render_pass_io,
@@ -165,13 +196,16 @@ const ModuleState = struct {
     clear_access: [2]c.ke_component_access, // WRITE backbuffer, READ frame
     end_access: [2]c.ke_component_access, // READ backbuffer, WRITE frame
 
-    // Forward pass
-    fwd_pipeline: c.ke_gpu_pipeline,
-    // Material-authored path: forward_lit composed with the built-in flat
-    // material (§8). Scene meshes draw through this; fwd_pipeline (the monolithic
-    // forward.slang) stays created as the fallback-of-record until parity is
-    // proven. magenta_pipeline is the Mechanism-1 "never silent" miss placeholder.
+    // Forward pass: forward_lit composed with the built-in flat material via
+    // the IMaterial conformance. Scene meshes draw through this.
+    // magenta_pipeline is the Mechanism-1 "never silent" miss placeholder.
     fwd_lit_pipeline: c.ke_gpu_pipeline,
+    // Classic-forward comparison twin of fwd_lit_pipeline: same material +
+    // pass, AllLights (brute-force loop) instead of ClusteredLights. Selected
+    // instead of fwd_lit_pipeline when classic_lighting is set — exists to
+    // measure clustered-forward's win at a given light count, not to ship.
+    fwd_lit_classic_pipeline: c.ke_gpu_pipeline,
+    classic_lighting: bool,
     magenta_pipeline: c.ke_gpu_pipeline,
     fwd_obj_bind_group: c.ke_gpu_bind_group, // set 2, per-object (dynamic offset)
     fwd_obj_uniform: c.ke_gpu_buffer,
@@ -208,9 +242,19 @@ const ModuleState = struct {
     shadow_io: c.ke_render_pass_io,
     shadow_access: [6]c.ke_component_access,
 
-    // Set 3 — clustered light lists (forward reads what the cull pass wrote).
+    // Set 3 — clustered light lists (forward reads what the cull pass wrote) +
+    // the cluster-grid UBO (cluster_feature.slang's ILightIterator conformance)
+    // at binding 6.
     light_set_bgl: c.ke_gpu_bind_group_layout,
     fwd_light_bind_group: c.ke_gpu_bind_group,
+    cluster_grid_uniform: c.ke_gpu_buffer,
+
+    // Classic-forward comparison set 3: same point/spot storage buffers, no
+    // per-froxel index/count buffers or grid UBO — just a total-count uniform
+    // (all_lights_feature.slang's AllLights conformance).
+    all_lights_bgl: c.ke_gpu_bind_group_layout,
+    fwd_alllights_light_bind_group: c.ke_gpu_bind_group,
+    light_counts_uniform: c.ke_gpu_buffer,
 
     // Storage buffers shared by the cull pass (writes) and the forward (reads).
     point_lights_sb: c.ke_gpu_buffer,
@@ -228,6 +272,10 @@ const ModuleState = struct {
     cull_access: [6]c.ke_component_access,
     cull_queries: [3]c.ke_query_decl, // [point_light,transform], [spot_light,transform], [camera,transform]
     clusters_cid: c.ke_component_id, // tag: cull WRITES, forward READS (ordering)
+    // Latched once the scene's actual point/spot count exceeds MAX_LIGHTS, so
+    // the truncation warning prints exactly once instead of every frame.
+    point_overflow_warned: bool,
+    spot_overflow_warned: bool,
 
     // ACES tonemapping pass — reads "hdr" (Rgba16Float), writes "backbuffer".
     tonemap_pipeline: c.ke_gpu_pipeline,
@@ -340,6 +388,30 @@ fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
     return zm.lookToLh(eye, fwd, up);
 }
 
+// Logs through the module's borrowed ke_logger (a no-op when none was passed
+// to ke_render_module_create). `kind`/`total`/`cap` are formatted into a fixed
+// stack buffer since ke_log_event.message is a plain C string.
+fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: usize) void {
+    const lg = logger orelse return;
+    var buf: [192]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(&buf, "{s} light count ({d}) exceeds the storage capacity ({d}); only the first {d} are culled/shaded this run", .{ kind, total, cap, cap }) catch return;
+    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "render_core", .message = msg.ptr };
+    lg.log.?(lg, &ev);
+}
+
+// A GPU resource create call failed on a path with no out_error slot to bubble
+// through (a runtime rebuild triggered by an environment change, not the
+// initial setup path) — route the captured ke_error through the logger
+// instead of losing it silently.
+fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
+    const lg = logger orelse return;
+    const e = err orelse return;
+    var buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
+    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_core", .message = msg.ptr };
+    lg.log.?(lg, &ev);
+}
+
 // ── Light cull compute pass ───────────────────────────────────────────────────
 // Packs the scene's point + spot lights into storage buffers, then dispatches one
 // thread per cluster to bin them. The forward reads the result; the "light_clusters"
@@ -349,49 +421,81 @@ fn cullSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void 
     const core = st.core.ref;
     const deg2rad: f32 = std.math.pi / 180.0;
     // Pack point lights — view 0 = [point_light, transform], columns aligned.
+    // Batched: fill a stack chunk and upload it whole, so N lights cost ceil(N /
+    // UPLOAD_CHUNK) uploads instead of N — a per-light upload blows the render
+    // core's per-frame upload-record cap (and is slow) at a few thousand lights.
     var pn: u32 = 0;
+    var point_total: usize = 0;
     {
+        var chunk: [UPLOAD_CHUNK]PointLightGpu = undefined;
+        var fill: u32 = 0;
         var segc: usize = 0;
         const segs = c.ke_system_ctx_view(ctx, 0, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const pls: [*c]const PointLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
             const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+            point_total += segs[s].count;
             var i: usize = 0;
             while (i < segs[s].count and pn < MAX_LIGHTS) : (i += 1) {
                 const m = tcs[i].world_matrix.m;
-                const pg = PointLightGpu{
+                chunk[fill] = PointLightGpu{
                     .pos_radius = .{ m[12], m[13], m[14], pls[i].radius },
                     .color_intensity = .{ pls[i].color[0], pls[i].color[1], pls[i].color[2], pls[i].intensity },
                 };
-                core.*.upload.?(core, st.point_lights_sb, pn * @sizeOf(PointLightGpu), &pg, @sizeOf(PointLightGpu));
+                fill += 1;
                 pn += 1;
+                if (fill == UPLOAD_CHUNK) {
+                    core.*.upload.?(core, st.point_lights_sb, (pn - fill) * @sizeOf(PointLightGpu), &chunk, fill * @sizeOf(PointLightGpu));
+                    fill = 0;
+                }
             }
         }
+        if (fill > 0) core.*.upload.?(core, st.point_lights_sb, (pn - fill) * @sizeOf(PointLightGpu), &chunk, fill * @sizeOf(PointLightGpu));
+    }
+    // A scene with more lights than MAX_LIGHTS is silently truncated by the
+    // cap above (pn stops advancing) unless this fires: log once, not every
+    // frame, so nobody mistakes a capped run for the full requested count.
+    if (point_total > MAX_LIGHTS and !st.point_overflow_warned) {
+        logLightOverflow(st.logger, "point", point_total, MAX_LIGHTS);
+        st.point_overflow_warned = true;
     }
 
     // Pack spot lights — view 1 = [spot_light, transform]; cone cosines precomputed.
     var sn: u32 = 0;
+    var spot_total: usize = 0;
     {
+        var chunk: [UPLOAD_CHUNK]SpotLightGpu = undefined;
+        var fill: u32 = 0;
         var segc: usize = 0;
         const segs = c.ke_system_ctx_view(ctx, 1, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
             const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+            spot_total += segs[s].count;
             var i: usize = 0;
             while (i < segs[s].count and sn < MAX_LIGHTS) : (i += 1) {
                 const m = tcs[i].world_matrix.m;
-                const sg = SpotLightGpu{
+                chunk[fill] = SpotLightGpu{
                     .pos_range = .{ m[12], m[13], m[14], sls[i].range },
                     .dir_cos_inner = .{ sls[i].dir[0], sls[i].dir[1], sls[i].dir[2], std.math.cos(sls[i].inner_deg * deg2rad) },
                     .color_intensity = .{ sls[i].color[0], sls[i].color[1], sls[i].color[2], sls[i].intensity },
                     .cone = .{ std.math.cos(sls[i].outer_deg * deg2rad), 0.0, 0.0, 0.0 },
                 };
-                core.*.upload.?(core, st.spot_lights_sb, sn * @sizeOf(SpotLightGpu), &sg, @sizeOf(SpotLightGpu));
+                fill += 1;
                 sn += 1;
+                if (fill == UPLOAD_CHUNK) {
+                    core.*.upload.?(core, st.spot_lights_sb, (sn - fill) * @sizeOf(SpotLightGpu), &chunk, fill * @sizeOf(SpotLightGpu));
+                    fill = 0;
+                }
             }
         }
+        if (fill > 0) core.*.upload.?(core, st.spot_lights_sb, (sn - fill) * @sizeOf(SpotLightGpu), &chunk, fill * @sizeOf(SpotLightGpu));
+    }
+    if (spot_total > MAX_LIGHTS and !st.spot_overflow_warned) {
+        logLightOverflow(st.logger, "spot", spot_total, MAX_LIGHTS);
+        st.spot_overflow_warned = true;
     }
 
     // Camera → view + projection params (must match the forward's). View 2 =
@@ -404,13 +508,24 @@ fn cullSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void 
 
     const pc = core.*.begin_pass.?(core, ctx, &st.cull_io);
     if (pc == null) return;
+
+    // Classic-forward comparison mode: skip the froxel cull compute entirely
+    // (that dispatch cost is exactly what's being measured against) — just
+    // hand the fragment shader the total counts to loop over.
+    if (st.classic_lighting) {
+        const counts = [4]u32{ pn, sn, 0, 0 };
+        core.*.upload.?(core, st.light_counts_uniform, 0, &counts, 16);
+        core.*.end_pass.?(core, pc);
+        return;
+    }
+
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
     var params: ClusterParams = .{
-        .grid = .{ GRID_X, GRID_Y, GRID_Z, MAX_LIGHTS_PER_CLUSTER },
+        .grid = .{ @floatFromInt(st.grid_x), @floatFromInt(st.grid_y), @floatFromInt(st.grid_z), @floatFromInt(st.max_lights_per_cluster) },
         .counts = .{ @floatFromInt(pn), @floatFromInt(sn), 0.0, 0.0 },
         .proj = .{ std.math.tan(cam.fov * deg2rad * 0.5), aspect, cam.near_plane, cam.far_plane },
         .view = undefined,
@@ -421,7 +536,7 @@ fn cullSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void 
     const cp = pc.*.begin_compute.?(pc);
     cp.*.set_pipeline.?(cp, st.cull_pipeline);
     cp.*.set_bind_group.?(cp, 0, st.cull_bind_group, null, 0);
-    cp.*.dispatch.?(cp, (NUM_CLUSTERS + 63) / 64, 1, 1);
+    cp.*.dispatch.?(cp, (st.num_clusters + 63) / 64, 1, 1);
     cp.*.end.?(cp);
     core.*.end_pass.?(core, pc);
 }
@@ -550,14 +665,19 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         .sky_view_proj = undefined,
         .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow active, z=directional active
         .view = undefined,
-        .cluster_grid = .{ GRID_X, GRID_Y, GRID_Z, MAX_LIGHTS_PER_CLUSTER },
-        .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), cam.near_plane, cam.far_plane },
     };
     zm.storeMat(frame.sky_view_proj[0..], sky_vp);
     zm.storeMat(frame.view[0..], view); // for the fragment's cluster z slice
     // light_vp is uploaded once by shadowSys into shadow_lvp_uniform (set 4);
     // the shadow feature's bind group reuses that buffer directly — no
     // duplicate computation/upload needed here.
+
+    // Clustered-lights feature's own UBO (cluster_feature.slang, set 3 binding 6).
+    const grid_data = ClusterGridUniform{
+        .cluster_grid = .{ @floatFromInt(st.grid_x), @floatFromInt(st.grid_y), @floatFromInt(st.grid_z), @floatFromInt(st.max_lights_per_cluster) },
+        .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), cam.near_plane, cam.far_plane },
+    };
+    core.*.upload.?(core, st.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
 
     // Directional light (first entity). Present → enable the directional term +
     // its shadow map; its ambient seeds the scene ambient. Point/spot lights are
@@ -610,11 +730,12 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     }
 
     const rp = pc.*.begin_render.?(pc);
-    // Sets 0 and 3 (per-frame + clustered lights) share the same layout across the
+    // Sets 0 and 3 (per-frame + lights) share the same layout across the
     // forward_lit and magenta pipelines, so they stay bound while the per-mesh
-    // pipeline switches below.
+    // pipeline switches below. Set 3's bind group depends on classic_lighting
+    // (a fixed choice for the session — see forwardSetup).
     rp.*.set_bind_group.?(rp, 0, st.fwd_frame_bind_group, null, 0); // set 0: per-frame
-    rp.*.set_bind_group.?(rp, 3, st.fwd_light_bind_group, null, 0); // set 3: clustered lights
+    rp.*.set_bind_group.?(rp, 3, if (st.classic_lighting) st.fwd_alllights_light_bind_group else st.fwd_light_bind_group, null, 0); // set 3: lights
     i = 0;
     while (i < n) : (i += 1) {
         var vbo: c.ke_gpu_buffer = 0;
@@ -625,7 +746,8 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         // PSO selection (§6 Mechanism 1): a mesh with no assigned material draws
         // magenta ("never silent"); an assigned material draws the IMaterial path.
         const has_material = meshes[i].material.idx != c.KE_HANDLE_NONE;
-        rp.*.set_pipeline.?(rp, if (has_material) st.fwd_lit_pipeline else st.magenta_pipeline);
+        const lit_pipeline = if (st.classic_lighting) st.fwd_lit_classic_pipeline else st.fwd_lit_pipeline;
+        rp.*.set_pipeline.?(rp, if (has_material) lit_pipeline else st.magenta_pipeline);
         const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
         rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
         rp.*.set_bind_group.?(rp, 2, st.fwd_obj_bind_group, &offset, 1); // set 2: per-object
@@ -661,23 +783,25 @@ fn rebuildFrameBindGroup(st: *ModuleState) void {
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
         .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
         .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 },
-        // Shadow feature (§8.12, shadow_feature.slang) — reuses shadow_lvp_uniform
+        // Shadow feature (shadow_feature.slang) — reuses shadow_lvp_uniform
         // (shadowSys already uploads the identical light-view-proj each frame,
         // before forward runs) and shadow_view; no duplicate buffer, no
         // duplicate upload. Only forward_lit.slang's shader references 4-6.
         .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
         .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 },
         .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
-        // IBL feature (§8.12, ibl_feature.slang) — same env_view/smp as binding
+        // IBL feature (ibl_feature.slang) — same env_view/smp as binding
         // 1/2, bound again at the slot forward_lit.slang's IndirectIBL expects.
         .{ .binding = 7, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
         .{ .binding = 8, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
     };
+    var err: ?*c.ke_error = null;
     st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = st.frame_bgl,
         .entry_count = 9,
         .entries = &entries,
-    });
+    }, &err);
+    if (err != null) logGpuError(st.logger, err, "rebuild frame bind group");
 }
 
 fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) bool {
@@ -703,22 +827,6 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(SkyboxComp));
     st.env_cubemap = .{ .idx = c.KE_HANDLE_NONE }; // default (black) cube until a skybox is set
 
-    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(forward_vs_wgsl),
-        .byte_size = forward_vs_wgsl.len,
-        .entry_point = "forward.vs",
-    }, out_error);
-    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, vs);
-
-    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(forward_fs_wgsl),
-        .byte_size = forward_fs_wgsl.len,
-        .entry_point = "forward.fs",
-    }, out_error);
-    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, fs);
-
     // Set 2 — per-object transform (dynamic offset, vertex stage).
     const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0,
@@ -738,16 +846,16 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
         .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }, // shadow map (2D R32F) — forward.slang only (dead pipeline); unused by forward_lit.slang
-        // Shadow feature (§8.12, shadow_feature.slang): appended here rather than
-        // a new set — the C ABI's bind_group_layouts array is fixed at 4 entries
+        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }, // vestigial: unused by any live shader; kept as a layout superset entry
+        // Shadow feature (shadow_feature.slang): appended here rather than a
+        // new set — the C ABI's bind_group_layouts array is fixed at 4 entries
         // (sets 0-3), but one set's own entry list has no such cap. Only
         // fwd_lit_pipeline's shader references 4-6; forward.slang/magenta.slang
         // simply don't (a layout superset of what a given shader uses is valid).
         .{ .binding = 4, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 5, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 6, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        // IBL feature (§8.12, ibl_feature.slang): same env cubemap as binding 1
+        // IBL feature (ibl_feature.slang): same env cubemap as binding 1
         // (skybox's own copy), bound again here at the slot forward_lit.slang's
         // IndirectIBL specialization expects — the two passes stay decoupled at
         // the source level even though they share the physical resource today.
@@ -773,8 +881,6 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .attributes = &attrs,
     };
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
-    pp.vertex_module = vs;
-    pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
     pp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -795,16 +901,11 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     pp.bind_group_layouts[3] = st.light_set_bgl; // set 3: clustered light lists
     pp.bind_group_layout_count = 4;
     pp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
-    st.fwd_pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (st.fwd_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
-    }
 
-    // Material-authored path: same pipeline state as fwd_pipeline, but the shader
-    // is the engine ForwardLit pass composed with the built-in flat material via
-    // IMaterial (§8). Byte-identical bind-group + vertex layouts, so pp is reused
-    // verbatim with only the shader modules swapped.
+    // Material-authored path: the engine ForwardLit pass composed with the
+    // built-in flat material via the IMaterial conformance. pp already carries
+    // the shared vertex/bind-group-layout state; only the shader modules
+    // differ between this pipeline and its classic-forward comparison twin.
     const lit_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
         .code = @ptrCast(mat_test_flat_vs_wgsl),
         .byte_size = mat_test_flat_vs_wgsl.len,
@@ -827,9 +928,38 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         return false;
     }
 
+    // Classic-forward comparison twin: identical pipeline state, set-3 layout
+    // swapped to all_lights_bgl (built in clusterSetup) and shaders swapped to
+    // the AllLights-linked variant.
+    const lit_classic_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(mat_test_flat_classic_vs_wgsl),
+        .byte_size = mat_test_flat_classic_vs_wgsl.len,
+        .entry_point = "mat_test_flat_classic.vs",
+    }, out_error);
+    if (lit_classic_vs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, lit_classic_vs);
+    const lit_classic_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(mat_test_flat_classic_fs_wgsl),
+        .byte_size = mat_test_flat_classic_fs_wgsl.len,
+        .entry_point = "mat_test_flat_classic.fs",
+    }, out_error);
+    if (lit_classic_fs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, lit_classic_fs);
+    pp.vertex_module = lit_classic_vs;
+    pp.fragment_module = lit_classic_fs;
+    pp.bind_group_layouts[3] = st.all_lights_bgl;
+    st.fwd_lit_classic_pipeline = dev.create_render_pipeline.?(dev, &pp);
+    if (st.fwd_lit_classic_pipeline == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward_lit classic pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+
     // Magenta placeholder — Mechanism 1 "never silent" miss fallback. Same
     // pipeline layout (so the draw loop binds it uniformly) + vertex layout;
-    // fragment outputs solid magenta.
+    // fragment outputs solid magenta. Set 3 must match whichever light bind
+    // group forwardSys keeps bound for the session (classic_lighting is a
+    // fixed choice at create time, not a per-draw switch).
+    pp.bind_group_layouts[3] = if (st.classic_lighting) st.all_lights_bgl else st.light_set_bgl;
     const mag_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
         .code = @ptrCast(magenta_vs_wgsl),
         .byte_size = magenta_vs_wgsl.len,
@@ -858,7 +988,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .size = UNIFORM_STRIDE * MAX_DRAWS,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (st.fwd_obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const obj_bg_entry = c.ke_gpu_bind_group_entry{
         .binding = 0,
         .type = c.KE_GPU_BINDING_TYPE_BUFFER,
@@ -872,7 +1003,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .layout = obj_bgl,
         .entry_count = 1,
         .entries = &obj_bg_entry,
-    });
+    }, out_error);
+    if (st.fwd_obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
     // ── Shadow-depth pass: targets + pipeline + uniforms ──────────────────
     const shadow_map_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
@@ -936,13 +1068,17 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         return false;
     }
 
-    st.shadow_lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 });
+    st.shadow_lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+    if (st.shadow_lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const sh_lvp_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
-    st.shadow_lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry });
+    st.shadow_lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
+    if (st.shadow_lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    st.shadow_obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 });
+    st.shadow_obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+    if (st.shadow_obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const sh_obj_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_obj_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ShadowObj), .texture_view = 0, .sampler = 0 };
-    st.shadow_obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry });
+    st.shadow_obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry }, out_error);
+    if (st.shadow_obj_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
     st.shadow_writes = .{ "shadow_map", "shadow_depth" };
     st.shadow_io = std.mem.zeroes(c.ke_render_pass_io);
@@ -965,7 +1101,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .size = @sizeOf(PerFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (st.fwd_frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     rebuildFrameBindGroup(st);
 
     // Skybox pipeline (set 0 only): position-only cube, depth LEQUAL, no write.
@@ -1018,13 +1155,15 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .size = @sizeOf(@TypeOf(sky_verts)),
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (st.sky_vbo == c.KE_GPU_INVALID_HANDLE) return false;
     st.sky_ibo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = &sky_idx,
         .size = @sizeOf(@TypeOf(sky_idx)),
         .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (st.sky_ibo == c.KE_GPU_INVALID_HANDLE) return false;
 
     // Transient depth target, sized to the backbuffer (the core resolves the
     // scale against its current swapchain size).
@@ -1102,11 +1241,13 @@ fn tonemapSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     // Destroy the previous frame's bind group before creating the new one.
     if (st.tonemap_bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, st.tonemap_bind_group);
+    var err: ?*c.ke_error = null;
     st.tonemap_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = st.tonemap_bgl,
         .entry_count = 2,
         .entries = &entries,
-    });
+    }, &err);
+    if (err != null) logGpuError(st.logger, err, "tonemap bind group");
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, st.tonemap_pipeline);
@@ -1180,13 +1321,13 @@ fn tonemapSetup(st: *ModuleState, out_error: [*c][*c]c.ke_error) bool {
     return true;
 }
 
-fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize) c.ke_gpu_buffer {
+fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize, out_error: [*c][*c]c.ke_error) c.ke_gpu_buffer {
     return dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_STORAGE | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
 }
 
 // Storage buffers + the cull compute pipeline + the forward's set-3 light bind
@@ -1196,15 +1337,25 @@ fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
 
     const point_lights_bytes = MAX_LIGHTS * @sizeOf(PointLightGpu);
     const spot_lights_bytes = MAX_LIGHTS * @sizeOf(SpotLightGpu);
-    const indices_bytes = NUM_CLUSTERS * MAX_LIGHTS_PER_CLUSTER * @sizeOf(u32);
-    const counts_bytes = NUM_CLUSTERS * @sizeOf(u32);
+    const indices_bytes: usize = @as(usize, st.num_clusters) * st.max_lights_per_cluster * @sizeOf(u32);
+    const counts_bytes: usize = @as(usize, st.num_clusters) * @sizeOf(u32);
 
-    st.point_lights_sb = makeStorageBuffer(dev, point_lights_bytes);
-    st.spot_lights_sb = makeStorageBuffer(dev, spot_lights_bytes);
-    st.point_indices_sb = makeStorageBuffer(dev, indices_bytes);
-    st.point_counts_sb = makeStorageBuffer(dev, counts_bytes);
-    st.spot_indices_sb = makeStorageBuffer(dev, indices_bytes);
-    st.spot_counts_sb = makeStorageBuffer(dev, counts_bytes);
+    // A froxel index/count buffer sized from the caller-configured grid + cap
+    // (ke_render_cluster_params) can exceed this device's binding-size limit —
+    // that is a legitimate ke_error (this device, at this workload, can't do
+    // it), not an engine-imposed ceiling; the caller decides how to react.
+    st.point_lights_sb = makeStorageBuffer(dev, point_lights_bytes, out_error);
+    if (st.point_lights_sb == c.KE_GPU_INVALID_HANDLE) return false;
+    st.spot_lights_sb = makeStorageBuffer(dev, spot_lights_bytes, out_error);
+    if (st.spot_lights_sb == c.KE_GPU_INVALID_HANDLE) return false;
+    st.point_indices_sb = makeStorageBuffer(dev, indices_bytes, out_error);
+    if (st.point_indices_sb == c.KE_GPU_INVALID_HANDLE) return false;
+    st.point_counts_sb = makeStorageBuffer(dev, counts_bytes, out_error);
+    if (st.point_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
+    st.spot_indices_sb = makeStorageBuffer(dev, indices_bytes, out_error);
+    if (st.spot_indices_sb == c.KE_GPU_INVALID_HANDLE) return false;
+    st.spot_counts_sb = makeStorageBuffer(dev, counts_bytes, out_error);
+    if (st.spot_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
 
     // Set 3 — the forward's read-only view of the light + cluster buffers.
     const ro = c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
@@ -1216,11 +1367,20 @@ fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .binding = 3, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 4, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 5, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        // Clustered-lights feature's own grid UBO (cluster_feature.slang).
+        .{ .binding = 6, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     st.light_set_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 6,
+        .entry_count = 7,
         .entries = &light_bgl_entries,
     });
+    st.cluster_grid_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = @sizeOf(ClusterGridUniform),
+        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    }, out_error);
+    if (st.cluster_grid_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const light_bg_entries = [_]c.ke_gpu_bind_group_entry{
         .{ .binding = 0, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
         .{ .binding = 1, .type = ro, .buffer = st.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
@@ -1228,12 +1388,45 @@ fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .binding = 3, .type = ro, .buffer = st.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
         .{ .binding = 4, .type = ro, .buffer = st.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
         .{ .binding = 5, .type = ro, .buffer = st.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.cluster_grid_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterGridUniform), .texture_view = 0, .sampler = 0 },
     };
     st.fwd_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = st.light_set_bgl,
-        .entry_count = 6,
+        .entry_count = 7,
         .entries = &light_bg_entries,
+    }, out_error);
+    if (st.fwd_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+
+    // Classic-forward comparison set 3 (all_lights_feature.slang's AllLights):
+    // the same point/spot storage buffers, no index/count/grid buffers, plus a
+    // total-count uniform cullSys uploads each frame instead of dispatching cull.
+    const all_lights_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 1, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 2, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+    };
+    st.all_lights_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .entry_count = 3,
+        .entries = &all_lights_bgl_entries,
     });
+    st.light_counts_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = 16, // uint4, std140-aligned
+        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    }, out_error);
+    if (st.light_counts_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+    const all_lights_bg_entries = [_]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 1, .type = ro, .buffer = st.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.light_counts_uniform, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 },
+    };
+    st.fwd_alllights_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = st.all_lights_bgl,
+        .entry_count = 3,
+        .entries = &all_lights_bg_entries,
+    }, out_error);
+    if (st.fwd_alllights_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
     // Cull compute: uniform + read-only lights + read-write index/count buffers.
     const rw = c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER;
@@ -1257,7 +1450,8 @@ fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .size = @sizeOf(ClusterParams),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (st.cull_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const cull_bg_entries = [_]c.ke_gpu_bind_group_entry{
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.cull_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterParams), .texture_view = 0, .sampler = 0 },
         .{ .binding = 1, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
@@ -1271,7 +1465,8 @@ fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .layout = cull_bgl,
         .entry_count = 7,
         .entries = &cull_bg_entries,
-    });
+    }, out_error);
+    if (st.cull_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
     const cs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
         .code = @ptrCast(cluster_cull_cs_wgsl),
@@ -1364,7 +1559,8 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
 const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
 
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
-                                  default_passes: c.ke_bool, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
+                                  default_passes: c.ke_bool, logger: ?*c.ke_logger,
+                                  cluster_params: ?*const c.ke_render_cluster_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
     const dev = device orelse return empty;
@@ -1378,6 +1574,26 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     };
     st.core = core_h;
     st.device = dev;
+    // 0 (or an absent params struct) means "use the engine default" per field —
+    // a caller running a denser scene than the default sweet spot can raise
+    // any of these rather than hit a hardcoded ceiling (§ no-magic-numbers).
+    if (cluster_params) |p| {
+        st.grid_x = if (p.grid_x != 0) p.grid_x else DEFAULT_GRID_X;
+        st.grid_y = if (p.grid_y != 0) p.grid_y else DEFAULT_GRID_Y;
+        st.grid_z = if (p.grid_z != 0) p.grid_z else DEFAULT_GRID_Z;
+        st.max_lights_per_cluster = if (p.max_lights_per_cluster != 0) p.max_lights_per_cluster else DEFAULT_MAX_LIGHTS_PER_CLUSTER;
+        st.classic_lighting = p.classic_lighting != 0;
+    } else {
+        st.grid_x = DEFAULT_GRID_X;
+        st.grid_y = DEFAULT_GRID_Y;
+        st.grid_z = DEFAULT_GRID_Z;
+        st.max_lights_per_cluster = DEFAULT_MAX_LIGHTS_PER_CLUSTER;
+        st.classic_lighting = false;
+    }
+    st.num_clusters = st.grid_x * st.grid_y * st.grid_z;
+    st.logger = logger;
+    st.point_overflow_warned = false;
+    st.spot_overflow_warned = false;
     st.bb_writes = .{"backbuffer"};
     st.io = std.mem.zeroes(c.ke_render_pass_io);
     st.io.writes = @ptrCast(&st.bb_writes);

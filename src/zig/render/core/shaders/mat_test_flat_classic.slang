@@ -1,23 +1,19 @@
-// Built-in flat material. Binds the TestFlat IMaterial conformance into the
-// engine ForwardLit pass. This wrapper is the hand-written stand-in for what
-// the material-manifest codegen will emit per authored material in a later
-// phase (§8): a struct implementing IMaterial + the two entry points that call
-// the engine's generic ke_forward_vs / ke_forward_fs with the concrete type.
+// Classic-forward comparison twin of mat_test_flat.slang: identical material
+// and pass, only the light-iteration feature differs (AllLights instead of
+// ClusteredLights) — isolates the froxel-cull cost so the two can be compared
+// at the same light count.
 
 import ke;
 import forward_lit;
 import shadow_feature;
 import ibl_feature;
-import cluster_feature;
+import all_lights_feature;
 
-struct TestFlat : IMaterial {
+struct TestFlatClassic : IMaterial {
     void vertex(inout VertexInfo v) {
         // Flat material: no vertex deformation.
     }
     void fragment(inout SurfaceState s) {
-        // Source the surface from the fixed engine material set (set 1): the
-        // base-color UBO modulated by the albedo texture, plus tangent-space
-        // normal mapping — matching forward.slang's flat-lit result.
         s.albedo    = mat.base_color.rgb * albedo.Sample(tex_sampler, s.uv).rgb;
         s.metallic  = mat.metallic;
         s.roughness = mat.roughness;
@@ -26,10 +22,10 @@ struct TestFlat : IMaterial {
     }
 }
 
-static TestFlat _mat;
+static TestFlatClassic _mat;
 static ShadowMapVisibility _vis;
 static IndirectIBL _ibl;
-static ClusteredLights _lights;
+static AllLights _lights;
 
 [shader("vertex")]
 VsOut vs_main(VsIn input) { return ke_forward_vs(_mat, input); }

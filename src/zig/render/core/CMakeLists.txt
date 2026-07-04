@@ -4,30 +4,12 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_render_core${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
-# Compile the forward pass shader (Slang -> WGSL) for @embedFile in the Zig lib.
+# Compile pass shaders (Slang -> WGSL) for @embedFile in the Zig lib.
 set(COMPILE_SLANG "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
 set(SHADER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
 file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
 # One WGSL module per stage: a uniform shared across stages would be declared
 # twice (invalid WGSL) if both entry points were emitted into one module.
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/forward.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward.slang"
-            --output "${SHADER_GEN_DIR}/forward.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/forward.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward.slang"
-            --output "${SHADER_GEN_DIR}/forward.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
 add_custom_command(
     OUTPUT "${SHADER_GEN_DIR}/skybox.vs.wgsl"
     COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
@@ -148,6 +130,7 @@ add_custom_command(
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
             "${KE_SHADER_LIB_DIR}/ke.slang"
             "${KE_SHADER_LIB_DIR}/ke/surface.slang"
             "${COMPILE_SLANG}"
@@ -165,6 +148,44 @@ add_custom_command(
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_classic.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_classic.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_classic.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_classic.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/all_lights_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_classic.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_classic.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_classic.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_classic.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/all_lights_feature.slang"
             "${KE_SHADER_LIB_DIR}/ke.slang"
             "${KE_SHADER_LIB_DIR}/ke/surface.slang"
             "${COMPILE_SLANG}"
@@ -181,10 +202,9 @@ add_custom_command(
         "-Dke-runtime-include=${CMAKE_SOURCE_DIR}/src/c/runtime/include"
         "-Dke-spatial-include=${CMAKE_SOURCE_DIR}/src/c/spatial/include"
         "-Dke-render-include=${CMAKE_SOURCE_DIR}/src/c/render/include"
+        "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dforward-vs-wgsl=${SHADER_GEN_DIR}/forward.vs.wgsl"
-        "-Dforward-fs-wgsl=${SHADER_GEN_DIR}/forward.fs.wgsl"
         "-Dskybox-vs-wgsl=${SHADER_GEN_DIR}/skybox.vs.wgsl"
         "-Dskybox-fs-wgsl=${SHADER_GEN_DIR}/skybox.fs.wgsl"
         "-Dshadow-vs-wgsl=${SHADER_GEN_DIR}/shadow.vs.wgsl"
@@ -196,6 +216,8 @@ add_custom_command(
         "-Dui-fs-wgsl=${SHADER_GEN_DIR}/ui.fs.wgsl"
         "-Dmat-test-flat-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
         "-Dmat-test-flat-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+        "-Dmat-test-flat-classic-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_classic.vs.wgsl"
+        "-Dmat-test-flat-classic-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_classic.fs.wgsl"
         "-Dmagenta-vs-wgsl=${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "-Dmagenta-fs-wgsl=${SHADER_GEN_DIR}/magenta.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
@@ -204,8 +226,6 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/src/render_core.zig"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/render_module.zig"
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/forward.vs.wgsl"
-        "${SHADER_GEN_DIR}/forward.fs.wgsl"
         "${SHADER_GEN_DIR}/skybox.vs.wgsl"
         "${SHADER_GEN_DIR}/skybox.fs.wgsl"
         "${SHADER_GEN_DIR}/shadow.vs.wgsl"
@@ -217,6 +237,8 @@ add_custom_command(
         "${SHADER_GEN_DIR}/ui.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_classic.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_classic.fs.wgsl"
         "${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "${SHADER_GEN_DIR}/magenta.fs.wgsl"
         ke_common

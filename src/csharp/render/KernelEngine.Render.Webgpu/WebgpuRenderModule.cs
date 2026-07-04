@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
+using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
 using KernelEngine.Window;
@@ -20,10 +21,28 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_render_module_handle _module;
     private ke_render_core* _core;
     private readonly System.Numerics.Vector4 _clearColor;
+    private readonly ke_render_cluster_params _clusterParams;
 
     /// <param name="clearColor">Background color the default passes clear to (RGBA).</param>
-    public WebgpuRenderModule(System.Numerics.Vector4 clearColor = default)
-        => _clearColor = clearColor == default ? new(0.10f, 0.15f, 0.30f, 1.0f) : clearColor;
+    /// <param name="clusterGridX">Clustered-forward screen-tile columns; 0 = engine default (32).</param>
+    /// <param name="clusterGridY">Clustered-forward screen-tile rows; 0 = engine default (18).</param>
+    /// <param name="clusterGridZ">Clustered-forward depth slices; 0 = engine default (24).</param>
+    /// <param name="maxLightsPerCluster">Per-froxel light-index-list cap; 0 = engine default (256). Raise this for scenes denser than the default sweet spot.</param>
+    /// <param name="classicLighting">When true, materials draw through a brute-force "classic forward" light loop (every fragment iterates every light, no froxel cull) instead of clustered forward. Exists to compare the two at a given light count; not a shipping quality knob.</param>
+    public WebgpuRenderModule(System.Numerics.Vector4 clearColor = default,
+        uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
+        bool classicLighting = false)
+    {
+        _clearColor = clearColor == default ? new(0.10f, 0.15f, 0.30f, 1.0f) : clearColor;
+        _clusterParams = new ke_render_cluster_params
+        {
+            grid_x = clusterGridX,
+            grid_y = clusterGridY,
+            grid_z = clusterGridZ,
+            max_lights_per_cluster = maxLightsPerCluster,
+            classic_lighting = (byte)(classicLighting ? 1 : 0),
+        };
+    }
 
     public string Name => "Webgpu.Render";
 
@@ -35,10 +54,12 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         var window = services.GetRequiredService<IWindow>();
         var ecs    = services.GetRequiredService<IEcs>();
+        var logger = services.GetService<INativeLogger>();
 
         var win = ((INativeWindow)window).Native;
         var rt  = ((INativeRuntime)runtime).Native;
         var ec  = ((INativeEcs)ecs).Native;
+        var lg  = logger != null ? logger.Native : null;
 
         ke_error* err = null;
 
@@ -47,7 +68,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_device.@ref == null)
             throw Fail("webgpu device create failed", err);
 
-        _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, 1, &err);
+        var cp = _clusterParams;
+        _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, 1, lg, &cp, &err);
         if (_module.@ref == null)
             throw Fail("render module create failed", err);
 

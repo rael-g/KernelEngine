@@ -23,23 +23,12 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-struct PointLight {
-    float4 pos_radius;
-    float4 color_intensity;
-};
-
-struct SpotLight {
-    float4 pos_range;
-    float4 dir_cos_inner;
-    float4 color_intensity;
-    float4 cone;
-};
-
 // Set 0 — per frame. light_vp/shadow_map moved out to ShadowMapVisibility
-// (shadow_feature.slang) and env/env_sampler moved out to IndirectIBL
-// (ibl_feature.slang) — both feature components (§8.12 of
-// RenderArchitectureV2.md). The pass no longer declares any of them, keeping
-// this file ignorant of any specific ILightVisibility/IIndirect conformance.
+// (shadow_feature.slang), env/env_sampler moved out to IndirectIBL
+// (ibl_feature.slang), and cluster_grid/cluster_viewport + the point/spot
+// light lists moved out to ClusteredLights (cluster_feature.slang) — the
+// pass no longer declares any of them, keeping this file ignorant of any
+// specific ILightVisibility/IIndirect/ILightIterator conformance.
 // shadow_params.z (directional light active) stays — a light-existence flag,
 // orthogonal to whether it is shadowed.
 struct PerFrame {
@@ -50,31 +39,8 @@ struct PerFrame {
     float4x4 sky_view_proj;
     float4   shadow_params;
     float4x4 view;
-    float4   cluster_grid;
-    float4   cluster_viewport;
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
-
-// Set 3 — clustered light lists.
-[[vk::binding(0, 3)]] StructuredBuffer<PointLight> point_lights;
-[[vk::binding(1, 3)]] StructuredBuffer<SpotLight>  spot_lights;
-[[vk::binding(2, 3)]] StructuredBuffer<uint>       point_indices;
-[[vk::binding(3, 3)]] StructuredBuffer<uint>       point_counts;
-[[vk::binding(4, 3)]] StructuredBuffer<uint>       spot_indices;
-[[vk::binding(5, 3)]] StructuredBuffer<uint>       spot_counts;
-
-uint cluster_index(float2 frag_xy, float view_z) {
-    uint numX = (uint)frame.cluster_grid.x;
-    uint numY = (uint)frame.cluster_grid.y;
-    uint numZ = (uint)frame.cluster_grid.z;
-    float near = frame.cluster_viewport.z;
-    float far  = frame.cluster_viewport.w;
-    uint ix = (uint)clamp(frag_xy.x / frame.cluster_viewport.x * (float)numX, 0.0, (float)(numX - 1u));
-    uint iy = (uint)clamp(frag_xy.y / frame.cluster_viewport.y * (float)numY, 0.0, (float)(numY - 1u));
-    float zs = (float)numZ * log(max(view_z, near) / near) / log(far / near);
-    uint iz = (uint)clamp(zs, 0.0, (float)(numZ - 1u));
-    return iz * numX * numY + iy * numX + ix;
-}
 
 // Set 1 — per material: the fixed engine material set. TestFlat and the other
 // built-in materials source their surface fields from this UBO + textures.
@@ -151,7 +117,7 @@ VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     return o;
 }
 
-float4 ke_forward_fs<T : IMaterial, V : ILightVisibility, I : IIndirect>(T material, V vis, I indirect, VsOut input) {
+float4 ke_forward_fs<T : IMaterial, V : ILightVisibility, I : IIndirect, L : ILightIterator>(T material, V vis, I indirect, L lights, VsOut input) {
     // Build the tangent->world basis and hand the material a populated surface.
     float3 ng = normalize(input.world_normal);
     float3 t  = normalize(input.world_tangent - ng * dot(ng, input.world_tangent));
@@ -188,42 +154,8 @@ float4 ke_forward_fs<T : IMaterial, V : ILightVisibility, I : IIndirect>(T mater
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance) * shadow;
     }
 
-    float  view_z    = mul(frame.view, float4(input.world_pos, 1.0)).z;
-    uint   ci        = cluster_index(input.clip.xy, view_z);
-    uint   maxLights = (uint)frame.cluster_grid.w;
-
-    uint pcount = point_counts[ci];
-    for (uint i = 0u; i < pcount; i++) {
-        uint   li     = point_indices[ci * maxLights + i];
-        float3 to_l   = point_lights[li].pos_radius.xyz - input.world_pos;
-        float  dist   = length(to_l);
-        float  radius = point_lights[li].pos_radius.w;
-        float3 l      = to_l / max(dist, 1e-4);
-        float  att    = clamp(1.0 - dist / max(radius, 1e-4), 0.0, 1.0);
-        att *= att;
-        float3 radiance = point_lights[li].color_intensity.rgb *
-                          point_lights[li].color_intensity.w * att;
-        lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
-    }
-
-    uint scount = spot_counts[ci];
-    for (uint sp = 0u; sp < scount; sp++) {
-        uint   li    = spot_indices[ci * maxLights + sp];
-        float3 to_l  = spot_lights[li].pos_range.xyz - input.world_pos;
-        float  dist  = length(to_l);
-        float  range = spot_lights[li].pos_range.w;
-        float3 l     = to_l / max(dist, 1e-4);
-        float  datt  = clamp(1.0 - dist / max(range, 1e-4), 0.0, 1.0);
-        datt *= datt;
-        float3 sdir     = normalize(spot_lights[li].dir_cos_inner.xyz);
-        float  cos_in   = spot_lights[li].dir_cos_inner.w;
-        float  cos_out  = spot_lights[li].cone.x;
-        float  cos_a    = dot(-l, sdir);
-        float  catt     = clamp((cos_a - cos_out) / max(cos_in - cos_out, 1e-3), 0.0, 1.0);
-        float3 radiance = spot_lights[li].color_intensity.rgb *
-                          spot_lights[li].color_intensity.w * datt * catt;
-        lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
-    }
+    float  view_z = mul(frame.view, float4(input.world_pos, 1.0)).z;
+    lit += lights.accumulate(n, v, albedo_c, f0, metallic, rough, input.world_pos, input.clip.xy, view_z);
 
     float3 ibl = indirect.contribution(n, v, albedo_c, metallic);
 

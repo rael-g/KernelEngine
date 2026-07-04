@@ -192,6 +192,8 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 
 7. **Framework plugin is implemented in pure C.** `src/c/framework/` ships pure C only — no STL, no `new`/`delete`, no C++ standard library. tomlc99 (vendored) handles TOML parsing. The framework's public-facing surface is C-ABI vtable + factory functions, so C++ name-mangling at the implementation layer would only add friction for dynamic-language bindings (Lua, future Rust).
 
+8. **No magic numbers — we are engine developers, not game developers.** A numeric constant is only allowed to stay a bare `const` when it is truly non-dynamic — implied by the algorithm itself, with no other value that would ever make sense (a 4x4 matrix, a quaternion's 4 components). Every other constant is a **game-tuning or workload-shape value**, and imposing it on the caller as a hardcoded ceiling is not our call to make. It must be a constructor parameter or params-struct field, with the current value kept only as the default for convenience. This applies especially to anything found to be a real limiting factor — a buffer size, a per-bucket cap, a grid resolution — where exceeding it produces a hard failure or visible artifact instead of graceful degradation. Stress tests exist to discover a *sane default*, not to justify a hardcoded ceiling; once a constant is shown to be limiting, promote it to a field rather than tuning the number in place. Don't flood constructors with parameters nobody sets — only promote what's actually been shown to matter.
+
 ---
 
 ## Key documents

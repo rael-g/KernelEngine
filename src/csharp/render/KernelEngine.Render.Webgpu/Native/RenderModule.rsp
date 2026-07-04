@@ -32,12 +32,14 @@ ke_
 ke_runtime=KernelEngine.Runtime.Native.ke_runtime
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_gpu_device=ke_gpu_device
+ke_logger=KernelEngine.Logger.Native.ke_logger
 ke_result=ke_result
 --exclude
 ke_result
 ke_bool
 ke_runtime
 ke_ecs
+ke_logger
 --config
 multi-file
 latest-codegen

@@ -1144,6 +1144,15 @@ No "publish all entities to a frame packet" step — there is no frame packet. C
 
 Ships: **`FrustumCullPass`** (AABB-vs-6-planes, CPU SIMD first, ~50-100 LoC; compute variant in G5+) and **`OcclusionCullPass`** (Hi-Z + AABB reprojection, ~300 LoC + one compute shader; wrap Frostbite / Ubisoft Anvil patterns). Does NOT ship: portal culling, PVS, antiportals, voxel occlusion, scene-graph cell culling — game-specific, plug your own. Per-light culling is already clustered forward shading's job, a different concern.
 
+### 11.5 Current clustered-forward is a stress-test baseline, not the final tuning
+
+Confirmed via the `09_many_lights` classic-vs-clustered comparison (2026-07-04): clustered forward's per-froxel cull correctly bounds *shading* cost to lights actually near the camera (a light whose sphere never overlaps a froxel AABB never reaches the fragment shader — frustum culling of lights falls out of the froxel binning for free). But two things are not yet refined:
+
+- **The cull compute itself is brute-force**, O(clusters × total scene lights), no broad-phase/spatial pre-filter — a light far outside the frustum is still tested against every froxel before failing. Fine at today's scales; would need a spatial pre-pass if the scene ever has orders-of-magnitude more lights than are ever visible at once.
+- **The forward pass has no depth prepass or front-to-back draw sort** — same-pass depth test/write means overdraw can still fully shade (material + light loop) a fragment that a nearer surface later overwrites. Not a per-light problem, but it does mean shading cost isn't purely "scene complexity + light cost," it's scene overdraw × light cost in the worst case.
+
+Neither is a regression — they're just not solved yet. Noting so this doesn't read as a finished forward++ when it's a working baseline.
+
 ---
 
 ## 12. What V2 explicitly does NOT change (non-goals)
