@@ -35,12 +35,13 @@ struct SpotLight {
     float4 cone;
 };
 
-// Set 0 — per frame. light_vp/shadow_map moved out to a feature component
-// (§8.12 of RenderArchitectureV2.md, e.g. ShadowMapVisibility in
-// shadow_feature.slang): the pass no longer declares them, keeping this file
-// ignorant of any specific ILightVisibility conformance. shadow_params.z
-// (directional light active) stays — a light-existence flag, orthogonal to
-// whether it is shadowed.
+// Set 0 — per frame. light_vp/shadow_map moved out to ShadowMapVisibility
+// (shadow_feature.slang) and env/env_sampler moved out to IndirectIBL
+// (ibl_feature.slang) — both feature components (§8.12 of
+// RenderArchitectureV2.md). The pass no longer declares any of them, keeping
+// this file ignorant of any specific ILightVisibility/IIndirect conformance.
+// shadow_params.z (directional light active) stays — a light-existence flag,
+// orthogonal to whether it is shadowed.
 struct PerFrame {
     float4   camera_pos;
     float4   light_dir;
@@ -53,8 +54,6 @@ struct PerFrame {
     float4   cluster_viewport;
 };
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
-[[vk::binding(1, 0)]] TextureCube  env;
-[[vk::binding(2, 0)]] SamplerState env_sampler;
 
 // Set 3 — clustered light lists.
 [[vk::binding(0, 3)]] StructuredBuffer<PointLight> point_lights;
@@ -152,7 +151,7 @@ VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     return o;
 }
 
-float4 ke_forward_fs<T : IMaterial, V : ILightVisibility>(T material, V vis, VsOut input) {
+float4 ke_forward_fs<T : IMaterial, V : ILightVisibility, I : IIndirect>(T material, V vis, I indirect, VsOut input) {
     // Build the tangent->world basis and hand the material a populated surface.
     float3 ng = normalize(input.world_normal);
     float3 t  = normalize(input.world_tangent - ng * dot(ng, input.world_tangent));
@@ -226,10 +225,7 @@ float4 ke_forward_fs<T : IMaterial, V : ILightVisibility>(T material, V vis, VsO
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance);
     }
 
-    float3 f_ibl       = fresnel_schlick(max(dot(n, v), 0.0), f0);
-    float3 ibl_spec    = env.Sample(env_sampler, reflect(-v, n)).rgb * f_ibl;
-    float3 ibl_diffuse = env.Sample(env_sampler, n).rgb * albedo_c * (1.0 - metallic) * (1.0 - f_ibl);
-    float3 ibl         = ibl_spec + ibl_diffuse;
+    float3 ibl = indirect.contribution(n, v, albedo_c, metallic);
 
     float3 ambient = frame.ambient.rgb * albedo_c * (1.0 - metallic);
     float3 color   = ambient + lit + s.emissive;

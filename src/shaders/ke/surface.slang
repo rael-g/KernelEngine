@@ -64,6 +64,19 @@ struct FullyLit : ILightVisibility {
     float visibility(float3 worldPos) { return 1.0; }
 }
 
+// Feature <-> pass seam for ambient/reflection contribution (§8.12). NoIndirect
+// is the zero-binding default (no environment/IBL module present). An IBL
+// module contributes a conformance owning its own environment cubemap +
+// sampler (e.g. IndirectIBL in ibl_feature.slang), linked in only when
+// composed into the scene.
+interface IIndirect {
+    float3 contribution(float3 n, float3 v, float3 albedo, float metallic);
+}
+
+struct NoIndirect : IIndirect {
+    float3 contribution(float3 n, float3 v, float3 albedo, float metallic) { return float3(0.0, 0.0, 0.0); }
+}
+
 interface IUnlitMaterial {
     void vertex(inout VertexInfo v);
     float4 fragment(inout VertexInfo v);
