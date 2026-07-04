@@ -33,8 +33,8 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_fence)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, void> destroy_fence;
 
-    [NativeTypeName("ke_gpu_buffer (*)(struct ke_gpu_device *, const ke_gpu_buffer_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_buffer_params*, ulong> create_buffer;
+    [NativeTypeName("ke_gpu_buffer (*)(struct ke_gpu_device *, const ke_gpu_buffer_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_buffer_params*, ke_error**, ulong> create_buffer;
 
     [NativeTypeName("ke_gpu_texture (*)(struct ke_gpu_device *, const ke_gpu_texture_params *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_texture_params*, ulong> create_texture;
@@ -57,8 +57,8 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_gpu_device *, const ke_gpu_bind_group_layout_params *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_bind_group_layout_params*, ulong> create_bind_group_layout;
 
-    [NativeTypeName("ke_gpu_bind_group (*)(struct ke_gpu_device *, const ke_gpu_bind_group_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_bind_group_params*, ulong> create_bind_group;
+    [NativeTypeName("ke_gpu_bind_group (*)(struct ke_gpu_device *, const ke_gpu_bind_group_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_bind_group_params*, ke_error**, ulong> create_bind_group;
 
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_buffer)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, void> destroy_buffer;

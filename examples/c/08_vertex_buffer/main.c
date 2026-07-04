@@ -14,11 +14,9 @@
 
 static void die(const char *msg, ke_error *err)
 {
-    if (err)
-        fprintf(stderr, "ERROR [%s]: %s\n", err->type->name, err->message);
-    else
-        fprintf(stderr, "ERROR: %s\n", msg);
-    __builtin_trap();
+    if (err) { ke_error_fatal(err); }
+    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
+    ke_error_fatal(&fallback);
 }
 
 typedef struct { float x, y, r, g, b; } vertex_t;
@@ -74,8 +72,8 @@ int main(void)
         .usage              = KE_GPU_BUFFER_USAGE_VERTEX | KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     };
-    ke_gpu_buffer vbo = gpu.ref->create_buffer(gpu.ref, &vbp);
-    if (vbo == KE_GPU_INVALID_HANDLE) die("vertex buffer creation failed", NULL);
+    ke_gpu_buffer vbo = gpu.ref->create_buffer(gpu.ref, &vbp, &err);
+    if (vbo == KE_GPU_INVALID_HANDLE) die("vertex buffer creation failed", err);
 
     // ── Index buffer ──────────────────────────────────────────────────────────
 
@@ -85,8 +83,8 @@ int main(void)
         .usage              = KE_GPU_BUFFER_USAGE_INDEX | KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     };
-    ke_gpu_buffer ibo = gpu.ref->create_buffer(gpu.ref, &ibp);
-    if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", NULL);
+    ke_gpu_buffer ibo = gpu.ref->create_buffer(gpu.ref, &ibp, &err);
+    if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", err);
 
     // ── Shaders ───────────────────────────────────────────────────────────────
 

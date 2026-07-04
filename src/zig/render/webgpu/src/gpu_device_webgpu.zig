@@ -573,7 +573,7 @@ fn mapShaderStage(ke_stage: ke.ke_gpu_shader_stage) wgpu.WGPUShaderStage {
     return s;
 }
 
-fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params) callconv(.c) ke.ke_gpu_buffer {
+fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_buffer {
     const pp = @as(*const ke.ke_gpu_buffer_params, @ptrCast(p));
     const s = state(dev);
     var usage = mapBufferUsage(pp.usage);
@@ -586,9 +586,30 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params)
         .size             = pp.size,
         .mappedAtCreation = if (pp.mapped_at_creation != 0) 1 else 0,
     };
-    const buf: wgpu.WGPUBuffer = wgpu.wgpuDeviceCreateBuffer(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
-    if (pp.initial_data != null) wgpu.wgpuQueueWriteBuffer(s.queue, buf, 0, pp.initial_data, pp.size);
-    return @intFromPtr(buf);
+
+    // Scope the validation so an over-limit request (e.g. exceeding this
+    // device's max buffer size) surfaces as a described ke_error instead of
+    // firing wgpu-native's uncaptured-error path (a hard, unrecoverable abort).
+    wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
+    const buf: wgpu.WGPUBuffer = wgpu.wgpuDeviceCreateBuffer(s.device, &desc);
+    var se = ScopeError{ .captured = false, .buf = undefined };
+    _ = wgpu.wgpuDevicePopErrorScope(s.device, .{
+        .nextInChain = null,
+        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
+        .callback  = popErrorCallback,
+        .userdata1 = &se,
+        .userdata2 = null,
+    });
+    _ = wgpu.wgpuDevicePoll(s.device, 1, null);
+
+    if (se.captured) {
+        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, &se.buf, @src().file, @intCast(@src().line), null);
+        if (buf != null) wgpu.wgpuBufferRelease(buf);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    const handle = buf orelse return ke.KE_GPU_INVALID_HANDLE;
+    if (pp.initial_data != null) wgpu.wgpuQueueWriteBuffer(s.queue, handle, 0, pp.initial_data, pp.size);
+    return @intFromPtr(handle);
 }
 
 fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params) callconv(.c) ke.ke_gpu_texture {
@@ -708,6 +729,14 @@ export const KE_ERROR_GPU_SHADER_COMPILATION: ke.ke_error_type = .{
 export const KE_ERROR_WGPU_SHADER_COMPILATION: ke.ke_error_type = .{
     .name = "ke.render.gpu.wgpu.shader_compilation",
     .parent = &KE_ERROR_GPU_SHADER_COMPILATION,
+};
+export const KE_ERROR_GPU_RESOURCE_CREATION: ke.ke_error_type = .{
+    .name = "ke.render.gpu.resource_creation",
+    .parent = &ke.KE_ERROR_INVALID_ARGUMENT,
+};
+export const KE_ERROR_WGPU_RESOURCE_CREATION: ke.ke_error_type = .{
+    .name = "ke.render.gpu.wgpu.resource_creation",
+    .parent = &KE_ERROR_GPU_RESOURCE_CREATION,
 };
 
 const ScopeError = struct {
@@ -1008,7 +1037,7 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
     return @intFromPtr(wgpu.wgpuDeviceCreateBindGroupLayout(state(dev).device, &desc));
 }
 
-fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_params) callconv(.c) ke.ke_gpu_bind_group {
+fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_bind_group {
     const pp = @as(*const ke.ke_gpu_bind_group_params, @ptrCast(p));
     const n = @min(pp.entry_count, 32);
     var entries: [32]wgpu.WGPUBindGroupEntry = undefined;
@@ -1041,7 +1070,29 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
         .entryCount  = n,
         .entries     = if (n > 0) &entries else null,
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateBindGroup(state(dev).device, &desc));
+    const s = state(dev);
+
+    // Same rationale as createBuffer: a binding range exceeding this device's
+    // limits (e.g. max_*_buffer_binding_size) must surface as a ke_error, not
+    // fire wgpu-native's uncaptured-error path (a hard, unrecoverable abort).
+    wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
+    const bg: wgpu.WGPUBindGroup = wgpu.wgpuDeviceCreateBindGroup(s.device, &desc);
+    var se = ScopeError{ .captured = false, .buf = undefined };
+    _ = wgpu.wgpuDevicePopErrorScope(s.device, .{
+        .nextInChain = null,
+        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
+        .callback  = popErrorCallback,
+        .userdata1 = &se,
+        .userdata2 = null,
+    });
+    _ = wgpu.wgpuDevicePoll(s.device, 1, null);
+
+    if (se.captured) {
+        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, &se.buf, @src().file, @intCast(@src().line), null);
+        if (bg != null) wgpu.wgpuBindGroupRelease(bg);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(bg orelse return ke.KE_GPU_INVALID_HANDLE);
 }
 
 // ── Resource destruction ───────────────────────────────────────────────────

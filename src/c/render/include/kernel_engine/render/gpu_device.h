@@ -45,6 +45,13 @@ typedef struct ke_gpu_device ke_gpu_device;
 /// A shader module failed to compile/validate (source rejected by the backend).
 extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
 
+/// A resource creation call (buffer, bind group, ...) was rejected by backend
+/// validation — e.g. a buffer or binding range exceeding a device limit. The
+/// limit itself (like max buffer binding size) is backend/hardware-specific and
+/// not something the engine hardcodes; the caller who requested the resource
+/// decides how to react (retry smaller, surface to the user, etc).
+extern const ke_error_type KE_ERROR_GPU_RESOURCE_CREATION;
+
 // ── Clip-space (NDC) convention ───────────────────────────────────────────
 // The one math-adjacent fact only the backend knows. The engine implements no
 // matrix math; a consumer queries this and builds its projection with its own
@@ -328,7 +335,8 @@ typedef struct ke_gpu_device
 
     // ── Resource creation ──────────────────────────────────────────────────
     ke_gpu_buffer          (*create_buffer)(struct ke_gpu_device *self,
-                                            const ke_gpu_buffer_params *p);
+                                            const ke_gpu_buffer_params *p,
+                                            ke_error **out_error);
     ke_gpu_texture         (*create_texture)(struct ke_gpu_device *self,
                                              const ke_gpu_texture_params *p);
     ke_gpu_texture_view    (*create_texture_view)(struct ke_gpu_device *self,
@@ -346,7 +354,8 @@ typedef struct ke_gpu_device
     ke_gpu_bind_group_layout (*create_bind_group_layout)(struct ke_gpu_device *self,
                                                          const ke_gpu_bind_group_layout_params *p);
     ke_gpu_bind_group      (*create_bind_group)(struct ke_gpu_device *self,
-                                                const ke_gpu_bind_group_params *p);
+                                                const ke_gpu_bind_group_params *p,
+                                                ke_error **out_error);
 
     // ── Resource destruction ───────────────────────────────────────────────
     void (*destroy_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h);

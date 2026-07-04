@@ -17,11 +17,9 @@
 
 static void die(const char *msg, ke_error *err)
 {
-    if (err)
-        fprintf(stderr, "ERROR [%s]: %s\n", err->type->name, err->message);
-    else
-        fprintf(stderr, "ERROR: %s\n", msg);
-    __builtin_trap();
+    if (err) { ke_error_fatal(err); }
+    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
+    ke_error_fatal(&fallback);
 }
 
 static double elapsed_seconds(void)
@@ -78,8 +76,8 @@ int main(void)
         .usage           = KE_GPU_BUFFER_USAGE_UNIFORM | KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     };
-    ke_gpu_buffer ubo = gpu.ref->create_buffer(gpu.ref, &ubp);
-    if (ubo == KE_GPU_INVALID_HANDLE) die("uniform buffer creation failed", NULL);
+    ke_gpu_buffer ubo = gpu.ref->create_buffer(gpu.ref, &ubp, &err);
+    if (ubo == KE_GPU_INVALID_HANDLE) die("uniform buffer creation failed", err);
 
     // ── Bind group layout ─────────────────────────────────────────────────────
 
@@ -110,8 +108,8 @@ int main(void)
         .entry_count = 1,
         .entries     = &bg_entry,
     };
-    ke_gpu_bind_group bg = gpu.ref->create_bind_group(gpu.ref, &bg_params);
-    if (bg == KE_GPU_INVALID_HANDLE) die("bind group creation failed", NULL);
+    ke_gpu_bind_group bg = gpu.ref->create_bind_group(gpu.ref, &bg_params, &err);
+    if (bg == KE_GPU_INVALID_HANDLE) die("bind group creation failed", err);
 
     // ── Shaders ───────────────────────────────────────────────────────────────
 

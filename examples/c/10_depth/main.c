@@ -15,9 +15,9 @@
 
 static void die(const char *msg, ke_error *err)
 {
-    if (err) fprintf(stderr, "ERROR [%s]: %s\n", err->type->name, err->message);
-    else     fprintf(stderr, "ERROR: %s\n", msg);
-    __builtin_trap();
+    if (err) { ke_error_fatal(err); }
+    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
+    ke_error_fatal(&fallback);
 }
 
 // xyz + rgb
@@ -88,11 +88,14 @@ int main(void)
     // ── Geometry ──────────────────────────────────────────────────────────────
 
     ke_gpu_buffer vbo_back  = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
-        .initial_data = back_verts,  .size = sizeof(back_verts),  .usage = KE_GPU_BUFFER_USAGE_VERTEX });
+        .initial_data = back_verts,  .size = sizeof(back_verts),  .usage = KE_GPU_BUFFER_USAGE_VERTEX }, &err);
+    if (vbo_back == KE_GPU_INVALID_HANDLE) die("back vertex buffer creation failed", err);
     ke_gpu_buffer vbo_front = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
-        .initial_data = front_verts, .size = sizeof(front_verts), .usage = KE_GPU_BUFFER_USAGE_VERTEX });
+        .initial_data = front_verts, .size = sizeof(front_verts), .usage = KE_GPU_BUFFER_USAGE_VERTEX }, &err);
+    if (vbo_front == KE_GPU_INVALID_HANDLE) die("front vertex buffer creation failed", err);
     ke_gpu_buffer ibo = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
-        .initial_data = quad_idx, .size = sizeof(quad_idx), .usage = KE_GPU_BUFFER_USAGE_INDEX });
+        .initial_data = quad_idx, .size = sizeof(quad_idx), .usage = KE_GPU_BUFFER_USAGE_INDEX }, &err);
+    if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", err);
 
     // ── Shaders ───────────────────────────────────────────────────────────────
 

@@ -8,7 +8,7 @@ public partial struct ke_gpu_barrier
 {
     public ke_gpu_barrier_type type;
 
-    [NativeTypeName("__AnonymousRecord_gpu_device_L294_C5")]
+    [NativeTypeName("__AnonymousRecord_gpu_device_L301_C5")]
     public _Anonymous_e__Union Anonymous;
 
     [UnscopedRef]

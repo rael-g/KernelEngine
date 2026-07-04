@@ -469,7 +469,6 @@ fn uploadBuffer(self: [*c]c.ke_render_core, buffer: c.ke_gpu_buffer, offset: u64
 
 fn uploadMesh(self: [*c]c.ke_render_core, vertices: ?*const anyopaque, vertices_size: usize,
               indices: [*c]const u16, index_count: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_mesh_handle {
-    _ = out_error;
     const st = coreOf(self);
     if (st.mesh_count >= MAX_MESHES) return .{ .idx = c.KE_HANDLE_NONE };
 
@@ -478,7 +477,7 @@ fn uploadMesh(self: [*c]c.ke_render_core, vertices: ?*const anyopaque, vertices_
         .size = vertices_size,
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
     if (vbo == c.KE_GPU_INVALID_HANDLE) return .{ .idx = c.KE_HANDLE_NONE };
 
     const ibo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
@@ -486,7 +485,7 @@ fn uploadMesh(self: [*c]c.ke_render_core, vertices: ?*const anyopaque, vertices_
         .size = index_count * @sizeOf(u16),
         .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
     if (ibo == c.KE_GPU_INVALID_HANDLE) {
         st.device.destroy_buffer.?(st.device, vbo);
         return .{ .idx = c.KE_HANDLE_NONE };
@@ -558,7 +557,6 @@ fn srgbToLinear(cs: f32) f32 {
 fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
                   metallic: f32, roughness: f32, albedo: c.ke_texture_handle,
                   normal: c.ke_texture_handle, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
-    _ = out_error;
     const st = coreOf(self);
     if (st.material_count >= MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
 
@@ -572,7 +570,8 @@ fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
         .size = 32,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (ubo == c.KE_GPU_INVALID_HANDLE) return .{ .idx = c.KE_HANDLE_NONE };
 
     // Unknown / none albedo resolves to the built-in white texture (index 0);
     // none normal resolves to the built-in flat (0,0,1) normal map.
@@ -591,7 +590,11 @@ fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
         .layout = st.material_bgl,
         .entry_count = 4,
         .entries = &entries,
-    });
+    }, out_error);
+    if (bg == c.KE_GPU_INVALID_HANDLE) {
+        st.device.destroy_buffer.?(st.device, ubo);
+        return .{ .idx = c.KE_HANDLE_NONE };
+    }
 
     const idx = st.material_count;
     st.materials[idx] = .{ .ubo = ubo, .bind_group = bg };
@@ -721,11 +724,15 @@ fn uiBindGroupFor(st: *CoreState, tex_idx: u32) c.ke_gpu_bind_group {
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
     };
+    // No out_error slot on this lazy-cache path (uiQuad, its only caller, is a
+    // void draw-call helper) — pass null. The push/pop error scope inside
+    // create_bind_group still prevents the uncaptured-error abort either way;
+    // only the descriptive ke_error is lost here.
     const bg = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
         .layout = st.ui_bgl_tex,
         .entry_count = 2,
         .entries = &entries,
-    });
+    }, null);
     st.ui_bind_group_cache[tex_idx] = bg;
     return bg;
 }
@@ -813,7 +820,9 @@ fn uiSetup(st: *CoreState, out_error: [*c][*c]c.ke_error) bool {
         .size = 64, // float4x4
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (st.ui_frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+
     const frame_entry = c.ke_gpu_bind_group_entry{
         .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER,
         .buffer = st.ui_frame_uniform, .buffer_offset = 0, .buffer_size = 64,
@@ -823,14 +832,16 @@ fn uiSetup(st: *CoreState, out_error: [*c][*c]c.ke_error) bool {
         .layout = st.ui_bgl_frame,
         .entry_count = 1,
         .entries = &frame_entry,
-    });
+    }, out_error);
+    if (st.ui_frame_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
     st.ui_vbo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
         .size = st.ui_vertices.len * @sizeOf(UiVertex),
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
-    });
+    }, out_error);
+    if (st.ui_vbo == c.KE_GPU_INVALID_HANDLE) return false;
 
     st.ui_vertex_count = 0;
     st.ui_batch_count = 0;
