@@ -84,8 +84,11 @@ const PerFrame = extern struct {
     light_color: [4]f32, // rgb, w = intensity
     ambient: [4]f32,
     sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
-    light_vp: [16]f32, // directional light view*proj (for shadow sampling)
-    shadow_params: [4]f32, // x = shadow active, z = directional active
+    // light_vp moved to the shadow feature's own UBO (reuses shadow_lvp_uniform,
+    // set 4 — §8.12). shadow_params.x (shadow active) is vestigial now that
+    // which ILightVisibility is linked decides this at compile time; kept for
+    // forward.slang (dead pipeline) compatibility, harmless either way.
+    shadow_params: [4]f32, // x = shadow active (vestigial), z = directional active
     view: [16]f32, // world→view (for the fragment's cluster z slice)
     cluster_grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
     cluster_viewport: [4]f32, // screen W, screen H, near, far
@@ -545,7 +548,6 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         .light_color = .{ 1.0, 1.0, 1.0, 1.0 },
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
         .sky_view_proj = undefined,
-        .light_vp = undefined,
         .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow active, z=directional active
         .view = undefined,
         .cluster_grid = .{ GRID_X, GRID_Y, GRID_Z, MAX_LIGHTS_PER_CLUSTER },
@@ -553,8 +555,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     };
     zm.storeMat(frame.sky_view_proj[0..], sky_vp);
     zm.storeMat(frame.view[0..], view); // for the fragment's cluster z slice
-    // Same light view-proj the shadow pass used, for the forward's shadow lookup.
-    zm.storeMat(frame.light_vp[0..], lightViewProj(st.ndc, lightDirOf(ctx, st)));
+    // light_vp is uploaded once by shadowSys into shadow_lvp_uniform (set 4);
+    // the shadow feature's bind group reuses that buffer directly — no
+    // duplicate computation/upload needed here.
 
     // Directional light (first entity). Present → enable the directional term +
     // its shadow map; its ambient seeds the scene ambient. Point/spot lights are
@@ -658,10 +661,17 @@ fn rebuildFrameBindGroup(st: *ModuleState) void {
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
         .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
         .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 },
+        // Shadow feature (§8.12, shadow_feature.slang) — reuses shadow_lvp_uniform
+        // (shadowSys already uploads the identical light-view-proj each frame,
+        // before forward runs) and shadow_view; no duplicate buffer, no
+        // duplicate upload. Only forward_lit.slang's shader references 4-6.
+        .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 },
+        .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
     };
     st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = st.frame_bgl,
-        .entry_count = 4,
+        .entry_count = 7,
         .entries = &entries,
     });
 }
@@ -724,10 +734,18 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
         .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }, // shadow map (2D R32F)
+        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }, // shadow map (2D R32F) — forward.slang only (dead pipeline); unused by forward_lit.slang
+        // Shadow feature (§8.12, shadow_feature.slang): appended here rather than
+        // a new set — the C ABI's bind_group_layouts array is fixed at 4 entries
+        // (sets 0-3), but one set's own entry list has no such cap. Only
+        // fwd_lit_pipeline's shader references 4-6; forward.slang/magenta.slang
+        // simply don't (a layout superset of what a given shader uses is valid).
+        .{ .binding = 4, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 5, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 6, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     const frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 4,
+        .entry_count = 7,
         .entries = &frame_bgl_entries,
     });
     st.frame_bgl = frame_bgl;

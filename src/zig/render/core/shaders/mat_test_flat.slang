@@ -6,6 +6,7 @@
 
 import ke;
 import forward_lit;
+import shadow_feature;
 
 struct TestFlat : IMaterial {
     void vertex(inout VertexInfo v) {
@@ -24,9 +25,10 @@ struct TestFlat : IMaterial {
 }
 
 static TestFlat _mat;
+static ShadowMapVisibility _vis;
 
 [shader("vertex")]
 VsOut vs_main(VsIn input) { return ke_forward_vs(_mat, input); }
 
 [shader("fragment")]
-float4 fs_main(VsOut input) : SV_Target { return ke_forward_fs(_mat, input); }
+float4 fs_main(VsOut input) : SV_Target { return ke_forward_fs(_mat, _vis, input); }

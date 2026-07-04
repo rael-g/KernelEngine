@@ -35,14 +35,18 @@ struct SpotLight {
     float4 cone;
 };
 
-// Set 0 — per frame.
+// Set 0 — per frame. light_vp/shadow_map moved out to a feature component
+// (§8.12 of RenderArchitectureV2.md, e.g. ShadowMapVisibility in
+// shadow_feature.slang): the pass no longer declares them, keeping this file
+// ignorant of any specific ILightVisibility conformance. shadow_params.z
+// (directional light active) stays — a light-existence flag, orthogonal to
+// whether it is shadowed.
 struct PerFrame {
     float4   camera_pos;
     float4   light_dir;
     float4   light_color;
     float4   ambient;
     float4x4 sky_view_proj;
-    float4x4 light_vp;
     float4   shadow_params;
     float4x4 view;
     float4   cluster_grid;
@@ -51,7 +55,6 @@ struct PerFrame {
 [[vk::binding(0, 0)]] ConstantBuffer<PerFrame> frame;
 [[vk::binding(1, 0)]] TextureCube  env;
 [[vk::binding(2, 0)]] SamplerState env_sampler;
-[[vk::binding(3, 0)]] Texture2D    shadow_map;
 
 // Set 3 — clustered light lists.
 [[vk::binding(0, 3)]] StructuredBuffer<PointLight> point_lights;
@@ -72,16 +75,6 @@ uint cluster_index(float2 frag_xy, float view_z) {
     float zs = (float)numZ * log(max(view_z, near) / near) / log(far / near);
     uint iz = (uint)clamp(zs, 0.0, (float)(numZ - 1u));
     return iz * numX * numY + iy * numX + ix;
-}
-
-float compute_shadow(float3 world_pos) {
-    float4 sc = mul(frame.light_vp, float4(world_pos, 1.0));
-    float3 coord = sc.xyz / sc.w;
-    coord.x = coord.x * 0.5 + 0.5;
-    coord.y = -coord.y * 0.5 + 0.5;
-    if (any(coord < 0.0) || any(coord > 1.0)) return 1.0;
-    float closest = shadow_map.Sample(env_sampler, coord.xy).r;
-    return (coord.z - 0.005 > closest) ? 0.3 : 1.0;
 }
 
 // Set 1 — per material: the fixed engine material set. TestFlat and the other
@@ -159,7 +152,7 @@ VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     return o;
 }
 
-float4 ke_forward_fs<T : IMaterial>(T material, VsOut input) {
+float4 ke_forward_fs<T : IMaterial, V : ILightVisibility>(T material, V vis, VsOut input) {
     // Build the tangent->world basis and hand the material a populated surface.
     float3 ng = normalize(input.world_normal);
     float3 t  = normalize(input.world_tangent - ng * dot(ng, input.world_tangent));
@@ -192,7 +185,7 @@ float4 ke_forward_fs<T : IMaterial>(T material, VsOut input) {
     if (frame.shadow_params.z > 0.5) {
         float3 l        = -normalize(frame.light_dir.xyz);
         float3 radiance = frame.light_color.rgb * frame.light_color.w;
-        float  shadow   = (frame.shadow_params.x > 0.5) ? compute_shadow(input.world_pos) : 1.0;
+        float  shadow   = vis.visibility(input.world_pos);
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance) * shadow;
     }
 
