@@ -30,6 +30,8 @@ using KernelEngine.Render;
 // this file per run.
 int LightCount = int.TryParse(Environment.GetEnvironmentVariable("LIGHT_COUNT"), out var lc) ? lc : 10000;
 bool ClassicLighting = Environment.GetEnvironmentVariable("CLASSIC_LIGHTING") == "1";
+bool EnableShadows = Environment.GetEnvironmentVariable("ENABLE_SHADOWS") != "0";
+bool EnableIbl = Environment.GetEnvironmentVariable("ENABLE_IBL") != "0";
 const float CorridorWidth = 10f;
 const float CorridorHeight = 6f;
 // Fixed length (NOT scaled by LightCount) — a sane far plane keeps depth
@@ -54,7 +56,7 @@ var services = new ServiceCollection()
     // stay well under the backend's max_*_buffer_binding_size limit (128MB on
     // this WebGPU build) when raising these. 64/512 here is ~72MB.
     .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.005f, 0.005f, 0.008f, 1.0f),
-        clusterGridZ: 64, maxLightsPerCluster: 512, classicLighting: ClassicLighting))
+        clusterGridZ: 64, maxLightsPerCluster: 512, classicLighting: ClassicLighting, enableShadows: EnableShadows, enableIbl: EnableIbl))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

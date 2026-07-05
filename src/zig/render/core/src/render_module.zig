@@ -37,6 +37,12 @@ const mat_test_flat_vs_wgsl = @embedFile("mat_test_flat.vs.wgsl");
 const mat_test_flat_fs_wgsl = @embedFile("mat_test_flat.fs.wgsl");
 const mat_test_flat_classic_vs_wgsl = @embedFile("mat_test_flat_classic.vs.wgsl");
 const mat_test_flat_classic_fs_wgsl = @embedFile("mat_test_flat_classic.fs.wgsl");
+const mat_test_flat_no_shadow_vs_wgsl = @embedFile("mat_test_flat_no_shadow.vs.wgsl");
+const mat_test_flat_no_shadow_fs_wgsl = @embedFile("mat_test_flat_no_shadow.fs.wgsl");
+const mat_test_flat_no_ibl_vs_wgsl = @embedFile("mat_test_flat_no_ibl.vs.wgsl");
+const mat_test_flat_no_ibl_fs_wgsl = @embedFile("mat_test_flat_no_ibl.fs.wgsl");
+const mat_test_flat_no_shadow_no_ibl_vs_wgsl = @embedFile("mat_test_flat_no_shadow_no_ibl.vs.wgsl");
+const mat_test_flat_no_shadow_no_ibl_fs_wgsl = @embedFile("mat_test_flat_no_shadow_no_ibl.fs.wgsl");
 const magenta_vs_wgsl = @embedFile("magenta.vs.wgsl");
 const magenta_fs_wgsl = @embedFile("magenta.fs.wgsl");
 
@@ -206,6 +212,14 @@ const ModuleState = struct {
     // measure clustered-forward's win at a given light count, not to ship.
     fwd_lit_classic_pipeline: c.ke_gpu_pipeline,
     classic_lighting: bool,
+    // Real opt-in: when false, no shadow pass, no shadow map resource, no
+    // shadow shader bindings exist — fwd_lit_pipeline links FullyLit
+    // (surface.slang's no-op ILightVisibility) instead of ShadowMapVisibility.
+    shadow_enabled: bool,
+    // Same idea for ambient/reflection: when false, no IBL cubemap bindings in
+    // the material shader (NoIndirect instead of IndirectIBL). Skybox
+    // rendering itself is a separate concern and stays unaffected.
+    ibl_enabled: bool,
     magenta_pipeline: c.ke_gpu_pipeline,
     fwd_obj_bind_group: c.ke_gpu_bind_group, // set 2, per-object (dynamic offset)
     fwd_obj_uniform: c.ke_gpu_buffer,
@@ -215,6 +229,7 @@ const ModuleState = struct {
     fwd_reads: [1][*c]const u8,
     fwd_io: c.ke_render_pass_io,
     fwd_access: [13]c.ke_component_access,
+    fwd_access_count: u32, // < 13 when shadow_enabled is false (no shadow_map READ dependency)
     mesh_cid: c.ke_component_id,
     transform_cid: c.ke_component_id,
     camera_cid: c.ke_component_id,
@@ -778,27 +793,45 @@ fn rebuildFrameBindGroup(st: *ModuleState) void {
     const core = st.core.ref;
     const env_view = core.*.texture_view.?(core, st.env_cubemap);
     const smp = core.*.sampler.?(core);
-    const entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.fwd_frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
-        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
-        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 },
+    // Bindings 3-6 (legacy shadow texture + shadow feature) only exist when
+    // shadow_enabled — no shadow_view to bind otherwise (no shadow_map
+    // resource was ever declared). IBL stays at 7-8 either way (§9.8: opt-in
+    // features must leave zero footprint when absent, not a dummy binding).
+    var entries: [9]c.ke_gpu_bind_group_entry = undefined;
+    var n: u32 = 0;
+    entries[n] = .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.fwd_frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 };
+    n += 1;
+    entries[n] = .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 };
+    n += 1;
+    entries[n] = .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp };
+    n += 1;
+    if (st.shadow_enabled) {
+        entries[n] = .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 };
+        n += 1;
         // Shadow feature (shadow_feature.slang) — reuses shadow_lvp_uniform
         // (shadowSys already uploads the identical light-view-proj each frame,
         // before forward runs) and shadow_view; no duplicate buffer, no
         // duplicate upload. Only forward_lit.slang's shader references 4-6.
-        .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 },
-        .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
+        entries[n] = .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
+        n += 1;
+        entries[n] = .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 };
+        n += 1;
+        entries[n] = .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp };
+        n += 1;
+    }
+    if (st.ibl_enabled) {
         // IBL feature (ibl_feature.slang) — same env_view/smp as binding
         // 1/2, bound again at the slot forward_lit.slang's IndirectIBL expects.
-        .{ .binding = 7, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
-        .{ .binding = 8, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
-    };
+        entries[n] = .{ .binding = 7, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 };
+        n += 1;
+        entries[n] = .{ .binding = 8, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp };
+        n += 1;
+    }
+
     var err: ?*c.ke_error = null;
     st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = st.frame_bgl,
-        .entry_count = 9,
+        .entry_count = n,
         .entries = &entries,
     }, &err);
     if (err != null) logGpuError(st.logger, err, "rebuild frame bind group");
@@ -841,29 +874,43 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     });
 
     // Set 0 — per-frame uniform (vs reads sky_view_proj; fs reads camera/light) +
-    // environment cubemap + sampler (fs, for skybox + IBL).
-    const frame_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
-        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }, // vestigial: unused by any live shader; kept as a layout superset entry
-        // Shadow feature (shadow_feature.slang): appended here rather than a
-        // new set — the C ABI's bind_group_layouts array is fixed at 4 entries
-        // (sets 0-3), but one set's own entry list has no such cap. Only
-        // fwd_lit_pipeline's shader references 4-6; forward.slang/magenta.slang
-        // simply don't (a layout superset of what a given shader uses is valid).
-        .{ .binding = 4, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 5, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 6, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+    // environment cubemap + sampler (fs, for skybox + IBL). Bindings 3-6 (the
+    // legacy shadow texture + shadow_feature.slang's own resources) exist only
+    // when shadow_enabled — a game with shadows off gets no shadow GPU
+    // resource of any kind (§9.8: opt-in means absent, not disabled-and-idle).
+    var frame_bgl_entries: [9]c.ke_gpu_bind_group_layout_entry = undefined;
+    var frame_bgl_n: u32 = 0;
+    frame_bgl_entries[frame_bgl_n] = .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
+    frame_bgl_n += 1;
+    frame_bgl_entries[frame_bgl_n] = .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE };
+    frame_bgl_n += 1;
+    frame_bgl_entries[frame_bgl_n] = .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 };
+    frame_bgl_n += 1;
+    if (st.shadow_enabled) {
+        // Set-0 append rather than a new set — the C ABI's bind_group_layouts
+        // array is fixed at 4 entries (sets 0-3), but one set's own entry list
+        // has no such cap. Only fwd_lit_pipeline's shader references 4-6.
+        frame_bgl_entries[frame_bgl_n] = .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }; // legacy shadow texture, superset entry
+        frame_bgl_n += 1;
+        frame_bgl_entries[frame_bgl_n] = .{ .binding = 4, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
+        frame_bgl_n += 1;
+        frame_bgl_entries[frame_bgl_n] = .{ .binding = 5, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 };
+        frame_bgl_n += 1;
+        frame_bgl_entries[frame_bgl_n] = .{ .binding = 6, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 };
+        frame_bgl_n += 1;
+    }
+    if (st.ibl_enabled) {
         // IBL feature (ibl_feature.slang): same env cubemap as binding 1
         // (skybox's own copy), bound again here at the slot forward_lit.slang's
         // IndirectIBL specialization expects — the two passes stay decoupled at
         // the source level even though they share the physical resource today.
-        .{ .binding = 7, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
-        .{ .binding = 8, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
+        frame_bgl_entries[frame_bgl_n] = .{ .binding = 7, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE };
+        frame_bgl_n += 1;
+        frame_bgl_entries[frame_bgl_n] = .{ .binding = 8, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 };
+        frame_bgl_n += 1;
+    }
     const frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 9,
+        .entry_count = frame_bgl_n,
         .entries = &frame_bgl_entries,
     });
     st.frame_bgl = frame_bgl;
@@ -905,18 +952,36 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     // Material-authored path: the engine ForwardLit pass composed with the
     // built-in flat material via the IMaterial conformance. pp already carries
     // the shared vertex/bind-group-layout state; only the shader modules
-    // differ between this pipeline and its classic-forward comparison twin.
+    // differ between this pipeline and its classic-forward/no-shadow twins.
+    // shadow_enabled picks which ILightVisibility got linked in at compile
+    // time (ShadowMapVisibility vs FullyLit) — real opt-in, not a runtime branch.
+    const lit_vs_wgsl = if (st.shadow_enabled and st.ibl_enabled) mat_test_flat_vs_wgsl
+        else if (st.shadow_enabled) mat_test_flat_no_ibl_vs_wgsl
+        else if (st.ibl_enabled) mat_test_flat_no_shadow_vs_wgsl
+        else mat_test_flat_no_shadow_no_ibl_vs_wgsl;
+    const lit_fs_wgsl = if (st.shadow_enabled and st.ibl_enabled) mat_test_flat_fs_wgsl
+        else if (st.shadow_enabled) mat_test_flat_no_ibl_fs_wgsl
+        else if (st.ibl_enabled) mat_test_flat_no_shadow_fs_wgsl
+        else mat_test_flat_no_shadow_no_ibl_fs_wgsl;
+    const lit_vs_entry = if (st.shadow_enabled and st.ibl_enabled) "mat_test_flat.vs"
+        else if (st.shadow_enabled) "mat_test_flat_no_ibl.vs"
+        else if (st.ibl_enabled) "mat_test_flat_no_shadow.vs"
+        else "mat_test_flat_no_shadow_no_ibl.vs";
+    const lit_fs_entry = if (st.shadow_enabled and st.ibl_enabled) "mat_test_flat.fs"
+        else if (st.shadow_enabled) "mat_test_flat_no_ibl.fs"
+        else if (st.ibl_enabled) "mat_test_flat_no_shadow.fs"
+        else "mat_test_flat_no_shadow_no_ibl.fs";
     const lit_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(mat_test_flat_vs_wgsl),
-        .byte_size = mat_test_flat_vs_wgsl.len,
-        .entry_point = "mat_test_flat.vs",
+        .code = @ptrCast(lit_vs_wgsl),
+        .byte_size = lit_vs_wgsl.len,
+        .entry_point = lit_vs_entry,
     }, out_error);
     if (lit_vs == c.KE_GPU_INVALID_HANDLE) return false;
     defer dev.destroy_shader_module.?(dev, lit_vs);
     const lit_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(mat_test_flat_fs_wgsl),
-        .byte_size = mat_test_flat_fs_wgsl.len,
-        .entry_point = "mat_test_flat.fs",
+        .code = @ptrCast(lit_fs_wgsl),
+        .byte_size = lit_fs_wgsl.len,
+        .entry_point = lit_fs_entry,
     }, out_error);
     if (lit_fs == c.KE_GPU_INVALID_HANDLE) return false;
     defer dev.destroy_shader_module.?(dev, lit_fs);
@@ -930,28 +995,33 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
 
     // Classic-forward comparison twin: identical pipeline state, set-3 layout
     // swapped to all_lights_bgl (built in clusterSetup) and shaders swapped to
-    // the AllLights-linked variant.
-    const lit_classic_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(mat_test_flat_classic_vs_wgsl),
-        .byte_size = mat_test_flat_classic_vs_wgsl.len,
-        .entry_point = "mat_test_flat_classic.vs",
-    }, out_error);
-    if (lit_classic_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, lit_classic_vs);
-    const lit_classic_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(mat_test_flat_classic_fs_wgsl),
-        .byte_size = mat_test_flat_classic_fs_wgsl.len,
-        .entry_point = "mat_test_flat_classic.fs",
-    }, out_error);
-    if (lit_classic_fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, lit_classic_fs);
-    pp.vertex_module = lit_classic_vs;
-    pp.fragment_module = lit_classic_fs;
-    pp.bind_group_layouts[3] = st.all_lights_bgl;
-    st.fwd_lit_classic_pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (st.fwd_lit_classic_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward_lit classic pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
+    // the AllLights-linked variant. mat_test_flat_classic.slang always links
+    // ShadowMapVisibility + IndirectIBL (see the classic_lighting guard in
+    // ke_render_module_create), so this pipeline only exists when both are on —
+    // frame_bgl otherwise lacks the bindings to match it against.
+    if (st.shadow_enabled and st.ibl_enabled) {
+        const lit_classic_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+            .code = @ptrCast(mat_test_flat_classic_vs_wgsl),
+            .byte_size = mat_test_flat_classic_vs_wgsl.len,
+            .entry_point = "mat_test_flat_classic.vs",
+        }, out_error);
+        if (lit_classic_vs == c.KE_GPU_INVALID_HANDLE) return false;
+        defer dev.destroy_shader_module.?(dev, lit_classic_vs);
+        const lit_classic_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+            .code = @ptrCast(mat_test_flat_classic_fs_wgsl),
+            .byte_size = mat_test_flat_classic_fs_wgsl.len,
+            .entry_point = "mat_test_flat_classic.fs",
+        }, out_error);
+        if (lit_classic_fs == c.KE_GPU_INVALID_HANDLE) return false;
+        defer dev.destroy_shader_module.?(dev, lit_classic_fs);
+        pp.vertex_module = lit_classic_vs;
+        pp.fragment_module = lit_classic_fs;
+        pp.bind_group_layouts[3] = st.all_lights_bgl;
+        st.fwd_lit_classic_pipeline = dev.create_render_pipeline.?(dev, &pp);
+        if (st.fwd_lit_classic_pipeline == c.KE_GPU_INVALID_HANDLE) {
+            c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward_lit classic pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+            return false;
+        }
     }
 
     // Magenta placeholder — Mechanism 1 "never silent" miss fallback. Same
@@ -1007,92 +1077,97 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     if (st.fwd_obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
     // ── Shadow-depth pass: targets + pipeline + uniforms ──────────────────
-    const shadow_map_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
-        .name = "shadow_map",
-        .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, // filterable; depth in .r
-        .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
-        .width = SHADOW_RES,
-        .height = SHADOW_RES,
-        .scale_x = 1.0,
-        .scale_y = 1.0,
-        .clear_value = .{ 1.0, 1.0, 1.0, 1.0 }, // R=1 = far depth; alpha≠0 → override
-    }, null);
-    const shadow_depth_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
-        .name = "shadow_depth",
-        .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
-        .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
-        .width = SHADOW_RES,
-        .height = SHADOW_RES,
-        .scale_x = 1.0,
-        .scale_y = 1.0,
-    }, null);
-    st.shadow_view = st.core.ref.*.resource_view.?(st.core.ref, "shadow_map");
+    // Real opt-in (§9.8): when shadow_enabled is false, none of this runs —
+    // no shadow_map/shadow_depth resource, no shadow pipeline, no shadow
+    // buffers, no "render.shadow" system. st.shadow_view stays KE_GPU_INVALID_HANDLE.
+    if (st.shadow_enabled) {
+        const shadow_map_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
+            .name = "shadow_map",
+            .type = c.KE_RENDER_RESOURCE_TEXTURE,
+            .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, // filterable; depth in .r
+            .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
+            .width = SHADOW_RES,
+            .height = SHADOW_RES,
+            .scale_x = 1.0,
+            .scale_y = 1.0,
+            .clear_value = .{ 1.0, 1.0, 1.0, 1.0 }, // R=1 = far depth; alpha≠0 → override
+        }, null);
+        const shadow_depth_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
+            .name = "shadow_depth",
+            .type = c.KE_RENDER_RESOURCE_TEXTURE,
+            .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
+            .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
+            .width = SHADOW_RES,
+            .height = SHADOW_RES,
+            .scale_x = 1.0,
+            .scale_y = 1.0,
+        }, null);
+        st.shadow_view = st.core.ref.*.resource_view.?(st.core.ref, "shadow_map");
 
-    const sh_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_vs_wgsl), .byte_size = shadow_vs_wgsl.len, .entry_point = "shadow.vs" }, out_error);
-    if (sh_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, sh_vs);
-    const sh_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_fs_wgsl), .byte_size = shadow_fs_wgsl.len, .entry_point = "shadow.fs" }, out_error);
-    if (sh_fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, sh_fs);
+        const sh_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_vs_wgsl), .byte_size = shadow_vs_wgsl.len, .entry_point = "shadow.vs" }, out_error);
+        if (sh_vs == c.KE_GPU_INVALID_HANDLE) return false;
+        defer dev.destroy_shader_module.?(dev, sh_vs);
+        const sh_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_fs_wgsl), .byte_size = shadow_fs_wgsl.len, .entry_point = "shadow.fs" }, out_error);
+        if (sh_fs == c.KE_GPU_INVALID_HANDLE) return false;
+        defer dev.destroy_shader_module.?(dev, sh_fs);
 
-    const sh_lvp_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
-    const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_lvp_entry });
-    const sh_obj_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 1, .view_dimension = 0 };
-    const sh_obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_obj_entry });
+        const sh_lvp_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
+        const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_lvp_entry });
+        const sh_obj_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 1, .view_dimension = 0 };
+        const sh_obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_obj_entry });
 
-    const sh_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
-    const sh_vbl = c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = &sh_attr };
-    var shp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
-    shp.vertex_module = sh_vs;
-    shp.fragment_module = sh_fs;
-    shp.vertex_entry = "vs_main";
-    shp.fragment_entry = "fs_main";
-    shp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    shp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
-    shp.front_face = c.KE_GPU_FRONT_FACE_CCW;
-    shp.vertex_buffer_count = 1;
-    shp.vertex_buffers = &sh_vbl;
-    shp.blend_state.write_mask = 0x0F;
-    shp.depth_stencil.depth_test_enabled = 1;
-    shp.depth_stencil.depth_write_enabled = 1;
-    shp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    shp.bind_group_layouts[0] = sh_lvp_bgl;
-    shp.bind_group_layouts[1] = sh_obj_bgl;
-    shp.bind_group_layout_count = 2;
-    shp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
-    st.shadow_pipeline = dev.create_render_pipeline.?(dev, &shp);
-    if (st.shadow_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "shadow pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
+        const sh_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
+        const sh_vbl = c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = &sh_attr };
+        var shp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+        shp.vertex_module = sh_vs;
+        shp.fragment_module = sh_fs;
+        shp.vertex_entry = "vs_main";
+        shp.fragment_entry = "fs_main";
+        shp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        shp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
+        shp.front_face = c.KE_GPU_FRONT_FACE_CCW;
+        shp.vertex_buffer_count = 1;
+        shp.vertex_buffers = &sh_vbl;
+        shp.blend_state.write_mask = 0x0F;
+        shp.depth_stencil.depth_test_enabled = 1;
+        shp.depth_stencil.depth_write_enabled = 1;
+        shp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
+        shp.bind_group_layouts[0] = sh_lvp_bgl;
+        shp.bind_group_layouts[1] = sh_obj_bgl;
+        shp.bind_group_layout_count = 2;
+        shp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+        st.shadow_pipeline = dev.create_render_pipeline.?(dev, &shp);
+        if (st.shadow_pipeline == c.KE_GPU_INVALID_HANDLE) {
+            c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "shadow pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+            return false;
+        }
+
+        st.shadow_lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+        if (st.shadow_lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+        const sh_lvp_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
+        st.shadow_lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
+        if (st.shadow_lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
+
+        st.shadow_obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+        if (st.shadow_obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+        const sh_obj_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_obj_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ShadowObj), .texture_view = 0, .sampler = 0 };
+        st.shadow_obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry }, out_error);
+        if (st.shadow_obj_bg == c.KE_GPU_INVALID_HANDLE) return false;
+
+        st.shadow_writes = .{ "shadow_map", "shadow_depth" };
+        st.shadow_io = std.mem.zeroes(c.ke_render_pass_io);
+        st.shadow_io.writes = @ptrCast(&st.shadow_writes);
+        st.shadow_io.writes_count = 2;
+        st.shadow_io.cmd_slot = 1; // shadow pass → frame command slot 1 (before forward)
+        st.shadow_access = .{
+            .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
+            .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },
+            .{ .cid = st.mesh_cid, .access = c.KE_ACCESS_READ },
+            .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
+            .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ },
+            .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
+        };
     }
-
-    st.shadow_lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
-    if (st.shadow_lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const sh_lvp_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
-    st.shadow_lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
-    if (st.shadow_lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
-
-    st.shadow_obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
-    if (st.shadow_obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const sh_obj_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_obj_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ShadowObj), .texture_view = 0, .sampler = 0 };
-    st.shadow_obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry }, out_error);
-    if (st.shadow_obj_bg == c.KE_GPU_INVALID_HANDLE) return false;
-
-    st.shadow_writes = .{ "shadow_map", "shadow_depth" };
-    st.shadow_io = std.mem.zeroes(c.ke_render_pass_io);
-    st.shadow_io.writes = @ptrCast(&st.shadow_writes);
-    st.shadow_io.writes_count = 2;
-    st.shadow_io.cmd_slot = 1; // shadow pass → frame command slot 1 (before forward)
-    st.shadow_access = .{
-        .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
-        .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },
-        .{ .cid = st.mesh_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
-    };
 
     // Set 0 — per-frame uniform + env cubemap + sampler + shadow map. The bind
     // group is rebuilt (rebuildFrameBindGroup) when the bound environment changes.
@@ -1197,25 +1272,45 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.fwd_io = std.mem.zeroes(c.ke_render_pass_io);
     st.fwd_io.writes = @ptrCast(&st.fwd_writes);
     st.fwd_io.writes_count = 2;
-    st.fwd_io.reads = @ptrCast(&st.fwd_reads);
-    st.fwd_io.reads_count = 1;
+    // No "shadow_map" resource exists at all when shadow_enabled is false —
+    // declaring a read dependency on it here would reference an undeclared
+    // resource.
+    if (st.shadow_enabled) {
+        st.fwd_io.reads = @ptrCast(&st.fwd_reads);
+        st.fwd_io.reads_count = 1;
+    }
     st.fwd_io.cmd_slot = 3; // forward pass → frame command slot 3 (after cull)
 
-    st.fwd_access = .{
-        .{ .cid = st.hdr_cid, .access = c.KE_ACCESS_WRITE },
-        .{ .cid = depth_cid, .access = c.KE_ACCESS_WRITE },
-        .{ .cid = st.mesh_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.skybox_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.core.ref.*.cid.?(st.core.ref, "shadow_map"), .access = c.KE_ACCESS_READ },
-        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.point_light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.spot_light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.ambient_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.clusters_cid, .access = c.KE_ACCESS_READ }, // after the cull pass
-    };
+    var fac: u32 = 0;
+    st.fwd_access[fac] = .{ .cid = st.hdr_cid, .access = c.KE_ACCESS_WRITE };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = depth_cid, .access = c.KE_ACCESS_WRITE };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.mesh_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.light_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.skybox_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    if (st.shadow_enabled) {
+        st.fwd_access[fac] = .{ .cid = st.core.ref.*.cid.?(st.core.ref, "shadow_map"), .access = c.KE_ACCESS_READ };
+        fac += 1;
+    }
+    st.fwd_access[fac] = .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.point_light_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.spot_light_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.ambient_cid, .access = c.KE_ACCESS_READ };
+    fac += 1;
+    st.fwd_access[fac] = .{ .cid = st.clusters_cid, .access = c.KE_ACCESS_READ }; // after the cull pass
+    fac += 1;
+    st.fwd_access_count = fac;
     return true;
 }
 
@@ -1560,7 +1655,8 @@ const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
 
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
                                   default_passes: c.ke_bool, logger: ?*c.ke_logger,
-                                  cluster_params: ?*const c.ke_render_cluster_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
+                                  cluster_params: ?*const c.ke_render_cluster_params,
+                                  feature_params: ?*const c.ke_render_feature_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
     const dev = device orelse return empty;
@@ -1591,6 +1687,21 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         st.classic_lighting = false;
     }
     st.num_clusters = st.grid_x * st.grid_y * st.grid_z;
+    st.shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
+    st.ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
+    st.shadow_view = c.KE_GPU_INVALID_HANDLE;
+    if (st.classic_lighting and !(st.shadow_enabled and st.ibl_enabled)) {
+        // fwd_lit_classic_pipeline always links ShadowMapVisibility + IndirectIBL
+        // (it exists solely to isolate the clustered-vs-classic light-loop cost,
+        // not to exercise every feature combination) — it would reference
+        // bindings frame_bgl doesn't allocate when either feature is off.
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT,
+            "classic_lighting requires both shadow_enabled and enable_ibl (the classic-forward comparison pipeline has no reduced-feature variant)",
+            @src().file, @intCast(@src().line), null);
+        if (core_h.destroy) |d| d(core_h.ref);
+        gpa.destroy(st);
+        return empty;
+    }
     st.logger = logger;
     st.point_overflow_warned = false;
     st.spot_overflow_warned = false;
@@ -1645,9 +1756,11 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
-        registerSys(rt, "render.shadow", null, 0, &st.shadow_access, st.shadow_access.len, st, shadowSys);
+        if (st.shadow_enabled) {
+            registerSys(rt, "render.shadow", null, 0, &st.shadow_access, st.shadow_access.len, st, shadowSys);
+        }
         registerSys(rt, "render.cull", &st.cull_queries, 3, &st.cull_access, st.cull_access.len, st, cullSys);
-        registerSys(rt, "render.forward", null, 0, &st.fwd_access, st.fwd_access.len, st, forwardSys);
+        registerSys(rt, "render.forward", null, 0, &st.fwd_access, st.fwd_access_count, st, forwardSys);
         registerSys(rt, "render.tonemap", null, 0, &st.tonemap_access, st.tonemap_access.len, st, tonemapSys);
         registerSys(rt, "render.ui", null, 0, &st.ui_access, st.ui_access.len, st, uiSys);
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);

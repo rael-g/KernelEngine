@@ -30,6 +30,12 @@ pub fn build(b: *std.Build) void {
     const mat_test_flat_fs_wgsl = b.option([]const u8, "mat-test-flat-fs-wgsl", "generated flat-material fragment WGSL path") orelse @panic("-Dmat-test-flat-fs-wgsl required");
     const mat_test_flat_classic_vs_wgsl = b.option([]const u8, "mat-test-flat-classic-vs-wgsl", "generated classic-forward comparison vertex WGSL path")   orelse @panic("-Dmat-test-flat-classic-vs-wgsl required");
     const mat_test_flat_classic_fs_wgsl = b.option([]const u8, "mat-test-flat-classic-fs-wgsl", "generated classic-forward comparison fragment WGSL path") orelse @panic("-Dmat-test-flat-classic-fs-wgsl required");
+    const mat_test_flat_no_shadow_vs_wgsl = b.option([]const u8, "mat-test-flat-no-shadow-vs-wgsl", "generated no-shadow flat-material vertex WGSL path")   orelse @panic("-Dmat-test-flat-no-shadow-vs-wgsl required");
+    const mat_test_flat_no_shadow_fs_wgsl = b.option([]const u8, "mat-test-flat-no-shadow-fs-wgsl", "generated no-shadow flat-material fragment WGSL path") orelse @panic("-Dmat-test-flat-no-shadow-fs-wgsl required");
+    const mat_test_flat_no_ibl_vs_wgsl = b.option([]const u8, "mat-test-flat-no-ibl-vs-wgsl", "generated no-ibl flat-material vertex WGSL path")   orelse @panic("-Dmat-test-flat-no-ibl-vs-wgsl required");
+    const mat_test_flat_no_ibl_fs_wgsl = b.option([]const u8, "mat-test-flat-no-ibl-fs-wgsl", "generated no-ibl flat-material fragment WGSL path") orelse @panic("-Dmat-test-flat-no-ibl-fs-wgsl required");
+    const mat_test_flat_no_shadow_no_ibl_vs_wgsl = b.option([]const u8, "mat-test-flat-no-shadow-no-ibl-vs-wgsl", "generated no-shadow-no-ibl flat-material vertex WGSL path")   orelse @panic("-Dmat-test-flat-no-shadow-no-ibl-vs-wgsl required");
+    const mat_test_flat_no_shadow_no_ibl_fs_wgsl = b.option([]const u8, "mat-test-flat-no-shadow-no-ibl-fs-wgsl", "generated no-shadow-no-ibl flat-material fragment WGSL path") orelse @panic("-Dmat-test-flat-no-shadow-no-ibl-fs-wgsl required");
     const magenta_vs_wgsl = b.option([]const u8, "magenta-vs-wgsl", "generated magenta placeholder vertex WGSL path")   orelse @panic("-Dmagenta-vs-wgsl required");
     const magenta_fs_wgsl = b.option([]const u8, "magenta-fs-wgsl", "generated magenta placeholder fragment WGSL path") orelse @panic("-Dmagenta-fs-wgsl required");
 
@@ -67,6 +73,12 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("mat_test_flat.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_fs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_classic.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_classic_vs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_classic.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_classic_fs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_no_shadow.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_no_shadow_vs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_no_shadow.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_no_shadow_fs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_no_ibl.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_no_ibl_vs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_no_ibl.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_no_ibl_fs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_no_shadow_no_ibl.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_no_shadow_no_ibl_vs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_no_shadow_no_ibl.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_no_shadow_no_ibl_fs_wgsl } });
     mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });
     mod.addAnonymousImport("magenta.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_fs_wgsl } });
 

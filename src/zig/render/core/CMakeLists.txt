@@ -193,6 +193,109 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_no_shadow.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_no_shadow.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_no_shadow.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_no_shadow.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_no_ibl.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_ibl.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_no_ibl.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_ibl.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_no_ibl.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_ibl.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_no_ibl.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_ibl.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow_no_ibl.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow_no_ibl.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow_no_ibl.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_no_shadow_no_ibl.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
@@ -218,6 +321,12 @@ add_custom_command(
         "-Dmat-test-flat-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
         "-Dmat-test-flat-classic-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_classic.vs.wgsl"
         "-Dmat-test-flat-classic-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_classic.fs.wgsl"
+        "-Dmat-test-flat-no-shadow-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_no_shadow.vs.wgsl"
+        "-Dmat-test-flat-no-shadow-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_no_shadow.fs.wgsl"
+        "-Dmat-test-flat-no-ibl-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_no_ibl.vs.wgsl"
+        "-Dmat-test-flat-no-ibl-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_no_ibl.fs.wgsl"
+        "-Dmat-test-flat-no-shadow-no-ibl-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.vs.wgsl"
+        "-Dmat-test-flat-no-shadow-no-ibl-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.fs.wgsl"
         "-Dmagenta-vs-wgsl=${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "-Dmagenta-fs-wgsl=${SHADER_GEN_DIR}/magenta.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
@@ -239,6 +348,12 @@ add_custom_command(
         "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_classic.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_classic.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_no_shadow.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_no_shadow.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_no_ibl.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_no_ibl.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_no_shadow_no_ibl.fs.wgsl"
         "${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "${SHADER_GEN_DIR}/magenta.fs.wgsl"
         ke_common

@@ -62,7 +62,7 @@ int main(void)
     if (!rt.ref) die("runtime", err);
 
     // ── Install the render module — default_passes registers the render chain ─
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, 1, NULL, NULL, &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, 1, NULL, NULL, NULL, &err);
     if (!render.ref) die("render module", err);
 
     printf("Clearing the screen through the runtime each tick. Close to exit.\n");

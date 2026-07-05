@@ -37,6 +37,18 @@ typedef struct ke_render_cluster_params
     ke_bool  classic_lighting;
 } ke_render_cluster_params;
 
+// Which optional render features actually exist for this module instance. A
+// game with no shadows must have no shadow code, shader, or GPU resource — not
+// a disabled branch, not an unused embed. NULL (or a zeroed struct) means "use
+// the engine defaults", which today preserve prior behavior (shadows on).
+// More fields (enable_ibl, enable_bloom, ...) land here as each feature's
+// opt-in gets threaded through, following the same shape as enable_shadows.
+typedef struct ke_render_feature_params
+{
+    ke_bool enable_shadows; // 0 = no shadow pass, no shadow map, no shadow shader bindings
+    ke_bool enable_ibl;     // 0 = no IBL sampling in materials (IndirectIBL contribution); skybox rendering is unaffected
+} ke_render_feature_params;
+
 // Installs the render path into a runtime: builds the render core over the
 // shared ecs + a caller-created GPU device. No pass is imposed — when
 // default_passes is non-zero it registers the conventional chain (begin → clear
@@ -46,11 +58,13 @@ typedef struct ke_render_cluster_params
 // and must outlive the handle; ref is NULL on failure. `logger` is optional
 // (NULL is valid) — when present, the module routes its own runtime
 // diagnostics (e.g. a scene exceeding a fixed resource cap) through it instead
-// of staying silent. `cluster_params` is optional (NULL = all defaults).
+// of staying silent. `cluster_params` and `feature_params` are optional (NULL
+// = all defaults).
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_bool default_passes, struct ke_logger *logger,
-                        const ke_render_cluster_params *cluster_params, ke_error **out_error);
+                        const ke_render_cluster_params *cluster_params,
+                        const ke_render_feature_params *feature_params, ke_error **out_error);
 
 // Borrows the render core the module owns — used to upload meshes and declare
 // resources. Valid for the module's lifetime; the caller must not destroy it.

@@ -22,16 +22,19 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_render_core* _core;
     private readonly System.Numerics.Vector4 _clearColor;
     private readonly ke_render_cluster_params _clusterParams;
+    private readonly ke_render_feature_params _featureParams;
 
     /// <param name="clearColor">Background color the default passes clear to (RGBA).</param>
     /// <param name="clusterGridX">Clustered-forward screen-tile columns; 0 = engine default (32).</param>
     /// <param name="clusterGridY">Clustered-forward screen-tile rows; 0 = engine default (18).</param>
     /// <param name="clusterGridZ">Clustered-forward depth slices; 0 = engine default (24).</param>
     /// <param name="maxLightsPerCluster">Per-froxel light-index-list cap; 0 = engine default (256). Raise this for scenes denser than the default sweet spot.</param>
-    /// <param name="classicLighting">When true, materials draw through a brute-force "classic forward" light loop (every fragment iterates every light, no froxel cull) instead of clustered forward. Exists to compare the two at a given light count; not a shipping quality knob.</param>
+    /// <param name="classicLighting">When true, materials draw through a brute-force "classic forward" light loop (every fragment iterates every light, no froxel cull) instead of clustered forward. Exists to compare the two at a given light count; not a shipping quality knob. Requires <paramref name="enableShadows"/> and <paramref name="enableIbl"/>.</param>
+    /// <param name="enableShadows">When false, no shadow pass, no shadow map resource, and no shadow shader bindings exist at all — a game without shadows carries zero shadow footprint. Default true (matches prior behavior).</param>
+    /// <param name="enableIbl">When false, materials carry no IBL cubemap bindings (ambient/reflection falls back to none). Skybox rendering itself is unaffected. Default true (matches prior behavior).</param>
     public WebgpuRenderModule(System.Numerics.Vector4 clearColor = default,
         uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
-        bool classicLighting = false)
+        bool classicLighting = false, bool enableShadows = true, bool enableIbl = true)
     {
         _clearColor = clearColor == default ? new(0.10f, 0.15f, 0.30f, 1.0f) : clearColor;
         _clusterParams = new ke_render_cluster_params
@@ -41,6 +44,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             grid_z = clusterGridZ,
             max_lights_per_cluster = maxLightsPerCluster,
             classic_lighting = (byte)(classicLighting ? 1 : 0),
+        };
+        _featureParams = new ke_render_feature_params
+        {
+            enable_shadows = (byte)(enableShadows ? 1 : 0),
+            enable_ibl = (byte)(enableIbl ? 1 : 0),
         };
     }
 
@@ -69,7 +77,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw Fail("webgpu device create failed", err);
 
         var cp = _clusterParams;
-        _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, 1, lg, &cp, &err);
+        var fp = _featureParams;
+        _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, 1, lg, &cp, &fp, &err);
         if (_module.@ref == null)
             throw Fail("render module create failed", err);
 
