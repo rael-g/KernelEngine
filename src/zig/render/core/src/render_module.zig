@@ -5,6 +5,8 @@ const shadow_module = @import("shadow_module.zig");
 const ShadowModule = shadow_module.ShadowModule;
 const skybox_module = @import("skybox_module.zig");
 const SkyboxModule = skybox_module.SkyboxModule;
+const cluster_module = @import("cluster_module.zig");
+const ClusterModule = cluster_module.ClusterModule;
 
 // Compiled into the ke_render_core library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -19,9 +21,9 @@ const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) voi
 
 // Pass shaders, compiled Slang -> WGSL by CMake (one module per stage; a
 // cross-stage uniform can't be declared twice in one WGSL module). The shadow
-// pass's and skybox's own shaders are embedded in shadow_module.zig /
-// skybox_module.zig — this file no longer knows their names.
-const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
+// pass's, skybox's, and the cluster cull's own shaders are embedded in
+// shadow_module.zig / skybox_module.zig / cluster_module.zig — this file no
+// longer knows their names.
 const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
 const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
 // Material-authored forward path + magenta miss placeholder. A single shader
@@ -34,33 +36,19 @@ const mat_test_flat_fs_wgsl = @embedFile("mat_test_flat.fs.wgsl");
 const magenta_vs_wgsl = @embedFile("magenta.vs.wgsl");
 const magenta_fs_wgsl = @embedFile("magenta.fs.wgsl");
 
-// Clustered forward grid (froxels): numX×numY screen tiles × numZ depth slices.
-// Finer than the original 16x8: a coarse grid makes a single face's light set
-// jump discretely at a tile boundary (visible seam) when few, brightly colored
-// lights move independently — narrowing tiles reduces how different two
-// neighboring tiles' light sets can be. Cull compute cost stays trivial (few ms
-// even at this resolution for hundreds of lights).
 // Clustered-forward grid + per-froxel cap defaults. These are workload-tuning
 // values the caller can override via ke_render_cluster_params (0 field = keep
 // the default below) — not engine-imposed limits. A froxel holding more
 // concurrently overlapping lights than max_lights_per_cluster silently drops
 // the excess (a real correctness limit of the algorithm), so a caller running
 // a denser scene than these defaults suit should raise the field rather than
-// hit that ceiling.
+// hit that ceiling. The grid/cull machinery itself lives in cluster_module.zig
+// now; these defaults stay here because they're resolved from the caller's
+// ke_render_cluster_params before cluster_module.setup is even called.
 const DEFAULT_GRID_X: u32 = 32;
 const DEFAULT_GRID_Y: u32 = 18;
 const DEFAULT_GRID_Z: u32 = 24;
 const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
-// MAX_LIGHTS is a storage-buffer capacity ceiling, not a performance limit —
-// the brute-force cull (O(clusters × lights), no spatial acceleration) has no
-// throughput cliff of its own; it degrades linearly. The real ceiling for how
-// many lights run acceptably is discovered empirically (frame time), which is
-// the point of a stress-test scene — so this stays generous (a few tens of MB
-// of GPU memory) rather than a guessed small number.
-const MAX_LIGHTS = 1_000_000; // point (or spot) lights the storage buffers can hold, each type independently
-// Lights packed into a stack chunk and uploaded whole, bounding both stack use
-// (SpotLightGpu is 64B → 64KB here) and the number of per-frame upload records.
-const UPLOAD_CHUNK = 1024;
 
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
@@ -69,20 +57,6 @@ const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffs
 const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
-};
-
-// One point light in the storage buffer (matches cluster_cull/forward PointLight).
-const PointLightGpu = extern struct {
-    pos_radius: [4]f32, // xyz = world position, w = radius
-    color_intensity: [4]f32, // rgb = color, w = intensity
-};
-
-// One spot light in the storage buffer (cone cosines precomputed).
-const SpotLightGpu = extern struct {
-    pos_range: [4]f32, // xyz = world position, w = range
-    dir_cos_inner: [4]f32, // xyz = cone axis, w = cos(inner angle)
-    color_intensity: [4]f32, // rgb = color, w = intensity
-    cone: [4]f32, // x = cos(outer angle); yzw pad
 };
 
 // Set 0 — per-frame camera + light + skybox view. Matches forward.slang PerFrame.
@@ -98,43 +72,6 @@ const PerFrame = extern struct {
     // forward.slang (dead pipeline) compatibility, harmless either way.
     shadow_params: [4]f32, // x = shadow active (vestigial), z = directional active
     view: [16]f32, // world→view (for the fragment's cluster z slice)
-};
-
-// The clustered-lights feature's own UBO (cluster_feature.slang, set 3 binding
-// 6) — moved out of PerFrame: a scene with no dynamic-light module needs no
-// cluster grid data at all.
-const ClusterGridUniform = extern struct {
-    cluster_grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
-    cluster_viewport: [4]f32, // screen W, screen H, near, far
-};
-
-// The cull compute uniform (matches cluster_cull.slang ClusterParams).
-const ClusterParams = extern struct {
-    grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
-    counts: [4]f32, // pointCount, spotCount, 0, 0
-    proj: [4]f32, // tan(fovY/2), aspect, near, far
-    view: [16]f32, // world → view
-};
-
-// Mirrors the C# PointLightComponent { Vector3 Color, float Intensity, float Radius }
-// (registered as "point_light"). NOTE the field order is the C# struct's, not the
-// kernel ke_point_light_component header (which orders them differently).
-const PointLightComp = extern struct {
-    color: [3]f32,
-    intensity: f32,
-    radius: f32,
-};
-
-// Mirrors the C# SpotLightComponent { Vector3 Direction, Vector3 Color, float
-// Intensity, float Range, float InnerAngleDeg, float OuterAngleDeg } (registered
-// "spot_light"). Field order is the C# struct's, not the kernel header's.
-const SpotLightComp = extern struct {
-    dir: [3]f32,
-    color: [3]f32,
-    intensity: f32,
-    range: f32,
-    inner_deg: f32,
-    outer_deg: f32,
 };
 
 // Mirrors the C# AmbientLightComponent { Vector3 Color } (registered "AmbientLight").
@@ -154,14 +91,6 @@ const ModuleState = struct {
     device: *c.ke_gpu_device,
     ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
     logger: ?*c.ke_logger, // borrowed, optional — runtime diagnostics route through it when present
-
-    // Clustered-forward grid + per-froxel cap — caller-configurable workload
-    // shape (see ke_render_cluster_params), not an engine-imposed limit.
-    grid_x: u32,
-    grid_y: u32,
-    grid_z: u32,
-    num_clusters: u32,
-    max_lights_per_cluster: u32,
 
     bb_writes: [1][*c]const u8,
     io: c.ke_render_pass_io,
@@ -216,33 +145,13 @@ const ModuleState = struct {
     // (core, ndc, mesh/transform/light/frame cids) at setup.
     shadow: ShadowModule,
 
-    // Set 3 — clustered light lists (forward reads what the cull pass wrote) +
-    // the cluster-grid UBO (cluster_feature.slang's accumulate_clustered_lights
-    // hook) at binding 6.
-    light_set_bgl: c.ke_gpu_bind_group_layout,
-    fwd_light_bind_group: c.ke_gpu_bind_group,
-    cluster_grid_uniform: c.ke_gpu_buffer,
-
-    // Storage buffers shared by the cull pass (writes) and the forward (reads).
-    point_lights_sb: c.ke_gpu_buffer,
-    spot_lights_sb: c.ke_gpu_buffer,
-    point_indices_sb: c.ke_gpu_buffer,
-    point_counts_sb: c.ke_gpu_buffer,
-    spot_indices_sb: c.ke_gpu_buffer,
-    spot_counts_sb: c.ke_gpu_buffer,
-
-    // Light cull compute pass.
-    cull_pipeline: c.ke_gpu_pipeline,
-    cull_uniform: c.ke_gpu_buffer,
-    cull_bind_group: c.ke_gpu_bind_group,
-    cull_io: c.ke_render_pass_io,
-    cull_access: [6]c.ke_component_access,
-    cull_queries: [3]c.ke_query_decl, // [point_light,transform], [spot_light,transform], [camera,transform]
-    clusters_cid: c.ke_component_id, // tag: cull WRITES, forward READS (ordering)
-    // Latched once the scene's actual point/spot count exceeds MAX_LIGHTS, so
-    // the truncation warning prints exactly once instead of every frame.
-    point_overflow_warned: bool,
-    spot_overflow_warned: bool,
+    // Clustered forward + light cull — extracted into cluster_module.zig: owns
+    // the grid workload shape, the 6 storage buffers, the cull compute
+    // pipeline + its own "render.cull" runtime system, and the forward's set-3
+    // read-only bind group. forwardSys still calls into it once per frame
+    // (uploadGrid) and binds its set-3 group directly during the draw loop —
+    // the one real coupling seam left after the shadow/skybox extractions.
+    cluster: ClusterModule,
 
     // ACES tonemapping pass — reads "hdr" (Rgba16Float), writes "backbuffer".
     tonemap_pipeline: c.ke_gpu_pipeline,
@@ -320,17 +229,6 @@ fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
     return zm.lookToLh(eye, fwd, up);
 }
 
-// Logs through the module's borrowed ke_logger (a no-op when none was passed
-// to ke_render_module_create). `kind`/`total`/`cap` are formatted into a fixed
-// stack buffer since ke_log_event.message is a plain C string.
-fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: usize) void {
-    const lg = logger orelse return;
-    var buf: [192]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, "{s} light count ({d}) exceeds the storage capacity ({d}); only the first {d} are culled/shaded this run", .{ kind, total, cap, cap }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "render_core", .message = msg.ptr };
-    lg.log.?(lg, &ev);
-}
-
 // A GPU resource create call failed on a path with no out_error slot to bubble
 // through (a runtime rebuild triggered by an environment change, not the
 // initial setup path) — route the captured ke_error through the logger
@@ -342,125 +240,6 @@ fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void 
     const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
     var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_core", .message = msg.ptr };
     lg.log.?(lg, &ev);
-}
-
-// ── Light cull compute pass ───────────────────────────────────────────────────
-// Packs the scene's point + spot lights into storage buffers, then dispatches one
-// thread per cluster to bin them. The forward reads the result; the "light_clusters"
-// tag orders this pass before it.
-fn cullSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
-    const st = stateOf(user);
-    const core = st.core.ref;
-    const deg2rad: f32 = std.math.pi / 180.0;
-    // Pack point lights — view 0 = [point_light, transform], columns aligned.
-    // Batched: fill a stack chunk and upload it whole, so N lights cost ceil(N /
-    // UPLOAD_CHUNK) uploads instead of N — a per-light upload blows the render
-    // core's per-frame upload-record cap (and is slow) at a few thousand lights.
-    var pn: u32 = 0;
-    var point_total: usize = 0;
-    {
-        var chunk: [UPLOAD_CHUNK]PointLightGpu = undefined;
-        var fill: u32 = 0;
-        var segc: usize = 0;
-        const segs = c.ke_system_ctx_view(ctx, 0, &segc);
-        var s: usize = 0;
-        while (s < segc) : (s += 1) {
-            const pls: [*c]const PointLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
-            const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
-            point_total += segs[s].count;
-            var i: usize = 0;
-            while (i < segs[s].count and pn < MAX_LIGHTS) : (i += 1) {
-                const m = tcs[i].world_matrix.m;
-                chunk[fill] = PointLightGpu{
-                    .pos_radius = .{ m[12], m[13], m[14], pls[i].radius },
-                    .color_intensity = .{ pls[i].color[0], pls[i].color[1], pls[i].color[2], pls[i].intensity },
-                };
-                fill += 1;
-                pn += 1;
-                if (fill == UPLOAD_CHUNK) {
-                    core.*.upload.?(core, st.point_lights_sb, (pn - fill) * @sizeOf(PointLightGpu), &chunk, fill * @sizeOf(PointLightGpu));
-                    fill = 0;
-                }
-            }
-        }
-        if (fill > 0) core.*.upload.?(core, st.point_lights_sb, (pn - fill) * @sizeOf(PointLightGpu), &chunk, fill * @sizeOf(PointLightGpu));
-    }
-    // A scene with more lights than MAX_LIGHTS is silently truncated by the
-    // cap above (pn stops advancing) unless this fires: log once, not every
-    // frame, so nobody mistakes a capped run for the full requested count.
-    if (point_total > MAX_LIGHTS and !st.point_overflow_warned) {
-        logLightOverflow(st.logger, "point", point_total, MAX_LIGHTS);
-        st.point_overflow_warned = true;
-    }
-
-    // Pack spot lights — view 1 = [spot_light, transform]; cone cosines precomputed.
-    var sn: u32 = 0;
-    var spot_total: usize = 0;
-    {
-        var chunk: [UPLOAD_CHUNK]SpotLightGpu = undefined;
-        var fill: u32 = 0;
-        var segc: usize = 0;
-        const segs = c.ke_system_ctx_view(ctx, 1, &segc);
-        var s: usize = 0;
-        while (s < segc) : (s += 1) {
-            const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
-            const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
-            spot_total += segs[s].count;
-            var i: usize = 0;
-            while (i < segs[s].count and sn < MAX_LIGHTS) : (i += 1) {
-                const m = tcs[i].world_matrix.m;
-                chunk[fill] = SpotLightGpu{
-                    .pos_range = .{ m[12], m[13], m[14], sls[i].range },
-                    .dir_cos_inner = .{ sls[i].dir[0], sls[i].dir[1], sls[i].dir[2], std.math.cos(sls[i].inner_deg * deg2rad) },
-                    .color_intensity = .{ sls[i].color[0], sls[i].color[1], sls[i].color[2], sls[i].intensity },
-                    .cone = .{ std.math.cos(sls[i].outer_deg * deg2rad), 0.0, 0.0, 0.0 },
-                };
-                fill += 1;
-                sn += 1;
-                if (fill == UPLOAD_CHUNK) {
-                    core.*.upload.?(core, st.spot_lights_sb, (sn - fill) * @sizeOf(SpotLightGpu), &chunk, fill * @sizeOf(SpotLightGpu));
-                    fill = 0;
-                }
-            }
-        }
-        if (fill > 0) core.*.upload.?(core, st.spot_lights_sb, (sn - fill) * @sizeOf(SpotLightGpu), &chunk, fill * @sizeOf(SpotLightGpu));
-    }
-    if (spot_total > MAX_LIGHTS and !st.spot_overflow_warned) {
-        logLightOverflow(st.logger, "spot", spot_total, MAX_LIGHTS);
-        st.spot_overflow_warned = true;
-    }
-
-    // Camera → view + projection params (must match the forward's). View 2 =
-    // [camera, transform]; the first match is the active camera.
-    var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 2, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return;
-    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
-
-    const pc = core.*.begin_pass.?(core, ctx, &st.cull_io);
-    if (pc == null) return;
-
-    var bw: u32 = 0;
-    var bh: u32 = 0;
-    pc.*.backbuffer_size.?(pc, &bw, &bh);
-    const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
-
-    var params: ClusterParams = .{
-        .grid = .{ @floatFromInt(st.grid_x), @floatFromInt(st.grid_y), @floatFromInt(st.grid_z), @floatFromInt(st.max_lights_per_cluster) },
-        .counts = .{ @floatFromInt(pn), @floatFromInt(sn), 0.0, 0.0 },
-        .proj = .{ std.math.tan(cam.fov * deg2rad * 0.5), aspect, cam.near_plane, cam.far_plane },
-        .view = undefined,
-    };
-    zm.storeMat(params.view[0..], cameraView(cam_tc));
-    core.*.upload.?(core, st.cull_uniform, 0, &params, @sizeOf(ClusterParams));
-
-    const cp = pc.*.begin_compute.?(pc);
-    cp.*.set_pipeline.?(cp, st.cull_pipeline);
-    cp.*.set_bind_group.?(cp, 0, st.cull_bind_group, null, 0);
-    cp.*.dispatch.?(cp, (st.num_clusters + 63) / 64, 1, 1);
-    cp.*.end.?(cp);
-    core.*.end_pass.?(core, pc);
 }
 
 // ── Forward mesh pass ─────────────────────────────────────────────────────────
@@ -547,12 +326,10 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     // the shadow feature's bind group reuses that buffer directly — no
     // duplicate computation/upload needed here.
 
-    // Clustered-lights feature's own UBO (cluster_feature.slang, set 3 binding 6).
-    const grid_data = ClusterGridUniform{
-        .cluster_grid = .{ @floatFromInt(st.grid_x), @floatFromInt(st.grid_y), @floatFromInt(st.grid_z), @floatFromInt(st.max_lights_per_cluster) },
-        .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), cam.near_plane, cam.far_plane },
-    };
-    core.*.upload.?(core, st.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
+    // Clustered-lights feature's own UBO (cluster_feature.slang, set 3 binding
+    // 6) — the one seam where forward reaches into cluster_module.zig, since
+    // the viewport component is only known from forward's own backbuffer query.
+    cluster_module.uploadGrid(&st.cluster, bw, bh, cam.near_plane, cam.far_plane);
 
     // Directional light (first entity). Present → enable the directional term +
     // its shadow map; its ambient seeds the scene ambient. Point/spot lights are
@@ -609,7 +386,7 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     // forward_lit and magenta pipelines, so they stay bound while the per-mesh
     // pipeline switches below.
     rp.*.set_bind_group.?(rp, 0, st.fwd_frame_bind_group, null, 0); // set 0: per-frame
-    rp.*.set_bind_group.?(rp, 3, st.fwd_light_bind_group, null, 0); // set 3: lights
+    rp.*.set_bind_group.?(rp, 3, st.cluster.fwd_light_bind_group, null, 0); // set 3: lights
     i = 0;
     while (i < n) : (i += 1) {
         var vbo: c.ke_gpu_buffer = 0;
@@ -686,7 +463,8 @@ fn rebuildFrameBindGroup(st: *ModuleState) void {
     if (err != null) logGpuError(st.logger, err, "rebuild frame bind group");
 }
 
-fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) bool {
+fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, grid_x: u32, grid_y: u32, grid_z: u32,
+                 max_lights_per_cluster: u32, out_error: [*c][*c]c.ke_error) bool {
     const dev = st.device;
 
     // Clip-space convention of the active backend. The view stays left-handed
@@ -703,8 +481,8 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     st.transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
     st.camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
     st.light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
-    st.point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(PointLightComp));
-    st.spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(SpotLightComp));
+    st.point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(cluster_module.PointLightComp));
+    st.spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(cluster_module.SpotLightComp));
     st.ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(AmbientComp));
     st.skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(SkyboxComp));
     st.env_cubemap = .{ .idx = c.KE_HANDLE_NONE }; // default (black) cube until a skybox is set
@@ -775,11 +553,15 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
     // Clustered light culling: storage buffers + cull compute pipeline + the
     // forward's set-3 light bind group (the layout is needed for this pipeline).
-    if (!clusterSetup(st, e, out_error)) return false;
+    // Fully owned by cluster_module.zig now; render_module.zig only forwards
+    // the grid workload shape (resolved from ke_render_cluster_params by the
+    // caller) and the cross-cutting cids it needs.
+    if (!cluster_module.setup(&st.cluster, dev, e, st.core, st.logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
+                               st.point_light_cid, st.spot_light_cid, st.transform_cid, st.camera_cid, st.frame_cid, out_error)) return false;
     pp.bind_group_layouts[0] = frame_bgl; // set 0: per-frame (camera + light)
     pp.bind_group_layouts[1] = st.core.ref.*.material_layout.?(st.core.ref); // set 1: per-material
     pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object (transform)
-    pp.bind_group_layouts[3] = st.light_set_bgl; // set 3: clustered light lists
+    pp.bind_group_layouts[3] = st.cluster.light_set_bgl; // set 3: clustered light lists
     pp.bind_group_layout_count = 4;
     pp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
 
@@ -813,7 +595,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     // Magenta placeholder — Mechanism 1 "never silent" miss fallback. Same
     // pipeline layout (so the draw loop binds it uniformly) + vertex layout;
     // fragment outputs solid magenta.
-    pp.bind_group_layouts[3] = st.light_set_bgl;
+    pp.bind_group_layouts[3] = st.cluster.light_set_bgl;
     const mag_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
         .code = @ptrCast(magenta_vs_wgsl),
         .byte_size = magenta_vs_wgsl.len,
@@ -951,7 +733,7 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     fac += 1;
     st.fwd_access[fac] = .{ .cid = st.ambient_cid, .access = c.KE_ACCESS_READ };
     fac += 1;
-    st.fwd_access[fac] = .{ .cid = st.clusters_cid, .access = c.KE_ACCESS_READ }; // after the cull pass
+    st.fwd_access[fac] = .{ .cid = st.cluster.clusters_cid, .access = c.KE_ACCESS_READ }; // after the cull pass
     fac += 1;
     st.fwd_access_count = fac;
     return true;
@@ -1059,177 +841,6 @@ fn tonemapSetup(st: *ModuleState, out_error: [*c][*c]c.ke_error) bool {
     return true;
 }
 
-fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize, out_error: [*c][*c]c.ke_error) c.ke_gpu_buffer {
-    return dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
-        .initial_data = null,
-        .size = size,
-        .usage = c.KE_GPU_BUFFER_USAGE_STORAGE | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-}
-
-// Storage buffers + the cull compute pipeline + the forward's set-3 light bind
-// group. The cull pass writes the per-cluster index lists; the forward reads them.
-fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) bool {
-    const dev = st.device;
-
-    const point_lights_bytes = MAX_LIGHTS * @sizeOf(PointLightGpu);
-    const spot_lights_bytes = MAX_LIGHTS * @sizeOf(SpotLightGpu);
-    const indices_bytes: usize = @as(usize, st.num_clusters) * st.max_lights_per_cluster * @sizeOf(u32);
-    const counts_bytes: usize = @as(usize, st.num_clusters) * @sizeOf(u32);
-
-    // A froxel index/count buffer sized from the caller-configured grid + cap
-    // (ke_render_cluster_params) can exceed this device's binding-size limit —
-    // that is a legitimate ke_error (this device, at this workload, can't do
-    // it), not an engine-imposed ceiling; the caller decides how to react.
-    st.point_lights_sb = makeStorageBuffer(dev, point_lights_bytes, out_error);
-    if (st.point_lights_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    st.spot_lights_sb = makeStorageBuffer(dev, spot_lights_bytes, out_error);
-    if (st.spot_lights_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    st.point_indices_sb = makeStorageBuffer(dev, indices_bytes, out_error);
-    if (st.point_indices_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    st.point_counts_sb = makeStorageBuffer(dev, counts_bytes, out_error);
-    if (st.point_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    st.spot_indices_sb = makeStorageBuffer(dev, indices_bytes, out_error);
-    if (st.spot_indices_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    st.spot_counts_sb = makeStorageBuffer(dev, counts_bytes, out_error);
-    if (st.spot_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
-
-    // Set 3 — the forward's read-only view of the light + cluster buffers.
-    const ro = c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
-    const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
-    const light_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 2, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 4, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 5, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        // Clustered-lights feature's own grid UBO (cluster_feature.slang).
-        .{ .binding = 6, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    st.light_set_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 7,
-        .entries = &light_bgl_entries,
-    });
-    st.cluster_grid_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
-        .initial_data = null,
-        .size = @sizeOf(ClusterGridUniform),
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-    if (st.cluster_grid_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const light_bg_entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = ro, .buffer = st.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 2, .type = ro, .buffer = st.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 3, .type = ro, .buffer = st.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 4, .type = ro, .buffer = st.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 5, .type = ro, .buffer = st.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.cluster_grid_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterGridUniform), .texture_view = 0, .sampler = 0 },
-    };
-    st.fwd_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .layout = st.light_set_bgl,
-        .entry_count = 7,
-        .entries = &light_bg_entries,
-    }, out_error);
-    if (st.fwd_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
-
-    // Cull compute: uniform + read-only lights + read-write index/count buffers.
-    const rw = c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER;
-    const comp = c.KE_GPU_SHADER_STAGE_COMPUTE;
-    const cull_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = comp, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = comp, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 2, .visibility = comp, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 4, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 5, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 6, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    const cull_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 7,
-        .entries = &cull_bgl_entries,
-    });
-
-    st.cull_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
-        .initial_data = null,
-        .size = @sizeOf(ClusterParams),
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-    if (st.cull_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const cull_bg_entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.cull_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterParams), .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 2, .type = ro, .buffer = st.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 3, .type = rw, .buffer = st.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 4, .type = rw, .buffer = st.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 5, .type = rw, .buffer = st.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 6, .type = rw, .buffer = st.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-    };
-    st.cull_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .layout = cull_bgl,
-        .entry_count = 7,
-        .entries = &cull_bg_entries,
-    }, out_error);
-    if (st.cull_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
-
-    const cs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(cluster_cull_cs_wgsl),
-        .byte_size = cluster_cull_cs_wgsl.len,
-        .entry_point = "cluster.cs",
-    }, out_error);
-    if (cs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, cs);
-
-    const cull_layouts = [_]c.ke_gpu_bind_group_layout{ cull_bgl, 0, 0, 0 };
-    st.cull_pipeline = dev.create_compute_pipeline.?(dev, &c.ke_gpu_compute_pipeline_params{
-        .compute_module = cs,
-        .compute_entry = "cs_main",
-        .bind_group_layouts = cull_layouts,
-        .bind_group_layout_count = 1,
-    });
-    if (st.cull_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "cull pass: compute pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
-    }
-
-    // Ordering tag: the cull pass WRITES it, the forward READS it (cull → forward).
-    st.clusters_cid = e.component_register.?(e, "light_clusters", 0);
-    st.cull_io = std.mem.zeroes(c.ke_render_pass_io);
-    st.cull_io.cmd_slot = 2; // cull → frame command slot 2 (before forward)
-    // The cull WRITES light_clusters and the forward READS it (cull → forward) —
-    // the only ordering the cull needs. It may share a wave with the clear/shadow
-    // render passes: the render core accumulates this compute pass's recording into
-    // a CPU command list and replays it single-threaded at end_frame, so the unsafe
-    // compute∥render recording never actually happens concurrently.
-    st.cull_access = .{
-        .{ .cid = st.clusters_cid, .access = c.KE_ACCESS_WRITE },
-        .{ .cid = st.point_light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.spot_light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.transform_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.camera_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
-    };
-
-    // Data the cull body reads through resolved views: each light kind paired with
-    // its transform, and the camera paired with its transform. Index order here is
-    // the query_index the body passes to ke_system_ctx_view.
-    const rd = c.KE_ACCESS_READ;
-    st.cull_queries = std.mem.zeroes([3]c.ke_query_decl);
-    st.cull_queries[0].terms[0] = .{ .cid = st.point_light_cid, .access = rd };
-    st.cull_queries[0].terms[1] = .{ .cid = st.transform_cid, .access = rd };
-    st.cull_queries[0].term_count = 2;
-    st.cull_queries[1].terms[0] = .{ .cid = st.spot_light_cid, .access = rd };
-    st.cull_queries[1].terms[1] = .{ .cid = st.transform_cid, .access = rd };
-    st.cull_queries[1].term_count = 2;
-    st.cull_queries[2].terms[0] = .{ .cid = st.camera_cid, .access = rd };
-    st.cull_queries[2].terms[1] = .{ .cid = st.transform_cid, .access = rd };
-    st.cull_queries[2].term_count = 2;
-    return true;
-}
-
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
                queries: [*c]const c.ke_query_decl, query_count: u32,
                access: [*c]const c.ke_component_access, access_count: u32,
@@ -1285,24 +896,28 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     // 0 (or an absent params struct) means "use the engine default" per field —
     // a caller running a denser scene than the default sweet spot can raise
     // any of these rather than hit a hardcoded ceiling (§ no-magic-numbers).
+    // Resolved here (rather than inside cluster_module.setup) because
+    // ke_render_cluster_params is render_module.zig's own C ABI surface.
+    var grid_x: u32 = undefined;
+    var grid_y: u32 = undefined;
+    var grid_z: u32 = undefined;
+    var max_lights_per_cluster: u32 = undefined;
     if (cluster_params) |p| {
-        st.grid_x = if (p.grid_x != 0) p.grid_x else DEFAULT_GRID_X;
-        st.grid_y = if (p.grid_y != 0) p.grid_y else DEFAULT_GRID_Y;
-        st.grid_z = if (p.grid_z != 0) p.grid_z else DEFAULT_GRID_Z;
-        st.max_lights_per_cluster = if (p.max_lights_per_cluster != 0) p.max_lights_per_cluster else DEFAULT_MAX_LIGHTS_PER_CLUSTER;
+        grid_x = if (p.grid_x != 0) p.grid_x else DEFAULT_GRID_X;
+        grid_y = if (p.grid_y != 0) p.grid_y else DEFAULT_GRID_Y;
+        grid_z = if (p.grid_z != 0) p.grid_z else DEFAULT_GRID_Z;
+        max_lights_per_cluster = if (p.max_lights_per_cluster != 0) p.max_lights_per_cluster else DEFAULT_MAX_LIGHTS_PER_CLUSTER;
     } else {
-        st.grid_x = DEFAULT_GRID_X;
-        st.grid_y = DEFAULT_GRID_Y;
-        st.grid_z = DEFAULT_GRID_Z;
-        st.max_lights_per_cluster = DEFAULT_MAX_LIGHTS_PER_CLUSTER;
+        grid_x = DEFAULT_GRID_X;
+        grid_y = DEFAULT_GRID_Y;
+        grid_z = DEFAULT_GRID_Z;
+        max_lights_per_cluster = DEFAULT_MAX_LIGHTS_PER_CLUSTER;
     }
-    st.num_clusters = st.grid_x * st.grid_y * st.grid_z;
+    st.cluster = ClusterModule{};
     st.shadow = ShadowModule{};
     st.shadow.enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     st.ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
-    st.point_overflow_warned = false;
-    st.spot_overflow_warned = false;
     st.bb_writes = .{"backbuffer"};
     st.io = std.mem.zeroes(c.ke_render_pass_io);
     st.io.writes = @ptrCast(&st.bb_writes);
@@ -1329,7 +944,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     // otherwise the game wires its own passes. A failed setup (e.g. a bad shader)
     // fails loudly via out_error — it is never silently skipped.
     if (default_passes != 0) {
-        if (!forwardSetup(st, e, out_error)) {
+        if (!forwardSetup(st, e, grid_x, grid_y, grid_z, max_lights_per_cluster, out_error)) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
@@ -1357,7 +972,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         if (st.shadow.enabled) {
             registerSys(rt, "render.shadow", null, 0, &st.shadow.access, st.shadow.access.len, &st.shadow, shadow_module.system);
         }
-        registerSys(rt, "render.cull", &st.cull_queries, 3, &st.cull_access, st.cull_access.len, st, cullSys);
+        registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
         registerSys(rt, "render.forward", null, 0, &st.fwd_access, st.fwd_access_count, st, forwardSys);
         registerSys(rt, "render.tonemap", null, 0, &st.tonemap_access, st.tonemap_access.len, st, tonemapSys);
         registerSys(rt, "render.ui", null, 0, &st.ui_access, st.ui_access.len, st, uiSys);
