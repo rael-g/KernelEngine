@@ -29,12 +29,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// <param name="clusterGridY">Clustered-forward screen-tile rows; 0 = engine default (18).</param>
     /// <param name="clusterGridZ">Clustered-forward depth slices; 0 = engine default (24).</param>
     /// <param name="maxLightsPerCluster">Per-froxel light-index-list cap; 0 = engine default (256). Raise this for scenes denser than the default sweet spot.</param>
-    /// <param name="classicLighting">When true, materials draw through a brute-force "classic forward" light loop (every fragment iterates every light, no froxel cull) instead of clustered forward. Exists to compare the two at a given light count; not a shipping quality knob. Requires <paramref name="enableShadows"/> and <paramref name="enableIbl"/>.</param>
-    /// <param name="enableShadows">When false, no shadow pass, no shadow map resource, and no shadow shader bindings exist at all — a game without shadows carries zero shadow footprint. Default true (matches prior behavior).</param>
-    /// <param name="enableIbl">When false, materials carry no IBL cubemap bindings (ambient/reflection falls back to none). Skybox rendering itself is unaffected. Default true (matches prior behavior).</param>
+    /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist — a game without shadows carries zero shadow-pass footprint. Default true (matches prior behavior).</param>
+    /// <param name="enableIbl">When false, materials sample a forced-black environment regardless of any skybox (no ambient/reflection contribution). Skybox rendering itself is unaffected. Default true (matches prior behavior).</param>
     public WebgpuRenderModule(System.Numerics.Vector4 clearColor = default,
         uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
-        bool classicLighting = false, bool enableShadows = true, bool enableIbl = true)
+        bool enableShadows = true, bool enableIbl = true)
     {
         _clearColor = clearColor == default ? new(0.10f, 0.15f, 0.30f, 1.0f) : clearColor;
         _clusterParams = new ke_render_cluster_params
@@ -43,7 +42,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             grid_y = clusterGridY,
             grid_z = clusterGridZ,
             max_lights_per_cluster = maxLightsPerCluster,
-            classic_lighting = (byte)(classicLighting ? 1 : 0),
         };
         _featureParams = new ke_render_feature_params
         {

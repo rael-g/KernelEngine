@@ -32,17 +32,13 @@ const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
 const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
 const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
 const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
-// Material-authored forward path + magenta miss placeholder.
+// Material-authored forward path + magenta miss placeholder. A single shader
+// pair now covers every shadow/IBL opt-in combination — the hooks read
+// neutral-default resources (see forward_lit.slang) instead of being linked
+// in as separate generic specializations, so there is no per-combo variant
+// to embed here anymore.
 const mat_test_flat_vs_wgsl = @embedFile("mat_test_flat.vs.wgsl");
 const mat_test_flat_fs_wgsl = @embedFile("mat_test_flat.fs.wgsl");
-const mat_test_flat_classic_vs_wgsl = @embedFile("mat_test_flat_classic.vs.wgsl");
-const mat_test_flat_classic_fs_wgsl = @embedFile("mat_test_flat_classic.fs.wgsl");
-const mat_test_flat_no_shadow_vs_wgsl = @embedFile("mat_test_flat_no_shadow.vs.wgsl");
-const mat_test_flat_no_shadow_fs_wgsl = @embedFile("mat_test_flat_no_shadow.fs.wgsl");
-const mat_test_flat_no_ibl_vs_wgsl = @embedFile("mat_test_flat_no_ibl.vs.wgsl");
-const mat_test_flat_no_ibl_fs_wgsl = @embedFile("mat_test_flat_no_ibl.fs.wgsl");
-const mat_test_flat_no_shadow_no_ibl_vs_wgsl = @embedFile("mat_test_flat_no_shadow_no_ibl.vs.wgsl");
-const mat_test_flat_no_shadow_no_ibl_fs_wgsl = @embedFile("mat_test_flat_no_shadow_no_ibl.fs.wgsl");
 const magenta_vs_wgsl = @embedFile("magenta.vs.wgsl");
 const magenta_fs_wgsl = @embedFile("magenta.fs.wgsl");
 
@@ -203,22 +199,21 @@ const ModuleState = struct {
     end_access: [2]c.ke_component_access, // READ backbuffer, WRITE frame
 
     // Forward pass: forward_lit composed with the built-in flat material via
-    // the IMaterial conformance. Scene meshes draw through this.
-    // magenta_pipeline is the Mechanism-1 "never silent" miss placeholder.
+    // the IMaterial conformance. Scene meshes draw through this — a single
+    // pipeline covers every shadow/IBL combination now; the hooks read
+    // neutral-default resources (see rebuildFrameBindGroup) instead of a
+    // separately-compiled shader variant. magenta_pipeline is the Mechanism-1
+    // "never silent" miss placeholder.
     fwd_lit_pipeline: c.ke_gpu_pipeline,
-    // Classic-forward comparison twin of fwd_lit_pipeline: same material +
-    // pass, AllLights (brute-force loop) instead of ClusteredLights. Selected
-    // instead of fwd_lit_pipeline when classic_lighting is set — exists to
-    // measure clustered-forward's win at a given light count, not to ship.
-    fwd_lit_classic_pipeline: c.ke_gpu_pipeline,
-    classic_lighting: bool,
-    // Real opt-in: when false, no shadow pass, no shadow map resource, no
-    // shadow shader bindings exist — fwd_lit_pipeline links FullyLit
-    // (surface.slang's no-op ILightVisibility) instead of ShadowMapVisibility.
+    // Real opt-in: when false, no shadow pass and no shadow-map render target
+    // exist (the expensive resources) — the shader still samples visibility
+    // unconditionally, but binding 3/5 falls back to the engine's 1x1 white
+    // texture, which always returns 1.0 (unshadowed) regardless of the
+    // (unwritten) light-view-proj at binding 4.
     shadow_enabled: bool,
-    // Same idea for ambient/reflection: when false, no IBL cubemap bindings in
-    // the material shader (NoIndirect instead of IndirectIBL). Skybox
-    // rendering itself is a separate concern and stays unaffected.
+    // Same idea for ambient/reflection: when false, bindings 7-8 are forced to
+    // the engine's default black cubemap regardless of any skybox — the
+    // shader still samples it unconditionally, but the contribution is 0.
     ibl_enabled: bool,
     magenta_pipeline: c.ke_gpu_pipeline,
     fwd_obj_bind_group: c.ke_gpu_bind_group, // set 2, per-object (dynamic offset)
@@ -258,18 +253,11 @@ const ModuleState = struct {
     shadow_access: [6]c.ke_component_access,
 
     // Set 3 — clustered light lists (forward reads what the cull pass wrote) +
-    // the cluster-grid UBO (cluster_feature.slang's ILightIterator conformance)
-    // at binding 6.
+    // the cluster-grid UBO (cluster_feature.slang's accumulate_clustered_lights
+    // hook) at binding 6.
     light_set_bgl: c.ke_gpu_bind_group_layout,
     fwd_light_bind_group: c.ke_gpu_bind_group,
     cluster_grid_uniform: c.ke_gpu_buffer,
-
-    // Classic-forward comparison set 3: same point/spot storage buffers, no
-    // per-froxel index/count buffers or grid UBO — just a total-count uniform
-    // (all_lights_feature.slang's AllLights conformance).
-    all_lights_bgl: c.ke_gpu_bind_group_layout,
-    fwd_alllights_light_bind_group: c.ke_gpu_bind_group,
-    light_counts_uniform: c.ke_gpu_buffer,
 
     // Storage buffers shared by the cull pass (writes) and the forward (reads).
     point_lights_sb: c.ke_gpu_buffer,
@@ -524,16 +512,6 @@ fn cullSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void 
     const pc = core.*.begin_pass.?(core, ctx, &st.cull_io);
     if (pc == null) return;
 
-    // Classic-forward comparison mode: skip the froxel cull compute entirely
-    // (that dispatch cost is exactly what's being measured against) — just
-    // hand the fragment shader the total counts to loop over.
-    if (st.classic_lighting) {
-        const counts = [4]u32{ pn, sn, 0, 0 };
-        core.*.upload.?(core, st.light_counts_uniform, 0, &counts, 16);
-        core.*.end_pass.?(core, pc);
-        return;
-    }
-
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
@@ -747,10 +725,9 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const rp = pc.*.begin_render.?(pc);
     // Sets 0 and 3 (per-frame + lights) share the same layout across the
     // forward_lit and magenta pipelines, so they stay bound while the per-mesh
-    // pipeline switches below. Set 3's bind group depends on classic_lighting
-    // (a fixed choice for the session — see forwardSetup).
+    // pipeline switches below.
     rp.*.set_bind_group.?(rp, 0, st.fwd_frame_bind_group, null, 0); // set 0: per-frame
-    rp.*.set_bind_group.?(rp, 3, if (st.classic_lighting) st.fwd_alllights_light_bind_group else st.fwd_light_bind_group, null, 0); // set 3: lights
+    rp.*.set_bind_group.?(rp, 3, st.fwd_light_bind_group, null, 0); // set 3: lights
     i = 0;
     while (i < n) : (i += 1) {
         var vbo: c.ke_gpu_buffer = 0;
@@ -758,11 +735,10 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         var idx_count: u32 = 0;
         if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
         const offset: u32 = i * UNIFORM_STRIDE;
-        // PSO selection (§6 Mechanism 1): a mesh with no assigned material draws
+        // PSO selection (Mechanism 1): a mesh with no assigned material draws
         // magenta ("never silent"); an assigned material draws the IMaterial path.
         const has_material = meshes[i].material.idx != c.KE_HANDLE_NONE;
-        const lit_pipeline = if (st.classic_lighting) st.fwd_lit_classic_pipeline else st.fwd_lit_pipeline;
-        rp.*.set_pipeline.?(rp, if (has_material) lit_pipeline else st.magenta_pipeline);
+        rp.*.set_pipeline.?(rp, if (has_material) st.fwd_lit_pipeline else st.magenta_pipeline);
         const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
         rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
         rp.*.set_bind_group.?(rp, 2, st.fwd_obj_bind_group, &offset, 1); // set 2: per-object
@@ -786,52 +762,47 @@ fn forwardSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     core.*.end_pass.?(core, pc);
 }
 
-// Builds set 0 (per-frame uniform + env cubemap + sampler). Called at setup and
-// whenever the bound environment cubemap changes (rare — at scene load).
+// Builds set 0 (per-frame uniform + env cubemap + sampler + shadow/IBL hooks).
+// Called at setup and whenever the bound environment cubemap changes (rare —
+// at scene load). All 9 bindings are always present (one fixed pipeline
+// layout, one shader) — shadow_enabled/ibl_enabled only pick which resource
+// backs bindings 3-6/7-8: the real render target/env cube when on, or a
+// neutral default (1x1 white / black cube) that makes forward_lit.slang's
+// hooks a no-op when off. See project doctrine: neutral-default resources
+// realize opt-in composition without a shader variant per combination.
 fn rebuildFrameBindGroup(st: *ModuleState) void {
     const dev = st.device;
     const core = st.core.ref;
-    const env_view = core.*.texture_view.?(core, st.env_cubemap);
+    const env_view = core.*.texture_view.?(core, st.env_cubemap); // defaults to black cube when no skybox is set
+    const white_view = core.*.texture_view.?(core, .{ .idx = 0 }); // handle 0 = built-in 1x1 white texture
+    const black_cube_view = core.*.texture_view.?(core, .{ .idx = c.KE_HANDLE_NONE }); // always resolves to the default black cube
     const smp = core.*.sampler.?(core);
-    // Bindings 3-6 (legacy shadow texture + shadow feature) only exist when
-    // shadow_enabled — no shadow_view to bind otherwise (no shadow_map
-    // resource was ever declared). IBL stays at 7-8 either way (§9.8: opt-in
-    // features must leave zero footprint when absent, not a dummy binding).
-    var entries: [9]c.ke_gpu_bind_group_entry = undefined;
-    var n: u32 = 0;
-    entries[n] = .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.fwd_frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 };
-    n += 1;
-    entries[n] = .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 };
-    n += 1;
-    entries[n] = .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp };
-    n += 1;
-    if (st.shadow_enabled) {
-        entries[n] = .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 };
-        n += 1;
+
+    const shadow_tex_view = if (st.shadow_enabled) st.shadow_view else white_view;
+    const ibl_view = if (st.ibl_enabled) env_view else black_cube_view;
+
+    const entries = [9]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.fwd_frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 },
+        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
+        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
         // Shadow feature (shadow_feature.slang) — reuses shadow_lvp_uniform
-        // (shadowSys already uploads the identical light-view-proj each frame,
-        // before forward runs) and shadow_view; no duplicate buffer, no
-        // duplicate upload. Only forward_lit.slang's shader references 4-6.
-        entries[n] = .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
-        n += 1;
-        entries[n] = .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = st.shadow_view, .sampler = 0 };
-        n += 1;
-        entries[n] = .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp };
-        n += 1;
-    }
-    if (st.ibl_enabled) {
-        // IBL feature (ibl_feature.slang) — same env_view/smp as binding
-        // 1/2, bound again at the slot forward_lit.slang's IndirectIBL expects.
-        entries[n] = .{ .binding = 7, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 };
-        n += 1;
-        entries[n] = .{ .binding = 8, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp };
-        n += 1;
-    }
+        // (shadowSys uploads the light-view-proj each frame when shadow_enabled;
+        // otherwise the buffer stays zeroed and unread, since the white default
+        // texture always samples 1.0 regardless of the computed coordinate).
+        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = shadow_tex_view, .sampler = 0 },
+        .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = shadow_tex_view, .sampler = 0 },
+        .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
+        // IBL feature (ibl_feature.slang) — same env cube as binding 1 when on;
+        // forced to the default black cube when off, regardless of any skybox.
+        .{ .binding = 7, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = ibl_view, .sampler = 0 },
+        .{ .binding = 8, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
+    };
 
     var err: ?*c.ke_error = null;
     st.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = st.frame_bgl,
-        .entry_count = n,
+        .entry_count = 9,
         .entries = &entries,
     }, &err);
     if (err != null) logGpuError(st.logger, err, "rebuild frame bind group");
@@ -874,43 +845,28 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     });
 
     // Set 0 — per-frame uniform (vs reads sky_view_proj; fs reads camera/light) +
-    // environment cubemap + sampler (fs, for skybox + IBL). Bindings 3-6 (the
-    // legacy shadow texture + shadow_feature.slang's own resources) exist only
-    // when shadow_enabled — a game with shadows off gets no shadow GPU
-    // resource of any kind (§9.8: opt-in means absent, not disabled-and-idle).
-    var frame_bgl_entries: [9]c.ke_gpu_bind_group_layout_entry = undefined;
-    var frame_bgl_n: u32 = 0;
-    frame_bgl_entries[frame_bgl_n] = .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
-    frame_bgl_n += 1;
-    frame_bgl_entries[frame_bgl_n] = .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE };
-    frame_bgl_n += 1;
-    frame_bgl_entries[frame_bgl_n] = .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 };
-    frame_bgl_n += 1;
-    if (st.shadow_enabled) {
+    // environment cubemap + sampler (fs, for skybox + IBL) + the shadow and IBL
+    // hook resources (bindings 3-8), always present: one fixed layout, one
+    // shader, for every shadow_enabled/ibl_enabled combination.
+    // shadow_enabled/ibl_enabled gate which resource backs 3-6/7-8
+    // (rebuildFrameBindGroup) — a neutral default (1x1 white / black cube)
+    // when the feature is off, the real render target/env cube when on.
+    const frame_bgl_entries = [9]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
+        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
         // Set-0 append rather than a new set — the C ABI's bind_group_layouts
         // array is fixed at 4 entries (sets 0-3), but one set's own entry list
-        // has no such cap. Only fwd_lit_pipeline's shader references 4-6.
-        frame_bgl_entries[frame_bgl_n] = .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }; // legacy shadow texture, superset entry
-        frame_bgl_n += 1;
-        frame_bgl_entries[frame_bgl_n] = .{ .binding = 4, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
-        frame_bgl_n += 1;
-        frame_bgl_entries[frame_bgl_n] = .{ .binding = 5, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 };
-        frame_bgl_n += 1;
-        frame_bgl_entries[frame_bgl_n] = .{ .binding = 6, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 };
-        frame_bgl_n += 1;
-    }
-    if (st.ibl_enabled) {
-        // IBL feature (ibl_feature.slang): same env cubemap as binding 1
-        // (skybox's own copy), bound again here at the slot forward_lit.slang's
-        // IndirectIBL specialization expects — the two passes stay decoupled at
-        // the source level even though they share the physical resource today.
-        frame_bgl_entries[frame_bgl_n] = .{ .binding = 7, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE };
-        frame_bgl_n += 1;
-        frame_bgl_entries[frame_bgl_n] = .{ .binding = 8, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 };
-        frame_bgl_n += 1;
-    }
+        // has no such cap.
+        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 }, // legacy shadow texture, superset entry
+        .{ .binding = 4, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 5, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 6, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 7, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
+        .{ .binding = 8, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+    };
     const frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = frame_bgl_n,
+        .entry_count = 9,
         .entries = &frame_bgl_entries,
     });
     st.frame_bgl = frame_bgl;
@@ -950,38 +906,21 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     pp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
 
     // Material-authored path: the engine ForwardLit pass composed with the
-    // built-in flat material via the IMaterial conformance. pp already carries
-    // the shared vertex/bind-group-layout state; only the shader modules
-    // differ between this pipeline and its classic-forward/no-shadow twins.
-    // shadow_enabled picks which ILightVisibility got linked in at compile
-    // time (ShadowMapVisibility vs FullyLit) — real opt-in, not a runtime branch.
-    const lit_vs_wgsl = if (st.shadow_enabled and st.ibl_enabled) mat_test_flat_vs_wgsl
-        else if (st.shadow_enabled) mat_test_flat_no_ibl_vs_wgsl
-        else if (st.ibl_enabled) mat_test_flat_no_shadow_vs_wgsl
-        else mat_test_flat_no_shadow_no_ibl_vs_wgsl;
-    const lit_fs_wgsl = if (st.shadow_enabled and st.ibl_enabled) mat_test_flat_fs_wgsl
-        else if (st.shadow_enabled) mat_test_flat_no_ibl_fs_wgsl
-        else if (st.ibl_enabled) mat_test_flat_no_shadow_fs_wgsl
-        else mat_test_flat_no_shadow_no_ibl_fs_wgsl;
-    const lit_vs_entry = if (st.shadow_enabled and st.ibl_enabled) "mat_test_flat.vs"
-        else if (st.shadow_enabled) "mat_test_flat_no_ibl.vs"
-        else if (st.ibl_enabled) "mat_test_flat_no_shadow.vs"
-        else "mat_test_flat_no_shadow_no_ibl.vs";
-    const lit_fs_entry = if (st.shadow_enabled and st.ibl_enabled) "mat_test_flat.fs"
-        else if (st.shadow_enabled) "mat_test_flat_no_ibl.fs"
-        else if (st.ibl_enabled) "mat_test_flat_no_shadow.fs"
-        else "mat_test_flat_no_shadow_no_ibl.fs";
+    // built-in flat material via the IMaterial conformance. One shader pair
+    // covers every shadow_enabled/ibl_enabled combination — the hooks read
+    // neutral-default resources bound by rebuildFrameBindGroup, not a
+    // separately-compiled shader variant.
     const lit_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(lit_vs_wgsl),
-        .byte_size = lit_vs_wgsl.len,
-        .entry_point = lit_vs_entry,
+        .code = @ptrCast(mat_test_flat_vs_wgsl),
+        .byte_size = mat_test_flat_vs_wgsl.len,
+        .entry_point = "mat_test_flat.vs",
     }, out_error);
     if (lit_vs == c.KE_GPU_INVALID_HANDLE) return false;
     defer dev.destroy_shader_module.?(dev, lit_vs);
     const lit_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(lit_fs_wgsl),
-        .byte_size = lit_fs_wgsl.len,
-        .entry_point = lit_fs_entry,
+        .code = @ptrCast(mat_test_flat_fs_wgsl),
+        .byte_size = mat_test_flat_fs_wgsl.len,
+        .entry_point = "mat_test_flat.fs",
     }, out_error);
     if (lit_fs == c.KE_GPU_INVALID_HANDLE) return false;
     defer dev.destroy_shader_module.?(dev, lit_fs);
@@ -993,43 +932,10 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
         return false;
     }
 
-    // Classic-forward comparison twin: identical pipeline state, set-3 layout
-    // swapped to all_lights_bgl (built in clusterSetup) and shaders swapped to
-    // the AllLights-linked variant. mat_test_flat_classic.slang always links
-    // ShadowMapVisibility + IndirectIBL (see the classic_lighting guard in
-    // ke_render_module_create), so this pipeline only exists when both are on —
-    // frame_bgl otherwise lacks the bindings to match it against.
-    if (st.shadow_enabled and st.ibl_enabled) {
-        const lit_classic_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-            .code = @ptrCast(mat_test_flat_classic_vs_wgsl),
-            .byte_size = mat_test_flat_classic_vs_wgsl.len,
-            .entry_point = "mat_test_flat_classic.vs",
-        }, out_error);
-        if (lit_classic_vs == c.KE_GPU_INVALID_HANDLE) return false;
-        defer dev.destroy_shader_module.?(dev, lit_classic_vs);
-        const lit_classic_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-            .code = @ptrCast(mat_test_flat_classic_fs_wgsl),
-            .byte_size = mat_test_flat_classic_fs_wgsl.len,
-            .entry_point = "mat_test_flat_classic.fs",
-        }, out_error);
-        if (lit_classic_fs == c.KE_GPU_INVALID_HANDLE) return false;
-        defer dev.destroy_shader_module.?(dev, lit_classic_fs);
-        pp.vertex_module = lit_classic_vs;
-        pp.fragment_module = lit_classic_fs;
-        pp.bind_group_layouts[3] = st.all_lights_bgl;
-        st.fwd_lit_classic_pipeline = dev.create_render_pipeline.?(dev, &pp);
-        if (st.fwd_lit_classic_pipeline == c.KE_GPU_INVALID_HANDLE) {
-            c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward_lit classic pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-            return false;
-        }
-    }
-
     // Magenta placeholder — Mechanism 1 "never silent" miss fallback. Same
     // pipeline layout (so the draw loop binds it uniformly) + vertex layout;
-    // fragment outputs solid magenta. Set 3 must match whichever light bind
-    // group forwardSys keeps bound for the session (classic_lighting is a
-    // fixed choice at create time, not a per-draw switch).
-    pp.bind_group_layouts[3] = if (st.classic_lighting) st.all_lights_bgl else st.light_set_bgl;
+    // fragment outputs solid magenta.
+    pp.bind_group_layouts[3] = st.light_set_bgl;
     const mag_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
         .code = @ptrCast(magenta_vs_wgsl),
         .byte_size = magenta_vs_wgsl.len,
@@ -1076,10 +982,19 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     }, out_error);
     if (st.fwd_obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // ── Shadow-depth pass: targets + pipeline + uniforms ──────────────────
-    // Real opt-in (§9.8): when shadow_enabled is false, none of this runs —
-    // no shadow_map/shadow_depth resource, no shadow pipeline, no shadow
-    // buffers, no "render.shadow" system. st.shadow_view stays KE_GPU_INVALID_HANDLE.
+    // shadow_lvp_uniform is always allocated (tiny, 64 bytes) — it backs
+    // frame_bgl binding 4 unconditionally so the single forward shader always
+    // has a valid buffer to read, even when shadow_enabled is false (in which
+    // case it stays zeroed and unwritten: the white default texture at
+    // bindings 3/5 always samples 1.0 regardless of its contents).
+    st.shadow_lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+    if (st.shadow_lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+
+    // ── Shadow-depth pass: targets + pipeline + per-pass uniforms ─────────
+    // Real opt-in: when shadow_enabled is false, none of the expensive
+    // resources exist — no shadow_map/shadow_depth render target, no shadow
+    // pipeline, no per-draw shadow buffers, no "render.shadow" system.
+    // st.shadow_view stays KE_GPU_INVALID_HANDLE.
     if (st.shadow_enabled) {
         const shadow_map_cid = st.core.ref.*.declare.?(st.core.ref, &c.ke_render_resource_desc{
             .name = "shadow_map",
@@ -1142,8 +1057,6 @@ fn forwardSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
             return false;
         }
 
-        st.shadow_lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
-        if (st.shadow_lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
         const sh_lvp_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.shadow_lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
         st.shadow_lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
         if (st.shadow_lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
@@ -1492,37 +1405,6 @@ fn clusterSetup(st: *ModuleState, e: *c.ke_ecs, out_error: [*c][*c]c.ke_error) b
     }, out_error);
     if (st.fwd_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // Classic-forward comparison set 3 (all_lights_feature.slang's AllLights):
-    // the same point/spot storage buffers, no index/count/grid buffers, plus a
-    // total-count uniform cullSys uploads each frame instead of dispatching cull.
-    const all_lights_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 2, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    st.all_lights_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 3,
-        .entries = &all_lights_bgl_entries,
-    });
-    st.light_counts_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
-        .initial_data = null,
-        .size = 16, // uint4, std140-aligned
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-    if (st.light_counts_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const all_lights_bg_entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = ro, .buffer = st.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = ro, .buffer = st.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = st.light_counts_uniform, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 },
-    };
-    st.fwd_alllights_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .layout = st.all_lights_bgl,
-        .entry_count = 3,
-        .entries = &all_lights_bg_entries,
-    }, out_error);
-    if (st.fwd_alllights_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
-
     // Cull compute: uniform + read-only lights + read-write index/count buffers.
     const rw = c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER;
     const comp = c.KE_GPU_SHADER_STAGE_COMPUTE;
@@ -1678,30 +1560,16 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         st.grid_y = if (p.grid_y != 0) p.grid_y else DEFAULT_GRID_Y;
         st.grid_z = if (p.grid_z != 0) p.grid_z else DEFAULT_GRID_Z;
         st.max_lights_per_cluster = if (p.max_lights_per_cluster != 0) p.max_lights_per_cluster else DEFAULT_MAX_LIGHTS_PER_CLUSTER;
-        st.classic_lighting = p.classic_lighting != 0;
     } else {
         st.grid_x = DEFAULT_GRID_X;
         st.grid_y = DEFAULT_GRID_Y;
         st.grid_z = DEFAULT_GRID_Z;
         st.max_lights_per_cluster = DEFAULT_MAX_LIGHTS_PER_CLUSTER;
-        st.classic_lighting = false;
     }
     st.num_clusters = st.grid_x * st.grid_y * st.grid_z;
     st.shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     st.ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.shadow_view = c.KE_GPU_INVALID_HANDLE;
-    if (st.classic_lighting and !(st.shadow_enabled and st.ibl_enabled)) {
-        // fwd_lit_classic_pipeline always links ShadowMapVisibility + IndirectIBL
-        // (it exists solely to isolate the clustered-vs-classic light-loop cost,
-        // not to exercise every feature combination) — it would reference
-        // bindings frame_bgl doesn't allocate when either feature is off.
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT,
-            "classic_lighting requires both shadow_enabled and enable_ibl (the classic-forward comparison pipeline has no reduced-feature variant)",
-            @src().file, @intCast(@src().line), null);
-        if (core_h.destroy) |d| d(core_h.ref);
-        gpa.destroy(st);
-        return empty;
-    }
     st.logger = logger;
     st.point_overflow_warned = false;
     st.spot_overflow_warned = false;

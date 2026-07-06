@@ -7,6 +7,9 @@
 // forward.slang so the same pipeline layout / material bind group serve both.
 
 import ke;   // VertexInfo, SurfaceState, IMaterial
+import shadow_feature;   // sample_shadow_visibility — neutral default when off (white shadow map)
+import ibl_feature;      // ibl_contribution — neutral default when off (black env cube)
+import cluster_feature;  // accumulate_clustered_lights — neutral default when off (empty light lists)
 
 struct VsIn {
     float3 position : POSITION;
@@ -23,12 +26,11 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-// Set 0 — per frame. light_vp/shadow_map moved out to ShadowMapVisibility
-// (shadow_feature.slang), env/env_sampler moved out to IndirectIBL
-// (ibl_feature.slang), and cluster_grid/cluster_viewport + the point/spot
-// light lists moved out to ClusteredLights (cluster_feature.slang) — the
-// pass no longer declares any of them, keeping this file ignorant of any
-// specific ILightVisibility/IIndirect/ILightIterator conformance.
+// Set 0 — per frame. light_vp/shadow_map live in shadow_feature.slang,
+// env/env_sampler in ibl_feature.slang, and cluster_grid/cluster_viewport +
+// the point/spot light lists in cluster_feature.slang — this file declares
+// none of them directly, but always calls their plain hook functions; a
+// neutral-default resource makes each hook a no-op when its feature is off.
 // shadow_params.z (directional light active) stays — a light-existence flag,
 // orthogonal to whether it is shadowed.
 struct PerFrame {
@@ -117,7 +119,7 @@ VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     return o;
 }
 
-float4 ke_forward_fs<T : IMaterial, V : ILightVisibility, I : IIndirect, L : ILightIterator>(T material, V vis, I indirect, L lights, VsOut input) {
+float4 ke_forward_fs<T : IMaterial>(T material, VsOut input) {
     // Build the tangent->world basis and hand the material a populated surface.
     float3 ng = normalize(input.world_normal);
     float3 t  = normalize(input.world_tangent - ng * dot(ng, input.world_tangent));
@@ -150,14 +152,14 @@ float4 ke_forward_fs<T : IMaterial, V : ILightVisibility, I : IIndirect, L : ILi
     if (frame.shadow_params.z > 0.5) {
         float3 l        = -normalize(frame.light_dir.xyz);
         float3 radiance = frame.light_color.rgb * frame.light_color.w;
-        float  shadow   = vis.visibility(input.world_pos);
+        float  shadow   = sample_shadow_visibility(input.world_pos);
         lit += pbr_direct(n, v, l, albedo_c, f0, metallic, rough, radiance) * shadow;
     }
 
     float  view_z = mul(frame.view, float4(input.world_pos, 1.0)).z;
-    lit += lights.accumulate(n, v, albedo_c, f0, metallic, rough, input.world_pos, input.clip.xy, view_z);
+    lit += accumulate_clustered_lights(n, v, albedo_c, f0, metallic, rough, input.world_pos, input.clip.xy, view_z);
 
-    float3 ibl = indirect.contribution(n, v, albedo_c, metallic);
+    float3 ibl = ibl_contribution(n, v, albedo_c, metallic);
 
     float3 ambient = frame.ambient.rgb * albedo_c * (1.0 - metallic);
     float3 color   = ambient + lit + s.emissive;

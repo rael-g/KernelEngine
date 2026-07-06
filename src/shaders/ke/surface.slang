@@ -50,47 +50,12 @@ interface IMaterial {
     void fragment(inout SurfaceState s);
 }
 
-// A shading pass calls visibility() generically and never names the feature
-// that implements it. FullyLit is the no-op default (no shadow module present
-// -> zero shadow bindings compiled into the pipeline). A shadow module
-// contributes its own conformance (e.g. ShadowMapVisibility) owning its own
-// texture/sampler/matrix, linked in only when that module is composed into
-// the scene.
-interface ILightVisibility {
-    float visibility(float3 worldPos);
-}
-
-struct FullyLit : ILightVisibility {
-    float visibility(float3 worldPos) { return 1.0; }
-}
-
-// Ambient/reflection contribution. NoIndirect is the zero-binding default
-// (no environment/IBL module present). An IBL module contributes a
-// conformance owning its own environment cubemap + sampler (e.g. IndirectIBL
-// in ibl_feature.slang), linked in only when composed into the scene.
-interface IIndirect {
-    float3 contribution(float3 n, float3 v, float3 albedo, float metallic);
-}
-
-struct NoIndirect : IIndirect {
-    float3 contribution(float3 n, float3 v, float3 albedo, float metallic) { return float3(0.0, 0.0, 0.0); }
-}
-
-// Dynamic (point/spot) light accumulation. NoLights is the zero-binding
-// default (no dynamic-light module present — a scene with only a directional
-// light needs no cluster/light-list data at all). A clustered-forward module
-// contributes a conformance owning its own froxel-culled light lists (e.g.
-// ClusteredLights in cluster_feature.slang), linked in only when composed
-// into the scene.
-interface ILightIterator {
-    float3 accumulate(float3 n, float3 v, float3 albedo, float3 f0, float metallic, float rough,
-                       float3 worldPos, float2 fragXY, float viewZ);
-}
-
-struct NoLights : ILightIterator {
-    float3 accumulate(float3 n, float3 v, float3 albedo, float3 f0, float metallic, float rough,
-                       float3 worldPos, float2 fragXY, float viewZ) { return float3(0.0, 0.0, 0.0); }
-}
+// Shadow visibility, indirect/IBL contribution, and dynamic-light
+// accumulation are NOT generic hooks here — they are plain functions in
+// shadow_feature.slang / ibl_feature.slang / cluster_feature.slang, called
+// directly by forward_lit.slang. Each reads a neutral-default resource
+// (white shadow map, black env cube, empty light list) when its producing
+// feature is absent, so the hook is a no-op without needing a type to select.
 
 interface IUnlitMaterial {
     void vertex(inout VertexInfo v);

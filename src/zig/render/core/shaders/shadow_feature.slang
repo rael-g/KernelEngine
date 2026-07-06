@@ -1,16 +1,14 @@
-// Shadow feature component — an ILightVisibility conformance. forward_lit.slang
-// never imports this file and knows nothing about shadows; only a material
-// wrapper that DOES want shadow sampling (see mat_test_flat.slang) imports it
-// and specializes ke_forward_fs with ShadowMapVisibility.
+// Shadow hook — a plain function reading a neutral-default resource. forward_lit.slang
+// always calls sample_shadow_visibility(); when no shadow module produces real
+// data, shadowMap is bound to the engine's 1x1 white default texture, which
+// makes this function return 1.0 (fully lit) for every fragment — the neutral
+// element for a visibility factor. There is no generic conformance to select;
+// the hook is realized by which resource is bound, not by which type is linked.
 //
 // Resources are pinned module-scope globals in SET 0 (bindings 4-6, appended
 // after frame/env/env_sampler/shadow_map at 0-3) — the same pattern as
-// frame/env/mat/obj elsewhere in this file tree — NOT fields owned by the
-// ShadowMapVisibility struct. A generic-owned resource field lets slangc's
-// WGSL backend assign an unstable, auto-numbered binding: it silently shifts
-// whenever an unrelated unused global elsewhere in `ke.*` changes. Pinning the
-// binding here keeps it deterministic regardless of what else is compiled
-// into the specialization.
+// frame/env/mat/obj elsewhere in this file tree. Pinning the binding here
+// keeps it deterministic regardless of what else is compiled into the module.
 //
 // A dedicated set 4 was considered and rejected: the C ABI's
 // ke_gpu_render_pipeline_params.bind_group_layouts is fixed at 4 entries
@@ -28,14 +26,12 @@ struct ShadowFeatureParams {
 [[vk::binding(5, 0)]] Texture2D    shadowMap;
 [[vk::binding(6, 0)]] SamplerState shadowSampler;
 
-struct ShadowMapVisibility : ILightVisibility {
-    float visibility(float3 worldPos) {
-        float4 sc = mul(shadowParams.lightVP, float4(worldPos, 1.0));
-        float3 coord = sc.xyz / sc.w;
-        coord.x = coord.x * 0.5 + 0.5;
-        coord.y = -coord.y * 0.5 + 0.5;
-        if (any(coord < 0.0) || any(coord > 1.0)) return 1.0;
-        float closest = shadowMap.Sample(shadowSampler, coord.xy).r;
-        return (coord.z - 0.005 > closest) ? 0.3 : 1.0;
-    }
+float sample_shadow_visibility(float3 worldPos) {
+    float4 sc = mul(shadowParams.lightVP, float4(worldPos, 1.0));
+    float3 coord = sc.xyz / sc.w;
+    coord.x = coord.x * 0.5 + 0.5;
+    coord.y = -coord.y * 0.5 + 0.5;
+    if (any(coord < 0.0) || any(coord > 1.0)) return 1.0;
+    float closest = shadowMap.Sample(shadowSampler, coord.xy).r;
+    return (coord.z - 0.005 > closest) ? 0.3 : 1.0;
 }

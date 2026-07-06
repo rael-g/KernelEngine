@@ -15,7 +15,4 @@ public partial struct ke_render_cluster_params
 
     [NativeTypeName("uint32_t")]
     public uint max_lights_per_cluster;
-
-    [NativeTypeName("ke_bool")]
-    public byte classic_lighting;
 }

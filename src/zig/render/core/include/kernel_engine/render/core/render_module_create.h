@@ -30,11 +30,6 @@ typedef struct ke_render_cluster_params
     uint32_t grid_y;                  // screen-tile rows; 0 = default (18)
     uint32_t grid_z;                  // depth slices; 0 = default (24)
     uint32_t max_lights_per_cluster;   // per-froxel index-list cap; 0 = default (256)
-    // When non-zero, materials draw through a brute-force "classic forward"
-    // light loop (every fragment iterates every light) instead of the
-    // per-froxel cluster cull — no cull compute dispatch runs. Exists to
-    // compare the two at the same light count; not a shipping quality knob.
-    ke_bool  classic_lighting;
 } ke_render_cluster_params;
 
 // Which optional render features actually exist for this module instance. A

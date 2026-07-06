@@ -1,8 +1,10 @@
-// Clustered dynamic-light feature component — an ILightIterator conformance.
-// forward_lit.slang never imports this file and knows nothing about froxels
-// or clustered light lists; only a material wrapper that DOES want
-// point/spot lights (see mat_test_flat.slang) imports it and specializes
-// ke_forward_fs with ClusteredLights.
+// Clustered dynamic-light hook — a plain function reading neutral-default
+// resources. forward_lit.slang always calls accumulate_clustered_lights();
+// when no cull module populates real light lists, the point/spot count
+// buffers are bound to a tiny zeroed default, so every cluster iterates zero
+// lights and the function returns 0 — the neutral element for an additive
+// lighting term. There is no generic conformance to select; the hook is
+// realized by which resource is bound, not by which type is linked.
 //
 // Resources stay at set 3 (bindings 0-5, unchanged from before this file
 // existed) — a genuinely separate bind-group set, not appended into set 0
@@ -91,46 +93,44 @@ uint cluster_index(float2 frag_xy, float view_z) {
     return iz * numX * numY + iy * numX + ix;
 }
 
-struct ClusteredLights : ILightIterator {
-    float3 accumulate(float3 n, float3 v, float3 albedo, float3 f0, float metallic, float rough,
-                       float3 worldPos, float2 fragXY, float viewZ) {
-        uint ci        = cluster_index(fragXY, viewZ);
-        uint maxLights = (uint)cluster.cluster_grid.w;
-        float3 lit = float3(0.0, 0.0, 0.0);
+float3 accumulate_clustered_lights(float3 n, float3 v, float3 albedo, float3 f0, float metallic, float rough,
+                   float3 worldPos, float2 fragXY, float viewZ) {
+    uint ci        = cluster_index(fragXY, viewZ);
+    uint maxLights = (uint)cluster.cluster_grid.w;
+    float3 lit = float3(0.0, 0.0, 0.0);
 
-        uint pcount = point_counts[ci];
-        for (uint i = 0u; i < pcount; i++) {
-            uint   li     = point_indices[ci * maxLights + i];
-            float3 to_l   = point_lights[li].pos_radius.xyz - worldPos;
-            float  dist   = length(to_l);
-            float  radius = point_lights[li].pos_radius.w;
-            float3 l      = to_l / max(dist, 1e-4);
-            float  att    = clamp(1.0 - dist / max(radius, 1e-4), 0.0, 1.0);
-            att *= att;
-            float3 radiance = point_lights[li].color_intensity.rgb *
-                              point_lights[li].color_intensity.w * att;
-            lit += cluster_pbr_direct(n, v, l, albedo, f0, metallic, rough, radiance);
-        }
-
-        uint scount = spot_counts[ci];
-        for (uint sp = 0u; sp < scount; sp++) {
-            uint   li    = spot_indices[ci * maxLights + sp];
-            float3 to_l  = spot_lights[li].pos_range.xyz - worldPos;
-            float  dist  = length(to_l);
-            float  range = spot_lights[li].pos_range.w;
-            float3 l     = to_l / max(dist, 1e-4);
-            float  datt  = clamp(1.0 - dist / max(range, 1e-4), 0.0, 1.0);
-            datt *= datt;
-            float3 sdir     = normalize(spot_lights[li].dir_cos_inner.xyz);
-            float  cos_in   = spot_lights[li].dir_cos_inner.w;
-            float  cos_out  = spot_lights[li].cone.x;
-            float  cos_a    = dot(-l, sdir);
-            float  catt     = clamp((cos_a - cos_out) / max(cos_in - cos_out, 1e-3), 0.0, 1.0);
-            float3 radiance = spot_lights[li].color_intensity.rgb *
-                              spot_lights[li].color_intensity.w * datt * catt;
-            lit += cluster_pbr_direct(n, v, l, albedo, f0, metallic, rough, radiance);
-        }
-
-        return lit;
+    uint pcount = point_counts[ci];
+    for (uint i = 0u; i < pcount; i++) {
+        uint   li     = point_indices[ci * maxLights + i];
+        float3 to_l   = point_lights[li].pos_radius.xyz - worldPos;
+        float  dist   = length(to_l);
+        float  radius = point_lights[li].pos_radius.w;
+        float3 l      = to_l / max(dist, 1e-4);
+        float  att    = clamp(1.0 - dist / max(radius, 1e-4), 0.0, 1.0);
+        att *= att;
+        float3 radiance = point_lights[li].color_intensity.rgb *
+                          point_lights[li].color_intensity.w * att;
+        lit += cluster_pbr_direct(n, v, l, albedo, f0, metallic, rough, radiance);
     }
+
+    uint scount = spot_counts[ci];
+    for (uint sp = 0u; sp < scount; sp++) {
+        uint   li    = spot_indices[ci * maxLights + sp];
+        float3 to_l  = spot_lights[li].pos_range.xyz - worldPos;
+        float  dist  = length(to_l);
+        float  range = spot_lights[li].pos_range.w;
+        float3 l     = to_l / max(dist, 1e-4);
+        float  datt  = clamp(1.0 - dist / max(range, 1e-4), 0.0, 1.0);
+        datt *= datt;
+        float3 sdir     = normalize(spot_lights[li].dir_cos_inner.xyz);
+        float  cos_in   = spot_lights[li].dir_cos_inner.w;
+        float  cos_out  = spot_lights[li].cone.x;
+        float  cos_a    = dot(-l, sdir);
+        float  catt     = clamp((cos_a - cos_out) / max(cos_in - cos_out, 1e-3), 0.0, 1.0);
+        float3 radiance = spot_lights[li].color_intensity.rgb *
+                          spot_lights[li].color_intensity.w * datt * catt;
+        lit += cluster_pbr_direct(n, v, l, albedo, f0, metallic, rough, radiance);
+    }
+
+    return lit;
 }
