@@ -21,8 +21,12 @@ pub fn declare(self: [*c]c.ke_render_core, desc: [*c]const c.ke_render_resource_
     }
 
     const depth = rc.isDepthFormat(desc.*.format);
+    // Depth targets are sampleable too (deferred-lighting reads the G-buffer
+    // depth to reconstruct position). WGPU allows RenderAttachment|TextureBinding
+    // on Depth32Float; the pass that writes it and the later pass that samples it
+    // don't overlap, so no in-pass read/write hazard.
     const usage: c.ke_gpu_texture_usage = if (depth)
-        c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH
+        c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED
     else
         c.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED;
 

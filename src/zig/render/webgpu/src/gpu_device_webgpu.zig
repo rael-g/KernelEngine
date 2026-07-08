@@ -1025,6 +1025,15 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
                     wgpu.WGPUTextureViewDimension_2D;
                 entries[i].texture.multisampled  = 0;
             },
+            ke.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE => {
+                // A depth-format texture bound for sampling/texel-fetch. WGPU
+                // rejects a depth texture bound as filterable-float; the Depth
+                // sample type is the depth-texture-correct one (also what a
+                // future comparison-sampled shadow map uses).
+                entries[i].texture.sampleType    = wgpu.WGPUTextureSampleType_Depth;
+                entries[i].texture.viewDimension = wgpu.WGPUTextureViewDimension_2D;
+                entries[i].texture.multisampled  = 0;
+            },
             ke.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE => {
                 entries[i].storageTexture.access        = wgpu.WGPUStorageTextureAccess_WriteOnly;
                 entries[i].storageTexture.format        = wgpu.WGPUTextureFormat_RGBA8Unorm;
@@ -1062,6 +1071,7 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
                 entries[i].sampler = @ptrFromInt(src.sampler);
             },
             ke.KE_GPU_BINDING_TYPE_TEXTURE,
+            ke.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE,
             ke.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE => {
                 entries[i].textureView = @ptrFromInt(src.texture_view);
             },
