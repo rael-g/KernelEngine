@@ -65,6 +65,21 @@ ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
 // resources. Valid for the module's lifetime; the caller must not destroy it.
 KE_RENDER_CORE_API ke_render_core *ke_render_module_core(ke_render_module *module);
 
+// Queues a screen-space UI quad for this frame, drawn after tonemap so it
+// composites over the rendered scene. Coordinates are pixels (top-left
+// origin); uv selects a region of `texture` (KE_TEXTURE_NONE = built-in white,
+// so a flat-color quad just samples white*color); color is premultiplied
+// alpha RGBA. Call from any render-phase system body, before the "render.ui"
+// pass runs (the module orders it last). Silently dropped past the per-frame
+// quad/batch limits. Owned by the module, not the render core: UI overlay is
+// a rendering feature (its own pipeline, shaders, batching state) like
+// tonemap/forward/shadow, not core machinery.
+KE_RENDER_CORE_API void
+ke_render_module_ui_quad(ke_render_module *module, ke_texture_handle texture,
+                         float dst_x, float dst_y, float dst_w, float dst_h,
+                         float u0, float v0, float u1, float v1,
+                         float r, float g, float b, float a);
+
 #ifdef __cplusplus
 }
 #endif

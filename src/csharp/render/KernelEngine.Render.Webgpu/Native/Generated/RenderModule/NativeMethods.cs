@@ -10,4 +10,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_render_core", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_module_core", ExactSpelling = true)]
     public static extern ke_render_core* render_module_core(ke_render_module* module);
+
+    [DllImport("ke_render_core", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_module_ui_quad", ExactSpelling = true)]
+    public static extern void render_module_ui_quad(ke_render_module* module, ke_texture_handle texture, float dst_x, float dst_y, float dst_w, float dst_h, float u0, float v0, float u1, float v1, float r, float g, float b, float a);
 }

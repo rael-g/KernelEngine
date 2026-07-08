@@ -26,15 +26,15 @@ comptime {
 //   pass_recording.zig    — ke_render_pass_ctx + the compute-pass proxy
 //   frame_lifecycle.zig   — begin/end_frame + the deferred-upload recorder
 //   asset_upload.zig      — mesh/texture/cubemap/material upload
-//   ui_overlay.zig         — the UI quad-batch pipeline (see the NOTE in that
-//                            file — it is a rendering feature that arguably
-//                            should not be a core vtable slot at all; flagged,
-//                            not resolved, by this split)
+// The UI overlay used to live here too (a quad-batch pipeline baked into this
+// "dumb" core's vtable) — moved out to ui_module.zig on the render_module.zig
+// side, as its own opt-in pass alongside tonemap/forward/shadow, since it is a
+// rendering feature, not core machinery. ke_render_module_ui_quad is the new
+// ABI entry game code calls (see render_module.zig).
 const resource_table = @import("resource_table.zig");
 const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");
 const asset_upload = @import("asset_upload.zig");
-const ui_overlay = @import("ui_overlay.zig");
 
 pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
@@ -45,23 +45,6 @@ pub const MAX_TEXTURES = 256;
 pub const MAX_MATERIALS = 256;
 pub const MAX_UPLOADS = 4096; // deferred buffer uploads per frame
 const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024; // per-frame staging for upload data copies
-
-// UI overlay: quads accumulate here across the frame (ui_quad calls from any
-// thread before the pass runs) and are flushed as one dynamic vertex buffer by
-// the ui pass. 6 vertices per quad (two triangles, no index buffer — the count
-// per frame is small enough that indexing isn't worth the complexity).
-const MAX_UI_QUADS = 8192;
-const MAX_UI_BATCHES = 512;
-pub const UiVertex = extern struct {
-    position: [2]f32,
-    uv: [2]f32,
-    color: [4]f32,
-};
-pub const UiBatch = struct {
-    texture_idx: u32,
-    first_vertex: u32,
-    vertex_count: u32,
-};
 
 // A deferred buffer upload. wgpuQueueWriteBuffer is NOT safe to call concurrently
 // with render-pass recording on wgpu-native (it deadlocks), so `upload` records
@@ -168,25 +151,6 @@ pub const CoreState = struct {
 
     ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
 
-    // UI overlay pipeline + per-frame quad buffer. vertices accumulate through
-    // ui_quad (single-threaded — called from the ordinary system-execute path,
-    // never from a parallel wave body) and are uploaded + drawn by the ui pass.
-    ui_pipeline: c.ke_gpu_pipeline,
-    ui_bgl_frame: c.ke_gpu_bind_group_layout, // set 0: proj uniform
-    ui_bgl_tex: c.ke_gpu_bind_group_layout, // set 1: texture + sampler
-    ui_frame_uniform: c.ke_gpu_buffer,
-    ui_frame_bind_group: c.ke_gpu_bind_group,
-    ui_vbo: c.ke_gpu_buffer,
-    ui_vertices: [MAX_UI_QUADS * 6]UiVertex,
-    ui_vertex_count: u32,
-    // Consecutive same-texture quads batch into one draw call (sprite-batching —
-    // texture switches are the only thing that splits a batch). Sized generously;
-    // a caller alternating textures every quad still degrades gracefully (no
-    // crash, just more draw calls up to MAX_UI_BATCHES).
-    ui_batches: [MAX_UI_BATCHES]UiBatch,
-    ui_batch_count: u32,
-    ui_bind_group_cache: [MAX_TEXTURES]c.ke_gpu_bind_group, // lazily built, keyed by texture index; INVALID_HANDLE = unbuilt
-
     pub fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
         if (idx >= self.mesh_count) return null;
         return &self.meshes[idx];
@@ -265,6 +229,7 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
 }
 
 export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_core_handle {
+    _ = out_error; // no longer consumed directly here — UI setup (its only caller) moved to ui_module.zig
     const dev = device orelse return .{ .ref = null, .destroy = null };
     const e = ecs orelse return .{ .ref = null, .destroy = null };
 
@@ -307,17 +272,6 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .default_cubemap = .{ .idx = c.KE_HANDLE_NONE },
         .white_texture = .{ .idx = c.KE_HANDLE_NONE },
         .ndc = dev.get_ndc_convention.?(dev),
-        .ui_pipeline = c.KE_GPU_INVALID_HANDLE,
-        .ui_bgl_frame = c.KE_GPU_INVALID_HANDLE,
-        .ui_bgl_tex = c.KE_GPU_INVALID_HANDLE,
-        .ui_frame_uniform = c.KE_GPU_INVALID_HANDLE,
-        .ui_frame_bind_group = c.KE_GPU_INVALID_HANDLE,
-        .ui_vbo = c.KE_GPU_INVALID_HANDLE,
-        .ui_vertices = undefined,
-        .ui_vertex_count = 0,
-        .ui_batches = undefined,
-        .ui_batch_count = 0,
-        .ui_bind_group_cache = undefined,
     };
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
@@ -359,8 +313,6 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .texture_view = asset_upload.textureView,
         .sampler = asset_upload.samplerOf,
         .resource_view = resource_table.resourceView,
-        .ui_quad = ui_overlay.uiQuad,
-        .ui_draw = ui_overlay.uiDraw,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)
@@ -395,12 +347,6 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     st.default_cubemap = asset_upload.uploadCubemap(core, 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
     _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, null);
-
-    if (!ui_overlay.uiSetup(st, out_error)) {
-        gpa.destroy(core);
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    }
 
     return .{ .ref = core, .destroy = destroyCore };
 }

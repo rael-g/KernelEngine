@@ -116,6 +116,18 @@ export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.k
     return st.core.ref;
 }
 
+// Queues a screen-space UI quad for this frame — owned by the module (UI
+// overlay is a rendering feature: its own pipeline, shaders, and batching
+// state), not by ke_render_core. Replaces the old ke_render_core.ui_quad
+// vtable slot; see ui_module.zig for why it moved.
+export fn ke_render_module_ui_quad(module: ?*c.ke_render_module, texture: c.ke_texture_handle,
+                                   dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
+                                   uv0: f32, uv1: f32, uv2: f32, uv3: f32,
+                                   r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+    const st: *ModuleState = @alignCast(@ptrCast(module orelse return));
+    ui_module.uiQuad(&st.ui, texture, dst_x, dst_y, dst_w, dst_h, uv0, uv1, uv2, uv3, r, g, b, a);
+}
+
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
     tonemap_module.destroy(&st.tonemap);
@@ -246,7 +258,11 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         // UI overlay pass: loads (doesn't clear) the backbuffer tonemap just wrote,
         // so text/quads composite on top. cmd_slot 5 = after tonemap's slot 4.
-        ui_module.setup(&st.ui, st.core, bb_cid, 5);
+        if (!ui_module.setup(&st.ui, dev, st.core, ndc, logger, bb_cid, 5, out_error)) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
 
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);

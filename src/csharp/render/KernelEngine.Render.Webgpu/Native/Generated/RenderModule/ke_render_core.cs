@@ -62,10 +62,4 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("void (*)(struct ke_render_core *, ke_gpu_buffer, uint64_t, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ulong, ulong, void*, nuint, void> upload;
-
-    [NativeTypeName("void (*)(struct ke_render_core *, ke_texture_handle, float, float, float, float, float, float, float, float, float, float, float, float)")]
-    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_texture_handle, float, float, float, float, float, float, float, float, float, float, float, float, void> ui_quad;
-
-    [NativeTypeName("void (*)(struct ke_render_core *, ke_system_ctx *, const ke_render_pass_io *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_system_ctx*, ke_render_pass_io*, void> ui_draw;
 }
