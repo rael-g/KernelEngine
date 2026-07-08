@@ -218,7 +218,8 @@ pub fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: c.ke_render_core_ha
     shp.bind_group_layouts[0] = sh_lvp_bgl;
     shp.bind_group_layouts[1] = sh_obj_bgl;
     shp.bind_group_layout_count = 2;
-    shp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    shp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    shp.color_target_count = 1;
     sh.pipeline = dev.create_render_pipeline.?(dev, &shp);
     if (sh.pipeline == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "shadow pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);

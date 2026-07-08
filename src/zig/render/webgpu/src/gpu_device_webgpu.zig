@@ -838,15 +838,11 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
         attr_offset += ac;
     }
 
-    // Color target (one output, explicit format overrides surface default)
+    // Color targets, in SV_Target order. A count of 0 means one target (back-compat
+    // with a zero-initialized params); each slot's format 0 → swapchain surface
+    // format. The shared blend_state/write_mask applies to every target.
     const s = state(dev);
-    const color_fmt = if (pp.color_target_format != ke.KE_GPU_TEXTURE_FORMAT_INVALID)
-        toWgpuTextureFormat(pp.color_target_format)
-    else if (s.surface_format != wgpu.WGPUTextureFormat_Undefined)
-        s.surface_format
-    else
-        wgpu.WGPUTextureFormat_BGRA8Unorm;
-
+    const target_count = @min(@max(pp.color_target_count, 1), 8);
     const bs = pp.blend_state;
     const wgpu_blend = wgpu.WGPUBlendState{
         .color = .{
@@ -860,20 +856,29 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
             .operation = toWgpuBlendOp(bs.alpha_op),
         },
     };
-    const color_target = wgpu.WGPUColorTargetState{
-        .nextInChain = null,
-        .format      = color_fmt,
-        .blend       = if (bs.blend_enabled != 0) &wgpu_blend else null,
-        .writeMask   = pp.blend_state.write_mask,
-    };
+    var color_targets: [8]wgpu.WGPUColorTargetState = undefined;
+    for (0..target_count) |ti| {
+        const fmt = pp.color_target_formats[ti];
+        color_targets[ti] = .{
+            .nextInChain = null,
+            .format      = if (fmt != ke.KE_GPU_TEXTURE_FORMAT_INVALID)
+                toWgpuTextureFormat(fmt)
+            else if (s.surface_format != wgpu.WGPUTextureFormat_Undefined)
+                s.surface_format
+            else
+                wgpu.WGPUTextureFormat_BGRA8Unorm,
+            .blend       = if (bs.blend_enabled != 0) &wgpu_blend else null,
+            .writeMask   = pp.blend_state.write_mask,
+        };
+    }
     const frag_state = wgpu.WGPUFragmentState{
         .nextInChain  = null,
         .module       = @ptrFromInt(pp.fragment_module),
         .entryPoint   = .{ .data = if (pp.fragment_entry != null) pp.fragment_entry else "main", .length = wgpu.WGPU_STRLEN },
         .constantCount = 0,
         .constants    = null,
-        .targetCount  = 1,
-        .targets      = &color_target,
+        .targetCount  = target_count,
+        .targets      = &color_targets,
     };
 
     // Depth/stencil

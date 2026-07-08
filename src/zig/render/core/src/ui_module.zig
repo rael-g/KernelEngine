@@ -257,7 +257,8 @@ pub fn setup(ui: *UiModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle
     pp.depth_stencil.depth_test_enabled = 0;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    pp.color_target_format = 0; // swapchain surface format (backbuffer)
+    pp.color_target_formats[0] = 0; // swapchain surface format (backbuffer)
+    pp.color_target_count = 1;
 
     ui.pipeline = dev.create_render_pipeline.?(dev, &pp);
     if (ui.pipeline == c.KE_GPU_INVALID_HANDLE) {

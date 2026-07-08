@@ -231,7 +231,13 @@ typedef struct ke_gpu_render_pipeline_params
     ke_gpu_bind_group_layout         bind_group_layouts[4];
     uint32_t                         bind_group_layout_count;
     ke_bool                          alpha_to_coverage_enabled;
-    ke_gpu_texture_format            color_target_format;  ///< 0 → swapchain surface format
+    // Color render targets, in SV_Target order. A multi-target (MRT) pass —
+    // e.g. a deferred G-buffer encode — sets several; a single-target pass sets
+    // color_target_count = 1. A count of 0 is treated as 1 (back-compat with a
+    // zero-initialized params). Each slot's format 0 → swapchain surface format.
+    // The shared blend_state/write_mask above applies to every target.
+    ke_gpu_texture_format            color_target_formats[8];
+    uint32_t                         color_target_count;
 } ke_gpu_render_pipeline_params;
 
 // ── Compute pipeline ──────────────────────────────────────────────────────

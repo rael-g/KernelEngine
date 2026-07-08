@@ -74,7 +74,8 @@ pub fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, frame_bgl: c.ke_gpu_bind_
     skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
     skp.bind_group_layouts[0] = frame_bgl;
     skp.bind_group_layout_count = 1;
-    skp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
+    skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
+    skp.color_target_count = 1;
     sm.pipeline = dev.create_render_pipeline.?(dev, &skp);
     if (sm.pipeline == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox: render pipeline creation failed", @src().file, @intCast(@src().line), null);

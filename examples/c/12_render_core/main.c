@@ -66,7 +66,8 @@ int main(void)
                          .src_alpha = KE_GPU_BLEND_FACTOR_ONE, .dst_alpha = KE_GPU_BLEND_FACTOR_ZERO,
                          .alpha_op = KE_GPU_BLEND_OP_ADD, .write_mask = 0x0F },
         .depth_stencil = { .depth_test_enabled = 0 },
-        .color_target_format = 0, // swapchain surface format
+        .color_target_formats = { 0 }, // slot 0 = swapchain surface format
+        .color_target_count = 1,
     };
     ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
     if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", NULL);

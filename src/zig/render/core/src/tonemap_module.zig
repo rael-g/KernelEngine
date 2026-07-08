@@ -101,7 +101,8 @@ pub fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     pp.fragment_entry  = "fs_main";
     pp.bind_group_layouts[0] = bgl;
     pp.bind_group_layout_count = 1;
-    pp.color_target_format = 0; // swapchain surface format
+    pp.color_target_formats[0] = 0; // swapchain surface format
+    pp.color_target_count = 1;
     pp.blend_state.write_mask = 0x0F;
     // no depth test — fullscreen triangle pass over backbuffer
     pp.depth_stencil.depth_test_enabled = 0;

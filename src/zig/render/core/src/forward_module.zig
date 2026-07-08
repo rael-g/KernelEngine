@@ -448,7 +448,8 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object (transform)
     pp.bind_group_layouts[3] = cluster.light_set_bgl; // set 3: clustered light lists
     pp.bind_group_layout_count = 4;
-    pp.color_target_format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
+    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
+    pp.color_target_count = 1;
 
     // Material-authored path: one shader pair covers every shadow/ibl combination
     // — the hooks read neutral-default resources bound by rebuildFrameBindGroup.

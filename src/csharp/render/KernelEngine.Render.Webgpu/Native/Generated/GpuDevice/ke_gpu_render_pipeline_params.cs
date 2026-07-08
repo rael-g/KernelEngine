@@ -42,11 +42,21 @@ public unsafe partial struct ke_gpu_render_pipeline_params
     [NativeTypeName("ke_bool")]
     public byte alpha_to_coverage_enabled;
 
-    public ke_gpu_texture_format color_target_format;
+    [NativeTypeName("ke_gpu_texture_format[8]")]
+    public _color_target_formats_e__FixedBuffer color_target_formats;
+
+    [NativeTypeName("uint32_t")]
+    public uint color_target_count;
 
     [InlineArray(4)]
     public partial struct _bind_group_layouts_e__FixedBuffer
     {
         public ulong e0;
+    }
+
+    [InlineArray(8)]
+    public partial struct _color_target_formats_e__FixedBuffer
+    {
+        public ke_gpu_texture_format e0;
     }
 }
