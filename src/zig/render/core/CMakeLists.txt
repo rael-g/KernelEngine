@@ -128,11 +128,13 @@ add_custom_command(
             --output "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
             "${KE_SHADER_LIB_DIR}/ke.slang"
             "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
             "${COMPILE_SLANG}"
     VERBATIM
 )
@@ -146,11 +148,13 @@ add_custom_command(
             --output "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
             "${KE_SHADER_LIB_DIR}/ke.slang"
             "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
             "${COMPILE_SLANG}"
     VERBATIM
 )
