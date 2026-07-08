@@ -8,6 +8,8 @@ const cluster_module = @import("cluster_module.zig");
 const ClusterModule = cluster_module.ClusterModule;
 const forward_module = @import("forward_module.zig");
 const ForwardModule = forward_module.ForwardModule;
+const tonemap_module = @import("tonemap_module.zig");
+const TonemapModule = tonemap_module.TonemapModule;
 
 // Compiled into the ke_render_core library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -19,12 +21,6 @@ pub const c = cimport.c;
 const gpa = std.heap.c_allocator;
 
 const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) void;
-
-// Only the tonemap pass's shaders live here now. Each feature pass embeds its
-// own shaders in its own file: shadow_module.zig, skybox_module.zig,
-// cluster_module.zig, and forward_module.zig (the forward_lit + magenta pair).
-const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
-const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
 
 // Clustered-forward grid + per-froxel cap defaults. These are workload-tuning
 // values the caller can override via ke_render_cluster_params (0 field = keep
@@ -67,15 +63,7 @@ const ModuleState = struct {
     cluster: ClusterModule, // cluster_module.zig — light cull compute, set-3 light lists
     skybox: SkyboxModule,   // skybox_module.zig — cubemap background, drawn inside forward's pass
     forward: ForwardModule, // forward_module.zig — the opaque forward+ shading pass (consumes the above)
-
-    // ACES tonemapping pass — reads "hdr" (Rgba16Float), writes "backbuffer".
-    tonemap_pipeline: c.ke_gpu_pipeline,
-    tonemap_bgl: c.ke_gpu_bind_group_layout,
-    tonemap_bind_group: c.ke_gpu_bind_group,
-    tonemap_writes: [1][*c]const u8,
-    tonemap_reads: [1][*c]const u8,
-    tonemap_io: c.ke_render_pass_io,
-    tonemap_access: [2]c.ke_component_access,
+    tonemap: TonemapModule, // tonemap_module.zig — ACES resolve, reads "hdr", writes "backbuffer"
 
     // UI overlay — screen-space quads (Font/Label text, solid rects) composited
     // over the tonemapped scene. Loads (doesn't clear) the backbuffer; the core
@@ -110,121 +98,12 @@ fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) voi
     _ = st.core.ref.*.end_frame.?(st.core.ref, null);
 }
 
-// A GPU resource create call failed on a path with no out_error slot to bubble
-// through (a runtime rebuild triggered by an environment change, not the
-// initial setup path) — route the captured ke_error through the logger
-// instead of losing it silently.
-fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
-    const lg = logger orelse return;
-    const e = err orelse return;
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_core", .message = msg.ptr };
-    lg.log.?(lg, &ev);
-}
-
-// ── ACES tonemapping pass ─────────────────────────────────────────────────────
-// Reads the HDR buffer written by the forward pass and resolves it to the
-// swapchain via the ACES fitted curve (Narkowicz 2015).
-
-fn tonemapSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
-    const st = stateOf(user);
-    const core = st.core.ref;
-    const dev = st.device;
-
-    const pc = core.*.begin_pass.?(core, ctx, &st.tonemap_io);
-    if (pc == null) return;
-
-    // Resolve the HDR texture view for this frame and rebuild the bind group.
-    const hdr_view = pc.*.read.?(pc, "hdr");
-    const samp = core.*.sampler.?(core);
-    const entries = [2]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_view, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = samp },
-    };
-    // Destroy the previous frame's bind group before creating the new one.
-    if (st.tonemap_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, st.tonemap_bind_group);
-    var err: ?*c.ke_error = null;
-    st.tonemap_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .layout = st.tonemap_bgl,
-        .entry_count = 2,
-        .entries = &entries,
-    }, &err);
-    if (err != null) logGpuError(st.logger, err, "tonemap bind group");
-
-    const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, st.tonemap_pipeline);
-    rp.*.set_bind_group.?(rp, 0, st.tonemap_bind_group, null, 0);
-    rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle — no vertex buffer needed
-    rp.*.end.?(rp);
-    core.*.end_pass.?(core, pc);
-}
-
 // UI overlay pass — draws whatever ui_quad calls (Font/Label systems, game HUD
 // code) queued this frame. The core owns the pipeline and quad list entirely;
 // this just forwards ctx/io so ui_draw can begin/end its own pass.
 fn uiSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st = stateOf(user);
     st.core.ref.*.ui_draw.?(st.core.ref, ctx, &st.ui_io);
-}
-
-fn tonemapSetup(st: *ModuleState, out_error: [*c][*c]c.ke_error) bool {
-    const dev = st.device;
-
-    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(tonemap_vs_wgsl), .byte_size = tonemap_vs_wgsl.len, .entry_point = "tonemap.vs" }, out_error);
-    defer dev.destroy_shader_module.?(dev, vs);
-    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(tonemap_fs_wgsl), .byte_size = tonemap_fs_wgsl.len, .entry_point = "tonemap.fs" }, out_error);
-    defer dev.destroy_shader_module.?(dev, fs);
-
-    // Set 0: { texture2D t_hdr @binding(0), sampler s_hdr @binding(1) }
-    const bgl_entries = [2]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_2D },
-        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    const bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 2,
-        .entries = &bgl_entries,
-    });
-
-    st.tonemap_bgl = bgl; // kept alive for per-frame bind group creation in tonemapSys
-    var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
-    pp.vertex_module   = vs;
-    pp.vertex_entry    = "vs_main";
-    pp.fragment_module = fs;
-    pp.fragment_entry  = "fs_main";
-    pp.bind_group_layouts[0] = bgl;
-    pp.bind_group_layout_count = 1;
-    pp.color_target_format = 0; // swapchain surface format
-    pp.blend_state.write_mask = 0x0F;
-    // no depth test — fullscreen triangle pass over backbuffer
-    pp.depth_stencil.depth_test_enabled = 0;
-    pp.depth_stencil.depth_write_enabled = 0;
-    pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    st.tonemap_pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (st.tonemap_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        dev.destroy_bind_group_layout.?(dev, bgl);
-        return false;
-    }
-
-    st.tonemap_bind_group = c.KE_GPU_INVALID_HANDLE;
-
-    st.tonemap_writes = .{"backbuffer"};
-    st.tonemap_reads  = .{"hdr"};
-    st.tonemap_io = std.mem.zeroes(c.ke_render_pass_io);
-    st.tonemap_io.writes = @ptrCast(&st.tonemap_writes);
-    st.tonemap_io.writes_count = 1;
-    st.tonemap_io.reads = @ptrCast(&st.tonemap_reads);
-    st.tonemap_io.reads_count = 1;
-    st.tonemap_io.cmd_slot = 4; // after forward (slot 3)
-
-    // "hdr" is declared by forward_module.setup (which runs first); resolve it
-    // by name here rather than threading a cid across the module boundary.
-    st.tonemap_access = .{
-        .{ .cid = st.core.ref.*.cid.?(st.core.ref, "hdr"), .access = c.KE_ACCESS_READ },
-        .{ .cid = st.core.ref.*.cid.?(st.core.ref, "backbuffer"), .access = c.KE_ACCESS_WRITE },
-    };
-    return true;
 }
 
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
@@ -251,11 +130,7 @@ export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.k
 
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
-    const dev = st.device;
-    if (st.tonemap_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, st.tonemap_bind_group);
-    if (st.tonemap_bgl != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group_layout.?(dev, st.tonemap_bgl);
+    tonemap_module.destroy(&st.tonemap);
     if (st.core.destroy) |d| d(st.core.ref);
     gpa.destroy(st);
 }
@@ -303,6 +178,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.cluster = ClusterModule{};
     st.skybox = SkyboxModule{};
     st.forward = ForwardModule{};
+    st.tonemap = TonemapModule{};
     st.shadow.enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
@@ -373,7 +249,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        if (!tonemapSetup(st, out_error)) {
+        if (!tonemap_module.setup(&st.tonemap, dev, st.core, logger, out_error)) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
@@ -398,7 +274,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         }
         registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
         registerSys(rt, "render.forward", null, 0, &st.forward.fwd_access, st.forward.fwd_access_count, &st.forward, forward_module.system);
-        registerSys(rt, "render.tonemap", null, 0, &st.tonemap_access, st.tonemap_access.len, st, tonemapSys);
+        registerSys(rt, "render.tonemap", null, 0, &st.tonemap.access, st.tonemap.access.len, &st.tonemap, tonemap_module.system);
         registerSys(rt, "render.ui", null, 0, &st.ui_access, st.ui_access.len, st, uiSys);
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
