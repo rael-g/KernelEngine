@@ -10,6 +10,8 @@ const forward_module = @import("forward_module.zig");
 const ForwardModule = forward_module.ForwardModule;
 const tonemap_module = @import("tonemap_module.zig");
 const TonemapModule = tonemap_module.TonemapModule;
+const ui_module = @import("ui_module.zig");
+const UiModule = ui_module.UiModule;
 
 // Compiled into the ke_render_core library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -64,13 +66,7 @@ const ModuleState = struct {
     skybox: SkyboxModule,   // skybox_module.zig — cubemap background, drawn inside forward's pass
     forward: ForwardModule, // forward_module.zig — the opaque forward+ shading pass (consumes the above)
     tonemap: TonemapModule, // tonemap_module.zig — ACES resolve, reads "hdr", writes "backbuffer"
-
-    // UI overlay — screen-space quads (Font/Label text, solid rects) composited
-    // over the tonemapped scene. Loads (doesn't clear) the backbuffer; the core
-    // owns the pipeline + per-frame quad list (ke_render_core.ui_quad/ui_draw).
-    ui_writes: [1][*c]const u8,
-    ui_io: c.ke_render_pass_io,
-    ui_access: [1]c.ke_component_access,
+    ui: UiModule,           // ui_module.zig — overlay, loads (doesn't clear) "backbuffer"
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
@@ -96,14 +92,6 @@ fn clearSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void
 fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st = stateOf(user);
     _ = st.core.ref.*.end_frame.?(st.core.ref, null);
-}
-
-// UI overlay pass — draws whatever ui_quad calls (Font/Label systems, game HUD
-// code) queued this frame. The core owns the pipeline and quad list entirely;
-// this just forwards ctx/io so ui_draw can begin/end its own pass.
-fn uiSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
-    const st = stateOf(user);
-    st.core.ref.*.ui_draw.?(st.core.ref, ctx, &st.ui_io);
 }
 
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
@@ -179,6 +167,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.skybox = SkyboxModule{};
     st.forward = ForwardModule{};
     st.tonemap = TonemapModule{};
+    st.ui = UiModule{};
     st.shadow.enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
@@ -257,15 +246,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         // UI overlay pass: loads (doesn't clear) the backbuffer tonemap just wrote,
         // so text/quads composite on top. cmd_slot 5 = after tonemap's slot 4.
-        st.ui_writes = .{"backbuffer"};
-        st.ui_io = std.mem.zeroes(c.ke_render_pass_io);
-        st.ui_io.writes = @ptrCast(&st.ui_writes);
-        st.ui_io.writes_count = 1;
-        st.ui_io.cmd_slot = 5;
-        st.ui_io.load = 1;
-        st.ui_access = .{
-            .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
-        };
+        ui_module.setup(&st.ui, st.core, bb_cid, 5);
 
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
@@ -275,7 +256,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
         registerSys(rt, "render.forward", null, 0, &st.forward.fwd_access, st.forward.fwd_access_count, &st.forward, forward_module.system);
         registerSys(rt, "render.tonemap", null, 0, &st.tonemap.access, st.tonemap.access.len, &st.tonemap, tonemap_module.system);
-        registerSys(rt, "render.ui", null, 0, &st.ui_access, st.ui_access.len, st, uiSys);
+        registerSys(rt, "render.ui", null, 0, &st.ui.access, st.ui.access.len, &st.ui, ui_module.system);
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
 
