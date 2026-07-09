@@ -7,43 +7,44 @@ const ShadowModule = shadow_module.ShadowModule;
 const cluster_module = @import("cluster_module.zig");
 const ClusterModule = cluster_module.ClusterModule;
 
-// Forward+ mesh pass — shades a surface inline, in one pass, so it can express
-// N-layer blending. That makes it the path for transparency, which a G-buffer
-// cannot represent (it stores one surface per pixel).
+// Transparent-forward pass — the other half of the deferred+forward hybrid
+// (§8.14/§8.15). Only BLEND materials reach it (gbuffer_module skips them; a
+// G-buffer holds one surface per pixel, so N-layer order-dependent blending
+// cannot be represented there). Depth-tests LEQUAL against the G-buffer's
+// "depth" without writing it, and blends into "hdr" after skybox.
 //
-// It is the *consumer*: shadow and cluster (light cull) are their own modules
-// set up before this one; forward borrows their handles (the shadow map + lvp
-// uniform into set 0, the clustered light lists into set 3) rather than owning
-// or wiring them. That is the honest coupling of a forward shading pass — it
-// reads every feature's output to compute the final lit pixel — expressed as
-// borrowed pointers, not a parent module reaching across a shared state blob.
+// Shares set 0 (frame + shadow/ibl gap-filling) and set 3 (cluster light
+// lists) with deferred_lighting_module — same shading library, same hooks.
+// Adds one more: refraction_feature reads "hdr_opaque", a same-frame snapshot
+// of "hdr" taken (via a raw encoder copy, before this pass's own render pass
+// opens) so a refracting fragment can sample what's already been shaded
+// behind it without a read/write hazard against the target it also writes.
 //
-// No scene declares a transparent material yet, so render_module.zig does not
-// register this pass; opaque geometry shades through the G-buffer instead.
+// Owns its own material (set 1, per-mesh) + object (set 2, per-draw) binding,
+// mirroring gbuffer_module — this pass draws real geometry, not a fullscreen
+// triangle like deferred_lighting/skybox/tonemap.
 
-const mat_test_flat_vs_wgsl = @embedFile("mat_test_flat.vs.wgsl");
-const mat_test_flat_fs_wgsl = @embedFile("mat_test_flat.fs.wgsl");
-const magenta_vs_wgsl = @embedFile("magenta.vs.wgsl");
-const magenta_fs_wgsl = @embedFile("magenta.fs.wgsl");
+const vs_wgsl = @embedFile("mat_test_flat_transparent.vs.wgsl");
+const fs_wgsl = @embedFile("mat_test_flat_transparent.fs.wgsl");
 
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
-// Set 2 — per-object transform. Matches forward.slang PerObject.
+// Set 2 — per-object transform. Matches forward_common.slang's PerObject.
 const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
 };
 
-// Set 0 — per-frame camera + light + skybox view. Matches forward.slang PerFrame.
+// Matches transparent_forward.slang's PerFrame.
 const PerFrame = extern struct {
     camera_pos: [4]f32,
     light_dir: [4]f32,
-    light_color: [4]f32, // rgb, w = intensity
+    light_color: [4]f32,
     ambient: [4]f32,
-    sky_view_proj: [16]f32, // rotation-only view*proj for the skybox
-    shadow_params: [4]f32, // x = shadow active (vestigial), z = directional active
-    view: [16]f32, // world→view (for the fragment's cluster z slice)
+    shadow_params: [4]f32, // z = directional active
+    viewport: [4]f32, // x=w, y=h
+    view: [16]f32,
 };
 
 // Mirrors ke_directional_light_component (10 floats, see render/components.h).
@@ -55,61 +56,72 @@ const DirLight = extern struct {
 };
 
 // Mirrors the C# AmbientLightComponent { Vector3 Color } (registered "AmbientLight").
-// Exported: the aggregator registers the component (its cid feeds forward's own
-// access list), so it needs this struct's size at registration.
+// Exported: the aggregator registers the component (its cid feeds this pass's
+// own access list), so it needs this struct's size at registration.
 pub const AmbientComp = extern struct { color: [3]f32 };
-
-// Mirrors the framework SkyboxComponent (registered under "Skybox"): a cubemap handle.
+// Mirrors the framework SkyboxComponent (registered "Skybox"): a cubemap handle.
 pub const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
+
+// One transparent draw, collected while iterating the mesh query, then sorted
+// back-to-front before recording. ke_ecs has no ordered iteration (query_resolve
+// returns archetype segments in storage order), so the pass builds and sorts
+// its own list rather than relying on iteration order.
+const Draw = struct {
+    mesh: *const c.ke_mesh_component,
+    transform: *const c.ke_transform_component,
+    view_depth: f32,
+};
+
+fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
+    return a.view_depth > b.view_depth; // back-to-front: farthest drawn first
+}
 
 pub const ForwardModule = struct {
     core: c.ke_render_core_handle = undefined,
     device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined, // backend clip-space convention
+    ndc: c.ke_ndc_convention = undefined,
     logger: ?*c.ke_logger = null,
 
     // When false, bindings 7-8 are forced to the engine's default black cubemap
     // regardless of any skybox — the shader still samples it, but IBL is 0.
     ibl_enabled: bool = true,
 
-    // Cross-cutting cids, captured at setup (registered once by the aggregator).
     mesh_cid: c.ke_component_id = undefined,
     transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
     light_cid: c.ke_component_id = undefined,
-    point_light_cid: c.ke_component_id = undefined,
-    spot_light_cid: c.ke_component_id = undefined,
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
-    frame_cid: c.ke_component_id = undefined,
 
-    // Borrowed feature modules whose outputs forward consumes (set up first).
+    // Borrowed feature modules whose outputs this pass consumes (set up first).
     shadow: *ShadowModule = undefined,
     cluster: *ClusterModule = undefined,
 
-    fwd_lit_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
-    magenta_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE, // Mechanism-1 "never silent" miss placeholder
-    fwd_obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 2, per-object (dynamic offset)
-    fwd_obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    fwd_frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, per-frame
-    fwd_frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0 layout (rebuild bind group on env change)
-    env_cubemap: c.ke_texture_handle = .{ .idx = c.KE_HANDLE_NONE }, // currently bound env (default until a skybox is set)
+    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
+    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, rebuilt on env change
+    frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
+    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 2
+    obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
+    env_cubemap: c.ke_texture_handle = .{ .idx = c.KE_HANDLE_NONE },
 
-    fwd_writes: [2][*c]const u8 = undefined,
-    fwd_reads: [1][*c]const u8 = undefined,
-    fwd_io: c.ke_render_pass_io = undefined,
-    fwd_access: [13]c.ke_component_access = undefined,
-    fwd_access_count: u32 = 0, // < 13 when shadow.enabled is false (no shadow_map READ dependency)
+    draws: [MAX_DRAWS]Draw = undefined,
+
+    writes: [2][*c]const u8 = undefined, // hdr (blend), depth (LEQUAL test, no write)
+    reads: [1][*c]const u8 = undefined, // shadow_map (conditional)
+    io: c.ke_render_pass_io = undefined,
+    // WRITE hdr, hdr_opaque (2) + READ depth, mesh, transform, camera, light,
+    // ambient, skybox, frame_cid, cluster.clusters_cid (9) + 1 conditional
+    // (shadow_map) = 12 max.
+    access: [12]c.ke_component_access = undefined,
+    access_count: u32 = 0,
     // Resolved single-threaded by the runtime before the wave dispatches; the
     // body then reads plain memory via ke_system_ctx_view and touches the ECS
     // not at all.
     queries: [5]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient], [mesh,transform]
 };
 
-// ── Projection helpers (consume the backend NDC convention) ──────────────────
-// The view is always built left-handed (the engine owns the world convention).
-// The projection absorbs the backend's clip-space quirks (z range + Y flip).
 fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
     var p = if (ndc.z_zero_to_one != 0)
         zm.perspectiveFovLh(fovy, aspect, near, far)
@@ -119,8 +131,6 @@ fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, 
     return p;
 }
 
-// Left-handed view from a camera transform (identity rotation → look at origin;
-// otherwise the world-matrix basis, looking down local −Z).
 fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
     const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
     const q = cam_tc.rotation;
@@ -145,48 +155,41 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-// Builds set 0 (per-frame uniform + env cubemap + sampler + shadow/IBL hooks).
-// Called at setup and whenever the bound environment cubemap changes (rare —
-// at scene load). All 9 bindings are always present (one fixed pipeline
-// layout, one shader); shadow.enabled/ibl_enabled only pick which resource
-// backs bindings 3-6/7-8: the real render target/env cube when on, or a
-// neutral default (1x1 white / black cube) that makes forward_lit.slang's
-// hooks a no-op when off.
+// Set 0 — frame UBO + refraction source (1-2) + shadow (4-6) + ibl (7-8). The
+// refraction/shadow/ibl bindings are stable views set once here (and whenever
+// the bound environment changes), not per-frame transient ones — unlike
+// deferred_lighting's set-1 gbuffer bind group, nothing here changes size or
+// identity across frames.
 fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const dev = fwd.device;
     const core = fwd.core.ref;
-    const env_view = core.*.texture_view.?(core, fwd.env_cubemap); // defaults to black cube when no skybox is set
-    const white_view = core.*.texture_view.?(core, .{ .idx = 0 }); // handle 0 = built-in 1x1 white texture
-    const black_cube_view = core.*.texture_view.?(core, .{ .idx = c.KE_HANDLE_NONE }); // always resolves to the default black cube
+    const env_view = core.*.texture_view.?(core, fwd.env_cubemap);
+    const white_view = core.*.texture_view.?(core, .{ .idx = 0 });
+    const black_cube_view = core.*.texture_view.?(core, .{ .idx = c.KE_HANDLE_NONE });
+    const hdr_opaque_view = core.*.resource_view.?(core, "hdr_opaque");
     const smp = core.*.sampler.?(core);
 
     const shadow_tex_view = if (fwd.shadow.enabled) fwd.shadow.view else white_view;
     const ibl_view = if (fwd.ibl_enabled) env_view else black_cube_view;
 
-    const entries = [9]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = fwd.fwd_frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
+    const entries = [8]c.ke_gpu_bind_group_entry{
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = fwd.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(PerFrame), .texture_view = 0, .sampler = 0 },
+        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_opaque_view, .sampler = 0 },
         .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
-        // Shadow feature (shadow_feature.slang) — reuses the shadow module's lvp
-        // uniform (its system uploads the light-view-proj each frame when
-        // enabled; otherwise the white default texture always samples 1.0).
-        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = shadow_tex_view, .sampler = 0 },
         .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = fwd.shadow.lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
         .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = shadow_tex_view, .sampler = 0 },
         .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
-        // IBL feature (ibl_feature.slang) — same env cube as binding 1 when on;
-        // forced to the default black cube when off, regardless of any skybox.
         .{ .binding = 7, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = ibl_view, .sampler = 0 },
         .{ .binding = 8, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
     };
 
     var err: ?*c.ke_error = null;
-    fwd.fwd_frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+    fwd.frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .layout = fwd.frame_bgl,
-        .entry_count = 9,
+        .entry_count = 8,
         .entries = &entries,
     }, &err);
-    if (err != null) logGpuError(fwd.logger, err, "rebuild frame bind group");
+    if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
 }
 
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
@@ -196,40 +199,33 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
-
-    const pc = core.*.begin_pass.?(core, ctx, &fwd.fwd_io);
-    if (pc == null) return;
-
-    // No camera — open/close the pass so the hdr target is cleared, then bail.
-    if (cam_segc == 0 or cam_segs[0].count == 0) {
-        const rp0 = pc.*.begin_render.?(pc);
-        rp0.*.end.?(rp0);
-        core.*.end_pass.?(core, pc);
-        return;
-    }
+    // No camera: deferred-lighting already cleared/shaded hdr (or left it
+    // cleared); this pass composites on top, so there is nothing to do.
+    if (cam_segc == 0 or cam_segs[0].count == 0) return;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
+    const pc = core.*.begin_pass.?(core, ctx, &fwd.io);
+    if (pc == null) return;
+
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
-    const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
+    // Snapshot "hdr" into "hdr_opaque" before this pass's own render pass opens
+    // (a copy cannot be issued once a render pass is active) — the refraction
+    // hook samples this, never the target this pass is itself writing into.
+    const enc = pc.*.encoder.?(pc);
+    const hdr_tex = core.*.resource_texture.?(core, "hdr");
+    const hdr_opaque_tex = core.*.resource_texture.?(core, "hdr_opaque");
+    enc.*.copy_texture_to_texture.?(enc, hdr_tex, hdr_opaque_tex, bw, bh);
+
+    const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
     const view = cameraView(cam_tc);
-    // ke_camera_component.fov is in degrees (the cross-backend convention).
     const fov_rad = cam.fov * @as(f32, std.math.pi / 180.0);
     const proj = makePerspective(fwd.ndc, fov_rad, aspect, cam.near_plane, cam.far_plane);
     const view_proj = zm.mul(view, proj);
-
-    // Skybox view: rotation-only (translation zeroed) × proj, so the cube stays
-    // centred on the camera (infinite background).
-    var vm: [16]f32 = undefined;
-    zm.storeMat(vm[0..], view);
-    vm[12] = 0;
-    vm[13] = 0;
-    vm[14] = 0;
-    const sky_vp = zm.mul(zm.loadMat(vm[0..]), proj);
 
     // Environment cubemap from the first skybox entity (default black otherwise);
     // rebuild set 0 only when the bound environment changes. View 1 = [skybox].
@@ -239,116 +235,100 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
         .{ .idx = c.KE_HANDLE_NONE };
-    if (want_env.idx != fwd.env_cubemap.idx) {
+    if (want_env.idx != fwd.env_cubemap.idx or fwd.frame_bind_group == c.KE_GPU_INVALID_HANDLE) {
         fwd.env_cubemap = want_env;
         rebuildFrameBindGroup(fwd);
     }
 
-    // Per-frame: camera + lights. All light terms default off; each present light
-    // turns on its contribution (a scene with only point lights has no directional).
     var frame: PerFrame = .{
         .camera_pos = .{ cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0 },
         .light_dir = .{ -0.4, -1.0, -0.3, 0.0 },
         .light_color = .{ 1.0, 1.0, 1.0, 1.0 },
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
-        .sky_view_proj = undefined,
-        .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 }, // x=shadow active, z=directional active
+        .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 },
+        .viewport = .{ @floatFromInt(bw), @floatFromInt(bh), 0.0, 0.0 },
         .view = undefined,
     };
-    zm.storeMat(frame.sky_view_proj[0..], sky_vp);
-    zm.storeMat(frame.view[0..], view); // for the fragment's cluster z slice
+    zm.storeMat(frame.view[0..], view);
 
-    // Clustered-lights feature's own UBO (cluster_feature.slang, set 3 binding
-    // 6) — the one seam where forward reaches into cluster_module.zig, since
-    // the viewport component is only known from forward's own backbuffer query.
-    cluster_module.uploadGrid(fwd.cluster, bw, bh, cam.near_plane, cam.far_plane);
-
-    // Directional light (first entity). Present → enable the directional term +
-    // its shadow map; its ambient seeds the scene ambient. Point/spot lights are
-    // accumulated from the clustered storage buffers (the cull pass binned them).
-    // View 2 = [directional_light].
+    // View 2 = [directional_light]; present → enable the directional term and
+    // seed the scene ambient from it.
     var li_segc: usize = 0;
     const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
-        const dl: *const DirLight = @ptrCast(@alignCast(li_segs[0].columns[0]));
-        frame.light_dir = .{ dl.dir[0], dl.dir[1], dl.dir[2], 0.0 };
-        frame.light_color = .{ dl.rgb[0], dl.rgb[1], dl.rgb[2], dl.intensity };
-        frame.ambient = .{ dl.ambient[0], dl.ambient[1], dl.ambient[2], 0.0 };
-        frame.shadow_params[0] = 1.0; // shadow active
-        frame.shadow_params[2] = 1.0; // directional active
+        const d: *const DirLight = @ptrCast(@alignCast(li_segs[0].columns[0]));
+        frame.light_dir = .{ d.dir[0], d.dir[1], d.dir[2], 0.0 };
+        frame.light_color = .{ d.rgb[0], d.rgb[1], d.rgb[2], d.intensity };
+        frame.ambient = .{ d.ambient[0], d.ambient[1], d.ambient[2], 0.0 };
+        frame.shadow_params[2] = 1.0;
     }
-
-    // Standalone ambient light (overrides the directional's when present).
-    // View 3 = [AmbientLight].
+    // View 3 = [AmbientLight]; a standalone ambient overrides the directional's.
     var am_segc: usize = 0;
     const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
         const al: *const AmbientComp = @ptrCast(@alignCast(am_segs[0].columns[0]));
         frame.ambient = .{ al.color[0], al.color[1], al.color[2], 0.0 };
     }
+    core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
-    core.*.upload.?(core, fwd.fwd_frame_uniform, 0, &frame, @sizeOf(PerFrame));
-
-    const rp = pc.*.begin_render.?(pc);
-    // Sets 0 and 3 (per-frame + lights) share the same layout across the
-    // forward_lit and magenta pipelines, so they stay bound while the per-mesh
-    // pipeline switches below.
-    rp.*.set_bind_group.?(rp, 0, fwd.fwd_frame_bind_group, null, 0); // set 0: per-frame
-    rp.*.set_bind_group.?(rp, 3, fwd.cluster.fwd_light_bind_group, null, 0); // set 3: lights
-
-    // View 4 = [mesh, transform], columns aligned. Per-draw uniform writes are
-    // deferred by the core and replayed before the submit, so uploading inside
-    // the draw loop still lands ahead of the draws that read it.
-    var draw_idx: u32 = 0;
+    // View 4 = [mesh, transform]. Collect only BLEND materials — gbuffer_module
+    // already drew everything else. Compute each draw's view-space depth so
+    // they can be sorted back-to-front before recording (blending is not
+    // commutative; ke_ecs has no ordered iteration to rely on instead).
+    var draw_count: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 4, &segc);
     var s: usize = 0;
-    while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
+    while (s < segc and draw_count < MAX_DRAWS) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
         const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
-        while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
+        while (i < segs[s].count and draw_count < MAX_DRAWS) : (i += 1) {
+            if (core.*.material_alpha_mode.?(core, meshes[i].material) != c.KE_ALPHA_MODE_BLEND) continue;
+            const wp = zm.f32x4(tcs[i].position.x, tcs[i].position.y, tcs[i].position.z, 1.0);
+            const view_pos = zm.mul(wp, view);
+            fwd.draws[draw_count] = .{ .mesh = @ptrCast(&meshes[i]), .transform = @ptrCast(&tcs[i]), .view_depth = view_pos[2] };
+            draw_count += 1;
+        }
+    }
+    std.sort.pdq(Draw, fwd.draws[0..draw_count], {}, drawFartherFirst);
+
+    const rp = pc.*.begin_render.?(pc);
+    rp.*.set_pipeline.?(rp, fwd.pipeline);
+    rp.*.set_bind_group.?(rp, 0, fwd.frame_bind_group, null, 0);
+    rp.*.set_bind_group.?(rp, 3, fwd.cluster.fwd_light_bind_group, null, 0);
+
+    var d: u32 = 0;
+    while (d < draw_count) : (d += 1) {
+        const draw = fwd.draws[d];
         var vbo: c.ke_gpu_buffer = 0;
         var ibo: c.ke_gpu_buffer = 0;
         var idx_count: u32 = 0;
-        if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
+        if (core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count) == 0) continue;
 
-        const model = zm.loadMat(tcs[i].world_matrix.m[0..]);
+        const model = zm.loadMat(draw.transform.world_matrix.m[0..]);
         const mvp = zm.mul(model, view_proj);
         var u: PerObject = undefined;
         zm.storeMat(u.mvp[0..], mvp);
         zm.storeMat(u.model[0..], model);
-        const offset: u32 = draw_idx * UNIFORM_STRIDE;
-        core.*.upload.?(core, fwd.fwd_obj_uniform, offset, &u, @sizeOf(PerObject));
+        const offset: u32 = d * UNIFORM_STRIDE;
+        core.*.upload.?(core, fwd.obj_uniform, offset, &u, @sizeOf(PerObject));
 
-        // PSO selection (Mechanism 1): a mesh with no assigned material draws
-        // magenta ("never silent"); an assigned material draws the IMaterial path.
-        const has_material = meshes[i].material.idx != c.KE_HANDLE_NONE;
-        rp.*.set_pipeline.?(rp, if (has_material) fwd.fwd_lit_pipeline else fwd.magenta_pipeline);
-        const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
+        const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
         rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
-        rp.*.set_bind_group.?(rp, 2, fwd.fwd_obj_bind_group, &offset, 1); // set 2: per-object
+        rp.*.set_bind_group.?(rp, 2, fwd.obj_bind_group, &offset, 1); // set 2: per-object
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
-            draw_idx += 1;
-        }
     }
-
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
 }
 
-// Sets up the forward pass's own resources. shadow and cluster are already set
-// up by the aggregator and passed as borrowed pointers — forward consumes their
-// handles (shadow map + lvp into set 0, cluster light lists into set 3), it does
-// not create them.
 pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
              ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
-             mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
-             camera_cid: c.ke_component_id, light_cid: c.ke_component_id,
-             point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
-             ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
+             mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
+             light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
              frame_cid: c.ke_component_id, shadow: *ShadowModule, cluster: *ClusterModule,
              out_error: [*c][*c]c.ke_error) bool {
     fwd.core = core;
@@ -360,16 +340,30 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     fwd.transform_cid = transform_cid;
     fwd.camera_cid = camera_cid;
     fwd.light_cid = light_cid;
-    fwd.point_light_cid = point_light_cid;
-    fwd.spot_light_cid = spot_light_cid;
     fwd.ambient_cid = ambient_cid;
     fwd.skybox_cid = skybox_cid;
-    fwd.frame_cid = frame_cid;
     fwd.shadow = shadow;
     fwd.cluster = cluster;
     fwd.env_cubemap = .{ .idx = c.KE_HANDLE_NONE };
 
-    // Set 2 — per-object transform (dynamic offset, vertex stage).
+    const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
+    const frame_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
+        .{ .binding = 0, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 1, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 2, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 4, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 5, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 6, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+        .{ .binding = 7, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
+        .{ .binding = 8, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
+    };
+    fwd.frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .entry_count = 8,
+        .entries = &frame_bgl_entries,
+    });
+
+    // Set 2 — per-object transform ring (dynamic offset, vertex stage). Same
+    // shape as gbuffer_module's.
     const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0,
         .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
@@ -377,35 +371,10 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
         .has_dynamic_offset = 1,
         .view_dimension = 0,
     };
-    const obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+    fwd.obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
         .entry_count = 1,
         .entries = &obj_bgl_entry,
     });
-
-    // Set 0 — per-frame uniform + env cubemap + sampler + the shadow and IBL
-    // hook resources (bindings 3-8), always present: one fixed layout, one
-    // shader, for every shadow/ibl combination. Which resource backs 3-6/7-8 is
-    // a neutral default (1x1 white / black cube) when the feature is off, the
-    // real render target/env cube when on (rebuildFrameBindGroup).
-    const frame_bgl_entries = [9]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
-        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        // Set-0 append rather than a new set — the C ABI's bind_group_layouts
-        // array is fixed at 4 entries (sets 0-3), but one set's own entry list
-        // has no such cap.
-        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 4, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 5, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 6, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 7, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
-        .{ .binding = 8, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    const frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .entry_count = 9,
-        .entries = &frame_bgl_entries,
-    });
-    fwd.frame_bgl = frame_bgl;
 
     const attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -419,183 +388,144 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
         .attribute_count = 4,
         .attributes = &attrs,
     };
+
+    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(vs_wgsl), .byte_size = vs_wgsl.len, .entry_point = "mat_test_flat_transparent.vs",
+    }, out_error);
+    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, vs);
+    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(fs_wgsl), .byte_size = fs_wgsl.len, .entry_point = "mat_test_flat_transparent.fs",
+    }, out_error);
+    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, fs);
+
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    pp.vertex_module = vs;
+    pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
     pp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    pp.cull_mode = c.KE_GPU_CULL_MODE_NONE; // winding-agnostic for the first pass; depth sorts
+    pp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &vbl;
+    // Standard alpha blend: the surface's own alpha weighs its shading against
+    // whatever is already in "hdr" (skybox + opaque, composited by deferred-lighting
+    // + skybox before this pass runs).
+    pp.blend_state.blend_enabled = 1;
+    pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_SRC_ALPHA;
+    pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    pp.blend_state.color_op = c.KE_GPU_BLEND_OP_ADD;
+    pp.blend_state.src_alpha = c.KE_GPU_BLEND_FACTOR_ONE;
+    pp.blend_state.dst_alpha = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    pp.blend_state.alpha_op = c.KE_GPU_BLEND_OP_ADD;
     pp.blend_state.write_mask = 0x0F;
+    // LEQUAL, no write: tests against the G-buffer's depth (already populated
+    // by gbuffer_module) without occluding surfaces this pass draws later —
+    // depth ordering among transparents is handled by the back-to-front sort,
+    // not by the depth buffer.
     pp.depth_stencil.depth_test_enabled = 1;
-    pp.depth_stencil.depth_write_enabled = 1;
-    pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    pp.bind_group_layouts[0] = frame_bgl; // set 0: per-frame (camera + light)
+    pp.depth_stencil.depth_write_enabled = 0;
+    pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
+    pp.bind_group_layouts[0] = fwd.frame_bgl;
     pp.bind_group_layouts[1] = core.ref.*.material_layout.?(core.ref); // set 1: per-material
-    pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object (transform)
-    pp.bind_group_layouts[3] = cluster.light_set_bgl; // set 3: clustered light lists
+    pp.bind_group_layouts[2] = fwd.obj_bgl; // set 2: per-object
+    pp.bind_group_layouts[3] = cluster.light_set_bgl; // set 3: cluster light lists
     pp.bind_group_layout_count = 4;
-    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
+    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
     pp.color_target_count = 1;
-
-    // Material-authored path: one shader pair covers every shadow/ibl combination
-    // — the hooks read neutral-default resources bound by rebuildFrameBindGroup.
-    const lit_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(mat_test_flat_vs_wgsl),
-        .byte_size = mat_test_flat_vs_wgsl.len,
-        .entry_point = "mat_test_flat.vs",
-    }, out_error);
-    if (lit_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, lit_vs);
-    const lit_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(mat_test_flat_fs_wgsl),
-        .byte_size = mat_test_flat_fs_wgsl.len,
-        .entry_point = "mat_test_flat.fs",
-    }, out_error);
-    if (lit_fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, lit_fs);
-    pp.vertex_module = lit_vs;
-    pp.fragment_module = lit_fs;
-    fwd.fwd_lit_pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (fwd.fwd_lit_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "forward_lit pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+    fwd.pipeline = dev.create_render_pipeline.?(dev, &pp);
+    if (fwd.pipeline == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "transparent-forward: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }
 
-    // Magenta placeholder — Mechanism 1 "never silent" miss fallback. Same
-    // pipeline layout + vertex layout; fragment outputs solid magenta.
-    const mag_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(magenta_vs_wgsl),
-        .byte_size = magenta_vs_wgsl.len,
-        .entry_point = "magenta.vs",
-    }, out_error);
-    if (mag_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, mag_vs);
-    const mag_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(magenta_fs_wgsl),
-        .byte_size = magenta_fs_wgsl.len,
-        .entry_point = "magenta.fs",
-    }, out_error);
-    if (mag_fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, mag_fs);
-    pp.vertex_module = mag_vs;
-    pp.fragment_module = mag_fs;
-    fwd.magenta_pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (fwd.magenta_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "magenta placeholder: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
-    }
-
-    // Set 2 — per-object ring (one dynamic-offset region per draw).
-    fwd.fwd_obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
-        .initial_data = null,
-        .size = UNIFORM_STRIDE * MAX_DRAWS,
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-    if (fwd.fwd_obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const obj_bg_entry = c.ke_gpu_bind_group_entry{
-        .binding = 0,
-        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
-        .buffer = fwd.fwd_obj_uniform,
-        .buffer_offset = 0,
-        .buffer_size = @sizeOf(PerObject),
-        .texture_view = 0,
-        .sampler = 0,
-    };
-    fwd.fwd_obj_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .layout = obj_bgl,
-        .entry_count = 1,
-        .entries = &obj_bg_entry,
-    }, out_error);
-    if (fwd.fwd_obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
-
-    // Set 0 — per-frame uniform + env cubemap + sampler + shadow map. The bind
-    // group is rebuilt (rebuildFrameBindGroup) when the bound environment changes.
-    fwd.fwd_frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    fwd.frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
         .size = @sizeOf(PerFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     }, out_error);
-    if (fwd.fwd_frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+    if (fwd.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+
+    fwd.obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = UNIFORM_STRIDE * MAX_DRAWS,
+        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    }, out_error);
+    if (fwd.obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+    const obj_bg_entry = c.ke_gpu_bind_group_entry{
+        .binding = 0,
+        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
+        .buffer = fwd.obj_uniform,
+        .buffer_offset = 0,
+        .buffer_size = @sizeOf(PerObject),
+        .texture_view = 0,
+        .sampler = 0,
+    };
+    fwd.obj_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .layout = fwd.obj_bgl,
+        .entry_count = 1,
+        .entries = &obj_bg_entry,
+    }, out_error);
+    if (fwd.obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+
+    // Snapshot target for refraction_feature.slang — same format/sizing as "hdr"
+    // (declared by deferred_lighting_module), copied into fresh each frame.
+    const hdr_opaque_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
+        .name = "hdr_opaque",
+        .type = c.KE_RENDER_RESOURCE_TEXTURE,
+        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
+        .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
+    }, out_error);
+
     rebuildFrameBindGroup(fwd);
 
-    // Transient depth target, sized to the backbuffer (the core resolves the
-    // scale against its current swapchain size).
-    const depth_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
-        .name = "depth",
-        .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
-        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
-        .width = 0,
-        .height = 0,
-        .scale_x = 1.0,
-        .scale_y = 1.0,
-    }, null);
+    // "hdr" LOADs (composites over skybox's output); "depth" also LOADs, tested
+    // read-only (io.load governs both — see pass_recording.zig's ctxBeginRender).
+    fwd.writes = .{ "hdr", "depth" };
+    fwd.reads = .{"shadow_map"};
+    fwd.io = std.mem.zeroes(c.ke_render_pass_io);
+    fwd.io.writes = @ptrCast(&fwd.writes);
+    fwd.io.writes_count = 2;
+    fwd.io.reads = @ptrCast(&fwd.reads);
+    fwd.io.reads_count = if (shadow.enabled) 1 else 0;
+    fwd.io.load = 1;
+    fwd.io.cmd_slot = 6; // after skybox (5), before tonemap (now 7)
 
-    // HDR intermediate buffer (Rgba16Float). The forward renders here; the
-    // tonemap pass resolves it to the swapchain (backbuffer).
-    const hdr_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
-        .name = "hdr",
-        .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
-        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
-        .width = 0,
-        .height = 0,
-        .scale_x = 1.0,
-        .scale_y = 1.0,
-    }, null);
-
-    // Forward writes to "hdr" (not directly to backbuffer); tonemap resolves.
-    fwd.fwd_writes = .{ "hdr", "depth" };
-    fwd.fwd_reads = .{"shadow_map"};
-    fwd.fwd_io = std.mem.zeroes(c.ke_render_pass_io);
-    fwd.fwd_io.writes = @ptrCast(&fwd.fwd_writes);
-    fwd.fwd_io.writes_count = 2;
-    // No "shadow_map" resource exists at all when shadow.enabled is false —
-    // declaring a read dependency on it here would reference an undeclared
-    // resource.
-    if (fwd.shadow.enabled) {
-        fwd.fwd_io.reads = @ptrCast(&fwd.fwd_reads);
-        fwd.fwd_io.reads_count = 1;
+    var ac: u32 = 0;
+    fwd.access[ac] = .{ .cid = core.ref.*.cid.?(core.ref, "hdr"), .access = c.KE_ACCESS_WRITE };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = hdr_opaque_cid, .access = c.KE_ACCESS_WRITE };
+    ac += 1;
+    // READ, not WRITE: this pass tests depth but never writes it (depth_write_enabled=0).
+    fwd.access[ac] = .{ .cid = core.ref.*.cid.?(core.ref, "depth"), .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = transform_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = light_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = ambient_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = skybox_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = frame_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    fwd.access[ac] = .{ .cid = cluster.clusters_cid, .access = c.KE_ACCESS_READ };
+    ac += 1;
+    if (shadow.enabled) {
+        fwd.access[ac] = .{ .cid = core.ref.*.cid.?(core.ref, "shadow_map"), .access = c.KE_ACCESS_READ };
+        ac += 1;
     }
-    fwd.fwd_io.cmd_slot = 3; // forward pass → frame command slot 3 (after cull)
+    fwd.access_count = ac;
 
-    var fac: u32 = 0;
-    fwd.fwd_access[fac] = .{ .cid = hdr_cid, .access = c.KE_ACCESS_WRITE };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = depth_cid, .access = c.KE_ACCESS_WRITE };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = transform_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = light_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = skybox_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    if (fwd.shadow.enabled) {
-        fwd.fwd_access[fac] = .{ .cid = core.ref.*.cid.?(core.ref, "shadow_map"), .access = c.KE_ACCESS_READ };
-        fac += 1;
-    }
-    fwd.fwd_access[fac] = .{ .cid = frame_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = point_light_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = spot_light_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = ambient_cid, .access = c.KE_ACCESS_READ };
-    fac += 1;
-    fwd.fwd_access[fac] = .{ .cid = cluster.clusters_cid, .access = c.KE_ACCESS_READ }; // after the cull pass
-    fac += 1;
-    fwd.fwd_access_count = fac;
-
-    // Data the body reads through resolved views. Index order is the
-    // query_index passed to ke_system_ctx_view.
     const rd = c.KE_ACCESS_READ;
     fwd.queries = std.mem.zeroes([5]c.ke_query_decl);
     fwd.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
@@ -611,4 +541,10 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     fwd.queries[4].terms[1] = .{ .cid = transform_cid, .access = rd };
     fwd.queries[4].term_count = 2;
     return true;
+}
+
+pub fn destroy(fwd: *const ForwardModule) void {
+    const dev = fwd.device;
+    if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
 }

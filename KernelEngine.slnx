@@ -19,6 +19,7 @@
     <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
     <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
     <Project Path="examples/csharp/17_webgpu_clear/17_webgpu_clear.csproj" />
+    <Project Path="examples/csharp/19_transparency/19_transparency.csproj" />
   </Folder>
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />

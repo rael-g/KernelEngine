@@ -207,6 +207,53 @@ add_custom_command(
 # Deferred lighting: fullscreen resolve reading the G-buffer + depth, shading
 # with the shared shadow/ibl/cluster hooks + ke.pbr. Needs the ke library dir
 # (ke.pbr) + the core shaders dir (the feature imports).
+# Transparent forward: the same flat material bound into the transparent-only
+# forward pass (transparent_forward.slang) instead of the parked all-opaque
+# forward (forward_lit.slang) or the encode pass (gbuffer.slang). Adds
+# refraction_feature.slang to the shared shadow/ibl/cluster dependency set.
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/refraction_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/refraction_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
 add_custom_command(
     OUTPUT "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
     COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
@@ -272,6 +319,8 @@ add_custom_command(
         "-Dmat-test-flat-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
         "-Dmat-test-flat-gbuffer-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "-Dmat-test-flat-gbuffer-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+        "-Dmat-test-flat-transparent-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
+        "-Dmat-test-flat-transparent-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "-Ddeferred-lighting-vs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
         "-Ddeferred-lighting-fs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
         "-Dmagenta-vs-wgsl=${SHADER_GEN_DIR}/magenta.vs.wgsl"
@@ -296,6 +345,8 @@ add_custom_command(
         "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
         "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
         "${SHADER_GEN_DIR}/magenta.vs.wgsl"

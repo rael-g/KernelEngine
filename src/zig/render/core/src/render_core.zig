@@ -36,7 +36,7 @@ const asset_upload = @import("asset_upload.zig");
 
 pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
-pub const NUM_PRECREATED_ENCODERS = 8; // command encoders pre-created per frame (≥ pass count)
+pub const NUM_PRECREATED_ENCODERS = 9; // command encoders pre-created per frame (≥ pass count)
 pub const MAX_COLOR_ATTACH = 8;
 pub const MAX_MESHES = 256;
 pub const MAX_TEXTURES = 256;
