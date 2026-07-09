@@ -906,7 +906,7 @@ The mature real-time pipeline is not a choice between topologies; it is a **hybr
 - **Transparency** shades through **clustered forward** — unavoidable: a G-buffer / visibility buffer stores exactly one surface per pixel, so N-layer order-dependent blending cannot be represented in deferred. This is universal.
 - **Both halves share the clustered light cull** (§8.13) and, crucially, **the same materials and the same shading library** — the opaque deferred-lighting pass and the transparent forward pass each consume one `IMaterial`'s `SurfaceState` and the same `ke.pbr` + contribution interfaces.
 
-**What we guarantee from now (the invariants that keep the hybrid reachable), even though none of it is built:**
+**What we guarantee (the invariants that keep the hybrid reachable). The opaque deferred half is built; the transparent forward half is specified in §8.15:**
 
 1. **Materials never assume a shading topology** — always write `SurfaceState`, never shade themselves. One material must be able to instantiate into forward-shade, gbuffer/vis-buffer write, deferred-lighting, *and* transparent-forward.
 2. **The shading library + contribution interfaces never assume they are inside a forward pass** — the same code runs in a forward fragment and a deferred-lighting fullscreen dispatch.
@@ -917,6 +917,115 @@ Hold these two and the hybrid is later a matter of *registering more pass-module
 
 - **Which deferred form** — classic fat G-buffer vs visibility buffer — is undecided. We commit to neither; the material/shading contract must not presume either. Picking one belongs to whenever deferred is actually built.
 - **`SurfaceState` stays evolvable (semver, §8.5)** as the plug point where a richer surface representation lands later. The industry answer to "a fixed G-buffer can only carry one shading model per pixel" is a composable layered-BSDF material with variable-footprint encoding — **Unreal's Substrate (née Strata)**. Substrate generalizes *surface expressiveness in deferred* only; it does **not** address transparency (still forward) and is **not** the hybrid itself. It is a future enrichment that plugs into the `SurfaceState` seam — so the contribution interfaces must be able to migrate from "here is albedo/metallic/roughness" to "evaluate this BSDF" without breaking passes. Not near-term; recorded so the seam is not frozen shut.
+
+### 8.15 Transparency — the forward half, and where the forward pass closes
+
+The deferred half of §8.14 shipped: `gbuffer` encodes, `deferred_lighting` decodes and shades. This section
+locks the transparent half. It is the *last* structural decision the forward pass needs, and the intent is
+to close forward here and not reopen it.
+
+#### 8.15.1 Bucketing — `alpha_mode` on the material, never a tag on the entity
+
+A surface's transparency is a property of the **material**, not of the entity instancing it. Two entities
+sharing a material must never disagree about which pass shades them. The material therefore carries a
+three-valued mode, aligned with glTF 2.0 `material.alphaMode`, Unreal's *Blend Mode*, and Unity's
+*Surface Type*:
+
+| `alpha_mode` | Pass | Depth | Notes |
+|---|---|---|---|
+| `OPAQUE` | gbuffer | write | The default. Alpha channel ignored. |
+| `MASK` | gbuffer | write | Opaque with `discard` below `alpha_cutoff`. **Not** blending — foliage, fences, chain-link. |
+| `BLEND` | transparent forward | test only | The only mode that leaves the G-buffer. |
+
+Rejected alternatives, recorded so they are not re-proposed:
+
+- **A `Transparent` tag component on the entity.** Lets two entities sharing one material diverge, with no
+  error. Also pushes the decision onto whoever authors the scene, where forgetting it silently yields
+  opaque glass.
+- **An `alpha < 1.0` heuristic on `base_color.a`.** A magic threshold: an import rounding to `0.99` becomes
+  blended. Cannot express `MASK` at all, which is the more common case in real content.
+
+The pass split is a CPU-side query, so the mode must be readable without touching GPU state. The bucket is
+therefore **derived** — never hand-authored — but not as an entity tag component: `ComponentApplyCallback<T>`
+(the scene loader's mesh-apply hook) receives the component to fill, not the entity id, so it has no path to
+attach a *second* component to the same entity without an ABI change to `register_component_apply` that
+ripples through every existing apply callback. Instead, `alpha_mode` is queried **by material handle**,
+mirroring the existing `material_bind_group(core, handle)` lookup: `material_alpha_mode(core, handle)`.
+The render core already resolves material handles into CPU-side storage at creation time (`materials[idx]`
+in `render_core.zig`, not GPU-only), so this is the same cost and the same "derived, never authored"
+guarantee the tag would have given — gbuffer and forward each call it per draw and skip/include accordingly.
+
+#### 8.15.2 Why transparency cannot be deferred, precisely
+
+Not because the G-buffer "doesn't know" what is behind the surface — whatever is behind is opaque, was
+encoded, was shaded, and already sits in `hdr`. The reason is narrower: **a G-buffer holds exactly one
+surface per pixel.** A transparent fragment and the opaque fragment behind it both land on one pixel, and
+there is nowhere to write the second. So the transparent fragment must be shaded at rasterization time and
+composited immediately. Forward shades inline by definition; that is not debt.
+
+#### 8.15.3 The forward vocabulary is closed at four hooks
+
+Forward imports hooks, never implementations. Each has a neutral default, so a disabled feature costs
+nothing and changes no shader variant (§9.8):
+
+| Hook | Term | Neutral default |
+|---|---|---|
+| `accumulate_clustered_lights` | direct radiance | empty light list |
+| `sample_shadow_visibility` | visibility | fully-lit shadow map |
+| `ibl_contribution` | indirect radiance | black environment cube |
+| `refraction_contribution` | transmission | opaque — no `hdr` sampling |
+
+These four are the complete **analytic** shading vocabulary: everything computable from the surface and the
+lights alone. The distinction that closes the pass:
+
+- **Analytic terms** reach both halves. Replacing the shadow technique, the IBL integration, or the light
+  culling changes only the feature behind the hook — forward is untouched.
+- **Screen-space terms** (SSAO, SSR, SSGI) sample the G-buffer. A transparent surface is not in the
+  G-buffer, so these can never apply to it. This is a property of the topology, not a deficiency of the
+  pass. The industry accepts it: Unity's URP denies SSAO to transparents; Unreal exposes translucency
+  *Lighting Mode* as an explicit cheap↔full dial.
+
+The mitigation channel is the hook set itself: when opaque gains SSR, transparent gains probe-based
+reflection through the **same** `ibl_contribution` hook. The gap is bounded and has somewhere to land.
+
+Forward is reopened only by a genuinely new **term in the rendering equation** — not by a new implementation
+of an existing term. Refraction is such a term, and it is the reason transparency gets a fourth hook rather
+than three: real glass samples the already-shaded `hdr` behind it, distorted by the surface normal and an
+index of refraction. Deferred structurally cannot do this. After refraction we know of no further term:
+subsurface scattering is a **material**, and enters through `IMaterial`, not through the pass.
+
+#### 8.15.4 Ordering — sorted blend first, OIT as a module swap
+
+Blending is not commutative, so N overlapping transparent surfaces only composite correctly back-to-front.
+Two facts constrain where the ordering lives:
+
+- The ECS **is** the data channel between systems — one system writes a component, the next wave reads it.
+  What does not exist is **ordered iteration**: `ke_ecs`'s vtable has no `order_by`, and `query_resolve`
+  returns archetype segments in storage order. A per-frame *permutation* also has no per-entity shape.
+- Therefore: a system may compute per-entity view depth in parallel (the arithmetic), but the permutation
+  is built where the draw list is assembled — inside the pass.
+
+**Sorted per-draw blend is the default path and is not throwaway work.** Weighted-Blended OIT
+(McGuire & Bavoil, 2013) is an *approximation*: it weights each layer by a function of depth and washes out
+near-opaque surfaces. Production engines ship both, using OIT where sorting is impossible or too costly
+(foliage, hair, particles) and sorted blend everywhere else.
+
+Known limit of per-draw sorting, recorded so it is not a future surprise: interpenetrating transparent
+meshes, and a concave transparent mesh seen from outside, composite wrongly. Correct ordering there is
+per-fragment. That is what OIT buys.
+
+**OIT is a replacement of the transparent module, not a strategy inside it.** The analogy to the light cull
+does not hold: a dumb cull and a clustered cull emit the *same shape* (a light list per froxel), so the
+shader is indifferent. Sorting and OIT do not — sorting yields a draw order and writes one target; WBOIT
+abolishes the order, writes **two** targets (`accum` RGBA16F, `revealage` R8) under **different** blend
+states, and adds a fullscreen resolve. The swappable unit is the whole pass, which is exactly the open
+composition the chain already supports: both variants read the G-buffer depth and write `hdr`, and nothing
+downstream notices.
+
+**ABI prerequisite for OIT.** `ke_gpu_render_pipeline_params` carries a single `blend_state` applied to every
+color target — a deliberate simplification taken when MRT landed. WBOIT is the first case that breaks it:
+`accum` needs additive (`ONE`/`ONE`), `revealage` needs multiplicative (`ZERO`/`ONE_MINUS_SRC`). OIT
+therefore costs per-target blend in the ABI, two resources, and one resolve pass — bounded, but not free.
 
 `KernelEngine.Render.Modern` is a **runtime Module** (`IRuntimeModule` in C#, `ke_runtime_module_params` at the C ABI) — the same shape `KernelEngine.Render.Bgfx` uses today. The V2 renderer doesn't invent a new integration pattern; it slots into the locked one.
 
