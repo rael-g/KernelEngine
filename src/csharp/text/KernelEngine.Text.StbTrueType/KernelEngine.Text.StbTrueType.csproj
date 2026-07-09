@@ -11,9 +11,9 @@
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
-    <ProjectReference Include="..\..\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
   </ItemGroup>
 
   <ItemGroup>

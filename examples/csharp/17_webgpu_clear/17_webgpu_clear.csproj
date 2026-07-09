@@ -17,4 +17,8 @@
     <ProjectReference Include="..\..\..\src\csharp\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+  </ItemGroup>
+
 </Project>

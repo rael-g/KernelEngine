@@ -13,7 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
-    <ProjectReference Include="..\..\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
   </ItemGroup>
 
   <ItemGroup>
