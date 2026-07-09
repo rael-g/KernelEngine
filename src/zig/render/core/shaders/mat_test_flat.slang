@@ -15,7 +15,9 @@ struct TestFlat : IMaterial {
         // Source the surface from the fixed engine material set (set 1): the
         // base-color UBO modulated by the albedo texture, plus tangent-space
         // normal mapping — matching forward.slang's flat-lit result.
-        s.albedo    = mat.base_color.rgb * albedo.Sample(tex_sampler, s.uv).rgb;
+        float4 tex  = albedo.Sample(tex_sampler, s.uv);
+        s.albedo    = mat.base_color.rgb * tex.rgb;
+        s.alpha     = mat.base_color.a * tex.a;
         s.metallic  = mat.metallic;
         s.roughness = mat.roughness;
         float3 tn   = normal_map.Sample(tex_sampler, s.uv).rgb * 2.0 - 1.0;

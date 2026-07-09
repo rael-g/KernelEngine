@@ -132,6 +132,11 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
+            // BLEND materials are the transparent-forward pass's exclusive draws;
+            // this pass never encodes them (a G-buffer holds one surface per pixel,
+            // and blended fragments can't be adjudicated to a single one).
+            if (core.*.material_alpha_mode.?(core, meshes[i].material) == c.KE_ALPHA_MODE_BLEND) continue;
+
             var vbo: c.ke_gpu_buffer = 0;
             var ibo: c.ke_gpu_buffer = 0;
             var idx_count: u32 = 0;

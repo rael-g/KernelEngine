@@ -28,7 +28,14 @@ struct Material {
     float4 base_color;
     float  metallic;
     float  roughness;
-    float2 _pad;
+    // 0.0 for every OPAQUE/BLEND material — the gbuffer encode wrapper's MASK
+    // discard test never fires on a negative alpha. The real cutoff only for MASK.
+    float  alpha_cutoff;
+    // Index of refraction, read only by BLEND materials' refraction_contribution
+    // (1.0 = no bend, 1.33 = water, 1.5 = glass). Not yet an author-facing
+    // parameter — every material gets 1.5 at creation; promote to a real
+    // create_material argument once content needs per-material control.
+    float  ior;
 };
 [[vk::binding(0, 1)]] ConstantBuffer<Material> mat;
 [[vk::binding(1, 1)]] Texture2D    albedo;

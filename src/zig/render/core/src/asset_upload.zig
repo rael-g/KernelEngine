@@ -96,14 +96,20 @@ fn srgbToLinear(cs: f32) f32 {
 
 pub fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
                   metallic: f32, roughness: f32, albedo: c.ke_texture_handle,
-                  normal: c.ke_texture_handle, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
+                  normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode,
+                  alpha_cutoff: f32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     const st = rc.coreOf(self);
     if (st.material_count >= rc.MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
 
-    // std140: float4 base_color (linearized) + (metallic, roughness) packed next.
+    // std140: float4 base_color (linearized) + metallic + roughness + alpha_cutoff
+    // + ior. Only MASK writes a real cutoff — OPAQUE/BLEND get 0.0, which the
+    // shader's `alpha < cutoff` discard test never trips (alpha is never negative).
+    // ior is not yet an author-facing parameter (see forward_common.slang).
+    const gpu_alpha_cutoff: f32 = if (alpha_mode == c.KE_ALPHA_MODE_MASK) alpha_cutoff else 0.0;
+    const default_ior: f32 = 1.5;
     const mat_data = [8]f32{
         srgbToLinear(base_color[0]), srgbToLinear(base_color[1]), srgbToLinear(base_color[2]), base_color[3],
-        metallic,                    roughness,                   0.0,                         0.0,
+        metallic,                    roughness,                   gpu_alpha_cutoff,            default_ior,
     };
     const ubo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
         .initial_data = &mat_data,
@@ -137,9 +143,17 @@ pub fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
     }
 
     const idx = st.material_count;
-    st.materials[idx] = .{ .ubo = ubo, .bind_group = bg };
+    st.materials[idx] = .{ .ubo = ubo, .bind_group = bg, .alpha_mode = alpha_mode, .alpha_cutoff = alpha_cutoff };
     st.material_count += 1;
     return .{ .idx = idx };
+}
+
+pub fn materialAlphaMode(self: [*c]c.ke_render_core, h: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
+    return rc.coreOf(self).materialAt(h.idx).alpha_mode;
+}
+
+pub fn materialAlphaCutoff(self: [*c]c.ke_render_core, h: c.ke_material_handle) callconv(.c) f32 {
+    return rc.coreOf(self).materialAt(h.idx).alpha_cutoff;
 }
 
 pub fn materialLayout(self: [*c]c.ke_render_core) callconv(.c) c.ke_gpu_bind_group_layout {

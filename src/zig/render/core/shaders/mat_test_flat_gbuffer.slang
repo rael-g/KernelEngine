@@ -13,11 +13,17 @@ struct TestFlat : IMaterial {
         // Flat material: no vertex deformation.
     }
     void fragment(inout SurfaceState s) {
-        s.albedo    = mat.base_color.rgb * albedo.Sample(tex_sampler, s.uv).rgb;
+        float4 tex  = albedo.Sample(tex_sampler, s.uv);
+        s.albedo    = mat.base_color.rgb * tex.rgb;
+        s.alpha     = mat.base_color.a * tex.a;
         s.metallic  = mat.metallic;
         s.roughness = mat.roughness;
         float3 tn   = normal_map.Sample(tex_sampler, s.uv).rgb * 2.0 - 1.0;
         s.normal    = normalize(mul(tn, s.tbn));
+
+        // MASK: opaque with a hard cutoff, never a blend. OPAQUE materials carry
+        // alpha_cutoff == 0.0, so this never discards them (alpha is never < 0).
+        if (s.alpha < mat.alpha_cutoff) discard;
     }
 }
 
