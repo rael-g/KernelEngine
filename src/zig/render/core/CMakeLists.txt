@@ -4,6 +4,13 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_render_core${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
+# Zig resolves its own compilation unit from the @import graph, so CMake cannot
+# know which files matter. Depend on all of them: a source omitted here rebuilds
+# nothing and ships a stale binary, which fails silently at runtime.
+# CONFIGURE_DEPENDS re-runs the glob when a file is added or removed.
+file(GLOB KE_RENDER_CORE_ZIG_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
+
 # Compile pass shaders (Slang -> WGSL) for @embedFile in the Zig lib.
 set(COMPILE_SLANG "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
 set(SHADER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
@@ -159,6 +166,86 @@ add_custom_command(
     VERBATIM
 )
 
+# Deferred G-buffer encode: the same flat material bound into the encode pass
+# (gbuffer.slang) instead of the forward pass. Same include dirs as the forward
+# wrapper (shared ke library + core shaders dir).
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
+            --output "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
+# Deferred lighting: fullscreen resolve reading the G-buffer + depth, shading
+# with the shared shadow/ibl/cluster hooks + ke.pbr. Needs the ke library dir
+# (ke.pbr) + the core shaders dir (the feature imports).
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
+            --output "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
+            --output "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
 add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
     COMMAND "${ZIG_EXECUTABLE}" build
@@ -183,13 +270,18 @@ add_custom_command(
         "-Dui-fs-wgsl=${SHADER_GEN_DIR}/ui.fs.wgsl"
         "-Dmat-test-flat-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
         "-Dmat-test-flat-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+        "-Dmat-test-flat-gbuffer-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
+        "-Dmat-test-flat-gbuffer-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+        "-Ddeferred-lighting-vs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
+        "-Ddeferred-lighting-fs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
         "-Dmagenta-vs-wgsl=${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "-Dmagenta-fs-wgsl=${SHADER_GEN_DIR}/magenta.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/render_core.zig"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/render_module.zig"
+        # Every Zig source, not a hand-listed subset: a stale binary from an
+        # unlisted file is silent and costs far more than an occasional rebuild.
+        ${KE_RENDER_CORE_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
         "${SHADER_GEN_DIR}/skybox.vs.wgsl"
         "${SHADER_GEN_DIR}/skybox.fs.wgsl"
@@ -202,6 +294,10 @@ add_custom_command(
         "${SHADER_GEN_DIR}/ui.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+        "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
+        "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
         "${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "${SHADER_GEN_DIR}/magenta.fs.wgsl"
         ke_common
