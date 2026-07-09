@@ -1,4 +1,4 @@
-﻿using KernelEngine.Common.Native;
+using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Scheduler;
 using KernelEngine.Logger;
@@ -9,7 +9,6 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers an Assimp-backed <see cref="IAssetLoader"/> singleton.
-    /// Requires <c>AddKernel()</c> to be called first.
     /// </summary>
     public static IServiceCollection AddAssimpAssetLoader(this IServiceCollection services)
     {

@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using KernelEngine.Logger;
 using KernelEngine.Common;
 
@@ -71,7 +71,6 @@ public sealed unsafe class Input : IInput, INativeInput
     /// <inheritdoc/>
     public int DrainEvents(Span<InputEvent> buffer)
     {
-        KernelThread.AssertCurrent("ke.main");
         if (buffer.IsEmpty) return 0;
 
         // Stage into a native-shaped buffer, then translate. The native struct is identical

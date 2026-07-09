@@ -1,4 +1,4 @@
-﻿using KernelEngine.Audio.MiniAudio.Native;
+using KernelEngine.Audio.MiniAudio.Native;
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Logger;
@@ -9,7 +9,6 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers a miniaudio-backed <see cref="IAudio"/> singleton.
-    /// Requires <c>AddKernel()</c> to be called first.
     /// </summary>
     public static IServiceCollection AddMiniAudio(this IServiceCollection services)
     {

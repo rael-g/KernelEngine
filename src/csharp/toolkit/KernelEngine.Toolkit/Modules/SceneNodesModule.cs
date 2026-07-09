@@ -12,9 +12,8 @@ namespace KernelEngine.Framework;
 /// Scene infrastructure for the v2 (component-driven) render path. Registers the
 /// <see cref="NodeWorld"/>, installs the BehaviorSystem that propagates transforms
 /// and drives per-node <see cref="Node.OnUpdate"/>, and runs a one-shot scene
-/// setup callback on the render worker. Unlike <c>SceneRenderModule</c> it
-/// registers no IRenderer contributors — the render module's forward pass reads
-/// the ECS components directly.
+/// setup callback on the render worker. The render module's passes read the ECS
+/// components directly, so no per-node render contributor is registered.
 /// </summary>
 /// <remarks>
 /// Add <c>FrameworkModule</c> and the render module before this one: the render
@@ -56,8 +55,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         var scheduler = services.GetRequiredService<IScheduler>();
 
         // [entity.components.AmbientLight] — backend-agnostic data mapping, no GPU
-        // resources touched, so it's safe to register unconditionally (mirrors the
-        // identical callback SceneRenderModule registers for the legacy bgfx path).
+        // resources touched, so it's safe to register unconditionally.
         var components = services.GetRequiredService<IComponentRegistry>();
         world.RegisterComponentApply<AmbientLightComponent>(
             components.CidOf<AmbientLightComponent>(),
@@ -87,18 +85,15 @@ public sealed class SceneNodesModule : IRuntimeModule
         }, pinnedThread: 1);
 
         // Optional: only registered when the active render module implements
-        // IRenderResources (render-v2). The legacy bgfx path renders labels through
-        // its own IFrameContributor bridge and applies [entity.components.MeshRenderer]
-        // through SceneRenderModule instead.
+        // IRenderResources.
         var resources = services.GetService<IRenderResources>();
         var window    = services.GetService<IWindow>();
         if (resources != null && window != null)
         {
             LabelUiSystem.Register(runtime, nodeWorld, resources, window);
 
-            // [entity.components.MeshRenderer] — render-v2 analog of SceneRenderModule's
-            // MeshRendererComponent apply: resolves a named primitive mesh + a flat-color
-            // material through IRenderResources instead of the legacy IRenderer. Named
+            // [entity.components.MeshRenderer] — resolves a named primitive mesh + a
+            // flat-color material through IRenderResources. Named
             // primitives are uploaded once and cached (scene files reuse the same few
             // shapes across many entities — e.g. every Pong sprite is "quad").
             var primitiveCache = new Dictionary<string, MeshHandle>(StringComparer.OrdinalIgnoreCase);

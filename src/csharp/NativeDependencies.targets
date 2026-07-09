@@ -67,8 +67,8 @@
     Csprojs declare every native DLL they need via:
 
         <ItemGroup>
-          <NativeDep Include="ke_kernel" />
-          <NativeDep Include="ke_threading" />
+          <NativeDep Include="ke_common" />
+          <NativeDep Include="ke_runtime" />
         </ItemGroup>
 
     The legacy single-target shortcut `<NativeTarget>ke_foo</NativeTarget>` is

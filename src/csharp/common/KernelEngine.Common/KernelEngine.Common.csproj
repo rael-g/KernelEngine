@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <NativeDep Include="ke_common" />
-    <NativeDep Include="ke_threading" />
   </ItemGroup>
 
   <Import Project="../../NativeDependencies.targets" />

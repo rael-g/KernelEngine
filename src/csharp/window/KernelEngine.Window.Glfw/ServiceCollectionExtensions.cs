@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using KernelEngine.Configuration;
 using KernelEngine.Window.Glfw.Native;
 using KernelEngine.Common.Native;
@@ -14,7 +14,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers a GLFW-backed <see cref="KernelEngine.Window.Window"/> singleton.
     /// Reads <c>[runtime.window]</c> from Project.toml when present; otherwise uses
-    /// <see cref="WindowOptions"/> defaults. Requires <c>AddKernel()</c> to be called first.
+    /// <see cref="WindowOptions"/> defaults.
     /// </summary>
     public static IServiceCollection AddGlfwWindow(this IServiceCollection services)
     {

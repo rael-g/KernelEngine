@@ -1,4 +1,4 @@
-﻿
+
 using KernelEngine.Common.Native;
 using KernelEngine.Text.Native;
 using KernelEngine.Text.StbTrueType.Native;
@@ -13,7 +13,7 @@ public static class TextStbTrueTypeServiceExtensions
     /// Registers a stb_truetype-backed <see cref="IFontLoader"/> singleton. Fonts loaded through
     /// <c>Assets.LoadFontAsync(path, pixelSize)</c> route here for CPU decode + atlas bake; the
     /// resulting atlas texture is uploaded via the existing <c>ResourceManager.CreateTextureAsync</c>
-    /// pipeline. Requires <c>AddKernel()</c> first.
+    /// pipeline.
     /// </summary>
     public static IServiceCollection AddTextStbTrueType(this IServiceCollection services)
     {

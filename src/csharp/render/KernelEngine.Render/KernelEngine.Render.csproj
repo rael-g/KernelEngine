@@ -7,10 +7,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- FramePacket constructor is internal; tests need it for isolated unit testing. -->
-    <InternalsVisibleTo Include="KernelEngine.Kernel.Tests" />
-  </ItemGroup>
 
   <Import Project="../../NativeDependencies.targets" />
 

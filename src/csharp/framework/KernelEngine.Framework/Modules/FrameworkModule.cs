@@ -1,4 +1,4 @@
-﻿using KernelEngine.Ecs.Flecs;
+using KernelEngine.Ecs.Flecs;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Ecs;
 using KernelEngine.Runtime;
@@ -8,11 +8,11 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Creates the native <c>ke_world</c> aggregator and registers the ECS registry +
 /// component registry as <see cref="IEcsRegistry"/> and <see cref="IComponentRegistry"/>
-/// so Toolkit's <c>SceneRenderModule</c> can resolve them without a direct
+/// so Toolkit's scene modules can resolve them without a direct
 /// dependency on this assembly.
 /// </summary>
 /// <remarks>
-/// Add this module before <c>SceneRenderModule</c>. It must run first so the
+/// Add this module before any scene module. It must run first so the
 /// interfaces are in DI before the scene infrastructure tries to resolve them.
 /// </remarks>
 public sealed class FrameworkModule : IRuntimeModule
@@ -56,8 +56,8 @@ public sealed class FrameworkModule : IRuntimeModule
             // sizes (104 bytes) before this registry re-registers them at framework sizes
             // (40 bytes). If scene_tree runs second, flecs stores transform at 40 bytes
             // and C writes of ke_transform_component (104 bytes) corrupt adjacent heap.
-            // This guarantee must live in the factory so it holds no matter who triggers
-            // ComponentRegistry first (e.g. SceneRenderModule resolving IFrameContributors).
+            // This guarantee must live in the factory so it holds no matter which
+            // consumer resolves ComponentRegistry first.
             _ = sp.GetRequiredService<World>();
             return new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>());
         });

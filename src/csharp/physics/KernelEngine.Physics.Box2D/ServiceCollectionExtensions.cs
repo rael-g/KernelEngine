@@ -1,4 +1,4 @@
-﻿using KernelEngine.Configuration;
+using KernelEngine.Configuration;
 using KernelEngine.Common.Native;
 using KernelEngine.Physics.Box2D.Native;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +22,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers a Box2D-backed <see cref="IPhysics2D"/> singleton. Reads
     /// <c>[runtime.physics_2d]</c> from the Project file when present; otherwise uses
-    /// <see cref="Box2DOptions"/> defaults. Requires <c>AddKernel()</c> first.
+    /// <see cref="Box2DOptions"/> defaults.
     /// </summary>
     public static IServiceCollection AddBox2D(this IServiceCollection services)
     {

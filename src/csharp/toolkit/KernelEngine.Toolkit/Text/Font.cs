@@ -1,4 +1,4 @@
-﻿using KernelEngine.Render;
+using KernelEngine.Render;
 using KernelEngine.Text;
 
 
@@ -11,10 +11,9 @@ namespace KernelEngine.Framework;
 /// (render worker thread — GPU resource creation has thread affinity).
 /// </summary>
 /// <remarks>
-/// render-v2 (<see cref="IRenderResources"/>) has no texture-destroy path — GPU
-/// resources it owns live for the render module's lifetime, so this type is not
-/// <see cref="IDisposable"/> here (the legacy bgfx <c>IRenderer</c> path, which
-/// does support destroy, is a separate build).
+/// <see cref="IRenderResources"/> has no texture-destroy path — GPU resources it
+/// owns live for the render module's lifetime, so this type is not
+/// <see cref="IDisposable"/>.
 /// </remarks>
 public sealed class Font
 {

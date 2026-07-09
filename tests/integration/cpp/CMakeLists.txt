@@ -45,8 +45,6 @@ target_link_libraries(test_integration_cpp PRIVATE
     ke_logger_simple
     ke_input_default
     ke_resource_cache_default
-    ke_render_frame_packet
-    ke_threading_default
     ke_runtime
     ke_ecs_flecs
     ke_framework

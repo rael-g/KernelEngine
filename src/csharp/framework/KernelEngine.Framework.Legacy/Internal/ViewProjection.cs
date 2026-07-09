@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using KernelEngine.Render;
 
 namespace KernelEngine.Framework.Legacy.Internal;
@@ -26,7 +26,7 @@ namespace KernelEngine.Framework.Legacy.Internal;
 /// </para>
 /// <para>
 /// Results are written into <see cref="Matrix4x4"/> slots so the flat bytes match the column-major
-/// <c>ke_mat4</c> layout; <c>FramePacket.ToKeMat4</c> blits them verbatim.
+/// <c>ke_mat4</c> layout and can be blitted verbatim.
 /// </para>
 /// </remarks>
 internal static class ViewProjection

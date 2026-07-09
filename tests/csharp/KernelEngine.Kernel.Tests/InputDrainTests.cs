@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Xunit;
 
@@ -6,7 +6,6 @@ namespace EngineTests;
 
 public unsafe class InputDrainTests
 {
-    public InputDrainTests() { KernelThread.SetCurrentName("ke.main"); }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
     private static uint MockDrainEvents(ke_input* self, ke_input_event* buffer, uint capacity)

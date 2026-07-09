@@ -1,4 +1,4 @@
-﻿using KernelEngine.Render;
+using KernelEngine.Render;
 using KernelEngine.Input;
 namespace KernelEngine.Framework;
 
@@ -27,9 +27,8 @@ public interface ISystem
     /// <summary>Advances this system by one frame.</summary>
     /// <param name="world">The active ECS world.</param>
     /// <param name="dt">Delta time since last frame.</param>
-    /// <param name="packet">Optional frame packet for recording render commands.</param>
     /// <param name="input">Immutable snapshot of input state for this frame.</param>
-    void Update(IWorld world, float dt, IFramePacket? packet = null, IInputReader? input = null);
+    void Update(IWorld world, float dt, IInputReader? input = null);
 
     /// <summary>
     /// Returns the component access pattern for this system.

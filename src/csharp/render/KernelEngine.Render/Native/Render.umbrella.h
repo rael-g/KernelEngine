@@ -8,8 +8,6 @@
 #include <kernel_engine/render/material.h>
 #include <kernel_engine/render/mesh.h>
 #include <kernel_engine/render/texture.h>
-#include <kernel_engine/threading/frame_sync.h>
-#include <kernel_engine/render/frame_packet.h>
 #include <kernel_engine/render/render.h>
 #include <kernel_engine/render/render_graph.h>
 #include <kernel_engine/render/shader_compiler.h>

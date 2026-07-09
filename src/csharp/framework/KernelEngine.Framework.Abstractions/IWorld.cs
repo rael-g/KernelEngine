@@ -1,4 +1,4 @@
-﻿using KernelEngine.Ecs;
+using KernelEngine.Ecs;
 using KernelEngine.Render;
 using KernelEngine.Input;
 namespace KernelEngine.Framework;
@@ -46,5 +46,5 @@ public interface IWorld : IDisposable
     void UnregisterScript(ulong entity);
 
     /// <summary>Advances the simulation by one frame.</summary>
-    void Update(IFramePacket? packet = null, IInputReader? input = null);
+    void Update(IInputReader? input = null);
 }

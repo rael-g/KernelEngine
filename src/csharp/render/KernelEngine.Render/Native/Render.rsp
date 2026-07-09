@@ -19,8 +19,6 @@ ke_render_bgfx
 --include-directory
 ../../../../c/scheduler/include
 --include-directory
-../../../../c/threading/include
---include-directory
 ../../../../c/resource_cache/include
 --include-directory
 ../../../../c/window/include
@@ -36,8 +34,6 @@ Render.umbrella.h
 ../../../../c/render/include/kernel_engine/render/material.h
 ../../../../c/render/include/kernel_engine/render/mesh.h
 ../../../../c/render/include/kernel_engine/render/texture.h
-../../../../c/threading/include/kernel_engine/threading/frame_sync.h
-../../../../c/render/include/kernel_engine/render/frame_packet.h
 ../../../../c/render/include/kernel_engine/render/render.h
 ../../../../c/render/include/kernel_engine/render/render_graph.h
 ../../../../c/render/include/kernel_engine/render/shader_compiler.h

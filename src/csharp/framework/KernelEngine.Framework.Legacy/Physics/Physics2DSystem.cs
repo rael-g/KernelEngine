@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using KernelEngine.Render;
 using KernelEngine.Input;
 using KernelEngine.Physics;
@@ -36,7 +36,7 @@ public sealed class Physics2DSystem : ISystem
         _physics = physics;
     }
 
-    public void Update(IWorld world, float deltaTime, IFramePacket? packet, IInputReader? input)
+    public void Update(IWorld world, float deltaTime, IInputReader? input)
     {
         _accumulator += deltaTime;
         // Cap to avoid the "spiral of death" if a frame stalls — at most ~8 sub-steps per frame.

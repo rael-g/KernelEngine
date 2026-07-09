@@ -3,7 +3,7 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// 2D visual node. Configured entirely from the scene file via
 /// <c>[entity.components.Sprite2D]</c>: mesh primitive, base color, and
-/// roughness. The <see cref="SceneRenderModule"/> registers the apply callback
+/// roughness. <see cref="SceneNodesModule"/> registers the apply callback
 /// that creates GPU resources and writes <see cref="MeshRendererComponent"/>.
 /// </summary>
 public class Sprite2D : Node

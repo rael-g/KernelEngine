@@ -17,8 +17,6 @@ ke_framework
 --include-directory
 ../../../../c/scheduler/include
 --include-directory
-../../../../c/threading/include
---include-directory
 ../../../../c/runtime/include
 --include-directory
 ../../../../c/framework/include

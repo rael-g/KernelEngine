@@ -1,8 +1,7 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using LuaSpike;
 
 // ── Thread name (World.Update asserts ke.sim) ─────────────────────────────────
-KernelThread.SetCurrentName("ke.sim");
 
 const int WarmupFrames    = 10;
 const int BenchmarkFrames = 1000;

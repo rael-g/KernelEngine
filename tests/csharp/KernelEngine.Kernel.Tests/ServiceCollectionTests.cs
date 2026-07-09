@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace EngineTests;
@@ -6,20 +6,9 @@ namespace EngineTests;
 public class ServiceCollectionTests
 {
     [Fact]
-    public void AddKernel_RegistersRequiredServices()
-    {
-        var services = new ServiceCollection();
-        services.AddKernel();
-        var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetService<IKernelFactory>());
-    }
-
-    [Fact]
     public void AddLogger_RegistersLogger()
     {
         var services = new ServiceCollection();
-        services.AddKernel();
         services.AddLogger();
         var provider = services.BuildServiceProvider();
 
@@ -31,7 +20,6 @@ public class ServiceCollectionTests
     public void AddInput_RegistersInput()
     {
         var services = new ServiceCollection();
-        services.AddKernel();
         services.AddInput();
         var provider = services.BuildServiceProvider();
 

@@ -24,7 +24,6 @@ target_link_libraries(test_ke_kernel PRIVATE
     ke_logger_simple
     ke_input_default
     ke_resource_cache_default
-    ke_render_frame_packet
     ke_framework
     ke_runtime
     ke_ecs_flecs
@@ -39,7 +38,6 @@ target_include_directories(test_ke_kernel PRIVATE
     ${CMAKE_SOURCE_DIR}/src/c/ecs/include
     ${CMAKE_SOURCE_DIR}/src/c/spatial/include
     ${CMAKE_SOURCE_DIR}/src/c/scheduler/include
-    ${CMAKE_SOURCE_DIR}/src/c/threading/include
     ${CMAKE_SOURCE_DIR}/src/c/runtime/include
     ${CMAKE_SOURCE_DIR}/src/c/framework/include
     ${CMAKE_SOURCE_DIR}/src/c/render/include

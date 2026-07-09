@@ -1,4 +1,4 @@
-﻿
+
 using Xunit;
 
 namespace EngineTests;
@@ -21,7 +21,7 @@ public class InputTests
     [Fact]
     public void CaptureSnapshot_ReturnsValidReader()
     {
-        KernelThread.SetCurrentName("ke.main");        using var input = new Input(null);
+        using var input = new Input(null);
         var reader = input.CaptureSnapshot();
         Assert.NotNull(reader);
         Assert.False(reader.IsKeyDown(65));
@@ -36,7 +36,7 @@ public class InputTests
     [Fact]
     public void InputReaderExtensions_WorkCorrectly()
     {
-        KernelThread.SetCurrentName("ke.main");        using var input = new Input(null);
+        using var input = new Input(null);
         
         var reader = input.CaptureSnapshot();
         Assert.False(reader.IsKeyDown(Key.W));

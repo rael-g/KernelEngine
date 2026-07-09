@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using KernelEngine.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -100,20 +100,20 @@ public static class InputActions
     /// <exception cref="InvalidOperationException">No <see cref="IProjectConfig"/> registered, or the file has no <c>[input].actions</c> entry.</exception>
     /// <exception cref="FileNotFoundException">The path resolved from <c>res://</c> does not exist.</exception>
     /// <summary>
-    /// DI registration that tells <see cref="Application"/> which game enum to auto-load actions for.
-    /// Use <c>services.AddInputActions&lt;PongAction&gt;()</c>; Application loads the file at startup,
-    /// game code just calls <see cref="Get{TEnum}"/> from anywhere.
+    /// DI registration that declares which game enum to auto-load actions for.
+    /// Use <c>services.AddInputActions&lt;PongAction&gt;()</c>; the host loads the file at
+    /// startup, and game code just calls <see cref="Get{TEnum}"/> from anywhere.
     /// </summary>
-    internal interface IAutoLoader { void Load(Application app); }
+    internal interface IAutoLoader { void Load(IServiceProvider services); }
     internal sealed class AutoLoader<TEnum> : IAutoLoader where TEnum : struct, Enum
     {
-        public void Load(Application app) => LoadFromProject<TEnum>(app);
+        public void Load(IServiceProvider services) => LoadFromProject<TEnum>(services);
     }
 
-    public static IInputActionReader<TEnum> LoadFromProject<TEnum>(Application app)
+    public static IInputActionReader<TEnum> LoadFromProject<TEnum>(IServiceProvider services)
         where TEnum : struct, Enum
     {
-        var config = app.Services.GetService<IProjectConfig>()
+        var config = services.GetService<IProjectConfig>()
             ?? throw new InvalidOperationException(
                 "InputActions.LoadFromProject requires a Project file. Add KernelEngine.Configuration and ensure a Project file is registered.");
         if (!config.IsLoaded)

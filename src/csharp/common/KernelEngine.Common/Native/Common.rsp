@@ -3,7 +3,7 @@ Generated/
 --namespace
 KernelEngine.Common.Native
 --libraryPath
-ke_threading
+ke_common
 --include-directory
 ../../../../c/common/include
 --include-directory
@@ -12,15 +12,12 @@ ke_threading
 ../../../../c/spatial/include
 --include-directory
 ../../../../c/resource_cache/include
---include-directory
-../../../../c/threading/include
 --file
 ../../../../c/common/include/kernel_engine/common/types.h
 ../../../../c/common/include/kernel_engine/common/error.h
 ../../../../c/common/include/kernel_engine/common/math.h
 ../../../../c/allocator/include/kernel_engine/allocator/allocator.h
 ../../../../c/resource_cache/include/kernel_engine/resource_cache/resource_cache.h
-../../../../c/threading/include/kernel_engine/threading/thread_name.h
 ../../../../c/spatial/include/kernel_engine/spatial/transform.h
 --methodClassName
 NativeMethods

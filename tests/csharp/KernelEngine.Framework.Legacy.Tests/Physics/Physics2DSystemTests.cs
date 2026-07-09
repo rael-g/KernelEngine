@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using Xunit;
 using NSubstitute;
 
@@ -13,7 +13,7 @@ public class Physics2DSystemTests
         var system = new Physics2DSystem(physics);
 
         // dt = 2.5 * 1/60 should result in 2 steps
-        system.Update(null!, 2.5f / 60f, null, null);
+        system.Update(null!, 2.5f / 60f, null);
 
         physics.Received(2).Step(Physics2DSystem.FixedTimestep);
     }
@@ -25,7 +25,7 @@ public class Physics2DSystemTests
         var system = new Physics2DSystem(physics);
 
         // dt = 1.0s should result in many steps, but capped at 8
-        system.Update(null!, 1.0f, null, null);
+        system.Update(null!, 1.0f, null);
 
         physics.Received(8).Step(Physics2DSystem.FixedTimestep);
     }
@@ -77,7 +77,7 @@ public class Physics2DSystemTests
         physics.GetBodyState(handle).Returns(new BodyState2D { Position = new Vector2(100, 200), Angle = 0.5f });
 
         // Update with enough time for 1 step
-        system.Update(null!, Physics2DSystem.FixedTimestep, null, null);
+        system.Update(null!, Physics2DSystem.FixedTimestep, null);
 
         Assert.Equal(100f, body.LocalTransform.Position.X);
         Assert.Equal(200f, body.LocalTransform.Position.Y);
@@ -104,7 +104,7 @@ public class Physics2DSystemTests
         system.Unregister(body);
         
         physics.GetBodyState(handle).Returns(new BodyState2D { Position = new Vector2(999, 999) });
-        system.Update(null!, Physics2DSystem.FixedTimestep, null, null);
+        system.Update(null!, Physics2DSystem.FixedTimestep, null);
 
         Assert.NotEqual(999f, body.LocalTransform.Position.X);
         Physics2DContext.Set(null, null);

@@ -1,4 +1,4 @@
-﻿using KernelEngine.Logger;
+using KernelEngine.Logger;
 
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +9,6 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers an stb_image-backed <see cref="IImageLoader"/> singleton. Requires
-    /// <c>AddKernel()</c> first.
     /// </summary>
     public static IServiceCollection AddStbImageLoader(this IServiceCollection services)
     {

@@ -14,8 +14,8 @@ using KernelEngine.Render;
 
 // 02_textured_quad — procedural checkerboard texture on the built-in quad, lit
 // by one directional light. Render v2 (webgpu): a glTF-style material (white
-// base-color factor × albedo texture) referenced by the mesh; the forward pass
-// samples it. No IRenderer, no contributors.
+// base-color factor × albedo texture) referenced by the mesh; the shading pass
+// samples it.
 
 var services = new ServiceCollection()
     .AddLogger()

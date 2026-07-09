@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Numerics;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
@@ -15,8 +15,8 @@ using KernelEngine.Render;
 
 // 01_window_scene — a single orange quad spinning on the screen under a fixed
 // directional light. Smallest possible scene that exercises window + renderer
-// + framework + a scripted node behavior. Render v2 (webgpu): the forward pass
-// reads the scene's ECS components directly — no IRenderer, no contributors.
+// + framework + a scripted node behavior. The render passes read the scene's ECS
+// components directly.
 
 var services = new ServiceCollection()
     .AddLogger()
