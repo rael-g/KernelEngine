@@ -171,6 +171,45 @@ TEST_F(AssetResolverTest, ResolveMaterial_MalformedFile_ReturnsError)
     fs::remove(mat);
 }
 
+TEST_F(AssetResolverTest, ResolveMaterial_NoAlphaMode_DefaultsToOpaque)
+{
+    auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_EQ(spec.alpha_mode, KE_ALPHA_MODE_OPAQUE);
+    EXPECT_FLOAT_EQ(spec.alpha_cutoff, 0.5f);
+    fs::remove(mat);
+}
+
+TEST_F(AssetResolverTest, ResolveMaterial_AlphaModeMask_ParsesModeAndCutoff)
+{
+    auto mat = WriteTempFile(".material",
+        "[material]\nalpha_mode = \"MASK\"\nalpha_cutoff = 0.75\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_EQ(spec.alpha_mode, KE_ALPHA_MODE_MASK);
+    EXPECT_FLOAT_EQ(spec.alpha_cutoff, 0.75f);
+    fs::remove(mat);
+}
+
+TEST_F(AssetResolverTest, ResolveMaterial_AlphaModeBlend_Parses)
+{
+    auto mat = WriteTempFile(".material", "[material]\nalpha_mode = \"BLEND\"\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_EQ(spec.alpha_mode, KE_ALPHA_MODE_BLEND);
+    fs::remove(mat);
+}
+
+TEST_F(AssetResolverTest, ResolveMaterial_UnknownAlphaMode_DefaultsToOpaque)
+{
+    auto mat = WriteTempFile(".material", "[material]\nalpha_mode = \"typo\"\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_EQ(spec.alpha_mode, KE_ALPHA_MODE_OPAQUE);
+    fs::remove(mat);
+}
+
 // ── Material resolution ────────────────────────────────────────────────────
 
 TEST_F(AssetResolverTest, Create_NullImageAndRoot_ReturnsValidHandle)

@@ -18,6 +18,10 @@ public partial struct ke_material_spec
     [NativeTypeName("char[256]")]
     public _normal_path_e__FixedBuffer normal_path;
 
+    public ke_alpha_mode alpha_mode;
+
+    public float alpha_cutoff;
+
     [InlineArray(4)]
     public partial struct _base_color_e__FixedBuffer
     {

@@ -17,6 +17,18 @@ extern "C"
     typedef struct ke_cubemap_handle     { uint32_t idx; } ke_cubemap_handle;
     typedef struct ke_shadow_map_handle  { uint32_t idx; } ke_shadow_map_handle;
 
+    // glTF 2.0 material.alphaMode. OPAQUE and MASK both stay in the G-buffer (MASK
+    // discards below alpha_cutoff but writes no blend); BLEND is the only mode the
+    // transparent forward pass shades. Lives alongside the handles because both the
+    // asset-side material spec and the render core's material creation need it,
+    // and neither should pull in the other's header.
+    typedef enum ke_alpha_mode
+    {
+        KE_ALPHA_MODE_OPAQUE,
+        KE_ALPHA_MODE_MASK,
+        KE_ALPHA_MODE_BLEND,
+    } ke_alpha_mode;
+
 #ifndef CLANGSHARP
 #define KE_MESH_NONE        ((ke_mesh_handle)      { KE_HANDLE_NONE })
 #define KE_TEXTURE_NONE     ((ke_texture_handle)   { KE_HANDLE_NONE })

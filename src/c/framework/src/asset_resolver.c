@@ -109,6 +109,8 @@ static bool parse_material_file(const char *path, ke_material_spec *out_spec) {
     out_spec->roughness      = 0.5f;
     out_spec->albedo_path[0] = '\0';
     out_spec->normal_path[0] = '\0';
+    out_spec->alpha_mode     = KE_ALPHA_MODE_OPAQUE;
+    out_spec->alpha_cutoff   = 0.5f;
 
     FILE *fp = fopen(path, "rb");
     if (!fp) return false;
@@ -158,6 +160,22 @@ static bool parse_material_file(const char *path, ke_material_spec *out_spec) {
     if (n.ok) {
         copy_string_clamped(out_spec->normal_path, n.u.s, KE_MATERIAL_PATH_MAX);
         free(n.u.s);
+    }
+
+    // glTF-aligned: "OPAQUE" | "MASK" | "BLEND". Unknown values keep the OPAQUE
+    // default rather than erroring — a typo should not make a whole scene load fail.
+    toml_datum_t am = toml_string_in(mat, "alpha_mode");
+    if (am.ok) {
+        if (strcmp(am.u.s, "MASK") == 0)       out_spec->alpha_mode = KE_ALPHA_MODE_MASK;
+        else if (strcmp(am.u.s, "BLEND") == 0) out_spec->alpha_mode = KE_ALPHA_MODE_BLEND;
+        free(am.u.s);
+    }
+
+    toml_datum_t ac = toml_double_in(mat, "alpha_cutoff");
+    if (ac.ok) out_spec->alpha_cutoff = (float)ac.u.d;
+    else {
+        toml_datum_t aci = toml_int_in(mat, "alpha_cutoff");
+        if (aci.ok) out_spec->alpha_cutoff = (float)aci.u.i;
     }
 
     toml_free(root);

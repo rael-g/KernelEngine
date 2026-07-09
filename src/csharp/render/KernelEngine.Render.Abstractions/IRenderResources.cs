@@ -35,9 +35,14 @@ public interface IRenderResources
     /// by an albedo texture (default <c>TextureHandle.White</c> = flat color), plus
     /// metallic (0 = dielectric, 1 = metal), roughness (0 = mirror, 1 = matte), and
     /// an optional tangent-space normal map (<c>null</c> = flat / no perturbation).
+    /// <paramref name="alphaMode"/> selects which pass shades the material
+    /// (gbuffer for <see cref="AlphaMode.Opaque"/>/<see cref="AlphaMode.Mask"/>,
+    /// transparent forward for <see cref="AlphaMode.Blend"/>); <paramref name="alphaCutoff"/>
+    /// only applies to <see cref="AlphaMode.Mask"/>.
     /// </summary>
     MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
-                                  TextureHandle albedo = default, TextureHandle? normalMap = null);
+                                  TextureHandle albedo = default, TextureHandle? normalMap = null,
+                                  AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f);
 
     /// <summary>
     /// Queues a screen-space UI quad for this frame, drawn after tonemap so it

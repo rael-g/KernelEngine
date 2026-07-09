@@ -123,7 +123,22 @@ public sealed class SceneNodesModule : IRuntimeModule
                     {
                         float roughness = 1f;
                         reader.TryGetFloat("roughness", out roughness);
-                        comp.Material = resources.CreateMaterial(color, roughness: roughness);
+
+                        var alphaMode = AlphaMode.Opaque;
+                        if (reader.TryGetString("alpha_mode", out var alphaModeName))
+                        {
+                            alphaMode = alphaModeName switch
+                            {
+                                "mask"  => AlphaMode.Mask,
+                                "blend" => AlphaMode.Blend,
+                                _       => AlphaMode.Opaque,
+                            };
+                        }
+                        float alphaCutoff = 0.5f;
+                        reader.TryGetFloat("alpha_cutoff", out alphaCutoff);
+
+                        comp.Material = resources.CreateMaterial(color, roughness: roughness,
+                            alphaMode: alphaMode, alphaCutoff: alphaCutoff);
                     }
                 });
         }
