@@ -69,6 +69,8 @@ pub const Texture = struct {
 pub const Material = struct {
     ubo: c.ke_gpu_buffer, // base_color uniform
     bind_group: c.ke_gpu_bind_group, // set 1: base_color + albedo + sampler
+    alpha_mode: c.ke_alpha_mode, // CPU-side only — gates gbuffer vs transparent-forward, no GPU state
+    alpha_cutoff: f32, // MASK discard threshold; unused for OPAQUE/BLEND
 };
 
 pub const Resource = struct {
@@ -307,6 +309,8 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .create_material = asset_upload.createMaterial,
         .material_layout = asset_upload.materialLayout,
         .material_bind_group = asset_upload.materialBindGroup,
+        .material_alpha_mode = asset_upload.materialAlphaMode,
+        .material_alpha_cutoff = asset_upload.materialAlphaCutoff,
         .upload_cubemap = asset_upload.uploadCubemap,
         .texture_view = asset_upload.textureView,
         .sampler = asset_upload.samplerOf,
@@ -344,7 +348,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
     st.default_cubemap = asset_upload.uploadCubemap(core, 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, null);
+    _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }
