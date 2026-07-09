@@ -22,15 +22,13 @@ comptime {
 // methods), the factory/destroy pair, and the vtable wiring. Each vtable
 // slot's actual logic lives in its own file, grouped by concern rather than
 // by "everything the core does":
-//   resource_table.zig   — named-resource declare/import/lookup (§7 tags)
+//   resource_table.zig   — named-resource declare/import/lookup (tag cids)
 //   pass_recording.zig    — ke_render_pass_ctx + the compute-pass proxy
 //   frame_lifecycle.zig   — begin/end_frame + the deferred-upload recorder
 //   asset_upload.zig      — mesh/texture/cubemap/material upload
-// The UI overlay used to live here too (a quad-batch pipeline baked into this
-// "dumb" core's vtable) — moved out to ui_module.zig on the render_module.zig
-// side, as its own opt-in pass alongside tonemap/forward/shadow, since it is a
-// rendering feature, not core machinery. ke_render_module_ui_quad is the new
-// ABI entry game code calls (see render_module.zig).
+// The core provides mechanism only. A rendering feature — anything owning a
+// pipeline, shaders, or per-frame draw state — belongs to a pass module, not
+// to this vtable.
 const resource_table = @import("resource_table.zig");
 const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");

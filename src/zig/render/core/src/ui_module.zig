@@ -4,14 +4,11 @@ const cimport = @import("cimport.zig");
 const c = cimport.c;
 
 // UI overlay — screen-space quad batching + its own pipeline/shaders, drawn
-// after tonemap so it composites over the rendered scene. Previously this was
-// baked into ke_render_core's own vtable (ui_quad/ui_draw) — a rendering
-// feature (a pipeline, two shaders, per-frame batching state) embedded in the
-// "dumb" core, the same shape §9.8 already diagnosed and fixed one layer up.
-// Moved here so UI is an opt-in module like tonemap/forward/shadow: the core
-// only provides the mechanism (begin_pass/upload/end_pass) this module calls,
-// same as every other feature pass. ke_render_module_ui_quad (the ABI entry
-// game code calls) forwards straight into this module's quad accumulator.
+// after tonemap so it composites over the rendered scene. An opt-in pass module
+// like tonemap or shadow: it owns its pipeline, shaders, and per-frame batching
+// state, and reaches the GPU only through the mechanism the core exposes
+// (begin_pass/upload/end_pass). Game code queues quads via the ABI entry
+// ke_render_module_ui_quad, which forwards into this module's accumulator.
 
 const ui_vs_wgsl = @embedFile("ui.vs.wgsl");
 const ui_fs_wgsl = @embedFile("ui.fs.wgsl");

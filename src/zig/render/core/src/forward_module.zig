@@ -6,17 +6,20 @@ const shadow_module = @import("shadow_module.zig");
 const ShadowModule = shadow_module.ShadowModule;
 const cluster_module = @import("cluster_module.zig");
 const ClusterModule = cluster_module.ClusterModule;
-const skybox_module = @import("skybox_module.zig");
-const SkyboxModule = skybox_module.SkyboxModule;
 
-// Forward+ mesh pass — the opaque-shading half of the deferred+forward end-state.
-// It is the *consumer*: shadow, cluster (light cull), and skybox are their own
-// modules set up before this one; forward borrows their handles (the shadow map
-// + lvp uniform into set 0, the clustered light lists into set 3, the skybox
-// draw folded into its render pass) rather than owning or wiring them. That is
-// the honest coupling of a forward shading pass — it reads every feature's
-// output to compute the final lit pixel — expressed as borrowed pointers, not a
-// parent module reaching across a shared state blob.
+// Forward+ mesh pass — shades a surface inline, in one pass, so it can express
+// N-layer blending. That makes it the path for transparency, which a G-buffer
+// cannot represent (it stores one surface per pixel).
+//
+// It is the *consumer*: shadow and cluster (light cull) are their own modules
+// set up before this one; forward borrows their handles (the shadow map + lvp
+// uniform into set 0, the clustered light lists into set 3) rather than owning
+// or wiring them. That is the honest coupling of a forward shading pass — it
+// reads every feature's output to compute the final lit pixel — expressed as
+// borrowed pointers, not a parent module reaching across a shared state blob.
+//
+// No scene declares a transparent material yet, so render_module.zig does not
+// register this pass; opaque geometry shades through the G-buffer instead.
 
 const mat_test_flat_vs_wgsl = @embedFile("mat_test_flat.vs.wgsl");
 const mat_test_flat_fs_wgsl = @embedFile("mat_test_flat.fs.wgsl");
@@ -83,7 +86,6 @@ pub const ForwardModule = struct {
     // Borrowed feature modules whose outputs forward consumes (set up first).
     shadow: *ShadowModule = undefined,
     cluster: *ClusterModule = undefined,
-    skybox: *SkyboxModule = undefined,
 
     fwd_lit_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
     magenta_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE, // Mechanism-1 "never silent" miss placeholder
@@ -99,6 +101,10 @@ pub const ForwardModule = struct {
     fwd_io: c.ke_render_pass_io = undefined,
     fwd_access: [13]c.ke_component_access = undefined,
     fwd_access_count: u32 = 0, // < 13 when shadow.enabled is false (no shadow_map READ dependency)
+    // Resolved single-threaded by the runtime before the wave dispatches; the
+    // body then reads plain memory via ke_system_ctx_view and touches the ECS
+    // not at all.
+    queries: [5]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient], [mesh,transform]
 };
 
 // ── Projection helpers (consume the backend NDC convention) ──────────────────
@@ -187,31 +193,23 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const fwd = moduleOf(user);
     const core = fwd.core.ref;
 
-    // Camera: take the first camera entity + its transform.
-    var cam_ents: [*c]c.ke_entity = undefined;
-    var cam_data: ?*anyopaque = undefined;
-    var cam_count: usize = 0;
-    c.ke_system_ctx_query(ctx, fwd.camera_cid, &cam_ents, &cam_data, &cam_count);
+    // View 0 = [camera, transform]; the first match is the active camera.
+    var cam_segc: usize = 0;
+    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
 
     const pc = core.*.begin_pass.?(core, ctx, &fwd.fwd_io);
     if (pc == null) return;
 
     // No camera — open/close the pass so the hdr target is cleared, then bail.
-    if (cam_count == 0) {
+    if (cam_segc == 0 or cam_segs[0].count == 0) {
         const rp0 = pc.*.begin_render.?(pc);
         rp0.*.end.?(rp0);
         core.*.end_pass.?(core, pc);
         return;
     }
 
-    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_data));
-    const cam_tc_raw = c.ke_system_ctx_get(ctx, fwd.transform_cid, cam_ents[0]) orelse {
-        const rp0 = pc.*.begin_render.?(pc);
-        rp0.*.end.?(rp0);
-        core.*.end_pass.?(core, pc);
-        return;
-    };
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_tc_raw));
+    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
+    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -234,13 +232,11 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const sky_vp = zm.mul(zm.loadMat(vm[0..]), proj);
 
     // Environment cubemap from the first skybox entity (default black otherwise);
-    // rebuild set 0 only when the bound environment changes.
-    var sky_ents: [*c]c.ke_entity = undefined;
-    var sky_data: ?*anyopaque = undefined;
-    var sky_count: usize = 0;
-    c.ke_system_ctx_query(ctx, fwd.skybox_cid, &sky_ents, &sky_data, &sky_count);
-    const want_env: c.ke_texture_handle = if (sky_count != 0)
-        (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_data)))).cubemap
+    // rebuild set 0 only when the bound environment changes. View 1 = [skybox].
+    var sky_segc: usize = 0;
+    const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
+    const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
+        (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
         .{ .idx = c.KE_HANDLE_NONE };
     if (want_env.idx != fwd.env_cubemap.idx) {
@@ -270,12 +266,11 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     // Directional light (first entity). Present → enable the directional term +
     // its shadow map; its ambient seeds the scene ambient. Point/spot lights are
     // accumulated from the clustered storage buffers (the cull pass binned them).
-    var li_ents: [*c]c.ke_entity = undefined;
-    var li_data: ?*anyopaque = undefined;
-    var li_count: usize = 0;
-    c.ke_system_ctx_query(ctx, fwd.light_cid, &li_ents, &li_data, &li_count);
-    if (li_count != 0) {
-        const dl: *const DirLight = @ptrCast(@alignCast(li_data));
+    // View 2 = [directional_light].
+    var li_segc: usize = 0;
+    const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
+    if (li_segc != 0 and li_segs[0].count != 0) {
+        const dl: *const DirLight = @ptrCast(@alignCast(li_segs[0].columns[0]));
         frame.light_dir = .{ dl.dir[0], dl.dir[1], dl.dir[2], 0.0 };
         frame.light_color = .{ dl.rgb[0], dl.rgb[1], dl.rgb[2], dl.intensity };
         frame.ambient = .{ dl.ambient[0], dl.ambient[1], dl.ambient[2], 0.0 };
@@ -283,39 +278,16 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         frame.shadow_params[2] = 1.0; // directional active
     }
 
-    // Standalone ambient light (overrides the directional's ambient when present).
-    var am_ents: [*c]c.ke_entity = undefined;
-    var am_data: ?*anyopaque = undefined;
-    var am_count: usize = 0;
-    c.ke_system_ctx_query(ctx, fwd.ambient_cid, &am_ents, &am_data, &am_count);
-    if (am_count != 0) {
-        const al: *const AmbientComp = @ptrCast(@alignCast(am_data));
+    // Standalone ambient light (overrides the directional's when present).
+    // View 3 = [AmbientLight].
+    var am_segc: usize = 0;
+    const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
+    if (am_segc != 0 and am_segs[0].count != 0) {
+        const al: *const AmbientComp = @ptrCast(@alignCast(am_segs[0].columns[0]));
         frame.ambient = .{ al.color[0], al.color[1], al.color[2], 0.0 };
     }
 
     core.*.upload.?(core, fwd.fwd_frame_uniform, 0, &frame, @sizeOf(PerFrame));
-
-    // Meshes: build + upload one uniform region per draw (queue writes land before
-    // the recorded draws, so each dynamic offset reads its own object).
-    var ents: [*c]c.ke_entity = undefined;
-    var data: ?*anyopaque = undefined;
-    var count: usize = 0;
-    c.ke_system_ctx_query(ctx, fwd.mesh_cid, &ents, &data, &count);
-    const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(data));
-    const n: u32 = @intCast(@min(count, MAX_DRAWS));
-
-    var i: u32 = 0;
-    while (i < n) : (i += 1) {
-        const tc_raw = c.ke_system_ctx_get(ctx, fwd.transform_cid, ents[i]) orelse continue;
-        const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
-        const model = zm.loadMat(tc.world_matrix.m[0..]);
-        const mvp = zm.mul(model, view_proj);
-
-        var u: PerObject = undefined;
-        zm.storeMat(u.mvp[0..], mvp);
-        zm.storeMat(u.model[0..], model);
-        core.*.upload.?(core, fwd.fwd_obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(PerObject));
-    }
 
     const rp = pc.*.begin_render.?(pc);
     // Sets 0 and 3 (per-frame + lights) share the same layout across the
@@ -323,13 +295,32 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     // pipeline switches below.
     rp.*.set_bind_group.?(rp, 0, fwd.fwd_frame_bind_group, null, 0); // set 0: per-frame
     rp.*.set_bind_group.?(rp, 3, fwd.cluster.fwd_light_bind_group, null, 0); // set 3: lights
-    i = 0;
-    while (i < n) : (i += 1) {
+
+    // View 4 = [mesh, transform], columns aligned. Per-draw uniform writes are
+    // deferred by the core and replayed before the submit, so uploading inside
+    // the draw loop still lands ahead of the draws that read it.
+    var draw_idx: u32 = 0;
+    var segc: usize = 0;
+    const segs = c.ke_system_ctx_view(ctx, 4, &segc);
+    var s: usize = 0;
+    while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
+        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        var i: usize = 0;
+        while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
         var vbo: c.ke_gpu_buffer = 0;
         var ibo: c.ke_gpu_buffer = 0;
         var idx_count: u32 = 0;
         if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
-        const offset: u32 = i * UNIFORM_STRIDE;
+
+        const model = zm.loadMat(tcs[i].world_matrix.m[0..]);
+        const mvp = zm.mul(model, view_proj);
+        var u: PerObject = undefined;
+        zm.storeMat(u.mvp[0..], mvp);
+        zm.storeMat(u.model[0..], model);
+        const offset: u32 = draw_idx * UNIFORM_STRIDE;
+        core.*.upload.?(core, fwd.fwd_obj_uniform, offset, &u, @sizeOf(PerObject));
+
         // PSO selection (Mechanism 1): a mesh with no assigned material draws
         // magenta ("never silent"); an assigned material draws the IMaterial path.
         const has_material = meshes[i].material.idx != c.KE_HANDLE_NONE;
@@ -340,20 +331,18 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
+            draw_idx += 1;
+        }
     }
-
-    // Skybox last — depth LEQUAL, no depth write: fills only the background pixels
-    // the opaque meshes did not cover, within the same render pass (no load-op).
-    skybox_module.draw(fwd.skybox, rp, fwd.fwd_frame_bind_group);
 
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
 }
 
-// Sets up the forward pass's own resources. shadow/cluster/skybox are already
-// set up by the aggregator and passed as borrowed pointers — forward consumes
-// their handles (shadow map + lvp into set 0, cluster light lists into set 3,
-// skybox drawn inside the render pass), it does not create them.
+// Sets up the forward pass's own resources. shadow and cluster are already set
+// up by the aggregator and passed as borrowed pointers — forward consumes their
+// handles (shadow map + lvp into set 0, cluster light lists into set 3), it does
+// not create them.
 pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
              ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
              mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
@@ -361,7 +350,7 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
              ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
              frame_cid: c.ke_component_id, shadow: *ShadowModule, cluster: *ClusterModule,
-             skybox: *SkyboxModule, out_error: [*c][*c]c.ke_error) bool {
+             out_error: [*c][*c]c.ke_error) bool {
     fwd.core = core;
     fwd.device = dev;
     fwd.ndc = ndc;
@@ -378,7 +367,6 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     fwd.frame_cid = frame_cid;
     fwd.shadow = shadow;
     fwd.cluster = cluster;
-    fwd.skybox = skybox;
     fwd.env_cubemap = .{ .idx = c.KE_HANDLE_NONE };
 
     // Set 2 — per-object transform (dynamic offset, vertex stage).
@@ -605,5 +593,22 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     fwd.fwd_access[fac] = .{ .cid = cluster.clusters_cid, .access = c.KE_ACCESS_READ }; // after the cull pass
     fac += 1;
     fwd.fwd_access_count = fac;
+
+    // Data the body reads through resolved views. Index order is the
+    // query_index passed to ke_system_ctx_view.
+    const rd = c.KE_ACCESS_READ;
+    fwd.queries = std.mem.zeroes([5]c.ke_query_decl);
+    fwd.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
+    fwd.queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    fwd.queries[0].term_count = 2;
+    fwd.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
+    fwd.queries[1].term_count = 1;
+    fwd.queries[2].terms[0] = .{ .cid = light_cid, .access = rd };
+    fwd.queries[2].term_count = 1;
+    fwd.queries[3].terms[0] = .{ .cid = ambient_cid, .access = rd };
+    fwd.queries[3].term_count = 1;
+    fwd.queries[4].terms[0] = .{ .cid = mesh_cid, .access = rd };
+    fwd.queries[4].terms[1] = .{ .cid = transform_cid, .access = rd };
+    fwd.queries[4].term_count = 2;
     return true;
 }

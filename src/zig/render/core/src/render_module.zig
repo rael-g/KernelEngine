@@ -12,6 +12,18 @@ const tonemap_module = @import("tonemap_module.zig");
 const TonemapModule = tonemap_module.TonemapModule;
 const ui_module = @import("ui_module.zig");
 const UiModule = ui_module.UiModule;
+const gbuffer_module = @import("gbuffer_module.zig");
+const GBufferModule = gbuffer_module.GBufferModule;
+const deferred_lighting_module = @import("deferred_lighting_module.zig");
+const DeferredLightingModule = deferred_lighting_module.DeferredLightingModule;
+
+// The forward pass shades transparent surfaces, which a G-buffer cannot hold
+// (one surface per pixel). No scene declares a transparent material yet, so it
+// is not registered below; this reference keeps it compiled and honest.
+comptime {
+    _ = &forward_module.setup;
+    _ = &forward_module.system;
+}
 
 // Compiled into the ke_render_core library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -57,16 +69,19 @@ const ModuleState = struct {
     end_access: [2]c.ke_component_access, // READ backbuffer, WRITE frame
 
     // Feature pass modules — each owns its own GPU resources, runtime system(s),
-    // and shaders, in its own file. They are set up by ke_render_module_create
-    // in dependency order (shadow + cluster + skybox first, then forward, which
-    // borrows their handles). This aggregator holds them so their addresses are
-    // stable for the pointers forward keeps and for the systems' user_data.
-    shadow: ShadowModule,   // shadow_module.zig — depth pass, writes "shadow_map"
-    cluster: ClusterModule, // cluster_module.zig — light cull compute, set-3 light lists
-    skybox: SkyboxModule,   // skybox_module.zig — cubemap background, drawn inside forward's pass
-    forward: ForwardModule, // forward_module.zig — the opaque forward+ shading pass (consumes the above)
-    tonemap: TonemapModule, // tonemap_module.zig — ACES resolve, reads "hdr", writes "backbuffer"
-    ui: UiModule,           // ui_module.zig — overlay, loads (doesn't clear) "backbuffer"
+    // and shaders, in its own file. Set up in dependency order: shadow + cluster
+    // produce handles gbuffer/deferred consume; gbuffer encodes the G-buffer;
+    // deferred-lighting shades it (borrowing shadow/cluster + tracking the env
+    // cubemap for IBL); skybox fills the pixels neither wrote. This aggregator
+    // holds them so their addresses are stable for the borrowed pointers and the
+    // systems' user_data.
+    shadow: ShadowModule,               // shadow_module.zig — depth pass, writes "shadow_map"
+    cluster: ClusterModule,             // cluster_module.zig — light cull compute, set-3 light lists
+    gbuffer: GBufferModule,             // gbuffer_module.zig — opaque encode, writes gbuffer×3 + depth
+    deferred: DeferredLightingModule,   // deferred_lighting_module.zig — decode + shade, writes "hdr"
+    skybox: SkyboxModule,               // skybox_module.zig — standalone fullscreen background fill
+    tonemap: TonemapModule,             // tonemap_module.zig — ACES resolve, reads "hdr", writes "backbuffer"
+    ui: UiModule,                       // ui_module.zig — overlay, loads (doesn't clear) "backbuffer"
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
@@ -156,7 +171,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.device = dev;
     // 0 (or an absent params struct) means "use the engine default" per field —
     // a caller running a denser scene than the default sweet spot can raise
-    // any of these rather than hit a hardcoded ceiling (§ no-magic-numbers).
+    // any of these rather than hit a hardcoded ceiling.
     // Resolved here (rather than inside cluster_module.setup) because
     // ke_render_cluster_params is render_module.zig's own C ABI surface.
     var grid_x: u32 = undefined;
@@ -176,8 +191,9 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     }
     st.shadow = ShadowModule{};
     st.cluster = ClusterModule{};
+    st.gbuffer = GBufferModule{};
+    st.deferred = DeferredLightingModule{};
     st.skybox = SkyboxModule{};
-    st.forward = ForwardModule{};
     st.tonemap = TonemapModule{};
     st.ui = UiModule{};
     st.shadow.enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
@@ -233,18 +249,20 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(forward_module.AmbientComp));
         const skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(forward_module.SkyboxComp));
 
-        // Setup order is a real dependency chain, not incidental: shadow +
-        // cluster produce the handles forward's set 0/set 3 consume, so they set
-        // up first; forward then builds its pipeline (and the set-0 layout the
-        // skybox shares), so skybox sets up last against forward.frame_bgl.
+        // Setup order is a real dependency chain: shadow + cluster produce
+        // handles the deferred path consumes, so they set up first; gbuffer
+        // encodes (needs no feature handles); deferred-lighting decodes + shades
+        // (borrows shadow/cluster); skybox fills what's left (reads gbuffer's
+        // depth).
         if (!shadow_module.setup(&st.shadow, dev, st.core, ndc, st.shadow.enabled,
                                  mesh_cid, transform_cid, light_cid, st.frame_cid, out_error) or
             !cluster_module.setup(&st.cluster, dev, e, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
                                   point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error) or
-            !forward_module.setup(&st.forward, dev, st.core, ndc, logger, ibl_enabled,
-                                  mesh_cid, transform_cid, camera_cid, light_cid, point_light_cid, spot_light_cid,
-                                  ambient_cid, skybox_cid, st.frame_cid, &st.shadow, &st.cluster, &st.skybox, out_error) or
-            !skybox_module.setup(&st.skybox, dev, st.forward.frame_bgl, out_error))
+            !gbuffer_module.setup(&st.gbuffer, dev, st.core, ndc, mesh_cid, transform_cid, camera_cid, st.frame_cid, out_error) or
+            !deferred_lighting_module.setup(&st.deferred, dev, st.core, ndc, logger, ibl_enabled,
+                                  camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
+                                  &st.shadow, &st.cluster, out_error) or
+            !skybox_module.setup(&st.skybox, dev, st.core, ndc, camera_cid, transform_cid, skybox_cid, st.frame_cid, out_error))
         {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
@@ -257,8 +275,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         }
 
         // UI overlay pass: loads (doesn't clear) the backbuffer tonemap just wrote,
-        // so text/quads composite on top. cmd_slot 5 = after tonemap's slot 4.
-        if (!ui_module.setup(&st.ui, dev, st.core, ndc, logger, bb_cid, 5, out_error)) {
+        // so text/quads composite on top. cmd_slot 7 = after tonemap's slot 6.
+        if (!ui_module.setup(&st.ui, dev, st.core, ndc, logger, bb_cid, 7, out_error)) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
@@ -267,10 +285,12 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
         if (st.shadow.enabled) {
-            registerSys(rt, "render.shadow", null, 0, &st.shadow.access, st.shadow.access.len, &st.shadow, shadow_module.system);
+            registerSys(rt, "render.shadow", &st.shadow.queries, 2, &st.shadow.access, st.shadow.access.len, &st.shadow, shadow_module.system);
         }
         registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
-        registerSys(rt, "render.forward", null, 0, &st.forward.fwd_access, st.forward.fwd_access_count, &st.forward, forward_module.system);
+        registerSys(rt, "render.gbuffer", &st.gbuffer.queries, 2, &st.gbuffer.access, st.gbuffer.access_count, &st.gbuffer, gbuffer_module.system);
+        registerSys(rt, "render.deferred_lighting", &st.deferred.queries, 4, &st.deferred.access, st.deferred.access_count, &st.deferred, deferred_lighting_module.system);
+        registerSys(rt, "render.skybox", &st.skybox.queries, 2, &st.skybox.access, st.skybox.access.len, &st.skybox, skybox_module.system);
         registerSys(rt, "render.tonemap", null, 0, &st.tonemap.access, st.tonemap.access.len, &st.tonemap, tonemap_module.system);
         registerSys(rt, "render.ui", null, 0, &st.ui.access, st.ui.access.len, &st.ui, ui_module.system);
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);

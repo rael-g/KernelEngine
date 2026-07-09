@@ -3,16 +3,15 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-// Shadow-depth pass, extracted as the §9.8 decomposition pilot: this file owns
-// every shadow-specific GPU resource, its own runtime system, and the cids it
-// needs, taking them as setup parameters rather than reaching into the parent
-// module's state directly — render_module.zig only holds one `ShadowModule`
-// field and forwards the cross-cutting ids (mesh/transform/light/frame) once,
-// at setup. When shadow_enabled is false, `setup` still allocates the tiny
-// lvp_uniform (read unconditionally by the single forward shader as its
-// neutral-default hook resource — see forward_lit.slang) but none of the
-// expensive resources (shadow_map/shadow_depth render targets, pipeline,
-// per-draw buffers, the "render.shadow" system) exist.
+// Shadow-depth pass: this file owns every shadow-specific GPU resource, its own
+// runtime system, and the cids it needs, taking them as setup parameters rather
+// than reaching into the parent module's state — render_module.zig holds one
+// `ShadowModule` field and forwards the cross-cutting ids
+// (mesh/transform/light/frame) once, at setup. When shadow_enabled is false,
+// `setup` still allocates the tiny lvp_uniform (a shading shader samples the
+// shadow hook unconditionally; a neutral-default resource makes it a no-op) but
+// none of the expensive resources (shadow_map/shadow_depth render targets,
+// pipeline, per-draw buffers, the "render.shadow" system) exist.
 
 const shadow_vs_wgsl = @embedFile("shadow.vs.wgsl");
 const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
@@ -59,6 +58,10 @@ pub const ShadowModule = struct {
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
+    // Resolved single-threaded by the runtime before the wave dispatches; the
+    // body then reads plain memory via ke_system_ctx_view and touches the ECS
+    // not at all. Index order here is the query_index the body passes to it.
+    queries: [2]c.ke_query_decl = undefined, // [directional_light], [mesh, transform]
 };
 
 // Orthographic light view-proj; the light source sits opposite the travel
@@ -82,13 +85,12 @@ fn makeOrtho(ndc: c.ke_ndc_convention, w: f32, h: f32, near: f32, far: f32) zm.M
     return p;
 }
 
-fn lightDirOf(ctx: ?*c.ke_system_ctx, light_cid: c.ke_component_id) zm.Vec {
-    var ents: [*c]c.ke_entity = undefined;
-    var data: ?*anyopaque = undefined;
-    var count: usize = 0;
-    c.ke_system_ctx_query(ctx, light_cid, &ents, &data, &count);
-    if (count == 0) return zm.f32x4(-0.4, -1.0, -0.3, 0.0);
-    const dl: *const DirLight = @ptrCast(@alignCast(data));
+// View 0 = [directional_light]; the first match is the active sun.
+fn lightDirOf(ctx: ?*c.ke_system_ctx) zm.Vec {
+    var segc: usize = 0;
+    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    if (segc == 0 or segs[0].count == 0) return zm.f32x4(-0.4, -1.0, -0.3, 0.0);
+    const dl: *const DirLight = @ptrCast(@alignCast(segs[0].columns[0]));
     return zm.f32x4(dl.dir[0], dl.dir[1], dl.dir[2], 0.0);
 }
 
@@ -100,7 +102,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const sh = moduleOf(user);
     const core = sh.core.ref;
 
-    const lvp = lightViewProj(sh.ndc, lightDirOf(ctx, sh.light_cid));
+    const lvp = lightViewProj(sh.ndc, lightDirOf(ctx));
     var lvp_arr: [16]f32 = undefined;
     zm.storeMat(lvp_arr[0..], lvp);
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
@@ -108,36 +110,38 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     const pc = core.*.begin_pass.?(core, ctx, &sh.io);
     if (pc == null) return;
 
-    var ents: [*c]c.ke_entity = undefined;
-    var data: ?*anyopaque = undefined;
-    var count: usize = 0;
-    c.ke_system_ctx_query(ctx, sh.mesh_cid, &ents, &data, &count);
-    const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(data));
-    const n: u32 = @intCast(@min(count, MAX_DRAWS));
-
-    var i: u32 = 0;
-    while (i < n) : (i += 1) {
-        const tc_raw = c.ke_system_ctx_get(ctx, sh.transform_cid, ents[i]) orelse continue;
-        const tc: *const c.ke_transform_component = @ptrCast(@alignCast(tc_raw));
-        var u: ShadowObj = undefined;
-        @memcpy(u.model[0..], tc.world_matrix.m[0..16]);
-        core.*.upload.?(core, sh.obj_uniform, i * UNIFORM_STRIDE, &u, @sizeOf(ShadowObj));
-    }
-
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, sh.pipeline);
     rp.*.set_bind_group.?(rp, 0, sh.lvp_bg, null, 0);
-    i = 0;
-    while (i < n) : (i += 1) {
-        var vbo: c.ke_gpu_buffer = 0;
-        var ibo: c.ke_gpu_buffer = 0;
-        var idx_count: u32 = 0;
-        if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
-        const offset: u32 = i * UNIFORM_STRIDE;
-        rp.*.set_bind_group.?(rp, 1, sh.obj_bg, &offset, 1);
-        rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
-        rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
-        rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
+
+    // View 1 = [mesh, transform], columns aligned. Per-draw uniform writes are
+    // deferred by the core and replayed before the submit, so uploading inside
+    // the draw loop still lands ahead of the draws that read it.
+    var draw_idx: u32 = 0;
+    var segc: usize = 0;
+    const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    var s: usize = 0;
+    while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
+        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        var i: usize = 0;
+        while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
+            var vbo: c.ke_gpu_buffer = 0;
+            var ibo: c.ke_gpu_buffer = 0;
+            var idx_count: u32 = 0;
+            if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
+
+            var u: ShadowObj = undefined;
+            @memcpy(u.model[0..], tcs[i].world_matrix.m[0..16]);
+            const offset: u32 = draw_idx * UNIFORM_STRIDE;
+            core.*.upload.?(core, sh.obj_uniform, offset, &u, @sizeOf(ShadowObj));
+
+            rp.*.set_bind_group.?(rp, 1, sh.obj_bg, &offset, 1);
+            rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
+            rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
+            rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
+            draw_idx += 1;
+        }
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
@@ -240,7 +244,7 @@ pub fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: c.ke_render_core_ha
     sh.io = std.mem.zeroes(c.ke_render_pass_io);
     sh.io.writes = @ptrCast(&sh.writes);
     sh.io.writes_count = 2;
-    sh.io.cmd_slot = 1; // shadow pass → frame command slot 1 (before forward)
+    sh.io.cmd_slot = 1; // shadow pass → frame command slot 1 (before the opaque pass)
     sh.access = .{
         .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },
@@ -249,5 +253,15 @@ pub fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: c.ke_render_core_ha
         .{ .cid = light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
+
+    // Data the body reads through resolved views. Index order is the
+    // query_index passed to ke_system_ctx_view.
+    const rd = c.KE_ACCESS_READ;
+    sh.queries = std.mem.zeroes([2]c.ke_query_decl);
+    sh.queries[0].terms[0] = .{ .cid = light_cid, .access = rd };
+    sh.queries[0].term_count = 1;
+    sh.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
+    sh.queries[1].terms[1] = .{ .cid = transform_cid, .access = rd };
+    sh.queries[1].term_count = 2;
     return true;
 }

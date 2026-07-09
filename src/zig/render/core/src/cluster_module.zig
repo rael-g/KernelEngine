@@ -3,12 +3,12 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-// Clustered-forward light cull, extracted as the third §9.8 decomposition
-// slice. Unlike shadow/skybox, this module has real coupling into forward:
-// forward uploads a per-frame grid UBO (uploadGrid, called from forwardSys)
-// and binds this module's set-3 bind group directly. Those two calls are the
-// seam; everything else (storage buffers, the cull compute pipeline, its own
-// "render.cull" runtime system) is fully self-contained here.
+// Clustered light cull — bins point/spot lights into a froxel grid so a shading
+// pass iterates only the lights touching its pixel. Shared by both shading
+// topologies: whichever pass shades calls uploadGrid once per frame (only it
+// knows the viewport) and binds this module's set-3 group. That pair of calls
+// is the seam; the storage buffers, the cull compute pipeline, and the
+// "render.cull" system are self-contained here.
 
 const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
 
@@ -63,8 +63,8 @@ pub const SpotLightComp = extern struct {
 };
 
 // The clustered-lights feature's own UBO (cluster_feature.slang, set 3 binding
-// 6) — moved out of the frame UBO: a scene with no dynamic-light module needs
-// no cluster grid data at all.
+// 6). Kept out of the shared per-frame UBO: a scene with no dynamic-light
+// module needs no cluster grid data at all.
 const ClusterGridUniform = extern struct {
     cluster_grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
     cluster_viewport: [4]f32, // screen W, screen H, near, far
@@ -273,9 +273,9 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
 }
 
 // Uploads the clustered-lights feature's own grid UBO (cluster_feature.slang,
-// set 3 binding 6). Called once per frame from forwardSys — the one seam
-// where forward reaches into this module, since the grid's screen-size
-// component (viewport) is only known from forward's own backbuffer query.
+// set 3 binding 6). The shading pass calls this once per frame — the seam
+// exists because the grid's screen-size component (viewport) is only known from
+// that pass's own backbuffer query.
 pub fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) void {
     const core = cm.core.ref;
     const grid_data = ClusterGridUniform{

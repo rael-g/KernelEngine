@@ -28,6 +28,10 @@ pub fn build(b: *std.Build) void {
     const ui_fs_wgsl = b.option([]const u8, "ui-fs-wgsl", "generated ui fragment WGSL path") orelse @panic("-Dui-fs-wgsl required");
     const mat_test_flat_vs_wgsl = b.option([]const u8, "mat-test-flat-vs-wgsl", "generated flat-material vertex WGSL path")   orelse @panic("-Dmat-test-flat-vs-wgsl required");
     const mat_test_flat_fs_wgsl = b.option([]const u8, "mat-test-flat-fs-wgsl", "generated flat-material fragment WGSL path") orelse @panic("-Dmat-test-flat-fs-wgsl required");
+    const mat_test_flat_gbuffer_vs_wgsl = b.option([]const u8, "mat-test-flat-gbuffer-vs-wgsl", "generated flat-material gbuffer vertex WGSL path")   orelse @panic("-Dmat-test-flat-gbuffer-vs-wgsl required");
+    const mat_test_flat_gbuffer_fs_wgsl = b.option([]const u8, "mat-test-flat-gbuffer-fs-wgsl", "generated flat-material gbuffer fragment WGSL path") orelse @panic("-Dmat-test-flat-gbuffer-fs-wgsl required");
+    const deferred_lighting_vs_wgsl = b.option([]const u8, "deferred-lighting-vs-wgsl", "generated deferred-lighting vertex WGSL path")   orelse @panic("-Ddeferred-lighting-vs-wgsl required");
+    const deferred_lighting_fs_wgsl = b.option([]const u8, "deferred-lighting-fs-wgsl", "generated deferred-lighting fragment WGSL path") orelse @panic("-Ddeferred-lighting-fs-wgsl required");
     const magenta_vs_wgsl = b.option([]const u8, "magenta-vs-wgsl", "generated magenta placeholder vertex WGSL path")   orelse @panic("-Dmagenta-vs-wgsl required");
     const magenta_fs_wgsl = b.option([]const u8, "magenta-fs-wgsl", "generated magenta placeholder fragment WGSL path") orelse @panic("-Dmagenta-fs-wgsl required");
 
@@ -63,6 +67,10 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("ui.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_fs_wgsl } });
     mod.addAnonymousImport("mat_test_flat.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_vs_wgsl } });
     mod.addAnonymousImport("mat_test_flat.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_fs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_gbuffer.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_gbuffer_vs_wgsl } });
+    mod.addAnonymousImport("mat_test_flat_gbuffer.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_gbuffer_fs_wgsl } });
+    mod.addAnonymousImport("deferred_lighting.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = deferred_lighting_vs_wgsl } });
+    mod.addAnonymousImport("deferred_lighting.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = deferred_lighting_fs_wgsl } });
     mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });
     mod.addAnonymousImport("magenta.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_fs_wgsl } });
 

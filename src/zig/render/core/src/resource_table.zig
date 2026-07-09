@@ -4,7 +4,7 @@ const c = rc.c;
 // Named-resource table: declare()/import_texture() register a resource under
 // a tag-cid (the runtime access-list identity passes order by), cid()/
 // resource_view() resolve it back. This is the render-graph-via-ECS-tags
-// mechanism (§7): no render-graph object, just resources registered by name.
+// mechanism: no render-graph object, just resources registered by name.
 
 pub fn declare(self: [*c]c.ke_render_core, desc: [*c]const c.ke_render_resource_desc, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;

@@ -1026,11 +1026,13 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
                 entries[i].texture.multisampled  = 0;
             },
             ke.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE => {
-                // A depth-format texture bound for sampling/texel-fetch. WGPU
-                // rejects a depth texture bound as filterable-float; the Depth
-                // sample type is the depth-texture-correct one (also what a
-                // future comparison-sampled shadow map uses).
-                entries[i].texture.sampleType    = wgpu.WGPUTextureSampleType_Depth;
+                // A depth-format texture read by texel fetch (Slang `Texture2D<float>`
+                // + .Load → WGSL `texture_2d<f32>` + textureLoad). Depth formats are
+                // unfilterable, so the binding must be UnfilterableFloat — NOT Float
+                // (filterable, rejected for a depth format) and NOT Depth (which is
+                // for `texture_depth_2d` + a comparison sampler; a future
+                // comparison-sampled shadow map would use that instead).
+                entries[i].texture.sampleType    = wgpu.WGPUTextureSampleType_UnfilterableFloat;
                 entries[i].texture.viewDimension = wgpu.WGPUTextureViewDimension_2D;
                 entries[i].texture.multisampled  = 0;
             },

@@ -123,7 +123,7 @@ pub fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     tm.io.writes_count = 1;
     tm.io.reads = @ptrCast(&tm.reads);
     tm.io.reads_count = 1;
-    tm.io.cmd_slot = 4; // after forward (slot 3)
+    tm.io.cmd_slot = 6; // after skybox (slot 5)
 
     // "hdr" is declared by forward_module.setup (which runs first); resolve it
     // by name here rather than threading a cid across the module boundary.
