@@ -15,7 +15,6 @@ add_executable(test_ke_kernel
     test_scene_loader.cpp    # C-phase 6: re-enabled with pure-C scene_loader + apply registry
     #   test_mesh_shape.cpp    -- legacy header API gone; replaced by asset_resolver
     #   test_material_file.cpp -- legacy header API gone; replaced by asset_resolver
-    #   test_resource_queue.cpp
 )
 
 

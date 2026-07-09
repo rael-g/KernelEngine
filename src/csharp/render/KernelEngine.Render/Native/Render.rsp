@@ -30,13 +30,7 @@ ke_render_bgfx
 Render.umbrella.h
 --traverse
 ../../../../c/render/include/kernel_engine/render/handles.h
-../../../../c/render/include/kernel_engine/render/light.h
-../../../../c/render/include/kernel_engine/render/material.h
 ../../../../c/render/include/kernel_engine/render/mesh.h
-../../../../c/render/include/kernel_engine/render/texture.h
-../../../../c/render/include/kernel_engine/render/render.h
-../../../../c/render/include/kernel_engine/render/render_graph.h
-../../../../c/render/include/kernel_engine/render/shader_compiler.h
 ../../../../c/render/include/kernel_engine/render/material_file.h
 ../../../../c/render/include/kernel_engine/render/components.h
 --methodClassName

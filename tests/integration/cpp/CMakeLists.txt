@@ -4,7 +4,6 @@ find_package(assimp CONFIG REQUIRED)
 # Integration Tests (DLL based)
 # These tests link against the full implementations and may interact with hardware/OS.
 add_executable(test_integration_cpp
-    # test_framework_integration.cpp  -- disabled in B0 (depends on legacy ke_world)
     test_world.cpp
     test_glfw_window_device.cpp
     test_factories.cpp
