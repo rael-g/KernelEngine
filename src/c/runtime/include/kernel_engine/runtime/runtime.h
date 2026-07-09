@@ -59,15 +59,15 @@ typedef struct ke_runtime_system_params {
     const char *name;
     ke_phase    phase;
 
-    /// Queries the system reads through (the parallel-safe path). When set, the
-    /// runtime registers them, derives the scheduling access list from their
-    /// terms, and resolves them into segments the body reads via ke_system_ctx_view.
+    /// Queries the system reads through. The runtime registers them, derives the
+    /// scheduling access list from their terms, and resolves them into segments
+    /// the body reads via ke_system_ctx_view.
     const ke_query_decl *queries;
     uint32_t             query_count;
 
-    /// Direct access declaration. Used when no queries are declared; the body then
-    /// reads through ke_system_ctx_query/get, which is not safe across a parallel
-    /// wave and is being phased out in favor of queries.
+    /// Cids the system touches that no query term covers, folded into the derived
+    /// set so the wave-builder still orders on them: ordering-only tags (render
+    /// resources carry no data) and entity-keyed reads via ke_system_ctx_get.
     const ke_component_access *access_list;
     uint32_t                   access_count;
 

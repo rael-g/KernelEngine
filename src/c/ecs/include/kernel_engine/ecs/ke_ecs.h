@@ -72,12 +72,6 @@ extern "C"
                                ke_entity      entity,
                                ke_component_id component);
 
-        void (*query)(struct ke_ecs  *self,
-                      ke_component_id component,
-                      ke_entity     **out_entities,
-                      void          **out_data,
-                      size_t         *out_count);
-
         // ── Sim/render snapshot (RuntimeArchitectureV2.md §16) ──────────────
         // Like component_register but honors ke_component_flags (DOUBLE_BUFFERED
         // gives the component a back buffer). component_register == v3 with NONE.

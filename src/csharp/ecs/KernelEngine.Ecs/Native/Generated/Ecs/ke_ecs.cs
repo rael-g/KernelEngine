@@ -27,9 +27,6 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("void *(*)(struct ke_ecs *, ke_entity, ke_component_id)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, uint, void*> component_get;
 
-    [NativeTypeName("void (*)(struct ke_ecs *, ke_component_id, ke_entity **, void **, size_t *)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, uint, ulong**, void**, nuint*, void> query;
-
     [NativeTypeName("ke_component_id (*)(struct ke_ecs *, const char *, size_t, ke_component_flags)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, sbyte*, nuint, ke_component_flags, uint> component_register_v3;
 

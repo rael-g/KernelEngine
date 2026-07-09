@@ -83,17 +83,4 @@ public sealed unsafe class EcsRegistry : IEcsRegistry
     public bool HasComponent(ulong entity, uint componentId) =>
         _native->component_get(_native, entity, componentId) != null;
 
-    // ── Query ─────────────────────────────────────────────────────────────────
-
-    /// <inheritdoc/>
-    public EcsQuery<T> Query<T>(uint componentId) where T : unmanaged
-    {
-        ulong* entities;
-        void* data;
-        nuint count;
-        _native->query(_native, componentId, &entities, &data, &count);
-        return new EcsQuery<T>(
-            new ReadOnlySpan<ulong>(entities, (int)count),
-            new Span<T>((T*)data, (int)count));
-    }
 }

@@ -690,8 +690,8 @@ TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
 
 // A zero-size component registers as a tag (entity id, no data): valid in
 // add/has/query and used as a render-resource dependency key. It must register
-// cleanly — not abort and not corrupt the world (a fatal here silently broke
-// every later ecs op, e.g. the forward render pass's component queries).
+// cleanly — not abort and not corrupt the world, since a fatal here silently
+// breaks every later ecs op.
 TEST(FlecsTagTest, ZeroSizeComponent_RegistersAsUsableTag)
 {
     ke_ecs_flecs_params p{};
@@ -701,13 +701,21 @@ TEST(FlecsTagTest, ZeroSizeComponent_RegistersAsUsableTag)
     ke_component_id tag = h.ref->component_register(h.ref, "ZeroSizeTag", 0);
     EXPECT_NE(tag, (ke_component_id)0) << "zero-size component should be a valid tag";
 
-    // The world must stay usable: add the tag + a sized component, then query.
+    // The world must stay usable: add the tag, then find its carrier through the
+    // resolved-query path (the only read path the engine exposes).
     ke_entity e = h.ref->entity_create(h.ref);
     h.ref->component_add(h.ref, e, tag);
 
-    ke_entity *ents = nullptr; void *data = nullptr; size_t count = 0;
-    h.ref->query(h.ref, tag, &ents, &data, &count);
-    EXPECT_EQ(count, (size_t)1) << "entity carrying the tag should be found";
+    ke_query_id q = h.ref->query_register(h.ref, &tag, 1);
+    ASSERT_NE(q, KE_QUERY_INVALID) << "a tag must be registrable as a query term";
+
+    ke_ecs_segment segs[8]{};
+    size_t         seg_count = 0;
+    h.ref->query_resolve(h.ref, q, segs, 8, &seg_count);
+
+    size_t total = 0;
+    for (size_t i = 0; i < seg_count; i++) total += segs[i].count;
+    EXPECT_EQ(total, (size_t)1) << "entity carrying the tag should be found";
 
     h.destroy(h.ref);
 }

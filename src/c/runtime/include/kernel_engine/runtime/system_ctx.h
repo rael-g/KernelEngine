@@ -36,16 +36,14 @@ KE_RUNTIME_API void ke_runtime_debug_compute_waves(const ke_runtime_system_param
                                                      uint32_t                       *out_wave_assignments,
                                                      uint32_t                       *out_wave_count);
 
-KE_RUNTIME_API void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
-                                          ke_entity **out_entities, void **out_data,
-                                          size_t *out_count);
-
-/// Returns the resolved archetype segments for the system's query at query_index
-/// (the order the queries were declared in ke_runtime_system_params). Sets
-/// *out_count to the segment count and returns the segment array; both are valid
-/// for the duration of the system body. Makes no ke_ecs call — the segments were
-/// resolved single-threaded before the wave. Returns NULL for an out-of-range
-/// index or a system that declared no queries.
+/// The system body's only path to component memory. Returns the resolved
+/// archetype segments for the system's query at query_index (the order the
+/// queries were declared in ke_runtime_system_params). Sets *out_count to the
+/// segment count and returns the segment array; both are valid for the duration
+/// of the system body. Makes no ke_ecs call — the segments were resolved
+/// single-threaded before the wave, because an ECS iterator allocates from
+/// storage shared across the wave's parallel systems. Returns NULL for an
+/// out-of-range index or a system that declared no queries.
 KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
                                                           uint32_t query_index,
                                                           size_t *out_count);

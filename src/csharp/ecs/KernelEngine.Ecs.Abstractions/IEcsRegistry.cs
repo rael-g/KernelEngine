@@ -34,7 +34,4 @@ public interface IEcsRegistry
 
     /// <summary>Returns true if <paramref name="entity"/> has the component with the given <paramref name="componentId"/>.</summary>
     bool HasComponent(ulong entity, uint componentId);
-
-    /// <summary>Zero-copy query of all entities that have <paramref name="componentId"/>.</summary>
-    EcsQuery<T> Query<T>(uint componentId) where T : unmanaged;
 }

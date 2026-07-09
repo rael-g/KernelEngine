@@ -294,22 +294,6 @@ const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity
 #endif
 }
 
-void ke_system_ctx_query(ke_system_ctx *ctx, ke_component_id cid,
-                          ke_entity **out_entities, void **out_data, size_t *out_count)
-{
-    if (out_entities) *out_entities = NULL;
-    if (out_data)     *out_data     = NULL;
-    if (out_count)    *out_count    = 0;
-    if (!ctx || !ctx->ecs) return;
-#ifndef NDEBUG
-    ecs_call_enter();
-    ctx->ecs->query(ctx->ecs, cid, out_entities, out_data, out_count);
-    ecs_call_leave();
-#else
-    ctx->ecs->query(ctx->ecs, cid, out_entities, out_data, out_count);
-#endif
-}
-
 const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx, uint32_t query_index, size_t *out_count)
 {
     if (out_count) *out_count = 0;
