@@ -94,7 +94,6 @@ public class Application : IDisposable
     private System.Numerics.Vector4? _projectClearColor;
     private System.Numerics.Vector3? _projectAmbientLight;
     private IResourceCommandQueue _resourceQueue = null!;
-    private ShadowRenderSystem? _shadowSystem;
     private Physics2DSystem? _physics2DSystem;
 
     private string GetGpuFatalError()
@@ -185,18 +184,6 @@ public class Application : IDisposable
                 // Set before ke.sim's first frame (which happens after renderReady below).
                 Internal.ViewProjection.SetConvention(Renderer.GetNdcConvention());
                 Renderer.SetAmbientLight(0.4f, 0.4f, 0.4f);
-
-                // Create the shadow map on ke.render (GPU creation requires this thread).
-                if (_shadowSystem != null)
-                {
-                    try
-                    {
-                        var shadowMap = Renderer.CreateShadowMap(1024, 1024);
-                        _shadowSystem.SetShadowMap(shadowMap);
-                        Logger?.Info("Application", "ke.render: shadow map created (1024x1024)");
-                    }
-                    catch (KernelError) { /* shadow map unavailable — continue without it */ }
-                }
 
                 Logger?.Info("Application", "ke.render: renderer ready — signaling ke.sim");
                 renderReady.Set(); // signal ke.sim that the renderer is ready
@@ -483,20 +470,12 @@ public class Application : IDisposable
 
         var xformCid = ActiveWorld.TransformComponentId;
 
-        // All render systems are pure-managed now — render/core C++ is no longer in the pipeline.
-        ActiveWorld.AddSystem(new CameraRenderSystem(cameraCid, xformCid));
-        ActiveWorld.AddSystem(new LightRenderSystem(dirLightCid, pointLightCid, spotLightCid, xformCid));
-        ActiveWorld.AddSystem(new MeshRenderSystem(meshCid, xformCid));
-        ActiveWorld.AddSystem(new SkyboxRenderSystem(skyboxCid));
         // Label rendering — polls current backbuffer size each frame so resizes propagate.
         ActiveWorld.AddSystem(new LabelRenderSystem(() =>
         {
             try { var sz = Window.GetSize(); return ((uint)sz.Width, (uint)sz.Height); }
             catch (KernelError) { return (0u, 0u); }
         }));
-
-        _shadowSystem = new ShadowRenderSystem(dirLightCid, meshCid, xformCid);
-        ActiveWorld.AddSystem(_shadowSystem);
 
         // Physics 2D: auto-register when a backend is in DI (chapter 24 §5 "Physics2DSystem auto-registered").
         // Game code never instantiates this and never calls IPhysics2D.Step.
