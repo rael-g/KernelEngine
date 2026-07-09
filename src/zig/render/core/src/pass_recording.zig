@@ -76,7 +76,25 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     while (i < ps.io.writes_count) : (i += 1) {
         const r = ps.core.find(ps.io.writes[i]) orelse continue;
         if (rc.isDepthFormat(r.format)) {
-            depth = .{
+            // io.load also governs depth: a pass that composites onto existing
+            // color content (transparent-forward onto "hdr") tests against the
+            // opaque depth someone else already wrote — it loads rather than
+            // clears. depth_read_only stays false either way: that render-pass
+            // flag is for sampling the SAME depth texture as a bound resource
+            // while it's also attached (skybox's texel-fetch case), which this
+            // pass doesn't do — the pipeline's depth_write_enabled=0 is what
+            // actually prevents this pass from modifying the buffer it tests
+            // against; the attachment's store_op is a harmless no-op write.
+            depth = if (ps.io.load != 0) .{
+                .view = r.view,
+                .depth_load_op = c.KE_GPU_LOAD_OP_LOAD,
+                .depth_store_op = c.KE_GPU_STORE_OP_STORE,
+                .stencil_store_op = c.KE_GPU_STORE_OP_DONT_CARE,
+                .clear_depth = 1.0,
+                .clear_stencil = 0,
+                .depth_read_only = 0,
+                .stencil_read_only = 0,
+            } else .{
                 .view = r.view,
                 .depth_load_op = c.KE_GPU_LOAD_OP_CLEAR,
                 .depth_store_op = c.KE_GPU_STORE_OP_STORE,

@@ -82,6 +82,13 @@ struct ke_gpu_command_encoder
                                    ke_gpu_texture dst,
                                    uint32_t dst_x, uint32_t dst_y, uint32_t dst_z,
                                    uint32_t width, uint32_t height);
+    // Whole-texture same-format copy (mip 0, layer 0, full extent). The scene-color
+    // snapshot a refraction pass reads must be a distinct texture from the one it
+    // writes — sampling and writing the same render target in one pass is not
+    // representable by the API. Must be issued outside an active render pass.
+    void (*copy_texture_to_texture)(struct ke_gpu_command_encoder *self,
+                                    ke_gpu_texture src, ke_gpu_texture dst,
+                                    uint32_t width, uint32_t height);
     struct ke_gpu_command_buffer *(*finish)(struct ke_gpu_command_encoder *self);
     void (*destroy)(struct ke_gpu_command_encoder *self);
 };

@@ -1220,12 +1220,16 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
     const has_ds = pp.depth_stencil_attachment != null;
     if (has_ds) {
         const dsa = @as(*const ke.ke_gpu_depth_stencil_attachment, @ptrCast(pp.depth_stencil_attachment));
+        const depth_ro = dsa.depth_read_only != 0;
         ds_attach = .{
             .view              = @ptrFromInt(dsa.view),
-            .depthLoadOp       = toWgpuLoadOp(dsa.depth_load_op),
-            .depthStoreOp      = toWgpuStoreOp(dsa.depth_store_op),
+            // The WebGPU spec requires depthLoadOp/StoreOp to be left Undefined
+            // when depthReadOnly is set — providing an explicit op alongside it
+            // is a validation error ("Read-only attachment with load").
+            .depthLoadOp       = if (depth_ro) wgpu.WGPULoadOp_Undefined else toWgpuLoadOp(dsa.depth_load_op),
+            .depthStoreOp      = if (depth_ro) wgpu.WGPUStoreOp_Undefined else toWgpuStoreOp(dsa.depth_store_op),
             .depthClearValue   = dsa.clear_depth,
-            .depthReadOnly     = if (dsa.depth_read_only != 0) 1 else 0,
+            .depthReadOnly     = if (depth_ro) 1 else 0,
             .stencilLoadOp     = wgpu.WGPULoadOp_Undefined,
             .stencilStoreOp    = toWgpuStoreOp(dsa.stencil_store_op),
             .stencilClearValue = dsa.clear_stencil,
@@ -1286,6 +1290,23 @@ fn encCopyBufferToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buff
 
 fn encCopyBufferToTexture(_: [*c]ke.ke_gpu_command_encoder, _: ke.ke_gpu_buffer, _: usize, _: ke.ke_gpu_texture, _: u32, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
 
+fn encCopyTextureToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_texture, dst: ke.ke_gpu_texture, width: u32, height: u32) callconv(.c) void {
+    const src_info = wgpu.WGPUTexelCopyTextureInfo{
+        .texture = @ptrFromInt(src),
+        .mipLevel = 0,
+        .origin = .{ .x = 0, .y = 0, .z = 0 },
+        .aspect = wgpu.WGPUTextureAspect_All,
+    };
+    const dst_info = wgpu.WGPUTexelCopyTextureInfo{
+        .texture = @ptrFromInt(dst),
+        .mipLevel = 0,
+        .origin = .{ .x = 0, .y = 0, .z = 0 },
+        .aspect = wgpu.WGPUTextureAspect_All,
+    };
+    const extent = wgpu.WGPUExtent3D{ .width = width, .height = height, .depthOrArrayLayers = 1 };
+    wgpu.wgpuCommandEncoderCopyTextureToTexture(@ptrCast(enc.*.handle), &src_info, &dst_info, &extent);
+}
+
 fn encFinish(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) [*c]ke.ke_gpu_command_buffer {
     const desc = wgpu.WGPUCommandBufferDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
     const raw = wgpu.wgpuCommandEncoderFinish(@ptrCast(enc.*.handle), &desc) orelse return null;
@@ -1313,6 +1334,7 @@ fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_co
         .pipeline_barrier       = encPipelineBarrier,
         .copy_buffer_to_buffer  = encCopyBufferToBuffer,
         .copy_buffer_to_texture = encCopyBufferToTexture,
+        .copy_texture_to_texture = encCopyTextureToTexture,
         .finish                 = encFinish,
         .destroy                = encDestroy,
     };

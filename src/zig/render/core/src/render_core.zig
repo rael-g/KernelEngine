@@ -315,6 +315,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .texture_view = asset_upload.textureView,
         .sampler = asset_upload.samplerOf,
         .resource_view = resource_table.resourceView,
+        .resource_texture = resource_table.resourceTexture,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)

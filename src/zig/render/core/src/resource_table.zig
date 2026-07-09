@@ -24,11 +24,16 @@ pub fn declare(self: [*c]c.ke_render_core, desc: [*c]const c.ke_render_resource_
     // Depth targets are sampleable too (deferred-lighting reads the G-buffer
     // depth to reconstruct position). WGPU allows RenderAttachment|TextureBinding
     // on Depth32Float; the pass that writes it and the later pass that samples it
-    // don't overlap, so no in-pass read/write hazard.
+    // don't overlap, so no in-pass read/write hazard. COPY_SRC|COPY_DST let any
+    // declared resource be a copy_texture_to_texture endpoint (e.g. "hdr" snapshotted
+    // into "hdr_opaque" for the transparent-forward pass's refraction read) without
+    // a per-resource opt-in — the same blanket-permissive approach as SAMPLED above.
     const usage: c.ke_gpu_texture_usage = if (depth)
-        c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED
+        c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED |
+            c.KE_GPU_TEXTURE_USAGE_COPY_SRC | c.KE_GPU_TEXTURE_USAGE_COPY_DST
     else
-        c.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED;
+        c.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED |
+            c.KE_GPU_TEXTURE_USAGE_COPY_SRC | c.KE_GPU_TEXTURE_USAGE_COPY_DST;
 
     const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
         .width = w,
@@ -95,4 +100,9 @@ pub fn cidOf(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_c
 pub fn resourceView(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.view;
+}
+
+pub fn resourceTexture(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_gpu_texture {
+    const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
+    return r.texture;
 }

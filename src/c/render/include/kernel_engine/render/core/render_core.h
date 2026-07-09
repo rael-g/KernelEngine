@@ -136,12 +136,15 @@ struct ke_render_core
                                         const void *rgba, ke_error **out_error);
     // Creates a material: base_color factor multiplied by the albedo texture
     // (KE_TEXTURE_NONE / handle 0 = white). Handle 0 is a built-in white material.
-    // KE_MATERIAL_NONE on failure.
+    // KE_MATERIAL_NONE on failure. alpha_mode/alpha_cutoff are CPU-side only (see
+    // material_alpha_mode below) — they never reach the GPU material uniform.
     ke_material_handle (*create_material)(struct ke_render_core *self,
                                           const float *base_color, // rgba (4 floats)
                                           float metallic, float roughness,
                                           ke_texture_handle albedo,
                                           ke_texture_handle normal, // KE_TEXTURE_NONE = flat
+                                          ke_alpha_mode alpha_mode,
+                                          float alpha_cutoff,
                                           ke_error **out_error);
     // The per-material bind-group layout (descriptor set 1) a forward pipeline
     // must declare so its set-1 bind groups (from material_bind_group) are valid.
@@ -149,6 +152,12 @@ struct ke_render_core
     // The set-1 bind group for a material handle; an unknown handle resolves to
     // the built-in white material (handle 0).
     ke_gpu_bind_group (*material_bind_group)(struct ke_render_core *self, ke_material_handle h);
+    // The pass bucket for a material handle, resolved from CPU-side storage —
+    // no GPU state touched. gbuffer skips BLEND; transparent forward skips
+    // everything else. An unknown handle resolves to OPAQUE (the white material).
+    ke_alpha_mode (*material_alpha_mode)(struct ke_render_core *self, ke_material_handle h);
+    // The MASK discard threshold for a material handle. Meaningless outside MASK.
+    float (*material_alpha_cutoff)(struct ke_render_core *self, ke_material_handle h);
 
     // ── Environment cubemap (skybox + image-based lighting) ──────────────
     // Uploads an RGBA8 cubemap: 6 faces of face_size×face_size, +X,-X,+Y,-Y,+Z,-Z
@@ -167,6 +176,11 @@ struct ke_render_core
     // another pass's output, e.g. the forward sampling the shadow map).
     // KE_GPU_INVALID_HANDLE if no resource with that name was declared.
     ke_gpu_texture_view (*resource_view)(struct ke_render_core *self, const char *name);
+    // The raw GPU texture behind a declared resource — for copy_texture_to_texture,
+    // which operates on textures, not views (e.g. snapshotting "hdr" into a
+    // second texture a same-pass refraction read can sample without a hazard).
+    // KE_GPU_INVALID_HANDLE if no resource with that name was declared.
+    ke_gpu_texture (*resource_texture)(struct ke_render_core *self, const char *name);
 
     // Records a buffer upload to be flushed single-threaded at end_frame (before
     // submit). Render passes call this instead of the device's write_buffer so
