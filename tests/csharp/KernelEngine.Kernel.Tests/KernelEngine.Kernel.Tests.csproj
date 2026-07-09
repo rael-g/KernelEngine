@@ -27,7 +27,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\csharp\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework.Legacy\KernelEngine.Framework.Legacy.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window\KernelEngine.Window.csproj" />

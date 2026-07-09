@@ -34,7 +34,6 @@
     <Project Path="src/csharp/cli/KernelEngine.Cli/KernelEngine.Cli.csproj" />
     <Project Path="src/csharp/configuration/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework.Abstractions/KernelEngine.Framework.Abstractions.csproj" />
-    <Project Path="src/csharp/framework/KernelEngine.Framework.Legacy.Abstractions/KernelEngine.Framework.Legacy.Abstractions.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/toolkit/KernelEngine.Toolkit/KernelEngine.Toolkit.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj" />

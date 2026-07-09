@@ -1,4 +1,4 @@
-﻿global using KernelEngine;
+global using KernelEngine;
 global using KernelEngine.Common;
 global using KernelEngine.Common.Native;
 global using KernelEngine.Logger.Native;
@@ -26,5 +26,4 @@ global using KernelEngine.Input;
 global using KernelEngine.Audio;
 global using KernelEngine.Window;
 global using KernelEngine.Framework;
-global using KernelEngine.Framework.Legacy;
 global using KernelEngine.Configuration;

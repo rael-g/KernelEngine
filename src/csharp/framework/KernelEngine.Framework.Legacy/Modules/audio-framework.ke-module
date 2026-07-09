@@ -1,5 +1,0 @@
-id          = "KernelEngine.Framework.AudioFramework"
-using       = "KernelEngine.Framework"
-extension   = "AddAudioFramework"
-csproj-ref  = "src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj"
-depends-on  = ["KernelEngine.Audio.MiniAudio"]

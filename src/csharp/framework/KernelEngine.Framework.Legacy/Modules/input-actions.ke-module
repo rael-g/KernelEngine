@@ -1,5 +1,0 @@
-id          = "KernelEngine.Framework.InputActions"
-using       = "KernelEngine.Framework"
-extension   = "AddInputActions"
-csproj-ref  = "src/csharp/KernelEngine.Framework/KernelEngine.Framework.csproj"
-depends-on  = ["KernelEngine.Kernel.Input"]

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using Xunit;
@@ -22,7 +22,6 @@ public class AgnosticDriftTests(ITestOutputHelper output)
         ("src/c/kernel",                         [".h", ".c"]),
         ("src/csharp/KernelEngine.Kernel",        [".cs"]),
         ("src/csharp/KernelEngine.Kernel.Abstractions", [".cs"]),
-        ("src/csharp/KernelEngine.Framework.Legacy",     [".cs"]),
     ];
 
     // Subdirectory names that are always skipped (generated/build output).
