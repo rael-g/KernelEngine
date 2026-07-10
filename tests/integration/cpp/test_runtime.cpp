@@ -415,14 +415,20 @@ TEST_F(RuntimeSpike, Snapshot_FreezesLiveSide)
 
     ecs->swap_snapshots(ecs, nullptr);  // freeze live(100) → snapshot
 
-    int *snap_ptr = static_cast<int *>(ecs->component_get(ecs, e, snap));
+    // The snapshot lives on a separate "shadow" entity (never `e` itself — see
+    // ke_ecs.h's snapshot_entity), so a raw component_get for the snap cid must
+    // pair snapshot_cid with snapshot_entity, exactly like ke_system_ctx_get does.
+    ke_entity shadow = ecs->snapshot_entity(ecs, e);
+    ASSERT_NE(shadow, 0u);
+
+    int *snap_ptr = static_cast<int *>(ecs->component_get(ecs, shadow, snap));
     ASSERT_NE(snap_ptr, nullptr);
     EXPECT_EQ(*snap_ptr, 100);
 
     // Mutate live WITHOUT swapping — the snapshot must stay frozen. This is the
     // property that lets render N read a stable view while sim writes on.
     static_cast<int *>(ecs->component_get(ecs, e, cid))[0] = 200;
-    EXPECT_EQ(static_cast<int *>(ecs->component_get(ecs, e, snap))[0], 100);
+    EXPECT_EQ(static_cast<int *>(ecs->component_get(ecs, shadow, snap))[0], 100);
     EXPECT_EQ(static_cast<int *>(ecs->component_get(ecs, e, cid))[0], 200);
 }
 

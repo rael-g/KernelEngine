@@ -128,8 +128,17 @@ extern "C"
         // call from any wave thread during a parallel dispatch. The entity is alive
         // immediately and may be referenced (e.g. as a parent) and have components
         // attached through the runtime defer queue, applied at the wave barrier.
-        // Kept last so adding it does not shift existing vtable slot offsets.
         ke_entity (*entity_reserve)(struct ke_ecs *self);
+
+        // Maps a live entity to the entity its snapshot components are stored on
+        // (a separate "shadow" entity per §16 — never the live entity itself, so
+        // unrelated structural churn on the live side never relocates a snapshot
+        // column a render read has already resolved). Returns the entity
+        // unchanged if it owns no double-buffered component yet. A snapshot-cid
+        // read (snapshot_cid) MUST be paired with a snapshot-entity read
+        // (this function) — using one without the other looks up the wrong slot.
+        // Kept last so adding it does not shift existing vtable slot offsets.
+        ke_entity (*snapshot_entity)(struct ke_ecs *self, ke_entity live);
 
     } ke_ecs;
 

@@ -282,8 +282,15 @@ const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity
 #endif
     // Render-phase reads land on the snapshot side of a double-buffered
     // component; for everything else snapshot_cid returns cid unchanged (§16).
+    // The snapshot lives on a separate "shadow" entity (never the live one —
+    // see ke_ecs.h's snapshot_entity), so cid and entity are always remapped
+    // together; one without the other looks up the wrong slot.
     if (ctx->reads_snapshot && ctx->ecs->snapshot_cid)
+    {
         cid = ctx->ecs->snapshot_cid(ctx->ecs, cid);
+        if (ctx->ecs->snapshot_entity)
+            entity = ctx->ecs->snapshot_entity(ctx->ecs, entity);
+    }
 #ifndef NDEBUG
     ecs_call_enter();
     const void *r = ctx->ecs->component_get(ctx->ecs, entity, cid);

@@ -159,8 +159,12 @@ TEST_F(EcsSnapshot, RenderView_ResolvesToSnapshotStorage)
 
     const ke_component_id snap = ecs->snapshot_cid(ecs, pos);
     ASSERT_NE(snap, pos);
+    // The snapshot lives on a separate shadow entity — pair snapshot_cid with
+    // snapshot_entity, exactly like ke_system_ctx_get does.
+    const ke_entity shadow = ecs->snapshot_entity(ecs, entity);
+    ASSERT_NE(shadow, 0u);
 
-    const void *snap_storage = ecs->component_get(ecs, entity, snap);
+    const void *snap_storage = ecs->component_get(ecs, shadow, snap);
     const void *live_storage = ecs->component_get(ecs, entity, pos);
     ASSERT_NE(snap_storage, nullptr);
     ASSERT_NE(live_storage, nullptr);
@@ -202,12 +206,56 @@ TEST_F(EcsSnapshot, SnapshotLagsLiveByOneSwap)
     EXPECT_FLOAT_EQ(g_render_value, 10.0f) << "the swap must hand the sim's write to render";
 
     // Write live after this tick's swap: the snapshot still holds the old value.
+    // The snapshot lives on a separate shadow entity — snapshot_cid and
+    // snapshot_entity must be paired, exactly like ke_system_ctx_get does.
     set_live_x(20.0f);
-    const Pos *snap = static_cast<const Pos *>(ecs->component_get(ecs, entity, ecs->snapshot_cid(ecs, pos)));
+    const ke_entity shadow = ecs->snapshot_entity(ecs, entity);
+    ASSERT_NE(shadow, 0u);
+    const Pos *snap = static_cast<const Pos *>(ecs->component_get(ecs, shadow, ecs->snapshot_cid(ecs, pos)));
     ASSERT_NE(snap, nullptr);
     EXPECT_FLOAT_EQ(snap->x, 10.0f) << "the snapshot must not observe a live write made after the swap";
 
     // The next tick's swap propagates it.
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
     EXPECT_FLOAT_EQ(g_render_value, 20.0f) << "the next swap must hand the newer value to render";
+}
+
+// The reason the snapshot lives on a dedicated shadow entity rather than the
+// live entity itself: an unrelated structural change to the live entity (sim
+// adding/removing some other component, e.g. via defer_flush) moves the live
+// entity's archetype. If the snapshot shared that archetype, the move would
+// relocate the snapshot column too — invalidating any pointer a render read
+// had already resolved. Once render overlaps a future sim tick asynchronously
+// (RuntimeArchitectureV2.md §16 pipelining) that read may still be in flight
+// when the churn happens. This test freezes an already-resolved snapshot
+// pointer, churns the LIVE entity's archetype, and asserts the snapshot's own
+// memory — read directly, without going back through the ECS — is untouched.
+TEST_F(EcsSnapshot, SnapshotStorageSurvivesLiveArchetypeChurn)
+{
+    ke_query_decl decl{};
+    register_reader(render_reader, KE_PHASE_RENDER, "RenderReader", &decl);
+
+    set_live_x(42.0f);
+    ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
+    ASSERT_NE(g_render_column, nullptr);
+    EXPECT_FLOAT_EQ(g_render_value, 42.0f);
+
+    // Freeze the pointer the render read already resolved this tick.
+    const Pos *resolved_snap = static_cast<const Pos *>(g_render_column);
+    const float value_before = resolved_snap->x;
+
+    // Churn the LIVE entity's archetype: add, then remove, an unrelated
+    // component. Neither touches `pos` or its snapshot — only the live
+    // entity's own component set.
+    ke_component_id unrelated = ecs->component_register(ecs, "churn_marker", sizeof(int));
+    ASSERT_NE(unrelated, 0u);
+    int *marker = static_cast<int *>(ecs->component_add(ecs, entity, unrelated));
+    ASSERT_NE(marker, nullptr);
+    *marker = 1;
+    ecs->component_remove(ecs, entity, unrelated);
+
+    // The already-resolved snapshot pointer must still read the frozen value:
+    // the live entity's archetype moved, but the shadow entity's did not.
+    EXPECT_FLOAT_EQ(resolved_snap->x, value_before)
+        << "an unrelated structural change to the live entity must not relocate the snapshot";
 }

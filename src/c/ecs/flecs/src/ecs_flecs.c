@@ -102,6 +102,18 @@ typedef struct ecs_flecs_state
     size_t     snap_count;
     size_t     snap_capacity;
 
+    // Every _snap component lives on a dedicated "shadow" entity, one per live
+    // entity that owns at least one double-buffered component — NOT on the live
+    // entity itself. A live entity's archetype can churn every frame (sim adds/
+    // removes unrelated components via defer_flush); if _snap shared that
+    // archetype, an unrelated structural change would relocate the snapshot
+    // column too, invalidating any pointer a render read had already resolved —
+    // fatal once render overlaps a future sim tick asynchronously (RuntimeArchitectureV2.md
+    // §16 pipelining). The shadow entity's own archetype is touched only by
+    // swap_snapshots (serial, at the phase boundary), never by a running wave.
+    // shadow_link_cid (lazily registered) holds the live entity's shadow id.
+    ke_component_id shadow_link_cid;
+
     // Query cache — populated eagerly at component_register (so the parallel
     // wave never creates a query, which flecs forbids in readonly mode). During
     // a wave the cache is read-only, so concurrent lookups are safe.
@@ -182,6 +194,41 @@ static query_cache_entry *find_or_create_query(ecs_flecs_state *s, ke_component_
     return entry;
 }
 
+// Lazily registers the hidden link component that maps a live entity to its
+// shadow entity (see ecs_flecs_state's shadow_link_cid comment). Not a tag —
+// it carries the shadow's ecs_entity_t — so it is a real, small component.
+static ke_component_id shadow_link_cid(ecs_flecs_state *s)
+{
+    if (s->shadow_link_cid != 0) return s->shadow_link_cid;
+    ecs_entity_desc_t edesc = {0};
+    edesc.name = "ke.snapshot_shadow_link";
+    ecs_entity_t e = ecs_entity_init(s->world, &edesc);
+    ecs_component_desc_t cdesc = {0};
+    cdesc.entity         = e;
+    cdesc.type.size      = sizeof(ecs_entity_t);
+    cdesc.type.alignment = (ecs_size_t)alignof(ecs_entity_t);
+    s->shadow_link_cid = (ke_component_id)ecs_component_init(s->world, &cdesc);
+    return s->shadow_link_cid;
+}
+
+// Returns `live`'s shadow entity, creating it (and the link) on first use. Only
+// called from swap_snapshots — serial, at the phase boundary — so adding the
+// link component to `live` here (which moves its archetype once) never races
+// a running wave.
+static ecs_entity_t get_or_create_shadow(ecs_flecs_state *s, ecs_entity_t live)
+{
+    ke_component_id link = shadow_link_cid(s);
+    if (link == 0) return 0;
+    const ecs_entity_t *existing =
+        (const ecs_entity_t *)ecs_get_id(s->world, live, (ecs_id_t)link);
+    if (existing) return *existing;
+
+    ecs_entity_t shadow = ecs_new_w_id(s->world, 0);
+    ecs_entity_t *slot  = (ecs_entity_t *)ecs_get_mut_id(s->world, live, (ecs_id_t)link);
+    if (slot) *slot = shadow;
+    return shadow;
+}
+
 static bool grow_scratch_entities(thread_scratch *ts, size_t needed)
 {
     if (needed <= ts->entity_capacity) return true;
@@ -226,6 +273,17 @@ static void ecs_flecs_entity_destroy(ke_ecs *self, ke_entity entity)
     if (!self || !self->handle || entity == 0) return;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
     if (!ecs_is_alive(h->state.world, (ecs_entity_t)entity)) return;
+
+    // Cascade to the snapshot shadow (see ecs_flecs_state's shadow_link_cid
+    // comment) — otherwise every entity that ever carried a double-buffered
+    // component leaks its shadow for the life of the process.
+    if (h->state.shadow_link_cid != 0)
+    {
+        const ecs_entity_t *shadow = (const ecs_entity_t *)
+            ecs_get_id(h->state.world, (ecs_entity_t)entity, (ecs_id_t)h->state.shadow_link_cid);
+        if (shadow && ecs_is_alive(h->state.world, *shadow))
+            ecs_delete(h->state.world, *shadow);
+    }
     ecs_delete(h->state.world, (ecs_entity_t)entity);
 }
 
@@ -487,6 +545,22 @@ static ke_component_id ecs_flecs_snapshot_cid(ke_ecs *self, ke_component_id cid)
     return p ? p->snap : cid;
 }
 
+// Read-only lookup (ecs_get_id, not ecs_get_mut_id) — safe inside a readonly
+// parallel wave, same category as component_get. Never creates the shadow
+// (that only happens from swap_snapshots, serially): if none exists yet
+// (asked before the first swap involving this entity), the entity is
+// returned unchanged and the paired component_get(live, snap_cid) call
+// simply finds nothing, exactly like a never-swapped component does today.
+static ke_entity ecs_flecs_snapshot_entity(ke_ecs *self, ke_entity live)
+{
+    if (!self || !self->handle || live == 0) return live;
+    ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
+    if (h->state.shadow_link_cid == 0) return live;
+    const ecs_entity_t *shadow = (const ecs_entity_t *)
+        ecs_get_id(h->state.world, (ecs_entity_t)live, (ecs_id_t)h->state.shadow_link_cid);
+    return shadow ? (ke_entity)*shadow : live;
+}
+
 static bool ecs_flecs_swap_snapshots(ke_ecs *self, ke_error **out_error)
 {
     if (!self || !self->handle) return true;
@@ -517,15 +591,22 @@ static bool ecs_flecs_swap_snapshots(ke_ecs *self, ke_error **out_error)
             total += (size_t)it.count;
         }
 
-        // Pass 2: copy live → snap per entity (adds snap on first swap; safe
-        // outside iteration even though it moves archetypes).
+        // Pass 2: copy live → each entity's shadow's snap component. Creating the
+        // shadow (first swap for that entity) and adding the snap component to it
+        // (first swap for that pair) are both safe here, outside iteration, even
+        // though either can move an archetype — the shadow's, never the live
+        // entity's, so a render read already resolved against a snap column is
+        // never invalidated by unrelated churn on the live side (see
+        // ecs_flecs_state's shadow_link_cid comment).
         if (p->snap == 0) continue; // snap creation failed; skip to avoid ecs abort
         for (size_t e = 0; e < total; e++)
         {
             ecs_entity_t ent = (ecs_entity_t)ts->entities[e];
             if (!ecs_is_alive(h->state.world, ent)) continue;
+            ecs_entity_t shadow = get_or_create_shadow(&h->state, ent);
+            if (shadow == 0) continue;
             void *live = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->live);
-            void *snap = ecs_get_mut_id(h->state.world, ent, (ecs_id_t)p->snap);
+            void *snap = ecs_get_mut_id(h->state.world, shadow, (ecs_id_t)p->snap);
             if (live && snap) memcpy(snap, live, p->element_size);
         }
     }
@@ -629,6 +710,7 @@ ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
     h->api.concurrent_reads      = ecs_flecs_concurrent_reads;
     h->api.query_register        = ecs_flecs_query_register;
     h->api.query_resolve         = ecs_flecs_query_resolve;
+    h->api.snapshot_entity       = ecs_flecs_snapshot_entity;
 
     return (ke_ecs_handle){ .ref = &h->api, .destroy = ecs_flecs_destroy };
 }
