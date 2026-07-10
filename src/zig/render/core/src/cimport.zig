@@ -19,5 +19,6 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/tonemap/tonemap_create.h");
     @cInclude("kernel_engine/render/skybox/skybox_create.h");
     @cInclude("kernel_engine/render/ui/ui_create.h");
+    @cInclude("kernel_engine/render/gbuffer/gbuffer_create.h");
     @cInclude("kernel_engine/logger/logger.h");
 });

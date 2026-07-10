@@ -66,44 +66,6 @@ add_custom_command(
 
 set(KE_SHADER_LIB_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
 
-# Deferred G-buffer encode: the same flat material bound into the encode pass
-# (gbuffer.slang) instead of the forward pass. Same include dirs as the forward
-# wrapper (shared ke library + core shaders dir).
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
-)
-
 # Deferred lighting: fullscreen resolve reading the G-buffer + depth, shading
 # with the shared shadow/ibl/cluster hooks + ke.pbr. Needs the ke library dir
 # (ke.pbr) + the core shaders dir (the feature imports).
@@ -121,7 +83,7 @@ add_custom_command(
             --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
+            "${KE_SHADER_LIB_DIR}/forward_common.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
@@ -142,7 +104,7 @@ add_custom_command(
             --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
+            "${KE_SHADER_LIB_DIR}/forward_common.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
@@ -163,7 +125,7 @@ add_custom_command(
             --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
             --output "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
+            "${KE_SHADER_LIB_DIR}/gbuffer_encoding.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
@@ -182,7 +144,7 @@ add_custom_command(
             --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
             --output "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_encoding.slang"
+            "${KE_SHADER_LIB_DIR}/gbuffer_encoding.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
@@ -208,12 +170,11 @@ add_custom_command(
         "-Dke-tonemap-include=${CMAKE_SOURCE_DIR}/src/zig/render/tonemap/include"
         "-Dke-skybox-include=${CMAKE_SOURCE_DIR}/src/zig/render/skybox/include"
         "-Dke-ui-include=${CMAKE_SOURCE_DIR}/src/zig/render/ui/include"
+        "-Dke-gbuffer-include=${CMAKE_SOURCE_DIR}/src/zig/render/gbuffer/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
         "-Dshadow-vs-wgsl=${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "-Dshadow-fs-wgsl=${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-        "-Dmat-test-flat-gbuffer-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
-        "-Dmat-test-flat-gbuffer-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
         "-Dmat-test-flat-transparent-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
         "-Dmat-test-flat-transparent-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "-Ddeferred-lighting-vs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
@@ -230,8 +191,6 @@ add_custom_command(
         "${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-        "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
-        "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
@@ -243,6 +202,7 @@ add_custom_command(
         ke_render_tonemap_zig
         ke_render_skybox_zig
         ke_render_ui_zig
+        ke_render_gbuffer_zig
     VERBATIM
 )
 

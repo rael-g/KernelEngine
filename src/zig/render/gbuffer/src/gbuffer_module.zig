@@ -3,6 +3,8 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
+const gpa = std.heap.c_allocator;
+
 // Deferred G-buffer encode pass — the opaque path's first half. Draws every
 // mesh through the encode pipeline (mat_test_flat_gbuffer), writing the surface
 // (albedo/metallic/normal/roughness/ao/emissive) into 3 color targets + depth.
@@ -15,6 +17,10 @@ const c = cimport.c;
 //   RT1 RGBA8:   octNormal.xy, roughness, ao
 //   RT2 RGBA16F: emissive.rgb, alpha
 // Depth32Float is written here and sampled by deferred to reconstruct position.
+//
+// A standalone plugin: talks to the rest of the render pipeline only through
+// the borrowed ke_render_core/ke_runtime handles passed to create() — it never
+// sees another pass's private struct.
 
 const vs_wgsl = @embedFile("mat_test_flat_gbuffer.vs.wgsl");
 const fs_wgsl = @embedFile("mat_test_flat_gbuffer.fs.wgsl");
@@ -30,8 +36,8 @@ const PerObject = extern struct {
     model: [16]f32,
 };
 
-pub const GBufferModule = struct {
-    core: c.ke_render_core_handle = undefined,
+const GBufferModule = struct {
+    core: *c.ke_render_core = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
 
@@ -84,9 +90,9 @@ inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const gb = moduleOf(user);
-    const core = gb.core.ref;
+    const core = gb.core;
 
     // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
@@ -163,9 +169,9 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     core.*.end_pass.?(core, pc);
 }
 
-pub fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
-             ndc: c.ke_ndc_convention, mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
-             camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
+fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+         ndc: c.ke_ndc_convention, mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+         camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     gb.core = core;
     gb.device = dev;
     gb.ndc = ndc;
@@ -242,7 +248,7 @@ pub fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     pp.depth_stencil.depth_write_enabled = 1;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
     pp.bind_group_layouts[0] = gb.empty_bgl; // set 0: empty
-    pp.bind_group_layouts[1] = core.ref.*.material_layout.?(core.ref); // set 1: per-material
+    pp.bind_group_layouts[1] = core.*.material_layout.?(core); // set 1: per-material
     pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object
     pp.bind_group_layout_count = 3;
     // MRT: the three G-buffer targets, in SV_Target order (matches gbuffer.slang
@@ -283,28 +289,28 @@ pub fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     // Declare the G-buffer targets (all relative-to-backbuffer) + the depth
     // buffer. depth is declared with SAMPLED usage (resource_table.zig) so the
     // deferred pass can read it back to reconstruct position.
-    const albedo_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
+    const albedo_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "gbuffer_albedo",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
-    const normal_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
+    const normal_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "gbuffer_normal",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
-    const emissive_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
+    const emissive_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "gbuffer_emissive",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
-    const depth_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
+    const depth_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "depth",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
@@ -347,4 +353,41 @@ pub fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     gb.queries[1].terms[1] = .{ .cid = transform_cid, .access = rd };
     gb.queries[1].term_count = 2;
     return true;
+}
+
+fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
+    const gb: *GBufferModule = @ptrCast(@alignCast(self orelse return));
+    gpa.destroy(gb);
+}
+
+export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                                    mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                    camera_cid: c.ke_component_id, frame_cid: c.ke_component_id,
+                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_gbuffer_handle {
+    const empty = c.ke_render_gbuffer_handle{ .ref = null, .destroy = null };
+    const rt = runtime orelse return empty;
+    const core_ref = core orelse return empty;
+    const dev = device orelse return empty;
+
+    const gb = gpa.create(GBufferModule) catch return empty;
+    gb.* = .{};
+    if (!setup(gb, dev, core_ref, ndc, mesh_cid, transform_cid, camera_cid, frame_cid, out_error)) {
+        gpa.destroy(gb);
+        return empty;
+    }
+
+    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    params.name = "render.gbuffer";
+    params.phase = c.KE_PHASE_RENDER;
+    params.queries = &gb.queries;
+    params.query_count = gb.queries.len;
+    params.access_list = &gb.access;
+    params.access_count = gb.access_count;
+    params.pinned_thread = 0;
+    params.user_data = gb;
+    params.execute = system;
+    _ = rt.register_system.?(rt, &params, null);
+
+    return .{ .ref = @ptrCast(gb), .destroy = destroyHandle };
 }

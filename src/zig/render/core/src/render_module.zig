@@ -6,8 +6,6 @@ const cluster_module = @import("cluster_module.zig");
 const ClusterModule = cluster_module.ClusterModule;
 const forward_module = @import("forward_module.zig");
 const ForwardModule = forward_module.ForwardModule;
-const gbuffer_module = @import("gbuffer_module.zig");
-const GBufferModule = gbuffer_module.GBufferModule;
 const deferred_lighting_module = @import("deferred_lighting_module.zig");
 const DeferredLightingModule = deferred_lighting_module.DeferredLightingModule;
 
@@ -65,7 +63,9 @@ const ModuleState = struct {
     // borrowed pointers and the systems' user_data.
     shadow: ShadowModule,               // shadow_module.zig — depth pass, writes "shadow_map"
     cluster: ClusterModule,             // cluster_module.zig — light cull compute, set-3 light lists
-    gbuffer: GBufferModule,             // gbuffer_module.zig — opaque encode, writes gbuffer×3 + depth
+    // Gbuffer encode is its own physical plugin (ke_render_gbuffer) — this
+    // aggregator only holds the borrowed handle it returned, not its private state.
+    gbuffer: c.ke_render_gbuffer_handle,
     deferred: DeferredLightingModule,   // deferred_lighting_module.zig — decode + shade, writes "hdr"
     // Skybox is its own physical plugin (ke_render_skybox) — this aggregator
     // only holds the borrowed handle it returned, not its private state.
@@ -142,6 +142,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);
     if (st.skybox.destroy) |d| d(st.skybox.ref);
     if (st.ui.destroy) |d| d(st.ui.ref);
+    if (st.gbuffer.destroy) |d| d(st.gbuffer.ref);
     if (st.core.destroy) |d| d(st.core.ref);
     gpa.destroy(st);
 }
@@ -187,7 +188,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     }
     st.shadow = ShadowModule{};
     st.cluster = ClusterModule{};
-    st.gbuffer = GBufferModule{};
+    st.gbuffer = .{ .ref = null, .destroy = null };
     st.deferred = DeferredLightingModule{};
     st.skybox = .{ .ref = null, .destroy = null };
     st.forward = ForwardModule{};
@@ -246,6 +247,19 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(forward_module.AmbientComp));
         const skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(forward_module.SkyboxComp));
 
+        // begin_frame/clear are registered first, unconditionally, before any
+        // pass's setup runs: gbuffer is its own physical plugin whose create()
+        // call both configures it (declaring gbuffer_albedo/normal/emissive —
+        // deferred_lighting.setup() below resolves those cids) AND registers
+        // its runtime system in the same call. Registering begin_frame/clear
+        // up front guarantees they're ahead of gbuffer's system in the wave
+        // order regardless of where gbuffer's combined call lands (registration
+        // order determines wave placement — see the tonemap/skybox plugins for
+        // the same lesson learned the hard way: an out-of-order registration
+        // races ahead of begin_frame's per-slot encoder pre-creation).
+        registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
+        registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
+
         // Setup order is a real dependency chain: shadow + cluster publish their
         // outputs (LVP uniform, shadow view, light-list bind group + layout)
         // into the named-resource table first, so gbuffer/deferred/forward can
@@ -254,9 +268,29 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         if (!shadow_module.setup(&st.shadow, dev, st.core, ndc, st.shadow.enabled,
                                  mesh_cid, transform_cid, light_cid, st.frame_cid, out_error) or
             !cluster_module.setup(&st.cluster, dev, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-                                  point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error) or
-            !gbuffer_module.setup(&st.gbuffer, dev, st.core, ndc, mesh_cid, transform_cid, camera_cid, st.frame_cid, out_error) or
-            !deferred_lighting_module.setup(&st.deferred, dev, st.core, ndc, logger, ibl_enabled,
+                                  point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error))
+        {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
+        if (st.shadow.enabled) {
+            registerSys(rt, "render.shadow", &st.shadow.queries, 2, &st.shadow.access, st.shadow.access.len, &st.shadow, shadow_module.system);
+        }
+        registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
+
+        // Gbuffer is its own physical plugin: create() both declares its
+        // resources (gbuffer_albedo/normal/emissive/depth — needed by
+        // deferred-lighting's setup below) and registers its runtime system,
+        // in the position its old registerSys call used to occupy.
+        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, ndc, mesh_cid, transform_cid, camera_cid, st.frame_cid, out_error);
+        if (st.gbuffer.ref == null) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
+
+        if (!deferred_lighting_module.setup(&st.deferred, dev, st.core, ndc, logger, ibl_enabled,
                                   camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
                                   out_error) or
             !forward_module.setup(&st.forward, dev, st.core, ndc, logger, ibl_enabled,
@@ -267,13 +301,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
-        registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
-        if (st.shadow.enabled) {
-            registerSys(rt, "render.shadow", &st.shadow.queries, 2, &st.shadow.access, st.shadow.access.len, &st.shadow, shadow_module.system);
-        }
-        registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
-        registerSys(rt, "render.gbuffer", &st.gbuffer.queries, 2, &st.gbuffer.access, st.gbuffer.access_count, &st.gbuffer, gbuffer_module.system);
         registerSys(rt, "render.deferred_lighting", &st.deferred.queries, 4, &st.deferred.access, st.deferred.access_count, &st.deferred, deferred_lighting_module.system);
         // Skybox is its own physical plugin: its factory registers its own
         // runtime system directly, matching the position its old registerSys
