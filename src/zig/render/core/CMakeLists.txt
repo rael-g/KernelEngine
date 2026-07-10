@@ -17,15 +17,6 @@ set(SHADER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
 file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
 # One WGSL module per stage: a uniform shared across stages would be declared
 # twice (invalid WGSL) if both entry points were emitted into one module.
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry cs_main --stage compute
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang"
-            --output "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
 
 add_custom_command(
     OUTPUT "${SHADER_GEN_DIR}/magenta.vs.wgsl"
@@ -154,8 +145,8 @@ add_custom_command(
         "-Dke-ui-include=${CMAKE_SOURCE_DIR}/src/zig/render/ui/include"
         "-Dke-gbuffer-include=${CMAKE_SOURCE_DIR}/src/zig/render/gbuffer/include"
         "-Dke-shadow-include=${CMAKE_SOURCE_DIR}/src/zig/render/shadow/include"
+        "-Dke-cluster-include=${CMAKE_SOURCE_DIR}/src/zig/render/cluster/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "-Dmat-test-flat-transparent-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
         "-Dmat-test-flat-transparent-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "-Ddeferred-lighting-vs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
@@ -169,7 +160,6 @@ add_custom_command(
         # unlisted file is silent and costs far more than an occasional rebuild.
         ${KE_RENDER_CORE_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
@@ -183,6 +173,7 @@ add_custom_command(
         ke_render_ui_zig
         ke_render_gbuffer_zig
         ke_render_shadow_zig
+        ke_render_cluster_zig
     VERBATIM
 )
 

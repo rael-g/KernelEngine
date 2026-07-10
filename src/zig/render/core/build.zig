@@ -21,8 +21,8 @@ pub fn build(b: *std.Build) void {
     const ke_ui        = b.option([]const u8, "ke-ui-include",       "ke_render_ui plugin include dir")      orelse @panic("-Dke-ui-include required");
     const ke_gbuffer   = b.option([]const u8, "ke-gbuffer-include",  "ke_render_gbuffer plugin include dir") orelse @panic("-Dke-gbuffer-include required");
     const ke_shadow    = b.option([]const u8, "ke-shadow-include",   "ke_render_shadow plugin include dir")  orelse @panic("-Dke-shadow-include required");
+    const ke_cluster   = b.option([]const u8, "ke-cluster-include",  "ke_render_cluster plugin include dir") orelse @panic("-Dke-cluster-include required");
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
-    const cluster_cull_cs_wgsl = b.option([]const u8, "cluster-cull-cs-wgsl", "generated cluster cull compute WGSL path") orelse @panic("-Dcluster-cull-cs-wgsl required");
     const mat_test_flat_transparent_vs_wgsl = b.option([]const u8, "mat-test-flat-transparent-vs-wgsl", "generated flat-material transparent-forward vertex WGSL path")   orelse @panic("-Dmat-test-flat-transparent-vs-wgsl required");
     const mat_test_flat_transparent_fs_wgsl = b.option([]const u8, "mat-test-flat-transparent-fs-wgsl", "generated flat-material transparent-forward fragment WGSL path") orelse @panic("-Dmat-test-flat-transparent-fs-wgsl required");
     const deferred_lighting_vs_wgsl = b.option([]const u8, "deferred-lighting-vs-wgsl", "generated deferred-lighting vertex WGSL path")   orelse @panic("-Ddeferred-lighting-vs-wgsl required");
@@ -36,7 +36,7 @@ pub fn build(b: *std.Build) void {
         .optimize  = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_allocator, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_logger, ke_self, ke_tonemap, ke_skybox, ke_ui, ke_gbuffer, ke_shadow }) |inc| {
+    inline for (.{ ke_common, ke_allocator, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_logger, ke_self, ke_tonemap, ke_skybox, ke_ui, ke_gbuffer, ke_shadow, ke_cluster }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
@@ -47,6 +47,7 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("ke_render_ui", .{}); // the ui overlay pass plugin
     mod.linkSystemLibrary("ke_render_gbuffer", .{}); // the gbuffer encode pass plugin
     mod.linkSystemLibrary("ke_render_shadow", .{}); // the shadow-depth pass plugin
+    mod.linkSystemLibrary("ke_render_cluster", .{}); // the clustered-light-cull pass plugin
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
 
     // Matrix math for the forward pass (view-proj). The engine implements no
@@ -56,7 +57,6 @@ pub fn build(b: *std.Build) void {
 
     // The forward pass shaders, compiled Slang -> WGSL by CMake (one module per
     // stage), embedded here.
-    mod.addAnonymousImport("cluster_cull.cs.wgsl", .{ .root_source_file = .{ .cwd_relative = cluster_cull_cs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_transparent.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_transparent_vs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_transparent.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_transparent_fs_wgsl } });
     mod.addAnonymousImport("deferred_lighting.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = deferred_lighting_vs_wgsl } });

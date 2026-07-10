@@ -3,12 +3,17 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
+const gpa = std.heap.c_allocator;
+
 // Clustered light cull — bins point/spot lights into a froxel grid so a shading
-// pass iterates only the lights touching its pixel. Shared by both shading
-// topologies: whichever pass shades calls uploadGrid once per frame (only it
-// knows the viewport) and binds this module's set-3 group. That pair of calls
-// is the seam; the storage buffers, the cull compute pipeline, and the
-// "render.cull" system are self-contained here.
+// pass iterates only the lights touching its pixel. A standalone plugin: talks
+// to the rest of the render pipeline only through the borrowed
+// ke_render_core/ke_runtime handles passed to create() — it never sees another
+// pass's private struct. Publishes its outputs ("cluster_lights" bind group +
+// layout, "light_clusters" ordering tag) through the named-resource table;
+// deferred/forward resolve them by name. Uploads its own grid UBO inside its
+// own system() (using the camera it already reads for the cull), so no other
+// pass needs to trigger it.
 
 const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
 
@@ -44,7 +49,7 @@ const SpotLightGpu = extern struct {
 // kernel ke_point_light_component header (which orders them differently).
 // Exported: render_module.zig registers the component (its cid is shared with
 // forward's own access list), so it needs this struct's size at registration.
-pub const PointLightComp = extern struct {
+const PointLightComp = extern struct {
     color: [3]f32,
     intensity: f32,
     radius: f32,
@@ -53,7 +58,7 @@ pub const PointLightComp = extern struct {
 // Mirrors the C# SpotLightComponent { Vector3 Direction, Vector3 Color, float
 // Intensity, float Range, float InnerAngleDeg, float OuterAngleDeg } (registered
 // "spot_light"). Field order is the C# struct's, not the kernel header's.
-pub const SpotLightComp = extern struct {
+const SpotLightComp = extern struct {
     dir: [3]f32,
     color: [3]f32,
     intensity: f32,
@@ -78,10 +83,10 @@ const ClusterParams = extern struct {
     view: [16]f32, // world → view
 };
 
-pub const ClusterModule = struct {
+const ClusterModule = struct {
     // Borrowed cross-cutting refs, captured once at setup so the system body
     // never reaches into the parent ModuleState.
-    core: c.ke_render_core_handle = undefined,
+    core: *c.ke_render_core = undefined,
     logger: ?*c.ke_logger = null,
     point_light_cid: c.ke_component_id = undefined,
     spot_light_cid: c.ke_component_id = undefined,
@@ -157,9 +162,9 @@ inline fn moduleOf(user: ?*anyopaque) *ClusterModule {
 // Packs the scene's point + spot lights into storage buffers, then dispatches one
 // thread per cluster to bin them. The forward reads the result; the "light_clusters"
 // tag orders this pass before it.
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const cm = moduleOf(user);
-    const core = cm.core.ref;
+    const core = cm.core;
     const deg2rad: f32 = std.math.pi / 180.0;
     // Pack point lights — view 0 = [point_light, transform], columns aligned.
     // Batched: fill a stack chunk and upload it whole, so N lights cost ceil(N /
@@ -282,8 +287,8 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
 // set 3 binding 6). The shading pass calls this once per frame — the seam
 // exists because the grid's screen-size component (viewport) is only known from
 // that pass's own backbuffer query.
-pub fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) void {
-    const core = cm.core.ref;
+fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) void {
+    const core = cm.core;
     const grid_data = ClusterGridUniform{
         .cluster_grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), near, far },
@@ -302,7 +307,7 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize, out_error: [*c][*c]c.ke
 
 // Storage buffers + the cull compute pipeline + the forward's set-3 light bind
 // group. The cull pass writes the per-cluster index lists; the forward reads them.
-pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
+fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
              transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
@@ -383,7 +388,7 @@ pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     if (cm.fwd_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
     // Published under a name so deferred/forward bind it without holding a
     // pointer to *ClusterModule.
-    _ = core.ref.*.import_bind_group.?(core.ref, "cluster_lights", cm.fwd_light_bind_group, cm.light_set_bgl, null);
+    _ = core.*.import_bind_group.?(core, "cluster_lights", cm.fwd_light_bind_group, cm.light_set_bgl, null);
 
     // Cull compute: uniform + read-only lights + read-write index/count buffers.
     const rw = c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER;
@@ -450,7 +455,7 @@ pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     // consumer looks it up by name via core.cid() instead of a *ClusterModule
     // pointer. No GPU payload; the real light data crosses via "cluster_lights"
     // (import_bind_group) below.
-    cm.clusters_cid = core.ref.*.import_tag.?(core.ref, "light_clusters", null);
+    cm.clusters_cid = core.*.import_tag.?(core, "light_clusters", null);
     cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);
     cm.cull_io.cmd_slot = 2; // cull → frame command slot 2 (before forward)
     // The cull WRITES light_clusters and the forward READS it (cull → forward) —
@@ -482,4 +487,44 @@ pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     cm.cull_queries[2].terms[1] = .{ .cid = cm.transform_cid, .access = rd };
     cm.cull_queries[2].term_count = 2;
     return true;
+}
+
+fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
+    const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
+    gpa.destroy(cm);
+}
+
+export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+                                    device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
+                                    grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
+                                    point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
+                                    transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
+                                    frame_cid: c.ke_component_id,
+                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_cluster_handle {
+    const empty = c.ke_render_cluster_handle{ .ref = null, .destroy = null };
+    const rt = runtime orelse return empty;
+    const core_ref = core orelse return empty;
+    const dev = device orelse return empty;
+
+    const cm = gpa.create(ClusterModule) catch return empty;
+    cm.* = .{};
+    if (!setup(cm, dev, core_ref, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
+               point_light_cid, spot_light_cid, transform_cid, camera_cid, frame_cid, out_error)) {
+        gpa.destroy(cm);
+        return empty;
+    }
+
+    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    params.name = "render.cull";
+    params.phase = c.KE_PHASE_RENDER;
+    params.queries = &cm.cull_queries;
+    params.query_count = cm.cull_queries.len;
+    params.access_list = &cm.cull_access;
+    params.access_count = cm.cull_access.len;
+    params.pinned_thread = 0;
+    params.user_data = cm;
+    params.execute = system;
+    _ = rt.register_system.?(rt, &params, null);
+
+    return .{ .ref = @ptrCast(cm), .destroy = destroyHandle };
 }

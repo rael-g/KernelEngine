@@ -15,6 +15,7 @@
     <NativeDep Include="ke_render_ui" />
     <NativeDep Include="ke_render_gbuffer" />
     <NativeDep Include="ke_render_shadow" />
+    <NativeDep Include="ke_render_cluster" />
     <NativeDep Include="wgpu_native" />
   </ItemGroup>
 

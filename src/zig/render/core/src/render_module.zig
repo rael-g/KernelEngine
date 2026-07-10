@@ -1,7 +1,23 @@
 const std = @import("std");
 const cimport = @import("cimport.zig");
-const cluster_module = @import("cluster_module.zig");
-const ClusterModule = cluster_module.ClusterModule;
+// Cluster is its own physical plugin (ke_render_cluster). These two structs
+// mirror its own private PointLightComp/SpotLightComp (duplicated rather than
+// imported cross-DLL — same decoupling precedent as forward_common.slang's
+// PerObject being copied per pass): the aggregator only needs their byte size
+// to register the ECS components, never their fields.
+const PointLightComp = extern struct {
+    color: [3]f32,
+    intensity: f32,
+    radius: f32,
+};
+const SpotLightComp = extern struct {
+    dir: [3]f32,
+    color: [3]f32,
+    intensity: f32,
+    range: f32,
+    inner_deg: f32,
+    outer_deg: f32,
+};
 const forward_module = @import("forward_module.zig");
 const ForwardModule = forward_module.ForwardModule;
 const deferred_lighting_module = @import("deferred_lighting_module.zig");
@@ -62,7 +78,9 @@ const ModuleState = struct {
     // Shadow is its own physical plugin (ke_render_shadow) — this aggregator
     // only holds the borrowed handle it returned, not its private state.
     shadow: c.ke_render_shadow_handle,
-    cluster: ClusterModule,             // cluster_module.zig — light cull compute, set-3 light lists
+    // Cluster is its own physical plugin (ke_render_cluster) — this aggregator
+    // only holds the borrowed handle it returned, not its private state.
+    cluster: c.ke_render_cluster_handle,
     // Gbuffer encode is its own physical plugin (ke_render_gbuffer) — this
     // aggregator only holds the borrowed handle it returned, not its private state.
     gbuffer: c.ke_render_gbuffer_handle,
@@ -144,6 +162,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.ui.destroy) |d| d(st.ui.ref);
     if (st.gbuffer.destroy) |d| d(st.gbuffer.ref);
     if (st.shadow.destroy) |d| d(st.shadow.ref);
+    if (st.cluster.destroy) |d| d(st.cluster.ref);
     if (st.core.destroy) |d| d(st.core.ref);
     gpa.destroy(st);
 }
@@ -188,7 +207,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         max_lights_per_cluster = DEFAULT_MAX_LIGHTS_PER_CLUSTER;
     }
     st.shadow = .{ .ref = null, .destroy = null };
-    st.cluster = ClusterModule{};
+    st.cluster = .{ .ref = null, .destroy = null };
     st.gbuffer = .{ .ref = null, .destroy = null };
     st.deferred = DeferredLightingModule{};
     st.skybox = .{ .ref = null, .destroy = null };
@@ -243,8 +262,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
         const camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
         const light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
-        const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(cluster_module.PointLightComp));
-        const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(cluster_module.SpotLightComp));
+        const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(PointLightComp));
+        const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(SpotLightComp));
         const ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(forward_module.AmbientComp));
         const skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(forward_module.SkyboxComp));
 
@@ -279,14 +298,18 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return empty;
         }
 
-        if (!cluster_module.setup(&st.cluster, dev, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-                                  point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error))
-        {
+        // Cluster is its own physical plugin: create() both declares its
+        // outputs ("cluster_lights" bind group + layout, "light_clusters"
+        // ordering tag — deferred/forward resolve them by name) and registers
+        // its runtime system, in the position its old registerSys call used
+        // to occupy.
+        st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
+                                                point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error);
+        if (st.cluster.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
         }
-        registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
 
         // Gbuffer is its own physical plugin: create() both declares its
         // resources (gbuffer_albedo/normal/emissive/depth — needed by

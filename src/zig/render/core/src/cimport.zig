@@ -21,5 +21,6 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/ui/ui_create.h");
     @cInclude("kernel_engine/render/gbuffer/gbuffer_create.h");
     @cInclude("kernel_engine/render/shadow/shadow_create.h");
+    @cInclude("kernel_engine/render/cluster/cluster_create.h");
     @cInclude("kernel_engine/logger/logger.h");
 });
