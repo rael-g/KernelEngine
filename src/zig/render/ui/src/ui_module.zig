@@ -3,12 +3,15 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
+const gpa = std.heap.c_allocator;
+
 // UI overlay — screen-space quad batching + its own pipeline/shaders, drawn
-// after tonemap so it composites over the rendered scene. An opt-in pass module
-// like tonemap or shadow: it owns its pipeline, shaders, and per-frame batching
-// state, and reaches the GPU only through the mechanism the core exposes
-// (begin_pass/upload/end_pass). Game code queues quads via the ABI entry
-// ke_render_module_ui_quad, which forwards into this module's accumulator.
+// after tonemap so it composites over the rendered scene. A standalone
+// plugin: talks to the rest of the pipeline only through the borrowed
+// ke_render_core/ke_runtime handles passed to create() — it never sees
+// another pass's private struct. Game code queues quads via the ui_quad
+// vtable method, which is why (unlike tonemap/skybox) this plugin exposes a
+// real vtable instead of an opaque fire-and-forget handle.
 
 const ui_vs_wgsl = @embedFile("ui.vs.wgsl");
 const ui_fs_wgsl = @embedFile("ui.fs.wgsl");
@@ -30,11 +33,14 @@ const UiBatch = struct {
     vertex_count: u32,
 };
 
-pub const UiModule = struct {
-    core: c.ke_render_core_handle = undefined,
+// api is the first field so &state.api == &state (the same trick
+// ke_configuration uses) — the opaque ke_render_ui* handle IS this struct.
+const UiState = struct {
+    api: c.ke_render_ui = undefined,
+
+    core: *c.ke_render_core = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
-    logger: ?*c.ke_logger = null,
 
     pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
     bgl_frame: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0: proj uniform
@@ -58,19 +64,24 @@ pub const UiModule = struct {
     access: [1]c.ke_component_access = undefined,
 };
 
+fn stateOf(self: [*c]c.ke_render_ui) *UiState {
+    return @alignCast(@ptrCast(self));
+}
+
 // Resets the accumulator at the start of each frame — called at the end of
 // system() (draw), not at frame-begin: resetting at frame-begin would wipe
 // quads a system in an EARLIER phase queued for THIS frame's ui pass to draw,
 // since begin_frame has no ordering guarantee relative to other modules.
-fn uiReset(ui: *UiModule) void {
+fn uiReset(ui: *UiState) void {
     ui.vertex_count = 0;
     ui.batch_count = 0;
 }
 
-pub fn uiQuad(ui: *UiModule, texture: c.ke_texture_handle,
+fn uiQuad(self: [*c]c.ke_render_ui, texture: c.ke_texture_handle,
           dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
           uv0: f32, uv1: f32, uv2: f32, uv3: f32,
-          r: f32, g: f32, b: f32, a: f32) void {
+          r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+    const ui = stateOf(self);
     if (ui.vertex_count + 6 > ui.vertices.len) return;
 
     // White (handle 0, the core's built-in) is the flat-color default: a quad
@@ -113,14 +124,14 @@ pub fn uiQuad(ui: *UiModule, texture: c.ke_texture_handle,
 // The set-1 (texture+sampler) bind group for a texture index, built once and
 // cached — UI textures (font atlases, a handful of solid-color sources) are
 // stable across frames, so rebuilding every quad would be wasteful.
-fn uiBindGroupFor(ui: *UiModule, tex_idx: u32) c.ke_gpu_bind_group {
+fn uiBindGroupFor(ui: *UiState, tex_idx: u32) c.ke_gpu_bind_group {
     if (ui.bind_group_cache[tex_idx] != c.KE_GPU_INVALID_HANDLE)
         return ui.bind_group_cache[tex_idx];
 
-    const view = ui.core.ref.*.texture_view.?(ui.core.ref, .{ .idx = tex_idx });
+    const view = ui.core.*.texture_view.?(ui.core, .{ .idx = tex_idx });
     const entries = [_]c.ke_gpu_bind_group_entry{
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.ref.*.sampler.?(ui.core.ref) },
+        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
     };
     // No out_error slot on this lazy-cache path (uiQuad, its only caller, is a
     // void draw-call helper) — pass null. The push/pop error scope inside
@@ -135,15 +146,15 @@ fn uiBindGroupFor(ui: *UiModule, tex_idx: u32) c.ke_gpu_bind_group {
     return bg;
 }
 
-inline fn moduleOf(user: ?*anyopaque) *UiModule {
+inline fn moduleOf(user: ?*anyopaque) *UiState {
     return @alignCast(@ptrCast(user.?));
 }
 
 // Uploads this frame's accumulated quads and draws each texture batch — the
 // "render.ui" runtime system.
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const ui = moduleOf(user);
-    const core = ui.core.ref;
+    const core = ui.core;
     if (ui.vertex_count == 0) return;
 
     const pc = core.*.begin_pass.?(core, ctx, &ui.io);
@@ -185,13 +196,12 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
 // Pipeline + buffers for the UI overlay pass. Premultiplied-alpha blend so
 // both solid quads and glyph coverage composite correctly over whatever the
 // tonemap pass already wrote.
-pub fn setup(ui: *UiModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
-             ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, bb_cid: c.ke_component_id,
-             cmd_slot: u32, out_error: [*c][*c]c.ke_error) bool {
+fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+         ndc: c.ke_ndc_convention, bb_cid: c.ke_component_id,
+         cmd_slot: u32, out_error: [*c][*c]c.ke_error) bool {
     ui.core = core;
     ui.device = dev;
     ui.ndc = ndc;
-    ui.logger = logger;
 
     const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(ui_vs_wgsl), .byte_size = ui_vs_wgsl.len, .entry_point = "ui.vs" }, out_error);
     defer dev.destroy_shader_module.?(dev, vs);
@@ -242,7 +252,7 @@ pub fn setup(ui: *UiModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle
     pp.bind_group_layouts[1] = ui.bgl_tex;
     pp.bind_group_layout_count = 2;
     // Premultiplied-alpha over: dst = src + dst*(1-src.a). The color channel
-    // reads ONE (not SRC_ALPHA) because uiQuad's caller already premultiplies.
+    // reads ONE (not SRC_ALPHA) because ui_quad's caller already premultiplies.
     pp.blend_state.blend_enabled = 1;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_ONE;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -307,4 +317,49 @@ pub fn setup(ui: *UiModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle
         .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
     };
     return true;
+}
+
+fn destroyState(ui: *const UiState) void {
+    const dev = ui.device;
+    if (ui.frame_bind_group != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group.?(dev, ui.frame_bind_group);
+    for (ui.bind_group_cache) |bg| {
+        if (bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, bg);
+    }
+}
+
+fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
+    const ui: *UiState = @ptrCast(@alignCast(self orelse return));
+    destroyState(ui);
+    gpa.destroy(ui);
+}
+
+export fn ke_render_ui_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+                               device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                               bb_cid: c.ke_component_id, cmd_slot: u32,
+                               out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_ui_handle {
+    const empty = c.ke_render_ui_handle{ .ref = null, .destroy = null };
+    const rt = runtime orelse return empty;
+    const core_ref = core orelse return empty;
+    const dev = device orelse return empty;
+
+    const ui = gpa.create(UiState) catch return empty;
+    ui.* = .{};
+    ui.api = .{ .handle = ui, .ui_quad = uiQuad };
+    if (!setup(ui, dev, core_ref, ndc, bb_cid, cmd_slot, out_error)) {
+        gpa.destroy(ui);
+        return empty;
+    }
+
+    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    params.name = "render.ui";
+    params.phase = c.KE_PHASE_RENDER;
+    params.access_list = &ui.access;
+    params.access_count = ui.access.len;
+    params.pinned_thread = 0;
+    params.user_data = ui;
+    params.execute = system;
+    _ = rt.register_system.?(rt, &params, null);
+
+    return .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
 }

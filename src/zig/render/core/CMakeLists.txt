@@ -44,24 +44,6 @@ add_custom_command(
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang" "${COMPILE_SLANG}"
     VERBATIM
 )
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/ui.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang"
-            --output "${SHADER_GEN_DIR}/ui.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/ui.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang"
-            --output "${SHADER_GEN_DIR}/ui.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ui.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
 
 add_custom_command(
     OUTPUT "${SHADER_GEN_DIR}/magenta.vs.wgsl"
@@ -225,12 +207,11 @@ add_custom_command(
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-tonemap-include=${CMAKE_SOURCE_DIR}/src/zig/render/tonemap/include"
         "-Dke-skybox-include=${CMAKE_SOURCE_DIR}/src/zig/render/skybox/include"
+        "-Dke-ui-include=${CMAKE_SOURCE_DIR}/src/zig/render/ui/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
         "-Dshadow-vs-wgsl=${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "-Dshadow-fs-wgsl=${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-        "-Dui-vs-wgsl=${SHADER_GEN_DIR}/ui.vs.wgsl"
-        "-Dui-fs-wgsl=${SHADER_GEN_DIR}/ui.fs.wgsl"
         "-Dmat-test-flat-gbuffer-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "-Dmat-test-flat-gbuffer-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
         "-Dmat-test-flat-transparent-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
@@ -249,8 +230,6 @@ add_custom_command(
         "${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-        "${SHADER_GEN_DIR}/ui.vs.wgsl"
-        "${SHADER_GEN_DIR}/ui.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
@@ -263,6 +242,7 @@ add_custom_command(
         ke_runtime
         ke_render_tonemap_zig
         ke_render_skybox_zig
+        ke_render_ui_zig
     VERBATIM
 )
 

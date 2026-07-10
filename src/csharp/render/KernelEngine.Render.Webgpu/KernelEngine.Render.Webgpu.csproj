@@ -12,6 +12,7 @@
     <NativeDep Include="ke_render_core" />
     <NativeDep Include="ke_render_tonemap" />
     <NativeDep Include="ke_render_skybox" />
+    <NativeDep Include="ke_render_ui" />
     <NativeDep Include="wgpu_native" />
   </ItemGroup>
 

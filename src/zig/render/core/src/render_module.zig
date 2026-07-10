@@ -6,8 +6,6 @@ const cluster_module = @import("cluster_module.zig");
 const ClusterModule = cluster_module.ClusterModule;
 const forward_module = @import("forward_module.zig");
 const ForwardModule = forward_module.ForwardModule;
-const ui_module = @import("ui_module.zig");
-const UiModule = ui_module.UiModule;
 const gbuffer_module = @import("gbuffer_module.zig");
 const GBufferModule = gbuffer_module.GBufferModule;
 const deferred_lighting_module = @import("deferred_lighting_module.zig");
@@ -76,7 +74,9 @@ const ModuleState = struct {
     // Tonemap is its own physical plugin (ke_render_tonemap) — this aggregator
     // only holds the borrowed handle it returned, not its private state.
     tonemap: c.ke_render_tonemap_handle,
-    ui: UiModule,                       // ui_module.zig — overlay, loads (doesn't clear) "backbuffer"
+    // UI is its own physical plugin (ke_render_ui) — this aggregator only
+    // holds the borrowed vtable handle it returned, not its private state.
+    ui: c.ke_render_ui_handle,
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
@@ -126,22 +126,22 @@ export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.k
     return st.core.ref;
 }
 
-// Queues a screen-space UI quad for this frame — owned by the module (UI
-// overlay is a rendering feature: its own pipeline, shaders, and batching
-// state), not by ke_render_core. Replaces the old ke_render_core.ui_quad
-// vtable slot; see ui_module.zig for why it moved.
+// Queues a screen-space UI quad for this frame — forwarded into the ui plugin's
+// own vtable (ke_render_ui.ui_quad), not handled by ke_render_core. Replaces
+// the old ke_render_core.ui_quad vtable slot; see ke_render_ui for why it moved.
 export fn ke_render_module_ui_quad(module: ?*c.ke_render_module, texture: c.ke_texture_handle,
                                    dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
                                    uv0: f32, uv1: f32, uv2: f32, uv3: f32,
                                    r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(module orelse return));
-    ui_module.uiQuad(&st.ui, texture, dst_x, dst_y, dst_w, dst_h, uv0, uv1, uv2, uv3, r, g, b, a);
+    st.ui.ref.*.ui_quad.?(st.ui.ref, texture, dst_x, dst_y, dst_w, dst_h, uv0, uv1, uv2, uv3, r, g, b, a);
 }
 
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);
     if (st.skybox.destroy) |d| d(st.skybox.ref);
+    if (st.ui.destroy) |d| d(st.ui.ref);
     if (st.core.destroy) |d| d(st.core.ref);
     gpa.destroy(st);
 }
@@ -192,7 +192,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.skybox = .{ .ref = null, .destroy = null };
     st.forward = ForwardModule{};
     st.tonemap = .{ .ref = null, .destroy = null };
-    st.ui = UiModule{};
+    st.ui = .{ .ref = null, .destroy = null };
     st.shadow.enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
@@ -267,14 +267,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        // UI overlay pass: loads (doesn't clear) the backbuffer tonemap will write,
-        // so text/quads composite on top. cmd_slot 8 = after tonemap's slot 7.
-        if (!ui_module.setup(&st.ui, dev, st.core, ndc, logger, bb_cid, 8, out_error)) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
-            return empty;
-        }
-
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
         if (st.shadow.enabled) {
@@ -306,7 +298,16 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        registerSys(rt, "render.ui", null, 0, &st.ui.access, st.ui.access.len, &st.ui, ui_module.system);
+        // UI overlay pass: its own physical plugin, factory registers its own
+        // runtime system, matching the position its old registerSys call
+        // occupied. cmd_slot 8 = after tonemap's slot 7 (loads, doesn't clear,
+        // the backbuffer tonemap just wrote, so text/quads composite on top).
+        st.ui = c.ke_render_ui_create(rt, st.core.ref, dev, ndc, bb_cid, 8, out_error);
+        if (st.ui.ref == null) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
 
