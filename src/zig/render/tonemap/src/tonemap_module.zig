@@ -2,16 +2,23 @@ const std = @import("std");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-// ACES tonemapping pass — reads the HDR buffer forward_module wrote and
-// resolves it to the swapchain via the ACES fitted curve (Narkowicz 2015).
-// A fullscreen-triangle pass with no vertex buffer; its only per-frame work is
-// rebuilding the bind group against that frame's "hdr" texture view.
+const gpa = std.heap.c_allocator;
+
+// ACES tonemapping pass — reads the HDR buffer the transparent-forward pass
+// wrote and resolves it to the swapchain via the ACES fitted curve (Narkowicz
+// 2015). A fullscreen-triangle pass with no vertex buffer; its only per-frame
+// work is rebuilding the bind group against that frame's "hdr" texture view.
+//
+// A standalone plugin: talks to the rest of the render pipeline only through
+// the borrowed ke_render_core/ke_runtime handles passed to create() — it
+// never sees another pass's private struct. "hdr" is resolved by name (the
+// producing pass declares it before this one registers its own system).
 
 const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
 const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
 
 pub const TonemapModule = struct {
-    core: c.ke_render_core_handle = undefined,
+    core: *c.ke_render_core = undefined,
     device: *c.ke_gpu_device = undefined,
     logger: ?*c.ke_logger = null,
 
@@ -30,7 +37,7 @@ fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void 
     const e = err orelse return;
     var buf: [256]u8 = undefined;
     const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_core", .message = msg.ptr };
+    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_tonemap", .message = msg.ptr };
     lg.log.?(lg, &ev);
 }
 
@@ -38,9 +45,9 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const tm = moduleOf(user);
-    const core = tm.core.ref;
+    const core = tm.core;
     const dev = tm.device;
 
     const pc = core.*.begin_pass.?(core, ctx, &tm.io);
@@ -72,8 +79,8 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     core.*.end_pass.?(core, pc);
 }
 
-pub fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
-             logger: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) bool {
+fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+         logger: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) bool {
     tm.core = core;
     tm.device = dev;
     tm.logger = logger;
@@ -125,21 +132,56 @@ pub fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: c.ke_render_core_h
     tm.io.reads_count = 1;
     tm.io.cmd_slot = 7; // after transparent-forward (slot 6)
 
-    // "hdr" is declared by forward_module.setup (which runs first); resolve it
-    // by name here rather than threading a cid across the module boundary.
+    // "hdr" is declared by the transparent-forward pass (which sets up and
+    // registers its system first); resolved here by name, not by holding a
+    // pointer to that pass's private struct.
     tm.access = .{
-        .{ .cid = core.ref.*.cid.?(core.ref, "hdr"), .access = c.KE_ACCESS_READ },
-        .{ .cid = core.ref.*.cid.?(core.ref, "backbuffer"), .access = c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_READ },
+        .{ .cid = core.*.cid.?(core, "backbuffer"), .access = c.KE_ACCESS_WRITE },
     };
     return true;
 }
 
 // Destroys the per-frame bind group + its layout — the only resources this
 // module allocates that outlive a single setup call and need explicit teardown.
-pub fn destroy(tm: *const TonemapModule) void {
+fn destroyModule(tm: *const TonemapModule) void {
     const dev = tm.device;
     if (tm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, tm.bind_group);
     if (tm.bgl != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group_layout.?(dev, tm.bgl);
+}
+
+fn destroyHandle(self: ?*c.ke_render_tonemap) callconv(.c) void {
+    const tm: *TonemapModule = @ptrCast(@alignCast(self orelse return));
+    destroyModule(tm);
+    gpa.destroy(tm);
+}
+
+export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+                                    device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
+                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_tonemap_handle {
+    const empty = c.ke_render_tonemap_handle{ .ref = null, .destroy = null };
+    const rt = runtime orelse return empty;
+    const core_ref = core orelse return empty;
+    const dev = device orelse return empty;
+
+    const tm = gpa.create(TonemapModule) catch return empty;
+    tm.* = .{};
+    if (!setup(tm, dev, core_ref, logger, out_error)) {
+        gpa.destroy(tm);
+        return empty;
+    }
+
+    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    params.name = "render.tonemap";
+    params.phase = c.KE_PHASE_RENDER;
+    params.access_list = &tm.access;
+    params.access_count = tm.access.len;
+    params.pinned_thread = 0; // render systems run in parallel (sim ‖ render + parallel passes)
+    params.user_data = tm;
+    params.execute = system;
+    _ = rt.register_system.?(rt, &params, null);
+
+    return .{ .ref = @ptrCast(tm), .destroy = destroyHandle };
 }
