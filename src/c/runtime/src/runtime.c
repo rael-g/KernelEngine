@@ -464,10 +464,16 @@ typedef struct registered_system
 {
     ke_runtime_system_params params;
 
-    // Resolved-query state. Built at registration when params.queries is set:
-    // each query is registered with the ECS, the union of their terms becomes the
+    // Resolved-query state. The caller's query decls are copied at registration
+    // (its pointer's lifetime is not ours); the union of their terms becomes the
     // derived access list (params.access_list is repointed to it), and seg_storage
     // holds the segments each frame's resolve fills (read by this system's body).
+    //
+    // The ECS-side queries are registered later, on the first tick that sees this
+    // system: a render system's queries must resolve against the SNAPSHOT cids,
+    // and those exist only once snapshot inference has run over every registered
+    // system's access list.
+    ke_query_decl   query_decls[KE_MAX_QUERIES_PER_SYSTEM];
     ke_query_id     query_ids[KE_MAX_QUERIES_PER_SYSTEM];
     uint32_t        query_count;
     ke_ecs_segment *seg_storage; // KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY
@@ -495,10 +501,16 @@ typedef struct runtime_state
     float fixed_dt_max_accum;
     float fixed_accumulator;
 
-    // §16 snapshot inference runs once, on the first tick, after all systems
-    // are registered: every cid a render-phase system reads is marked
-    // double-buffered so the sim→render swap has a back buffer to fill.
-    bool inference_done;
+    // §16 snapshot preparation cursor: systems in [0, systems_prepared) have had
+    // their render-phase cids marked double-buffered and their ECS queries
+    // registered. Runs at the top of a tick, never at registration, because
+    // inference must see every system's access list before any render system's
+    // queries are bound to a snapshot cid.
+    //
+    // A render system registered after a tick has already run will not retroactively
+    // re-point an earlier system's queries at a cid it newly marks double-buffered.
+    // Every module registers its systems before the first tick, so this holds.
+    size_t systems_prepared;
 } runtime_state;
 
 typedef struct runtime_handle
@@ -574,11 +586,16 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
             uint32_t tn = qd->term_count;
             if (tn > KE_QUERY_MAX_TERMS) tn = KE_QUERY_MAX_TERMS;
 
-            ke_component_id cids[KE_QUERY_MAX_TERMS];
+            // Copy the decl: the caller's queries pointer is dropped below.
+            rs->query_decls[q]            = *qd;
+            rs->query_decls[q].term_count = tn;
+            rs->query_ids[q]              = KE_QUERY_INVALID; // bound on the first tick
+
             for (uint32_t t = 0; t < tn; t++)
             {
-                cids[t] = qd->terms[t].cid;
                 // Fold into the derived access list: dedup the cid, OR the modes.
+                // Always the LIVE cid — the wave-builder orders on the caller's
+                // declared vocabulary, not on the snapshot the reads resolve to.
                 bool found = false;
                 for (uint32_t d = 0; d < rs->derived_access_count; d++)
                 {
@@ -596,10 +613,6 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
                     rs->derived_access_count++;
                 }
             }
-
-            rs->query_ids[q] = h->state.ecs->query_register
-                                   ? h->state.ecs->query_register(h->state.ecs, cids, tn)
-                                   : KE_QUERY_INVALID;
         }
         rs->query_count = qn;
 
@@ -624,8 +637,8 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
         }
 
         // The wave-builder and the funnel guard read this derived list. Drop the
-        // caller's queries pointer — its lifetime is not ours; the resolved query
-        // ids and segment storage are owned by this registered_system.
+        // caller's queries pointer — its lifetime is not ours; the copied decls,
+        // resolved query ids and segment storage are owned by this registered_system.
         rs->params.access_list  = rs->derived_access;
         rs->params.access_count = rs->derived_access_count;
         rs->params.queries      = NULL;
@@ -809,16 +822,61 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
 // Walk every render-phase system; mark each component it reads as
 // double-buffered so the sim→render swap has a back buffer to fill. Tag
 // components (size 0, e.g. render-resource cids) are skipped by the ecs impl.
-static void runtime_infer_snapshots(runtime_handle *h)
+static void runtime_infer_snapshots(runtime_handle *h, size_t first, size_t last)
 {
     if (!h->state.ecs->set_double_buffered) return;
-    for (size_t si = 0; si < h->state.system_count; si++)
+    for (size_t si = first; si < last; si++)
     {
         registered_system *rs = &h->state.systems[si];
         if (rs->params.phase != KE_PHASE_RENDER) continue;
         for (uint32_t a = 0; a < rs->params.access_count; a++)
             h->state.ecs->set_double_buffered(h->state.ecs, rs->params.access_list[a].cid);
     }
+}
+
+// Bind each system's copied query decls to real ECS queries. A render-phase
+// system's terms are mapped through snapshot_cid first, so the segments its body
+// reads via ke_system_ctx_view come from the snapshot side — matching what
+// ke_system_ctx_get already does per-entity. snapshot_cid returns the cid
+// unchanged for anything not double-buffered (tags, sim-only components), so a
+// mixed query resolves correctly.
+//
+// Must run after runtime_infer_snapshots: the snapshot cids do not exist before it.
+static void runtime_bind_queries(runtime_handle *h, size_t first, size_t last)
+{
+    if (!h->state.ecs->query_register) return;
+    for (size_t si = first; si < last; si++)
+    {
+        registered_system *rs = &h->state.systems[si];
+        const bool to_snapshot =
+            rs->params.phase == KE_PHASE_RENDER && h->state.ecs->snapshot_cid != NULL;
+
+        for (uint32_t q = 0; q < rs->query_count; q++)
+        {
+            const ke_query_decl *qd = &rs->query_decls[q];
+            ke_component_id      cids[KE_QUERY_MAX_TERMS];
+            for (uint32_t t = 0; t < qd->term_count; t++)
+            {
+                ke_component_id cid = qd->terms[t].cid;
+                if (to_snapshot) cid = h->state.ecs->snapshot_cid(h->state.ecs, cid);
+                cids[t] = cid;
+            }
+            rs->query_ids[q] = h->state.ecs->query_register(h->state.ecs, cids, qd->term_count);
+        }
+    }
+}
+
+// Snapshot inference + query binding for every system not yet prepared. Both run
+// at the top of a tick rather than at registration: inference must observe every
+// system's access list before any render query is bound to a snapshot cid.
+static void runtime_prepare_systems(runtime_handle *h)
+{
+    if (h->state.systems_prepared >= h->state.system_count) return;
+    const size_t first = h->state.systems_prepared;
+    const size_t last  = h->state.system_count;
+    runtime_infer_snapshots(h, first, last);
+    runtime_bind_queries(h, first, last);
+    h->state.systems_prepared = last;
 }
 
 static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
@@ -834,6 +892,11 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
         return false;
     }
     runtime_handle *h = (runtime_handle *)self->handle;
+
+    // Snapshot inference + query binding for any system registered since the last
+    // tick. Ahead of every phase: a render system's queries must already resolve
+    // to the snapshot side the first time its body runs.
+    runtime_prepare_systems(h);
 
     runtime_run_phase(h, KE_PHASE_PRE_UPDATE, dt);
 
@@ -858,14 +921,8 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
     runtime_run_phase(h, KE_PHASE_UPDATE,      dt);
     runtime_run_phase(h, KE_PHASE_POST_UPDATE, dt);
 
-    // Sim→render boundary (§16). One-time inference marks every component a
-    // render system reads as double-buffered; the swap then freezes the sim's
-    // just-written live side into the snapshot the render phase reads.
-    if (!h->state.inference_done)
-    {
-        runtime_infer_snapshots(h);
-        h->state.inference_done = true;
-    }
+    // Sim→render boundary (§16): freeze the sim's just-written live side into the
+    // snapshot the render phase reads.
     if (h->state.ecs->swap_snapshots)
     {
         if (!h->state.ecs->swap_snapshots(h->state.ecs, out_error))

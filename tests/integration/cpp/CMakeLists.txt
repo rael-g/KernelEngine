@@ -16,6 +16,7 @@ add_executable(test_integration_cpp
     test_stb_font.cpp
     test_runtime.cpp
     test_ecs_parallel_reads.cpp
+    test_ecs_snapshot.cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
