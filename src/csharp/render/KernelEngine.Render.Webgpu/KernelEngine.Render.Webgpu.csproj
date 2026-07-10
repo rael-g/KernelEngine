@@ -17,6 +17,7 @@
     <NativeDep Include="ke_render_shadow" />
     <NativeDep Include="ke_render_cluster" />
     <NativeDep Include="ke_render_deferred_lighting" />
+    <NativeDep Include="ke_render_forward" />
     <NativeDep Include="wgpu_native" />
   </ItemGroup>
 

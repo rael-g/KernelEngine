@@ -18,8 +18,13 @@ const SpotLightComp = extern struct {
     inner_deg: f32,
     outer_deg: f32,
 };
-const forward_module = @import("forward_module.zig");
-const ForwardModule = forward_module.ForwardModule;
+// Forward is its own physical plugin (ke_render_forward). These two structs
+// mirror its own private AmbientComp/SkyboxComp (duplicated rather than
+// imported cross-DLL — same decoupling precedent as PointLightComp/
+// SpotLightComp above): the aggregator only needs their byte size to
+// register the ECS components, never their fields.
+const AmbientComp = extern struct { color: [3]f32 };
+const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
 
 // Compiled into the ke_render_core library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -89,7 +94,9 @@ const ModuleState = struct {
     // Skybox is its own physical plugin (ke_render_skybox) — this aggregator
     // only holds the borrowed handle it returned, not its private state.
     skybox: c.ke_render_skybox_handle,
-    forward: ForwardModule,             // forward_module.zig — transparent-only, blends BLEND materials into "hdr"
+    // Forward is its own physical plugin (ke_render_forward) — this aggregator
+    // only holds the borrowed handle it returned, not its private state.
+    forward: c.ke_render_forward_handle,
     // Tonemap is its own physical plugin (ke_render_tonemap) — this aggregator
     // only holds the borrowed handle it returned, not its private state.
     tonemap: c.ke_render_tonemap_handle,
@@ -161,6 +168,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);
     if (st.skybox.destroy) |d| d(st.skybox.ref);
     if (st.ui.destroy) |d| d(st.ui.ref);
+    if (st.forward.destroy) |d| d(st.forward.ref);
     if (st.deferred.destroy) |d| d(st.deferred.ref);
     if (st.gbuffer.destroy) |d| d(st.gbuffer.ref);
     if (st.shadow.destroy) |d| d(st.shadow.ref);
@@ -213,7 +221,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.gbuffer = .{ .ref = null, .destroy = null };
     st.deferred = .{ .ref = null, .destroy = null };
     st.skybox = .{ .ref = null, .destroy = null };
-    st.forward = ForwardModule{};
+    st.forward = .{ .ref = null, .destroy = null };
     st.tonemap = .{ .ref = null, .destroy = null };
     st.ui = .{ .ref = null, .destroy = null };
     const shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
@@ -266,8 +274,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
         const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(PointLightComp));
         const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(SpotLightComp));
-        const ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(forward_module.AmbientComp));
-        const skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(forward_module.SkyboxComp));
+        const ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(AmbientComp));
+        const skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(SkyboxComp));
 
         // begin_frame/clear are registered first, unconditionally, before any
         // pass's setup runs: gbuffer is its own physical plugin whose create()
@@ -335,14 +343,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        if (!forward_module.setup(&st.forward, dev, st.core, ndc, logger, ibl_enabled,
-                                  mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
-                                  out_error))
-        {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
-            return empty;
-        }
         // Skybox is its own physical plugin: its factory registers its own
         // runtime system directly, matching the position its old registerSys
         // call used to occupy (registration order matters — see tonemap above).
@@ -352,7 +352,18 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        registerSys(rt, "render.forward_transparent", &st.forward.queries, 5, &st.forward.access, st.forward.access_count, &st.forward, forward_module.system);
+        // Forward is its own physical plugin: create() both configures the
+        // transparent-only pipeline (reading shadow/cluster's outputs by name
+        // through ke_render_core, sharing deferred-lighting's shading hooks)
+        // and registers its runtime system, in the position its old
+        // registerSys call used to occupy.
+        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
+                                                mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
+        if (st.forward.ref == null) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
         // Tonemap is its own physical plugin: its factory registers its own
         // runtime system directly (no registerSys call here, unlike the
         // in-process modules above). Created here — matching the position the

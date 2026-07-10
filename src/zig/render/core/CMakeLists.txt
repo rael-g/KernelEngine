@@ -39,56 +39,6 @@ add_custom_command(
 
 set(KE_SHADER_LIB_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
 
-# Deferred lighting: fullscreen resolve reading the G-buffer + depth, shading
-# with the shared shadow/ibl/cluster hooks + ke.pbr. Needs the ke library dir
-# (ke.pbr) + the core shaders dir (the feature imports).
-# Transparent forward: the same flat material bound into the transparent-only
-# forward pass (transparent_forward.slang), the BLEND counterpart to the encode
-# pass (gbuffer.slang). Adds refraction_feature.slang to the shared
-# shadow/ibl/cluster dependency set.
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
-            "${KE_SHADER_LIB_DIR}/forward_common.slang"
-            "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
-            "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/refraction_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
-            "${KE_SHADER_LIB_DIR}/forward_common.slang"
-            "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
-            "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/refraction_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
-)
-
 add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
     COMMAND "${ZIG_EXECUTABLE}" build
@@ -108,9 +58,8 @@ add_custom_command(
         "-Dke-shadow-include=${CMAKE_SOURCE_DIR}/src/zig/render/shadow/include"
         "-Dke-cluster-include=${CMAKE_SOURCE_DIR}/src/zig/render/cluster/include"
         "-Dke-deferred-lighting-include=${CMAKE_SOURCE_DIR}/src/zig/render/deferred_lighting/include"
+        "-Dke-forward-include=${CMAKE_SOURCE_DIR}/src/zig/render/forward/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dmat-test-flat-transparent-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-        "-Dmat-test-flat-transparent-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "-Dmagenta-vs-wgsl=${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "-Dmagenta-fs-wgsl=${SHADER_GEN_DIR}/magenta.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
@@ -120,8 +69,6 @@ add_custom_command(
         # unlisted file is silent and costs far more than an occasional rebuild.
         ${KE_RENDER_CORE_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-        "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "${SHADER_GEN_DIR}/magenta.fs.wgsl"
         ke_common
@@ -133,6 +80,7 @@ add_custom_command(
         ke_render_shadow_zig
         ke_render_cluster_zig
         ke_render_deferred_lighting_zig
+        ke_render_forward_zig
     VERBATIM
 )
 

@@ -3,22 +3,25 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-// Transparent-forward pass — the other half of the deferred+forward hybrid
-// (§8.14/§8.15). Only BLEND materials reach it (gbuffer_module skips them; a
-// G-buffer holds one surface per pixel, so N-layer order-dependent blending
-// cannot be represented there). Depth-tests LEQUAL against the G-buffer's
-// "depth" without writing it, and blends into "hdr" after skybox.
+// Transparent-forward pass — the other half of the deferred+forward hybrid.
+// Only BLEND materials reach it (the gbuffer plugin skips them; a G-buffer
+// holds one surface per pixel, so N-layer order-dependent blending cannot be
+// represented there). Depth-tests LEQUAL against the G-buffer's "depth"
+// without writing it, and blends into "hdr" after skybox.
 //
 // Shares set 0 (frame + shadow/ibl gap-filling) and set 3 (cluster light
-// lists) with deferred_lighting_module — same shading library, same hooks.
-// Adds one more: refraction_feature reads "hdr_opaque", a same-frame snapshot
-// of "hdr" taken (via a raw encoder copy, before this pass's own render pass
-// opens) so a refracting fragment can sample what's already been shaded
-// behind it without a read/write hazard against the target it also writes.
+// lists) with the deferred-lighting plugin — same shading library, same
+// hooks. Adds one more: refraction_feature reads "hdr_opaque", a same-frame
+// snapshot of "hdr" taken (via a raw encoder copy, before this pass's own
+// render pass opens) so a refracting fragment can sample what's already been
+// shaded behind it without a read/write hazard against the target it also
+// writes.
 //
 // Owns its own material (set 1, per-mesh) + object (set 2, per-draw) binding,
-// mirroring gbuffer_module — this pass draws real geometry, not a fullscreen
-// triangle like deferred_lighting/skybox/tonemap.
+// mirroring the gbuffer plugin — this pass draws real geometry, not a
+// fullscreen triangle like deferred-lighting/skybox/tonemap.
+
+const gpa = std.heap.c_allocator;
 
 const vs_wgsl = @embedFile("mat_test_flat_transparent.vs.wgsl");
 const fs_wgsl = @embedFile("mat_test_flat_transparent.fs.wgsl");
@@ -52,11 +55,9 @@ const DirLight = extern struct {
 };
 
 // Mirrors the C# AmbientLightComponent { Vector3 Color } (registered "AmbientLight").
-// Exported: the aggregator registers the component (its cid feeds this pass's
-// own access list), so it needs this struct's size at registration.
-pub const AmbientComp = extern struct { color: [3]f32 };
+const AmbientComp = extern struct { color: [3]f32 };
 // Mirrors the framework SkyboxComponent (registered "Skybox"): a cubemap handle.
-pub const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
+const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
 
 // One transparent draw, collected while iterating the mesh query, then sorted
 // back-to-front before recording. ke_ecs has no ordered iteration (query_resolve
@@ -72,8 +73,8 @@ fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
     return a.view_depth > b.view_depth; // back-to-front: farthest drawn first
 }
 
-pub const ForwardModule = struct {
-    core: c.ke_render_core_handle = undefined,
+const ForwardModule = struct {
+    core: *c.ke_render_core = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
     logger: ?*c.ke_logger = null,
@@ -139,7 +140,7 @@ fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void 
     const e = err orelse return;
     var buf: [256]u8 = undefined;
     const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_core", .message = msg.ptr };
+    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_forward", .message = msg.ptr };
     lg.log.?(lg, &ev);
 }
 
@@ -149,21 +150,21 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
 
 // Set 0 — frame UBO + refraction source (1-2) + shadow (4-6) + ibl (7-8). The
 // refraction/shadow/ibl bindings are stable views set once here (and whenever
-// the bound environment changes), not per-frame transient ones — unlike
-// deferred_lighting's set-1 gbuffer bind group, nothing here changes size or
-// identity across frames.
+// the bound environment changes), not per-frame transient ones — unlike the
+// deferred-lighting plugin's set-1 gbuffer bind group, nothing here changes
+// size or identity across frames.
 fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const dev = fwd.device;
-    const core = fwd.core.ref;
+    const core = fwd.core;
     const env_view = core.*.texture_view.?(core, fwd.env_cubemap);
     const white_view = core.*.texture_view.?(core, .{ .idx = 0 });
     const black_cube_view = core.*.texture_view.?(core, .{ .idx = c.KE_HANDLE_NONE });
     const hdr_opaque_view = core.*.resource_view.?(core, "hdr_opaque");
     const smp = core.*.sampler.?(core);
 
-    // Shadow's outputs are looked up by name, not through a *ShadowModule
-    // pointer — an invalid view IS the "off" signal (see deferred_lighting_module
-    // for the same pattern).
+    // Shadow's outputs are looked up by name, not through a pointer to the
+    // shadow plugin — an invalid view IS the "off" signal (see the
+    // deferred-lighting plugin for the same pattern).
     const shadow_view_raw = core.*.resource_view.?(core, "shadow_map");
     const shadow_tex_view = if (shadow_view_raw != c.KE_GPU_INVALID_HANDLE) shadow_view_raw else white_view;
     const shadow_lvp_buf = core.*.resource_buffer.?(core, "shadow_lvp");
@@ -190,9 +191,9 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const fwd = moduleOf(user);
-    const core = fwd.core.ref;
+    const core = fwd.core;
 
     // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
@@ -269,10 +270,10 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     }
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
-    // View 4 = [mesh, transform]. Collect only BLEND materials — gbuffer_module
-    // already drew everything else. Compute each draw's view-space depth so
-    // they can be sorted back-to-front before recording (blending is not
-    // commutative; ke_ecs has no ordered iteration to rely on instead).
+    // View 4 = [mesh, transform]. Collect only BLEND materials — the gbuffer
+    // plugin already drew everything else. Compute each draw's view-space
+    // depth so they can be sorted back-to-front before recording (blending is
+    // not commutative; ke_ecs has no ordered iteration to rely on instead).
     var draw_count: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 4, &segc);
@@ -323,12 +324,12 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     core.*.end_pass.?(core, pc);
 }
 
-pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
-             ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
-             mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
-             light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
-             frame_cid: c.ke_component_id,
-             out_error: [*c][*c]c.ke_error) bool {
+fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+         ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
+         mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
+         light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
+         frame_cid: c.ke_component_id,
+         out_error: [*c][*c]c.ke_error) bool {
     fwd.core = core;
     fwd.device = dev;
     fwd.ndc = ndc;
@@ -359,7 +360,7 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     });
 
     // Set 2 — per-object transform ring (dynamic offset, vertex stage). Same
-    // shape as gbuffer_module's.
+    // shape as the gbuffer plugin's.
     const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0,
         .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
@@ -407,8 +408,8 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &vbl;
     // Standard alpha blend: the surface's own alpha weighs its shading against
-    // whatever is already in "hdr" (skybox + opaque, composited by deferred-lighting
-    // + skybox before this pass runs).
+    // whatever is already in "hdr" (skybox + opaque, composited by deferred-
+    // lighting + skybox before this pass runs).
     pp.blend_state.blend_enabled = 1;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_SRC_ALPHA;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -418,16 +419,16 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     pp.blend_state.alpha_op = c.KE_GPU_BLEND_OP_ADD;
     pp.blend_state.write_mask = 0x0F;
     // LEQUAL, no write: tests against the G-buffer's depth (already populated
-    // by gbuffer_module) without occluding surfaces this pass draws later —
-    // depth ordering among transparents is handled by the back-to-front sort,
-    // not by the depth buffer.
+    // by the gbuffer plugin) without occluding surfaces this pass draws later
+    // — depth ordering among transparents is handled by the back-to-front
+    // sort, not by the depth buffer.
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
     pp.bind_group_layouts[0] = fwd.frame_bgl;
-    pp.bind_group_layouts[1] = core.ref.*.material_layout.?(core.ref); // set 1: per-material
+    pp.bind_group_layouts[1] = core.*.material_layout.?(core); // set 1: per-material
     pp.bind_group_layouts[2] = fwd.obj_bgl; // set 2: per-object
-    pp.bind_group_layouts[3] = core.ref.*.resource_bind_group_layout.?(core.ref, "cluster_lights"); // set 3: cluster light lists
+    pp.bind_group_layouts[3] = core.*.resource_bind_group_layout.?(core, "cluster_lights"); // set 3: cluster light lists
     pp.bind_group_layout_count = 4;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
     pp.color_target_count = 1;
@@ -468,9 +469,9 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     }, out_error);
     if (fwd.obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // Snapshot target for refraction_feature.slang — same format/sizing as "hdr"
-    // (declared by deferred_lighting_module), copied into fresh each frame.
-    const hdr_opaque_cid = core.ref.*.declare.?(core.ref, &c.ke_render_resource_desc{
+    // Snapshot target for refraction_feature.slang — same format/sizing as
+    // "hdr" (declared by the deferred-lighting plugin), copied afresh each frame.
+    const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "hdr_opaque",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
@@ -480,14 +481,15 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
 
     rebuildFrameBindGroup(fwd);
 
-    // Shadow's presence is read from the named-resource table, not a
-    // *ShadowModule pointer (see deferred_lighting_module for the same pattern).
-    const shadow_map_cid = core.ref.*.cid.?(core.ref, "shadow_map");
+    // Shadow's presence is read from the named-resource table, not a pointer
+    // to the shadow plugin (see the deferred-lighting plugin for the same
+    // pattern).
+    const shadow_map_cid = core.*.cid.?(core, "shadow_map");
     const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
     // "light_clusters" (not "cluster_lights") is the scheduling ordering tag —
     // cull WRITEs it, this pass READs it; the actual light data crosses
     // through the "cluster_lights" bind group looked up separately below.
-    const cluster_lights_cid = core.ref.*.cid.?(core.ref, "light_clusters");
+    const cluster_lights_cid = core.*.cid.?(core, "light_clusters");
 
     // "hdr" LOADs (composites over skybox's output); "depth" also LOADs, tested
     // read-only (io.load governs both — see pass_recording.zig's ctxBeginRender).
@@ -499,15 +501,15 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     fwd.io.reads = @ptrCast(&fwd.reads);
     fwd.io.reads_count = if (shadow_enabled) 1 else 0;
     fwd.io.load = 1;
-    fwd.io.cmd_slot = 6; // after skybox (5), before tonemap (now 7)
+    fwd.io.cmd_slot = 6; // after skybox (5), before tonemap (7)
 
     var ac: u32 = 0;
-    fwd.access[ac] = .{ .cid = core.ref.*.cid.?(core.ref, "hdr"), .access = c.KE_ACCESS_WRITE };
+    fwd.access[ac] = .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE };
     ac += 1;
     fwd.access[ac] = .{ .cid = hdr_opaque_cid, .access = c.KE_ACCESS_WRITE };
     ac += 1;
     // READ, not WRITE: this pass tests depth but never writes it (depth_write_enabled=0).
-    fwd.access[ac] = .{ .cid = core.ref.*.cid.?(core.ref, "depth"), .access = c.KE_ACCESS_READ };
+    fwd.access[ac] = .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ };
     ac += 1;
     fwd.access[ac] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
@@ -548,8 +550,47 @@ pub fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: c.ke_render_core_
     return true;
 }
 
-pub fn destroy(fwd: *const ForwardModule) void {
+fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
+    const fwd: *ForwardModule = @ptrCast(@alignCast(self orelse return));
     const dev = fwd.device;
     if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    gpa.destroy(fwd);
+}
+
+export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                                    logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
+                                    mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                    camera_cid: c.ke_component_id, light_cid: c.ke_component_id,
+                                    ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
+                                    frame_cid: c.ke_component_id,
+                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_forward_handle {
+    const empty = c.ke_render_forward_handle{ .ref = null, .destroy = null };
+    const rt = runtime orelse return empty;
+    const core_ref = core orelse return empty;
+    const dev = device orelse return empty;
+
+    const fwd = gpa.create(ForwardModule) catch return empty;
+    fwd.* = .{};
+    if (!setup(fwd, dev, core_ref, ndc, logger, ibl_enabled != 0,
+               mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
+    {
+        gpa.destroy(fwd);
+        return empty;
+    }
+
+    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    params.name = "render.forward_transparent";
+    params.phase = c.KE_PHASE_RENDER;
+    params.queries = &fwd.queries;
+    params.query_count = fwd.queries.len;
+    params.access_list = &fwd.access;
+    params.access_count = fwd.access_count;
+    params.pinned_thread = 0;
+    params.user_data = fwd;
+    params.execute = system;
+    _ = rt.register_system.?(rt, &params, null);
+
+    return .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
 }
