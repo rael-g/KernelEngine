@@ -11,6 +11,7 @@
     <NativeDep Include="ke_gpu_device_webgpu" />
     <NativeDep Include="ke_render_core" />
     <NativeDep Include="ke_render_tonemap" />
+    <NativeDep Include="ke_render_skybox" />
     <NativeDep Include="wgpu_native" />
   </ItemGroup>
 

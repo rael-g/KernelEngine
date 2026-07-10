@@ -3,12 +3,19 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
+const gpa = std.heap.c_allocator;
+
 // Skybox — a standalone pass. Fullscreen triangle that fills the pixels the
 // geometry did not cover (G-buffer depth at far), sampling the environment
 // cubemap by the reconstructed view direction. Runs after deferred-lighting
 // (which shaded the covered pixels) and before tonemap, writing "hdr" with load
 // (composite, not clear). No depth attachment — it discards covered pixels by
 // texel-fetching the depth buffer.
+//
+// A standalone plugin: talks to the rest of the render pipeline only through
+// the borrowed ke_render_core/ke_runtime handles passed to create() — it never
+// sees another pass's private struct. "depth" is resolved by name (the
+// producing pass declares it before this one registers its own system).
 
 const skybox_vs_wgsl = @embedFile("skybox.vs.wgsl");
 const skybox_fs_wgsl = @embedFile("skybox.fs.wgsl");
@@ -19,8 +26,8 @@ const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
 // Matches skybox.slang's SkyFrame.
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
-pub const SkyboxModule = struct {
-    core: c.ke_render_core_handle = undefined,
+const SkyboxModule = struct {
+    core: *c.ke_render_core = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
 
@@ -67,9 +74,9 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const sm = moduleOf(user);
-    const core = sm.core.ref;
+    const core = sm.core;
     const dev = sm.device;
 
     // View 0 = [camera, transform]; the first match is the active camera.
@@ -142,9 +149,9 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     core.*.end_pass.?(core, pc);
 }
 
-pub fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
-             ndc: c.ke_ndc_convention, camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
-             skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
+fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+         ndc: c.ke_ndc_convention, camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+         skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     sm.core = core;
     sm.device = dev;
     sm.ndc = ndc;
@@ -216,8 +223,8 @@ pub fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: c.ke_render_core_ha
     sm.io.cmd_slot = 5; // after deferred-lighting (4), before tonemap (6)
 
     sm.access = .{
-        .{ .cid = core.ref.*.cid.?(core.ref, "hdr"), .access = c.KE_ACCESS_WRITE },
-        .{ .cid = core.ref.*.cid.?(core.ref, "depth"), .access = c.KE_ACCESS_READ },
+        .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = skybox_cid, .access = c.KE_ACCESS_READ },
@@ -236,8 +243,46 @@ pub fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: c.ke_render_core_ha
     return true;
 }
 
-pub fn destroy(sm: *const SkyboxModule) void {
+fn destroyModule(sm: *const SkyboxModule) void {
     const dev = sm.device;
     if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, sm.bind_group);
+}
+
+fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
+    const sm: *SkyboxModule = @ptrCast(@alignCast(self orelse return));
+    destroyModule(sm);
+    gpa.destroy(sm);
+}
+
+export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                                   camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                   skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
+                                   out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_skybox_handle {
+    const empty = c.ke_render_skybox_handle{ .ref = null, .destroy = null };
+    const rt = runtime orelse return empty;
+    const core_ref = core orelse return empty;
+    const dev = device orelse return empty;
+
+    const sm = gpa.create(SkyboxModule) catch return empty;
+    sm.* = .{};
+    if (!setup(sm, dev, core_ref, ndc, camera_cid, transform_cid, skybox_cid, frame_cid, out_error)) {
+        gpa.destroy(sm);
+        return empty;
+    }
+
+    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    params.name = "render.skybox";
+    params.phase = c.KE_PHASE_RENDER;
+    params.queries = &sm.queries;
+    params.query_count = sm.queries.len;
+    params.access_list = &sm.access;
+    params.access_count = sm.access.len;
+    params.pinned_thread = 0;
+    params.user_data = sm;
+    params.execute = system;
+    _ = rt.register_system.?(rt, &params, null);
+
+    return .{ .ref = @ptrCast(sm), .destroy = destroyHandle };
 }

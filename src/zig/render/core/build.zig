@@ -17,9 +17,8 @@ pub fn build(b: *std.Build) void {
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const ke_tonemap   = b.option([]const u8, "ke-tonemap-include",   "ke_render_tonemap plugin include dir") orelse @panic("-Dke-tonemap-include required");
+    const ke_skybox    = b.option([]const u8, "ke-skybox-include",    "ke_render_skybox plugin include dir")  orelse @panic("-Dke-skybox-include required");
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
-    const skybox_vs_wgsl  = b.option([]const u8, "skybox-vs-wgsl",    "generated skybox vertex WGSL path")   orelse @panic("-Dskybox-vs-wgsl required");
-    const skybox_fs_wgsl  = b.option([]const u8, "skybox-fs-wgsl",    "generated skybox fragment WGSL path") orelse @panic("-Dskybox-fs-wgsl required");
     const shadow_vs_wgsl  = b.option([]const u8, "shadow-vs-wgsl",    "generated shadow vertex WGSL path")   orelse @panic("-Dshadow-vs-wgsl required");
     const shadow_fs_wgsl  = b.option([]const u8, "shadow-fs-wgsl",    "generated shadow fragment WGSL path") orelse @panic("-Dshadow-fs-wgsl required");
     const cluster_cull_cs_wgsl = b.option([]const u8, "cluster-cull-cs-wgsl", "generated cluster cull compute WGSL path") orelse @panic("-Dcluster-cull-cs-wgsl required");
@@ -40,13 +39,14 @@ pub fn build(b: *std.Build) void {
         .optimize  = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_allocator, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_logger, ke_self, ke_tonemap }) |inc| {
+    inline for (.{ ke_common, ke_allocator, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_logger, ke_self, ke_tonemap, ke_skybox }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
     mod.linkSystemLibrary("ke_runtime", .{}); // ke_system_ctx_* used by the forward pass
     mod.linkSystemLibrary("ke_render_tonemap", .{}); // the tonemap pass plugin
+    mod.linkSystemLibrary("ke_render_skybox", .{}); // the skybox pass plugin
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
 
     // Matrix math for the forward pass (view-proj). The engine implements no
@@ -56,8 +56,6 @@ pub fn build(b: *std.Build) void {
 
     // The forward pass shaders, compiled Slang -> WGSL by CMake (one module per
     // stage), embedded here.
-    mod.addAnonymousImport("skybox.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = skybox_vs_wgsl } });
-    mod.addAnonymousImport("skybox.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = skybox_fs_wgsl } });
     mod.addAnonymousImport("shadow.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = shadow_vs_wgsl } });
     mod.addAnonymousImport("shadow.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = shadow_fs_wgsl } });
     mod.addAnonymousImport("cluster_cull.cs.wgsl", .{ .root_source_file = .{ .cwd_relative = cluster_cull_cs_wgsl } });

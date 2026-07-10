@@ -2,8 +2,6 @@ const std = @import("std");
 const cimport = @import("cimport.zig");
 const shadow_module = @import("shadow_module.zig");
 const ShadowModule = shadow_module.ShadowModule;
-const skybox_module = @import("skybox_module.zig");
-const SkyboxModule = skybox_module.SkyboxModule;
 const cluster_module = @import("cluster_module.zig");
 const ClusterModule = cluster_module.ClusterModule;
 const forward_module = @import("forward_module.zig");
@@ -71,7 +69,9 @@ const ModuleState = struct {
     cluster: ClusterModule,             // cluster_module.zig — light cull compute, set-3 light lists
     gbuffer: GBufferModule,             // gbuffer_module.zig — opaque encode, writes gbuffer×3 + depth
     deferred: DeferredLightingModule,   // deferred_lighting_module.zig — decode + shade, writes "hdr"
-    skybox: SkyboxModule,               // skybox_module.zig — standalone fullscreen background fill
+    // Skybox is its own physical plugin (ke_render_skybox) — this aggregator
+    // only holds the borrowed handle it returned, not its private state.
+    skybox: c.ke_render_skybox_handle,
     forward: ForwardModule,             // forward_module.zig — transparent-only, blends BLEND materials into "hdr"
     // Tonemap is its own physical plugin (ke_render_tonemap) — this aggregator
     // only holds the borrowed handle it returned, not its private state.
@@ -141,6 +141,7 @@ export fn ke_render_module_ui_quad(module: ?*c.ke_render_module, texture: c.ke_t
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);
+    if (st.skybox.destroy) |d| d(st.skybox.ref);
     if (st.core.destroy) |d| d(st.core.ref);
     gpa.destroy(st);
 }
@@ -188,7 +189,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.cluster = ClusterModule{};
     st.gbuffer = GBufferModule{};
     st.deferred = DeferredLightingModule{};
-    st.skybox = SkyboxModule{};
+    st.skybox = .{ .ref = null, .destroy = null };
     st.forward = ForwardModule{};
     st.tonemap = .{ .ref = null, .destroy = null };
     st.ui = UiModule{};
@@ -249,8 +250,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // outputs (LVP uniform, shadow view, light-list bind group + layout)
         // into the named-resource table first, so gbuffer/deferred/forward can
         // look them up by name — none of them holds a pointer to ShadowModule/
-        // ClusterModule. gbuffer encodes; deferred-lighting decodes + shades;
-        // skybox fills what's left (reads gbuffer's depth).
+        // ClusterModule. gbuffer encodes; deferred-lighting decodes + shades.
         if (!shadow_module.setup(&st.shadow, dev, st.core, ndc, st.shadow.enabled,
                                  mesh_cid, transform_cid, light_cid, st.frame_cid, out_error) or
             !cluster_module.setup(&st.cluster, dev, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
@@ -259,7 +259,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             !deferred_lighting_module.setup(&st.deferred, dev, st.core, ndc, logger, ibl_enabled,
                                   camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
                                   out_error) or
-            !skybox_module.setup(&st.skybox, dev, st.core, ndc, camera_cid, transform_cid, skybox_cid, st.frame_cid, out_error) or
             !forward_module.setup(&st.forward, dev, st.core, ndc, logger, ibl_enabled,
                                   mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
                                   out_error))
@@ -284,7 +283,15 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
         registerSys(rt, "render.gbuffer", &st.gbuffer.queries, 2, &st.gbuffer.access, st.gbuffer.access_count, &st.gbuffer, gbuffer_module.system);
         registerSys(rt, "render.deferred_lighting", &st.deferred.queries, 4, &st.deferred.access, st.deferred.access_count, &st.deferred, deferred_lighting_module.system);
-        registerSys(rt, "render.skybox", &st.skybox.queries, 2, &st.skybox.access, st.skybox.access.len, &st.skybox, skybox_module.system);
+        // Skybox is its own physical plugin: its factory registers its own
+        // runtime system directly, matching the position its old registerSys
+        // call used to occupy (registration order matters — see tonemap above).
+        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, camera_cid, transform_cid, skybox_cid, st.frame_cid, out_error);
+        if (st.skybox.ref == null) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
         registerSys(rt, "render.forward_transparent", &st.forward.queries, 5, &st.forward.access, st.forward.access_count, &st.forward, forward_module.system);
         // Tonemap is its own physical plugin: its factory registers its own
         // runtime system directly (no registerSys call here, unlike the

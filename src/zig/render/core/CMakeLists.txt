@@ -18,24 +18,6 @@ file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
 # One WGSL module per stage: a uniform shared across stages would be declared
 # twice (invalid WGSL) if both entry points were emitted into one module.
 add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/skybox.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang"
-            --output "${SHADER_GEN_DIR}/skybox.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/skybox.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang"
-            --output "${SHADER_GEN_DIR}/skybox.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/skybox.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
     OUTPUT "${SHADER_GEN_DIR}/shadow.vs.wgsl"
     COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
             --raw --target wgsl --entry vs_main --stage vertex
@@ -242,9 +224,8 @@ add_custom_command(
         "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-tonemap-include=${CMAKE_SOURCE_DIR}/src/zig/render/tonemap/include"
+        "-Dke-skybox-include=${CMAKE_SOURCE_DIR}/src/zig/render/skybox/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dskybox-vs-wgsl=${SHADER_GEN_DIR}/skybox.vs.wgsl"
-        "-Dskybox-fs-wgsl=${SHADER_GEN_DIR}/skybox.fs.wgsl"
         "-Dshadow-vs-wgsl=${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "-Dshadow-fs-wgsl=${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
@@ -265,8 +246,6 @@ add_custom_command(
         # unlisted file is silent and costs far more than an occasional rebuild.
         ${KE_RENDER_CORE_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/skybox.vs.wgsl"
-        "${SHADER_GEN_DIR}/skybox.fs.wgsl"
         "${SHADER_GEN_DIR}/shadow.vs.wgsl"
         "${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
@@ -283,6 +262,7 @@ add_custom_command(
         ke_common
         ke_runtime
         ke_render_tonemap_zig
+        ke_render_skybox_zig
     VERBATIM
 )
 
