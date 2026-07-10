@@ -494,9 +494,14 @@ typedef struct runtime_state
     ke_ecs            *ecs;             // borrowed
     ke_scheduler *scheduler;  // borrowed
 
-    registered_system *systems;
-    size_t             system_count;
-    size_t             system_capacity;
+    // An array of POINTERS, not inline structs: growing the index array (via
+    // realloc below) must never move an existing registered_system, because
+    // ke_runtime_system_params.access_list is set (at registration) to point
+    // INTO that system's own derived_access field — a self-referential pointer
+    // that a memcpy-based grow would silently invalidate.
+    registered_system **systems;
+    size_t              system_count;
+    size_t              system_capacity;
 
     uint64_t next_module_id;
     uint64_t next_system_id;
@@ -559,9 +564,11 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
 
     if (h->state.system_count == h->state.system_capacity)
     {
-        size_t             new_cap = h->state.system_capacity ? h->state.system_capacity * 2 : 4;
-        registered_system *new_buf = (registered_system *)ke_alloc(
-            sizeof(registered_system) * new_cap, alignof(registered_system));
+        size_t new_cap = h->state.system_capacity ? h->state.system_capacity * 2 : 4;
+        // Growing the POINTER array only relocates the pointers themselves —
+        // each registered_system block they point to stays put.
+        registered_system **new_buf = (registered_system **)ke_alloc(
+            sizeof(registered_system *) * new_cap, alignof(registered_system *));
         if (!new_buf)
         {
             KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "system array allocation failed");
@@ -569,14 +576,20 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
         }
         if (h->state.systems)
         {
-            memcpy(new_buf, h->state.systems, sizeof(registered_system) * h->state.system_count);
+            memcpy(new_buf, h->state.systems, sizeof(registered_system *) * h->state.system_count);
             ke_free(h->state.systems);
         }
         h->state.systems         = new_buf;
         h->state.system_capacity = new_cap;
     }
 
-    registered_system *rs   = &h->state.systems[h->state.system_count++];
+    registered_system *rs = (registered_system *)ke_alloc(sizeof(registered_system), alignof(registered_system));
+    if (!rs)
+    {
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "registered_system allocation failed");
+        return 0;
+    }
+    h->state.systems[h->state.system_count++] = rs;
     rs->params              = *p;
     rs->query_count         = 0;
     rs->seg_storage         = NULL;
@@ -731,7 +744,7 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
     uint32_t phase_count = 0;
     for (size_t si = 0; si < h->state.system_count; si++)
     {
-        registered_system *rs = &h->state.systems[si];
+        registered_system *rs = h->state.systems[si];
         if (rs->params.phase != phase) continue;
         if (!rs->params.execute) continue;
         if (phase_count >= KE_RUNTIME_MAX_SYSTEMS_PER_PHASE) break;
@@ -758,7 +771,7 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
         for (uint32_t k = 0; k < phase_count; k++)
         {
             if (wave_assignments[k] != w) continue;
-            registered_system *rs = &h->state.systems[phase_indices[k]];
+            registered_system *rs = h->state.systems[phase_indices[k]];
 
             task_pkg *pkg          = &pkgs[wave_size];
             pkg->ctx.ecs           = h->state.ecs;
@@ -834,7 +847,7 @@ static void runtime_infer_snapshots(runtime_handle *h, size_t first, size_t last
     if (!h->state.ecs->set_double_buffered) return;
     for (size_t si = first; si < last; si++)
     {
-        registered_system *rs = &h->state.systems[si];
+        registered_system *rs = h->state.systems[si];
         if (rs->params.phase != KE_PHASE_RENDER) continue;
         for (uint32_t a = 0; a < rs->params.access_count; a++)
             h->state.ecs->set_double_buffered(h->state.ecs, rs->params.access_list[a].cid);
@@ -854,7 +867,7 @@ static void runtime_bind_queries(runtime_handle *h, size_t first, size_t last)
     if (!h->state.ecs->query_register) return;
     for (size_t si = first; si < last; si++)
     {
-        registered_system *rs = &h->state.systems[si];
+        registered_system *rs = h->state.systems[si];
         const bool to_snapshot =
             rs->params.phase == KE_PHASE_RENDER && h->state.ecs->snapshot_cid != NULL;
 
@@ -948,7 +961,10 @@ static void runtime_destroy(ke_runtime *self)
     if (h->state.systems)
     {
         for (size_t i = 0; i < h->state.system_count; i++)
-            if (h->state.systems[i].seg_storage) ke_free(h->state.systems[i].seg_storage);
+        {
+            if (h->state.systems[i]->seg_storage) ke_free(h->state.systems[i]->seg_storage);
+            ke_free(h->state.systems[i]);
+        }
         ke_free(h->state.systems);
     }
     // Per-task defer queues are stack-allocated; freed at the wave barrier.
