@@ -395,6 +395,11 @@ typedef struct registered_system
     uint32_t            derived_access_count;
 } registered_system;
 
+// Forward declaration: the render-dispatch job payload (defined near
+// runtime_run_phase, since it wraps that call) is referenced by runtime_state
+// before it is fully defined.
+typedef struct render_job render_job;
+
 typedef struct runtime_state
 {
     ke_ecs            *ecs;             // borrowed
@@ -424,6 +429,17 @@ typedef struct runtime_state
     // tick rather than done at registration purely so a system added after the
     // first tick still gets bound before it is ever dispatched.
     size_t systems_prepared;
+
+    // Sim N+1 ‖ render N pipelining (RuntimeArchitectureV2.md §16). The render
+    // phase dispatched at the END of a tick is not waited on before that tick
+    // returns; the NEXT tick's sim phases run first (overlapping render N's
+    // still-executing waves on the worker pool), THEN this is joined — before
+    // that tick's own extract touches the same registered_system buffers
+    // render N's coordinator may still be reading. render_job is heap-owned
+    // (not a tick() stack local) because it must outlive the tick() call that
+    // dispatched it.
+    ke_task     *pending_render_task;
+    render_job  *render_job;
 } runtime_state;
 
 typedef struct runtime_handle
@@ -885,6 +901,42 @@ static void runtime_extract_render_state(runtime_handle *h)
     }
 }
 
+// Payload for the async render dispatch (RuntimeArchitectureV2.md §16). Heap-
+// owned by runtime_state, reused every tick: it must outlive the tick() call
+// that dispatches it (the coordinator task keeps running after tick()
+// returns) and is only ever touched between one tick's dispatch and the next
+// tick's join, so a single persistent instance is safe — never two in flight.
+struct render_job
+{
+    runtime_handle *h;
+    float           dt;
+};
+
+// Runs the entire render phase (every wave, in order, exactly as
+// runtime_run_phase always has) from inside a scheduler task instead of the
+// calling thread. Dispatched once per tick, immediately after the extract;
+// NOT waited on before that tick's own tick() call returns — the next tick's
+// sim phases run while this executes on the worker pool, and the FOLLOWING
+// tick joins it (see runtime_tick). Nothing here calls into ke_ecs: render-
+// phase systems read only the buffers runtime_extract_render_state already
+// filled (runtime_run_phase's render branch skips the live query_resolve).
+static void render_job_run(void *data)
+{
+    render_job *job = (render_job *)data;
+    runtime_run_phase(job->h, KE_PHASE_RENDER, job->dt);
+}
+
+// Waits for the previous tick's dispatched-but-unjoined render phase, if any.
+// Must run before this tick's own extract: extraction overwrites the very
+// registered_system buffers (seg_storage, extracted[].col_bufs) a still-
+// executing render coordinator could be mid-read of.
+static void runtime_join_pending_render(runtime_handle *h)
+{
+    if (!h->state.pending_render_task) return;
+    h->state.scheduler->wait(h->state.scheduler, h->state.pending_render_task);
+    h->state.pending_render_task = NULL;
+}
+
 static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
 {
     if (!self || !self->handle)
@@ -899,9 +951,8 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
     }
     runtime_handle *h = (runtime_handle *)self->handle;
 
-    // Snapshot inference + query binding for any system registered since the last
-    // tick. Ahead of every phase: a render system's queries must already resolve
-    // to the snapshot side the first time its body runs.
+    // Query binding for any system registered since the last tick. Ahead of
+    // every phase since a system must be bound before it can ever dispatch.
     runtime_prepare_systems(h);
 
     runtime_run_phase(h, KE_PHASE_PRE_UPDATE, dt);
@@ -924,13 +975,40 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
         h->state.fixed_accumulator -= h->state.fixed_dt;
     }
 
+    // Sim's phases for THIS tick run above, before the previous tick's render
+    // is even joined — this is the actual overlap: sim N+1 (this tick, up to
+    // this point) executes concurrently with render N (dispatched at the end
+    // of the previous tick, still running on the worker pool the whole time).
     runtime_run_phase(h, KE_PHASE_UPDATE,      dt);
     runtime_run_phase(h, KE_PHASE_POST_UPDATE, dt);
 
+    // Join render N before touching anything it might still be reading.
+    runtime_join_pending_render(h);
+
     // Sim→render boundary (§16): copy every render-phase query's matches out
-    // of the live ECS into buffers this tick's render systems own.
+    // of the live ECS into buffers this tick's render systems own. Safe now:
+    // the previous render is fully joined, so nothing is reading these
+    // buffers while they're overwritten.
     runtime_extract_render_state(h);
-    runtime_run_phase(h, KE_PHASE_RENDER, dt);
+
+    // Dispatch this tick's render phase and return without waiting — the
+    // NEXT call to tick() joins it (runtime_join_pending_render above) before
+    // touching these same buffers again.
+    if (!h->state.render_job)
+        h->state.render_job = (render_job *)ke_alloc(sizeof(render_job), alignof(render_job));
+    if (h->state.render_job)
+    {
+        h->state.render_job->h  = h;
+        h->state.render_job->dt = dt;
+        h->state.pending_render_task =
+            h->state.scheduler->dispatch(h->state.scheduler, render_job_run, h->state.render_job);
+    }
+    else
+    {
+        // OOM allocating the one persistent job slot: fall back to running
+        // render synchronously this tick rather than skipping it.
+        runtime_run_phase(h, KE_PHASE_RENDER, dt);
+    }
 
     return true;
 }
@@ -939,6 +1017,11 @@ static void runtime_destroy(ke_runtime *self)
 {
     if (!self || !self->handle) return;
     runtime_handle *h = (runtime_handle *)self->handle;
+
+    // A dispatched-but-unjoined render phase may still be running on the pool;
+    // it reads registered_system state we are about to free below.
+    runtime_join_pending_render(h);
+    if (h->state.render_job) ke_free(h->state.render_job);
 
     if (h->state.systems)
     {

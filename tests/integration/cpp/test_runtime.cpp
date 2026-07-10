@@ -7,6 +7,7 @@
 #include <kernel_engine/scheduler/enki/enki_scheduler.h>
 
 #include <atomic>
+#include <chrono>
 #include <set>
 #include <thread>
 
@@ -354,18 +355,88 @@ TEST_F(RuntimeSpike, Tick_RejectsNegativeDt)
     EXPECT_FALSE(runtime->tick(runtime, -1.0f, NULL));
 }
 
+// ── Async render dispatch (sim N+1 ‖ render N, RuntimeArchitectureV2.md §16) ─
+//
+// The defining property of this phase: tick() dispatches the render phase and
+// returns WITHOUT waiting for it — the NEXT tick() call is what joins it,
+// right before that tick's own extract. Proven with an explicit gate rather
+// than a timing guess: the render body blocks on an atomic the test controls,
+// so "tick() returned while the gate is still closed" is a deterministic,
+// race-free observation, not a hope that a sleep was long enough.
+
+namespace {
+std::atomic<int>  g_gated_render_runs{0};
+std::atomic<bool> g_gated_render_may_finish{false};
+
+void gated_render_body(ke_system_ctx *, void *, float)
+{
+    while (!g_gated_render_may_finish.load()) std::this_thread::yield();
+    g_gated_render_runs.fetch_add(1);
+}
+}
+
+TEST_F(RuntimeSpike, Tick_DispatchesRenderAsynchronously_DoesNotBlock)
+{
+    g_gated_render_runs.store(0);
+    g_gated_render_may_finish.store(false);
+
+    ke_runtime_system_params rnd{};
+    rnd.name = "GatedRender"; rnd.phase = KE_PHASE_RENDER;
+    rnd.execute = gated_render_body;
+    ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
+
+    // The render body is blocked on a gate the test hasn't opened — if tick()
+    // waited for the render phase to complete, this call would hang forever.
+    // Returning proves the dispatch is genuinely async, not just "usually fast".
+    ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
+    EXPECT_EQ(g_gated_render_runs.load(), 0)
+        << "render must not have run yet — tick() must not block on the render phase";
+
+    // Open the gate, then let the NEXT tick's join catch up to render #1
+    // before its own dispatch — the mechanism that keeps extraction from ever
+    // overwriting a buffer render #1 might still be reading.
+    g_gated_render_may_finish.store(true);
+    ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
+    EXPECT_GE(g_gated_render_runs.load(), 1)
+        << "the second tick's join must wait for the first tick's render to finish";
+}
+
 // ── §16 render-state extract (RuntimeArchitectureV2.md §16 — the "R4" cut) ──
 //
 // A render-phase system's queries are resolved against the live ECS once per
 // tick, at the sim→render boundary, into buffers the runtime allocates and
 // owns (runtime_extract_render_state) — never against the live ECS directly.
 // This is what lets a render-phase system make zero ke_ecs calls, which in
-// turn is what would let a future async tick() overlap sim N+1 with a
-// still-executing render N without depending on the ECS tolerating concurrent
-// access.
+// turn is what lets tick() dispatch the render phase asynchronously (sim N+1
+// overlaps render N on the worker pool) without the ECS ever seeing concurrent
+// access. Because render is now dispatched-not-joined by the time tick()
+// returns, these tests can't read a render body's side effect right after
+// tick() — they wait (bounded) on an atomic the render body sets as its last
+// statement, which is safe precisely because nothing dispatches a further
+// tick (and therefore a further render) after the single tick() call below.
 
 namespace {
-struct ExtractProbe { ke_entity e; ke_component_id cid; int seen; const void *seen_ptr; };
+template <typename Pred>
+bool wait_for(Pred pred, int timeout_ms = 2000)
+{
+    auto start = std::chrono::steady_clock::now();
+    while (!pred())
+    {
+        if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(timeout_ms))
+            return false;
+        std::this_thread::yield();
+    }
+    return true;
+}
+
+struct ExtractProbe
+{
+    ke_entity            e{};
+    ke_component_id      cid{};
+    std::atomic<int>     seen{-1};
+    std::atomic<const void *> seen_ptr{nullptr};
+    std::atomic<int>     runs{0};
+};
 ExtractProbe g_extract_probe;
 }
 
@@ -376,7 +447,11 @@ TEST_F(RuntimeSpike, RenderExtract_ReflectsThisTicksSimWrite)
     int *v = static_cast<int *>(ecs->component_add(ecs, e, cid));
     ASSERT_NE(v, nullptr);
     *v = 0;
-    g_extract_probe = { e, cid, -1, nullptr };
+    g_extract_probe.e = e;
+    g_extract_probe.cid = cid;
+    g_extract_probe.seen.store(-1);
+    g_extract_probe.seen_ptr.store(nullptr);
+    g_extract_probe.runs.store(0);
 
     ke_query_decl wq{}; wq.terms[0] = {cid, KE_ACCESS_WRITE}; wq.term_count = 1;
     ke_runtime_system_params sim{};
@@ -402,26 +477,33 @@ TEST_F(RuntimeSpike, RenderExtract_ReflectsThisTicksSimWrite)
         const ke_ecs_segment *segs = ke_system_ctx_view(ctx, 0, &segc);
         if (segc > 0 && segs[0].count > 0)
         {
-            g_extract_probe.seen     = static_cast<const int *>(segs[0].columns[0])[0];
-            g_extract_probe.seen_ptr = segs[0].columns[0];
+            g_extract_probe.seen.store(static_cast<const int *>(segs[0].columns[0])[0]);
+            g_extract_probe.seen_ptr.store(segs[0].columns[0]);
         }
+        g_extract_probe.runs.fetch_add(1); // last statement: signals the write above is visible
     };
     ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
 
+    // The extract (and the sim write it captures) happens synchronously inside
+    // this one tick() call, before render is dispatched — only the render
+    // BODY's execution is async, hence the wait below.
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
+    ASSERT_TRUE(wait_for([] { return g_extract_probe.runs.load() >= 1; }))
+        << "render system never ran";
 
-    EXPECT_EQ(g_extract_probe.seen, 42) << "the extract must hand render this tick's sim write";
+    EXPECT_EQ(g_extract_probe.seen.load(), 42) << "the extract must hand render this tick's sim write";
 
     // The extracted column is an OWNED copy, never the live storage: it must
     // not alias the pointer component_get returns for the live entity.
     const void *live_ptr = ecs->component_get(ecs, e, cid);
-    EXPECT_NE(g_extract_probe.seen_ptr, live_ptr)
+    EXPECT_NE(g_extract_probe.seen_ptr.load(), live_ptr)
         << "render must read an owned copy, never the live component storage";
 }
 
 namespace {
 struct MultiTermExtract { float x, y, z; };
 double g_extract_pv_sum = 0.0;
+std::atomic<int> g_extract_pv_runs{0};
 }
 
 // A two-term render query must hand the body both columns aligned 1:1 with the
@@ -464,11 +546,15 @@ TEST_F(RuntimeSpike, RenderExtract_MultiTermAlignment)
             for (size_t i = 0; i < segs[s].count; i++)
                 g_extract_pv_sum += static_cast<double>(pc[i].x) + static_cast<double>(vc[i].x);
         }
+        g_extract_pv_runs.fetch_add(1); // last statement: signals the sum above is visible
     };
     ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
 
     g_extract_pv_sum = 0.0;
+    g_extract_pv_runs.store(0);
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
+    ASSERT_TRUE(wait_for([] { return g_extract_pv_runs.load() >= 1; }))
+        << "render system never ran";
     EXPECT_DOUBLE_EQ(g_extract_pv_sum, expect)
         << "the extract's merge-copy must preserve per-entity column alignment";
 }
