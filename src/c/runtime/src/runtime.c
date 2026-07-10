@@ -4,8 +4,6 @@
 #include <kernel_engine/allocator/allocator.h>
 
 #include <stdalign.h>
-#include <stdatomic.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -69,80 +67,18 @@ struct ke_system_ctx
     ke_ecs                    *ecs;          // borrowed; alive while the system runs
     const ke_component_access *access_list;  // borrowed from the system's params
     uint32_t                   access_count;
-    bool                       reads_snapshot; // render phase: reads route to snapshot side (§16)
     const char                *system_name;  // for diagnostics
     defer_queue               *defer;        // borrowed from the runtime
 
     // Resolved query views (borrowed from the registered_system). seg_storage holds
     // KE_MAX_SEGMENTS_PER_QUERY segments per query, contiguous by query index.
+    // This is the ONLY path a system body has to component memory — no ke_ecs
+    // call happens here or anywhere else during a wave, so ke_ecs itself needs
+    // no lock, no readonly mode, no concurrency guard of its own (ke_ecs.h).
     const ke_ecs_segment      *seg_storage;
     const size_t              *seg_counts;
     uint32_t                   view_query_count;
 };
-
-// Debug-only check infrastructure. Compiled in only when NDEBUG is undefined;
-// release builds get zero overhead. R2.5c-final flips violations from
-// log-and-continue to abort() — for now we surface failures via a counter so
-// tests can assert without crashing the process.
-#ifndef NDEBUG
-static uint32_t s_check_failures = 0;
-
-// Concurrency-overlap guard. The contract says no ke_ecs storage call happens
-// concurrently during a wave (reads are resolved single-threaded; bodies touch
-// only resolved memory). This detects a violation directly: a thread entering a
-// funnel storage call while another is already inside it. Counted (atomically),
-// never aborted, so tests can assert it.
-static atomic_uint s_ecs_call_depth       = 0;
-static atomic_uint s_concurrency_failures = 0;
-
-static void ecs_call_enter(void)
-{
-    if (atomic_fetch_add(&s_ecs_call_depth, 1u) != 0u)
-        atomic_fetch_add(&s_concurrency_failures, 1u);
-}
-static void ecs_call_leave(void)
-{
-    atomic_fetch_sub(&s_ecs_call_depth, 1u);
-}
-
-static bool access_list_contains(const ke_component_access *list, uint32_t n,
-                                  ke_component_id cid, ke_access required)
-{
-    for (uint32_t i = 0; i < n; i++)
-    {
-        if (list[i].cid == cid && (list[i].access & required) == required)
-            return true;
-    }
-    return false;
-}
-
-static void log_violation(const char *system_name, ke_component_id cid, const char *kind)
-{
-    fprintf(stderr,
-            "[ke_system_ctx] system '%s' accessed component %u (%s) without declared "
-            "access; add a ke_component_access entry to ke_runtime_system_params.access_list.\n",
-            system_name ? system_name : "<unnamed>", cid, kind);
-    s_check_failures++;
-}
-#endif
-
-uint32_t ke_system_ctx_check_failures(void)
-{
-#ifndef NDEBUG
-    return s_check_failures + atomic_load(&s_concurrency_failures);
-#else
-    return 0;
-#endif
-}
-
-void ke_system_ctx_reset_check_failures(void)
-{
-#ifndef NDEBUG
-    s_check_failures = 0;
-    atomic_store(&s_concurrency_failures, 0u);
-    atomic_store(&s_ecs_call_depth, 0u);
-#endif
-}
 
 // ── Wave builder (Bevy-style R/W conflict grouping) ────────────────────────
 //
@@ -249,57 +185,6 @@ void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
     *out_wave_count = current_wave + 1;
 }
 
-void *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
-{
-    if (!ctx || !ctx->ecs) return NULL;
-#ifndef NDEBUG
-    if (!access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
-    {
-        log_violation(ctx->system_name, cid, "MUT");
-        return NULL;
-    }
-    ecs_call_enter();
-    void *r = ctx->ecs->component_get(ctx->ecs, entity, cid);
-    ecs_call_leave();
-    return r;
-#else
-    return ctx->ecs->component_get(ctx->ecs, entity, cid);
-#endif
-}
-
-const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid, ke_entity entity)
-{
-    if (!ctx || !ctx->ecs) return NULL;
-#ifndef NDEBUG
-    // Read OR write declaration covers a read access. Checked against the
-    // declared (live) cid, before any snapshot routing below.
-    if (!access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_READ) &&
-        !access_list_contains(ctx->access_list, ctx->access_count, cid, KE_ACCESS_WRITE))
-    {
-        log_violation(ctx->system_name, cid, "GET");
-        return NULL;
-    }
-#endif
-    // Render-phase reads land on the snapshot side of a double-buffered
-    // component; for everything else snapshot_cid returns cid unchanged (§16).
-    // The snapshot lives on a separate "shadow" entity (never the live one —
-    // see ke_ecs.h's snapshot_entity), so cid and entity are always remapped
-    // together; one without the other looks up the wrong slot.
-    if (ctx->reads_snapshot && ctx->ecs->snapshot_cid)
-    {
-        cid = ctx->ecs->snapshot_cid(ctx->ecs, cid);
-        if (ctx->ecs->snapshot_entity)
-            entity = ctx->ecs->snapshot_entity(ctx->ecs, entity);
-    }
-#ifndef NDEBUG
-    ecs_call_enter();
-    const void *r = ctx->ecs->component_get(ctx->ecs, entity, cid);
-    ecs_call_leave();
-    return r;
-#else
-    return ctx->ecs->component_get(ctx->ecs, entity, cid);
-#endif
-}
 
 const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx, uint32_t query_index, size_t *out_count)
 {
@@ -467,24 +352,45 @@ void     ke_system_ctx_reset_defer_applied(void) { s_defer_applied_total = 0; }
 
 // ── Runtime state ───────────────────────────────────────────────────────────
 
+// A render-phase query's OWNED copy of its matched entities/columns, refreshed
+// once per tick at the sim→render boundary (RuntimeArchitectureV2.md §16 — the
+// "extract"). Render systems read only this: never the live ECS, so nothing
+// about pipelining sim N+1 alongside a still-running render N depends on the
+// ECS backend tolerating concurrent access — render simply never touches it.
+// Every original archetype segment this query matched is merged into ONE
+// contiguous segment here (multiple segments would need no different handling
+// downstream, so merging keeps ke_system_ctx_view's one-segment-per-query
+// addressing — see runtime_extract_render_state).
+typedef struct extracted_query
+{
+    ke_ecs_segment seg;                            // entities/columns point into the buffers below
+    ke_entity     *entities_buf;                   // owned
+    void          *col_bufs[KE_QUERY_MAX_TERMS];   // owned; NULL for a tag term (no column)
+    size_t         col_elem_size[KE_QUERY_MAX_TERMS]; // cached once; 0 = tag term
+    size_t         capacity;                       // entity capacity currently allocated
+    bool           elem_sizes_cached;
+} extracted_query;
+
 typedef struct registered_system
 {
     ke_runtime_system_params params;
 
     // Resolved-query state. The caller's query decls are copied at registration
     // (its pointer's lifetime is not ours); the union of their terms becomes the
-    // derived access list (params.access_list is repointed to it), and seg_storage
-    // holds the segments each frame's resolve fills (read by this system's body).
+    // derived access list (params.access_list is repointed to it).
     //
-    // The ECS-side queries are registered later, on the first tick that sees this
-    // system: a render system's queries must resolve against the SNAPSHOT cids,
-    // and those exist only once snapshot inference has run over every registered
-    // system's access list.
-    ke_query_decl   query_decls[KE_MAX_QUERIES_PER_SYSTEM];
-    ke_query_id     query_ids[KE_MAX_QUERIES_PER_SYSTEM];
-    uint32_t        query_count;
-    ke_ecs_segment *seg_storage; // KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY
-    size_t          seg_counts[KE_MAX_QUERIES_PER_SYSTEM];
+    // seg_storage/seg_counts is the segment array a render-phase system's body
+    // reads via ke_system_ctx_view. For a sim-phase system it is refreshed by a
+    // live ecs->query_resolve just before each wave dispatches (as always). For
+    // a render-phase system it instead holds a single already-merged segment
+    // per query, written once per tick by runtime_extract_render_state from
+    // this system's own `extracted` buffers — never touched by a live resolve.
+    ke_query_decl    query_decls[KE_MAX_QUERIES_PER_SYSTEM];
+    ke_query_id      query_ids[KE_MAX_QUERIES_PER_SYSTEM];
+    uint32_t         query_count;
+    ke_ecs_segment  *seg_storage; // KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY
+    size_t           seg_counts[KE_MAX_QUERIES_PER_SYSTEM];
+    extracted_query  extracted[KE_MAX_QUERIES_PER_SYSTEM]; // render-phase systems only
     ke_component_access derived_access[KE_MAX_QUERIES_PER_SYSTEM * KE_QUERY_MAX_TERMS];
     uint32_t            derived_access_count;
 } registered_system;
@@ -513,15 +419,10 @@ typedef struct runtime_state
     float fixed_dt_max_accum;
     float fixed_accumulator;
 
-    // §16 snapshot preparation cursor: systems in [0, systems_prepared) have had
-    // their render-phase cids marked double-buffered and their ECS queries
-    // registered. Runs at the top of a tick, never at registration, because
-    // inference must see every system's access list before any render system's
-    // queries are bound to a snapshot cid.
-    //
-    // A render system registered after a tick has already run will not retroactively
-    // re-point an earlier system's queries at a cid it newly marks double-buffered.
-    // Every module registers its systems before the first tick, so this holds.
+    // Query-binding cursor: systems in [0, systems_prepared) have had their
+    // ECS queries registered (runtime_bind_queries). Deferred to the top of a
+    // tick rather than done at registration purely so a system added after the
+    // first tick still gets bound before it is ever dispatched.
     size_t systems_prepared;
 } runtime_state;
 
@@ -594,6 +495,7 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
     rs->query_count         = 0;
     rs->seg_storage         = NULL;
     rs->derived_access_count = 0;
+    memset(rs->extracted, 0, sizeof(rs->extracted));
 
     if (p->queries && p->query_count > 0)
     {
@@ -777,22 +679,28 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             pkg->ctx.ecs           = h->state.ecs;
             pkg->ctx.access_list   = rs->params.access_list;
             pkg->ctx.access_count  = rs->params.access_count;
-            pkg->ctx.reads_snapshot = (phase == KE_PHASE_RENDER);
             pkg->ctx.system_name   = rs->params.name;
             pkg->ctx.defer         = NULL;  // task_pkg_run binds to &pkg->defer
 
-            // Resolve this system's queries here — single-threaded, before the wave
-            // dispatches — so the parallel body reads only the resolved segments and
-            // never touches the storage concurrently.
-            if (rs->query_count > 0 && rs->seg_storage && h->state.ecs->query_resolve)
+            if (rs->query_count > 0 && rs->seg_storage)
             {
-                for (uint32_t q = 0; q < rs->query_count; q++)
+                // Sim-phase systems resolve live segments here — single-threaded,
+                // right before this wave dispatches, so the parallel body only
+                // ever reads already-resolved memory. Render-phase systems skip
+                // this: their seg_storage was already filled once for this tick
+                // by runtime_extract_render_state, from buffers this system
+                // owns — no ke_ecs call happens for a render-phase system at
+                // any point during its wave.
+                if (phase != KE_PHASE_RENDER && h->state.ecs->query_resolve)
                 {
-                    ke_ecs_segment *dst = &rs->seg_storage[(size_t)q * KE_MAX_SEGMENTS_PER_QUERY];
-                    size_t          cnt = 0;
-                    h->state.ecs->query_resolve(h->state.ecs, rs->query_ids[q], dst,
-                                                KE_MAX_SEGMENTS_PER_QUERY, &cnt);
-                    rs->seg_counts[q] = cnt;
+                    for (uint32_t q = 0; q < rs->query_count; q++)
+                    {
+                        ke_ecs_segment *dst = &rs->seg_storage[(size_t)q * KE_MAX_SEGMENTS_PER_QUERY];
+                        size_t          cnt = 0;
+                        h->state.ecs->query_resolve(h->state.ecs, rs->query_ids[q], dst,
+                                                    KE_MAX_SEGMENTS_PER_QUERY, &cnt);
+                        rs->seg_counts[q] = cnt;
+                    }
                 }
                 pkg->ctx.seg_storage      = rs->seg_storage;
                 pkg->ctx.seg_counts       = rs->seg_counts;
@@ -817,14 +725,12 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             wave_size++;
         }
 
-        // Dispatch + join inside the ECS concurrent-read scope, so the parallel
-        // system bodies read the world safely (the ECS makes reads thread-safe;
-        // structural changes go to each system's defer queue, flushed below).
+        // Dispatch + join. No lock, no readonly mode: every wave body reads
+        // only its own resolved segments (plain memory, no ke_ecs call), and
+        // structural changes go to each system's own defer queue, flushed
+        // below — so nothing here ever touches the ECS concurrently.
         wave_run_ctx wc = { h, pkgs, tasks, pinned, wave_size };
-        if (h->state.ecs->concurrent_reads)
-            h->state.ecs->concurrent_reads(h->state.ecs, run_wave_body, &wc);
-        else
-            run_wave_body(&wc);
+        run_wave_body(&wc);
 
         // Wave barrier: flush each system's deferred structural changes in
         // registration order, serially on this thread (outside the read scope).
@@ -839,64 +745,144 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
     }
 }
 
-// Walk every render-phase system; mark each component it reads as
-// double-buffered so the sim→render swap has a back buffer to fill. Tag
-// components (size 0, e.g. render-resource cids) are skipped by the ecs impl.
-static void runtime_infer_snapshots(runtime_handle *h, size_t first, size_t last)
-{
-    if (!h->state.ecs->set_double_buffered) return;
-    for (size_t si = first; si < last; si++)
-    {
-        registered_system *rs = h->state.systems[si];
-        if (rs->params.phase != KE_PHASE_RENDER) continue;
-        for (uint32_t a = 0; a < rs->params.access_count; a++)
-            h->state.ecs->set_double_buffered(h->state.ecs, rs->params.access_list[a].cid);
-    }
-}
-
-// Bind each system's copied query decls to real ECS queries. A render-phase
-// system's terms are mapped through snapshot_cid first, so the segments its body
-// reads via ke_system_ctx_view come from the snapshot side — matching what
-// ke_system_ctx_get already does per-entity. snapshot_cid returns the cid
-// unchanged for anything not double-buffered (tags, sim-only components), so a
-// mixed query resolves correctly.
-//
-// Must run after runtime_infer_snapshots: the snapshot cids do not exist before it.
+// Bind each system's copied query decls to real ECS queries, once, the first
+// tick that sees each system. Every query registers against the plain cids the
+// caller declared — no cid ever needs remapping (RuntimeArchitectureV2.md §16:
+// the render/sim split lives entirely in WHERE a query's segments come from at
+// dispatch time — live resolve vs runtime_extract_render_state — never in
+// which cid a query is registered against).
 static void runtime_bind_queries(runtime_handle *h, size_t first, size_t last)
 {
     if (!h->state.ecs->query_register) return;
     for (size_t si = first; si < last; si++)
     {
         registered_system *rs = h->state.systems[si];
-        const bool to_snapshot =
-            rs->params.phase == KE_PHASE_RENDER && h->state.ecs->snapshot_cid != NULL;
-
         for (uint32_t q = 0; q < rs->query_count; q++)
         {
             const ke_query_decl *qd = &rs->query_decls[q];
             ke_component_id      cids[KE_QUERY_MAX_TERMS];
             for (uint32_t t = 0; t < qd->term_count; t++)
-            {
-                ke_component_id cid = qd->terms[t].cid;
-                if (to_snapshot) cid = h->state.ecs->snapshot_cid(h->state.ecs, cid);
-                cids[t] = cid;
-            }
+                cids[t] = qd->terms[t].cid;
             rs->query_ids[q] = h->state.ecs->query_register(h->state.ecs, cids, qd->term_count);
         }
     }
 }
 
-// Snapshot inference + query binding for every system not yet prepared. Both run
-// at the top of a tick rather than at registration: inference must observe every
-// system's access list before any render query is bound to a snapshot cid.
+// Query binding for every system not yet prepared. Runs at the top of a tick
+// rather than at registration purely so a system registered mid-session (after
+// the first tick) still gets bound — registration itself has no ordering
+// dependency on anything else since §16's cid-remap requirement is gone.
 static void runtime_prepare_systems(runtime_handle *h)
 {
     if (h->state.systems_prepared >= h->state.system_count) return;
     const size_t first = h->state.systems_prepared;
     const size_t last  = h->state.system_count;
-    runtime_infer_snapshots(h, first, last);
     runtime_bind_queries(h, first, last);
     h->state.systems_prepared = last;
+}
+
+// Copies every render-phase system's query matches out of the live ECS into
+// buffers that system owns (RuntimeArchitectureV2.md §16 — the "extract").
+// Called once per tick at the sim→render boundary, after sim's phases (and
+// their defer_flush) have fully applied. Render-phase systems then make ZERO
+// ke_ecs calls for the rest of the tick — see runtime_run_phase's render
+// branch — which is what lets a future async tick() overlap sim N+1 with a
+// still-executing render N: nothing about that overlap depends on the ECS
+// backend tolerating concurrent access, because render never touches it.
+static void runtime_extract_render_state(runtime_handle *h)
+{
+    if (!h->state.ecs->query_resolve) return;
+    ke_ecs_segment raw[KE_MAX_SEGMENTS_PER_QUERY];
+
+    for (size_t si = 0; si < h->state.system_count; si++)
+    {
+        registered_system *rs = h->state.systems[si];
+        if (rs->params.phase != KE_PHASE_RENDER) continue;
+
+        for (uint32_t q = 0; q < rs->query_count; q++)
+        {
+            extracted_query      *eq = &rs->extracted[q];
+            const ke_query_decl  *qd = &rs->query_decls[q];
+
+            // Cache each term's element size once (0 = tag, no column) — the
+            // ecs backend never changes a registered component's size.
+            if (!eq->elem_sizes_cached)
+            {
+                for (uint32_t t = 0; t < qd->term_count; t++)
+                    eq->col_elem_size[t] = h->state.ecs->component_size
+                        ? h->state.ecs->component_size(h->state.ecs, qd->terms[t].cid) : 0;
+                eq->elem_sizes_cached = true;
+            }
+
+            size_t raw_count = 0;
+            h->state.ecs->query_resolve(h->state.ecs, rs->query_ids[q], raw,
+                                        KE_MAX_SEGMENTS_PER_QUERY, &raw_count);
+
+            size_t total = 0;
+            for (size_t s = 0; s < raw_count; s++) total += raw[s].count;
+
+            if (total > eq->capacity)
+            {
+                size_t new_cap = eq->capacity ? eq->capacity * 2 : 64;
+                while (new_cap < total) new_cap *= 2;
+
+                ke_entity *new_ents = (ke_entity *)ke_alloc(sizeof(ke_entity) * new_cap, alignof(ke_entity));
+                if (new_ents)
+                {
+                    if (eq->entities_buf) ke_free(eq->entities_buf);
+                    eq->entities_buf = new_ents;
+
+                    for (uint32_t t = 0; t < qd->term_count; t++)
+                    {
+                        if (eq->col_elem_size[t] == 0) continue; // tag term: no column buffer
+                        void *new_col = ke_alloc(eq->col_elem_size[t] * new_cap, alignof(max_align_t));
+                        if (!new_col) continue; // OOM on this column: keep the old one, sized short
+                        if (eq->col_bufs[t]) ke_free(eq->col_bufs[t]);
+                        eq->col_bufs[t] = new_col;
+                    }
+                    eq->capacity = new_cap;
+                }
+                // Growth failed entirely (entities_buf alloc OOM): fall through
+                // and copy only up to the existing (smaller) capacity below,
+                // rather than crash — a capped extract beats no extract.
+            }
+
+            size_t cap = eq->capacity;
+            size_t written = 0;
+            for (size_t s = 0; s < raw_count && written < cap; s++)
+            {
+                size_t take = raw[s].count;
+                if (written + take > cap) take = cap - written;
+                if (eq->entities_buf)
+                    memcpy(eq->entities_buf + written, raw[s].entities, sizeof(ke_entity) * take);
+                for (uint32_t t = 0; t < qd->term_count; t++)
+                {
+                    if (eq->col_elem_size[t] == 0 || !eq->col_bufs[t]) continue;
+                    unsigned char *dst = (unsigned char *)eq->col_bufs[t] + written * eq->col_elem_size[t];
+                    memcpy(dst, raw[s].columns[t], eq->col_elem_size[t] * take);
+                }
+                written += take;
+            }
+
+            eq->seg.entities = eq->entities_buf;
+            eq->seg.count    = written;
+            for (uint32_t t = 0; t < qd->term_count; t++)
+                eq->seg.columns[t] = eq->col_elem_size[t] ? eq->col_bufs[t] : NULL;
+            for (uint32_t t = qd->term_count; t < KE_QUERY_MAX_TERMS; t++)
+                eq->seg.columns[t] = NULL;
+
+            // Present as ONE merged segment through the system's own
+            // seg_storage — a sim-phase system's live per-wave resolve would
+            // use this same array, but a render-phase system never resolves
+            // live (runtime_run_phase skips it), so reusing the array here is
+            // safe: the two uses never overlap for the same system.
+            if (rs->seg_storage)
+            {
+                rs->seg_storage[(size_t)q * KE_MAX_SEGMENTS_PER_QUERY] = eq->seg;
+                rs->seg_counts[q] = (written > 0) ? 1 : 0;
+            }
+        }
+    }
 }
 
 static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
@@ -941,13 +927,9 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
     runtime_run_phase(h, KE_PHASE_UPDATE,      dt);
     runtime_run_phase(h, KE_PHASE_POST_UPDATE, dt);
 
-    // Sim→render boundary (§16): freeze the sim's just-written live side into the
-    // snapshot the render phase reads.
-    if (h->state.ecs->swap_snapshots)
-    {
-        if (!h->state.ecs->swap_snapshots(h->state.ecs, out_error))
-            return false;
-    }
+    // Sim→render boundary (§16): copy every render-phase query's matches out
+    // of the live ECS into buffers this tick's render systems own.
+    runtime_extract_render_state(h);
     runtime_run_phase(h, KE_PHASE_RENDER, dt);
 
     return true;
@@ -962,8 +944,16 @@ static void runtime_destroy(ke_runtime *self)
     {
         for (size_t i = 0; i < h->state.system_count; i++)
         {
-            if (h->state.systems[i]->seg_storage) ke_free(h->state.systems[i]->seg_storage);
-            ke_free(h->state.systems[i]);
+            registered_system *rs = h->state.systems[i];
+            if (rs->seg_storage) ke_free(rs->seg_storage);
+            for (uint32_t q = 0; q < KE_MAX_QUERIES_PER_SYSTEM; q++)
+            {
+                extracted_query *eq = &rs->extracted[q];
+                if (eq->entities_buf) ke_free(eq->entities_buf);
+                for (uint32_t t = 0; t < KE_QUERY_MAX_TERMS; t++)
+                    if (eq->col_bufs[t]) ke_free(eq->col_bufs[t]);
+            }
+            ke_free(rs);
         }
         ke_free(h->state.systems);
     }

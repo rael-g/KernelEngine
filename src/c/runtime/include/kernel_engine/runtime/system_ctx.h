@@ -21,13 +21,6 @@ extern "C" {
 
 typedef struct ke_system_ctx ke_system_ctx;
 
-KE_RUNTIME_API void       *ke_system_ctx_get_mut(ke_system_ctx *ctx, ke_component_id cid,
-                                                    ke_entity entity);
-KE_RUNTIME_API const void *ke_system_ctx_get(ke_system_ctx *ctx, ke_component_id cid,
-                                               ke_entity entity);
-
-KE_RUNTIME_API uint32_t ke_system_ctx_check_failures(void);
-KE_RUNTIME_API void     ke_system_ctx_reset_check_failures(void);
 KE_RUNTIME_API uint32_t ke_system_ctx_defer_applied_count(void);
 KE_RUNTIME_API void     ke_system_ctx_reset_defer_applied(void);
 
@@ -56,10 +49,11 @@ KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
 // needs the id synchronously (e.g. scene-tree node creation from a system).
 KE_RUNTIME_API ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx);
 
-// A deferred structural operation, run serially at the wave barrier (main thread,
-// outside concurrent_reads) where entity creation/destruction and archetype moves
-// are legal. `user` points to the copied payload the caller passed to
-// ke_system_ctx_defer. `ecs` is the live world.
+// A deferred structural operation, run serially at the wave barrier (main
+// thread, after the wave's parallel bodies have all returned) where entity
+// creation/destruction and archetype moves are legal. `user` points to the
+// copied payload the caller passed to ke_system_ctx_defer. `ecs` is the live
+// world.
 typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
 
 // Enqueue an arbitrary structural mutation to run at the wave barrier. The engine
