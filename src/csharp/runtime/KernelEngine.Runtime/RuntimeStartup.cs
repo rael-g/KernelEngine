@@ -57,6 +57,12 @@ public static class RuntimeStartup
         if (!s_loadOrder.TryGetValue(runtime, out var ordered)) return;
         s_loadOrder.Remove(runtime);
 
+        // The last tick() dispatched its render phase asynchronously and may
+        // not have finished yet. Modules unload here — often tearing down the
+        // GPU device/swapchain the still-running render phase is reading —
+        // so it must be joined first.
+        runtime.Flush();
+
         for (int i = ordered.Count - 1; i >= 0; i--)
             ordered[i].OnUnload(runtime, services);
     }

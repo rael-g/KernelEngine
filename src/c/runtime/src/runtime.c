@@ -1013,6 +1013,12 @@ static bool runtime_tick(ke_runtime *self, float dt, ke_error **out_error)
     return true;
 }
 
+static void runtime_flush_render(ke_runtime *self)
+{
+    if (!self || !self->handle) return;
+    runtime_join_pending_render((runtime_handle *)self->handle);
+}
+
 static void runtime_destroy(ke_runtime *self)
 {
     if (!self || !self->handle) return;
@@ -1079,6 +1085,7 @@ ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
     h->api.register_module = runtime_register_module;
     h->api.register_system = runtime_register_system;
     h->api.tick            = runtime_tick;
+    h->api.flush_render    = runtime_flush_render;
 
     return (ke_runtime_handle){ .ref = &h->api, .destroy = runtime_destroy };
 }

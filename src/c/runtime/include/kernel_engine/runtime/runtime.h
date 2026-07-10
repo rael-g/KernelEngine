@@ -83,6 +83,14 @@ typedef struct ke_runtime {
     ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
     ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
     bool         (*tick)(ke_runtime *self, float dt, ke_error **out_error);
+
+    /// Blocks until any render phase dispatched by a previous tick() has
+    /// finished. tick() dispatches render asynchronously and returns before it
+    /// completes (§16); callers that need to tear down render-owned native
+    /// resources (GPU device, swapchain surface) must call this first, or the
+    /// still-running render phase races the teardown. A no-op if nothing is
+    /// pending.
+    void (*flush_render)(ke_runtime *self);
 } ke_runtime;
 
 typedef struct ke_runtime_handle {

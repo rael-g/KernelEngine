@@ -14,4 +14,7 @@ public unsafe partial struct ke_runtime
 
     [NativeTypeName("bool (*)(ke_runtime *, float, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, float, ke_error**, bool> tick;
+
+    [NativeTypeName("void (*)(ke_runtime *)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, void> flush_render;
 }

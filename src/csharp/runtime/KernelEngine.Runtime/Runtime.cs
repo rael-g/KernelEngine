@@ -206,6 +206,12 @@ public sealed unsafe class Runtime : IRuntime, INativeRuntime
         if (!ok) throw new InvalidOperationException($"Runtime.{nameof(Tick)} failed");
     }
 
+    public void Flush()
+    {
+        ThrowIfDisposed();
+        if (_native->flush_render != null) _native->flush_render(_native);
+    }
+
     public void Dispose()
     {
         if (_native == null) return;

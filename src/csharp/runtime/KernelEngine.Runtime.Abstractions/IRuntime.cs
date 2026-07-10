@@ -45,6 +45,15 @@ public interface IRuntime : IDisposable
 
     /// <summary>Drives one frame: PreUpdate → FixedUpdate×N → Update → PostUpdate.</summary>
     void Tick(float dt);
+
+    /// <summary>
+    /// Blocks until any render phase dispatched by a previous <see cref="Tick"/>
+    /// has finished. Tick() dispatches render asynchronously and returns before
+    /// it completes; call this before tearing down render-owned native
+    /// resources (GPU device, swapchain surface) or the still-running render
+    /// phase races the teardown. A no-op if nothing is pending.
+    /// </summary>
+    void Flush();
 }
 
 /// <summary>Mirrors <c>ke_phase</c>. Order matches the C enum so casts are safe.</summary>
