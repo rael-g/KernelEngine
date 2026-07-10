@@ -1,5 +1,6 @@
-// IBL hook — a plain function reading a neutral-default resource. forward_lit.slang
-// always calls ibl_contribution(); when no IBL module produces a real
+// IBL hook — a plain function reading a neutral-default resource.
+// deferred_lighting.slang and transparent_forward.slang both always call
+// ibl_contribution(); when no IBL module produces a real
 // environment, ibl_env is bound to the engine's black default cubemap, which
 // makes this function return 0 for every fragment — the neutral element for
 // an additive indirect term. There is no generic conformance to select; the

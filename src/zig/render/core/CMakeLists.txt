@@ -119,52 +119,7 @@ add_custom_command(
     VERBATIM
 )
 
-# Material-authored forward path: the built-in flat material (mat_test_flat)
-# binds a concrete IMaterial into the engine's generic ForwardLit pass
-# (forward_lit.slang). Both import the canonical `ke` surface contract, so these
-# compile with two include dirs: the shared shader library (src/shaders) and this
-# core shaders dir (for `import forward_lit`).
 set(KE_SHADER_LIB_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_lit.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_common.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow_feature.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/ibl_feature.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
-)
 
 # Deferred G-buffer encode: the same flat material bound into the encode pass
 # (gbuffer.slang) instead of the forward pass. Same include dirs as the forward
@@ -208,9 +163,9 @@ add_custom_command(
 # with the shared shadow/ibl/cluster hooks + ke.pbr. Needs the ke library dir
 # (ke.pbr) + the core shaders dir (the feature imports).
 # Transparent forward: the same flat material bound into the transparent-only
-# forward pass (transparent_forward.slang) instead of the parked all-opaque
-# forward (forward_lit.slang) or the encode pass (gbuffer.slang). Adds
-# refraction_feature.slang to the shared shadow/ibl/cluster dependency set.
+# forward pass (transparent_forward.slang), the BLEND counterpart to the encode
+# pass (gbuffer.slang). Adds refraction_feature.slang to the shared
+# shadow/ibl/cluster dependency set.
 add_custom_command(
     OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
     COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
@@ -315,8 +270,6 @@ add_custom_command(
         "-Dtonemap-fs-wgsl=${SHADER_GEN_DIR}/tonemap.fs.wgsl"
         "-Dui-vs-wgsl=${SHADER_GEN_DIR}/ui.vs.wgsl"
         "-Dui-fs-wgsl=${SHADER_GEN_DIR}/ui.fs.wgsl"
-        "-Dmat-test-flat-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
-        "-Dmat-test-flat-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
         "-Dmat-test-flat-gbuffer-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "-Dmat-test-flat-gbuffer-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
         "-Dmat-test-flat-transparent-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
@@ -341,8 +294,6 @@ add_custom_command(
         "${SHADER_GEN_DIR}/tonemap.fs.wgsl"
         "${SHADER_GEN_DIR}/ui.vs.wgsl"
         "${SHADER_GEN_DIR}/ui.fs.wgsl"
-        "${SHADER_GEN_DIR}/mat_test_flat.vs.wgsl"
-        "${SHADER_GEN_DIR}/mat_test_flat.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"

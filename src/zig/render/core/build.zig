@@ -26,8 +26,6 @@ pub fn build(b: *std.Build) void {
     const tonemap_fs_wgsl = b.option([]const u8, "tonemap-fs-wgsl", "generated tonemap fragment WGSL path") orelse @panic("-Dtonemap-fs-wgsl required");
     const ui_vs_wgsl = b.option([]const u8, "ui-vs-wgsl", "generated ui vertex WGSL path")   orelse @panic("-Dui-vs-wgsl required");
     const ui_fs_wgsl = b.option([]const u8, "ui-fs-wgsl", "generated ui fragment WGSL path") orelse @panic("-Dui-fs-wgsl required");
-    const mat_test_flat_vs_wgsl = b.option([]const u8, "mat-test-flat-vs-wgsl", "generated flat-material vertex WGSL path")   orelse @panic("-Dmat-test-flat-vs-wgsl required");
-    const mat_test_flat_fs_wgsl = b.option([]const u8, "mat-test-flat-fs-wgsl", "generated flat-material fragment WGSL path") orelse @panic("-Dmat-test-flat-fs-wgsl required");
     const mat_test_flat_gbuffer_vs_wgsl = b.option([]const u8, "mat-test-flat-gbuffer-vs-wgsl", "generated flat-material gbuffer vertex WGSL path")   orelse @panic("-Dmat-test-flat-gbuffer-vs-wgsl required");
     const mat_test_flat_gbuffer_fs_wgsl = b.option([]const u8, "mat-test-flat-gbuffer-fs-wgsl", "generated flat-material gbuffer fragment WGSL path") orelse @panic("-Dmat-test-flat-gbuffer-fs-wgsl required");
     const mat_test_flat_transparent_vs_wgsl = b.option([]const u8, "mat-test-flat-transparent-vs-wgsl", "generated flat-material transparent-forward vertex WGSL path")   orelse @panic("-Dmat-test-flat-transparent-vs-wgsl required");
@@ -67,8 +65,6 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("tonemap.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = tonemap_fs_wgsl } });
     mod.addAnonymousImport("ui.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_vs_wgsl } });
     mod.addAnonymousImport("ui.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_fs_wgsl } });
-    mod.addAnonymousImport("mat_test_flat.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_vs_wgsl } });
-    mod.addAnonymousImport("mat_test_flat.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_fs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_gbuffer.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_gbuffer_vs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_gbuffer.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_gbuffer_fs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_transparent.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = mat_test_flat_transparent_vs_wgsl } });

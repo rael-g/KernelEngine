@@ -1,8 +1,8 @@
 // Magenta placeholder — Mechanism 1 "never silent" fallback (§6). Drawn for a
 // mesh whose requested material PSO is missing (e.g. an unassigned material
-// handle). Same vertex layout + pipeline layout as forward_lit so the draw loop
-// binds it uniformly; the fragment just outputs solid magenta so the miss is
-// obvious and debuggable rather than silently wrong.
+// handle). Same vertex layout + pipeline layout as the mesh-drawing passes so
+// the draw loop binds it uniformly; the fragment just outputs solid magenta so
+// the miss is obvious and debuggable rather than silently wrong.
 
 struct VsIn {
     float3 position : POSITION;

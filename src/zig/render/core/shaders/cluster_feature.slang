@@ -1,10 +1,11 @@
 // Clustered dynamic-light hook — a plain function reading neutral-default
-// resources. forward_lit.slang always calls accumulate_clustered_lights();
-// when no cull module populates real light lists, the point/spot count
-// buffers are bound to a tiny zeroed default, so every cluster iterates zero
-// lights and the function returns 0 — the neutral element for an additive
-// lighting term. There is no generic conformance to select; the hook is
-// realized by which resource is bound, not by which type is linked.
+// resources. deferred_lighting.slang and transparent_forward.slang both always
+// call accumulate_clustered_lights(); when no cull module populates real light
+// lists, the point/spot count buffers are bound to a tiny zeroed default, so
+// every cluster iterates zero lights and the function returns 0 — the neutral
+// element for an additive lighting term. There is no generic conformance to
+// select; the hook is realized by which resource is bound, not by which type
+// is linked.
 //
 // Resources stay at set 3 (bindings 0-5, unchanged from before this file
 // existed) — a genuinely separate bind-group set, not appended into set 0
@@ -13,10 +14,10 @@
 // solely for this data, so no append-vs-new-set tradeoff applied here.
 //
 // Self-contained: its own copy of the direct-lighting BRDF (matches
-// forward_lit.slang's pbr_direct exactly). Duplicated rather than shared via
-// import to keep this feature decoupled from the pass file, at the small cost
-// of ~20 duplicated lines — the same tradeoff already accepted between
-// forward.slang and ke.pbr.
+// ke.pbr's pbr_direct exactly — see forward_common.slang / deferred_lighting.slang
+// for the shared version). Duplicated rather than shared via import to keep
+// this feature decoupled from the pass file, at the small cost of ~20
+// duplicated lines.
 
 import ke;
 

@@ -1,5 +1,6 @@
-// Shadow hook — a plain function reading a neutral-default resource. forward_lit.slang
-// always calls sample_shadow_visibility(); when no shadow module produces real
+// Shadow hook — a plain function reading a neutral-default resource.
+// deferred_lighting.slang and transparent_forward.slang both always call
+// sample_shadow_visibility(); when no shadow module produces real
 // data, shadowMap is bound to the engine's 1x1 white default texture, which
 // makes this function return 1.0 (fully lit) for every fragment — the neutral
 // element for a visibility factor. There is no generic conformance to select;
