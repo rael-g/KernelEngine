@@ -14,6 +14,7 @@
     <NativeDep Include="ke_render_skybox" />
     <NativeDep Include="ke_render_ui" />
     <NativeDep Include="ke_render_gbuffer" />
+    <NativeDep Include="ke_render_shadow" />
     <NativeDep Include="wgpu_native" />
   </ItemGroup>
 

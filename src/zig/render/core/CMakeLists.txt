@@ -18,24 +18,6 @@ file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
 # One WGSL module per stage: a uniform shared across stages would be declared
 # twice (invalid WGSL) if both entry points were emitted into one module.
 add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/shadow.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow.slang"
-            --output "${SHADER_GEN_DIR}/shadow.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/shadow.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow.slang"
-            --output "${SHADER_GEN_DIR}/shadow.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shadow.slang" "${COMPILE_SLANG}"
-    VERBATIM
-)
-add_custom_command(
     OUTPUT "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
     COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
             --raw --target wgsl --entry cs_main --stage compute
@@ -171,9 +153,8 @@ add_custom_command(
         "-Dke-skybox-include=${CMAKE_SOURCE_DIR}/src/zig/render/skybox/include"
         "-Dke-ui-include=${CMAKE_SOURCE_DIR}/src/zig/render/ui/include"
         "-Dke-gbuffer-include=${CMAKE_SOURCE_DIR}/src/zig/render/gbuffer/include"
+        "-Dke-shadow-include=${CMAKE_SOURCE_DIR}/src/zig/render/shadow/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dshadow-vs-wgsl=${SHADER_GEN_DIR}/shadow.vs.wgsl"
-        "-Dshadow-fs-wgsl=${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "-Dmat-test-flat-transparent-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
         "-Dmat-test-flat-transparent-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
@@ -188,8 +169,6 @@ add_custom_command(
         # unlisted file is silent and costs far more than an occasional rebuild.
         ${KE_RENDER_CORE_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/shadow.vs.wgsl"
-        "${SHADER_GEN_DIR}/shadow.fs.wgsl"
         "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
@@ -203,6 +182,7 @@ add_custom_command(
         ke_render_skybox_zig
         ke_render_ui_zig
         ke_render_gbuffer_zig
+        ke_render_shadow_zig
     VERBATIM
 )
 

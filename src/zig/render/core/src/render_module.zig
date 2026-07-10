@@ -1,7 +1,5 @@
 const std = @import("std");
 const cimport = @import("cimport.zig");
-const shadow_module = @import("shadow_module.zig");
-const ShadowModule = shadow_module.ShadowModule;
 const cluster_module = @import("cluster_module.zig");
 const ClusterModule = cluster_module.ClusterModule;
 const forward_module = @import("forward_module.zig");
@@ -61,7 +59,9 @@ const ModuleState = struct {
     // deferred's shadow/cluster/IBL wiring plus its own refraction snapshot.
     // This aggregator holds them so their addresses are stable for the
     // borrowed pointers and the systems' user_data.
-    shadow: ShadowModule,               // shadow_module.zig — depth pass, writes "shadow_map"
+    // Shadow is its own physical plugin (ke_render_shadow) — this aggregator
+    // only holds the borrowed handle it returned, not its private state.
+    shadow: c.ke_render_shadow_handle,
     cluster: ClusterModule,             // cluster_module.zig — light cull compute, set-3 light lists
     // Gbuffer encode is its own physical plugin (ke_render_gbuffer) — this
     // aggregator only holds the borrowed handle it returned, not its private state.
@@ -143,6 +143,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.skybox.destroy) |d| d(st.skybox.ref);
     if (st.ui.destroy) |d| d(st.ui.ref);
     if (st.gbuffer.destroy) |d| d(st.gbuffer.ref);
+    if (st.shadow.destroy) |d| d(st.shadow.ref);
     if (st.core.destroy) |d| d(st.core.ref);
     gpa.destroy(st);
 }
@@ -186,7 +187,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         grid_z = DEFAULT_GRID_Z;
         max_lights_per_cluster = DEFAULT_MAX_LIGHTS_PER_CLUSTER;
     }
-    st.shadow = ShadowModule{};
+    st.shadow = .{ .ref = null, .destroy = null };
     st.cluster = ClusterModule{};
     st.gbuffer = .{ .ref = null, .destroy = null };
     st.deferred = DeferredLightingModule{};
@@ -194,7 +195,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.forward = ForwardModule{};
     st.tonemap = .{ .ref = null, .destroy = null };
     st.ui = .{ .ref = null, .destroy = null };
-    st.shadow.enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
+    const shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
     st.bb_writes = .{"backbuffer"};
@@ -265,17 +266,25 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // into the named-resource table first, so gbuffer/deferred/forward can
         // look them up by name — none of them holds a pointer to ShadowModule/
         // ClusterModule. gbuffer encodes; deferred-lighting decodes + shades.
-        if (!shadow_module.setup(&st.shadow, dev, st.core, ndc, st.shadow.enabled,
-                                 mesh_cid, transform_cid, light_cid, st.frame_cid, out_error) or
-            !cluster_module.setup(&st.cluster, dev, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
+        //
+        // Shadow is its own physical plugin: create() both declares its
+        // resources ("shadow_map" view, "shadow_lvp" buffer — deferred/forward
+        // resolve them by name) and registers its runtime system only when
+        // enabled, in the position its old registerSys call used to occupy.
+        st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, @intFromBool(shadow_enabled),
+                                              mesh_cid, transform_cid, light_cid, st.frame_cid, out_error);
+        if (st.shadow.ref == null) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
+
+        if (!cluster_module.setup(&st.cluster, dev, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
                                   point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error))
         {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
-        }
-        if (st.shadow.enabled) {
-            registerSys(rt, "render.shadow", &st.shadow.queries, 2, &st.shadow.access, st.shadow.access.len, &st.shadow, shadow_module.system);
         }
         registerSys(rt, "render.cull", &st.cluster.cull_queries, 3, &st.cluster.cull_access, st.cluster.cull_access.len, &st.cluster, cluster_module.system);
 
