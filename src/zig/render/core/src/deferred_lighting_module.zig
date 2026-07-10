@@ -2,10 +2,6 @@ const std = @import("std");
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
-const shadow_module = @import("shadow_module.zig");
-const ShadowModule = shadow_module.ShadowModule;
-const cluster_module = @import("cluster_module.zig");
-const ClusterModule = cluster_module.ClusterModule;
 
 // Deferred lighting pass — the opaque path's second half. Fullscreen triangle
 // that reads the G-buffer (gbuffer_module wrote it) + depth, reconstructs world
@@ -18,9 +14,11 @@ const ClusterModule = cluster_module.ClusterModule;
 //   set 0: frame UBO (0) + shadow (4,5,6) + ibl (7,8)   — same layout as forward
 //   set 1: the 3 G-buffer targets + depth (texel-fetched, no sampler)
 //   set 2: empty (the features leave set 2 unused; the positional array needs it)
-//   set 3: cluster light lists (borrowed from ClusterModule) — same as forward
-// Borrows ShadowModule/ClusterModule, and owns the env-cubemap tracking its IBL
-// sampling needs (rebuilding set 0 when the bound environment changes).
+//   set 3: cluster light lists — same as forward
+// Shadow's and cluster's outputs (LVP uniform, shadow view, light-list bind
+// group + layout) are looked up by name through ke_render_core — this module
+// never holds a pointer to ShadowModule/ClusterModule. Owns the env-cubemap
+// tracking its IBL sampling needs (rebuilding set 0 when the environment changes).
 
 const vs_wgsl = @embedFile("deferred_lighting.vs.wgsl");
 const fs_wgsl = @embedFile("deferred_lighting.fs.wgsl");
@@ -60,9 +58,6 @@ pub const DeferredLightingModule = struct {
     light_cid: c.ke_component_id = undefined,
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
-
-    shadow: *ShadowModule = undefined,
-    cluster: *ClusterModule = undefined,
 
     pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
     frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
@@ -132,12 +127,19 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     const black_cube_view = core.*.texture_view.?(core, .{ .idx = c.KE_HANDLE_NONE }); // black cube
     const smp = core.*.sampler.?(core);
 
-    const shadow_tex_view = if (dl.shadow.enabled) dl.shadow.view else white_view;
+    // Shadow's outputs are looked up by name, not through a *ShadowModule
+    // pointer — resource_view returns KE_GPU_INVALID_HANDLE when shadow is
+    // disabled (it never declares "shadow_map" in that case), which is the
+    // signal to fall back to the neutral white texture.
+    const shadow_view_raw = core.*.resource_view.?(core, "shadow_map");
+    const shadow_tex_view = if (shadow_view_raw != c.KE_GPU_INVALID_HANDLE) shadow_view_raw else white_view;
+    const shadow_lvp_buf = core.*.resource_buffer.?(core, "shadow_lvp");
+    const shadow_lvp_size = core.*.resource_buffer_size.?(core, "shadow_lvp");
     const ibl_view = if (dl.ibl_enabled) env_view else black_cube_view;
 
     const entries = [6]c.ke_gpu_bind_group_entry{
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = dl.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(DeferredFrame), .texture_view = 0, .sampler = 0 },
-        .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = dl.shadow.lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 4, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = shadow_lvp_buf, .buffer_offset = 0, .buffer_size = shadow_lvp_size, .texture_view = 0, .sampler = 0 },
         .{ .binding = 5, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = shadow_tex_view, .sampler = 0 },
         .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
         .{ .binding = 7, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = ibl_view, .sampler = 0 },
@@ -230,11 +232,6 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     }
     core.*.upload.?(core, dl.frame_uniform, 0, &frame, @sizeOf(DeferredFrame));
 
-    // The clustered-lights hook indexes its froxel from the screen size and the
-    // depth range, which only the shading pass knows. Without this the grid UBO
-    // stays zeroed and every froxel lookup resolves to no lights.
-    cluster_module.uploadGrid(dl.cluster, bw, bh, cam.near_plane, cam.far_plane);
-
     // Set 1 — resolve this frame's G-buffer + depth views and rebuild (transient
     // views can change on resize; same per-frame pattern tonemap uses for "hdr").
     const albedo_view = pc.*.read.?(pc, "gbuffer_albedo");
@@ -262,7 +259,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     rp.*.set_bind_group.?(rp, 0, dl.frame_bind_group, null, 0);
     rp.*.set_bind_group.?(rp, 1, dl.gbuf_bind_group, null, 0);
     rp.*.set_bind_group.?(rp, 2, dl.empty_bg, null, 0);
-    rp.*.set_bind_group.?(rp, 3, dl.cluster.fwd_light_bind_group, null, 0);
+    rp.*.set_bind_group.?(rp, 3, core.*.resource_bind_group.?(core, "cluster_lights"), null, 0);
     rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
@@ -272,7 +269,7 @@ pub fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: c.ke_rend
              ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
              camera_cid: c.ke_component_id, transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
              ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
-             shadow: *ShadowModule, cluster: *ClusterModule, out_error: [*c][*c]c.ke_error) bool {
+             out_error: [*c][*c]c.ke_error) bool {
     dl.core = core;
     dl.device = dev;
     dl.ndc = ndc;
@@ -283,8 +280,6 @@ pub fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: c.ke_rend
     dl.light_cid = light_cid;
     dl.ambient_cid = ambient_cid;
     dl.skybox_cid = skybox_cid;
-    dl.shadow = shadow;
-    dl.cluster = cluster;
     dl.env_cubemap = .{ .idx = c.KE_HANDLE_NONE };
 
     const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
@@ -355,7 +350,7 @@ pub fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: c.ke_rend
     pp.bind_group_layouts[0] = dl.frame_bgl;
     pp.bind_group_layouts[1] = dl.gbuf_bgl;
     pp.bind_group_layouts[2] = dl.empty_bgl;
-    pp.bind_group_layouts[3] = cluster.light_set_bgl; // set 3: cluster light lists
+    pp.bind_group_layouts[3] = core.ref.*.resource_bind_group_layout.?(core.ref, "cluster_lights"); // set 3: cluster light lists
     pp.bind_group_layout_count = 4;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
     pp.color_target_count = 1;
@@ -385,6 +380,17 @@ pub fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: c.ke_rend
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
 
+    // Shadow's presence is read from the named-resource table, not a
+    // *ShadowModule pointer: shadow only registers "shadow_map"'s cid when
+    // enabled (see shadow_module.setup), so an invalid cid here IS the "off"
+    // signal — no separate `enabled` flag needs to cross the module boundary.
+    const shadow_map_cid = core.ref.*.cid.?(core.ref, "shadow_map");
+    const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
+    // "light_clusters" (not "cluster_lights") is the scheduling ordering tag —
+    // cull WRITEs it, this pass READs it; the actual light data crosses
+    // through the "cluster_lights" bind group looked up separately below.
+    const cluster_lights_cid = core.ref.*.cid.?(core.ref, "light_clusters");
+
     dl.writes = .{"hdr"};
     dl.reads = .{ "gbuffer_albedo", "gbuffer_normal", "gbuffer_emissive", "depth", "shadow_map", "light_clusters" };
     dl.io = std.mem.zeroes(c.ke_render_pass_io);
@@ -392,7 +398,7 @@ pub fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: c.ke_rend
     dl.io.writes_count = 1;
     // reads: the gbuffer + depth always exist; shadow_map only when shadow is on.
     dl.io.reads = @ptrCast(&dl.reads);
-    dl.io.reads_count = if (shadow.enabled) 6 else 5; // drop shadow_map read when absent (its resource isn't declared)
+    dl.io.reads_count = if (shadow_enabled) 6 else 5; // drop shadow_map read when absent (its resource isn't declared)
     dl.io.cmd_slot = 4; // after gbuffer (slot 3), before skybox (5) / tonemap (6)
 
     var ac: u32 = 0;
@@ -406,11 +412,11 @@ pub fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: c.ke_rend
     ac += 1;
     dl.access[ac] = .{ .cid = core.ref.*.cid.?(core.ref, "depth"), .access = c.KE_ACCESS_READ };
     ac += 1;
-    if (shadow.enabled) {
-        dl.access[ac] = .{ .cid = core.ref.*.cid.?(core.ref, "shadow_map"), .access = c.KE_ACCESS_READ };
+    if (shadow_enabled) {
+        dl.access[ac] = .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_READ };
         ac += 1;
     }
-    dl.access[ac] = .{ .cid = cluster.clusters_cid, .access = c.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = cluster_lights_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
     dl.access[ac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
     ac += 1;

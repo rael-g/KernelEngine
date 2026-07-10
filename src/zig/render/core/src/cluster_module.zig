@@ -264,6 +264,12 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     zm.storeMat(params.view[0..], cameraView(cam_tc));
     core.*.upload.?(core, cm.cull_uniform, 0, &params, @sizeOf(ClusterParams));
 
+    // The clustered-lights feature's own grid UBO (cluster_feature.slang, set 3
+    // binding 6) needs the same bw/bh/near/far this pass already computed for
+    // the cull params — uploaded here so no other pass needs to know this
+    // module's camera math or private fields to trigger it.
+    uploadGrid(cm, bw, bh, cam.near_plane, cam.far_plane);
+
     const cp = pc.*.begin_compute.?(pc);
     cp.*.set_pipeline.?(cp, cm.cull_pipeline);
     cp.*.set_bind_group.?(cp, 0, cm.cull_bind_group, null, 0);
@@ -296,7 +302,7 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize, out_error: [*c][*c]c.ke
 
 // Storage buffers + the cull compute pipeline + the forward's set-3 light bind
 // group. The cull pass writes the per-cluster index lists; the forward reads them.
-pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, e: *c.ke_ecs, core: c.ke_render_core_handle,
+pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
              transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
@@ -375,6 +381,9 @@ pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, e: *c.ke_ecs, core: c.ke
         .entries = &light_bg_entries,
     }, out_error);
     if (cm.fwd_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+    // Published under a name so deferred/forward bind it without holding a
+    // pointer to *ClusterModule.
+    _ = core.ref.*.import_bind_group.?(core.ref, "cluster_lights", cm.fwd_light_bind_group, cm.light_set_bgl, null);
 
     // Cull compute: uniform + read-only lights + read-write index/count buffers.
     const rw = c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER;
@@ -436,8 +445,12 @@ pub fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, e: *c.ke_ecs, core: c.ke
         return false;
     }
 
-    // Ordering tag: the cull pass WRITES it, the forward READS it (cull → forward).
-    cm.clusters_cid = e.component_register.?(e, "light_clusters", 0);
+    // Ordering tag: the cull pass WRITES it, deferred/forward READ it (cull →
+    // shading) — published through the named-resource table (import_tag) so a
+    // consumer looks it up by name via core.cid() instead of a *ClusterModule
+    // pointer. No GPU payload; the real light data crosses via "cluster_lights"
+    // (import_bind_group) below.
+    cm.clusters_cid = core.ref.*.import_tag.?(core.ref, "light_clusters", null);
     cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);
     cm.cull_io.cmd_slot = 2; // cull → frame command slot 2 (before forward)
     // The cull WRITES light_clusters and the forward READS it (cull → forward) —

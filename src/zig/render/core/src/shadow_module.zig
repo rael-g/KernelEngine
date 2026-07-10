@@ -147,10 +147,10 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
     core.*.end_pass.?(core, pc);
 }
 
-// Allocates lvp_uniform unconditionally (tiny, 64 bytes — the forward shader's
-// neutral-default hook resource, see forward_lit.slang) and, only when
-// `enabled`, the expensive resources: the shadow_map/shadow_depth render
-// targets, the shadow pipeline, and the per-draw uniform ring.
+// Allocates lvp_uniform unconditionally (tiny, 64 bytes — shadow_feature.slang's
+// neutral-default hook resource) and, only when `enabled`, the expensive
+// resources: the shadow_map/shadow_depth render targets, the shadow pipeline,
+// and the per-draw uniform ring.
 pub fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: c.ke_render_core_handle,
              ndc: c.ke_ndc_convention, enabled: bool, mesh_cid: c.ke_component_id,
              transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
@@ -165,6 +165,10 @@ pub fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: c.ke_render_core_ha
 
     sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
     if (sh.lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+    // Published under a name (not a *ShadowModule pointer) so any pass can bind
+    // it without knowing this module's private struct — the same contract
+    // "shadow_map" already uses for the shadow view below.
+    _ = core.ref.*.import_buffer.?(core.ref, "shadow_lvp", sh.lvp_uniform, 64, null);
 
     if (!enabled) return true;
 

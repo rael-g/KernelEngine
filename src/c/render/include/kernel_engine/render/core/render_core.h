@@ -93,6 +93,26 @@ struct ke_render_core
     // Imports an externally-owned texture under `name`; returns its tag cid.
     ke_component_id (*import_texture)(struct ke_render_core *self, const char *name,
                                       ke_gpu_texture tex, ke_error **out_error);
+    // Mints a tag cid under `name` with no GPU payload — for a pure scheduling
+    // ordering dependency between two passes that isn't itself a texture/
+    // buffer/bind-group (e.g. a compute pass's cull-list output another pass
+    // must run after, when the actual data crosses through a different named
+    // resource). Same table/cid() lookup as every other named resource.
+    ke_component_id (*import_tag)(struct ke_render_core *self, const char *name,
+                                  ke_error **out_error);
+    // Publishes an externally-owned GPU buffer under `name` (e.g. a shadow pass's
+    // light-view-proj uniform) so another pass can bind it without holding a
+    // pointer to the producing pass's private state — same contract as
+    // import_texture, for producer outputs that aren't a texture.
+    ke_component_id (*import_buffer)(struct ke_render_core *self, const char *name,
+                                     ke_gpu_buffer buffer, uint64_t size, ke_error **out_error);
+    // Publishes an externally-owned GPU bind group (+ the layout it was built
+    // from) under `name` (e.g. a clustered-lighting pass's light-list set). A
+    // consumer building its own pipeline needs the layout at setup time; the
+    // bind group instance is looked up again at draw time via resource_bind_group.
+    ke_component_id (*import_bind_group)(struct ke_render_core *self, const char *name,
+                                         ke_gpu_bind_group bg, ke_gpu_bind_group_layout layout,
+                                         ke_error **out_error);
     // The tag cid previously minted for `name` (KE_COMPONENT_INVALID if unknown).
     ke_component_id (*cid)(struct ke_render_core *self, const char *name);
 
@@ -187,6 +207,17 @@ struct ke_render_core
     // second texture a same-pass refraction read can sample without a hazard).
     // KE_GPU_INVALID_HANDLE if no resource with that name was declared.
     ke_gpu_texture (*resource_texture)(struct ke_render_core *self, const char *name);
+    // The GPU buffer published under `name` via import_buffer. KE_GPU_INVALID_HANDLE
+    // if no buffer with that name was published.
+    ke_gpu_buffer (*resource_buffer)(struct ke_render_core *self, const char *name);
+    // The size (bytes) of the buffer published under `name`. 0 if unknown.
+    uint64_t (*resource_buffer_size)(struct ke_render_core *self, const char *name);
+    // The GPU bind group published under `name` via import_bind_group.
+    // KE_GPU_INVALID_HANDLE if no bind group with that name was published.
+    ke_gpu_bind_group (*resource_bind_group)(struct ke_render_core *self, const char *name);
+    // The layout the named bind group was built from (for a consumer's own
+    // pipeline creation). KE_GPU_INVALID_HANDLE if unknown.
+    ke_gpu_bind_group_layout (*resource_bind_group_layout)(struct ke_render_core *self, const char *name);
 
     // Records a buffer upload to be flushed single-threaded at end_frame (before
     // submit). Render passes call this instead of the device's write_buffer so

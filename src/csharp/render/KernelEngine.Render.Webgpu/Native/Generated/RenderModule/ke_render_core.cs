@@ -12,6 +12,15 @@ public unsafe partial struct ke_render_core
     [NativeTypeName("ke_component_id (*)(struct ke_render_core *, const char *, ke_gpu_texture, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong, ke_error**, uint> import_texture;
 
+    [NativeTypeName("ke_component_id (*)(struct ke_render_core *, const char *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ke_error**, uint> import_tag;
+
+    [NativeTypeName("ke_component_id (*)(struct ke_render_core *, const char *, ke_gpu_buffer, uint64_t, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong, ulong, ke_error**, uint> import_buffer;
+
+    [NativeTypeName("ke_component_id (*)(struct ke_render_core *, const char *, ke_gpu_bind_group, ke_gpu_bind_group_layout, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong, ulong, ke_error**, uint> import_bind_group;
+
     [NativeTypeName("ke_component_id (*)(struct ke_render_core *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, uint> cid;
 
@@ -68,6 +77,18 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("ke_gpu_texture (*)(struct ke_render_core *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong> resource_texture;
+
+    [NativeTypeName("ke_gpu_buffer (*)(struct ke_render_core *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong> resource_buffer;
+
+    [NativeTypeName("uint64_t (*)(struct ke_render_core *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong> resource_buffer_size;
+
+    [NativeTypeName("ke_gpu_bind_group (*)(struct ke_render_core *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong> resource_bind_group;
+
+    [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_render_core *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ulong> resource_bind_group_layout;
 
     [NativeTypeName("void (*)(struct ke_render_core *, ke_gpu_buffer, uint64_t, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ulong, ulong, void*, nuint, void> upload;

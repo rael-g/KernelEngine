@@ -91,6 +91,81 @@ pub fn importTexture(self: [*c]c.ke_render_core, name: [*c]const u8, tex: c.ke_g
     return cid;
 }
 
+// Mints a tag cid under `name` with no GPU payload — for a producer/consumer
+// ordering dependency that isn't itself a texture/buffer/bind-group (e.g.
+// cluster's cull compute WRITEs "light_clusters" purely so the scheduler
+// orders deferred/forward's READ after it; the actual light data crosses via
+// import_bind_group's "cluster_lights", a separate name). Same table, same
+// cid() lookup as every other named resource — just no backing resource.
+pub fn importTag(self: [*c]c.ke_render_core, name: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+    _ = out_error;
+    const st = rc.coreOf(self);
+    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    const cid = st.ecs.component_register.?(st.ecs, name, 0);
+    st.resources[st.resource_count] = .{
+        .name = name,
+        .cid = cid,
+        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
+        .texture = c.KE_GPU_INVALID_HANDLE,
+        .view = c.KE_GPU_INVALID_HANDLE,
+        .is_backbuffer = false,
+        .is_transient = false,
+        .clear_value = .{ 0, 0, 0, 0 },
+    };
+    st.resource_count += 1;
+    return cid;
+}
+
+// Publishes a producer-owned GPU buffer under `name` (e.g. shadow's LVP uniform).
+// Mirrors importTexture: the resource is non-transient (the producer, not the
+// table, owns and destroys it) and carries no texture/view.
+pub fn importBuffer(self: [*c]c.ke_render_core, name: [*c]const u8, buffer: c.ke_gpu_buffer, size: u64, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+    _ = out_error;
+    const st = rc.coreOf(self);
+    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    const cid = st.ecs.component_register.?(st.ecs, name, 0);
+    st.resources[st.resource_count] = .{
+        .name = name,
+        .cid = cid,
+        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
+        .texture = c.KE_GPU_INVALID_HANDLE,
+        .view = c.KE_GPU_INVALID_HANDLE,
+        .is_backbuffer = false,
+        .is_transient = false,
+        .clear_value = .{ 0, 0, 0, 0 },
+        .buffer = buffer,
+        .buffer_size = size,
+    };
+    st.resource_count += 1;
+    return cid;
+}
+
+// Publishes a producer-owned GPU bind group (+ the layout it was built from)
+// under `name` (e.g. cluster's light-list set-3 bind group). A consumer
+// building its own pipeline needs the layout at setup time, not just the bind
+// group instance at draw time.
+pub fn importBindGroup(self: [*c]c.ke_render_core, name: [*c]const u8, bg: c.ke_gpu_bind_group,
+                       layout: c.ke_gpu_bind_group_layout, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+    _ = out_error;
+    const st = rc.coreOf(self);
+    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    const cid = st.ecs.component_register.?(st.ecs, name, 0);
+    st.resources[st.resource_count] = .{
+        .name = name,
+        .cid = cid,
+        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
+        .texture = c.KE_GPU_INVALID_HANDLE,
+        .view = c.KE_GPU_INVALID_HANDLE,
+        .is_backbuffer = false,
+        .is_transient = false,
+        .clear_value = .{ 0, 0, 0, 0 },
+        .bind_group = bg,
+        .bind_group_layout = layout,
+    };
+    st.resource_count += 1;
+    return cid;
+}
+
 pub fn cidOf(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
     if (st.find(name)) |r| return r.cid;
@@ -105,4 +180,29 @@ pub fn resourceView(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c)
 pub fn resourceTexture(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_gpu_texture {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.texture;
+}
+
+// KE_GPU_INVALID_HANDLE if no buffer with that name was published (importBuffer).
+pub fn resourceBuffer(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_gpu_buffer {
+    const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
+    return r.buffer;
+}
+
+// 0 if no buffer with that name was published.
+pub fn resourceBufferSize(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) u64 {
+    const r = rc.coreOf(self).find(name) orelse return 0;
+    return r.buffer_size;
+}
+
+// KE_GPU_INVALID_HANDLE if no bind group with that name was published (importBindGroup).
+pub fn resourceBindGroup(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group {
+    const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
+    return r.bind_group;
+}
+
+// The layout the named bind group was built from (for a consumer's own pipeline
+// creation). KE_GPU_INVALID_HANDLE if no bind group with that name was published.
+pub fn resourceBindGroupLayout(self: [*c]c.ke_render_core, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group_layout {
+    const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
+    return r.bind_group_layout;
 }

@@ -245,23 +245,24 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(forward_module.AmbientComp));
         const skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(forward_module.SkyboxComp));
 
-        // Setup order is a real dependency chain: shadow + cluster produce
-        // handles the deferred path consumes, so they set up first; gbuffer
-        // encodes (needs no feature handles); deferred-lighting decodes + shades
-        // (borrows shadow/cluster); skybox fills what's left (reads gbuffer's
-        // depth).
+        // Setup order is a real dependency chain: shadow + cluster publish their
+        // outputs (LVP uniform, shadow view, light-list bind group + layout)
+        // into the named-resource table first, so gbuffer/deferred/forward can
+        // look them up by name — none of them holds a pointer to ShadowModule/
+        // ClusterModule. gbuffer encodes; deferred-lighting decodes + shades;
+        // skybox fills what's left (reads gbuffer's depth).
         if (!shadow_module.setup(&st.shadow, dev, st.core, ndc, st.shadow.enabled,
                                  mesh_cid, transform_cid, light_cid, st.frame_cid, out_error) or
-            !cluster_module.setup(&st.cluster, dev, e, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
+            !cluster_module.setup(&st.cluster, dev, st.core, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
                                   point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error) or
             !gbuffer_module.setup(&st.gbuffer, dev, st.core, ndc, mesh_cid, transform_cid, camera_cid, st.frame_cid, out_error) or
             !deferred_lighting_module.setup(&st.deferred, dev, st.core, ndc, logger, ibl_enabled,
                                   camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
-                                  &st.shadow, &st.cluster, out_error) or
+                                  out_error) or
             !skybox_module.setup(&st.skybox, dev, st.core, ndc, camera_cid, transform_cid, skybox_cid, st.frame_cid, out_error) or
             !forward_module.setup(&st.forward, dev, st.core, ndc, logger, ibl_enabled,
                                   mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
-                                  &st.shadow, &st.cluster, out_error))
+                                  out_error))
         {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);

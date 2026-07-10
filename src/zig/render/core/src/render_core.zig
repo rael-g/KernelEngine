@@ -83,6 +83,17 @@ pub const Resource = struct {
     is_transient: bool, // owns texture+view → destroyed on core destroy
     // Per-resource clear color. [3]==0 (default) defers to core's global clear_color.
     clear_value: [4]f32,
+    // Non-texture producer outputs published under the same name→cid table, so a
+    // consumer pass never holds a pointer to the producing pass's private struct
+    // (e.g. shadow publishes its LVP uniform buffer, cluster its light-list bind
+    // group) — the same "look it up by name" contract textures already use.
+    buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
+    buffer_size: u64 = 0,
+    bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    // The layout the bind group was built from — a consumer building its own
+    // pipeline needs this at setup time (the bind group instance alone isn't
+    // enough to declare a matching bind_group_layouts[] slot).
+    bind_group_layout: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 };
 
 // Accumulated compute-pass recording. On wgpu-native, recording a compute pass
@@ -296,6 +307,9 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .handle = st,
         .declare = resource_table.declare,
         .import_texture = resource_table.importTexture,
+        .import_tag = resource_table.importTag,
+        .import_buffer = resource_table.importBuffer,
+        .import_bind_group = resource_table.importBindGroup,
         .cid = resource_table.cidOf,
         .begin_pass = pass_recording.beginPass,
         .end_pass = pass_recording.endPass,
@@ -316,6 +330,10 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .sampler = asset_upload.samplerOf,
         .resource_view = resource_table.resourceView,
         .resource_texture = resource_table.resourceTexture,
+        .resource_buffer = resource_table.resourceBuffer,
+        .resource_buffer_size = resource_table.resourceBufferSize,
+        .resource_bind_group = resource_table.resourceBindGroup,
+        .resource_bind_group_layout = resource_table.resourceBindGroupLayout,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)
