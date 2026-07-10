@@ -210,6 +210,42 @@ TEST_F(AssetResolverTest, ResolveMaterial_UnknownAlphaMode_DefaultsToOpaque)
     fs::remove(mat);
 }
 
+TEST_F(AssetResolverTest, ResolveMaterial_NoIor_DefaultsToGlass)
+{
+    auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_FLOAT_EQ(spec.ior, 1.5f);
+    fs::remove(mat);
+}
+
+TEST_F(AssetResolverTest, ResolveMaterial_Ior_Parses)
+{
+    auto mat = WriteTempFile(".material", "[material]\nalpha_mode = \"BLEND\"\nior = 1.33\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_FLOAT_EQ(spec.ior, 1.33f);
+    fs::remove(mat);
+}
+
+TEST_F(AssetResolverTest, ResolveMaterial_NoDistortionStrength_DefaultsToPointOhFive)
+{
+    auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_FLOAT_EQ(spec.distortion_strength, 0.05f);
+    fs::remove(mat);
+}
+
+TEST_F(AssetResolverTest, ResolveMaterial_DistortionStrength_Parses)
+{
+    auto mat = WriteTempFile(".material", "[material]\nalpha_mode = \"BLEND\"\ndistortion_strength = 0.2\n");
+    ke_material_spec spec{};
+    ASSERT_TRUE(resolver->resolve_material(resolver, mat.string().c_str(), &spec, nullptr));
+    EXPECT_FLOAT_EQ(spec.distortion_strength, 0.2f);
+    fs::remove(mat);
+}
+
 // ── Material resolution ────────────────────────────────────────────────────
 
 TEST_F(AssetResolverTest, Create_NullImageAndRoot_ReturnsValidHandle)

@@ -19,6 +19,8 @@ extern "C"
         char          normal_path[KE_MATERIAL_PATH_MAX];
         ke_alpha_mode alpha_mode;
         float         alpha_cutoff;
+        float         ior;
+        float         distortion_strength;
     } ke_material_spec;
 
 #ifdef __cplusplus

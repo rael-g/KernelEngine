@@ -97,23 +97,27 @@ fn srgbToLinear(cs: f32) f32 {
 pub fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
                   metallic: f32, roughness: f32, albedo: c.ke_texture_handle,
                   normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode,
-                  alpha_cutoff: f32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
+                  alpha_cutoff: f32, ior: f32, distortion_strength: f32,
+                  out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     const st = rc.coreOf(self);
     if (st.material_count >= rc.MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
 
-    // std140: float4 base_color (linearized) + metallic + roughness + alpha_cutoff
-    // + ior. Only MASK writes a real cutoff — OPAQUE/BLEND get 0.0, which the
+    // std140: float4 base_color (linearized) + float4(metallic, roughness,
+    // alpha_cutoff, ior) + float4(distortion_strength, pad, pad, pad) — the
+    // struct's own alignment (vec4) rounds size up to 48 regardless, so the
+    // trailing 3 floats are padding whether written explicitly or not; written
+    // explicitly here so the layout is visible instead of implicit.
+    // Only MASK writes a real alpha_cutoff — OPAQUE/BLEND get 0.0, which the
     // shader's `alpha < cutoff` discard test never trips (alpha is never negative).
-    // ior is not yet an author-facing parameter (see forward_common.slang).
     const gpu_alpha_cutoff: f32 = if (alpha_mode == c.KE_ALPHA_MODE_MASK) alpha_cutoff else 0.0;
-    const default_ior: f32 = 1.5;
-    const mat_data = [8]f32{
+    const mat_data = [12]f32{
         srgbToLinear(base_color[0]), srgbToLinear(base_color[1]), srgbToLinear(base_color[2]), base_color[3],
-        metallic,                    roughness,                   gpu_alpha_cutoff,            default_ior,
+        metallic,                    roughness,                   gpu_alpha_cutoff,            ior,
+        distortion_strength,         0.0,                         0.0,                         0.0,
     };
     const ubo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
         .initial_data = &mat_data,
-        .size = 32,
+        .size = 48,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     }, out_error);
@@ -127,7 +131,7 @@ pub fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
     const nrm_view = (st.textureAt(nrm_idx) orelse &st.textures[st.default_normal.idx]).view;
 
     const entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 32, .texture_view = 0, .sampler = 0 },
+        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 48, .texture_view = 0, .sampler = 0 },
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = alb_view, .sampler = 0 },
         .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
         .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = nrm_view, .sampler = 0 },

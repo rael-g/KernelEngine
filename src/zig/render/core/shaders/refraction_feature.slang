@@ -21,13 +21,10 @@ import ke;
 
 // screen_uv is the fragment's own position normalized to [0,1] (SV_Position / viewport).
 // ior: index of refraction (1.0 = no bend/air, 1.33 = water, 1.5 = glass).
-float3 refraction_contribution(float3 n, float3 v, float2 screen_uv, float ior) {
+// distortion_strength: how far the refracted ray's lateral deviation shifts
+// the sampled background, in normalized screen space (author-facing material field).
+float3 refraction_contribution(float3 n, float3 v, float2 screen_uv, float ior, float distortion_strength) {
     float3 refracted = refract(-v, n, 1.0 / max(ior, 1.0));
-    // Visual distortion strength — how far the refracted ray's lateral
-    // deviation shifts the sampled background, in normalized screen space.
-    // A tuning constant, not a physical one; promote to a material field
-    // if content ever needs per-material control (glass vs. thick water).
-    const float DISTORTION_STRENGTH = 0.05;
-    float2 uv = saturate(screen_uv + refracted.xy * DISTORTION_STRENGTH);
+    float2 uv = saturate(screen_uv + refracted.xy * distortion_strength);
     return hdr_opaque.Sample(hdr_opaque_sampler, uv).rgb;
 }

@@ -111,6 +111,8 @@ static bool parse_material_file(const char *path, ke_material_spec *out_spec) {
     out_spec->normal_path[0] = '\0';
     out_spec->alpha_mode     = KE_ALPHA_MODE_OPAQUE;
     out_spec->alpha_cutoff   = 0.5f;
+    out_spec->ior            = 1.5f;
+    out_spec->distortion_strength = 0.05f;
 
     FILE *fp = fopen(path, "rb");
     if (!fp) return false;
@@ -176,6 +178,22 @@ static bool parse_material_file(const char *path, ke_material_spec *out_spec) {
     else {
         toml_datum_t aci = toml_int_in(mat, "alpha_cutoff");
         if (aci.ok) out_spec->alpha_cutoff = (float)aci.u.i;
+    }
+
+    // ior: only meaningful for BLEND (see refraction_contribution), but parsed
+    // unconditionally like every other factor — the field is inert elsewhere.
+    toml_datum_t ior = toml_double_in(mat, "ior");
+    if (ior.ok) out_spec->ior = (float)ior.u.d;
+    else {
+        toml_datum_t iori = toml_int_in(mat, "ior");
+        if (iori.ok) out_spec->ior = (float)iori.u.i;
+    }
+
+    toml_datum_t ds = toml_double_in(mat, "distortion_strength");
+    if (ds.ok) out_spec->distortion_strength = (float)ds.u.d;
+    else {
+        toml_datum_t dsi = toml_int_in(mat, "distortion_strength");
+        if (dsi.ok) out_spec->distortion_strength = (float)dsi.u.i;
     }
 
     toml_free(root);

@@ -24,9 +24,9 @@ import ibl_feature;           // ibl_contribution — neutral default when off (
 import cluster_feature;       // accumulate_clustered_lights — neutral default when off (empty light lists)
 import refraction_feature;    // refraction_contribution — no neutral default; only this pass calls it
 
-// Set 0 — per frame. Same shadow/ibl gap-filling layout as forward_lit.slang's
-// parked PerFrame, minus sky_view_proj (skybox is its own pass now) and plus
-// viewport (refraction needs the fragment's normalized screen position).
+// Set 0 — per frame. Same shadow/ibl gap-filling layout as deferred_lighting.slang's
+// PerFrame, minus sky_view_proj (skybox is its own pass) and plus viewport
+// (refraction needs the fragment's normalized screen position).
 struct PerFrame {
     float4   camera_pos;
     float4   light_dir;
@@ -71,7 +71,7 @@ float4 ke_transparent_fs<T : IMaterial>(T material, VsOut input) {
     // surface's own alpha (a thin sheet of glass is mostly transmission;
     // a cloudier one is mostly its own shading) — this is the standard
     // "alpha blend against the scene-color snapshot" glass approximation.
-    float3 refr = refraction_contribution(n, v, input.clip.xy / frame.viewport.xy, mat.ior);
+    float3 refr = refraction_contribution(n, v, input.clip.xy / frame.viewport.xy, mat.ior, mat.distortion_strength);
     color = lerp(refr, color, s.alpha);
 
     // Linear HDR out — the ACES tonemap pass does the tone curve + display

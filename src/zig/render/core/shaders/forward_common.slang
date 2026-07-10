@@ -1,9 +1,10 @@
 // Shared mesh vertex stage + fixed engine material set (set 1) + the
-// surface-build prologue. Imported by both forward_lit.slang (inline shading)
-// and gbuffer.slang (deferred encode): the vertex transform, the per-material
-// binding, and populating a SurfaceState via the author's material.fragment()
-// are byte-identical whether the fragment then shades inline or encodes to a
-// G-buffer — only what happens *after* the SurfaceState is built differs.
+// surface-build prologue. Imported by transparent_forward.slang (inline
+// shading) and gbuffer.slang (deferred encode): the vertex transform, the
+// per-material binding, and populating a SurfaceState via the author's
+// material.fragment() are byte-identical whether the fragment then shades
+// inline or encodes to a G-buffer — only what happens *after* the
+// SurfaceState is built differs.
 
 import ke;   // VertexInfo, SurfaceState, IMaterial
 
@@ -32,10 +33,11 @@ struct Material {
     // discard test never fires on a negative alpha. The real cutoff only for MASK.
     float  alpha_cutoff;
     // Index of refraction, read only by BLEND materials' refraction_contribution
-    // (1.0 = no bend, 1.33 = water, 1.5 = glass). Not yet an author-facing
-    // parameter — every material gets 1.5 at creation; promote to a real
-    // create_material argument once content needs per-material control.
+    // (1.0 = no bend, 1.33 = water, 1.5 = glass). Author-facing via create_material.
     float  ior;
+    // Lateral distortion strength for refraction_contribution, in normalized
+    // screen space (glass vs. thick water). Author-facing via create_material.
+    float  distortion_strength;
 };
 [[vk::binding(0, 1)]] ConstantBuffer<Material> mat;
 [[vk::binding(1, 1)]] Texture2D    albedo;

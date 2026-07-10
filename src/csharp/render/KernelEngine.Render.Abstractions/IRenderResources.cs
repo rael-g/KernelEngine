@@ -38,11 +38,16 @@ public interface IRenderResources
     /// <paramref name="alphaMode"/> selects which pass shades the material
     /// (gbuffer for <see cref="AlphaMode.Opaque"/>/<see cref="AlphaMode.Mask"/>,
     /// transparent forward for <see cref="AlphaMode.Blend"/>); <paramref name="alphaCutoff"/>
-    /// only applies to <see cref="AlphaMode.Mask"/>.
+    /// only applies to <see cref="AlphaMode.Mask"/>. <paramref name="ior"/> (index of
+    /// refraction) and <paramref name="distortionStrength"/> only apply to
+    /// <see cref="AlphaMode.Blend"/> (ior: 1.0 = no bend, 1.33 = water, 1.5 = glass;
+    /// distortionStrength: lateral shift of the sampled background, in normalized
+    /// screen space).
     /// </summary>
     MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                   TextureHandle albedo = default, TextureHandle? normalMap = null,
-                                  AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f);
+                                  AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
+                                  float ior = 1.5f, float distortionStrength = 0.05f);
 
     /// <summary>
     /// Queues a screen-space UI quad for this frame, drawn after tonemap so it

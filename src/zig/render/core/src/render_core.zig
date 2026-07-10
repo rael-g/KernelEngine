@@ -349,7 +349,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
     st.default_cubemap = asset_upload.uploadCubemap(core, 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, null);
+    _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }

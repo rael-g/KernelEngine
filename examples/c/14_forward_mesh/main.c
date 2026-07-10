@@ -92,7 +92,7 @@ int main(void)
 
     const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };
     ke_material_handle mat = core->create_material(core, orange, 0.0f, 0.5f, KE_TEXTURE_NONE, KE_TEXTURE_NONE,
-                                                    KE_ALPHA_MODE_OPAQUE, 0.5f, &err);
+                                                    KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, &err);
     if (!ke_material_is_valid(mat)) die("create_material", err);
 
     ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component));

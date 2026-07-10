@@ -137,8 +137,15 @@ public sealed class SceneNodesModule : IRuntimeModule
                         float alphaCutoff = 0.5f;
                         reader.TryGetFloat("alpha_cutoff", out alphaCutoff);
 
+                        float ior = 1.5f;
+                        reader.TryGetFloat("ior", out ior);
+
+                        float distortionStrength = 0.05f;
+                        reader.TryGetFloat("distortion_strength", out distortionStrength);
+
                         comp.Material = resources.CreateMaterial(color, roughness: roughness,
-                            alphaMode: alphaMode, alphaCutoff: alphaCutoff);
+                            alphaMode: alphaMode, alphaCutoff: alphaCutoff, ior: ior,
+                            distortionStrength: distortionStrength);
                     }
                 });
         }

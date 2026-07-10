@@ -22,6 +22,10 @@ public partial struct ke_material_spec
 
     public float alpha_cutoff;
 
+    public float ior;
+
+    public float distortion_strength;
+
     [InlineArray(4)]
     public partial struct _base_color_e__FixedBuffer
     {

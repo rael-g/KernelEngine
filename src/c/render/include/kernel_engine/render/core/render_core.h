@@ -138,6 +138,10 @@ struct ke_render_core
     // (KE_TEXTURE_NONE / handle 0 = white). Handle 0 is a built-in white material.
     // KE_MATERIAL_NONE on failure. alpha_mode/alpha_cutoff are CPU-side only (see
     // material_alpha_mode below) — they never reach the GPU material uniform.
+    // ior/distortion_strength only affect the transparent-forward refraction hook
+    // (meaningless outside BLEND); ior: 1.0 = no bend, 1.33 = water, 1.5 = glass.
+    // distortion_strength: lateral shift of the sampled background, in
+    // normalized screen space (glass vs. thick water).
     ke_material_handle (*create_material)(struct ke_render_core *self,
                                           const float *base_color, // rgba (4 floats)
                                           float metallic, float roughness,
@@ -145,6 +149,8 @@ struct ke_render_core
                                           ke_texture_handle normal, // KE_TEXTURE_NONE = flat
                                           ke_alpha_mode alpha_mode,
                                           float alpha_cutoff,
+                                          float ior,
+                                          float distortion_strength,
                                           ke_error **out_error);
     // The per-material bind-group layout (descriptor set 1) a forward pipeline
     // must declare so its set-1 bind groups (from material_bind_group) are valid.
