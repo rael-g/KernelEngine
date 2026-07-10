@@ -20,8 +20,6 @@ const SpotLightComp = extern struct {
 };
 const forward_module = @import("forward_module.zig");
 const ForwardModule = forward_module.ForwardModule;
-const deferred_lighting_module = @import("deferred_lighting_module.zig");
-const DeferredLightingModule = deferred_lighting_module.DeferredLightingModule;
 
 // Compiled into the ke_render_core library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -84,7 +82,10 @@ const ModuleState = struct {
     // Gbuffer encode is its own physical plugin (ke_render_gbuffer) — this
     // aggregator only holds the borrowed handle it returned, not its private state.
     gbuffer: c.ke_render_gbuffer_handle,
-    deferred: DeferredLightingModule,   // deferred_lighting_module.zig — decode + shade, writes "hdr"
+    // Deferred lighting is its own physical plugin (ke_render_deferred_lighting)
+    // — this aggregator only holds the borrowed handle it returned, not its
+    // private state.
+    deferred: c.ke_render_deferred_lighting_handle,
     // Skybox is its own physical plugin (ke_render_skybox) — this aggregator
     // only holds the borrowed handle it returned, not its private state.
     skybox: c.ke_render_skybox_handle,
@@ -160,6 +161,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);
     if (st.skybox.destroy) |d| d(st.skybox.ref);
     if (st.ui.destroy) |d| d(st.ui.ref);
+    if (st.deferred.destroy) |d| d(st.deferred.ref);
     if (st.gbuffer.destroy) |d| d(st.gbuffer.ref);
     if (st.shadow.destroy) |d| d(st.shadow.ref);
     if (st.cluster.destroy) |d| d(st.cluster.ref);
@@ -209,7 +211,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.shadow = .{ .ref = null, .destroy = null };
     st.cluster = .{ .ref = null, .destroy = null };
     st.gbuffer = .{ .ref = null, .destroy = null };
-    st.deferred = DeferredLightingModule{};
+    st.deferred = .{ .ref = null, .destroy = null };
     st.skybox = .{ .ref = null, .destroy = null };
     st.forward = ForwardModule{};
     st.tonemap = .{ .ref = null, .destroy = null };
@@ -322,10 +324,18 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return empty;
         }
 
-        if (!deferred_lighting_module.setup(&st.deferred, dev, st.core, ndc, logger, ibl_enabled,
-                                  camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
-                                  out_error) or
-            !forward_module.setup(&st.forward, dev, st.core, ndc, logger, ibl_enabled,
+        // Deferred lighting is its own physical plugin: create() both decodes
+        // the G-buffer setup (reading shadow/cluster's outputs by name through
+        // ke_render_core) and registers its runtime system, in the position
+        // its old registerSys call used to occupy.
+        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
+                                                            camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
+        if (st.deferred.ref == null) {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
+        if (!forward_module.setup(&st.forward, dev, st.core, ndc, logger, ibl_enabled,
                                   mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid,
                                   out_error))
         {
@@ -333,7 +343,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        registerSys(rt, "render.deferred_lighting", &st.deferred.queries, 4, &st.deferred.access, st.deferred.access_count, &st.deferred, deferred_lighting_module.system);
         // Skybox is its own physical plugin: its factory registers its own
         // runtime system directly, matching the position its old registerSys
         // call used to occupy (registration order matters — see tonemap above).
