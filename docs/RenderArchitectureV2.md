@@ -401,7 +401,9 @@ Sorts queued draws by material/depth/whatever, builds the command buffer in one 
 
 ### 5.6 `PipelineCache`
 
-Owns PSO lifecycle. Detailed in §6.
+Owns PSO lifecycle. Detailed in §6. **Status: Mechanism 1 shipped** (2026-07-11/13,
+`refactor/ecs-memory-safety`) — `ke_render_core::get_or_create_pipeline` is the sole PSO authority
+every pass (in-tree or a game's own) routes through; see §6 Mechanism 1 for the as-built record.
 
 ---
 
@@ -432,7 +434,48 @@ With that doctrine in place, **three independent mechanisms** make PSO compilati
 
 ### Mechanism 1 — Ubershader fallback (runtime safety net)
 
-When a PSO miss happens at draw time, the renderer **does not stall**. Instead:
+**Status (2026-07-13): the dedup + magenta-fallback + async-compile half shipped; the ubershader half
+did not.** `ke_render_core::get_or_create_pipeline(params)` is the PSO authority every pass (in-tree
+or a game's own — the core has no privileged passes, §7) calls every frame instead of
+`ke_gpu_device::create_render_pipeline` directly:
+
+- **Dedup**: keyed by a `PsoKey` hashing every field of `ke_gpu_render_pipeline_params` that affects
+  the compiled object, in a `std.AutoHashMap` (O(1) lookup/insert — a fixed-size array + linear scan
+  was tried first and was wrong: this is an arbitrary-equality keyed lookup, not the handle-indexed
+  access pattern `CoreState`'s other tables use, and a small fixed cap can't even hold the ~400 PSOs
+  §6.2 documents as a "typical project").
+- **Never-stall**: a miss kicks an async compile and returns a **magenta fallback** immediately — built
+  from the REQUESTER'S OWN vertex module + vertex layout + bind group layouts (only the fragment stage
+  swaps to a trivial, arity-matched magenta shader generated as WGSL text at runtime), so it's correct
+  for any pass uniformly, with no assumption about a specific vertex layout. Every subsequent request
+  for that same key returns the fallback until the real PSO is ready, then the cached real PSO.
+- **The async primitive is emulated, not native**: `wgpuDeviceCreateRenderPipelineAsync` is listed as
+  unimplemented in wgpu-native (confirmed on trunk, not just the vendored release — it panics
+  "not implemented" if called). `ke_gpu_device::create_render_pipeline_async` stays an
+  implementation-agnostic ABI contract (`ke_render_core` has no idea which strategy backs it, nor
+  would a browser backend need to); the webgpu backend specifically emulates it by dispatching the
+  real, synchronous compile onto a caller-supplied `ke_scheduler` (falls back to synchronous
+  compile-then-callback if no scheduler is wired — never hangs, just isn't async). Two real bugs were
+  found and fixed building this: (1) every pass previously cached the PSO **handle** once at setup and
+  reused it forever — since setup happens before the async compile finishes, that handle was
+  permanently the magenta one; every pass now stores its full `ke_gpu_render_pipeline_params` and
+  re-queries `get_or_create_pipeline` every `record()` call instead. (2) a dispatched `ke_task`'s
+  memory is only freed by `wait()`, called exactly once — the compile job now retains a caller-added
+  shader-module ref (since the pass's own `defer destroy_shader_module` fires before the async compile
+  actually runs) and the device reaps/`flush`es dispatched tasks (`flush_pipeline_compiles`, called
+  before `ke_render_core`'s own teardown — the same shutdown-ordering fix shape as
+  `ke_runtime::flush_render`).
+- **Manual verification seam**: `KE_PSO_ASYNC_DELAY_MS` (+ `KE_PSO_ASYNC_DELAY_BLEND_ONLY=1` to scope
+  it to blend-enabled PSOs only, so an already-warm opaque scene stays correct while one new
+  blend object visibly flashes magenta then resolves) — env-var gated, never engaged unless a
+  developer sets it, not part of any shipped path. Confirmed working end-to-end this way: an object
+  using a brand-new PSO renders magenta for the artificial delay, then swaps to correct shading, while
+  pre-existing geometry using already-resolved PSOs is unaffected throughout.
+- **Not built**: the ubershader (item 2 below) — every miss today falls back to magenta regardless of
+  whether the request would have been ubershader-compatible. The distinction below (ubershader vs
+  magenta) is still the target design; only the magenta path exists.
+
+The **original design** (kept below as the as-yet-unbuilt target):
 
 1. Look up the request in the ubershader compatibility map.
 2. **Ubershader-compatible** (PBR forward, shadow caster, depth prepass, basic compute): render with the ubershader pipeline — a single large precompiled PSO that handles ~95% of common cases via dynamic branches and uniform-driven feature toggles. Visually nearly identical; ~10-20% slower per draw due to branchier shader.
@@ -1214,7 +1257,9 @@ Doc carried onto `feat/render-v2-zig`; Slang shaders + L3 C ABI headers ported a
 - `KernelEngine.Render.Modern` runtime module: device + render core at `on_load`; each pass registered as an **unpinned** runtime system with an access list mixing component reads and render-resource tag-cids; reads components via `ke_system_ctx`.
 - `example_01` opts into Modern via DI; both renderers selectable. **Hard gate: example_01 visually matches Bgfx.**
 
-### Phase G3.5 — Runtime snapshot pipelining (runtime §16) — MERGE-BLOCKING (4-5 sessions)
+### Phase G3.5 — Runtime snapshot pipelining (runtime §16) — MERGE-BLOCKING — DONE
+**Status: shipped, gate satisfied.** The as-built mechanism diverged from the plan below (which assumed a `ke_ecs` double-buffer that turned out unbuildable — flecs readonly mode is non-reentrant); `RuntimeArchitectureV2.md` §16.9 records what actually shipped (runtime-owned extract + async `tick()`), and the shutdown crash that was the last open issue is fixed (§9.4). The original plan text is kept below as the design log.
+
 With a multi-pass scene now running (G3), implement the deferred `RuntimeArchitectureV2.md` §16 component snapshot — this branch's shared deliverable with render v2, not a later option (§9.4): `ke_ecs` double-buffer contract (`component_register_v3` + `KE_COMPONENT_DOUBLE_BUFFERED` + `swap_snapshots`), flecs `X_live`/`X_snap` impl + phase-aware routing, startup inference over render-system access lists, scheduler swap at the phase boundary. Render code is untouched (reads via `ke_system_ctx`). **Hard gate: sim N+1 ‖ render N pipelines; the branch does not merge to main without it.**
 
 ### Phase G4 — PSO Mechanism 1 (ubershader + magenta) (3-4 sessions)
@@ -1385,7 +1430,8 @@ The previous branch (`feat/render-v2`) was authored before the kernel include re
 - [x] Lock the structural §13 questions: Zig source layout (§13.2) and the L4/L5/L6 surface (§13.3) — **decided**: render core is C ABI (Option A), the render-graph object is eliminated, passes are runtime systems ordered by access-list, resources are tag-component cids (§7).
 - [x] **Module decomposition (§9.8), including the physical-plugin split.** Every render pass (tonemap, skybox, ui, gbuffer, shadow, cluster, deferred_lighting, forward) is its own Zig-built shared library with its own factory/shaders/build files; `render_module.zig` is a thin composition-root aggregator. Native `ke_configuration` (§9.9) also shipped. Remaining: wire each pass's tunables through `ke_configuration` instead of hardcoded factory-param defaults (Phase G7).
 - [x] Validate wgpu-native thread-safety (§13.8) for parallel command recording — confirmed (§9.7). The shutdown crash once suspected to be a surface acquire/present thread-affinity issue was root-caused as an unjoined-render-task lifecycle bug instead (§9.4/§9.7, `RuntimeArchitectureV2.md` §16.9) and is fixed; no thread-affinity gate remains on this branch. `frames_in_flight` depth (§13.9) still unpicked.
-- [x] **Runtime snapshot (§9.4) — MERGE-BLOCKING — implemented, one open issue.** `RuntimeArchitectureV2.md` §16.9 is the as-built record: the extension in §16.3 (`ke_ecs` double-buffer + `swap_snapshots`) turned out unbuildable (flecs readonly mode is non-reentrant); what shipped is a runtime-owned extract + async `tick()` that joins the previous render before each extract. Sim/render genuinely pipeline (measured ~55-60% FPS gain on `09_many_lights`, not yet isolated from the extract-vs-shadow-entity substrate change in the same measurement). **Blocking further merge confidence:** the surface-affinity shutdown crash above.
+- [x] **Runtime snapshot (§9.4) — MERGE-BLOCKING gate — SATISFIED.** `RuntimeArchitectureV2.md` §16.9 is the as-built record: the extension in §16.3 (`ke_ecs` double-buffer + `swap_snapshots`) turned out unbuildable (flecs readonly mode is non-reentrant); what shipped is a runtime-owned extract + async `tick()` that joins the previous render before each extract. Sim/render genuinely pipeline (measured ~55-60% FPS gain on `09_many_lights`, not yet isolated from the extract-vs-shadow-entity substrate change in the same measurement). The shutdown crash that briefly held merge confidence was root-caused (an unjoined render task racing `UnloadModules`, not thread affinity) and fixed via `ke_runtime::flush_render` — no open blocker remains on the pipelining gate.
+- [x] **PSO Mechanism 1 (§6) — dedup + never-stall half shipped.** `ke_render_core::get_or_create_pipeline` is the sole PSO authority; async compile emulated via a caller-supplied `ke_scheduler` (wgpu-native's own async primitive is unimplemented, confirmed on trunk); magenta fallback verified end-to-end visually (isolated to a single new object, pre-existing geometry unaffected). **Not built**: the ubershader (ubershader-vs-magenta compatibility split) — every miss falls back to magenta today regardless of compatibility. Mechanisms 2 (build-time manifest) and 3 (disk cache) remain ~0% — see §6.6.
 - [ ] **Start G1**: render-v2 `build.zig` linking the webgpu distribution + a triangle through L3 from a `.slang` module.
 
 **This doc is the contract.** When G1-G3 ship, every word in §3 + §4 + §5 should match the code or this doc gets revised.
