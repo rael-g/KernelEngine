@@ -11,6 +11,7 @@
 #include "mesh_shape_internal.h"
 #include "../third_party/tomlc99/toml.h"
 
+#include <stdalign.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -318,6 +319,91 @@ static void vt_free_font(ke_asset_resolver *self, ke_font_data *data) {
         s->font_loader->free_font(s->font_loader, data);
 }
 
+// ── Cached load-from-path ───────────────────────────────────────────────────
+
+static ke_texture_handle vt_resolve_texture_into(ke_asset_resolver *self, ke_render_core *core,
+                                                  const char *path, ke_error **out_error) {
+    if (!self || !self->handle || !core || !path) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return KE_TEXTURE_NONE;
+    }
+    ke_texture_handle cached;
+    if (core->try_get_texture(core, path, &cached)) return cached;
+
+    ke_texture_data *data = NULL;
+    if (!vt_resolve_texture(self, path, &data, out_error)) return KE_TEXTURE_NONE;
+
+    ke_texture_handle h = core->upload_texture(core, path, data->width, data->height, data->pixels, out_error);
+    vt_free_texture(self, data);
+    return h;
+}
+
+static ke_mesh_handle vt_resolve_mesh_into(ke_asset_resolver *self, ke_render_core *core,
+                                          const char *path, ke_error **out_error) {
+    if (!self || !self->handle || !core || !path) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return KE_MESH_NONE;
+    }
+    ke_mesh_handle cached;
+    if (core->try_get_mesh(core, path, &cached)) return cached;
+
+    ke_mesh_shape_data shape;
+    if (!vt_resolve_mesh(self, path, &shape, out_error)) return KE_MESH_NONE;
+
+    // ke_render_core's vertex-buffer layout is 11 floats (pos3+nrm3+uv2+tan3);
+    // ke_vertex carries a 12th (bitangent-sign tw) the GPU pipeline doesn't bind
+    // — drop it here rather than upload padding the shader never reads.
+    float *gpu_verts = (float *)ke_alloc((size_t)shape.vertex_count * 11 * sizeof(float), alignof(float));
+    if (!gpu_verts) {
+        vt_free_mesh(self, &shape);
+        KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "vertex conversion buffer allocation failed");
+        return KE_MESH_NONE;
+    }
+    for (uint32_t i = 0; i < shape.vertex_count; ++i) {
+        const ke_vertex *v = &shape.vertices[i];
+        float *dst = &gpu_verts[i * 11];
+        dst[0] = v->x;  dst[1] = v->y;  dst[2] = v->z;
+        dst[3] = v->nx; dst[4] = v->ny; dst[5] = v->nz;
+        dst[6] = v->u;  dst[7] = v->v;
+        dst[8] = v->tx; dst[9] = v->ty; dst[10] = v->tz;
+    }
+
+    ke_mesh_handle h = core->upload_mesh(core, path, gpu_verts,
+                                        (size_t)shape.vertex_count * 11 * sizeof(float),
+                                        shape.indices, shape.index_count, out_error);
+    ke_free(gpu_verts);
+    vt_free_mesh(self, &shape);
+    return h;
+}
+
+static ke_material_handle vt_resolve_material_into(ke_asset_resolver *self, ke_render_core *core,
+                                                   const char *path, ke_error **out_error) {
+    if (!self || !self->handle || !core || !path) {
+        KE_ERROR_SET(out_error, &KE_ERROR_INVALID_ARGUMENT, "invalid argument");
+        return KE_MATERIAL_NONE;
+    }
+    ke_material_handle cached;
+    if (core->try_get_material(core, path, &cached)) return cached;
+
+    ke_material_spec spec;
+    if (!vt_resolve_material(self, path, &spec, out_error)) return KE_MATERIAL_NONE;
+
+    ke_texture_handle albedo = KE_TEXTURE_NONE;
+    if (spec.albedo_path[0] != '\0') {
+        albedo = vt_resolve_texture_into(self, core, spec.albedo_path, out_error);
+        if (!ke_texture_is_valid(albedo)) return KE_MATERIAL_NONE;
+    }
+    ke_texture_handle normal = KE_TEXTURE_NONE;
+    if (spec.normal_path[0] != '\0') {
+        normal = vt_resolve_texture_into(self, core, spec.normal_path, out_error);
+        if (!ke_texture_is_valid(normal)) return KE_MATERIAL_NONE;
+    }
+
+    return core->create_material(core, path, spec.base_color, spec.metallic, spec.roughness,
+                                 albedo, normal, spec.alpha_mode, spec.alpha_cutoff,
+                                 spec.ior, spec.distortion_strength, 0, out_error);
+}
+
 static void vt_destroy(ke_asset_resolver *self) {
     if (!self || !self->handle) return;
     asset_resolver_state *s = (asset_resolver_state *)self->handle;
@@ -357,6 +443,9 @@ ke_asset_resolver_handle ke_asset_resolver_create(ke_image_loader *image_loader,
     s->api.resolve_material = vt_resolve_material;
     s->api.resolve_font     = vt_resolve_font;
     s->api.free_font        = vt_free_font;
+    s->api.resolve_texture_into  = vt_resolve_texture_into;
+    s->api.resolve_mesh_into     = vt_resolve_mesh_into;
+    s->api.resolve_material_into = vt_resolve_material_into;
 
     ke_asset_resolver_handle out;
     out.ref     = &s->api;

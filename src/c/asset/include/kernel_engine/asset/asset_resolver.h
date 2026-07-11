@@ -18,6 +18,8 @@
 // resolver dispatches based on file extension.
 
 #include <kernel_engine/render/material_file.h>
+#include <kernel_engine/render/handles.h>
+#include <kernel_engine/render/core/render_core.h>
 #include <kernel_engine/asset/mesh_shape.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/mesh_data.h>
@@ -85,6 +87,37 @@ extern "C"
                                   ke_error                **out_error);
 
         void (*free_font)(struct ke_asset_resolver *self, ke_font_data *data);
+
+        // ── Cached load-from-path (decode + upload + dedup, one call) ───────
+        //
+        // The path itself is the resource_cache key (see kernel_engine/resource_cache),
+        // so a second call with the same path returns the already-uploaded handle
+        // (retained) without touching disk or the GPU again. `core` is the render
+        // core to upload into — a caller composes the resolver (CPU decode, this
+        // plugin) with whichever render core owns the GPU resources; the resolver
+        // holds no reference to it beyond the call. Callers own the returned
+        // reference and release it like any other core handle.
+
+        /// Resolves and uploads a texture, deduped by `path`. On a cache hit,
+        /// nothing is decoded. KE_TEXTURE_NONE on failure (see resolve_texture's
+        /// error cases; upload failure also reports via out_error).
+        ke_texture_handle (*resolve_texture_into)(struct ke_asset_resolver *self,
+                                                  ke_render_core *core, const char *path,
+                                                  ke_error **out_error);
+
+        /// Resolves and uploads a mesh, deduped by `path`. Today only the
+        /// "res://primitives/*" shapes resolve_mesh understands; a broader
+        /// path is a future-loader concern. KE_MESH_NONE on failure.
+        ke_mesh_handle (*resolve_mesh_into)(struct ke_asset_resolver *self,
+                                           ke_render_core *core, const char *path,
+                                           ke_error **out_error);
+
+        /// Resolves a `.material` file, resolving/uploading its albedo and normal
+        /// textures (each deduped by their own path) and creating the material,
+        /// deduped by `path`. KE_MATERIAL_NONE on failure.
+        ke_material_handle (*resolve_material_into)(struct ke_asset_resolver *self,
+                                                    ke_render_core *core, const char *path,
+                                                    ke_error **out_error);
 
     } ke_asset_resolver;
 

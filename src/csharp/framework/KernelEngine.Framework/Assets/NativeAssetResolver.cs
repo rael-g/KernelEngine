@@ -153,6 +153,67 @@ public sealed unsafe class NativeAssetResolver : IDisposable
         return MaterialSpec.FromNative(spec);
     }
 
+    /// <summary>
+    /// Resolves and uploads a texture into <paramref name="core"/>, deduped by
+    /// <paramref name="path"/> — a second call with the same path returns the
+    /// already-uploaded handle (retained) without decoding or uploading again.
+    /// All decode/dedup/upload logic runs native-side; this is a plain relay.
+    /// </summary>
+    /// <exception cref="KernelError">Resolve or upload failure.</exception>
+    public ke_texture_handle ResolveTextureInto(void* core, string path)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
+        var bytes = Encoding.UTF8.GetBytes(path + "\0");
+        ke_texture_handle h;
+        ke_error* err = null;
+        fixed (byte* p = bytes)
+            h = _native->resolve_texture_into(_native, core, (sbyte*)p, &err);
+        KernelError.ThrowIfFailed(h.bits != uint.MaxValue, err, "resolve_texture_into");
+        return h;
+    }
+
+    /// <summary>
+    /// Resolves and uploads a mesh into <paramref name="core"/>, deduped by
+    /// <paramref name="path"/>. All conversion/dedup/upload logic runs
+    /// native-side; this is a plain relay.
+    /// </summary>
+    /// <exception cref="KernelError">Resolve or upload failure.</exception>
+    public ke_mesh_handle ResolveMeshInto(void* core, string path)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
+        var bytes = Encoding.UTF8.GetBytes(path + "\0");
+        ke_mesh_handle h;
+        ke_error* err = null;
+        fixed (byte* p = bytes)
+            h = _native->resolve_mesh_into(_native, core, (sbyte*)p, &err);
+        KernelError.ThrowIfFailed(h.bits != uint.MaxValue, err, "resolve_mesh_into");
+        return h;
+    }
+
+    /// <summary>
+    /// Resolves a <c>.material</c> file (including its albedo/normal textures) and
+    /// creates the material in <paramref name="core"/>, deduped by <paramref name="path"/>.
+    /// All parsing/dedup/upload logic runs native-side; this is a plain relay.
+    /// </summary>
+    /// <exception cref="KernelError">Resolve or upload failure.</exception>
+    public ke_material_handle ResolveMaterialInto(void* core, string path)
+    {
+        ObjectDisposedException.ThrowIf(_native == null, this);
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
+        var bytes = Encoding.UTF8.GetBytes(path + "\0");
+        ke_material_handle h;
+        ke_error* err = null;
+        fixed (byte* p = bytes)
+            h = _native->resolve_material_into(_native, core, (sbyte*)p, &err);
+        KernelError.ThrowIfFailed(h.bits != uint.MaxValue, err, "resolve_material_into");
+        return h;
+    }
+
     /// <inheritdoc cref="IDisposable.Dispose"/>
     public void Dispose()
     {

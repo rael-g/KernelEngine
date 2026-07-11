@@ -11,6 +11,10 @@ ke_asset_assimp
 --include-directory
 ../../../../c/logger/include
 --include-directory
+../../../../c/ecs/include
+--include-directory
+../../../../c/resource_cache/include
+--include-directory
 ../../../../c/render/include
 --include-directory
 ../../../../c/scheduler/include
@@ -41,6 +45,10 @@ ke_task=KernelEngine.Scheduler.Native.ke_task
 ke_vertex=KernelEngine.Render.Native.ke_vertex
 ke_material_spec=KernelEngine.Render.Native.ke_material_spec
 ke_font_data=KernelEngine.Text.Native.ke_font_data
+ke_render_core=void
+ke_mesh_handle=KernelEngine.Render.Native.ke_mesh_handle
+ke_texture_handle=KernelEngine.Render.Native.ke_texture_handle
+ke_material_handle=KernelEngine.Render.Native.ke_material_handle
 ke_result=ke_result
 --exclude
 ke_result
@@ -50,6 +58,10 @@ ke_task
 ke_vertex
 ke_material_spec
 ke_font_data
+ke_render_core
+ke_mesh_handle
+ke_texture_handle
+ke_material_handle
 --config
 multi-file
 latest-codegen
