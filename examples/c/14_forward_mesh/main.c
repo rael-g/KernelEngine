@@ -86,12 +86,12 @@ int main(void)
     ke_render_core *core = ke_render_module_core(render.ref);
 
     // ── Upload the cube + populate the scene (camera + one mesh entity) ──────
-    ke_mesh_handle cube_h = core->upload_mesh(core, cube, sizeof(cube), cube_idx,
+    ke_mesh_handle cube_h = core->upload_mesh(core, NULL, cube, sizeof(cube), cube_idx,
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &err);
     if (!ke_mesh_is_valid(cube_h)) die("upload_mesh", err);
 
     const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };
-    ke_material_handle mat = core->create_material(core, orange, 0.0f, 0.5f, KE_TEXTURE_NONE, KE_TEXTURE_NONE,
+    ke_material_handle mat = core->create_material(core, NULL, orange, 0.0f, 0.5f, KE_TEXTURE_NONE, KE_TEXTURE_NONE,
                                                     KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, 0, &err);
     if (!ke_material_is_valid(mat)) die("create_material", err);
 

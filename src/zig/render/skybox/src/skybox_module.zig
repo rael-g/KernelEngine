@@ -120,7 +120,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
-        .{ .idx = c.KE_HANDLE_NONE };
+        .{ .bits = c.KE_HANDLE_NONE };
     const env_view = core.*.texture_view.?(core, env);
     const depth_view = pc.*.read.?(pc, "depth");
     const smp = core.*.sampler.?(core);

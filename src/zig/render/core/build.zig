@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) void {
     const ke_runtime   = b.option([]const u8, "ke-runtime-include",   "kernel_engine/runtime include dir")   orelse @panic("-Dke-runtime-include required");
     const ke_spatial   = b.option([]const u8, "ke-spatial-include",   "kernel_engine/spatial include dir")   orelse @panic("-Dke-spatial-include required");
     const ke_render    = b.option([]const u8, "ke-render-include",    "kernel_engine/render include dir")    orelse @panic("-Dke-render-include required");
+    const ke_resource_cache = b.option([]const u8, "ke-resource-cache-include", "kernel_engine/resource_cache include dir") orelse @panic("-Dke-resource-cache-include required");
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const ke_tonemap   = b.option([]const u8, "ke-tonemap-include",   "ke_render_tonemap plugin include dir") orelse @panic("-Dke-tonemap-include required");
@@ -34,11 +35,12 @@ pub fn build(b: *std.Build) void {
         .optimize  = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_allocator, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_logger, ke_self, ke_tonemap, ke_skybox, ke_ui, ke_gbuffer, ke_shadow, ke_cluster, ke_deferred_lighting, ke_forward }) |inc| {
+    inline for (.{ ke_common, ke_allocator, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_resource_cache, ke_logger, ke_self, ke_tonemap, ke_skybox, ke_ui, ke_gbuffer, ke_shadow, ke_cluster, ke_deferred_lighting, ke_forward }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.linkSystemLibrary("ke_resource_cache_default", .{}); // refcount + path-keyed dedup for mesh/texture/material
     mod.linkSystemLibrary("ke_runtime", .{}); // ke_system_ctx_* used by the forward pass
     mod.linkSystemLibrary("ke_render_tonemap", .{}); // the tonemap pass plugin
     mod.linkSystemLibrary("ke_render_skybox", .{}); // the skybox pass plugin

@@ -102,7 +102,7 @@ const ForwardModule = struct {
     obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 2
     obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    env_cubemap: c.ke_texture_handle = .{ .idx = c.KE_HANDLE_NONE },
+    env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
 
     draws: [MAX_DRAWS]Draw = undefined,
 
@@ -162,8 +162,8 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const dev = fwd.device;
     const core = fwd.core;
     const env_view = core.*.texture_view.?(core, fwd.env_cubemap);
-    const white_view = core.*.texture_view.?(core, .{ .idx = 0 });
-    const black_cube_view = core.*.texture_view.?(core, .{ .idx = c.KE_HANDLE_NONE });
+    const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core));
+    const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE });
     const hdr_opaque_view = core.*.resource_view.?(core, "hdr_opaque");
     const smp = core.*.sampler.?(core);
 
@@ -238,8 +238,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
-        .{ .idx = c.KE_HANDLE_NONE };
-    if (want_env.idx != fwd.env_cubemap.idx or fwd.frame_bind_group == c.KE_GPU_INVALID_HANDLE) {
+        .{ .bits = c.KE_HANDLE_NONE };
+    if (want_env.bits != fwd.env_cubemap.bits or fwd.frame_bind_group == c.KE_GPU_INVALID_HANDLE) {
         fwd.env_cubemap = want_env;
         rebuildFrameBindGroup(fwd);
     }
@@ -346,7 +346,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     fwd.light_cid = light_cid;
     fwd.ambient_cid = ambient_cid;
     fwd.skybox_cid = skybox_cid;
-    fwd.env_cubemap = .{ .idx = c.KE_HANDLE_NONE };
+    fwd.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
 
     const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
     const frame_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{

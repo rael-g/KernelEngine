@@ -14,25 +14,31 @@ public interface IRenderResources
     /// <summary>
     /// Uploads interleaved position+normal+uv vertices and 16-bit indices.
     /// Throws on failure — a bad upload is never swallowed.
+    /// <paramref name="key"/> (optional) enables dedup: a non-null key already
+    /// resident returns the existing handle with its refcount incremented,
+    /// uploading nothing. The result always carries one reference; balance it
+    /// with <see cref="ReleaseMesh"/>.
     /// </summary>
-    MeshHandle UploadMesh(ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices);
+    MeshHandle UploadMesh(ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices, string? key = null);
 
     /// <summary>
     /// Uploads an RGBA8 texture (<paramref name="rgba"/> is width*height*4 bytes,
-    /// row-major). Throws on failure.
+    /// row-major). Throws on failure. <paramref name="key"/> behaves as in
+    /// <see cref="UploadMesh"/>.
     /// </summary>
-    TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba);
+    TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba, string? key = null);
 
     /// <summary>
     /// Uploads an RGBA8 cubemap: 6 faces of <paramref name="faceSize"/>² in the
     /// order +X,-X,+Y,-Y,+Z,-Z (concatenated). Used as a skybox background and the
-    /// image-based-lighting environment. Throws on failure.
+    /// image-based-lighting environment. Throws on failure. <paramref name="key"/>
+    /// behaves as in <see cref="UploadMesh"/> (cubemaps share the texture cache).
     /// </summary>
-    TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces);
+    TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces, string? key = null);
 
     /// <summary>
     /// Creates a glTF metallic-roughness material: a base-color factor multiplied
-    /// by an albedo texture (default <c>TextureHandle.White</c> = flat color), plus
+    /// by an albedo texture (<c>null</c> = the built-in white = flat color), plus
     /// metallic (0 = dielectric, 1 = metal), roughness (0 = mirror, 1 = matte), and
     /// an optional tangent-space normal map (<c>null</c> = flat / no perturbation).
     /// <paramref name="alphaMode"/> selects which pass shades the material
@@ -48,10 +54,37 @@ public interface IRenderResources
     /// data); 0 = the pass's default/flat variant.
     /// </summary>
     MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
-                                  TextureHandle albedo = default, TextureHandle? normalMap = null,
+                                  TextureHandle? albedo = null, TextureHandle? normalMap = null,
                                   AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
                                   float ior = 1.5f, float distortionStrength = 0.05f,
-                                  uint shaderVariant = 0);
+                                  uint shaderVariant = 0, string? key = null);
+
+    /// <summary>The built-in 1×1 white texture (neutral albedo).</summary>
+    TextureHandle WhiteTexture { get; }
+
+    /// <summary>Adds one reference to a resource; balance with the matching release.</summary>
+    void RetainMesh(MeshHandle h);
+    /// <summary>Drops one reference; at zero the GPU objects are freed and the handle goes stale.</summary>
+    void ReleaseMesh(MeshHandle h);
+    /// <inheritdoc cref="RetainMesh"/>
+    void RetainTexture(TextureHandle h);
+    /// <inheritdoc cref="ReleaseMesh"/>
+    void ReleaseTexture(TextureHandle h);
+    /// <inheritdoc cref="RetainMesh"/>
+    void RetainMaterial(MaterialHandle h);
+    /// <inheritdoc cref="ReleaseMesh"/>
+    void ReleaseMaterial(MaterialHandle h);
+
+    /// <summary>
+    /// Path-keyed probe: on a cache hit returns true, sets <paramref name="handle"/>,
+    /// and retains it on the caller's behalf (as a keyed upload would). Lets a loader
+    /// skip decoding a file whose upload is already resident.
+    /// </summary>
+    bool TryGetMesh(string key, out MeshHandle handle);
+    /// <inheritdoc cref="TryGetMesh"/>
+    bool TryGetTexture(string key, out TextureHandle handle);
+    /// <inheritdoc cref="TryGetMesh"/>
+    bool TryGetMaterial(string key, out MaterialHandle handle);
 
     /// <summary>
     /// Queues a screen-space UI quad for this frame, drawn after tonemap so it

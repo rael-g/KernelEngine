@@ -18,15 +18,9 @@ public class HandleTests
     }
 
     [Fact]
-    public void TextureHandle_White_IsValid()
+    public void TextureHandle_None_IsInvalid()
     {
-        Assert.True(TextureHandle.White.IsValid);
-    }
-
-    [Fact]
-    public void TextureHandle_White_HasZeroValue()
-    {
-        Assert.Equal(0u, TextureHandle.White.Value);
+        Assert.False(TextureHandle.None.IsValid);
     }
 
     [Fact]

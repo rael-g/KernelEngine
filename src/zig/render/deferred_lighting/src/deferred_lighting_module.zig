@@ -73,7 +73,7 @@ const DeferredLightingModule = struct {
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, rebuilt on env change
     gbuf_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 1, rebuilt per frame (transient views)
-    env_cubemap: c.ke_texture_handle = .{ .idx = c.KE_HANDLE_NONE },
+    env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
 
     reads: [6][*c]const u8 = undefined,
     writes: [1][*c]const u8 = undefined,
@@ -129,8 +129,8 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     const dev = dl.device;
     const core = dl.core;
     const env_view = core.*.texture_view.?(core, dl.env_cubemap);
-    const white_view = core.*.texture_view.?(core, .{ .idx = 0 }); // 1x1 white
-    const black_cube_view = core.*.texture_view.?(core, .{ .idx = c.KE_HANDLE_NONE }); // black cube
+    const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core)); // 1x1 white
+    const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE }); // black cube
     const smp = core.*.sampler.?(core);
 
     // Shadow's outputs are looked up by name, not through a pointer to the
@@ -198,8 +198,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
-        .{ .idx = c.KE_HANDLE_NONE };
-    if (want_env.idx != dl.env_cubemap.idx) {
+        .{ .bits = c.KE_HANDLE_NONE };
+    if (want_env.bits != dl.env_cubemap.bits) {
         dl.env_cubemap = want_env;
         rebuildFrameBindGroup(dl);
     }
@@ -286,7 +286,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.light_cid = light_cid;
     dl.ambient_cid = ambient_cid;
     dl.skybox_cid = skybox_cid;
-    dl.env_cubemap = .{ .idx = c.KE_HANDLE_NONE };
+    dl.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
 
     const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
     // Set 0 layout — frame UBO (0) + shadow (4,5,6) + ibl (7,8). Bindings 1-3

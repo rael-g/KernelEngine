@@ -36,8 +36,8 @@ public unsafe partial struct ke_render_core
     [NativeTypeName("ke_bool (*)(struct ke_render_core *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_error**, byte> end_frame;
 
-    [NativeTypeName("ke_mesh_handle (*)(struct ke_render_core *, const void *, size_t, const uint16_t *, uint32_t, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_core*, void*, nuint, ushort*, uint, ke_error**, ke_mesh_handle> upload_mesh;
+    [NativeTypeName("ke_mesh_handle (*)(struct ke_render_core *, const char *, const void *, size_t, const uint16_t *, uint32_t, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, void*, nuint, ushort*, uint, ke_error**, ke_mesh_handle> upload_mesh;
 
     [NativeTypeName("ke_bool (*)(struct ke_render_core *, ke_mesh_handle, ke_gpu_buffer *, ke_gpu_buffer *, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_mesh_handle, ulong*, ulong*, uint*, byte> mesh_buffers;
@@ -45,11 +45,11 @@ public unsafe partial struct ke_render_core
     [NativeTypeName("void (*)(struct ke_render_core *, float, float, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, float, float, float, float, void> set_clear_color;
 
-    [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *, uint32_t, uint32_t, const void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_core*, uint, uint, void*, ke_error**, ke_texture_handle> upload_texture;
+    [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *, const char *, uint32_t, uint32_t, const void *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, uint, uint, void*, ke_error**, ke_texture_handle> upload_texture;
 
-    [NativeTypeName("ke_material_handle (*)(struct ke_render_core *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, uint32_t, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_core*, float*, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, uint, ke_error**, ke_material_handle> create_material;
+    [NativeTypeName("ke_material_handle (*)(struct ke_render_core *, const char *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, uint32_t, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, float*, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, uint, ke_error**, ke_material_handle> create_material;
 
     [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_render_core *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ulong> material_layout;
@@ -63,8 +63,8 @@ public unsafe partial struct ke_render_core
     [NativeTypeName("float (*)(struct ke_render_core *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_material_handle, float> material_alpha_cutoff;
 
-    [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *, uint32_t, const void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_core*, uint, void*, ke_error**, ke_texture_handle> upload_cubemap;
+    [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *, const char *, uint32_t, const void *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, uint, void*, ke_error**, ke_texture_handle> upload_cubemap;
 
     [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_core *, ke_texture_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_texture_handle, ulong> texture_view;
@@ -98,4 +98,34 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("uint32_t (*)(struct ke_render_core *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_material_handle, uint> material_shader_variant;
+
+    [NativeTypeName("void (*)(struct ke_render_core *, ke_mesh_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_mesh_handle, void> retain_mesh;
+
+    [NativeTypeName("void (*)(struct ke_render_core *, ke_mesh_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_mesh_handle, void> release_mesh;
+
+    [NativeTypeName("void (*)(struct ke_render_core *, ke_texture_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_texture_handle, void> retain_texture;
+
+    [NativeTypeName("void (*)(struct ke_render_core *, ke_texture_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_texture_handle, void> release_texture;
+
+    [NativeTypeName("void (*)(struct ke_render_core *, ke_material_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_material_handle, void> retain_material;
+
+    [NativeTypeName("void (*)(struct ke_render_core *, ke_material_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_material_handle, void> release_material;
+
+    [NativeTypeName("ke_bool (*)(struct ke_render_core *, const char *, ke_mesh_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ke_mesh_handle*, byte> try_get_mesh;
+
+    [NativeTypeName("ke_bool (*)(struct ke_render_core *, const char *, ke_texture_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ke_texture_handle*, byte> try_get_texture;
+
+    [NativeTypeName("ke_bool (*)(struct ke_render_core *, const char *, ke_material_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, ke_material_handle*, byte> try_get_material;
+
+    [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_texture_handle> white_texture;
 }

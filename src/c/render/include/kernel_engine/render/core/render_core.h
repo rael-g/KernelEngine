@@ -134,7 +134,11 @@ struct ke_render_core
     // Uploads interleaved vertices (position float3 + normal float3) and 16-bit
     // indices to device buffers; returns a handle a ke_mesh_component references.
     // The forward pass resolves the handle to draw. KE_MESH_NONE on failure.
-    ke_mesh_handle (*upload_mesh)(struct ke_render_core *self,
+    // `key` (optional, may be NULL) enables dedup: a non-NULL key already resident
+    // returns the existing handle with its refcount bumped, uploading nothing. NULL
+    // always uploads a fresh mesh. Either way the result starts with one reference;
+    // the caller balances it with release_mesh.
+    ke_mesh_handle (*upload_mesh)(struct ke_render_core *self, const char *key,
                                   const void *vertices, size_t vertices_size,
                                   const uint16_t *indices, uint32_t index_count,
                                   ke_error **out_error);
@@ -149,9 +153,11 @@ struct ke_render_core
     void (*set_clear_color)(struct ke_render_core *self, float r, float g, float b, float a);
 
     // ── Material resources (glTF base color factor × albedo texture) ──────
-    // Uploads an RGBA8 texture (width*height*4 bytes, row-major). Handle 0 is a
-    // built-in 1×1 white texture. KE_TEXTURE_NONE on failure.
-    ke_texture_handle (*upload_texture)(struct ke_render_core *self,
+    // Uploads an RGBA8 texture (width*height*4 bytes, row-major). The built-in
+    // white texture is available via white_texture(). KE_TEXTURE_NONE on failure.
+    // `key` behaves as in upload_mesh (NULL = no dedup; a resident key returns the
+    // cached handle, retained). Cubemaps share this texture cache and keyspace.
+    ke_texture_handle (*upload_texture)(struct ke_render_core *self, const char *key,
                                         uint32_t width, uint32_t height,
                                         const void *rgba, ke_error **out_error);
     // Creates a material: base_color factor multiplied by the albedo texture
@@ -167,7 +173,9 @@ struct ke_render_core
     // shader difference resolves to a distinct PSO via get_or_create_pipeline,
     // not just different bind-group data). 0 = the pass's default/flat variant;
     // an out-of-range value resolves to 0. CPU-side only, like alpha_mode.
-    ke_material_handle (*create_material)(struct ke_render_core *self,
+    // `key` behaves as in upload_mesh (NULL = no dedup; a resident key returns the
+    // cached material, retained).
+    ke_material_handle (*create_material)(struct ke_render_core *self, const char *key,
                                           const float *base_color, // rgba (4 floats)
                                           float metallic, float roughness,
                                           ke_texture_handle albedo,
@@ -195,11 +203,13 @@ struct ke_render_core
     // Uploads an RGBA8 cubemap: 6 faces of face_size×face_size, +X,-X,+Y,-Y,+Z,-Z
     // concatenated. Returns a texture handle whose view is cube-dimensioned.
     // KE_TEXTURE_NONE on failure.
-    ke_texture_handle (*upload_cubemap)(struct ke_render_core *self,
+    // `key` behaves as in upload_mesh (NULL = no dedup). Cubemaps live in the same
+    // texture cache as upload_texture and share its keyspace.
+    ke_texture_handle (*upload_cubemap)(struct ke_render_core *self, const char *key,
                                         uint32_t face_size, const void *faces,
                                         ke_error **out_error);
-    // The GPU view for a texture/cubemap handle (for a pass to bind it). An
-    // unknown handle resolves to the built-in white texture (handle 0).
+    // The GPU view for a texture/cubemap handle (for a pass to bind it). A stale or
+    // unknown handle resolves to the built-in white texture.
     ke_gpu_texture_view (*texture_view)(struct ke_render_core *self, ke_texture_handle h);
     // The shared filtering sampler the core creates (linear, repeat).
     ke_gpu_sampler (*sampler)(struct ke_render_core *self);
@@ -249,6 +259,35 @@ struct ke_render_core
     // get_or_create_pipeline. Appended at the tail so adding it never shifts
     // existing slot offsets.
     uint32_t (*material_shader_variant)(struct ke_render_core *self, ke_material_handle h);
+
+    // ── Resource lifetime (refcount + path-keyed dedup) ─────────────────────
+    // The core owns one cache per resource kind (mesh / texture+cubemap /
+    // material). upload_*/create_material register the result there with one
+    // reference; retain adds a reference, release drops one. At zero references
+    // the GPU objects are destroyed and the slot recycled (a later handle into
+    // the reused slot carries a new generation, so a handle kept past its
+    // release no longer resolves — see handles.h). Releasing an unknown or
+    // already-stale handle is a no-op.
+    void (*retain_mesh)(struct ke_render_core *self, ke_mesh_handle h);
+    void (*release_mesh)(struct ke_render_core *self, ke_mesh_handle h);
+    void (*retain_texture)(struct ke_render_core *self, ke_texture_handle h);
+    void (*release_texture)(struct ke_render_core *self, ke_texture_handle h);
+    void (*retain_material)(struct ke_render_core *self, ke_material_handle h);
+    void (*release_material)(struct ke_render_core *self, ke_material_handle h);
+
+    // Path-keyed probe: on a cache hit returns true, writes the resident handle,
+    // and retains it on the caller's behalf (as a keyed upload would). Lets a
+    // loader skip decoding a file whose upload is already resident. `key` must be
+    // non-NULL. A miss returns false and leaves *out untouched. try_get_texture
+    // also serves cubemaps (shared cache).
+    ke_bool (*try_get_mesh)(struct ke_render_core *self, const char *key, ke_mesh_handle *out);
+    ke_bool (*try_get_texture)(struct ke_render_core *self, const char *key, ke_texture_handle *out);
+    ke_bool (*try_get_material)(struct ke_render_core *self, const char *key, ke_material_handle *out);
+
+    // The built-in 1×1 white texture, resolvable everywhere a neutral albedo is
+    // wanted. Was implicitly "handle 0" before handles became generational; now
+    // exposed explicitly since no literal handle value is meaningful.
+    ke_texture_handle (*white_texture)(struct ke_render_core *self);
 };
 
 typedef struct ke_render_core_handle

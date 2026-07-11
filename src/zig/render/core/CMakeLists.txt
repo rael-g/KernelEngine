@@ -49,6 +49,7 @@ add_custom_command(
         "-Dke-runtime-include=${CMAKE_SOURCE_DIR}/src/c/runtime/include"
         "-Dke-spatial-include=${CMAKE_SOURCE_DIR}/src/c/spatial/include"
         "-Dke-render-include=${CMAKE_SOURCE_DIR}/src/c/render/include"
+        "-Dke-resource-cache-include=${CMAKE_SOURCE_DIR}/src/c/resource_cache/include"
         "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-tonemap-include=${CMAKE_SOURCE_DIR}/src/zig/render/tonemap/include"
@@ -72,6 +73,7 @@ add_custom_command(
         "${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "${SHADER_GEN_DIR}/magenta.fs.wgsl"
         ke_common
+        ke_resource_cache_default
         ke_runtime
         ke_render_tonemap_zig
         ke_render_skybox_zig

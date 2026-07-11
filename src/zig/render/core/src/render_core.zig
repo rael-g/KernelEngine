@@ -7,6 +7,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/gpu_surface_ext.h");
     @cInclude("kernel_engine/render/core/render_core.h");
     @cInclude("kernel_engine/render/core/pass_context.h");
+    @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
 pub const gpa = std.heap.c_allocator;
@@ -34,14 +35,12 @@ const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");
 const asset_upload = @import("asset_upload.zig");
 const pipeline_cache = @import("pipeline_cache.zig");
+const slot_map = @import("slot_map.zig");
 
 pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
 pub const NUM_PRECREATED_ENCODERS = 9; // command encoders pre-created per frame (≥ pass count)
 pub const MAX_COLOR_ATTACH = 8;
-pub const MAX_MESHES = 256;
-pub const MAX_TEXTURES = 256;
-pub const MAX_MATERIALS = 256;
 pub const MAX_UPLOADS = 4096; // deferred buffer uploads per frame
 const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024; // per-frame staging for upload data copies
 
@@ -78,6 +77,13 @@ pub const Material = struct {
     // GPU state itself, same as alpha_mode above. 0 = the pass's default/flat
     // shader variant.
     shader_variant: u32,
+    // The textures this material's bind group samples, held with one reference
+    // each (retained at create, released when the material is destroyed). Keeps
+    // the bind group's views alive independently of the caller's own references
+    // to those textures — releasing a shared texture elsewhere can't dangle this
+    // material. Resolved values (fallbacks included), not the caller's raw args.
+    albedo: c.ke_texture_handle,
+    normal: c.ke_texture_handle,
 };
 
 pub const Resource = struct {
@@ -152,20 +158,30 @@ pub const CoreState = struct {
     upload_arena: []u8,
     upload_arena_offset: std.atomic.Value(usize),
 
-    meshes: [MAX_MESHES]Mesh,
-    mesh_count: u32,
-
     clear_color: [4]f32,
 
-    textures: [MAX_TEXTURES]Texture,
-    texture_count: u32,
-    materials: [MAX_MATERIALS]Material,
-    material_count: u32,
+    // Resource storage: generational slot maps (grow on demand, recycle freed
+    // slots, detect stale handles). Ownership + refcount + path-dedup live in the
+    // matching ke_resource_cache; the slot map is just the backing store the
+    // cache's destroy callback empties. Cubemaps share the texture store.
+    mesh_store: slot_map.SlotMap(Mesh),
+    texture_store: slot_map.SlotMap(Texture),
+    material_store: slot_map.SlotMap(Material),
+    // One cache per owned resource kind (see resource_cache.h: a cache never
+    // inspects its handles, so each kind gets its own instance + destroy_fn).
+    mesh_cache: *c.ke_resource_cache,
+    texture_cache: *c.ke_resource_cache,
+    material_cache: *c.ke_resource_cache,
+    mesh_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
+    texture_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
+    material_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
+
     sampler: c.ke_gpu_sampler, // shared linear-repeat sampler
     material_bgl: c.ke_gpu_bind_group_layout, // set 1 layout
     default_normal: c.ke_texture_handle, // built-in flat (0,0,1) normal map
     default_cubemap: c.ke_texture_handle, // built-in 1×1 black env cubemap
-    white_texture: c.ke_texture_handle, // built-in 1×1 white — solid-color UI quads sample this
+    white_texture_h: c.ke_texture_handle, // built-in 1×1 white — solid-color UI quads sample this
+    white_material: c.ke_material_handle, // built-in white material — stale/unknown material handles resolve here
 
     ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
 
@@ -173,20 +189,24 @@ pub const CoreState = struct {
     // every ke_gpu_pipeline; passes request, never create/destroy directly.
     pipeline_cache: pipeline_cache.PipelineCache,
 
-    pub fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
-        if (idx >= self.mesh_count) return null;
-        return &self.meshes[idx];
+    // Resolve a handle to its payload, or null if the handle is stale/unknown.
+    // Callers decide the fallback (a neutral resource, or an error) — the store
+    // never silently substitutes one resource for another.
+    pub fn meshAt(self: *CoreState, h: c.ke_mesh_handle) ?*Mesh {
+        return self.mesh_store.get(h.bits);
     }
 
-    pub fn textureAt(self: *CoreState, idx: u32) ?*Texture {
-        if (idx >= self.texture_count) return null;
-        return &self.textures[idx];
+    pub fn textureAt(self: *CoreState, h: c.ke_texture_handle) ?*Texture {
+        return self.texture_store.get(h.bits);
     }
 
-    pub fn materialAt(self: *CoreState, idx: u32) *Material {
-        // Unknown handle falls back to the built-in white material (index 0).
-        if (idx >= self.material_count) return &self.materials[0];
-        return &self.materials[idx];
+    // Falls back to the built-in white material for a stale/unknown handle, so a
+    // draw with a released material renders visibly-neutral instead of reading
+    // freed memory. A pass that needs to distinguish the two checks material_store
+    // directly.
+    pub fn materialAt(self: *CoreState, h: c.ke_material_handle) *Material {
+        return self.material_store.get(h.bits) orelse
+            self.material_store.get(self.white_material.bits).?;
     }
 
     pub fn find(self: *CoreState, name: [*c]const u8) ?*Resource {
@@ -235,20 +255,16 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
             if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
         }
     }
-    var m: u32 = 0;
-    while (m < st.mesh_count) : (m += 1) {
-        st.device.destroy_buffer.?(st.device, st.meshes[m].vbo);
-        st.device.destroy_buffer.?(st.device, st.meshes[m].ibo);
-    }
-    var t: u32 = 0;
-    while (t < st.texture_count) : (t += 1) {
-        st.device.destroy_texture_view.?(st.device, st.textures[t].view);
-        st.device.destroy_texture.?(st.device, st.textures[t].tex);
-    }
-    var mat: u32 = 0;
-    while (mat < st.material_count) : (mat += 1) {
-        st.device.destroy_buffer.?(st.device, st.materials[mat].ubo);
-    }
+    // Destroying a cache fires its destroy_fn for every still-live resource,
+    // which removes it from its slot map and destroys the GPU objects. Materials
+    // before textures: a material's destroy releases the textures its bind group
+    // samples, so those textures must still be resident when it runs.
+    st.material_cache_destroy(st.material_cache);
+    st.texture_cache_destroy(st.texture_cache);
+    st.mesh_cache_destroy(st.mesh_cache);
+    st.material_store.deinit();
+    st.texture_store.deinit();
+    st.mesh_store.deinit();
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
     st.pipeline_cache.destroyAll(st.device);
     gpa.free(st.upload_arena);
@@ -287,21 +303,53 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .upload_count = std.atomic.Value(u32).init(0),
         .upload_arena = upload_arena,
         .upload_arena_offset = std.atomic.Value(usize).init(0),
-        .meshes = undefined,
-        .mesh_count = 0,
         .clear_color = .{ 0.10, 0.15, 0.30, 1.0 },
-        .textures = undefined,
-        .texture_count = 0,
-        .materials = undefined,
-        .material_count = 0,
+        .mesh_store = slot_map.SlotMap(Mesh).init(gpa),
+        .texture_store = slot_map.SlotMap(Texture).init(gpa),
+        .material_store = slot_map.SlotMap(Material).init(gpa),
+        .mesh_cache = undefined,
+        .texture_cache = undefined,
+        .material_cache = undefined,
+        .mesh_cache_destroy = undefined,
+        .texture_cache_destroy = undefined,
+        .material_cache_destroy = undefined,
         .sampler = c.KE_GPU_INVALID_HANDLE,
         .material_bgl = c.KE_GPU_INVALID_HANDLE,
-        .default_normal = .{ .idx = c.KE_HANDLE_NONE },
-        .default_cubemap = .{ .idx = c.KE_HANDLE_NONE },
-        .white_texture = .{ .idx = c.KE_HANDLE_NONE },
+        .default_normal = .{ .bits = c.KE_HANDLE_NONE },
+        .default_cubemap = .{ .bits = c.KE_HANDLE_NONE },
+        .white_texture_h = .{ .bits = c.KE_HANDLE_NONE },
+        .white_material = .{ .bits = c.KE_HANDLE_NONE },
         .ndc = dev.get_ndc_convention.?(dev),
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
+
+    // The three owning caches. Each destroy_fn empties the matching slot map and
+    // destroys the GPU objects; destroy_ctx is the core so the callback can reach
+    // the device + stores. A failure here leaves earlier caches leaked on the
+    // error path, but a cache alloc failing at startup is fatal anyway.
+    const mesh_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
+        .destroy_fn = asset_upload.destroyMeshResource,
+        .destroy_ctx = st,
+    }, null);
+    const tex_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
+        .destroy_fn = asset_upload.destroyTextureResource,
+        .destroy_ctx = st,
+    }, null);
+    const mat_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
+        .destroy_fn = asset_upload.destroyMaterialResource,
+        .destroy_ctx = st,
+    }, null);
+    if (mesh_ch.ref == null or tex_ch.ref == null or mat_ch.ref == null) {
+        gpa.free(upload_arena);
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    }
+    st.mesh_cache = mesh_ch.ref.?;
+    st.texture_cache = tex_ch.ref.?;
+    st.material_cache = mat_ch.ref.?;
+    st.mesh_cache_destroy = mesh_ch.destroy.?;
+    st.texture_cache_destroy = tex_ch.destroy.?;
+    st.material_cache_destroy = mat_ch.destroy.?;
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
     const bb_cid = e.component_register.?(e, "backbuffer", 0);
@@ -354,6 +402,16 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .resource_bind_group_layout = resource_table.resourceBindGroupLayout,
         .get_or_create_pipeline = pipeline_cache.getOrCreatePipeline,
         .material_shader_variant = asset_upload.materialShaderVariant,
+        .retain_mesh = asset_upload.retainMesh,
+        .release_mesh = asset_upload.releaseMesh,
+        .retain_texture = asset_upload.retainTexture,
+        .release_texture = asset_upload.releaseTexture,
+        .retain_material = asset_upload.retainMaterial,
+        .release_material = asset_upload.releaseMaterial,
+        .try_get_mesh = asset_upload.tryGetMesh,
+        .try_get_texture = asset_upload.tryGetTexture,
+        .try_get_material = asset_upload.tryGetMaterial,
+        .white_texture = asset_upload.whiteTexture,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)
@@ -380,14 +438,17 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .entry_count = 4,
         .entries = &mat_bgl_entries,
     });
+    // Built-in singletons: no dedup key (each is unique) and the core keeps the
+    // one reference every upload starts with, so they live until teardown. A
+    // stale/none albedo, normal, or material handle resolves to these.
     const white_px = [_]u8{ 255, 255, 255, 255 };
-    st.white_texture = asset_upload.uploadTexture(core, 1, 1, &white_px, null); // texture 0 = white albedo
+    st.white_texture_h = asset_upload.uploadTexture(core, null, 1, 1, &white_px, null);
     const flat_normal_px = [_]u8{ 128, 128, 255, 255 }; // (0,0,1) in tangent space
-    st.default_normal = asset_upload.uploadTexture(core, 1, 1, &flat_normal_px, null);
+    st.default_normal = asset_upload.uploadTexture(core, null, 1, 1, &flat_normal_px, null);
     const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
-    st.default_cubemap = asset_upload.uploadCubemap(core, 1, &black_cube_px, null);
+    st.default_cubemap = asset_upload.uploadCubemap(core, null, 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, 0, null);
+    st.white_material = asset_upload.createMaterial(core, null, &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, 0, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }

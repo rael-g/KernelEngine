@@ -28,7 +28,7 @@ const UiVertex = extern struct {
     color: [4]f32,
 };
 const UiBatch = struct {
-    texture_idx: u32,
+    texture: c.ke_texture_handle, // full generational handle; its slot index keys the bind-group cache
     first_vertex: u32,
     vertex_count: u32,
 };
@@ -87,18 +87,18 @@ fn uiQuad(self: [*c]c.ke_render_ui, texture: c.ke_texture_handle,
     const ui = stateOf(self);
     if (ui.vertex_count + 6 > ui.vertices.len) return;
 
-    // White (handle 0, the core's built-in) is the flat-color default: a quad
-    // with no texture assigned samples white*color.
-    const tex_idx = if (texture.idx == c.KE_HANDLE_NONE) 0 else texture.idx;
-    if (tex_idx >= MAX_UI_TEXTURES) return;
+    // The core's built-in white is the flat-color default: a quad with no
+    // texture assigned samples white*color.
+    const tex = if (texture.bits == c.KE_HANDLE_NONE) ui.core.*.white_texture.?(ui.core) else texture;
+    if (c.ke_handle_index(tex.bits) >= MAX_UI_TEXTURES) return;
 
     // Extend the current batch if the texture matches; otherwise open a new one.
     const need_new_batch = ui.batch_count == 0 or
-        ui.batches[ui.batch_count - 1].texture_idx != tex_idx;
+        ui.batches[ui.batch_count - 1].texture.bits != tex.bits;
     if (need_new_batch) {
         if (ui.batch_count >= ui.batches.len) return;
         ui.batches[ui.batch_count] = .{
-            .texture_idx = tex_idx,
+            .texture = tex,
             .first_vertex = ui.vertex_count,
             .vertex_count = 0,
         };
@@ -127,11 +127,12 @@ fn uiQuad(self: [*c]c.ke_render_ui, texture: c.ke_texture_handle,
 // The set-1 (texture+sampler) bind group for a texture index, built once and
 // cached — UI textures (font atlases, a handful of solid-color sources) are
 // stable across frames, so rebuilding every quad would be wasteful.
-fn uiBindGroupFor(ui: *UiState, tex_idx: u32) c.ke_gpu_bind_group {
+fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
+    const tex_idx = c.ke_handle_index(tex.bits);
     if (ui.bind_group_cache[tex_idx] != c.KE_GPU_INVALID_HANDLE)
         return ui.bind_group_cache[tex_idx];
 
-    const view = ui.core.*.texture_view.?(ui.core, .{ .idx = tex_idx });
+    const view = ui.core.*.texture_view.?(ui.core, tex);
     const entries = [_]c.ke_gpu_bind_group_entry{
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
@@ -184,7 +185,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var i: u32 = 0;
     while (i < ui.batch_count) : (i += 1) {
         const batch = ui.batches[i];
-        rp.*.set_bind_group.?(rp, 1, uiBindGroupFor(ui, batch.texture_idx), null, 0);
+        rp.*.set_bind_group.?(rp, 1, uiBindGroupFor(ui, batch.texture), null, 0);
         rp.*.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
     }
     rp.*.end.?(rp);

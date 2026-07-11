@@ -16,7 +16,7 @@ namespace KernelEngine.Render.Webgpu;
 /// registers begin/clear/end as KE_PHASE_RENDER systems on the runtime. The host
 /// just ticks the runtime — no render calls in the loop.
 /// </summary>
-public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
+public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources, INativeRenderResources
 {
     private ke_gpu_device_handle _device;
     private ke_render_module_handle _module;
@@ -97,74 +97,154 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// <see cref="MeshComponent"/> references. Valid only after the module is
     /// loaded. Throws on failure — a bad upload is never swallowed.
     /// </summary>
-    public MeshHandle UploadMesh(ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices)
+    public MeshHandle UploadMesh(ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices, string? key = null)
     {
         if (_core == null)
             throw new InvalidOperationException("UploadMesh called before the render module was loaded");
 
         ke_error* err = null;
         ke_mesh_handle h;
+        var keyBytes = Utf8(key);
         fixed (MeshVertex* v = vertices)
         fixed (ushort* i = indices)
+        fixed (byte* k = keyBytes)
         {
-            h = _core->upload_mesh(_core, v, (nuint)(vertices.Length * sizeof(MeshVertex)),
+            h = _core->upload_mesh(_core, (sbyte*)k, v, (nuint)(vertices.Length * sizeof(MeshVertex)),
                                    i, (uint)indices.Length, &err);
         }
-        if (h.idx == uint.MaxValue)
+        if (h.bits == uint.MaxValue)
             throw Fail("upload_mesh failed", err);
-        return new MeshHandle(h.idx);
+        return new MeshHandle(h.bits);
     }
 
     /// <inheritdoc/>
-    public TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba)
+    public TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba, string? key = null)
     {
         if (_core == null)
             throw new InvalidOperationException("UploadTexture called before the render module was loaded");
 
         ke_error* err = null;
         ke_texture_handle h;
+        var keyBytes = Utf8(key);
         fixed (byte* p = rgba)
-            h = _core->upload_texture(_core, width, height, p, &err);
-        if (h.idx == uint.MaxValue)
+        fixed (byte* k = keyBytes)
+            h = _core->upload_texture(_core, (sbyte*)k, width, height, p, &err);
+        if (h.bits == uint.MaxValue)
             throw Fail("upload_texture failed", err);
-        return new TextureHandle(h.idx);
+        return new TextureHandle(h.bits);
     }
 
     /// <inheritdoc/>
-    public TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces)
+    public TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces, string? key = null)
     {
         if (_core == null)
             throw new InvalidOperationException("UploadCubemap called before the render module was loaded");
 
         ke_error* err = null;
         ke_texture_handle h;
+        var keyBytes = Utf8(key);
         fixed (byte* p = faces)
-            h = _core->upload_cubemap(_core, faceSize, p, &err);
-        if (h.idx == uint.MaxValue)
+        fixed (byte* k = keyBytes)
+            h = _core->upload_cubemap(_core, (sbyte*)k, faceSize, p, &err);
+        if (h.bits == uint.MaxValue)
             throw Fail("upload_cubemap failed", err);
-        return new TextureHandle(h.idx);
+        return new TextureHandle(h.bits);
     }
 
     /// <inheritdoc/>
     public MaterialHandle CreateMaterial(System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
-                                         TextureHandle albedo = default, TextureHandle? normalMap = null,
+                                         TextureHandle? albedo = null, TextureHandle? normalMap = null,
                                          AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
                                          float ior = 1.5f, float distortionStrength = 0.05f,
-                                         uint shaderVariant = 0)
+                                         uint shaderVariant = 0, string? key = null)
     {
         if (_core == null)
             throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
 
         ke_error* err = null;
         ke_material_handle h;
-        var albedoH = new ke_texture_handle { idx = albedo.Value };
-        var normalH = new ke_texture_handle { idx = normalMap?.Value ?? uint.MaxValue };
-        h = _core->create_material(_core, &baseColor.X, metallic, roughness, albedoH, normalH,
-                                    (ke_alpha_mode)(int)alphaMode, alphaCutoff, ior, distortionStrength, shaderVariant, &err);
-        if (h.idx == uint.MaxValue)
+        var albedoH = new ke_texture_handle { bits = albedo?.Value ?? uint.MaxValue };
+        var normalH = new ke_texture_handle { bits = normalMap?.Value ?? uint.MaxValue };
+        var keyBytes = Utf8(key);
+        fixed (byte* k = keyBytes)
+            h = _core->create_material(_core, (sbyte*)k, &baseColor.X, metallic, roughness, albedoH, normalH,
+                                        (ke_alpha_mode)(int)alphaMode, alphaCutoff, ior, distortionStrength, shaderVariant, &err);
+        if (h.bits == uint.MaxValue)
             throw Fail("create_material failed", err);
-        return new MaterialHandle(h.idx);
+        return new MaterialHandle(h.bits);
     }
+
+    /// <summary>
+    /// The render-core pointer, untyped. Used only by native calls that cross
+    /// into another plugin (e.g. the framework's asset-resolver cached-load);
+    /// never exposed to game code.
+    /// </summary>
+    void* INativeRenderResources.Native => _core;
+
+    /// <inheritdoc/>
+    public TextureHandle WhiteTexture
+    {
+        get
+        {
+            if (_core == null)
+                throw new InvalidOperationException("WhiteTexture read before the render module was loaded");
+            return new TextureHandle(_core->white_texture(_core).bits);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void RetainMesh(MeshHandle h) => _core->retain_mesh(_core, new ke_mesh_handle { bits = h.Value });
+    /// <inheritdoc/>
+    public void ReleaseMesh(MeshHandle h) => _core->release_mesh(_core, new ke_mesh_handle { bits = h.Value });
+    /// <inheritdoc/>
+    public void RetainTexture(TextureHandle h) => _core->retain_texture(_core, new ke_texture_handle { bits = h.Value });
+    /// <inheritdoc/>
+    public void ReleaseTexture(TextureHandle h) => _core->release_texture(_core, new ke_texture_handle { bits = h.Value });
+    /// <inheritdoc/>
+    public void RetainMaterial(MaterialHandle h) => _core->retain_material(_core, new ke_material_handle { bits = h.Value });
+    /// <inheritdoc/>
+    public void ReleaseMaterial(MaterialHandle h) => _core->release_material(_core, new ke_material_handle { bits = h.Value });
+
+    /// <inheritdoc/>
+    public bool TryGetMesh(string key, out MeshHandle handle)
+    {
+        ke_mesh_handle h;
+        var keyBytes = Utf8(key);
+        byte ok;
+        fixed (byte* k = keyBytes)
+            ok = _core->try_get_mesh(_core, (sbyte*)k, &h);
+        handle = new MeshHandle(h.bits);
+        return ok != 0;
+    }
+
+    /// <inheritdoc/>
+    public bool TryGetTexture(string key, out TextureHandle handle)
+    {
+        ke_texture_handle h;
+        var keyBytes = Utf8(key);
+        byte ok;
+        fixed (byte* k = keyBytes)
+            ok = _core->try_get_texture(_core, (sbyte*)k, &h);
+        handle = new TextureHandle(h.bits);
+        return ok != 0;
+    }
+
+    /// <inheritdoc/>
+    public bool TryGetMaterial(string key, out MaterialHandle handle)
+    {
+        ke_material_handle h;
+        var keyBytes = Utf8(key);
+        byte ok;
+        fixed (byte* k = keyBytes)
+            ok = _core->try_get_material(_core, (sbyte*)k, &h);
+        handle = new MaterialHandle(h.bits);
+        return ok != 0;
+    }
+
+    // Null key → null pointer (no dedup). A non-null key is NUL-terminated so the
+    // native side can hash it as a C string.
+    private static byte[]? Utf8(string? s)
+        => s == null ? null : System.Text.Encoding.UTF8.GetBytes(s + '\0');
 
     /// <inheritdoc/>
     public void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
@@ -173,7 +253,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_module.@ref == null)
             throw new InvalidOperationException("UiQuad called before the render module was loaded");
 
-        var texH = new ke_texture_handle { idx = texture.Value };
+        var texH = new ke_texture_handle { bits = texture.Value };
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_ui_quad(_module.@ref, texH, dstX, dstY, dstW, dstH, u0, v0, u1, v1,
                        premultipliedColor.X, premultipliedColor.Y, premultipliedColor.Z, premultipliedColor.W);
     }
