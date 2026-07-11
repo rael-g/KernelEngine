@@ -72,6 +72,12 @@ pub const Material = struct {
     bind_group: c.ke_gpu_bind_group, // set 1: base_color + albedo + sampler
     alpha_mode: c.ke_alpha_mode, // CPU-side only — gates gbuffer vs transparent-forward, no GPU state
     alpha_cutoff: f32, // MASK discard threshold; unused for OPAQUE/BLEND
+    // CPU-side only — which build-time-compiled shader variant this material's
+    // fragment should use. Resolved into a distinct PSO by whichever pass
+    // draws it (§6 Mechanism 1's get_or_create_pipeline); this field carries no
+    // GPU state itself, same as alpha_mode above. 0 = the pass's default/flat
+    // shader variant.
+    shader_variant: u32,
 };
 
 pub const Resource = struct {
@@ -347,6 +353,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .resource_bind_group = resource_table.resourceBindGroup,
         .resource_bind_group_layout = resource_table.resourceBindGroupLayout,
         .get_or_create_pipeline = pipeline_cache.getOrCreatePipeline,
+        .material_shader_variant = asset_upload.materialShaderVariant,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)
@@ -380,7 +387,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
     st.default_cubemap = asset_upload.uploadCubemap(core, 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null);
+    _ = asset_upload.createMaterial(core, &white_color, 0.0, 0.5, .{ .idx = c.KE_HANDLE_NONE }, .{ .idx = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, 0, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }

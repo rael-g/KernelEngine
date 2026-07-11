@@ -42,12 +42,16 @@ public interface IRenderResources
     /// refraction) and <paramref name="distortionStrength"/> only apply to
     /// <see cref="AlphaMode.Blend"/> (ior: 1.0 = no bend, 1.33 = water, 1.5 = glass;
     /// distortionStrength: lateral shift of the sampled background, in normalized
-    /// screen space).
+    /// screen space). <paramref name="shaderVariant"/> selects which build-time-
+    /// compiled fragment shader the drawing pass uses (§6 Mechanism 1 proof —
+    /// distinct variants resolve to distinct PSOs, not just distinct bind-group
+    /// data); 0 = the pass's default/flat variant.
     /// </summary>
     MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                   TextureHandle albedo = default, TextureHandle? normalMap = null,
                                   AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
-                                  float ior = 1.5f, float distortionStrength = 0.05f);
+                                  float ior = 1.5f, float distortionStrength = 0.05f,
+                                  uint shaderVariant = 0);
 
     /// <summary>
     /// Queues a screen-space UI quad for this frame, drawn after tonemap so it

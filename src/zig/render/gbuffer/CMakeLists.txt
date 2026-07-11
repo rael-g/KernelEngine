@@ -52,6 +52,44 @@ add_custom_command(
     VERBATIM
 )
 
+# Second built-in material (§6 Mechanism 1 proof — a distinct shader, not just
+# distinct data, must resolve to a distinct PSO through the render core's
+# get_or_create_pipeline cache). Mirrors the mat_test_flat_gbuffer pair above.
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_stripes_gbuffer.vs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry vs_main --stage vertex
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_stripes_gbuffer.slang"
+            --output "${SHADER_GEN_DIR}/mat_stripes_gbuffer.vs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_stripes_gbuffer.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer.slang"
+            "${KE_SHADER_LIB_DIR}/gbuffer_encoding.slang"
+            "${KE_SHADER_LIB_DIR}/forward_common.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT "${SHADER_GEN_DIR}/mat_stripes_gbuffer.fs.wgsl"
+    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
+            --raw --target wgsl --entry fs_main --stage fragment
+            --include "${KE_SHADER_LIB_DIR}"
+            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_stripes_gbuffer.slang"
+            --output "${SHADER_GEN_DIR}/mat_stripes_gbuffer.fs.wgsl"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_stripes_gbuffer.slang"
+            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer.slang"
+            "${KE_SHADER_LIB_DIR}/gbuffer_encoding.slang"
+            "${KE_SHADER_LIB_DIR}/forward_common.slang"
+            "${KE_SHADER_LIB_DIR}/ke.slang"
+            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+            "${COMPILE_SLANG}"
+    VERBATIM
+)
+
 file(GLOB KE_RENDER_GBUFFER_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
 
@@ -69,6 +107,8 @@ add_custom_command(
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
         "-Dgbuffer-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "-Dgbuffer-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+        "-Dstripes-vs-wgsl=${SHADER_GEN_DIR}/mat_stripes_gbuffer.vs.wgsl"
+        "-Dstripes-fs-wgsl=${SHADER_GEN_DIR}/mat_stripes_gbuffer.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
@@ -76,6 +116,8 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.vs.wgsl"
         "${SHADER_GEN_DIR}/mat_test_flat_gbuffer.fs.wgsl"
+        "${SHADER_GEN_DIR}/mat_stripes_gbuffer.vs.wgsl"
+        "${SHADER_GEN_DIR}/mat_stripes_gbuffer.fs.wgsl"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/kernel_engine/render/gbuffer/gbuffer_create.h"
         ke_common
     COMMENT "Building ke_render_gbuffer (Zig)"

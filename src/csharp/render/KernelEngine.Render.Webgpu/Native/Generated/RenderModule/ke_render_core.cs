@@ -48,8 +48,8 @@ public unsafe partial struct ke_render_core
     [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *, uint32_t, uint32_t, const void *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, uint, uint, void*, ke_error**, ke_texture_handle> upload_texture;
 
-    [NativeTypeName("ke_material_handle (*)(struct ke_render_core *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_core*, float*, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, ke_error**, ke_material_handle> create_material;
+    [NativeTypeName("ke_material_handle (*)(struct ke_render_core *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, uint32_t, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, float*, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, uint, ke_error**, ke_material_handle> create_material;
 
     [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_render_core *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ulong> material_layout;
@@ -95,4 +95,7 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("ke_gpu_pipeline (*)(struct ke_render_core *, const ke_gpu_render_pipeline_params *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_gpu_render_pipeline_params*, ulong> get_or_create_pipeline;
+
+    [NativeTypeName("uint32_t (*)(struct ke_render_core *, ke_material_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_material_handle, uint> material_shader_variant;
 }

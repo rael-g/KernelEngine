@@ -24,6 +24,15 @@ const gpa = std.heap.c_allocator;
 
 const vs_wgsl = @embedFile("mat_test_flat_gbuffer.vs.wgsl");
 const fs_wgsl = @embedFile("mat_test_flat_gbuffer.fs.wgsl");
+// Second built-in material (§6 Mechanism 1 proof — see mat_stripes_gbuffer.slang):
+// a genuine shader difference, so a material referencing it resolves to a
+// distinct PSO through get_or_create_pipeline, not just distinct bind-group
+// data. SHADER_VARIANT_COUNT is a scaffold constant for this proof, not the
+// real material system (§8 Option C) — that will size this from the project's
+// authored materials, not a hardcoded 2.
+const stripes_vs_wgsl = @embedFile("mat_stripes_gbuffer.vs.wgsl");
+const stripes_fs_wgsl = @embedFile("mat_stripes_gbuffer.fs.wgsl");
+const SHADER_VARIANT_COUNT = 2;
 
 // Duplicated from the other pass modules per the decoupling precedent (see
 // shadow_module.zig): small shared constants kept local, not imported.
@@ -45,10 +54,12 @@ const GBufferModule = struct {
     transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
 
-    // Re-queried via core.get_or_create_pipeline every record() call — see
+    // One params struct per shader variant (§6 Mechanism 1 proof), re-queried
+    // via core.get_or_create_pipeline every record() call — see
     // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade.
-    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
+    // cached once at setup can't observe the async real-PSO upgrade. Indexed
+    // by ke_render_core::material_shader_variant(mesh.material).
+    pipeline_params: [SHADER_VARIANT_COUNT]c.ke_gpu_render_pipeline_params = undefined,
     // The encode shader binds only set 1 (material) + set 2 (object); set 0 is
     // an empty layout so the positional bind_group_layouts array has no hole.
     empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
@@ -126,7 +137,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const view_proj = zm.mul(view, proj);
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0); // set 0: empty (encode uses only sets 1+2)
 
     // View 1 = [mesh, transform], columns aligned. Per-draw uniform writes are
@@ -158,6 +168,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             zm.storeMat(u.model[0..], model);
             const offset: u32 = draw_idx * UNIFORM_STRIDE;
             core.*.upload.?(core, gb.obj_uniform, offset, &u, @sizeOf(PerObject));
+
+            // Per-draw PSO by material shader variant (§6 Mechanism 1 proof) —
+            // an O(1) cache lookup, correct and simple; sorting draws by PSO to
+            // batch state changes is a separate, later optimization.
+            const variant = @min(core.*.material_shader_variant.?(core, meshes[i].material), SHADER_VARIANT_COUNT - 1);
+            rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_params[variant]));
 
             const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
             rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
@@ -236,6 +252,23 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
     defer dev.destroy_shader_module.?(dev, fs);
 
+    // Shader variant 1 (§6 Mechanism 1 proof) — same bind-group/vertex layout,
+    // a genuinely different fragment (mat_stripes_gbuffer.slang).
+    const stripes_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(stripes_vs_wgsl),
+        .byte_size = stripes_vs_wgsl.len,
+        .entry_point = "mat_stripes_gbuffer.vs",
+    }, out_error);
+    if (stripes_vs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, stripes_vs);
+    const stripes_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
+        .code = @ptrCast(stripes_fs_wgsl),
+        .byte_size = stripes_fs_wgsl.len,
+        .entry_point = "mat_stripes_gbuffer.fs",
+    }, out_error);
+    if (stripes_fs == c.KE_GPU_INVALID_HANDLE) return false;
+    defer dev.destroy_shader_module.?(dev, stripes_fs);
+
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.vertex_module = vs;
     pp.fragment_module = fs;
@@ -260,9 +293,20 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM; // octNormal + roughness + ao
     pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // emissive + alpha
     pp.color_target_count = 3;
-    gb.pipeline_params = pp;
-    if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
+
+    // Variant 1: identical params, only the shader modules differ.
+    var pp_stripes = pp;
+    pp_stripes.vertex_module = stripes_vs;
+    pp_stripes.fragment_module = stripes_fs;
+
+    gb.pipeline_params[0] = pp;
+    gb.pipeline_params[1] = pp_stripes;
+    if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_params[0]) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+    if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_params[1]) == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: stripes-variant pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }
 

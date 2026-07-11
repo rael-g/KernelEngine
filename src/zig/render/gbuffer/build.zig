@@ -19,6 +19,8 @@ pub fn build(b: *std.Build) void {
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
     const gbuffer_vs_wgsl = b.option([]const u8, "gbuffer-vs-wgsl", "generated gbuffer vertex WGSL path")   orelse @panic("-Dgbuffer-vs-wgsl required");
     const gbuffer_fs_wgsl = b.option([]const u8, "gbuffer-fs-wgsl", "generated gbuffer fragment WGSL path") orelse @panic("-Dgbuffer-fs-wgsl required");
+    const stripes_vs_wgsl = b.option([]const u8, "stripes-vs-wgsl", "generated stripes-material vertex WGSL path")   orelse @panic("-Dstripes-vs-wgsl required");
+    const stripes_fs_wgsl = b.option([]const u8, "stripes-fs-wgsl", "generated stripes-material fragment WGSL path") orelse @panic("-Dstripes-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/gbuffer_module.zig"),
@@ -41,6 +43,8 @@ pub fn build(b: *std.Build) void {
 
     mod.addAnonymousImport("mat_test_flat_gbuffer.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = gbuffer_vs_wgsl } });
     mod.addAnonymousImport("mat_test_flat_gbuffer.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = gbuffer_fs_wgsl } });
+    mod.addAnonymousImport("mat_stripes_gbuffer.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = stripes_vs_wgsl } });
+    mod.addAnonymousImport("mat_stripes_gbuffer.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = stripes_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_gbuffer",

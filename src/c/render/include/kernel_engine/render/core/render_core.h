@@ -162,6 +162,11 @@ struct ke_render_core
     // (meaningless outside BLEND); ior: 1.0 = no bend, 1.33 = water, 1.5 = glass.
     // distortion_strength: lateral shift of the sampled background, in
     // normalized screen space (glass vs. thick water).
+    // shader_variant selects which build-time-compiled fragment shader the
+    // drawing pass uses for this material (§6 Mechanism 1 proof — a real
+    // shader difference resolves to a distinct PSO via get_or_create_pipeline,
+    // not just different bind-group data). 0 = the pass's default/flat variant;
+    // an out-of-range value resolves to 0. CPU-side only, like alpha_mode.
     ke_material_handle (*create_material)(struct ke_render_core *self,
                                           const float *base_color, // rgba (4 floats)
                                           float metallic, float roughness,
@@ -171,6 +176,7 @@ struct ke_render_core
                                           float alpha_cutoff,
                                           float ior,
                                           float distortion_strength,
+                                          uint32_t shader_variant,
                                           ke_error **out_error);
     // The per-material bind-group layout (descriptor set 1) a forward pipeline
     // must declare so its set-1 bind groups (from material_bind_group) are valid.
@@ -235,6 +241,14 @@ struct ke_render_core
     // identical params always resolve to the same cached pipeline.
     ke_gpu_pipeline (*get_or_create_pipeline)(struct ke_render_core *self,
                                               const ke_gpu_render_pipeline_params *params);
+
+    // The shader-variant id a material handle was created with (see
+    // create_material). An unknown handle resolves to 0 (the built-in white
+    // material's variant). CPU-side only, like alpha_mode/alpha_cutoff — a
+    // drawing pass uses this to pick which pipeline_params to resolve via
+    // get_or_create_pipeline. Appended at the tail so adding it never shifts
+    // existing slot offsets.
+    uint32_t (*material_shader_variant)(struct ke_render_core *self, ke_material_handle h);
 };
 
 typedef struct ke_render_core_handle

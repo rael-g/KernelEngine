@@ -98,6 +98,7 @@ pub fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
                   metallic: f32, roughness: f32, albedo: c.ke_texture_handle,
                   normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode,
                   alpha_cutoff: f32, ior: f32, distortion_strength: f32,
+                  shader_variant: u32,
                   out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     const st = rc.coreOf(self);
     if (st.material_count >= rc.MAX_MATERIALS) return .{ .idx = c.KE_HANDLE_NONE };
@@ -147,7 +148,13 @@ pub fn createMaterial(self: [*c]c.ke_render_core, base_color: [*c]const f32,
     }
 
     const idx = st.material_count;
-    st.materials[idx] = .{ .ubo = ubo, .bind_group = bg, .alpha_mode = alpha_mode, .alpha_cutoff = alpha_cutoff };
+    st.materials[idx] = .{
+        .ubo = ubo,
+        .bind_group = bg,
+        .alpha_mode = alpha_mode,
+        .alpha_cutoff = alpha_cutoff,
+        .shader_variant = shader_variant,
+    };
     st.material_count += 1;
     return .{ .idx = idx };
 }
@@ -158,6 +165,10 @@ pub fn materialAlphaMode(self: [*c]c.ke_render_core, h: c.ke_material_handle) ca
 
 pub fn materialAlphaCutoff(self: [*c]c.ke_render_core, h: c.ke_material_handle) callconv(.c) f32 {
     return rc.coreOf(self).materialAt(h.idx).alpha_cutoff;
+}
+
+pub fn materialShaderVariant(self: [*c]c.ke_render_core, h: c.ke_material_handle) callconv(.c) u32 {
+    return rc.coreOf(self).materialAt(h.idx).shader_variant;
 }
 
 pub fn materialLayout(self: [*c]c.ke_render_core) callconv(.c) c.ke_gpu_bind_group_layout {
