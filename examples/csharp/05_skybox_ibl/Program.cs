@@ -59,12 +59,12 @@ var services = new ServiceCollection()
                 faces[off + i * 4 + 3] = 255;
             }
         }
-        var cubemap = resources.UploadCubemap(faceSize, faces);
+        var cubemap = resources.UploadCubemap("sky_cubemap", faceSize, faces);
 
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
         var quad      = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        var mirrorMat = resources.CreateMaterial(Vector4.One, metallic: 0.8f, roughness: 0.1f);
+        var mirrorMat = resources.CreateMaterial("mirror", Vector4.One, metallic: 0.8f, roughness: 0.1f);
         tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mirrorMat }, "MirrorQuad");
 
         tree.AddNode(new DirectionalLight

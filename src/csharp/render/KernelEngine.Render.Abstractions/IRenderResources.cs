@@ -13,28 +13,33 @@ public interface IRenderResources
 {
     /// <summary>
     /// Uploads interleaved position+normal+uv vertices and 16-bit indices.
-    /// Throws on failure — a bad upload is never swallowed.
-    /// <paramref name="key"/> (optional) enables dedup: a non-null key already
-    /// resident returns the existing handle with its refcount incremented,
-    /// uploading nothing. The result always carries one reference; balance it
-    /// with <see cref="ReleaseMesh"/>.
+    /// Throws on failure — a bad upload is never swallowed. <paramref name="key"/>
+    /// is required — every upload is dedup-cached, there is no uncached path: a
+    /// key already resident returns the existing handle with its refcount
+    /// incremented, uploading nothing. The result always carries one reference;
+    /// balance it with <see cref="ReleaseMesh"/>. Content loaded from a file
+    /// should key by its path (see <c>NativeAssetResolver</c>'s cached-load
+    /// methods, which do this for you); procedural content keys by its own
+    /// generation parameters (e.g. <c>"primitive:cube"</c>) so identical calls
+    /// dedup the same way file-backed content does.
     /// </summary>
-    MeshHandle UploadMesh(ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices, string? key = null);
+    MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices);
 
     /// <summary>
     /// Uploads an RGBA8 texture (<paramref name="rgba"/> is width*height*4 bytes,
-    /// row-major). Throws on failure. <paramref name="key"/> behaves as in
-    /// <see cref="UploadMesh"/>.
+    /// row-major). Throws on failure. <paramref name="key"/> is required, same
+    /// rule as <see cref="UploadMesh"/>.
     /// </summary>
-    TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba, string? key = null);
+    TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba);
 
     /// <summary>
     /// Uploads an RGBA8 cubemap: 6 faces of <paramref name="faceSize"/>² in the
     /// order +X,-X,+Y,-Y,+Z,-Z (concatenated). Used as a skybox background and the
     /// image-based-lighting environment. Throws on failure. <paramref name="key"/>
-    /// behaves as in <see cref="UploadMesh"/> (cubemaps share the texture cache).
+    /// is required, same rule as <see cref="UploadMesh"/> (cubemaps share the
+    /// texture cache).
     /// </summary>
-    TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces, string? key = null);
+    TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces);
 
     /// <summary>
     /// Creates a glTF metallic-roughness material: a base-color factor multiplied
@@ -51,13 +56,16 @@ public interface IRenderResources
     /// screen space). <paramref name="shaderVariant"/> selects which build-time-
     /// compiled fragment shader the drawing pass uses (§6 Mechanism 1 proof —
     /// distinct variants resolve to distinct PSOs, not just distinct bind-group
-    /// data); 0 = the pass's default/flat variant.
+    /// data); 0 = the pass's default/flat variant. <paramref name="key"/> is
+    /// required, same rule as <see cref="UploadMesh"/> — a caller with no file
+    /// path (an inline scene-authored material, say) keys by its own parameters
+    /// so two nodes authored identically share one material.
     /// </summary>
-    MaterialHandle CreateMaterial(Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
+    MaterialHandle CreateMaterial(string key, Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                   TextureHandle? albedo = null, TextureHandle? normalMap = null,
                                   AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
                                   float ior = 1.5f, float distortionStrength = 0.05f,
-                                  uint shaderVariant = 0, string? key = null);
+                                  uint shaderVariant = 0);
 
     /// <summary>The built-in 1×1 white texture (neutral albedo).</summary>
     TextureHandle WhiteTexture { get; }

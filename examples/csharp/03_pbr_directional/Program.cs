@@ -43,9 +43,9 @@ var services = new ServiceCollection()
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 1.0f, 5.0f) };
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        var mat0 = resources.CreateMaterial(Vector4.One, metal0, rough0);
-        var mat1 = resources.CreateMaterial(Vector4.One, metal1, rough1);
-        var mat2 = resources.CreateMaterial(Vector4.One, metal2, rough2);
+        var mat0 = resources.CreateMaterial("mat0", Vector4.One, metal0, rough0);
+        var mat1 = resources.CreateMaterial("mat1", Vector4.One, metal1, rough1);
+        var mat2 = resources.CreateMaterial("mat2", Vector4.One, metal2, rough2);
 
         var n0 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat0 }, "QuadDielectric");
         n0.LocalTransform = n0.LocalTransform with { Position = new Vector3(-2f, 0f, 0f) };

@@ -97,10 +97,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// <see cref="MeshComponent"/> references. Valid only after the module is
     /// loaded. Throws on failure — a bad upload is never swallowed.
     /// </summary>
-    public MeshHandle UploadMesh(ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices, string? key = null)
+    public MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices)
     {
         if (_core == null)
             throw new InvalidOperationException("UploadMesh called before the render module was loaded");
+        ArgumentException.ThrowIfNullOrEmpty(key);
 
         ke_error* err = null;
         ke_mesh_handle h;
@@ -118,10 +119,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <inheritdoc/>
-    public TextureHandle UploadTexture(uint width, uint height, ReadOnlySpan<byte> rgba, string? key = null)
+    public TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba)
     {
         if (_core == null)
             throw new InvalidOperationException("UploadTexture called before the render module was loaded");
+        ArgumentException.ThrowIfNullOrEmpty(key);
 
         ke_error* err = null;
         ke_texture_handle h;
@@ -135,10 +137,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <inheritdoc/>
-    public TextureHandle UploadCubemap(uint faceSize, ReadOnlySpan<byte> faces, string? key = null)
+    public TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces)
     {
         if (_core == null)
             throw new InvalidOperationException("UploadCubemap called before the render module was loaded");
+        ArgumentException.ThrowIfNullOrEmpty(key);
 
         ke_error* err = null;
         ke_texture_handle h;
@@ -152,14 +155,15 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <inheritdoc/>
-    public MaterialHandle CreateMaterial(System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
+    public MaterialHandle CreateMaterial(string key, System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                          TextureHandle? albedo = null, TextureHandle? normalMap = null,
                                          AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
                                          float ior = 1.5f, float distortionStrength = 0.05f,
-                                         uint shaderVariant = 0, string? key = null)
+                                         uint shaderVariant = 0)
     {
         if (_core == null)
             throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
+        ArgumentException.ThrowIfNullOrEmpty(key);
 
         ke_error* err = null;
         ke_material_handle h;
@@ -241,10 +245,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         return ok != 0;
     }
 
-    // Null key → null pointer (no dedup). A non-null key is NUL-terminated so the
-    // native side can hash it as a C string.
-    private static byte[]? Utf8(string? s)
-        => s == null ? null : System.Text.Encoding.UTF8.GetBytes(s + '\0');
+    // NUL-terminated UTF-8 so the native side can hash the key as a C string.
+    private static byte[] Utf8(string s)
+        => System.Text.Encoding.UTF8.GetBytes(s + '\0');
 
     /// <inheritdoc/>
     public void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,

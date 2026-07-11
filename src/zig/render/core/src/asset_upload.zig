@@ -9,33 +9,43 @@ const c = rc.c;
 //
 // Every resource here is owned by a ke_resource_cache (one per kind, held on the
 // CoreState). An upload inserts into the matching generational slot map, then
-// registers the handle with the cache (refcount 1). An optional `key` enables
-// path dedup: a resident key returns the cached handle, retained, uploading
-// nothing. release drops a reference; at zero the cache fires the destroy_fn
-// below, which removes the slot and frees the GPU objects.
+// registers the handle with the cache (refcount 1) and records `key` for future
+// dedup lookups — `key` is required, not an opt-in: there is no uncached upload
+// path, so nothing a game does can silently duplicate GPU memory. Callers with
+// no natural path (procedural content, inline scene-authored materials) key by
+// their own generation parameters instead (see render_core.h's per-slot docs).
+// release drops a reference; at zero the cache fires the destroy_fn below,
+// which removes the slot and frees the GPU objects.
 
 // ── dedup helper ────────────────────────────────────────────────────────────
+
+fn keyValid(key: [*c]const u8) bool {
+    return key != null and key[0] != 0;
+}
 
 // On a keyed hit returns the cached handle bits (already retained by the cache);
 // otherwise KE_HANDLE_NONE, meaning the caller must build the resource.
 fn tryCached(cache: *c.ke_resource_cache, key: [*c]const u8) u32 {
-    if (key == null) return c.KE_HANDLE_NONE;
     var out: c.ke_resource_handle = c.KE_HANDLE_NONE;
     if (cache.try_get_cached.?(cache, key, &out)) return out;
     return c.KE_HANDLE_NONE;
 }
 
-// Registers a freshly-built resource (refcount 1) and, if keyed, records the key
-// for future dedup lookups.
+// Registers a freshly-built resource (refcount 1) and records the key for
+// future dedup lookups.
 fn registerCached(cache: *c.ke_resource_cache, key: [*c]const u8, bits: u32) void {
     _ = cache.register_resource.?(cache, bits, null);
-    if (key != null) _ = cache.cache_insert.?(cache, key, bits, null);
+    _ = cache.cache_insert.?(cache, key, bits, null);
 }
 
 // ── mesh ────────────────────────────────────────────────────────────────────
 
 pub fn uploadMesh(self: [*c]c.ke_render_core, key: [*c]const u8, vertices: ?*const anyopaque, vertices_size: usize, indices: [*c]const u16, index_count: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_mesh_handle {
     const st = rc.coreOf(self);
+    if (!keyValid(key)) {
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "upload_mesh requires a non-empty key", @src().file, @intCast(@src().line), null);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
 
     const cached = tryCached(st.mesh_cache, key);
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
@@ -85,8 +95,11 @@ pub fn setClearColor(self: [*c]c.ke_render_core, r: f32, g: f32, b: f32, a: f32)
 // ── texture / cubemap ───────────────────────────────────────────────────────
 
 pub fn uploadTexture(self: [*c]c.ke_render_core, key: [*c]const u8, width: u32, height: u32, rgba: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_texture_handle {
-    _ = out_error;
     const st = rc.coreOf(self);
+    if (!keyValid(key)) {
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "upload_texture requires a non-empty key", @src().file, @intCast(@src().line), null);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
 
     const cached = tryCached(st.texture_cache, key);
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
@@ -126,7 +139,10 @@ pub fn uploadTexture(self: [*c]c.ke_render_core, key: [*c]const u8, width: u32, 
 }
 
 pub fn uploadCubemap(self: [*c]c.ke_render_core, key: [*c]const u8, face_size: u32, faces: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_texture_handle {
-    _ = out_error;
+    if (!keyValid(key)) {
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "upload_cubemap requires a non-empty key", @src().file, @intCast(@src().line), null);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
     const st = rc.coreOf(self);
 
     const cached = tryCached(st.texture_cache, key);
@@ -194,6 +210,10 @@ fn srgbToLinear(cs: f32) f32 {
 
 pub fn createMaterial(self: [*c]c.ke_render_core, key: [*c]const u8, base_color: [*c]const f32, metallic: f32, roughness: f32, albedo: c.ke_texture_handle, normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader_variant: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     const st = rc.coreOf(self);
+    if (!keyValid(key)) {
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_material requires a non-empty key", @src().file, @intCast(@src().line), null);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
 
     const cached = tryCached(st.material_cache, key);
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };

@@ -63,7 +63,7 @@ var services = new ServiceCollection()
                 faces[off + i * 4 + 3] = 255;
             }
         }
-        var cubemap = resources.UploadCubemap(faceSize, faces);
+        var cubemap = resources.UploadCubemap("sky_cubemap", faceSize, faces);
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
         tree.AddNode(new DirectionalLight
@@ -79,7 +79,7 @@ var services = new ServiceCollection()
         // Opaque cube behind both quads — proves the transparent pass's LEQUAL
         // depth test never occludes it (no depth write from the quads).
         var cube  = KernelEngine.Render.MeshPrimitives.Cube(resources);
-        var gray  = resources.CreateMaterial(new Vector4(0.6f, 0.6f, 0.6f, 1f));
+        var gray  = resources.CreateMaterial("gray", new Vector4(0.6f, 0.6f, 0.6f, 1f));
         var back  = tree.AddNode(new MeshRenderer { MeshHandle = cube, MaterialHandle = gray }, "OpaqueCube");
         back.LocalTransform = back.LocalTransform with { Position = new Vector3(0f, 0f, -2f), Scale = new Vector3(1.5f) };
 
@@ -87,8 +87,8 @@ var services = new ServiceCollection()
         // z=1 — sorted back-to-front, the blue quad must composite AFTER red
         // where they overlap.
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        var red  = resources.CreateMaterial(new Vector4(1f, 0.15f, 0.15f, 0.5f), alphaMode: AlphaMode.Blend);
-        var blue = resources.CreateMaterial(new Vector4(0.15f, 0.35f, 1f, 0.5f), alphaMode: AlphaMode.Blend);
+        var red  = resources.CreateMaterial("red", new Vector4(1f, 0.15f, 0.15f, 0.5f), alphaMode: AlphaMode.Blend);
+        var blue = resources.CreateMaterial("blue", new Vector4(0.15f, 0.35f, 1f, 0.5f), alphaMode: AlphaMode.Blend);
 
         var far  = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = red }, "FarQuad");
         far.LocalTransform = far.LocalTransform with { Position = new Vector3(-0.4f, 0f, 0f), Scale = new Vector3(2f) };
@@ -99,7 +99,7 @@ var services = new ServiceCollection()
         // A third, separate quad off to the side — a near-clear "glass" pane with
         // a strong ior + distortion_strength so refraction_contribution's lateral
         // bend of the skybox is visible on its own, decoupled from the sort test.
-        var glass = resources.CreateMaterial(new Vector4(1f, 1f, 1f, 0.15f), alphaMode: AlphaMode.Blend,
+        var glass = resources.CreateMaterial("glass", new Vector4(1f, 1f, 1f, 0.15f), alphaMode: AlphaMode.Blend,
             ior: 1.5f, distortionStrength: 0.25f);
         var glassNode = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = glass }, "GlassQuad");
         glassNode.LocalTransform = glassNode.LocalTransform with { Position = new Vector3(2.5f, 0f, 2f), Scale = new Vector3(2f) };

@@ -42,8 +42,8 @@ var services = new ServiceCollection()
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
         var cubeMesh  = KernelEngine.Render.MeshPrimitives.Cube(resources);
 
-        var floorMat = resources.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f);
-        var cubeMat  = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
+        var floorMat = resources.CreateMaterial("floor", new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f);
+        var cubeMat  = resources.CreateMaterial("cube", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(30f, 1f, 30f) };

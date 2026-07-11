@@ -51,10 +51,10 @@ var services = new ServiceCollection()
             pixels[i + 2] = (byte)((nz * 0.5f + 0.5f) * 255);
             pixels[i + 3] = 255;
         }
-        var nm = resources.UploadTexture(w, h, pixels);
+        var nm = resources.UploadTexture("bumps_normal", w, h, pixels);
 
-        var matPlain  = resources.CreateMaterial(Vector4.One, roughness: 0.3f);
-        var matNormal = resources.CreateMaterial(Vector4.One, roughness: 0.3f, normalMap: nm);
+        var matPlain  = resources.CreateMaterial("plain", Vector4.One, roughness: 0.3f);
+        var matNormal = resources.CreateMaterial("normal_mapped", Vector4.One, roughness: 0.3f, normalMap: nm);
 
         tree.AddNode(
             new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },

@@ -10,11 +10,6 @@ namespace KernelEngine.Framework;
 /// produced. Create via <see cref="Load"/> from inside a scene setup callback
 /// (render worker thread — GPU resource creation has thread affinity).
 /// </summary>
-/// <remarks>
-/// <see cref="IRenderResources"/> has no texture-destroy path — GPU resources it
-/// owns live for the render module's lifetime, so this type is not
-/// <see cref="IDisposable"/>.
-/// </remarks>
 public sealed class Font
 {
     private readonly Dictionary<uint, GlyphMetrics> _glyphs;
@@ -42,7 +37,10 @@ public sealed class Font
     {
         using var data = loader.LoadFontAsync(path, pixelSize, atlasSize, firstCodepoint, codepointCount)
                                .GetAwaiter().GetResult();
-        var atlas = resources.UploadTexture(data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
+        // Bake parameters are part of the key: the same font file at a different
+        // size/range/atlas resolution is a genuinely different texture.
+        var key = $"font:{path}:{pixelSize}:{atlasSize}:{firstCodepoint}:{codepointCount}";
+        var atlas = resources.UploadTexture(key, data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
         return new Font(atlas, data.Glyphs, data.LineHeight, data.Ascent);
     }
 

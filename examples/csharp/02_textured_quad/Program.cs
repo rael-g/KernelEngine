@@ -42,8 +42,8 @@ var services = new ServiceCollection()
             int  i = (y * (int)width + x) * 4;
             pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v; pixels[i + 3] = 255;
         }
-        var tex = resources.UploadTexture(width, height, pixels);
-        var mat = resources.CreateMaterial(Vector4.One, albedo: tex);
+        var tex = resources.UploadTexture("checker", width, height, pixels);
+        var mat = resources.CreateMaterial("checker_mat", Vector4.One, albedo: tex);
 
         tree.AddNode(new DirectionalLight
         {

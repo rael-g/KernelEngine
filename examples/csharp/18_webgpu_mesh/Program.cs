@@ -36,7 +36,7 @@ runtime.LoadModules(sp);
 
 // ── Upload the cube + material, populate the scene (camera + one mesh entity) ─
 var cube   = MeshPrimitives.Cube(render);
-var orange = render.CreateMaterial(new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
+var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
 EcsRegistry reg;
 unsafe { reg = new EcsRegistry(((INativeEcs)ecs).Native); }

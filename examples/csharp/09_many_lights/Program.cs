@@ -72,7 +72,7 @@ var services = new ServiceCollection()
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, -3f) };
 
         var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
-        var wallMat = resources.CreateMaterial(new Vector4(0.6f, 0.6f, 0.65f, 1f), metallic: 0.1f, roughness: 0.7f);
+        var wallMat = resources.CreateMaterial("wall", new Vector4(0.6f, 0.6f, 0.65f, 1f), metallic: 0.1f, roughness: 0.7f);
 
         float halfW = CorridorWidth / 2f;
         float halfH = CorridorHeight / 2f;

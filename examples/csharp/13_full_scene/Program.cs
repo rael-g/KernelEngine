@@ -55,7 +55,7 @@ var services = new ServiceCollection()
         }, "Sun");
 
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
-        var floorMat  = resources.CreateMaterial(new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
+        var floorMat  = resources.CreateMaterial("floor", new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
         var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 1f, 50f) };
 

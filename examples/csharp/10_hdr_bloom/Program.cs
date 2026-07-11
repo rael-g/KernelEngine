@@ -44,10 +44,10 @@ var services = new ServiceCollection()
         // Very smooth materials — tight specular lobe pushes the peak far past 1.0,
         // making the ACES gradient obvious. Rough materials spread the energy too
         // wide and the highlight stays below the tonemapping threshold.
-        var matGray   = resources.CreateMaterial(new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.0f, roughness: 0.05f);
-        var matCopper = resources.CreateMaterial(new Vector4(0.9f, 0.5f, 0.2f, 1f), metallic: 0.9f, roughness: 0.08f);
-        var matBlue   = resources.CreateMaterial(new Vector4(0.2f, 0.4f, 0.9f, 1f), metallic: 0.0f, roughness: 0.12f);
-        var matFloor  = resources.CreateMaterial(new Vector4(0.3f, 0.3f, 0.3f, 1f), metallic: 0.0f, roughness: 0.9f);
+        var matGray   = resources.CreateMaterial("gray", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.0f, roughness: 0.05f);
+        var matCopper = resources.CreateMaterial("copper", new Vector4(0.9f, 0.5f, 0.2f, 1f), metallic: 0.9f, roughness: 0.08f);
+        var matBlue   = resources.CreateMaterial("blue", new Vector4(0.2f, 0.4f, 0.9f, 1f), metallic: 0.0f, roughness: 0.12f);
+        var matFloor  = resources.CreateMaterial("floor", new Vector4(0.3f, 0.3f, 0.3f, 1f), metallic: 0.0f, roughness: 0.9f);
 
         // Floor — large enough to show the falloff halo.
         var floorNode = tree.AddNode(new MeshRenderer { MeshHandle = floor, MaterialHandle = matFloor }, "Floor");

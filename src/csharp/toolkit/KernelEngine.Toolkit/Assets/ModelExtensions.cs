@@ -30,7 +30,11 @@ public static class ModelExtensions
         for (int i = 0; i < model.Textures.Count; i++)
         {
             var tex = model.Textures[i];
-            textures[i] = resources.UploadTexture(tex.Width, tex.Height, tex.Pixels);
+            // A texture loaded from its own file dedups by that path (shared across
+            // any model referencing the same file); an embedded texture has no path
+            // identity of its own, so it keys per model instance instead.
+            var texKey = string.IsNullOrEmpty(tex.Path) ? $"{rootName}#tex{i}" : tex.Path;
+            textures[i] = resources.UploadTexture(texKey, tex.Width, tex.Height, tex.Pixels);
         }
 
         var materials = new MaterialHandle[model.Materials.Count];
@@ -39,7 +43,7 @@ public static class ModelExtensions
             var m      = model.Materials[i];
             var albedo = m.AlbedoTextureIndex    >= 0 ? textures[m.AlbedoTextureIndex]    : default;
             var normal = m.NormalMapTextureIndex >= 0 ? (TextureHandle?)textures[m.NormalMapTextureIndex] : null;
-            materials[i] = resources.CreateMaterial(m.BaseColor, m.Metallic, m.Roughness, albedo, normal);
+            materials[i] = resources.CreateMaterial($"{rootName}#mat{i}", m.BaseColor, m.Metallic, m.Roughness, albedo, normal);
         }
 
         var nodes = new List<MeshRenderer>(model.Meshes.Count);
@@ -57,7 +61,7 @@ public static class ModelExtensions
                     new Vector2(v.U,  v.V),
                     new Vector3(v.Tx, v.Ty, v.Tz));
             }
-            var mesh     = resources.UploadMesh(converted, src.Indices);
+            var mesh     = resources.UploadMesh($"{rootName}#mesh{i}", converted, src.Indices);
             var material = src.MaterialIndex >= 0 ? materials[src.MaterialIndex] : default;
             var name     = string.IsNullOrEmpty(src.Name) ? $"{rootName}.Mesh_{i}" : $"{rootName}.{src.Name}";
             nodes.Add(nodeWorld.AddNode(new MeshRenderer { MeshHandle = mesh, MaterialHandle = material }, name));

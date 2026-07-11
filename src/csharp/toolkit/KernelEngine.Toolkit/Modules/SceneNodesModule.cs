@@ -93,30 +93,25 @@ public sealed class SceneNodesModule : IRuntimeModule
             LabelUiSystem.Register(runtime, nodeWorld, resources, window);
 
             // [entity.components.MeshRenderer] — resolves a named primitive mesh + a
-            // flat-color material through IRenderResources. Named
-            // primitives are uploaded once and cached (scene files reuse the same few
-            // shapes across many entities — e.g. every Pong sprite is "quad").
-            var primitiveCache = new Dictionary<string, MeshHandle>(StringComparer.OrdinalIgnoreCase);
+            // flat-color material through IRenderResources. Named primitives dedup
+            // through the render core's own key-based cache (MeshPrimitives keys each
+            // shape as "primitive:*"), so scene files reusing the same few shapes
+            // across many entities — e.g. every Pong sprite is "quad" — upload once.
             world.RegisterComponentApply<MeshComponent>(
                 components.CidOf<MeshComponent>(),
                 (ref MeshComponent comp, in VariantReader reader) =>
                 {
                     if (reader.TryGetString("mesh", out var meshName) && meshName is not null)
                     {
-                        if (!primitiveCache.TryGetValue(meshName, out var handle))
+                        comp.Mesh = meshName switch
                         {
-                            handle = meshName switch
-                            {
-                                "quad"   => KernelEngine.Render.MeshPrimitives.Quad(resources),
-                                "plane"  => KernelEngine.Render.MeshPrimitives.Plane(resources),
-                                "cube"   => KernelEngine.Render.MeshPrimitives.Cube(resources),
-                                "sphere" => KernelEngine.Render.MeshPrimitives.UvSphere(resources),
-                                _ => throw new InvalidOperationException(
-                                    $"[entity.components.MeshRenderer] unknown primitive '{meshName}'"),
-                            };
-                            primitiveCache[meshName] = handle;
-                        }
-                        comp.Mesh = handle;
+                            "quad"   => KernelEngine.Render.MeshPrimitives.Quad(resources),
+                            "plane"  => KernelEngine.Render.MeshPrimitives.Plane(resources),
+                            "cube"   => KernelEngine.Render.MeshPrimitives.Cube(resources),
+                            "sphere" => KernelEngine.Render.MeshPrimitives.UvSphere(resources),
+                            _ => throw new InvalidOperationException(
+                                $"[entity.components.MeshRenderer] unknown primitive '{meshName}'"),
+                        };
                     }
 
                     if (reader.TryGetVec4("color", out var color))
@@ -143,7 +138,11 @@ public sealed class SceneNodesModule : IRuntimeModule
                         float distortionStrength = 0.05f;
                         reader.TryGetFloat("distortion_strength", out distortionStrength);
 
-                        comp.Material = resources.CreateMaterial(color, roughness: roughness,
+                        // No file backs an inline scene-authored color, so the key is
+                        // the material's own parameters — two nodes authored with the
+                        // identical inline values share one material.
+                        var key = $"inline:{color}:{roughness}:{alphaMode}:{alphaCutoff}:{ior}:{distortionStrength}";
+                        comp.Material = resources.CreateMaterial(key, color, roughness: roughness,
                             alphaMode: alphaMode, alphaCutoff: alphaCutoff, ior: ior,
                             distortionStrength: distortionStrength);
                     }

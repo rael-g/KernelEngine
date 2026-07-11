@@ -46,7 +46,7 @@ var services = new ServiceCollection()
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
 
         var quad   = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        var orange = resources.CreateMaterial(new Vector4(1f, 0.5f, 0f, 1f));
+        var orange = resources.CreateMaterial("orange", new Vector4(1f, 0.5f, 0f, 1f));
         tree.AddNode(new SpinningQuad { MeshHandle = quad, MaterialHandle = orange }, "Spinner");
     }));
 

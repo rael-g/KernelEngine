@@ -438,17 +438,19 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .entry_count = 4,
         .entries = &mat_bgl_entries,
     });
-    // Built-in singletons: no dedup key (each is unique) and the core keeps the
-    // one reference every upload starts with, so they live until teardown. A
-    // stale/none albedo, normal, or material handle resolves to these.
+    // Built-in singletons: engine-reserved keys (never a real asset path, so no
+    // game content can collide with them) — every upload is cache-registered,
+    // no exceptions. The core keeps the one reference each starts with, so they
+    // live until teardown. A stale/none albedo, normal, or material handle
+    // resolves to these.
     const white_px = [_]u8{ 255, 255, 255, 255 };
-    st.white_texture_h = asset_upload.uploadTexture(core, null, 1, 1, &white_px, null);
+    st.white_texture_h = asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, null);
     const flat_normal_px = [_]u8{ 128, 128, 255, 255 }; // (0,0,1) in tangent space
-    st.default_normal = asset_upload.uploadTexture(core, null, 1, 1, &flat_normal_px, null);
+    st.default_normal = asset_upload.uploadTexture(core, "__ke_default_normal", 1, 1, &flat_normal_px, null);
     const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
-    st.default_cubemap = asset_upload.uploadCubemap(core, null, 1, &black_cube_px, null);
+    st.default_cubemap = asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    st.white_material = asset_upload.createMaterial(core, null, &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, 0, null);
+    st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, 0, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }

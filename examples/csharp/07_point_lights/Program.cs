@@ -39,7 +39,7 @@ var services = new ServiceCollection()
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        var mat  = resources.CreateMaterial(Vector4.One, metallic: 0.1f, roughness: 0.5f);
+        var mat  = resources.CreateMaterial("grid_quad", Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
         // Grid of quads at z=0, x,y ∈ {-5, -3, -1, 1, 3, 5}.
         for (int x = -5; x <= 5; x += 2)

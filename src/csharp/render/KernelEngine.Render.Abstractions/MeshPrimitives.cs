@@ -22,7 +22,7 @@ public static class MeshPrimitives
             new(new(-0.5f,  0.5f, 0f), new(0, 0, 1), new(0, 0), t),
         };
         ReadOnlySpan<ushort> indices = stackalloc ushort[] { 0, 1, 2, 0, 2, 3 };
-        return resources.UploadMesh(verts, indices);
+        return resources.UploadMesh("primitive:quad", verts, indices);
     }
 
     /// <summary>Unit XZ plane centered at the origin, facing +Y (a floor).</summary>
@@ -38,7 +38,7 @@ public static class MeshPrimitives
             new(new(-0.5f, 0f,  0.5f), n, new(0, 1), t),
         };
         ReadOnlySpan<ushort> indices = stackalloc ushort[] { 0, 1, 2, 0, 2, 3 };
-        return resources.UploadMesh(verts, indices);
+        return resources.UploadMesh("primitive:plane", verts, indices);
     }
 
     /// <summary>Unit cube centered at the origin, 24 verts (4 per face).</summary>
@@ -69,7 +69,7 @@ public static class MeshPrimitives
         Face(verts, idx, 4, new( 0, 0, 1), new(-h, -h, +h), new(+h, -h, +h), new(+h, +h, +h), new(-h, +h, +h));
         Face(verts, idx, 5, new( 0, 0,-1), new(+h, -h, -h), new(-h, -h, -h), new(-h, +h, -h), new(+h, +h, -h));
 
-        return resources.UploadMesh(verts, idx);
+        return resources.UploadMesh("primitive:cube", verts, idx);
     }
 
     /// <summary>UV sphere of the given radius, centered at the origin.</summary>
@@ -110,6 +110,6 @@ public static class MeshPrimitives
             }
         }
 
-        return resources.UploadMesh(verts, idx);
+        return resources.UploadMesh($"primitive:sphere:{radius}:{rings}:{segments}", verts, idx);
     }
 }

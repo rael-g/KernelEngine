@@ -8,6 +8,10 @@
     <NativeTarget>ke_audio_miniaudio</NativeTarget>
   </PropertyGroup>
 
+  <ItemGroup>
+    <NativeDep Include="ke_resource_cache_default" />
+  </ItemGroup>
+
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>

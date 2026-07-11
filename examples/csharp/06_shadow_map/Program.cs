@@ -37,8 +37,8 @@ var services = new ServiceCollection()
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
         var cubeMesh  = KernelEngine.Render.MeshPrimitives.Cube(resources);
 
-        var floorMat = resources.CreateMaterial(new Vector4(0.5f, 0.5f, 0.5f, 1f), roughness: 0.8f);
-        var redMat   = resources.CreateMaterial(new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
+        var floorMat = resources.CreateMaterial("floor", new Vector4(0.5f, 0.5f, 0.5f, 1f), roughness: 0.8f);
+        var redMat   = resources.CreateMaterial("red", new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
 
         tree.AddNode(new AnimatedSun
         {

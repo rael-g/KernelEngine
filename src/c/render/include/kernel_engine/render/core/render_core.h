@@ -134,10 +134,14 @@ struct ke_render_core
     // Uploads interleaved vertices (position float3 + normal float3) and 16-bit
     // indices to device buffers; returns a handle a ke_mesh_component references.
     // The forward pass resolves the handle to draw. KE_MESH_NONE on failure.
-    // `key` (optional, may be NULL) enables dedup: a non-NULL key already resident
-    // returns the existing handle with its refcount bumped, uploading nothing. NULL
-    // always uploads a fresh mesh. Either way the result starts with one reference;
-    // the caller balances it with release_mesh.
+    // `key` is required (KE_MESH_NONE + KE_ERROR_INVALID_ARGUMENT if NULL/empty) —
+    // every mesh is dedup-cached, no uncached upload exists. A resident key returns
+    // the existing handle with its refcount bumped, uploading nothing; a new key
+    // uploads and registers it. Either way the result starts with one reference;
+    // the caller balances it with release_mesh. Callers with no natural path
+    // (procedural geometry) key by their own generation parameters, e.g.
+    // "primitive:cube" or "primitive:sphere:0.5:24:32" — identical calls then
+    // dedup automatically, same as file-backed content.
     ke_mesh_handle (*upload_mesh)(struct ke_render_core *self, const char *key,
                                   const void *vertices, size_t vertices_size,
                                   const uint16_t *indices, uint32_t index_count,
@@ -155,8 +159,8 @@ struct ke_render_core
     // ── Material resources (glTF base color factor × albedo texture) ──────
     // Uploads an RGBA8 texture (width*height*4 bytes, row-major). The built-in
     // white texture is available via white_texture(). KE_TEXTURE_NONE on failure.
-    // `key` behaves as in upload_mesh (NULL = no dedup; a resident key returns the
-    // cached handle, retained). Cubemaps share this texture cache and keyspace.
+    // `key` is required, same rule as upload_mesh. Cubemaps share this texture
+    // cache and keyspace.
     ke_texture_handle (*upload_texture)(struct ke_render_core *self, const char *key,
                                         uint32_t width, uint32_t height,
                                         const void *rgba, ke_error **out_error);
@@ -173,8 +177,10 @@ struct ke_render_core
     // shader difference resolves to a distinct PSO via get_or_create_pipeline,
     // not just different bind-group data). 0 = the pass's default/flat variant;
     // an out-of-range value resolves to 0. CPU-side only, like alpha_mode.
-    // `key` behaves as in upload_mesh (NULL = no dedup; a resident key returns the
-    // cached material, retained).
+    // `key` is required, same rule as upload_mesh. A caller with no natural file
+    // path (a scene-authored inline material, say) keys by its own parameters —
+    // e.g. a hash/concatenation of base_color+metallic+roughness+alpha_mode — so
+    // two nodes authored with identical values share one material.
     ke_material_handle (*create_material)(struct ke_render_core *self, const char *key,
                                           const float *base_color, // rgba (4 floats)
                                           float metallic, float roughness,
@@ -203,7 +209,7 @@ struct ke_render_core
     // Uploads an RGBA8 cubemap: 6 faces of face_size×face_size, +X,-X,+Y,-Y,+Z,-Z
     // concatenated. Returns a texture handle whose view is cube-dimensioned.
     // KE_TEXTURE_NONE on failure.
-    // `key` behaves as in upload_mesh (NULL = no dedup). Cubemaps live in the same
+    // `key` is required, same rule as upload_mesh. Cubemaps live in the same
     // texture cache as upload_texture and share its keyspace.
     ke_texture_handle (*upload_cubemap)(struct ke_render_core *self, const char *key,
                                         uint32_t face_size, const void *faces,
