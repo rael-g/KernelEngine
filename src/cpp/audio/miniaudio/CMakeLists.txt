@@ -25,6 +25,7 @@ target_include_directories(ke_audio_miniaudio PRIVATE ${MINIAUDIO_INCLUDE_DIR})
 target_link_libraries(ke_audio_miniaudio PUBLIC
     ke_audio
     ke_logger
+    ke_resource_cache_default
 )
 target_link_libraries(ke_audio_miniaudio PRIVATE ke_allocator_malloc)
 

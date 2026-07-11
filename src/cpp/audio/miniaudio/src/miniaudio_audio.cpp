@@ -8,6 +8,7 @@
 #include "kernel_engine/common/error.h"
 #include "kernel_engine/allocator/allocator.h"
 #include "kernel_engine/logger/logger.h"
+#include "kernel_engine/resource_cache/resource_cache.h"
 
 #include <mutex>
 #include <unordered_map>
@@ -21,6 +22,12 @@ struct LoadedSound
     bool     initialized;
 };
 
+// Sounds are refcounted and deduped by path through ke_resource_cache — the
+// same kernel-built-in primitive the render core owns its texture/mesh/material
+// caches through (see resource_cache.h: "each subsystem creates its OWN cache
+// instance with a destroy_fn matching the subsystem's resource kind"). A second
+// load_sound with the same path returns the already-loaded id, retained; the
+// underlying ma_sound is only decoded once and only freed at refcount zero.
 struct MiniAudioState
 {
     ke_logger                                        *logger;
@@ -29,6 +36,8 @@ struct MiniAudioState
     std::mutex                                        mutex;             // guards sounds + next_id
     std::unordered_map<ke_audio_sound, LoadedSound *> sounds;
     ke_audio_sound                                    next_id;
+    ke_resource_cache                                 *cache;
+    void                                              (*cache_destroy)(ke_resource_cache *);
 };
 
 void log_warn(ke_logger *logger, const char *msg)
@@ -45,21 +54,37 @@ void log_info(ke_logger *logger, const char *msg)
     logger->log(logger, &ev);
 }
 
+// ke_resource_cache destroy_fn: fires at refcount zero (a matching unload_sound
+// call, or cache teardown for every still-live sound). ctx is the MiniAudioState.
+void destroy_sound_resource(ke_resource_handle handle, void *ctx)
+{
+    auto *state = static_cast<MiniAudioState *>(ctx);
+    LoadedSound *slot = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        auto it = state->sounds.find(handle);
+        if (it != state->sounds.end())
+        {
+            slot = it->second;
+            state->sounds.erase(it);
+        }
+    }
+    if (slot)
+    {
+        if (slot->initialized) ma_sound_uninit(&slot->sound);
+        ke_free(slot);
+    }
+}
+
 void audio_destroy(ke_audio *self)
 {
     if (!self) return;
     auto *state = static_cast<MiniAudioState *>(self->handle);
     if (state)
     {
-        {
-            std::lock_guard<std::mutex> lock(state->mutex);
-            for (auto &kv : state->sounds)
-            {
-                if (kv.second && kv.second->initialized) ma_sound_uninit(&kv.second->sound);
-                if (kv.second) ke_free(kv.second);
-            }
-            state->sounds.clear();
-        }
+        // Fires destroy_sound_resource for every sound still referenced, which
+        // uninits it and erases it from `sounds` — no separate teardown loop.
+        if (state->cache) state->cache_destroy(state->cache);
         if (state->engine_ready) ma_engine_uninit(&state->engine);
         state->~MiniAudioState();
         ke_free(state);
@@ -77,6 +102,10 @@ ke_audio_sound audio_load_sound(ke_audio *self, const char *path, ke_error **out
     }
 
     auto *state = static_cast<MiniAudioState *>(self->handle);
+
+    ke_resource_handle cached;
+    if (state->cache->try_get_cached(state->cache, path, &cached))
+        return static_cast<ke_audio_sound>(cached);
 
     auto *slot = static_cast<LoadedSound *>(ke_alloc(sizeof(LoadedSound), alignof(LoadedSound)));
     if (!slot)
@@ -103,6 +132,8 @@ ke_audio_sound audio_load_sound(ke_audio *self, const char *path, ke_error **out
         id = state->next_id++;
         state->sounds[id] = slot;
     }
+    state->cache->register_resource(state->cache, id, nullptr);
+    state->cache->cache_insert(state->cache, path, id, nullptr);
 
     return id;
 }
@@ -111,22 +142,7 @@ void audio_unload_sound(ke_audio *self, ke_audio_sound id)
 {
     if (!self || id == KE_AUDIO_SOUND_INVALID) return;
     auto *state = static_cast<MiniAudioState *>(self->handle);
-
-    LoadedSound *slot = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        auto it = state->sounds.find(id);
-        if (it != state->sounds.end())
-        {
-            slot = it->second;
-            state->sounds.erase(it);
-        }
-    }
-    if (slot)
-    {
-        if (slot->initialized) ma_sound_uninit(&slot->sound);
-        ke_free(slot);
-    }
+    state->cache->release(state->cache, id, nullptr);
 }
 
 bool audio_play(ke_audio *self, ke_audio_sound id, float volume, ke_bool loop, ke_error **out_error)
@@ -219,9 +235,22 @@ extern "C" KE_AUDIO_MINIAUDIO_API ke_audio_handle ke_audio_miniaudio_create(
     }
     state->engine_ready = true;
 
+    ke_resource_cache_params cache_params{ &destroy_sound_resource, state };
+    ke_resource_cache_handle cache_h = ke_resource_cache_create(&cache_params, out_error);
+    if (!cache_h.ref)
+    {
+        ma_engine_uninit(&state->engine);
+        state->~MiniAudioState();
+        ke_free(state);
+        return {nullptr, nullptr};
+    }
+    state->cache         = cache_h.ref;
+    state->cache_destroy = cache_h.destroy;
+
     auto *api = static_cast<ke_audio *>(ke_alloc(sizeof(ke_audio), alignof(ke_audio)));
     if (!api)
     {
+        state->cache_destroy(state->cache);
         ma_engine_uninit(&state->engine);
         state->~MiniAudioState();
         ke_free(state);
