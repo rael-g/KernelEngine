@@ -90,7 +90,12 @@ const ForwardModule = struct {
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    // Not a resolved handle — re-queried via core.get_or_create_pipeline every
+    // record() call. §6 Mechanism 1 upgrades a fresh miss's magenta fallback
+    // to the real compiled PSO asynchronously; a handle cached once at setup
+    // would freeze on whichever one was current AT setup time (the fallback,
+    // since the real compile hasn't finished yet) and never see the upgrade.
+    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
     frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, rebuilt on env change
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -293,7 +298,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     std.sort.pdq(Draw, fwd.draws[0..draw_count], {}, drawFartherFirst);
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, fwd.pipeline);
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, fwd.frame_bind_group, null, 0);
     rp.*.set_bind_group.?(rp, 3, core.*.resource_bind_group.?(core, "cluster_lights"), null, 0);
 
@@ -432,8 +437,8 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     pp.bind_group_layout_count = 4;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
     pp.color_target_count = 1;
-    fwd.pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (fwd.pipeline == c.KE_GPU_INVALID_HANDLE) {
+    fwd.pipeline_params = pp;
+    if (core.*.get_or_create_pipeline.?(core, &fwd.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "transparent-forward: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }

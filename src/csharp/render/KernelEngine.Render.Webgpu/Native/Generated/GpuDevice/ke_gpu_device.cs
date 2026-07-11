@@ -110,4 +110,10 @@ public unsafe partial struct ke_gpu_device
 
     [NativeTypeName("ke_ndc_convention (*)(struct ke_gpu_device *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_ndc_convention> get_ndc_convention;
+
+    [NativeTypeName("void (*)(struct ke_gpu_device *, const ke_gpu_render_pipeline_params *, void (*)(ke_gpu_pipeline, void *), void *)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_render_pipeline_params*, delegate* unmanaged[Cdecl]<ulong, void*, void>, void*, void> create_render_pipeline_async;
+
+    [NativeTypeName("void (*)(struct ke_gpu_device *)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, void> flush_pipeline_compiles;
 }

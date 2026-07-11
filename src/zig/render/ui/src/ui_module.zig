@@ -42,7 +42,10 @@ const UiState = struct {
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
 
-    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    // Re-queried via core.get_or_create_pipeline every record() call — see
+    // forward_module.zig's ForwardModule.pipeline_params for why a handle
+    // cached once at setup can't observe the async real-PSO upgrade.
+    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     bgl_frame: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0: proj uniform
     bgl_tex: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 1: texture + sampler
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -174,7 +177,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.upload.?(core, ui.vbo, 0, bytes.ptr, bytes.len);
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, ui.pipeline);
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &ui.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, ui.frame_bind_group, null, 0);
     rp.*.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
 
@@ -267,8 +270,8 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     pp.color_target_formats[0] = 0; // swapchain surface format (backbuffer)
     pp.color_target_count = 1;
 
-    ui.pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (ui.pipeline == c.KE_GPU_INVALID_HANDLE) {
+    ui.pipeline_params = pp;
+    if (core.*.get_or_create_pipeline.?(core, &ui.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "ui pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }

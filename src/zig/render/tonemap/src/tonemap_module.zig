@@ -22,7 +22,10 @@ pub const TonemapModule = struct {
     device: *c.ke_gpu_device = undefined,
     logger: ?*c.ke_logger = null,
 
-    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    // Re-queried via core.get_or_create_pipeline every record() call — see
+    // forward_module.zig's ForwardModule.pipeline_params for why a handle
+    // cached once at setup can't observe the async real-PSO upgrade.
+    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
 
@@ -72,7 +75,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     if (err != null) logGpuError(tm.logger, err, "tonemap bind group");
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, tm.pipeline);
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &tm.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, tm.bind_group, null, 0);
     rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle — no vertex buffer needed
     rp.*.end.?(rp);
@@ -115,8 +118,8 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     pp.depth_stencil.depth_test_enabled = 0;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    tm.pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (tm.pipeline == c.KE_GPU_INVALID_HANDLE) {
+    tm.pipeline_params = pp;
+    if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
         dev.destroy_bind_group_layout.?(dev, bgl);
         return false;
     }

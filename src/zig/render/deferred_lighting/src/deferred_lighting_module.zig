@@ -62,7 +62,10 @@ const DeferredLightingModule = struct {
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    // Re-queried via core.get_or_create_pipeline every record() call — see
+    // forward_module.zig's ForwardModule.pipeline_params for why a handle
+    // cached once at setup can't observe the async real-PSO upgrade.
+    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
     gbuf_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 1
     empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 2 (unused)
@@ -258,7 +261,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     if (err != null) logGpuError(dl.logger, err, "deferred gbuffer bind group");
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, dl.pipeline);
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &dl.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, dl.frame_bind_group, null, 0);
     rp.*.set_bind_group.?(rp, 1, dl.gbuf_bind_group, null, 0);
     rp.*.set_bind_group.?(rp, 2, dl.empty_bg, null, 0);
@@ -357,8 +360,8 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     pp.bind_group_layout_count = 4;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
     pp.color_target_count = 1;
-    dl.pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (dl.pipeline == c.KE_GPU_INVALID_HANDLE) {
+    dl.pipeline_params = pp;
+    if (core.*.get_or_create_pipeline.?(core, &dl.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "deferred lighting: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }

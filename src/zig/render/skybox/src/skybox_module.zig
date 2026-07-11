@@ -35,7 +35,10 @@ const SkyboxModule = struct {
     transform_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    // Re-queried via core.get_or_create_pipeline every record() call — see
+    // forward_module.zig's ForwardModule.pipeline_params for why a handle
+    // cached once at setup can't observe the async real-PSO upgrade.
+    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
     bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // rebuilt per frame (transient depth view)
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -142,7 +145,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, sm.pipeline);
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sm.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, sm.bind_group, null, 0);
     rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle
     rp.*.end.?(rp);
@@ -198,8 +201,8 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     skp.bind_group_layout_count = 1;
     skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
     skp.color_target_count = 1;
-    sm.pipeline = dev.create_render_pipeline.?(dev, &skp);
-    if (sm.pipeline == c.KE_GPU_INVALID_HANDLE) {
+    sm.pipeline_params = skp;
+    if (core.*.get_or_create_pipeline.?(core, &sm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }

@@ -226,6 +226,15 @@ struct ke_render_core
     // writes are ordered before the frame's submit, so deferring is correct.
     void (*upload)(struct ke_render_core *self, ke_gpu_buffer buffer,
                    uint64_t offset, const void *data, size_t size);
+
+    // ── PSO authority (§6 Mechanism 1) ─────────────────────────────────────
+    // Returns the pipeline for this exact params state, compiling it on first
+    // request. The core owns every pipeline it hands back — callers (every
+    // render pass, none privileged over another) never call
+    // create_render_pipeline / destroy_pipeline themselves. Two requests with
+    // identical params always resolve to the same cached pipeline.
+    ke_gpu_pipeline (*get_or_create_pipeline)(struct ke_render_core *self,
+                                              const ke_gpu_render_pipeline_params *params);
 };
 
 typedef struct ke_render_core_handle

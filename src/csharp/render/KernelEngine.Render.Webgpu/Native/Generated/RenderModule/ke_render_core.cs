@@ -92,4 +92,7 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("void (*)(struct ke_render_core *, ke_gpu_buffer, uint64_t, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ulong, ulong, void*, nuint, void> upload;
+
+    [NativeTypeName("ke_gpu_pipeline (*)(struct ke_render_core *, const ke_gpu_render_pipeline_params *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, ke_gpu_render_pipeline_params*, ulong> get_or_create_pipeline;
 }

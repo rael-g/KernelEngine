@@ -51,7 +51,10 @@ const ShadowModule = struct {
     frame_cid: c.ke_component_id = undefined,
 
     view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE, // the shadow map's view — read by the forward's set-0 binding 3/5
-    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    // Re-queried via core.get_or_create_pipeline every record() call — see
+    // forward_module.zig's ForwardModule.pipeline_params for why a handle
+    // cached once at setup can't observe the async real-PSO upgrade.
+    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE, // set 0 (this pass) AND read by the forward's binding 4
     lvp_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -113,7 +116,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     if (pc == null) return;
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, sh.pipeline);
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sh.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, sh.lvp_bg, null, 0);
 
     // View 1 = [mesh, transform], columns aligned. Per-draw uniform writes are
@@ -230,8 +233,8 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     shp.bind_group_layout_count = 2;
     shp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     shp.color_target_count = 1;
-    sh.pipeline = dev.create_render_pipeline.?(dev, &shp);
-    if (sh.pipeline == c.KE_GPU_INVALID_HANDLE) {
+    sh.pipeline_params = shp;
+    if (core.*.get_or_create_pipeline.?(core, &sh.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "shadow pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }

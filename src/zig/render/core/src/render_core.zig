@@ -33,6 +33,7 @@ const resource_table = @import("resource_table.zig");
 const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");
 const asset_upload = @import("asset_upload.zig");
+const pipeline_cache = @import("pipeline_cache.zig");
 
 pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
@@ -162,6 +163,10 @@ pub const CoreState = struct {
 
     ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
 
+    // PSO dedup + lifecycle (§6 Mechanism 1) — the core is the sole owner of
+    // every ke_gpu_pipeline; passes request, never create/destroy directly.
+    pipeline_cache: pipeline_cache.PipelineCache,
+
     pub fn meshAt(self: *CoreState, idx: u32) ?*Mesh {
         if (idx >= self.mesh_count) return null;
         return &self.meshes[idx];
@@ -211,6 +216,11 @@ pub fn isDepthFormat(fmt: c.ke_gpu_texture_format) bool {
 
 fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
     const st = coreOf(self);
+    // Must run before pipeline_cache.destroyAll: an in-flight async compile's
+    // on_ready callback writes into a pipeline_cache Entry, so destroying the
+    // cache (or the CoreState it lives in) before every dispatched compile has
+    // fired would race a callback against freed memory.
+    if (st.device.flush_pipeline_compiles) |flush| flush(st.device);
     var i: u32 = 0;
     while (i < st.resource_count) : (i += 1) {
         const r = &st.resources[i];
@@ -234,6 +244,7 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
         st.device.destroy_buffer.?(st.device, st.materials[mat].ubo);
     }
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
+    st.pipeline_cache.destroyAll(st.device);
     gpa.free(st.upload_arena);
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_core, @ptrCast(self)));
@@ -283,6 +294,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .default_cubemap = .{ .idx = c.KE_HANDLE_NONE },
         .white_texture = .{ .idx = c.KE_HANDLE_NONE },
         .ndc = dev.get_ndc_convention.?(dev),
+        .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
@@ -334,6 +346,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .resource_buffer_size = resource_table.resourceBufferSize,
         .resource_bind_group = resource_table.resourceBindGroup,
         .resource_bind_group_layout = resource_table.resourceBindGroupLayout,
+        .get_or_create_pipeline = pipeline_cache.getOrCreatePipeline,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)

@@ -45,7 +45,10 @@ const GBufferModule = struct {
     transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
 
-    pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
+    // Re-queried via core.get_or_create_pipeline every record() call — see
+    // forward_module.zig's ForwardModule.pipeline_params for why a handle
+    // cached once at setup can't observe the async real-PSO upgrade.
+    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     // The encode shader binds only set 1 (material) + set 2 (object); set 0 is
     // an empty layout so the positional bind_group_layouts array has no hole.
     empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
@@ -123,7 +126,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const view_proj = zm.mul(view, proj);
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, gb.pipeline);
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0); // set 0: empty (encode uses only sets 1+2)
 
     // View 1 = [mesh, transform], columns aligned. Per-draw uniform writes are
@@ -257,8 +260,8 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM; // octNormal + roughness + ao
     pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // emissive + alpha
     pp.color_target_count = 3;
-    gb.pipeline = dev.create_render_pipeline.?(dev, &pp);
-    if (gb.pipeline == c.KE_GPU_INVALID_HANDLE) {
+    gb.pipeline_params = pp;
+    if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }

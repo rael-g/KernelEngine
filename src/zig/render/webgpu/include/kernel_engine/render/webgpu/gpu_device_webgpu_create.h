@@ -4,6 +4,7 @@
 #include <kernel_engine/render/gpu_device.h>
 
 struct ke_window;
+struct ke_scheduler;
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_GPU_WEBGPU_EXPORT
@@ -34,9 +35,17 @@ KE_GPU_WEBGPU_API extern const ke_error_type KE_ERROR_WGPU_RESOURCE_CREATION;
 /// @brief Parameters for the WebGPU (wgpu-native) GPU device.
 typedef struct ke_gpu_device_webgpu_params
 {
-    struct ke_logger *logger;
-    struct ke_window *window;          ///< Optional. When non-NULL, a presentable surface is created.
-    ke_bool           enable_validation;
+    struct ke_logger    *logger;
+    struct ke_window    *window;          ///< Optional. When non-NULL, a presentable surface is created.
+    ke_bool              enable_validation;
+    /// Optional, borrowed. wgpu-native's async pipeline-compile entry points
+    /// (wgpuDeviceCreateRenderPipelineAsync et al) are unimplemented upstream
+    /// (panic "not implemented") — an implementation-detail limitation of this
+    /// backend, not part of ke_gpu_device's contract. When non-NULL, this
+    /// device emulates create_render_pipeline_async by dispatching the actual
+    /// compile onto this scheduler's worker pool. When NULL, it degrades to a
+    /// synchronous compile-then-callback (never hangs, just isn't async).
+    struct ke_scheduler *scheduler;
 } ke_gpu_device_webgpu_params;
 
 /**

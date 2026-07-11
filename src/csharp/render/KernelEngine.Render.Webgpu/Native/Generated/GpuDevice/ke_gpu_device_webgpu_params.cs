@@ -12,4 +12,7 @@ public unsafe partial struct ke_gpu_device_webgpu_params
 
     [NativeTypeName("ke_bool")]
     public byte enable_validation;
+
+    [NativeTypeName("struct ke_scheduler *")]
+    public KernelEngine.Scheduler.Native.ke_scheduler* scheduler;
 }

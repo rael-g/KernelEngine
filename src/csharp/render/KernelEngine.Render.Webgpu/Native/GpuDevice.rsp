@@ -11,6 +11,10 @@ ke_gpu_device_webgpu
 --include-directory
 ../../../../c/render/include
 --include-directory
+../../../../c/allocator/include
+--include-directory
+../../../../c/scheduler/include
+--include-directory
 ../../../../zig/render/webgpu/include
 --file
 ../../../../zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h
@@ -27,12 +31,14 @@ ke_
 --remap
 ke_logger=KernelEngine.Logger.Native.ke_logger
 ke_window=KernelEngine.Window.Native.ke_window
+ke_scheduler=KernelEngine.Scheduler.Native.ke_scheduler
 ke_result=ke_result
 --exclude
 ke_result
 ke_bool
 ke_logger
 ke_window
+ke_scheduler
 --config
 multi-file
 latest-codegen

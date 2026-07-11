@@ -4,6 +4,7 @@ using KernelEngine.Ecs;
 using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
 using KernelEngine.Window;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -58,18 +59,24 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var window = services.GetRequiredService<IWindow>();
-        var ecs    = services.GetRequiredService<IEcs>();
-        var logger = services.GetService<INativeLogger>();
+        var window    = services.GetRequiredService<IWindow>();
+        var ecs       = services.GetRequiredService<IEcs>();
+        var logger    = services.GetService<INativeLogger>();
+        var scheduler = services.GetRequiredService<IScheduler>();
 
         var win = ((INativeWindow)window).Native;
         var rt  = ((INativeRuntime)runtime).Native;
         var ec  = ((INativeEcs)ecs).Native;
         var lg  = logger != null ? logger.Native : null;
+        var sc  = ((INativeScheduler)scheduler).Native;
 
         ke_error* err = null;
 
-        var dp = new ke_gpu_device_webgpu_params { window = win, enable_validation = 1 };
+        // wgpu-native's async pipeline-compile primitive is unimplemented
+        // upstream — this backend emulates create_render_pipeline_async by
+        // dispatching the real compile onto this scheduler instead (see
+        // gpu_device_webgpu_create.h's doc comment on the `scheduler` field).
+        var dp = new ke_gpu_device_webgpu_params { window = win, enable_validation = 1, scheduler = sc };
         _device = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, &err);
         if (_device.@ref == null)
             throw Fail("webgpu device create failed", err);

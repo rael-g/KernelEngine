@@ -400,6 +400,25 @@ typedef struct ke_gpu_device
 
     /// Clip-space convention this backend expects projections built in.
     ke_ndc_convention (*get_ndc_convention)(struct ke_gpu_device *self);
+
+    /// Kicks a background pipeline compile — the driver compiles off the
+    /// caller's thread; `on_ready` fires later (during this device's normal
+    /// event pump, e.g. at queue_present) with the finished pipeline, or
+    /// KE_GPU_INVALID_HANDLE on failure. The raw async primitive: no caching,
+    /// no fallback — see ke_render_core::get_or_create_pipeline (§6 Mechanism
+    /// 1 of RenderArchitectureV2.md) for the policy layer built on top.
+    /// Appended at the tail so adding it never shifts existing slot offsets.
+    void (*create_render_pipeline_async)(struct ke_gpu_device *self,
+                                         const ke_gpu_render_pipeline_params *p,
+                                         void (*on_ready)(ke_gpu_pipeline pso, void *user),
+                                         void *user);
+
+    /// Blocks until every pipeline compile kicked via
+    /// create_render_pipeline_async has invoked its on_ready callback. Call
+    /// before destroying anything an in-flight callback might still write
+    /// into (e.g. before destroying a ke_render_core PSO cache that owns the
+    /// entries those callbacks update). A no-op if nothing is pending.
+    void (*flush_pipeline_compiles)(struct ke_gpu_device *self);
 } ke_gpu_device;
 
 // ── Owner wrapper ──────────────────────────────────────────────────────────
