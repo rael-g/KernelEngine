@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 // components; the forward pass (a KE_PHASE_RENDER system installed by the module)
 // reads them and draws. No render calls in the loop — only runtime.Tick.
 
-var render = new WebgpuRenderModule();
+var render = new WebgpuRenderModule(shaderDir: Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../build/win/bin/shaders")));
 
 var services = new ServiceCollection()
     .AddLogger()

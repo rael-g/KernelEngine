@@ -54,7 +54,7 @@ var services = new ServiceCollection()
     // Each froxel index buffer is gridX*gridY*gridZ*maxLightsPerCluster*4 bytes —
     // stay well under the backend's max_*_buffer_binding_size limit (128MB on
     // this WebGPU build) when raising these. 64/512 here is ~72MB.
-    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.005f, 0.005f, 0.008f, 1.0f),
+    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../build/win/bin/shaders")), clearColor: new Vector4(0.005f, 0.005f, 0.008f, 1.0f),
         clusterGridZ: 64, maxLightsPerCluster: 512, enableShadows: EnableShadows, enableIbl: EnableIbl))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>

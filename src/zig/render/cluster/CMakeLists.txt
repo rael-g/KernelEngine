@@ -7,24 +7,19 @@
 # ke_render_tonemap's build shape.
 
 find_program(ZIG_EXECUTABLE zig REQUIRED)
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_render_cluster${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
-set(COMPILE_SLANG "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
-set(SHADER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
-file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
-
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry cs_main --stage compute
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang"
-            --output "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang" "${COMPILE_SLANG}"
-    VERBATIM
+# Compiled to the shared runtime shaders directory (not embedded into this
+# plugin's DLL) — the pass loads it at runtime by logical name via
+# ke_render_core::load_shader, so this plugin never names a shader format.
+ke_compile_slang_shader(
+    NAME cluster_cull STAGE compute ENTRY cs_main
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/cluster_cull.slang"
+    OUT_FILE cluster_cull_cs_out
 )
+add_custom_target(ke_render_cluster_shaders ALL DEPENDS "${cluster_cull_cs_out}")
 
 file(GLOB KE_RENDER_CLUSTER_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
@@ -42,13 +37,11 @@ add_custom_command(
         "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dcluster-cull-cs-wgsl=${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
         ${KE_RENDER_CLUSTER_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/cluster_cull.cs.wgsl"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/kernel_engine/render/cluster/cluster_create.h"
         ke_common
     COMMENT "Building ke_render_cluster (Zig)"

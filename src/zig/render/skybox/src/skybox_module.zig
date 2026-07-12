@@ -17,9 +17,6 @@ const gpa = std.heap.c_allocator;
 // sees another pass's private struct. "depth" is resolved by name (the
 // producing pass declares it before this one registers its own system).
 
-const skybox_vs_wgsl = @embedFile("skybox.vs.wgsl");
-const skybox_fs_wgsl = @embedFile("skybox.fs.wgsl");
-
 // Mirrors the framework SkyboxComponent (registered "Skybox"): a cubemap handle.
 const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
 
@@ -174,16 +171,12 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
         .entries = &bgl_entries,
     });
 
-    const sky_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(skybox_vs_wgsl), .byte_size = skybox_vs_wgsl.len, .entry_point = "skybox.vs",
-    }, out_error);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both. The core owns the result; this pass never destroys it.
+    const sky_vs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sky_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, sky_vs);
-    const sky_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(skybox_fs_wgsl), .byte_size = skybox_fs_wgsl.len, .entry_point = "skybox.fs",
-    }, out_error);
+    const sky_fs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (sky_fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, sky_fs);
 
     var skp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     skp.vertex_module = sky_vs;

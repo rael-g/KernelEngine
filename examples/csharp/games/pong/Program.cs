@@ -35,7 +35,7 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule())
-    .Add<IRuntimeModule>(new WebgpuRenderModule())
+    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../build/win/bin/shaders"))))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule(_ => { })) // scene entities come entirely from Main.scene
     .Add<IRuntimeModule>(new PongModule())

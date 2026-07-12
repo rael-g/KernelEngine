@@ -54,12 +54,15 @@ typedef struct ke_render_feature_params
 // (NULL is valid) — when present, the module routes its own runtime
 // diagnostics (e.g. a scene exceeding a fixed resource cap) through it instead
 // of staying silent. `cluster_params` and `feature_params` are optional (NULL
-// = all defaults).
+// = all defaults). `shader_dir` is required — an absolute path to the
+// directory every pass's build-time-compiled shaders were installed into (see
+// ke_render_core_create); forwarded to the render core unchanged.
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_bool default_passes, struct ke_logger *logger,
                         const ke_render_cluster_params *cluster_params,
-                        const ke_render_feature_params *feature_params, ke_error **out_error);
+                        const ke_render_feature_params *feature_params,
+                        const char *shader_dir, ke_error **out_error);
 
 // Borrows the render core the module owns — used to upload meshes and declare
 // resources. Valid for the module's lifetime; the caller must not destroy it.

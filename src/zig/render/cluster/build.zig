@@ -18,7 +18,6 @@ pub fn build(b: *std.Build) void {
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
-    const cluster_cull_cs_wgsl = b.option([]const u8, "cluster-cull-cs-wgsl", "generated cluster cull compute WGSL path") orelse @panic("-Dcluster-cull-cs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/cluster_module.zig"),
@@ -38,8 +37,6 @@ pub fn build(b: *std.Build) void {
     // implements no math; this Zig module brings its own via zmath.
     const zmath = b.dependency("zmath", .{});
     mod.addImport("zmath", zmath.module("root"));
-
-    mod.addAnonymousImport("cluster_cull.cs.wgsl", .{ .root_source_file = .{ .cwd_relative = cluster_cull_cs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_cluster",

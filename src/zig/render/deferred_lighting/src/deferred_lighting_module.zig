@@ -23,9 +23,6 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-const vs_wgsl = @embedFile("deferred_lighting.vs.wgsl");
-const fs_wgsl = @embedFile("deferred_lighting.fs.wgsl");
-
 // Matches deferred_lighting.slang's DeferredFrame (std140).
 const DeferredFrame = extern struct {
     camera_pos: [4]f32,
@@ -330,16 +327,12 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     }, out_error);
     if (dl.empty_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(vs_wgsl), .byte_size = vs_wgsl.len, .entry_point = "deferred_lighting.vs",
-    }, out_error);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both. The core owns the result; this pass never destroys it.
+    const vs = core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, vs);
-    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(fs_wgsl), .byte_size = fs_wgsl.len, .entry_point = "deferred_lighting.fs",
-    }, out_error);
+    const fs = core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, fs);
 
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.vertex_module = vs;

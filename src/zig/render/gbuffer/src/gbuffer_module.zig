@@ -22,16 +22,13 @@ const gpa = std.heap.c_allocator;
 // the borrowed ke_render_core/ke_runtime handles passed to create() — it never
 // sees another pass's private struct.
 
-const vs_wgsl = @embedFile("mat_test_flat_gbuffer.vs.wgsl");
-const fs_wgsl = @embedFile("mat_test_flat_gbuffer.fs.wgsl");
 // Second built-in material (§6 Mechanism 1 proof — see mat_stripes_gbuffer.slang):
 // a genuine shader difference, so a material referencing it resolves to a
 // distinct PSO through get_or_create_pipeline, not just distinct bind-group
 // data. SHADER_VARIANT_COUNT is a scaffold constant for this proof, not the
 // real material system (§8 Option C) — that will size this from the project's
-// authored materials, not a hardcoded 2.
-const stripes_vs_wgsl = @embedFile("mat_stripes_gbuffer.vs.wgsl");
-const stripes_fs_wgsl = @embedFile("mat_stripes_gbuffer.fs.wgsl");
+// authored materials, not a hardcoded 2. "gbuffer" and "gbuffer_stripes" are
+// the two logical shader names core.load_shader resolves.
 const SHADER_VARIANT_COUNT = 2;
 
 // Duplicated from the other pass modules per the decoupling precedent (see
@@ -237,35 +234,18 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
         .attributes = &attrs,
     };
 
-    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(vs_wgsl),
-        .byte_size = vs_wgsl.len,
-        .entry_point = "mat_test_flat_gbuffer.vs",
-    }, out_error);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both. The core owns the result; this pass never destroys it.
+    const vs = core.*.load_shader.?(core, "gbuffer", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, vs);
-    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(fs_wgsl),
-        .byte_size = fs_wgsl.len,
-        .entry_point = "mat_test_flat_gbuffer.fs",
-    }, out_error);
+    const fs = core.*.load_shader.?(core, "gbuffer", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, fs);
 
     // Shader variant 1 (§6 Mechanism 1 proof) — same bind-group/vertex layout,
     // a genuinely different fragment (mat_stripes_gbuffer.slang).
-    const stripes_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(stripes_vs_wgsl),
-        .byte_size = stripes_vs_wgsl.len,
-        .entry_point = "mat_stripes_gbuffer.vs",
-    }, out_error);
+    const stripes_vs = core.*.load_shader.?(core, "gbuffer_stripes", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (stripes_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, stripes_vs);
-    const stripes_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(stripes_fs_wgsl),
-        .byte_size = stripes_fs_wgsl.len,
-        .entry_point = "mat_stripes_gbuffer.fs",
-    }, out_error);
+    const stripes_fs = core.*.load_shader.?(core, "gbuffer_stripes", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (stripes_fs == c.KE_GPU_INVALID_HANDLE) return false;
     defer dev.destroy_shader_module.?(dev, stripes_fs);
 

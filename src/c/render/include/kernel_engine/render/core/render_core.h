@@ -294,6 +294,24 @@ struct ke_render_core
     // wanted. Was implicitly "handle 0" before handles became generational; now
     // exposed explicitly since no literal handle value is meaningful.
     ke_texture_handle (*white_texture)(struct ke_render_core *self);
+
+    // ── Shader loading (build-time compiled, runtime resolved) ─────────────
+    // Resolves a shader by logical NAME + STAGE to a device-ready module. Names
+    // neither a file path nor a format — the core resolves
+    // "<shader_dir>/<name>.<stage-suffix>.<ext>" itself, where <shader_dir> was
+    // given to the factory that created this core and <ext> comes from
+    // device.shader_language() (WGSL/SPIR-V/MSL/DXIL). `stage` must be exactly
+    // one of KE_GPU_SHADER_STAGE_VERTEX/FRAGMENT/COMPUTE — never a combination.
+    // The file itself must already exist: this loads a build-time artifact
+    // (see cmake's ke_compile_slang_shader), it does not compile anything, so
+    // the PSO-affecting shader set stays statically derivable from the build
+    // (§6 doctrine) even though the load happens at runtime. The core owns
+    // every shader module it hands back — deduped by resolved path, like every
+    // other resource kind — so passes never call destroy_shader_module
+    // themselves. KE_GPU_INVALID_HANDLE on failure (file missing, `stage` not
+    // exactly one bit, or the device rejected the bytes).
+    ke_gpu_shader_module (*load_shader)(struct ke_render_core *self, const char *name,
+                                        ke_gpu_shader_stage stage, ke_error **out_error);
 };
 
 typedef struct ke_render_core_handle

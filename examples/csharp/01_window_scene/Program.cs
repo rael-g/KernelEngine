@@ -27,7 +27,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))
     // Render module before the scene module: its OnLoad creates the render core
     // (so mesh upload works) before the scene setup callback runs.
-    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new Vector4(0.15f, 0.15f, 0.15f, 1.0f)))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../build/win/bin/shaders")), clearColor: new Vector4(0.15f, 0.15f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

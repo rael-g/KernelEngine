@@ -15,8 +15,6 @@ const gpa = std.heap.c_allocator;
 // own system() (using the camera it already reads for the cull), so no other
 // pass needs to trigger it.
 
-const cluster_cull_cs_wgsl = @embedFile("cluster_cull.cs.wgsl");
-
 // Duplicated from render_module.zig rather than shared, matching the
 // decoupling precedent already established in cluster_feature.slang (its own
 // header comment: "Duplicated rather than shared via import to keep this
@@ -430,13 +428,10 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     }, out_error);
     if (cm.cull_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const cs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(cluster_cull_cs_wgsl),
-        .byte_size = cluster_cull_cs_wgsl.len,
-        .entry_point = "cluster.cs",
-    }, out_error);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both. The core owns the result; this pass never destroys it.
+    const cs = core.*.load_shader.?(core, "cluster_cull", c.KE_GPU_SHADER_STAGE_COMPUTE, out_error);
     if (cs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, cs);
 
     const cull_layouts = [_]c.ke_gpu_bind_group_layout{ cull_bgl, 0, 0, 0 };
     cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &c.ke_gpu_compute_pipeline_params{

@@ -21,7 +21,7 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Runtime Clear Color"))
-    .Add<IRuntimeModule>(new WebgpuRenderModule(clearColor: new System.Numerics.Vector4(0.15f, 0.20f, 0.35f, 1.0f)));
+    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../build/win/bin/shaders")), clearColor: new System.Numerics.Vector4(0.15f, 0.20f, 0.35f, 1.0f)));
 
 using var sp = services.BuildServiceProvider();
 var window   = sp.GetRequiredService<IWindow>();

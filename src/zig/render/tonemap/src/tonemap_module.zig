@@ -14,9 +14,6 @@ const gpa = std.heap.c_allocator;
 // never sees another pass's private struct. "hdr" is resolved by name (the
 // producing pass declares it before this one registers its own system).
 
-const tonemap_vs_wgsl = @embedFile("tonemap.vs.wgsl");
-const tonemap_fs_wgsl = @embedFile("tonemap.fs.wgsl");
-
 pub const TonemapModule = struct {
     core: *c.ke_render_core = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -88,10 +85,13 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     tm.device = dev;
     tm.logger = logger;
 
-    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(tonemap_vs_wgsl), .byte_size = tonemap_vs_wgsl.len, .entry_point = "tonemap.vs" }, out_error);
-    defer dev.destroy_shader_module.?(dev, vs);
-    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(tonemap_fs_wgsl), .byte_size = tonemap_fs_wgsl.len, .entry_point = "tonemap.fs" }, out_error);
-    defer dev.destroy_shader_module.?(dev, fs);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both (see shader_loader.zig). The core owns the result; this
+    // pass never destroys it.
+    const vs = core.*.load_shader.?(core, "tonemap", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
+    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
+    const fs = core.*.load_shader.?(core, "tonemap", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
+    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
 
     // Set 0: { texture2D t_hdr @binding(0), sampler s_hdr @binding(1) }
     const bgl_entries = [2]c.ke_gpu_bind_group_layout_entry{

@@ -17,8 +17,6 @@ pub fn build(b: *std.Build) void {
     const ke_render  = b.option([]const u8, "ke-render-include",  "kernel_engine/render include dir")  orelse @panic("-Dke-render-include required");
     const ke_self    = b.option([]const u8, "ke-self-include",    "this plugin's include dir")         orelse @panic("-Dke-self-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir",         "dir with ke_common import lib")     orelse @panic("-Dke-lib-dir required");
-    const tonemap_vs_wgsl = b.option([]const u8, "tonemap-vs-wgsl", "generated tonemap vertex WGSL path")   orelse @panic("-Dtonemap-vs-wgsl required");
-    const tonemap_fs_wgsl = b.option([]const u8, "tonemap-fs-wgsl", "generated tonemap fragment WGSL path") orelse @panic("-Dtonemap-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/tonemap_module.zig"),
@@ -32,9 +30,6 @@ pub fn build(b: *std.Build) void {
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
     mod.addCMacro("KE_RENDER_TONEMAP_EXPORT", "");
-
-    mod.addAnonymousImport("tonemap.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = tonemap_vs_wgsl } });
-    mod.addAnonymousImport("tonemap.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = tonemap_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_tonemap",

@@ -6,33 +6,24 @@
 # pattern (see that CMakeLists.txt for the base shape).
 
 find_program(ZIG_EXECUTABLE zig REQUIRED)
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_render_tonemap${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
-set(COMPILE_SLANG "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
-set(SHADER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
-file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
-
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/tonemap.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/tonemap.slang"
-            --output "${SHADER_GEN_DIR}/tonemap.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/tonemap.slang" "${COMPILE_SLANG}"
-    VERBATIM
+# Compiled to the shared runtime shaders directory (not embedded into this
+# plugin's DLL) — the pass loads them at runtime by logical name via
+# ke_render_core::load_shader, so this plugin never names a shader format.
+ke_compile_slang_shader(
+    NAME tonemap STAGE vertex ENTRY vs_main
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/tonemap.slang"
+    OUT_FILE tonemap_vs_out
 )
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/tonemap.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/tonemap.slang"
-            --output "${SHADER_GEN_DIR}/tonemap.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/tonemap.slang" "${COMPILE_SLANG}"
-    VERBATIM
+ke_compile_slang_shader(
+    NAME tonemap STAGE fragment ENTRY fs_main
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/tonemap.slang"
+    OUT_FILE tonemap_fs_out
 )
+add_custom_target(ke_render_tonemap_shaders ALL DEPENDS "${tonemap_vs_out}" "${tonemap_fs_out}")
 
 file(GLOB KE_RENDER_TONEMAP_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
@@ -49,15 +40,11 @@ add_custom_command(
         "-Dke-render-include=${CMAKE_SOURCE_DIR}/src/c/render/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dtonemap-vs-wgsl=${SHADER_GEN_DIR}/tonemap.vs.wgsl"
-        "-Dtonemap-fs-wgsl=${SHADER_GEN_DIR}/tonemap.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
         ${KE_RENDER_TONEMAP_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/tonemap.vs.wgsl"
-        "${SHADER_GEN_DIR}/tonemap.fs.wgsl"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/kernel_engine/render/tonemap/tonemap_create.h"
         ke_common
     COMMENT "Building ke_render_tonemap (Zig)"

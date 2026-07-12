@@ -16,8 +16,6 @@ pub fn build(b: *std.Build) void {
     const ke_render    = b.option([]const u8, "ke-render-include",    "kernel_engine/render include dir")    orelse @panic("-Dke-render-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
-    const ui_vs_wgsl = b.option([]const u8, "ui-vs-wgsl", "generated ui vertex WGSL path")   orelse @panic("-Dui-vs-wgsl required");
-    const ui_fs_wgsl = b.option([]const u8, "ui-fs-wgsl", "generated ui fragment WGSL path") orelse @panic("-Dui-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/ui_module.zig"),
@@ -37,9 +35,6 @@ pub fn build(b: *std.Build) void {
     // implements no math; this Zig module brings its own via zmath.
     const zmath = b.dependency("zmath", .{});
     mod.addImport("zmath", zmath.module("root"));
-
-    mod.addAnonymousImport("ui.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_vs_wgsl } });
-    mod.addAnonymousImport("ui.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = ui_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_ui",

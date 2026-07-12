@@ -9,54 +9,40 @@
 # cluster_feature.slang) since deferred_lighting.slang imports them.
 
 find_program(ZIG_EXECUTABLE zig REQUIRED)
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_render_deferred_lighting${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
-set(COMPILE_SLANG "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
 set(KE_SHADER_LIB_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
-set(SHADER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
-file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
+set(DEFERRED_LIGHTING_SHADER_DEPS
+    "${KE_SHADER_LIB_DIR}/gbuffer_encoding.slang"
+    "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
+    "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
+    "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
+    "${KE_SHADER_LIB_DIR}/ke.slang"
+    "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+    "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
+)
 
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
-            --output "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
-            "${KE_SHADER_LIB_DIR}/gbuffer_encoding.slang"
-            "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
-            "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
+# Compiled to the shared runtime shaders directory (not embedded into this
+# plugin's DLL) — the pass loads it at runtime by logical name via
+# ke_render_core::load_shader, so this plugin never names a shader format.
+ke_compile_slang_shader(
+    NAME deferred_lighting STAGE vertex ENTRY vs_main
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
+    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+    EXTRA_DEPENDS ${DEFERRED_LIGHTING_SHADER_DEPS}
+    OUT_FILE deferred_lighting_vs_out
 )
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
-            --output "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
-            "${KE_SHADER_LIB_DIR}/gbuffer_encoding.slang"
-            "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
-            "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
+ke_compile_slang_shader(
+    NAME deferred_lighting STAGE fragment ENTRY fs_main
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/deferred_lighting.slang"
+    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+    EXTRA_DEPENDS ${DEFERRED_LIGHTING_SHADER_DEPS}
+    OUT_FILE deferred_lighting_fs_out
 )
+add_custom_target(ke_render_deferred_lighting_shaders ALL
+    DEPENDS "${deferred_lighting_vs_out}" "${deferred_lighting_fs_out}")
 
 file(GLOB KE_RENDER_DEFERRED_LIGHTING_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
@@ -74,15 +60,11 @@ add_custom_command(
         "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Ddeferred-lighting-vs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
-        "-Ddeferred-lighting-fs-wgsl=${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
         ${KE_RENDER_DEFERRED_LIGHTING_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/deferred_lighting.vs.wgsl"
-        "${SHADER_GEN_DIR}/deferred_lighting.fs.wgsl"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/kernel_engine/render/deferred_lighting/deferred_lighting_create.h"
         ke_common
     COMMENT "Building ke_render_deferred_lighting (Zig)"

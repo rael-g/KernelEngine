@@ -15,9 +15,6 @@ const gpa = std.heap.c_allocator;
 // a no-op) but none of the expensive resources (shadow_map/shadow_depth render
 // targets, pipeline, per-draw buffers, the "render.shadow" system) exist.
 
-const shadow_vs_wgsl = @embedFile("shadow.vs.wgsl");
-const shadow_fs_wgsl = @embedFile("shadow.fs.wgsl");
-
 const SHADOW_RES = 1024; // shadow map resolution
 
 // Duplicated from render_module.zig rather than shared, matching the
@@ -200,12 +197,12 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     }, null);
     sh.view = core.*.resource_view.?(core, "shadow_map");
 
-    const sh_vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_vs_wgsl), .byte_size = shadow_vs_wgsl.len, .entry_point = "shadow.vs" }, out_error);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both. The core owns the result; this pass never destroys it.
+    const sh_vs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sh_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, sh_vs);
-    const sh_fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(shadow_fs_wgsl), .byte_size = shadow_fs_wgsl.len, .entry_point = "shadow.fs" }, out_error);
+    const sh_fs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (sh_fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, sh_fs);
 
     const sh_lvp_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
     const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_lvp_entry });

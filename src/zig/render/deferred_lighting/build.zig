@@ -18,8 +18,6 @@ pub fn build(b: *std.Build) void {
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
-    const deferred_lighting_vs_wgsl = b.option([]const u8, "deferred-lighting-vs-wgsl", "generated deferred-lighting vertex WGSL path")   orelse @panic("-Ddeferred-lighting-vs-wgsl required");
-    const deferred_lighting_fs_wgsl = b.option([]const u8, "deferred-lighting-fs-wgsl", "generated deferred-lighting fragment WGSL path") orelse @panic("-Ddeferred-lighting-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/deferred_lighting_module.zig"),
@@ -39,9 +37,6 @@ pub fn build(b: *std.Build) void {
     // this Zig module brings its own via the package manager (zmath).
     const zmath = b.dependency("zmath", .{});
     mod.addImport("zmath", zmath.module("root"));
-
-    mod.addAnonymousImport("deferred_lighting.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = deferred_lighting_vs_wgsl } });
-    mod.addAnonymousImport("deferred_lighting.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = deferred_lighting_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_deferred_lighting",

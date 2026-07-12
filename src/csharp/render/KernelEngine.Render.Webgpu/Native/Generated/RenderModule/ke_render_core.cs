@@ -128,4 +128,7 @@ public unsafe partial struct ke_render_core
 
     [NativeTypeName("ke_texture_handle (*)(struct ke_render_core *)")]
     public delegate* unmanaged[Cdecl]<ke_render_core*, ke_texture_handle> white_texture;
+
+    [NativeTypeName("ke_gpu_shader_module (*)(struct ke_render_core *, const char *, ke_gpu_shader_stage, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_core*, sbyte*, uint, ke_error**, ulong> load_shader;
 }

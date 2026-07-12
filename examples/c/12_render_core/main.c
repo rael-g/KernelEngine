@@ -44,7 +44,7 @@ int main(void)
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
-    ke_render_core_handle core = ke_render_core_create(gpu.ref, ecs.ref, &err);
+    ke_render_core_handle core = ke_render_core_create(gpu.ref, ecs.ref, "shaders", &err);
     if (!core.ref) die("render core", err);
 
     // ── Triangle pipeline — engine-level setup via the device ────────────────

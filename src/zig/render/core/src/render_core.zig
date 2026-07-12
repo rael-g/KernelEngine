@@ -36,6 +36,7 @@ const frame_lifecycle = @import("frame_lifecycle.zig");
 const asset_upload = @import("asset_upload.zig");
 const pipeline_cache = @import("pipeline_cache.zig");
 const slot_map = @import("slot_map.zig");
+const shader_loader = @import("shader_loader.zig");
 
 pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
@@ -176,6 +177,17 @@ pub const CoreState = struct {
     texture_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
     material_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
 
+    // Shader modules: a 4th owned resource kind, deduped by resolved file path
+    // (see shader_loader.zig). Never released by a pass — lives for the core's
+    // lifetime, freed at teardown like the built-in mesh/texture/material.
+    shader_store: slot_map.SlotMap(c.ke_gpu_shader_module),
+    shader_cache: *c.ke_resource_cache,
+    shader_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
+    // Absolute path to the directory build-time-compiled shaders were
+    // installed into (owned, allocated at create). load_shader resolves
+    // "<shader_dir>/<name>.<stage-suffix>.<ext>" against this.
+    shader_dir: []const u8,
+
     sampler: c.ke_gpu_sampler, // shared linear-repeat sampler
     material_bgl: c.ke_gpu_bind_group_layout, // set 1 layout
     default_normal: c.ke_texture_handle, // built-in flat (0,0,1) normal map
@@ -262,23 +274,34 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
     st.material_cache_destroy(st.material_cache);
     st.texture_cache_destroy(st.texture_cache);
     st.mesh_cache_destroy(st.mesh_cache);
+    st.shader_cache_destroy(st.shader_cache);
     st.material_store.deinit();
     st.texture_store.deinit();
     st.mesh_store.deinit();
+    st.shader_store.deinit();
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
     st.pipeline_cache.destroyAll(st.device);
     gpa.free(st.upload_arena);
+    gpa.free(@constCast(st.shader_dir));
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_core, @ptrCast(self)));
 }
 
-export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_core_handle {
-    _ = out_error; // no longer consumed directly here — UI setup (its only caller) moved to ui_module.zig
+export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_core_handle {
     const dev = device orelse return .{ .ref = null, .destroy = null };
     const e = ecs orelse return .{ .ref = null, .destroy = null };
+    const shader_dir_span = if (shader_dir != null) std.mem.span(shader_dir) else {
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_core_create: shader_dir is required", @src().file, @intCast(@src().line), null);
+        return .{ .ref = null, .destroy = null };
+    };
 
     const st = gpa.create(CoreState) catch return .{ .ref = null, .destroy = null };
     const upload_arena = gpa.alloc(u8, UPLOAD_ARENA_SIZE) catch {
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    };
+    const shader_dir_owned = gpa.dupe(u8, shader_dir_span) catch {
+        gpa.free(upload_arena);
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
     };
@@ -313,6 +336,10 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .mesh_cache_destroy = undefined,
         .texture_cache_destroy = undefined,
         .material_cache_destroy = undefined,
+        .shader_store = slot_map.SlotMap(c.ke_gpu_shader_module).init(gpa),
+        .shader_cache = undefined,
+        .shader_cache_destroy = undefined,
+        .shader_dir = shader_dir_owned,
         .sampler = c.KE_GPU_INVALID_HANDLE,
         .material_bgl = c.KE_GPU_INVALID_HANDLE,
         .default_normal = .{ .bits = c.KE_HANDLE_NONE },
@@ -323,7 +350,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
 
-    // The three owning caches. Each destroy_fn empties the matching slot map and
+    // The four owning caches. Each destroy_fn empties the matching slot map and
     // destroys the GPU objects; destroy_ctx is the core so the callback can reach
     // the device + stores. A failure here leaves earlier caches leaked on the
     // error path, but a cache alloc failing at startup is fatal anyway.
@@ -339,7 +366,12 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .destroy_fn = asset_upload.destroyMaterialResource,
         .destroy_ctx = st,
     }, null);
-    if (mesh_ch.ref == null or tex_ch.ref == null or mat_ch.ref == null) {
+    const shader_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
+        .destroy_fn = shader_loader.destroyShaderResource,
+        .destroy_ctx = st,
+    }, null);
+    if (mesh_ch.ref == null or tex_ch.ref == null or mat_ch.ref == null or shader_ch.ref == null) {
+        gpa.free(shader_dir_owned);
         gpa.free(upload_arena);
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
@@ -347,9 +379,11 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
     st.mesh_cache = mesh_ch.ref.?;
     st.texture_cache = tex_ch.ref.?;
     st.material_cache = mat_ch.ref.?;
+    st.shader_cache = shader_ch.ref.?;
     st.mesh_cache_destroy = mesh_ch.destroy.?;
     st.texture_cache_destroy = tex_ch.destroy.?;
     st.material_cache_destroy = mat_ch.destroy.?;
+    st.shader_cache_destroy = shader_ch.destroy.?;
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
     const bb_cid = e.component_register.?(e, "backbuffer", 0);
@@ -412,6 +446,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, out_
         .try_get_texture = asset_upload.tryGetTexture,
         .try_get_material = asset_upload.tryGetMaterial,
         .white_texture = asset_upload.whiteTexture,
+        .load_shader = shader_loader.loadShader,
     };
 
     // Material system: shared sampler + set-1 layout + built-in white texture (0)

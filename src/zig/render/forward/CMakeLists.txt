@@ -10,58 +10,41 @@
 # its own private refraction_feature.slang (only this pass calls it).
 
 find_program(ZIG_EXECUTABLE zig REQUIRED)
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_render_forward${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
-set(COMPILE_SLANG "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
 set(KE_SHADER_LIB_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
-set(SHADER_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
-file(MAKE_DIRECTORY "${SHADER_GEN_DIR}")
+set(FORWARD_SHADER_DEPS
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/refraction_feature.slang"
+    "${KE_SHADER_LIB_DIR}/forward_common.slang"
+    "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
+    "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
+    "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
+    "${KE_SHADER_LIB_DIR}/ke.slang"
+    "${KE_SHADER_LIB_DIR}/ke/surface.slang"
+    "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
+)
 
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry vs_main --stage vertex
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/refraction_feature.slang"
-            "${KE_SHADER_LIB_DIR}/forward_common.slang"
-            "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
-            "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
+# Compiled to the shared runtime shaders directory (not embedded into this
+# plugin's DLL) — the pass loads it at runtime by logical name via
+# ke_render_core::load_shader, so this plugin never names a shader format.
+ke_compile_slang_shader(
+    NAME forward STAGE vertex ENTRY vs_main
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
+    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+    EXTRA_DEPENDS ${FORWARD_SHADER_DEPS}
+    OUT_FILE forward_vs_out
 )
-add_custom_command(
-    OUTPUT "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
-    COMMAND "${Python3_EXECUTABLE}" "${COMPILE_SLANG}"
-            --raw --target wgsl --entry fs_main --stage fragment
-            --include "${KE_SHADER_LIB_DIR}"
-            --include "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            --input  "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            --output "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/transparent_forward.slang"
-            "${CMAKE_CURRENT_SOURCE_DIR}/shaders/refraction_feature.slang"
-            "${KE_SHADER_LIB_DIR}/forward_common.slang"
-            "${KE_SHADER_LIB_DIR}/shadow_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ibl_feature.slang"
-            "${KE_SHADER_LIB_DIR}/cluster_feature.slang"
-            "${KE_SHADER_LIB_DIR}/ke.slang"
-            "${KE_SHADER_LIB_DIR}/ke/surface.slang"
-            "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
-            "${COMPILE_SLANG}"
-    VERBATIM
+ke_compile_slang_shader(
+    NAME forward STAGE fragment ENTRY fs_main
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
+    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+    EXTRA_DEPENDS ${FORWARD_SHADER_DEPS}
+    OUT_FILE forward_fs_out
 )
+add_custom_target(ke_render_forward_shaders ALL DEPENDS "${forward_vs_out}" "${forward_fs_out}")
 
 file(GLOB KE_RENDER_FORWARD_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
@@ -79,15 +62,11 @@ add_custom_command(
         "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
-        "-Dforward-vs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-        "-Dforward-fs-wgsl=${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
         ${KE_RENDER_FORWARD_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        "${SHADER_GEN_DIR}/mat_test_flat_transparent.vs.wgsl"
-        "${SHADER_GEN_DIR}/mat_test_flat_transparent.fs.wgsl"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/kernel_engine/render/forward/forward_create.h"
         ke_common
     COMMENT "Building ke_render_forward (Zig)"

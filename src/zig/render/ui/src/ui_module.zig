@@ -13,9 +13,6 @@ const gpa = std.heap.c_allocator;
 // vtable method, which is why (unlike tonemap/skybox) this plugin exposes a
 // real vtable instead of an opaque fire-and-forget handle.
 
-const ui_vs_wgsl = @embedFile("ui.vs.wgsl");
-const ui_fs_wgsl = @embedFile("ui.fs.wgsl");
-
 // 6 vertices per quad (two triangles, no index buffer — the per-frame count is
 // small enough that indexing isn't worth the complexity).
 const MAX_UI_QUADS = 8192;
@@ -207,10 +204,12 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     ui.device = dev;
     ui.ndc = ndc;
 
-    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(ui_vs_wgsl), .byte_size = ui_vs_wgsl.len, .entry_point = "ui.vs" }, out_error);
-    defer dev.destroy_shader_module.?(dev, vs);
-    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{ .code = @ptrCast(ui_fs_wgsl), .byte_size = ui_fs_wgsl.len, .entry_point = "ui.fs" }, out_error);
-    defer dev.destroy_shader_module.?(dev, fs);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both. The core owns the result; this pass never destroys it.
+    const vs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
+    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
+    const fs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
+    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
 
     const frame_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,

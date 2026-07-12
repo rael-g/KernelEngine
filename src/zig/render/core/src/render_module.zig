@@ -182,12 +182,13 @@ const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
                                   default_passes: c.ke_bool, logger: ?*c.ke_logger,
                                   cluster_params: ?*const c.ke_render_cluster_params,
-                                  feature_params: ?*const c.ke_render_feature_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
+                                  feature_params: ?*const c.ke_render_feature_params,
+                                  shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
     const dev = device orelse return empty;
 
-    const core_h = c.ke_render_core_create(dev, e, out_error);
+    const core_h = c.ke_render_core_create(dev, e, shader_dir, out_error);
     if (core_h.ref == null) return empty;
 
     const st = gpa.create(ModuleState) catch {

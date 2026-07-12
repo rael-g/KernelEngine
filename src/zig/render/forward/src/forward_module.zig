@@ -23,9 +23,6 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-const vs_wgsl = @embedFile("mat_test_flat_transparent.vs.wgsl");
-const fs_wgsl = @embedFile("mat_test_flat_transparent.fs.wgsl");
-
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
@@ -391,16 +388,12 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
         .attributes = &attrs,
     };
 
-    const vs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(vs_wgsl), .byte_size = vs_wgsl.len, .entry_point = "mat_test_flat_transparent.vs",
-    }, out_error);
+    // Neither the path nor the shader format is named here — core.load_shader
+    // resolves both. The core owns the result; this pass never destroys it.
+    const vs = core.*.load_shader.?(core, "forward", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, vs);
-    const fs = dev.create_shader_module.?(dev, &c.ke_gpu_shader_module_params{
-        .code = @ptrCast(fs_wgsl), .byte_size = fs_wgsl.len, .entry_point = "mat_test_flat_transparent.fs",
-    }, out_error);
+    const fs = core.*.load_shader.?(core, "forward", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, fs);
 
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.vertex_module = vs;

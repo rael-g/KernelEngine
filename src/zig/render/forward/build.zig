@@ -18,8 +18,6 @@ pub fn build(b: *std.Build) void {
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
-    const forward_vs_wgsl = b.option([]const u8, "forward-vs-wgsl", "generated transparent-forward vertex WGSL path")   orelse @panic("-Dforward-vs-wgsl required");
-    const forward_fs_wgsl = b.option([]const u8, "forward-fs-wgsl", "generated transparent-forward fragment WGSL path") orelse @panic("-Dforward-fs-wgsl required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/forward_module.zig"),
@@ -39,9 +37,6 @@ pub fn build(b: *std.Build) void {
     // this Zig module brings its own via the package manager (zmath).
     const zmath = b.dependency("zmath", .{});
     mod.addImport("zmath", zmath.module("root"));
-
-    mod.addAnonymousImport("mat_test_flat_transparent.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = forward_vs_wgsl } });
-    mod.addAnonymousImport("mat_test_flat_transparent.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = forward_fs_wgsl } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_forward",

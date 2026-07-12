@@ -25,6 +25,18 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# ── Shader compilation (Slang → the active backend's accepted format) ───────
+# Set once, here — no render pass decides or names a shader format; each
+# resolves its own shader by logical name + stage through
+# ke_render_core::load_shader, which asks the device (ke_gpu_device::
+# shader_language) and maps that to this same extension. wgsl is the only
+# value today because webgpu is the only backend; a second backend changes
+# this one line, not any of the passes.
+set(KE_SHADER_TARGET "wgsl" CACHE STRING "Shader target format every render pass compiles to (must match the active ke_gpu_device backend)")
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(KE_COMPILE_SLANG_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
+include(cmake/CompileSlangShader.cmake)
+
 add_subdirectory(src/c/common)
 add_subdirectory(src/c/allocator)
 add_subdirectory(src/c/logger)
