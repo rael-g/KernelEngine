@@ -27,24 +27,19 @@ set(FORWARD_SHADER_DEPS
     "${KE_SHADER_LIB_DIR}/ke/pbr.slang"
 )
 
-# Compiled to the shared runtime shaders directory (not embedded into this
-# plugin's DLL) — the pass loads it at runtime by logical name via
-# ke_render_core::load_shader, so this plugin never names a shader format.
-ke_compile_slang_shader(
-    NAME forward STAGE vertex ENTRY vs_main
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
+# Every authored material x this pass. The pass hardcodes no material: each
+# lands as <material>.forward.{vs,fs}.<ext> in the shared runtime shaders dir,
+# resolved by logical name at draw time via ke_render_core::load_shader once a
+# material says which shader it wants. Adding a material means dropping a
+# .slang in KE_MATERIALS_DIR — this file does not change.
+ke_compile_material_shaders(
+    PASS forward
+    TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/shaders/forward_material.slang.in"
     INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
     EXTRA_DEPENDS ${FORWARD_SHADER_DEPS}
-    OUT_FILE forward_vs_out
+    OUT_FILES forward_material_outs
 )
-ke_compile_slang_shader(
-    NAME forward STAGE fragment ENTRY fs_main
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_transparent.slang"
-    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-    EXTRA_DEPENDS ${FORWARD_SHADER_DEPS}
-    OUT_FILE forward_fs_out
-)
-add_custom_target(ke_render_forward_shaders ALL DEPENDS "${forward_vs_out}" "${forward_fs_out}")
+add_custom_target(ke_render_forward_shaders ALL DEPENDS ${forward_material_outs})
 
 file(GLOB KE_RENDER_FORWARD_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")

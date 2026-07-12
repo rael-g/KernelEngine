@@ -170,7 +170,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                                          TextureHandle? albedo = null, TextureHandle? normalMap = null,
                                          AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
                                          float ior = 1.5f, float distortionStrength = 0.05f,
-                                         uint shaderVariant = 0)
+                                         string? shader = null)
     {
         if (_core == null)
             throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
@@ -181,9 +181,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var albedoH = new ke_texture_handle { bits = albedo?.Value ?? uint.MaxValue };
         var normalH = new ke_texture_handle { bits = normalMap?.Value ?? uint.MaxValue };
         var keyBytes = Utf8(key);
+        var shaderBytes = shader is null ? null : Utf8(shader);
         fixed (byte* k = keyBytes)
+        fixed (byte* sh = shaderBytes)
             h = _core->create_material(_core, (sbyte*)k, &baseColor.X, metallic, roughness, albedoH, normalH,
-                                        (ke_alpha_mode)(int)alphaMode, alphaCutoff, ior, distortionStrength, shaderVariant, &err);
+                                        (ke_alpha_mode)(int)alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)sh, &err);
         if (h.bits == uint.MaxValue)
             throw Fail("create_material failed", err);
         return new MaterialHandle(h.bits);

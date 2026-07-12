@@ -6,7 +6,7 @@ const c = cimport.c;
 const gpa = std.heap.c_allocator;
 
 // Deferred G-buffer encode pass — the opaque path's first half. Draws every
-// mesh through the encode pipeline (mat_test_flat_gbuffer), writing the surface
+// mesh through its material's encode pipeline, writing the surface
 // (albedo/metallic/normal/roughness/ao/emissive) into 3 color targets + depth.
 // No lighting: the deferred_lighting pass reads these back and shades. Unlike
 // forward, this pass needs no shadow/ibl/cluster/skybox handles — encode is
@@ -22,14 +22,16 @@ const gpa = std.heap.c_allocator;
 // the borrowed ke_render_core/ke_runtime handles passed to create() — it never
 // sees another pass's private struct.
 
-// Second built-in material (§6 Mechanism 1 proof — see mat_stripes_gbuffer.slang):
-// a genuine shader difference, so a material referencing it resolves to a
-// distinct PSO through get_or_create_pipeline, not just distinct bind-group
-// data. SHADER_VARIANT_COUNT is a scaffold constant for this proof, not the
-// real material system (§8 Option C) — that will size this from the project's
-// authored materials, not a hardcoded 2. "gbuffer" and "gbuffer_stripes" are
-// the two logical shader names core.load_shader resolves.
-const SHADER_VARIANT_COUNT = 2;
+// The pass draws any authored material: at draw time it reads the material's
+// shader name (ke_render_core::material_shader), resolves "<name>.gbuffer"
+// through load_shader, and gets the matching PSO. It hardcodes no material and
+// carries no fixed variant count — the (material x pass) set is a build
+// artifact (see cmake/CompileMaterialShaders.cmake), not a runtime constant.
+const PASS_NAME = "gbuffer";
+// The engine's default material shader — the same name ke_render_core resolves
+// an unknown/none material to. Duplicated here (not imported) per the plugin
+// decoupling precedent, only to warm a PSO at setup before any scene material.
+const DEFAULT_MATERIAL_SHADER = "standard";
 
 // Duplicated from the other pass modules per the decoupling precedent (see
 // shadow_module.zig): small shared constants kept local, not imported.
@@ -51,12 +53,16 @@ const GBufferModule = struct {
     transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
 
-    // One params struct per shader variant (§6 Mechanism 1 proof), re-queried
-    // via core.get_or_create_pipeline every record() call — see
-    // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade. Indexed
-    // by ke_render_core::material_shader_variant(mesh.material).
-    pipeline_params: [SHADER_VARIANT_COUNT]c.ke_gpu_render_pipeline_params = undefined,
+    // Pipeline params shared by every material this pass draws: identical bind-
+    // group/vertex/target layout, differing only in the two shader modules,
+    // which are filled per-draw from the material's shader name (see system()).
+    // Re-queried via core.get_or_create_pipeline every record() call — a handle
+    // cached once at setup can't observe the async real-PSO upgrade. attrs/vbl
+    // are held here (not setup-locals) so vertex_buffers stays a stable pointer
+    // for the PSO key's lifetime.
+    pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
+    attrs: [4]c.ke_gpu_vertex_attribute = undefined,
+    vbl: c.ke_gpu_vertex_buffer_layout = undefined,
     // The encode shader binds only set 1 (material) + set 2 (object); set 0 is
     // an empty layout so the positional bind_group_layouts array has no hole.
     empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
@@ -72,7 +78,27 @@ const GBufferModule = struct {
     // body then reads plain memory via ke_system_ctx_view and touches the ECS
     // not at all.
     queries: [2]c.ke_query_decl = undefined, // [camera, transform], [mesh, transform]
+
+    // Fills pipeline_template's two shader modules from the material's authored
+    // shader name, resolving "<shader>.gbuffer" for each stage. Returns false
+    // (draw skipped) if either stage fails to load. Called per draw; load_shader
+    // is a cache hit after the first resolve of a given material.
+    fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
+        var name_buf: [rc_MAX_SHADER_QUALIFIED]u8 = undefined;
+        const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
+        const vs = gb.core.*.load_shader.?(gb.core, name.ptr, c.KE_GPU_SHADER_STAGE_VERTEX, null);
+        if (vs == c.KE_GPU_INVALID_HANDLE) return false;
+        const fs = gb.core.*.load_shader.?(gb.core, name.ptr, c.KE_GPU_SHADER_STAGE_FRAGMENT, null);
+        if (fs == c.KE_GPU_INVALID_HANDLE) return false;
+        gb.pipeline_template.vertex_module = vs;
+        gb.pipeline_template.fragment_module = fs;
+        return true;
+    }
 };
+
+// A shader name ("standard") plus a ".<pass>" suffix — bounded by the same
+// identifier limit the core stores material shader names under, plus the suffix.
+const rc_MAX_SHADER_QUALIFIED = 128;
 
 // Left-handed view from a camera transform (identity rotation → look at origin;
 // otherwise the world-matrix basis). Duplicated from forward_module.zig per the
@@ -166,11 +192,14 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             const offset: u32 = draw_idx * UNIFORM_STRIDE;
             core.*.upload.?(core, gb.obj_uniform, offset, &u, @sizeOf(PerObject));
 
-            // Per-draw PSO by material shader variant (§6 Mechanism 1 proof) —
-            // an O(1) cache lookup, correct and simple; sorting draws by PSO to
-            // batch state changes is a separate, later optimization.
-            const variant = @min(core.*.material_shader_variant.?(core, meshes[i].material), SHADER_VARIANT_COUNT - 1);
-            rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_params[variant]));
+            // Per-draw PSO by the material's authored shader: resolve
+            // "<shader>.gbuffer" to this pass's compiled (material x pass)
+            // wrapper. load_shader + get_or_create_pipeline both dedup, so a
+            // repeated material is a cache hit; sorting draws by PSO to batch
+            // state changes is a separate, later optimization. A material whose
+            // shader fails to resolve is skipped (already logged by load_shader).
+            if (!gb.resolvePipeline(core.*.material_shader.?(core, meshes[i].material))) continue;
+            rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_template));
 
             const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
             rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
@@ -221,44 +250,30 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
         .entries = &obj_bgl_entry,
     });
 
-    const attrs = [_]c.ke_gpu_vertex_attribute{
+    gb.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
         .{ .shader_location = 1, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 3 * @sizeOf(f32) },
         .{ .shader_location = 2, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = 6 * @sizeOf(f32) },
         .{ .shader_location = 3, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 8 * @sizeOf(f32) },
     };
-    const vbl = c.ke_gpu_vertex_buffer_layout{
+    gb.vbl = c.ke_gpu_vertex_buffer_layout{
         .stride = 11 * @sizeOf(f32),
         .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX,
         .attribute_count = 4,
-        .attributes = &attrs,
+        .attributes = &gb.attrs,
     };
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
-    const vs = core.*.load_shader.?(core, "gbuffer", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
-    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    const fs = core.*.load_shader.?(core, "gbuffer", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
-    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
-
-    // Shader variant 1 (§6 Mechanism 1 proof) — same bind-group/vertex layout,
-    // a genuinely different fragment (mat_stripes_gbuffer.slang).
-    const stripes_vs = core.*.load_shader.?(core, "gbuffer_stripes", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
-    if (stripes_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    const stripes_fs = core.*.load_shader.?(core, "gbuffer_stripes", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
-    if (stripes_fs == c.KE_GPU_INVALID_HANDLE) return false;
-    defer dev.destroy_shader_module.?(dev, stripes_fs);
-
+    // Template shared by every material: layout, state, targets — everything but
+    // the two shader modules, which resolvePipeline() fills per draw from the
+    // material's shader name.
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
-    pp.vertex_module = vs;
-    pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
     pp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     pp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
-    pp.vertex_buffers = &vbl;
+    pp.vertex_buffers = &gb.vbl;
     pp.blend_state.write_mask = 0x0F; // opaque encode, no blend
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 1;
@@ -273,20 +288,16 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM; // octNormal + roughness + ao
     pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // emissive + alpha
     pp.color_target_count = 3;
+    gb.pipeline_template = pp;
 
-    // Variant 1: identical params, only the shader modules differ.
-    var pp_stripes = pp;
-    pp_stripes.vertex_module = stripes_vs;
-    pp_stripes.fragment_module = stripes_fs;
-
-    gb.pipeline_params[0] = pp;
-    gb.pipeline_params[1] = pp_stripes;
-    if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_params[0]) == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
+    // Warm the default material's PSO so a pipeline exists before the first
+    // draw resolves it. Any material a scene actually uses is resolved on demand.
+    if (!gb.resolvePipeline(DEFAULT_MATERIAL_SHADER)) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: default material shader failed to load", @src().file, @intCast(@src().line), null);
         return false;
     }
-    if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_params[1]) == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: stripes-variant pipeline creation failed", @src().file, @intCast(@src().line), null);
+    if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_template) == c.KE_GPU_INVALID_HANDLE) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }
 

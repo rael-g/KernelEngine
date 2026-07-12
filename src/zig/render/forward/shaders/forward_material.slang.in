@@ -1,0 +1,18 @@
+// Wrapper template — the transparent-forward pass's half of the (material x pass)
+// product. scripts/generate_material_wrapper.py substitutes the placeholders per
+// authored material; the result is compiled to <material>.forward.{vs,fs}.<ext>.
+// This file is the ONLY place that knows how to bind an IMaterial into this
+// pass, which is why an authored material never imports a pass and never
+// declares an entry point.
+
+import ke;
+import transparent_forward;
+import @MATERIAL_MODULE@;
+
+static @MATERIAL_STRUCT@ _mat;
+
+[shader("vertex")]
+VsOut vs_main(VsIn input) { return ke_forward_vs(_mat, input); }
+
+[shader("fragment")]
+float4 fs_main(VsOut input) : SV_Target { return ke_transparent_fs(_mat, input); }

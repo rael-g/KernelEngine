@@ -23,7 +23,7 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-// Set 1 — per material: the fixed engine material set. TestFlat and the other
+// Set 1 — per material: the fixed engine material set. Standard and the other
 // built-in materials source their surface fields from this UBO + textures.
 struct Material {
     float4 base_color;

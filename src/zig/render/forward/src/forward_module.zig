@@ -87,12 +87,18 @@ const ForwardModule = struct {
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    // Not a resolved handle — re-queried via core.get_or_create_pipeline every
-    // record() call. §6 Mechanism 1 upgrades a fresh miss's magenta fallback
-    // to the real compiled PSO asynchronously; a handle cached once at setup
-    // would freeze on whichever one was current AT setup time (the fallback,
-    // since the real compile hasn't finished yet) and never see the upgrade.
-    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
+    // Pipeline params shared by every material this pass draws: identical bind-
+    // group/vertex/target/blend layout, differing only in the two shader
+    // modules, filled per-draw from the material's shader name (see
+    // resolvePipeline). Not a resolved handle — re-queried via
+    // get_or_create_pipeline every record(): §6 Mechanism 1 upgrades a fresh
+    // miss's magenta fallback to the real compiled PSO asynchronously; a handle
+    // cached once at setup would freeze on the fallback and never see the
+    // upgrade. attrs/vbl held here (not setup-locals) so vertex_buffers stays a
+    // stable pointer for the PSO key's lifetime.
+    pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
+    attrs: [4]c.ke_gpu_vertex_attribute = undefined,
+    vbl: c.ke_gpu_vertex_buffer_layout = undefined,
     frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
     frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, rebuilt on env change
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -115,7 +121,31 @@ const ForwardModule = struct {
     // body then reads plain memory via ke_system_ctx_view and touches the ECS
     // not at all.
     queries: [5]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient], [mesh,transform]
+
+    // Fills pipeline_template's two shader modules from the material's authored
+    // shader name, resolving "<shader>.forward" for each stage. Returns false
+    // (draw skipped) if either stage fails to load. Called per draw; load_shader
+    // is a cache hit after the first resolve of a given material.
+    fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
+        var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
+        const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
+        const vs = fwd.core.*.load_shader.?(fwd.core, name.ptr, c.KE_GPU_SHADER_STAGE_VERTEX, null);
+        if (vs == c.KE_GPU_INVALID_HANDLE) return false;
+        const fs = fwd.core.*.load_shader.?(fwd.core, name.ptr, c.KE_GPU_SHADER_STAGE_FRAGMENT, null);
+        if (fs == c.KE_GPU_INVALID_HANDLE) return false;
+        fwd.pipeline_template.vertex_module = vs;
+        fwd.pipeline_template.fragment_module = fs;
+        return true;
+    }
 };
+
+const PASS_NAME = "forward";
+// The engine default material shader — the name ke_render_core resolves an
+// unknown/none material to. Duplicated here (not imported) per the plugin
+// decoupling precedent, only to warm a PSO at setup before any scene material.
+const DEFAULT_MATERIAL_SHADER = "standard";
+// A "<shader>.<pass>" qualified name — the shader-name bound plus the suffix.
+const MAX_SHADER_QUALIFIED = 128;
 
 fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
     var p = if (ndc.z_zero_to_one != 0)
@@ -295,7 +325,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     std.sort.pdq(Draw, fwd.draws[0..draw_count], {}, drawFartherFirst);
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, fwd.frame_bind_group, null, 0);
     rp.*.set_bind_group.?(rp, 3, core.*.resource_bind_group.?(core, "cluster_lights"), null, 0);
 
@@ -306,6 +335,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         var ibo: c.ke_gpu_buffer = 0;
         var idx_count: u32 = 0;
         if (core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count) == 0) continue;
+
+        // Per-draw PSO by the material's authored shader ("<shader>.forward").
+        // load_shader + get_or_create_pipeline both dedup, so a repeated
+        // material is a cache hit. A material whose shader fails to resolve is
+        // skipped (already logged by load_shader).
+        if (!fwd.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
+        rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template));
 
         const model = zm.loadMat(draw.transform.world_matrix.m[0..]);
         const mvp = zm.mul(model, view_proj);
@@ -375,36 +411,30 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
         .entries = &obj_bgl_entry,
     });
 
-    const attrs = [_]c.ke_gpu_vertex_attribute{
+    fwd.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
         .{ .shader_location = 1, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 3 * @sizeOf(f32) },
         .{ .shader_location = 2, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = 6 * @sizeOf(f32) },
         .{ .shader_location = 3, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 8 * @sizeOf(f32) },
     };
-    const vbl = c.ke_gpu_vertex_buffer_layout{
+    fwd.vbl = c.ke_gpu_vertex_buffer_layout{
         .stride = 11 * @sizeOf(f32),
         .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX,
         .attribute_count = 4,
-        .attributes = &attrs,
+        .attributes = &fwd.attrs,
     };
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
-    const vs = core.*.load_shader.?(core, "forward", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
-    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    const fs = core.*.load_shader.?(core, "forward", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
-    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
-
+    // Template shared by every material: layout, blend, depth, target —
+    // everything but the two shader modules, which resolvePipeline() fills per
+    // draw from the material's shader name.
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
-    pp.vertex_module = vs;
-    pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
     pp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     pp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
-    pp.vertex_buffers = &vbl;
+    pp.vertex_buffers = &fwd.vbl;
     // Standard alpha blend: the surface's own alpha weighs its shading against
     // whatever is already in "hdr" (skybox + opaque, composited by deferred-
     // lighting + skybox before this pass runs).
@@ -430,8 +460,15 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
     pp.bind_group_layout_count = 4;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
     pp.color_target_count = 1;
-    fwd.pipeline_params = pp;
-    if (core.*.get_or_create_pipeline.?(core, &fwd.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
+    fwd.pipeline_template = pp;
+
+    // Warm the default material's PSO so a pipeline exists before the first draw
+    // resolves it. Any material a scene actually uses is resolved on demand.
+    if (!fwd.resolvePipeline(DEFAULT_MATERIAL_SHADER)) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "transparent-forward: default material shader failed to load", @src().file, @intCast(@src().line), null);
+        return false;
+    }
+    if (core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template) == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "transparent-forward: render pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
     }

@@ -53,19 +53,22 @@ public interface IRenderResources
     /// refraction) and <paramref name="distortionStrength"/> only apply to
     /// <see cref="AlphaMode.Blend"/> (ior: 1.0 = no bend, 1.33 = water, 1.5 = glass;
     /// distortionStrength: lateral shift of the sampled background, in normalized
-    /// screen space). <paramref name="shaderVariant"/> selects which build-time-
-    /// compiled fragment shader the drawing pass uses (§6 Mechanism 1 proof —
-    /// distinct variants resolve to distinct PSOs, not just distinct bind-group
-    /// data); 0 = the pass's default/flat variant. <paramref name="key"/> is
-    /// required, same rule as <see cref="UploadMesh"/> — a caller with no file
-    /// path (an inline scene-authored material, say) keys by its own parameters
-    /// so two nodes authored identically share one material.
+    /// screen space). <paramref name="shader"/> names the authored material that
+    /// shades this surface — the file stem of a <c>struct X : IMaterial</c>
+    /// <c>.slang</c> in the project's materials directory (<c>"standard"</c>,
+    /// <c>"stripes"</c>, …); <c>null</c> selects the engine default. It is not a
+    /// file path or a format — whichever pass draws the material resolves
+    /// <c>"&lt;shader&gt;.&lt;pass&gt;"</c> to the wrapper the build compiled, so two
+    /// materials naming different shaders get genuinely distinct PSOs.
+    /// <paramref name="key"/> is required, same rule as <see cref="UploadMesh"/> —
+    /// a caller with no file path (an inline scene-authored material, say) keys
+    /// by its own parameters so two nodes authored identically share one material.
     /// </summary>
     MaterialHandle CreateMaterial(string key, Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                   TextureHandle? albedo = null, TextureHandle? normalMap = null,
                                   AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
                                   float ior = 1.5f, float distortionStrength = 0.05f,
-                                  uint shaderVariant = 0);
+                                  string? shader = null);
 
     /// <summary>The built-in 1×1 white texture (neutral albedo).</summary>
     TextureHandle WhiteTexture { get; }

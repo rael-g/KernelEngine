@@ -37,6 +37,21 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(KE_COMPILE_SLANG_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/compile_slang.py")
 include(cmake/CompileSlangShader.cmake)
 
+# ── Authored materials (the material x pass product) ────────────────────────
+# Every .slang across these directories is a lone `struct X : IMaterial` — no
+# entry point, no pass import. Each consuming pass compiles all of them
+# against its own wrapper template, so adding a material means dropping a file
+# in one of these directories: no pass, CMakeLists, or engine source changes.
+# The engine's own materials/ ships "standard" (the built-in default) and
+# "stripes" (a §6 Mechanism 1 proof); a game APPENDS its own directory here
+# rather than overriding, so both keep coexisting.
+set(KE_MATERIALS_DIRS "${CMAKE_SOURCE_DIR}/src/shaders/materials" CACHE STRING "Directories of authored IMaterial .slang files (list)")
+# Example-owned materials — proves a downstream project can author its own
+# shader outside the engine tree, not just swap between engine-shipped ones.
+list(APPEND KE_MATERIALS_DIRS "${CMAKE_SOURCE_DIR}/examples/csharp/03_pbr_directional/materials")
+set(KE_GENERATE_MATERIAL_WRAPPER_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/generate_material_wrapper.py")
+include(cmake/CompileMaterialShaders.cmake)
+
 add_subdirectory(src/c/common)
 add_subdirectory(src/c/allocator)
 add_subdirectory(src/c/logger)

@@ -20,43 +20,19 @@ set(GBUFFER_SHADER_DEPS
     "${KE_SHADER_LIB_DIR}/ke/surface.slang"
 )
 
-# Compiled to the shared runtime shaders directory (not embedded into this
-# plugin's DLL) — the pass loads each by logical name via
-# ke_render_core::load_shader, so this plugin never names a shader format.
-ke_compile_slang_shader(
-    NAME gbuffer STAGE vertex ENTRY vs_main
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
+# Every authored material x this pass. The pass hardcodes no material: each
+# lands as <material>.gbuffer.{vs,fs}.<ext> in the shared runtime shaders dir,
+# resolved by logical name at draw time via ke_render_core::load_shader once a
+# material says which shader it wants. Adding a material means dropping a
+# .slang in KE_MATERIALS_DIR — this file does not change.
+ke_compile_material_shaders(
+    PASS gbuffer
+    TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/shaders/gbuffer_material.slang.in"
     INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
     EXTRA_DEPENDS ${GBUFFER_SHADER_DEPS}
-    OUT_FILE gbuffer_vs_out
+    OUT_FILES gbuffer_material_outs
 )
-ke_compile_slang_shader(
-    NAME gbuffer STAGE fragment ENTRY fs_main
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_test_flat_gbuffer.slang"
-    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-    EXTRA_DEPENDS ${GBUFFER_SHADER_DEPS}
-    OUT_FILE gbuffer_fs_out
-)
-
-# Second built-in material (§6 Mechanism 1 proof — a distinct shader, not just
-# distinct data, must resolve to a distinct PSO through the render core's
-# get_or_create_pipeline cache). Own logical name ("gbuffer_stripes").
-ke_compile_slang_shader(
-    NAME gbuffer_stripes STAGE vertex ENTRY vs_main
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_stripes_gbuffer.slang"
-    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-    EXTRA_DEPENDS ${GBUFFER_SHADER_DEPS}
-    OUT_FILE stripes_vs_out
-)
-ke_compile_slang_shader(
-    NAME gbuffer_stripes STAGE fragment ENTRY fs_main
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/mat_stripes_gbuffer.slang"
-    INCLUDES "${KE_SHADER_LIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-    EXTRA_DEPENDS ${GBUFFER_SHADER_DEPS}
-    OUT_FILE stripes_fs_out
-)
-add_custom_target(ke_render_gbuffer_shaders ALL
-    DEPENDS "${gbuffer_vs_out}" "${gbuffer_fs_out}" "${stripes_vs_out}" "${stripes_fs_out}")
+add_custom_target(ke_render_gbuffer_shaders ALL DEPENDS ${gbuffer_material_outs})
 
 file(GLOB KE_RENDER_GBUFFER_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")

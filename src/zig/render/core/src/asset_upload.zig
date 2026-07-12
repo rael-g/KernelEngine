@@ -208,12 +208,23 @@ fn srgbToLinear(cs: f32) f32 {
     return if (cs <= 0.04045) cs / 12.92 else std.math.pow(f32, (cs + 0.055) / 1.055, 2.4);
 }
 
-pub fn createMaterial(self: [*c]c.ke_render_core, key: [*c]const u8, base_color: [*c]const f32, metallic: f32, roughness: f32, albedo: c.ke_texture_handle, normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader_variant: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
+pub fn createMaterial(self: [*c]c.ke_render_core, key: [*c]const u8, base_color: [*c]const f32, metallic: f32, roughness: f32, albedo: c.ke_texture_handle, normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     const st = rc.coreOf(self);
     if (!keyValid(key)) {
         c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_material requires a non-empty key", @src().file, @intCast(@src().line), null);
         return .{ .bits = c.KE_HANDLE_NONE };
     }
+
+    // NULL/empty shader → the engine default. A too-long name is a build/authoring
+    // error (a material file stem that overflows the identifier bound), not a
+    // runtime condition to paper over — reject it rather than silently truncate.
+    const shader_span: []const u8 = if (shader != null and shader[0] != 0) std.mem.span(shader) else rc.DEFAULT_MATERIAL_SHADER;
+    if (shader_span.len >= rc.MAX_SHADER_NAME) {
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_material: shader name too long", @src().file, @intCast(@src().line), null);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
+    var shader_buf = std.mem.zeroes([rc.MAX_SHADER_NAME]u8);
+    @memcpy(shader_buf[0..shader_span.len], shader_span);
 
     const cached = tryCached(st.material_cache, key);
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
@@ -265,7 +276,7 @@ pub fn createMaterial(self: [*c]c.ke_render_core, key: [*c]const u8, base_color:
         .bind_group = bg,
         .alpha_mode = alpha_mode,
         .alpha_cutoff = alpha_cutoff,
-        .shader_variant = shader_variant,
+        .shader = shader_buf,
         .albedo = alb,
         .normal = nrm,
     });
@@ -289,8 +300,10 @@ pub fn materialAlphaCutoff(self: [*c]c.ke_render_core, h: c.ke_material_handle) 
     return rc.coreOf(self).materialAt(h).alpha_cutoff;
 }
 
-pub fn materialShaderVariant(self: [*c]c.ke_render_core, h: c.ke_material_handle) callconv(.c) u32 {
-    return rc.coreOf(self).materialAt(h).shader_variant;
+pub fn materialShader(self: [*c]c.ke_render_core, h: c.ke_material_handle) callconv(.c) [*c]const u8 {
+    // The stored buffer is NUL-terminated (zeroed then copied), so it is a
+    // valid C string for the material's lifetime.
+    return @ptrCast(&rc.coreOf(self).materialAt(h).shader);
 }
 
 pub fn materialLayout(self: [*c]c.ke_render_core) callconv(.c) c.ke_gpu_bind_group_layout {

@@ -43,6 +43,10 @@ pub const MAX_CMD_BUFFERS = 64;
 pub const NUM_PRECREATED_ENCODERS = 9; // command encoders pre-created per frame (≥ pass count)
 pub const MAX_COLOR_ATTACH = 8;
 pub const MAX_UPLOADS = 4096; // deferred buffer uploads per frame
+// An authored-material shader name is a file stem (a build artifact), not a
+// game-tuning value — this bounds an identifier, not a workload.
+pub const MAX_SHADER_NAME = 64;
+pub const DEFAULT_MATERIAL_SHADER = "standard";
 const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024; // per-frame staging for upload data copies
 
 // A deferred buffer upload. wgpuQueueWriteBuffer is NOT safe to call concurrently
@@ -72,12 +76,13 @@ pub const Material = struct {
     bind_group: c.ke_gpu_bind_group, // set 1: base_color + albedo + sampler
     alpha_mode: c.ke_alpha_mode, // CPU-side only — gates gbuffer vs transparent-forward, no GPU state
     alpha_cutoff: f32, // MASK discard threshold; unused for OPAQUE/BLEND
-    // CPU-side only — which build-time-compiled shader variant this material's
-    // fragment should use. Resolved into a distinct PSO by whichever pass
-    // draws it (§6 Mechanism 1's get_or_create_pipeline); this field carries no
-    // GPU state itself, same as alpha_mode above. 0 = the pass's default/flat
-    // shader variant.
-    shader_variant: u32,
+    // CPU-side only — the authored-material shader name (file stem of a
+    // `struct X : IMaterial` .slang). A drawing pass concatenates
+    // "<shader>.<pass>" and resolves that PSO via load_shader; this field
+    // carries no GPU state itself, same as alpha_mode above. Stored inline
+    // (NUL-terminated) so the material owns the string; MAX_SHADER_NAME bounds
+    // a build-artifact identifier, not a game-tuning value.
+    shader: [MAX_SHADER_NAME]u8,
     // The textures this material's bind group samples, held with one reference
     // each (retained at create, released when the material is destroyed). Keeps
     // the bind group's views alive independently of the caller's own references
@@ -435,7 +440,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shad
         .resource_bind_group = resource_table.resourceBindGroup,
         .resource_bind_group_layout = resource_table.resourceBindGroupLayout,
         .get_or_create_pipeline = pipeline_cache.getOrCreatePipeline,
-        .material_shader_variant = asset_upload.materialShaderVariant,
+        .material_shader = asset_upload.materialShader,
         .retain_mesh = asset_upload.retainMesh,
         .release_mesh = asset_upload.releaseMesh,
         .retain_texture = asset_upload.retainTexture,
@@ -485,7 +490,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shad
     const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
     st.default_cubemap = asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, 0, null);
+    st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, null);
 
     return .{ .ref = core, .destroy = destroyCore };
 }
