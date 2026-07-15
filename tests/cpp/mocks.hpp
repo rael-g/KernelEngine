@@ -60,7 +60,7 @@ public:
                  const UiQuad& quad),
                 (override));
     MOCK_METHOD(void, SetPaletteColor, (uint8_t index, float r, float g, float b, float a), (override));
-    MOCK_METHOD(uint16_t, CreateVertexLayout, (const void* bgfx_layout_ptr), (override));
+    MOCK_METHOD(uint16_t, CreateVertexLayout, (const void* layout_ptr), (override));
     MOCK_METHOD(const char*, GetLastFatalError, (), (override));
 };
 

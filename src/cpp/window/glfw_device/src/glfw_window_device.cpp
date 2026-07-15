@@ -23,7 +23,7 @@ bool GlfwWindowDevice::Initialize(const WindowConfig& config)
 {
     if (!glfwInit()) return false;
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Default for bgfx
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // No GL context; the renderer owns the surface
     window_ = glfwCreateWindow(config.width, config.height, config.title, 
                                 config.fullscreen ? glfwGetPrimaryMonitor() : nullptr, nullptr);
     

@@ -60,7 +60,7 @@ const ShadowModule = struct {
 };
 
 // Orthographic light view-proj; the light source sits opposite the travel
-// direction. Matches the legacy bgfx ShadowRenderSystem (frustum 20, far 50).
+// direction. Frustum extent 20, far plane 50.
 fn lightViewProj(ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
     const ldir = zm.normalize3(ldir_in);
     const eye3 = ldir * zm.f32x4s(-25.0);
