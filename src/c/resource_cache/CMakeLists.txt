@@ -7,7 +7,7 @@ target_include_directories(ke_resource_cache INTERFACE
 )
 target_link_libraries(ke_resource_cache INTERFACE ke_allocator ke_common)
 
-add_subdirectory(default)
+add_subdirectory(${CMAKE_SOURCE_DIR}/src/zig/resource_cache/default ${CMAKE_BINARY_DIR}/src/zig/resource_cache/default)
 
 install(TARGETS ke_resource_cache EXPORT KernelEngineTargets)
 install(DIRECTORY include/ DESTINATION include)
