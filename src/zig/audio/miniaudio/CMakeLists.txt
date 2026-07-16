@@ -7,6 +7,7 @@ find_path(MINIAUDIO_INCLUDE_DIR "miniaudio.h" REQUIRED)
 
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_audio_miniaudio${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(KE_ZIG_ERROR "${CMAKE_SOURCE_DIR}/src/zig/common/kerror.zig")
 
 file(GLOB KE_AUDIO_MINIAUDIO_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
@@ -21,16 +22,16 @@ add_custom_command(
         "-Dke-resource-cache-include=${CMAKE_SOURCE_DIR}/src/c/resource_cache/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"
         "-Dminiaudio-include=${MINIAUDIO_INCLUDE_DIR}"
-        "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
         "-Dke-resource-cache-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_resource_cache_default>"
+        "-Dkerror-src=${KE_ZIG_ERROR}"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
         ${KE_AUDIO_MINIAUDIO_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/src/miniaudio_impl.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
+        "${KE_ZIG_ERROR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/kernel_engine/audio/miniaudio/miniaudio_audio.h"
-        ke_common
         ke_resource_cache_default
     COMMENT "Building ke_audio_miniaudio (Zig)"
     VERBATIM

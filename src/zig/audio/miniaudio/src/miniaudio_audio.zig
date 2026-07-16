@@ -15,6 +15,9 @@ const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
+// Zig-native error translation at the C-ABI seam (no ke_common link).
+const E = @import("kerror").Errors(c);
+
 const LoadedSound = struct {
     sound: ma.ma_sound,
     initialized: bool,
@@ -75,7 +78,7 @@ fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
 
 fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_audio_sound {
     if (self == null or path == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return c.KE_AUDIO_SOUND_INVALID;
     }
     const state: *State = @ptrCast(@alignCast(self.?.handle));
@@ -85,7 +88,7 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
         return @intCast(cached);
 
     const slot = gpa.create(LoadedSound) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "sound slot allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "sound slot allocation failed", @src());
         return c.KE_AUDIO_SOUND_INVALID;
     };
     slot.* = std.mem.zeroes(LoadedSound);
@@ -94,7 +97,7 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
     if (r != ma.MA_SUCCESS) {
         logWarn(state.logger, ma.ma_result_description(r));
         gpa.destroy(slot);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_NOT_FOUND, "sound file not found or failed to load", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .not_found, "sound file not found or failed to load", @src());
         return c.KE_AUDIO_SOUND_INVALID;
     }
     slot.initialized = true;
@@ -105,7 +108,7 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
     state.sounds.put(id, slot) catch {
         ma.ma_sound_uninit(&slot.sound);
         gpa.destroy(slot);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "sound map insert failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "sound map insert failed", @src());
         return c.KE_AUDIO_SOUND_INVALID;
     };
     _ = state.cache.register_resource.?(state.cache, id, null);
@@ -126,14 +129,14 @@ fn findSound(state: *State, id: c.ke_audio_sound) ?*LoadedSound {
 
 fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: c.ke_bool, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or id == c.KE_AUDIO_SOUND_INVALID) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
     const state: *State = @ptrCast(@alignCast(self.?.handle));
 
     const slot = findSound(state, id);
     if (slot == null or !slot.?.initialized) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_NOT_FOUND, "sound not loaded", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .not_found, "sound not loaded", @src());
         return false;
     }
     const s = slot.?;
@@ -145,7 +148,7 @@ fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: c.ke_b
     ma.ma_sound_set_looping(&s.sound, if (loop != 0) ma.MA_TRUE else ma.MA_FALSE);
     const r = ma.ma_sound_start(&s.sound);
     if (r != ma.MA_SUCCESS) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "ma_sound_start failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "ma_sound_start failed", @src());
         return false;
     }
     return true;
@@ -171,12 +174,12 @@ export fn ke_audio_miniaudio_create(
 ) callconv(.c) c.ke_audio_handle {
     const empty = c.ke_audio_handle{ .ref = null, .destroy = null };
     if (params == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return empty;
     }
 
     const state = gpa.create(State) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "state allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
     state.* = .{
@@ -195,7 +198,7 @@ export fn ke_audio_miniaudio_create(
         logWarn(state.logger, ma.ma_result_description(r));
         state.sounds.deinit();
         gpa.destroy(state);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "engine init failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "engine init failed", @src());
         return empty;
     }
     state.engine_ready = true;
@@ -216,7 +219,7 @@ export fn ke_audio_miniaudio_create(
         ma.ma_engine_uninit(&state.engine);
         state.sounds.deinit();
         gpa.destroy(state);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "api allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "api allocation failed", @src());
         return empty;
     };
     api.* = std.mem.zeroes(c.ke_audio);

@@ -6,6 +6,9 @@ const c = @cImport({
     @cInclude("kernel_engine/input/input.h");
 });
 
+// Zig-native error translation at the C-ABI seam (no ke_common link).
+const E = @import("kerror").Errors(c);
+
 const MAX_KEYS = 512;
 const EVENT_CAPACITY = 512;
 
@@ -51,7 +54,7 @@ fn pushEvent(s: *State, kind: c.ke_input_event_kind, code: i32, x: f32, y: f32) 
 
 fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const api = self orelse {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     };
     const s = stateOf(api);
@@ -188,12 +191,12 @@ export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) cal
     const empty = c.ke_input_handle{ .ref = null, .destroy = null };
 
     const api = gpa.create(c.ke_input) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "api allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "api allocation failed", @src());
         return empty;
     };
     const state = gpa.create(State) catch {
         gpa.destroy(api);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "state allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
     state.* = std.mem.zeroes(State);

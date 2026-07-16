@@ -15,7 +15,8 @@ pub fn build(b: *std.Build) void {
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
+
+    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/runtime.zig"),
@@ -26,8 +27,8 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_allocator, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
+    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
+    mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_RUNTIME_EXPORT", "");
 
     const lib = b.addLibrary(.{

@@ -21,7 +21,8 @@ pub fn build(b: *std.Build) void {
     const ke_asset = b.option([]const u8, "ke-asset-include", "kernel_engine/asset include dir") orelse @panic("-Dke-asset-include required");
     const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
     const stb_include = b.option([]const u8, "stb-include", "vcpkg stb_image.h include dir") orelse @panic("-Dstb-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
+
+    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/stb_image_loader.zig"),
@@ -38,8 +39,8 @@ pub fn build(b: *std.Build) void {
     // -fno-sanitize=undefined: stb does pointer arithmetic the Debug UBSan flags
     // as UB; it is not our code to fix.
     mod.addCSourceFile(.{ .file = b.path("src/stb_image_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
+    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
+    mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_ASSET_STB_IMAGE_EXPORT", "");
 
     const lib = b.addLibrary(.{

@@ -5,6 +5,9 @@ const c = @cImport({
     @cInclude("kernel_engine/runtime/system_ctx.h");
 });
 
+// Zig-native error translation at the C-ABI seam (no ke_common link).
+const E = @import("kerror").Errors(c);
+
 // In-house scheduler: ke_system_ctx is the only door to component memory inside
 // an execute call; sequential phase walk with Bevy-style R/W wave grouping,
 // enki-backed dispatch, a per-wave defer queue, and a fixed-timestep
@@ -403,7 +406,7 @@ fn handleOf(self: *c.ke_runtime) *RuntimeHandle {
 
 fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_module_id {
     if (self == null or self.?.handle == null or p == null or p.*.on_load == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return 0;
     }
     const h = handleOf(self.?);
@@ -415,7 +418,7 @@ fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_
 
 fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
     if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return 0;
     }
     const h = handleOf(self.?);
@@ -423,7 +426,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
     if (h.state.system_count == h.state.system_capacity) {
         const new_cap: usize = if (h.state.system_capacity != 0) h.state.system_capacity * 2 else 4;
         const new_buf = cAlloc(?*RegisteredSystem, new_cap) orelse {
-            _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "system array allocation failed", @src().file, @intCast(@src().line), null);
+            E.fail(out_error, .out_of_memory, "system array allocation failed", @src());
             return 0;
         };
         if (h.state.systems) |old| {
@@ -435,7 +438,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
     }
 
     const rs_mem = cAlloc(RegisteredSystem, 1) orelse {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "registered_system allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "registered_system allocation failed", @src());
         return 0;
     };
     const rs = &rs_mem[0];
@@ -502,7 +505,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 
         rs.seg_storage = cAlloc(c.ke_ecs_segment, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY) orelse {
             h.state.system_count -= 1;
-            _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "query segment storage allocation failed", @src().file, @intCast(@src().line), null);
+            E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
             return 0;
         };
     }
@@ -743,11 +746,11 @@ fn runtimeJoinPendingRender(h: *RuntimeHandle) void {
 
 fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or self.?.handle == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
     if (dt < 0.0) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "negative dt", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "negative dt", @src());
         return false;
     }
     const h = handleOf(self.?);
@@ -819,12 +822,12 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
 export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]const c.ke_runtime_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_runtime_handle {
     const empty = c.ke_runtime_handle{ .ref = null, .destroy = null };
     if (ecs == null or scheduler == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return empty;
     }
 
     const h_mem = cAlloc(RuntimeHandle, 1) orelse {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "state allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
     const h = &h_mem[0];

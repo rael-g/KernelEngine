@@ -21,6 +21,9 @@ const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
 });
 
+// Zig-native error translation at the C-ABI seam (no ke_common link).
+const E = @import("kerror").Errors(c);
+
 const State = struct {
     logger: ?*c.ke_logger,
 };
@@ -59,17 +62,17 @@ fn loadFont(
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) [*c]c.ke_font_data {
     if (self == null or path == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return null;
     }
     if (pixel_size <= 0.0 or atlas_size == 0 or codepoint_count == 0) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid font parameters", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid font parameters", @src());
         return null;
     }
 
     // 1. Slurp the TTF.
     const ttf = readFile(path) orelse {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_IO, "failed to open or read font file", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .io, "failed to open or read font file", @src());
         return null;
     };
     defer gpa.free(ttf);
@@ -78,7 +81,7 @@ fn loadFont(
     const w = atlas_size;
     const h = atlas_size;
     const alpha = gpa.alloc(u8, @as(usize, w) * @as(usize, h)) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "atlas alpha buffer allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "atlas alpha buffer allocation failed", @src());
         return null;
     };
     defer gpa.free(alpha);
@@ -86,28 +89,28 @@ fn loadFont(
 
     var pc: stb.stbtt_pack_context = undefined;
     if (stb.stbtt_PackBegin(&pc, alpha.ptr, @intCast(w), @intCast(h), 0, 1, null) == 0) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "stbtt_PackBegin failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "stbtt_PackBegin failed", @src());
         return null;
     }
     stb.stbtt_PackSetOversampling(&pc, 1, 1);
 
     const chars = gpa.alloc(stb.stbtt_packedchar, codepoint_count) catch {
         stb.stbtt_PackEnd(&pc);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "packed-char buffer allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "packed-char buffer allocation failed", @src());
         return null;
     };
     defer gpa.free(chars);
 
     if (stb.stbtt_PackFontRange(&pc, ttf.ptr, 0, pixel_size, @intCast(first_codepoint), @intCast(codepoint_count), chars.ptr) == 0) {
         stb.stbtt_PackEnd(&pc);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "stbtt_PackFontRange failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "stbtt_PackFontRange failed", @src());
         return null;
     }
     stb.stbtt_PackEnd(&pc);
 
     // 3. Expand alpha -> RGBA8 (white RGB + glyph-coverage alpha).
     const atlas_rgba = gpa.alloc(u8, @as(usize, w) * @as(usize, h) * 4) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "atlas allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "atlas allocation failed", @src());
         return null;
     };
     for (0..@as(usize, w) * @as(usize, h)) |i| {
@@ -121,7 +124,7 @@ fn loadFont(
     var info: stb.stbtt_fontinfo = undefined;
     if (stb.stbtt_InitFont(&info, ttf.ptr, stb.stbtt_GetFontOffsetForIndex(ttf.ptr, 0)) == 0) {
         gpa.free(atlas_rgba);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "stbtt_InitFont failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "stbtt_InitFont failed", @src());
         return null;
     }
     var ascent_i: c_int = 0;
@@ -134,7 +137,7 @@ fn loadFont(
 
     const glyphs = gpa.alloc(c.ke_glyph_metrics, codepoint_count) catch {
         gpa.free(atlas_rgba);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "glyphs allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "glyphs allocation failed", @src());
         return null;
     };
 
@@ -156,7 +159,7 @@ fn loadFont(
     const fd = gpa.create(c.ke_font_data) catch {
         gpa.free(atlas_rgba);
         gpa.free(glyphs);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "font_data allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "font_data allocation failed", @src());
         return null;
     };
     fd.atlas_rgba = atlas_rgba.ptr;
@@ -190,19 +193,19 @@ export fn ke_font_loader_stb_create(
 ) callconv(.c) c.ke_font_loader_handle {
     const empty = c.ke_font_loader_handle{ .ref = null, .destroy = null };
     if (params == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return empty;
     }
 
     const state = gpa.create(State) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "loader allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
         return empty;
     };
     state.* = .{ .logger = params.*.logger };
 
     const loader = gpa.create(c.ke_font_loader) catch {
         gpa.destroy(state);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "loader allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
         return empty;
     };
     loader.handle = state;

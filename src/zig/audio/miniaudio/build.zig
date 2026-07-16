@@ -20,8 +20,9 @@ pub fn build(b: *std.Build) void {
     const ke_resource_cache = b.option([]const u8, "ke-resource-cache-include", "kernel_engine/resource_cache include dir") orelse @panic("-Dke-resource-cache-include required");
     const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
     const miniaudio_include = b.option([]const u8, "miniaudio-include", "vcpkg miniaudio.h include dir") orelse @panic("-Dminiaudio-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
     const ke_resource_cache_lib_dir = b.option([]const u8, "ke-resource-cache-lib-dir", "dir with ke_resource_cache_default import lib") orelse @panic("-Dke-resource-cache-lib-dir required");
+
+    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/miniaudio_audio.zig"),
@@ -37,15 +38,15 @@ pub fn build(b: *std.Build) void {
     // -fno-sanitize=undefined: miniaudio (like most battle-tested C) does
     // pointer arithmetic the Debug UBSan flags as UB; it is not our code to fix.
     mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
     mod.linkSystemLibrary("ke_resource_cache_default", .{});
     // miniaudio uses the OS audio APIs; on Windows that's WASAPI/DSound and
     // brings in winmm — same as the C++ plugin's IF(WIN32) link.
     if (target.result.os.tag == .windows) {
         mod.linkSystemLibrary("winmm", .{});
     }
+    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
+    mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_AUDIO_MINIAUDIO_EXPORT", "");
 
     const lib = b.addLibrary(.{

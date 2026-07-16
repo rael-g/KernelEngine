@@ -11,7 +11,8 @@ pub fn build(b: *std.Build) void {
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
     const ke_input = b.option([]const u8, "ke-input-include", "kernel_engine/input include dir") orelse @panic("-Dke-input-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
+
+    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/input_default.zig"),
@@ -22,8 +23,8 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_input }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
+    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
+    mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_INPUT_EXPORT", "");
 
     const lib = b.addLibrary(.{

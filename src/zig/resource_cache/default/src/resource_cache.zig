@@ -6,6 +6,9 @@ const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
+// Zig-native error translation at the C-ABI seam (no ke_common link).
+const E = @import("kerror").Errors(c);
+
 // Open-addressed table with tombstones for both the handle→entry and
 // path→handle directions. destroy_fn is per-cache (set at construction); all
 // resources in a cache share the same destructor.
@@ -131,7 +134,7 @@ fn stateOf(self: *c.ke_resource_cache) *State {
 
 fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or handle == HANDLE_NONE) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
     const s = stateOf(self.?);
@@ -141,7 +144,7 @@ fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_err
     const key = keyFromHandle(handle);
     const idx = s.resources.probe(key, &found);
     if (found) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_ALREADY_EXISTS, "handle already registered", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .already_exists, "handle already registered", @src());
         return false;
     }
 
@@ -153,14 +156,14 @@ fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_err
 
 fn vtRetain(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or handle == HANDLE_NONE) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
     const s = stateOf(self.?);
     var found = false;
     const idx = s.resources.probe(keyFromHandle(handle), &found);
     if (!found) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_NOT_FOUND, "handle not found", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .not_found, "handle not found", @src());
         return false;
     }
     s.resources.slots[idx].refcount += 1;
@@ -179,20 +182,20 @@ fn evictPathsForHandle(s: *State, handle: c.ke_resource_handle) void {
 
 fn vtRelease(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or handle == HANDLE_NONE) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
     const s = stateOf(self.?);
     var found = false;
     const idx = s.resources.probe(keyFromHandle(handle), &found);
     if (!found) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_NOT_FOUND, "handle not found", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .not_found, "handle not found", @src());
         return false;
     }
 
     const slot_ref = &s.resources.slots[idx];
     if (slot_ref.refcount == 0) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "refcount is already zero", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "refcount is already zero", @src());
         return false;
     }
     slot_ref.refcount -= 1;
@@ -231,12 +234,12 @@ fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*
 
 fn vtCacheInsert(self: ?*c.ke_resource_cache, key: [*c]const u8, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or key == null or handle == HANDLE_NONE) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
     const s = stateOf(self.?);
     if (!s.paths.reserve()) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "path table rehash failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "path table rehash failed", @src());
         return false;
     }
 
@@ -244,7 +247,7 @@ fn vtCacheInsert(self: ?*c.ke_resource_cache, key: [*c]const u8, handle: c.ke_re
     const k = keyFromPath(key);
     const idx = s.paths.probe(k, &found);
     if (found) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_ALREADY_EXISTS, "key already in cache; call try_get_cached first", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .already_exists, "key already in cache; call try_get_cached first", @src());
         return false;
     }
 
@@ -288,12 +291,12 @@ fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
 export fn ke_resource_cache_create(params: [*c]const c.ke_resource_cache_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_resource_cache_handle {
     const empty = c.ke_resource_cache_handle{ .ref = null, .destroy = null };
     if (params == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return empty;
     }
 
     const s = gpa.create(State) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "state allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
     s.* = std.mem.zeroes(State);
@@ -302,13 +305,13 @@ export fn ke_resource_cache_create(params: [*c]const c.ke_resource_cache_params,
 
     s.resources = Table.init(64) orelse {
         gpa.destroy(s);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resources table allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "resources table allocation failed", @src());
         return empty;
     };
     s.paths = Table.init(64) orelse {
         s.resources.deinit();
         gpa.destroy(s);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "paths table allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "paths table allocation failed", @src());
         return empty;
     };
 

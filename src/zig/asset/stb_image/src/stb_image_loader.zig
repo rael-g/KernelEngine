@@ -14,6 +14,9 @@ const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
 });
 
+// Zig-native error translation at the C-ABI seam (no ke_common link).
+const E = @import("kerror").Errors(c);
+
 const State = struct {
     logger: ?*c.ke_logger,
 };
@@ -33,7 +36,7 @@ fn destroy(self: ?*c.ke_image_loader) callconv(.c) void {
 
 fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) [*c]c.ke_texture_data {
     if (self == null or path == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return null;
     }
     const loader = self.?;
@@ -46,7 +49,7 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
     const raw = stb.stbi_load(path, &w, &h, &channels, 4);
     if (raw == null) {
         logWarn(state.logger, stb.stbi_failure_reason());
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_NOT_FOUND, "image file not found or failed to decode", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .not_found, "image file not found or failed to decode", @src());
         return null;
     }
     defer stb.stbi_image_free(raw);
@@ -54,14 +57,14 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
     const pixel_bytes: usize = @as(usize, @intCast(w)) * @as(usize, @intCast(h)) * 4;
 
     const data = gpa.create(c.ke_texture_data) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "texture data allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "texture data allocation failed", @src());
         return null;
     };
     data.* = std.mem.zeroes(c.ke_texture_data);
 
     const pixels = gpa.alloc(u8, pixel_bytes) catch {
         gpa.destroy(data);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "pixel buffer allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "pixel buffer allocation failed", @src());
         return null;
     };
     @memcpy(pixels, @as([*]const u8, @ptrCast(raw))[0..pixel_bytes]);
@@ -95,19 +98,19 @@ export fn ke_image_loader_stb_create(
 ) callconv(.c) c.ke_image_loader_handle {
     const empty = c.ke_image_loader_handle{ .ref = null, .destroy = null };
     if (params == null) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return empty;
     }
 
     const state = gpa.create(State) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "state allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
     state.* = .{ .logger = params.*.logger };
 
     const loader = gpa.create(c.ke_image_loader) catch {
         gpa.destroy(state);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "loader allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
         return empty;
     };
     loader.handle = state;
