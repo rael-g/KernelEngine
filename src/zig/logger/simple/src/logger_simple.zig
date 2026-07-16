@@ -7,6 +7,9 @@ const c = @cImport({
     @cInclude("kernel_engine/logger/log_level.h");
 });
 
+// Zig-native error translation at the C-ABI seam (no ke_common link).
+const E = @import("kerror").Errors(c);
+
 const MAX_SINKS = 8;
 
 const State = struct {
@@ -48,12 +51,12 @@ fn loggerFlush(self: ?*c.ke_logger) callconv(.c) void {
 
 fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const logger = self orelse {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     };
     const s: *State = @ptrCast(@alignCast(logger.handle));
     if (s.sink_count >= MAX_SINKS) {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "sink capacity exceeded", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .general, "sink capacity exceeded", @src());
         return false;
     }
     s.sinks[@intCast(s.sink_count)] = sink;
@@ -77,12 +80,12 @@ export fn ke_logger_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_logg
     const empty = c.ke_logger_handle{ .ref = null, .destroy = null };
 
     const logger = gpa.create(c.ke_logger) catch {
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "logger allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "logger allocation failed", @src());
         return empty;
     };
     const state = gpa.create(State) catch {
         gpa.destroy(logger);
-        _ = c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "state allocation failed", @src().file, @intCast(@src().line), null);
+        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
     state.* = std.mem.zeroes(State);

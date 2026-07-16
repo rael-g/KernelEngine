@@ -1,11 +1,13 @@
 # ke_logger_simple — the multi-sink logger, a kernel built-in built in Zig.
 # Mirrors src/zig/asset/stb_image's zig-build-as-imported-target pattern; pure
-# logic, so no third-party C is compiled and only ke_common is linked.
+# logic, no third-party C, and no ke_common LINK — errors translate to the C
+# ABI at the export seam via the shared Zig kerror utility.
 
 find_program(ZIG_EXECUTABLE zig REQUIRED)
 
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_logger_simple${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(KE_ZIG_ERROR "${CMAKE_SOURCE_DIR}/src/zig/common/kerror.zig")
 
 file(GLOB KE_LOGGER_SIMPLE_ZIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig")
@@ -16,13 +18,13 @@ add_custom_command(
         "--prefix" "${ZIG_OUT_DIR}"
         "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/c/common/include"
         "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
-        "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
+        "-Dkerror-src=${KE_ZIG_ERROR}"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
         ${KE_LOGGER_SIMPLE_ZIG_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
-        ke_common
+        "${KE_ZIG_ERROR}"
     COMMENT "Building ke_logger_simple (Zig)"
     VERBATIM
 )
