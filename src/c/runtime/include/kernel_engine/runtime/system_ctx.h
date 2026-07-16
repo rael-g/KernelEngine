@@ -21,6 +21,30 @@ extern "C" {
 
 typedef struct ke_system_ctx ke_system_ctx;
 
+// A deferred structural operation, run serially at the wave barrier (main
+// thread, after the wave's parallel bodies have all returned) where entity
+// creation/destruction and archetype moves are legal. `user` points to the
+// copied payload the caller passed to defer. `ecs` is the live world.
+typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
+
+// ABI-stable vtable — the system body's operations on its own context. Callers
+// invoke these through the ke_system_ctx they receive (ctx->reserve(ctx), ...),
+// so a consumer needs only this header, never a link to ke_runtime. `handle`
+// is runtime-private. The free ke_system_ctx_* functions below are thin
+// wrappers over these slots, kept for callers loaded at runtime (C#) or already
+// linking ke_runtime (Zig render passes).
+struct ke_system_ctx {
+    void *handle;
+
+    const ke_ecs_segment *(*view)(ke_system_ctx *self, uint32_t query_index, size_t *out_count);
+    ke_entity (*reserve)(ke_system_ctx *self);
+    bool (*defer)(ke_system_ctx *self, ke_defer_fn fn, const void *user, size_t user_size);
+    ke_entity (*spawn)(ke_system_ctx *self);
+    bool (*attach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid, const void *data, size_t size);
+    bool (*detach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid);
+    bool (*despawn)(ke_system_ctx *self, ke_entity entity);
+};
+
 KE_RUNTIME_API uint32_t ke_system_ctx_defer_applied_count(void);
 KE_RUNTIME_API void     ke_system_ctx_reset_defer_applied(void);
 
@@ -48,13 +72,6 @@ KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
 // (applied at the barrier). This is the entry point for structural creation that
 // needs the id synchronously (e.g. scene-tree node creation from a system).
 KE_RUNTIME_API ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx);
-
-// A deferred structural operation, run serially at the wave barrier (main
-// thread, after the wave's parallel bodies have all returned) where entity
-// creation/destruction and archetype moves are legal. `user` points to the
-// copied payload the caller passed to ke_system_ctx_defer. `ecs` is the live
-// world.
-typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
 
 // Enqueue an arbitrary structural mutation to run at the wave barrier. The engine
 // copies `user_size` bytes of `user` into an internal arena, so the caller's

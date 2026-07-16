@@ -62,7 +62,11 @@ typedef struct defer_queue {
 #define KE_MAX_QUERIES_PER_SYSTEM 8
 #define KE_MAX_SEGMENTS_PER_QUERY 32
 
-struct ke_system_ctx
+// Runtime-private state behind ke_system_ctx.handle. The public vtable struct
+// (ke_system_ctx itself) is defined in system_ctx.h; callers reach these fields
+// only indirectly, through the vtable slots the runtime wires to the
+// ke_system_ctx_* functions below.
+typedef struct ctx_state
 {
     ke_ecs                    *ecs;          // borrowed; alive while the system runs
     const ke_component_access *access_list;  // borrowed from the system's params
@@ -78,7 +82,7 @@ struct ke_system_ctx
     const ke_ecs_segment      *seg_storage;
     const size_t              *seg_counts;
     uint32_t                   view_query_count;
-};
+} ctx_state;
 
 // ── Wave builder (Bevy-style R/W conflict grouping) ────────────────────────
 //
@@ -189,9 +193,11 @@ void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
 const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx, uint32_t query_index, size_t *out_count)
 {
     if (out_count) *out_count = 0;
-    if (!ctx || !ctx->seg_storage || query_index >= ctx->view_query_count) return NULL;
-    if (out_count) *out_count = ctx->seg_counts[query_index];
-    return &ctx->seg_storage[(size_t)query_index * KE_MAX_SEGMENTS_PER_QUERY];
+    if (!ctx) return NULL;
+    ctx_state *s = (ctx_state *)ctx->handle;
+    if (!s || !s->seg_storage || query_index >= s->view_query_count) return NULL;
+    if (out_count) *out_count = s->seg_counts[query_index];
+    return &s->seg_storage[(size_t)query_index * KE_MAX_SEGMENTS_PER_QUERY];
 }
 
 // Grow defer queue capacity by doubling. Returns false on OOM.
@@ -241,18 +247,22 @@ static size_t defer_arena_push(defer_queue *q, const void *data, size_t size)
 
 ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx)
 {
-    if (!ctx || !ctx->ecs || !ctx->ecs->entity_reserve) return KE_ENTITY_INVALID;
-    return ctx->ecs->entity_reserve(ctx->ecs);
+    if (!ctx) return KE_ENTITY_INVALID;
+    ctx_state *s = (ctx_state *)ctx->handle;
+    if (!s || !s->ecs || !s->ecs->entity_reserve) return KE_ENTITY_INVALID;
+    return s->ecs->entity_reserve(s->ecs);
 }
 
 bool ke_system_ctx_defer(ke_system_ctx *ctx, ke_defer_fn fn,
                           const void *user, size_t user_size)
 {
-    if (!ctx || !ctx->defer || !fn) return false;
-    size_t offset = defer_arena_push(ctx->defer, user, user_size);
+    if (!ctx || !fn) return false;
+    ctx_state *s = (ctx_state *)ctx->handle;
+    if (!s || !s->defer) return false;
+    size_t offset = defer_arena_push(s->defer, user, user_size);
     if (offset == (size_t)-1) return false;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
-    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    if (!defer_reserve(s->defer, s->defer->count + 1)) return false;
+    defer_command *cmd = &s->defer->cmds[s->defer->count++];
     cmd->kind          = DEFER_CALLBACK;
     cmd->fn            = fn;
     cmd->attach_offset = offset;
@@ -262,9 +272,11 @@ bool ke_system_ctx_defer(ke_system_ctx *ctx, ke_defer_fn fn,
 
 ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx)
 {
-    if (!ctx || !ctx->defer) return KE_ENTITY_INVALID;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return KE_ENTITY_INVALID;
-    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    if (!ctx) return KE_ENTITY_INVALID;
+    ctx_state *s = (ctx_state *)ctx->handle;
+    if (!s || !s->defer) return KE_ENTITY_INVALID;
+    if (!defer_reserve(s->defer, s->defer->count + 1)) return KE_ENTITY_INVALID;
+    defer_command *cmd = &s->defer->cmds[s->defer->count++];
     cmd->kind      = DEFER_SPAWN;
     cmd->spawn_out = NULL;
     // Return a placeholder; actual entity id is assigned at flush time.
@@ -275,11 +287,13 @@ ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx)
 bool ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                            ke_component_id cid, const void *data, size_t size)
 {
-    if (!ctx || !ctx->defer) return false;
-    size_t offset = defer_arena_push(ctx->defer, data, size);
+    if (!ctx) return false;
+    ctx_state *s = (ctx_state *)ctx->handle;
+    if (!s || !s->defer) return false;
+    size_t offset = defer_arena_push(s->defer, data, size);
     if (offset == (size_t)-1) return false;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
-    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    if (!defer_reserve(s->defer, s->defer->count + 1)) return false;
+    defer_command *cmd = &s->defer->cmds[s->defer->count++];
     cmd->kind          = DEFER_ATTACH;
     cmd->entity        = entity;
     cmd->cid           = cid;
@@ -290,9 +304,11 @@ bool ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
 
 bool ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_component_id cid)
 {
-    if (!ctx || !ctx->defer) return false;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
-    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    if (!ctx) return false;
+    ctx_state *s = (ctx_state *)ctx->handle;
+    if (!s || !s->defer) return false;
+    if (!defer_reserve(s->defer, s->defer->count + 1)) return false;
+    defer_command *cmd = &s->defer->cmds[s->defer->count++];
     cmd->kind   = DEFER_DETACH;
     cmd->entity = entity;
     cmd->cid    = cid;
@@ -301,12 +317,29 @@ bool ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity, ke_component_id 
 
 bool ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity)
 {
-    if (!ctx || !ctx->defer) return false;
-    if (!defer_reserve(ctx->defer, ctx->defer->count + 1)) return false;
-    defer_command *cmd = &ctx->defer->cmds[ctx->defer->count++];
+    if (!ctx) return false;
+    ctx_state *s = (ctx_state *)ctx->handle;
+    if (!s || !s->defer) return false;
+    if (!defer_reserve(s->defer, s->defer->count + 1)) return false;
+    defer_command *cmd = &s->defer->cmds[s->defer->count++];
     cmd->kind   = DEFER_DESPAWN;
     cmd->entity = entity;
     return true;
+}
+
+// Wire a ke_system_ctx's vtable to the free functions above and point its
+// handle at the runtime-private state. Callers then reach every operation
+// through ctx->slot(ctx, ...) with no link to ke_runtime.
+static void ke_system_ctx_bind(ke_system_ctx *ctx, ctx_state *state)
+{
+    ctx->handle  = state;
+    ctx->view    = ke_system_ctx_view;
+    ctx->reserve = ke_system_ctx_reserve;
+    ctx->defer   = ke_system_ctx_defer;
+    ctx->spawn   = ke_system_ctx_spawn;
+    ctx->attach  = ke_system_ctx_attach;
+    ctx->detach  = ke_system_ctx_detach;
+    ctx->despawn = ke_system_ctx_despawn;
 }
 
 // Apply every queued command in registration order, route through the ke_ecs
@@ -608,7 +641,8 @@ static ke_system_id runtime_register_system(ke_runtime                     *self
 // observably equivalent.
 typedef struct task_pkg
 {
-    ke_system_ctx ctx;
+    ctx_state     state;   // runtime-private; ctx.handle points here
+    ke_system_ctx ctx;     // public vtable handed to the system body
     void        (*execute)(ke_system_ctx *, void *, float);
     void         *user_data;
     float         dt;
@@ -618,7 +652,7 @@ typedef struct task_pkg
 static void task_pkg_run(void *data)
 {
     task_pkg *pkg = (task_pkg *)data;
-    pkg->ctx.defer = &pkg->defer;
+    pkg->state.defer = &pkg->defer;
     pkg->execute(&pkg->ctx, pkg->user_data, pkg->dt);
 }
 
@@ -692,11 +726,12 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
             registered_system *rs = h->state.systems[phase_indices[k]];
 
             task_pkg *pkg          = &pkgs[wave_size];
-            pkg->ctx.ecs           = h->state.ecs;
-            pkg->ctx.access_list   = rs->params.access_list;
-            pkg->ctx.access_count  = rs->params.access_count;
-            pkg->ctx.system_name   = rs->params.name;
-            pkg->ctx.defer         = NULL;  // task_pkg_run binds to &pkg->defer
+            ke_system_ctx_bind(&pkg->ctx, &pkg->state);
+            pkg->state.ecs           = h->state.ecs;
+            pkg->state.access_list   = rs->params.access_list;
+            pkg->state.access_count  = rs->params.access_count;
+            pkg->state.system_name   = rs->params.name;
+            pkg->state.defer         = NULL;  // task_pkg_run binds to &pkg->defer
 
             if (rs->query_count > 0 && rs->seg_storage)
             {
@@ -718,15 +753,15 @@ static void runtime_run_phase(runtime_handle *h, ke_phase phase, float dt)
                         rs->seg_counts[q] = cnt;
                     }
                 }
-                pkg->ctx.seg_storage      = rs->seg_storage;
-                pkg->ctx.seg_counts       = rs->seg_counts;
-                pkg->ctx.view_query_count = rs->query_count;
+                pkg->state.seg_storage      = rs->seg_storage;
+                pkg->state.seg_counts       = rs->seg_counts;
+                pkg->state.view_query_count = rs->query_count;
             }
             else
             {
-                pkg->ctx.seg_storage      = NULL;
-                pkg->ctx.seg_counts       = NULL;
-                pkg->ctx.view_query_count = 0;
+                pkg->state.seg_storage      = NULL;
+                pkg->state.seg_counts       = NULL;
+                pkg->state.view_query_count = 0;
             }
             pkg->execute           = rs->params.execute;
             pkg->user_data         = rs->params.user_data;

@@ -139,7 +139,7 @@ static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity
     // in registration order — so sibling links stay consistent even across
     // multiple creations under the same parent this tick.
     if (ctx) {
-        ke_entity entity = ke_system_ctx_reserve(ctx);
+        ke_entity entity = ctx->reserve(ctx);
         if (entity == KE_ENTITY_INVALID) return KE_ENTITY_INVALID;
         pending_create pc;
         pc.s      = s;
@@ -152,7 +152,7 @@ static ke_entity vt_create_node(ke_scene_tree *self, const char *name, ke_entity
         } else {
             pc.name[0] = '\0';
         }
-        if (!ke_system_ctx_defer(ctx, cb_create_node, &pc, sizeof pc))
+        if (!ctx->defer(ctx, cb_create_node, &pc, sizeof pc))
             return KE_ENTITY_INVALID;
         return entity;
     }
@@ -298,7 +298,7 @@ static bool vt_destroy_node(ke_scene_tree *self, ke_entity entity,
     // Defer the whole unlink + teardown to the wave barrier.
     if (ctx) {
         pending_destroy pd = { s, entity };
-        if (!ke_system_ctx_defer(ctx, cb_destroy_node, &pd, sizeof pd)) {
+        if (!ctx->defer(ctx, cb_destroy_node, &pd, sizeof pd)) {
             KE_ERROR_SET(out_error, &KE_ERROR_OUT_OF_MEMORY, "defer failed");
             return false;
         }

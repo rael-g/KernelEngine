@@ -17,6 +17,12 @@ target_include_directories(ke_framework PRIVATE
 target_include_directories(ke_framework PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    # runtime headers only — the framework calls ke_system_ctx ops through the
+    # vtable (ctx->reserve/defer), never the exported free functions, so it does
+    # NOT link ke_runtime. This is what lets ke_runtime become a Zig DLL without
+    # breaking this MSVC C DLL's CRT-injected link. See the migration-msvc-wall
+    # memory note.
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/c/runtime/include>
 )
 
 install(DIRECTORY include/ DESTINATION include)
@@ -30,7 +36,6 @@ target_link_libraries(ke_framework PUBLIC
     ke_render
     ke_asset
     ke_text
-    ke_runtime
 )
 target_link_libraries(ke_framework PRIVATE ke_allocator_malloc)
 
