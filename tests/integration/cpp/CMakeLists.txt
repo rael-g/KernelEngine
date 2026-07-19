@@ -53,6 +53,7 @@ target_link_libraries(test_integration_cpp PRIVATE
 
 # Run tests from the repo root so paths like "assets/Box.gltf" resolve against
 # the on-disk asset tree without requiring per-test copies.
+include(GoogleTest)
 gtest_discover_tests(test_integration_cpp
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     PROPERTIES LABELS "integration")

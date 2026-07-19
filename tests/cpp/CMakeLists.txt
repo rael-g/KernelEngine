@@ -20,4 +20,5 @@ target_link_libraries(test_asset_logic PRIVATE
     GTest::gtest_main
 )
 
+include(GoogleTest)
 gtest_discover_tests(test_asset_logic)

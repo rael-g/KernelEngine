@@ -52,16 +52,28 @@ TEST_F(StbFontTest, LoadFont_ZeroAtlasSize_ReturnsNull) {
     ASSERT_EQ(data, nullptr);
 }
 
-TEST_F(StbFontTest, LoadFont_Successful_OnWindows) {
-    ke_font_data* data = loader->load_font(loader, "C:/Windows/Fonts/arial.ttf", 16.0f, 32, 96, 512, nullptr);
+TEST_F(StbFontTest, LoadFont_Successful) {
+    // No font ships with the repo, so probe the usual system locations. The
+    // loader only needs some valid TTF; which one it is does not matter.
+    const char* candidates[] = {
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+    };
 
-    if (data != nullptr) {
-        EXPECT_EQ(data->glyph_count, 96u);
-        EXPECT_NE(data->atlas_rgba, nullptr);
-        loader->free_font(loader, data);
-    } else {
-        GTEST_SKIP() << "C:/Windows/Fonts/arial.ttf not found or inaccessible";
+    for (const char* path : candidates) {
+        ke_font_data* data = loader->load_font(loader, path, 16.0f, 32, 96, 512, nullptr);
+        if (data != nullptr) {
+            EXPECT_EQ(data->glyph_count, 96u);
+            EXPECT_NE(data->atlas_rgba, nullptr);
+            loader->free_font(loader, data);
+            return;
+        }
     }
+
+    GTEST_SKIP() << "no system TTF font found in the probed locations";
 }
 
 TEST_F(StbFontTest, Destroy_NullHandle_IsSafe) {

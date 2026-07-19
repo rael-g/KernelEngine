@@ -2,6 +2,8 @@
 #include <kernel_engine/asset/assimp/assimp_loader.h>
 #include <kernel_engine/allocator/allocator.h>
 
+#include <cstring>
+
 class AssetLoaderTest : public ::testing::Test {
 protected:
     ke_asset_loader_handle loader_h{};
