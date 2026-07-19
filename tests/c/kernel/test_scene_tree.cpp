@@ -177,6 +177,101 @@ TEST_F(SceneTreeTest, DestroyAll_ClearsChildrenButKeepsRoot)
 
 // ── Factory edge cases ──────────────────────────────────────────────────────
 
+// ── Transform propagation ───────────────────────────────────────────────────
+
+namespace {
+
+ke_transform_component *TransformOf(ke_ecs *ecs, ke_entity e)
+{
+    ke_component_meta meta;
+    if (!ecs->component_lookup(ecs, KE_COMPONENT_NAME_TRANSFORM, &meta, nullptr)) return nullptr;
+    return (ke_transform_component *)ecs->component_get(ecs, e, meta.cid);
+}
+
+} // namespace
+
+TEST_F(SceneTreeTest, PropagateTransforms_FreshNodeIsIdentity)
+{
+    ke_entity n = tree->create_node(tree, "N", KE_ENTITY_INVALID, NULL, NULL);
+    ASSERT_NE(n, KE_ENTITY_INVALID);
+    tree->propagate_transforms(tree);
+
+    auto *t = TransformOf(ecs, n);
+    ASSERT_NE(t, nullptr);
+    for (int i = 0; i < 16; ++i) {
+        EXPECT_FLOAT_EQ(t->world_matrix.m[i], (i % 5 == 0) ? 1.0f : 0.0f) << "cell " << i;
+    }
+}
+
+TEST_F(SceneTreeTest, PropagateTransforms_ChildTranslationComposesWithParent)
+{
+    ke_entity parent = tree->create_node(tree, "P", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity child  = tree->create_node(tree, "C", parent, NULL, NULL);
+    ASSERT_NE(parent, KE_ENTITY_INVALID);
+    ASSERT_NE(child, KE_ENTITY_INVALID);
+
+    TransformOf(ecs, parent)->position = ke_vec3{ 10.0f, 0.0f, 0.0f };
+    TransformOf(ecs, child)->position  = ke_vec3{  1.0f, 2.0f, 3.0f };
+    tree->propagate_transforms(tree);
+
+    // Row-major with translation in the last row.
+    auto *pt = TransformOf(ecs, parent);
+    EXPECT_FLOAT_EQ(pt->world_matrix.m[12], 10.0f);
+
+    auto *ct = TransformOf(ecs, child);
+    EXPECT_FLOAT_EQ(ct->world_matrix.m[12], 11.0f);
+    EXPECT_FLOAT_EQ(ct->world_matrix.m[13], 2.0f);
+    EXPECT_FLOAT_EQ(ct->world_matrix.m[14], 3.0f);
+}
+
+TEST_F(SceneTreeTest, PropagateTransforms_ParentScaleScalesChildOffset)
+{
+    ke_entity parent = tree->create_node(tree, "P", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity child  = tree->create_node(tree, "C", parent, NULL, NULL);
+
+    TransformOf(ecs, parent)->scale   = ke_vec3{ 2.0f, 2.0f, 2.0f };
+    TransformOf(ecs, child)->position = ke_vec3{ 1.0f, 0.0f, 0.0f };
+    tree->propagate_transforms(tree);
+
+    // The child sits one unit out in a parent scaled 2x, so it lands at 2.
+    auto *ct = TransformOf(ecs, child);
+    EXPECT_FLOAT_EQ(ct->world_matrix.m[12], 2.0f);
+    // And inherits the scale on its own basis row.
+    EXPECT_FLOAT_EQ(ct->world_matrix.m[0], 2.0f);
+}
+
+TEST_F(SceneTreeTest, PropagateTransforms_QuarterTurnAboutYMapsXToMinusZ)
+{
+    ke_entity n = tree->create_node(tree, "N", KE_ENTITY_INVALID, NULL, NULL);
+    // 90° about Y as a quaternion.
+    const float s = 0.70710678f;
+    TransformOf(ecs, n)->rotation = ke_quat{ 0.0f, s, 0.0f, s };
+    tree->propagate_transforms(tree);
+
+    // The basis X row must rotate onto -Z.
+    auto *t = TransformOf(ecs, n);
+    EXPECT_NEAR(t->world_matrix.m[0], 0.0f, 1e-5f);
+    EXPECT_NEAR(t->world_matrix.m[1], 0.0f, 1e-5f);
+    EXPECT_NEAR(t->world_matrix.m[2], -1.0f, 1e-5f);
+}
+
+TEST_F(SceneTreeTest, PropagateTransforms_GrandchildAccumulatesWholeChain)
+{
+    ke_entity a = tree->create_node(tree, "A", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity b = tree->create_node(tree, "B", a, NULL, NULL);
+    ke_entity d = tree->create_node(tree, "D", b, NULL, NULL);
+
+    TransformOf(ecs, a)->position = ke_vec3{ 1.0f, 0.0f, 0.0f };
+    TransformOf(ecs, b)->position = ke_vec3{ 0.0f, 2.0f, 0.0f };
+    TransformOf(ecs, d)->position = ke_vec3{ 0.0f, 0.0f, 4.0f };
+    tree->propagate_transforms(tree);
+
+    auto *dt = TransformOf(ecs, d);
+    EXPECT_FLOAT_EQ(dt->world_matrix.m[12], 1.0f);
+    EXPECT_FLOAT_EQ(dt->world_matrix.m[13], 2.0f);
+    EXPECT_FLOAT_EQ(dt->world_matrix.m[14], 4.0f);
+}
+
 TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 {
     EXPECT_EQ(ke_scene_tree_create(nullptr, NULL).ref, nullptr);
