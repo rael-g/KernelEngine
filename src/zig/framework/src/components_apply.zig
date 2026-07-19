@@ -58,7 +58,7 @@ fn asFloat(v: *const c.ke_variant) ?f32 {
 
 // -- transform ---------------------------------------------------------------
 
-export fn ke_framework_apply_transform(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_transform(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const t: *c.ke_transform_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
@@ -90,7 +90,7 @@ export fn ke_framework_apply_transform(ptr: ?*anyopaque, e: [*c]const c.ke_varia
 
 // -- camera ------------------------------------------------------------------
 
-export fn ke_framework_apply_camera(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_camera(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const cam: *c.ke_camera_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
@@ -117,7 +117,7 @@ export fn ke_framework_apply_camera(ptr: ?*anyopaque, e: [*c]const c.ke_variant_
 
 // -- mesh --------------------------------------------------------------------
 
-export fn ke_framework_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const m: *c.ke_mesh_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
@@ -134,7 +134,7 @@ export fn ke_framework_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_ta
 
 // -- directional light -------------------------------------------------------
 
-export fn ke_framework_apply_directional_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_directional_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const l: *c.ke_directional_light_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
@@ -176,7 +176,7 @@ export fn ke_framework_apply_directional_light(ptr: ?*anyopaque, e: [*c]const c.
 
 // -- point light -------------------------------------------------------------
 
-export fn ke_framework_apply_point_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_point_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const l: *c.ke_point_light_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
@@ -202,7 +202,7 @@ export fn ke_framework_apply_point_light(ptr: ?*anyopaque, e: [*c]const c.ke_var
 
 // -- spot light --------------------------------------------------------------
 
-export fn ke_framework_apply_spot_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_spot_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const l: *c.ke_spot_light_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;

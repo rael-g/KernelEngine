@@ -14,4 +14,5 @@ comptime {
     _ = @import("components_apply.zig");
     _ = @import("mesh_shape.zig");
     _ = @import("asset_resolver.zig");
+    _ = @import("world.zig");
 }
