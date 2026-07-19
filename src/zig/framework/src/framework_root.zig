@@ -12,4 +12,5 @@
 
 comptime {
     _ = @import("components_apply.zig");
+    _ = @import("mesh_shape.zig");
 }
