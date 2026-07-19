@@ -42,6 +42,11 @@ pub fn build(b: *std.Build) void {
     mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
     mod.linkSystemLibrary("ke_common", .{});
     mod.linkSystemLibrary("wgpu_native", .{});
+    // The Xlib surface path opens the display itself, so Xlib is a direct
+    // dependency of this module rather than something wgpu-native provides.
+    if (target.result.os.tag == .linux) {
+        mod.linkSystemLibrary("X11", .{});
+    }
     mod.addCMacro("KE_GPU_WEBGPU_EXPORT", "");
 
     const lib = b.addLibrary(.{
@@ -72,6 +77,9 @@ pub fn build(b: *std.Build) void {
     test_mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.linkSystemLibrary("wgpu_native", .{});
+    if (target.result.os.tag == .linux) {
+        test_mod.linkSystemLibrary("X11", .{});
+    }
 
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);

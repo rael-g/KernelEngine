@@ -59,14 +59,20 @@ add_custom_command(TARGET ke_render_tonemap_zig POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ZIG_LIB_NAME}"
-    # Also copy the import lib into the shared archive-output dir (same dir
-    # ke_common's .lib lands in) — ke_render_core's build.zig links this
-    # plugin via the same -Dke-lib-dir it already uses for ke_common/ke_runtime.
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${ZIG_OUT_DIR}/lib/ke_render_tonemap.lib"
-        "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/ke_render_tonemap.lib"
     VERBATIM
 )
+
+# The import library is a Windows-only artifact. Consumers link this
+# plugin through the shared archive-output dir; elsewhere the shared
+# object itself is the linker input and no separate lib is produced.
+if(WIN32)
+    add_custom_command(TARGET ke_render_tonemap_zig POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${ZIG_OUT_DIR}/lib/ke_render_tonemap.lib"
+            "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/ke_render_tonemap.lib"
+        VERBATIM
+    )
+endif()
 
 # ── Imported target ──────────────────────────────────────────────────────────
 

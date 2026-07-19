@@ -21,6 +21,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BUILD_SHARED_LIBS "Build libraries as shared" ON)
 
+# Several plugins are shared libraries that link internal static libraries
+# (e.g. ke_window_glfw pulls in ke_window_core). ELF targets reject non-PIC
+# objects inside a shared object, so position-independent code is required
+# everywhere rather than per-target.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

@@ -57,11 +57,20 @@ add_custom_command(TARGET ke_render_ui_zig POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ZIG_LIB_NAME}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${ZIG_OUT_DIR}/lib/ke_render_ui.lib"
-        "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/ke_render_ui.lib"
     VERBATIM
 )
+
+# The import library is a Windows-only artifact. Consumers link this
+# plugin through the shared archive-output dir; elsewhere the shared
+# object itself is the linker input and no separate lib is produced.
+if(WIN32)
+    add_custom_command(TARGET ke_render_ui_zig POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${ZIG_OUT_DIR}/lib/ke_render_ui.lib"
+            "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/ke_render_ui.lib"
+        VERBATIM
+    )
+endif()
 
 # ── Imported target ──────────────────────────────────────────────────────────
 

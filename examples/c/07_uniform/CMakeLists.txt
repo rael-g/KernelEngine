@@ -35,3 +35,9 @@ target_link_libraries(c_demo_07 PRIVATE
     ke_window_glfw
     ke_gpu_device_webgpu
 )
+
+# The math functions live in a separate library on Unix; on Windows they are
+# part of the C runtime and need no explicit link.
+if(NOT WIN32)
+    target_link_libraries(c_demo_07 PRIVATE m)
+endif()

@@ -39,8 +39,15 @@ add_custom_command(
 
 set(KE_SHADER_LIB_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
 
+# Zig emits a separate import library only on Windows; listing it as an output
+# elsewhere makes the build expect a file that is never produced.
+set(KE_RENDER_CORE_ZIG_OUTPUTS "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}")
+if(WIN32)
+    list(APPEND KE_RENDER_CORE_ZIG_OUTPUTS "${ZIG_OUT_DIR}/lib/ke_render_core.lib")
+endif()
+
 add_custom_command(
-    OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" "${ZIG_OUT_DIR}/lib/ke_render_core.lib"
+    OUTPUT ${KE_RENDER_CORE_ZIG_OUTPUTS}
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
         "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/c/common/include"

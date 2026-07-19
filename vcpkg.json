@@ -1,22 +1,18 @@
 {
   "dependencies": [
-    "spdlog",
     "glfw3",
-    "glad",
     "stb",
-    "glm",
     "box2d",
-    "bgfx",
     "assimp",
     "gtest",
     "enkits",
     "miniaudio",
-    "tomlplusplus",
-    "flecs",
+    "flecs"
+  ],
+  "overrides": [
     {
-      "name": "bgfx",
-      "features": [ "tools" ],
-      "host": true
+      "name": "enkits",
+      "version": "1.12"
     }
   ]
 }
