@@ -98,6 +98,7 @@ int main(void)
     ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component));
     ke_component_id camera_cid    = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_CAMERA,    sizeof(ke_camera_component));
     ke_component_id mesh_cid      = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_MESH,      sizeof(ke_mesh_component));
+    ke_component_id light_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, sizeof(ke_directional_light_component));
 
     const ke_mat4 identity = { .m = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 } };
 
@@ -112,6 +113,17 @@ int main(void)
     *ent_t = (ke_transform_component){ .world_matrix = identity };
     ke_mesh_component *ent_m = ecs.ref->component_add(ecs.ref, ent, mesh_cid);
     *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat };
+
+    // Shading keeps the directional term switched off until a light entity
+    // exists, so without this the cube resolves to black.
+    ke_entity sun = ecs.ref->entity_create(ecs.ref);
+    ke_directional_light_component *sun_l = ecs.ref->component_add(ecs.ref, sun, light_cid);
+    *sun_l = (ke_directional_light_component){
+        .dir_x = -0.4f, .dir_y = -1.0f, .dir_z = -0.3f,
+        .r = 1.0f, .g = 1.0f, .b = 1.0f,
+        .intensity = 3.0f,
+        .ambient_r = 0.03f, .ambient_g = 0.03f, .ambient_b = 0.04f,
+    };
 
     printf("Drawing a lit cube. Close the window to exit.\n");
     double prev = now_seconds();
