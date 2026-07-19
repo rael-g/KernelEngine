@@ -27,13 +27,6 @@ const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffs
 // Per-object model for the shadow pass (set 1).
 const ShadowObj = extern struct { model: [16]f32 };
 
-// Mirrors ke_directional_light_component (10 floats, see render/components.h).
-const DirLight = extern struct {
-    dir: [3]f32,
-    rgb: [3]f32,
-    intensity: f32,
-    ambient: [3]f32,
-};
 
 const ShadowModule = struct {
     enabled: bool = false,
@@ -87,13 +80,15 @@ fn makeOrtho(ndc: c.ke_ndc_convention, w: f32, h: f32, near: f32, far: f32) zm.M
     return p;
 }
 
-// View 0 = [directional_light]; the first match is the active sun.
-fn lightDirOf(ctx: ?*c.ke_system_ctx) zm.Vec {
+// View 0 = [directional_light]; the first match is the active sun. Null when
+// the scene declares no directional light — the caller skips the pass rather
+// than shadowing from an invented direction.
+fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
-    if (segc == 0 or segs[0].count == 0) return zm.f32x4(-0.4, -1.0, -0.3, 0.0);
-    const dl: *const DirLight = @ptrCast(@alignCast(segs[0].columns[0]));
-    return zm.f32x4(dl.dir[0], dl.dir[1], dl.dir[2], 0.0);
+    if (segc == 0 or segs[0].count == 0) return null;
+    const dl: *const c.ke_directional_light_component = @ptrCast(@alignCast(segs[0].columns[0]));
+    return zm.f32x4(dl.dir_x, dl.dir_y, dl.dir_z, 0.0);
 }
 
 inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
@@ -104,7 +99,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const sh = moduleOf(user);
     const core = sh.core;
 
-    const lvp = lightViewProj(sh.ndc, lightDirOf(ctx));
+    // No directional light means there is no directional shadow to render;
+    // the map keeps whatever the previous frame left and consumers gate on
+    // the same absence.
+    const light_dir = lightDirOf(ctx) orelse return;
+
+    const lvp = lightViewProj(sh.ndc, light_dir);
     var lvp_arr: [16]f32 = undefined;
     zm.storeMat(lvp_arr[0..], lvp);
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);

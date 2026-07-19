@@ -29,20 +29,32 @@ extern "C"
 
     typedef struct ke_point_light_component
     {
-        float radius;
         float r, g, b;
         float intensity;
+        float radius;
     } ke_point_light_component;
 
     typedef struct ke_spot_light_component
     {
         float dir_x, dir_y, dir_z;
-        float inner_angle;
-        float outer_angle;
-        float range;
         float r, g, b;
         float intensity;
+        float range;
+        float inner_angle;
+        float outer_angle;
     } ke_spot_light_component;
+
+    /// Scene-wide ambient color. The first entity carrying it wins.
+    typedef struct ke_ambient_light_component
+    {
+        float r, g, b;
+    } ke_ambient_light_component;
+
+    /// Environment cubemap driving both the skybox and image-based lighting.
+    typedef struct ke_skybox_component
+    {
+        ke_texture_handle cubemap;
+    } ke_skybox_component;
 
     typedef struct ke_mesh_component
     {
@@ -55,6 +67,8 @@ extern "C"
 #define KE_COMPONENT_NAME_DIRECTIONAL_LIGHT "directional_light"
 #define KE_COMPONENT_NAME_POINT_LIGHT       "point_light"
 #define KE_COMPONENT_NAME_SPOT_LIGHT        "spot_light"
+#define KE_COMPONENT_NAME_AMBIENT_LIGHT     "ambient_light"
+#define KE_COMPONENT_NAME_SKYBOX            "skybox"
 #define KE_COMPONENT_NAME_MESH              "mesh"
 
 #ifdef __cplusplus

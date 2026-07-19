@@ -43,18 +43,6 @@ const PerFrame = extern struct {
     view: [16]f32,
 };
 
-// Mirrors ke_directional_light_component (10 floats, see render/components.h).
-const DirLight = extern struct {
-    dir: [3]f32,
-    rgb: [3]f32,
-    intensity: f32,
-    ambient: [3]f32,
-};
-
-// Mirrors the C# AmbientLightComponent { Vector3 Color } (registered "AmbientLight").
-const AmbientComp = extern struct { color: [3]f32 };
-// Mirrors the framework SkyboxComponent (registered "Skybox"): a cubemap handle.
-const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
 
 // One transparent draw, collected while iterating the mesh query, then sorted
 // back-to-front before recording. ke_ecs has no ordered iteration (query_resolve
@@ -263,7 +251,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
-        (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
+        (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
         .{ .bits = c.KE_HANDLE_NONE };
     if (want_env.bits != fwd.env_cubemap.bits or fwd.frame_bind_group == c.KE_GPU_INVALID_HANDLE) {
@@ -273,8 +261,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     var frame: PerFrame = .{
         .camera_pos = .{ cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0 },
-        .light_dir = .{ -0.4, -1.0, -0.3, 0.0 },
-        .light_color = .{ 1.0, 1.0, 1.0, 1.0 },
+        // Zero until a directional_light entity supplies the real values; the
+        // shader ignores these while shadow_params.z stays clear.
+        .light_dir = .{ 0.0, 0.0, 0.0, 0.0 },
+        .light_color = .{ 0.0, 0.0, 0.0, 0.0 },
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
         .shadow_params = .{ 0.0, 0.0, 0.0, 0.0 },
         .viewport = .{ @floatFromInt(bw), @floatFromInt(bh), 0.0, 0.0 },
@@ -287,18 +277,18 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var li_segc: usize = 0;
     const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
-        const d: *const DirLight = @ptrCast(@alignCast(li_segs[0].columns[0]));
-        frame.light_dir = .{ d.dir[0], d.dir[1], d.dir[2], 0.0 };
-        frame.light_color = .{ d.rgb[0], d.rgb[1], d.rgb[2], d.intensity };
-        frame.ambient = .{ d.ambient[0], d.ambient[1], d.ambient[2], 0.0 };
+        const d: *const c.ke_directional_light_component = @ptrCast(@alignCast(li_segs[0].columns[0]));
+        frame.light_dir = .{ d.dir_x, d.dir_y, d.dir_z, 0.0 };
+        frame.light_color = .{ d.r, d.g, d.b, d.intensity };
+        frame.ambient = .{ d.ambient_r, d.ambient_g, d.ambient_b, 0.0 };
         frame.shadow_params[2] = 1.0;
     }
     // View 3 = [AmbientLight]; a standalone ambient overrides the directional's.
     var am_segc: usize = 0;
     const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
-        const al: *const AmbientComp = @ptrCast(@alignCast(am_segs[0].columns[0]));
-        frame.ambient = .{ al.color[0], al.color[1], al.color[2], 0.0 };
+        const al: *const c.ke_ambient_light_component = @ptrCast(@alignCast(am_segs[0].columns[0]));
+        frame.ambient = .{ al.r, al.g, al.b, 0.0 };
     }
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 

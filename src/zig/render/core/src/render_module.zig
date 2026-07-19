@@ -1,30 +1,5 @@
 const std = @import("std");
 const cimport = @import("cimport.zig");
-// Cluster is its own physical plugin (ke_render_cluster). These two structs
-// mirror its own private PointLightComp/SpotLightComp (duplicated rather than
-// imported cross-DLL — same decoupling precedent as forward_common.slang's
-// PerObject being copied per pass): the aggregator only needs their byte size
-// to register the ECS components, never their fields.
-const PointLightComp = extern struct {
-    color: [3]f32,
-    intensity: f32,
-    radius: f32,
-};
-const SpotLightComp = extern struct {
-    dir: [3]f32,
-    color: [3]f32,
-    intensity: f32,
-    range: f32,
-    inner_deg: f32,
-    outer_deg: f32,
-};
-// Forward is its own physical plugin (ke_render_forward). These two structs
-// mirror its own private AmbientComp/SkyboxComp (duplicated rather than
-// imported cross-DLL — same decoupling precedent as PointLightComp/
-// SpotLightComp above): the aggregator only needs their byte size to
-// register the ECS components, never their fields.
-const AmbientComp = extern struct { color: [3]f32 };
-const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
 
 // Compiled into the ke_render_core library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -273,10 +248,10 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
         const camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
         const light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
-        const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(PointLightComp));
-        const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(SpotLightComp));
-        const ambient_cid = e.component_register.?(e, "AmbientLight", @sizeOf(AmbientComp));
-        const skybox_cid = e.component_register.?(e, "Skybox", @sizeOf(SkyboxComp));
+        const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(c.ke_point_light_component));
+        const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(c.ke_spot_light_component));
+        const ambient_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, @sizeOf(c.ke_ambient_light_component));
+        const skybox_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component));
 
         // begin_frame/clear are registered first, unconditionally, before any
         // pass's setup runs: gbuffer is its own physical plugin whose create()

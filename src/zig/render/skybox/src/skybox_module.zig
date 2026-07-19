@@ -17,9 +17,6 @@ const gpa = std.heap.c_allocator;
 // sees another pass's private struct. "depth" is resolved by name (the
 // producing pass declares it before this one registers its own system).
 
-// Mirrors the framework SkyboxComponent (registered "Skybox"): a cubemap handle.
-const SkyboxComp = extern struct { cubemap: c.ke_texture_handle };
-
 // Matches skybox.slang's SkyFrame.
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
@@ -115,7 +112,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
     const env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
-        (@as(*const SkyboxComp, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
+        (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
         .{ .bits = c.KE_HANDLE_NONE };
     const env_view = core.*.texture_view.?(core, env);
