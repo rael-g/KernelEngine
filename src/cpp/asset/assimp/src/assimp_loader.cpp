@@ -190,10 +190,14 @@ ke_task *AssimpLoader::LoadModelAsync(ke_scheduler *scheduler,
         void                       *user_data;
     };
 
+    static const ke_error s_oom = { &KE_ERROR_OUT_OF_MEMORY,
+                                    "out of memory preparing async model load",
+                                    nullptr, 0, nullptr };
+
     auto *ctx = static_cast<AsyncCtx *>(
         ke_alloc(sizeof(AsyncCtx), alignof(AsyncCtx)));
     if (!ctx) {
-        on_complete(false, nullptr, user_data);
+        on_complete(&s_oom, nullptr, user_data);
         return nullptr;
     }
 
@@ -201,7 +205,7 @@ ke_task *AssimpLoader::LoadModelAsync(ke_scheduler *scheduler,
     char *path_buf = static_cast<char *>(ke_alloc(path_copy.size() + 1, 1));
     if (!path_buf) {
         ke_free(ctx);
-        on_complete(false, nullptr, user_data);
+        on_complete(&s_oom, nullptr, user_data);
         return nullptr;
     }
     memcpy(path_buf, path_copy.c_str(), path_copy.size() + 1);
