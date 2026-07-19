@@ -21,17 +21,17 @@ public sealed class ComponentRegistry : IComponentRegistry
         // match exactly so that the native scene-loader apply callbacks and
         // managed contributors share one ECS slot per component type.
         Register<TransformComponent>(ecs, "transform");
-        Register<CameraComponent>(ecs, "camera");
-        Register<MeshComponent>(ecs, "mesh");
-        Register<DirectionalLightComponent>(ecs, "directional_light");
-        Register<PointLightComponent>(ecs, "point_light");
-        Register<SpotLightComponent>(ecs, "spot_light");
-        // Framework-only components (no kernel counterpart) keep their own names.
+        Register<CameraComponent>(ecs, CameraComponent.Name);
+        Register<MeshComponent>(ecs, MeshComponent.Name);
+        Register<DirectionalLightComponent>(ecs, DirectionalLightComponent.Name);
+        Register<PointLightComponent>(ecs, PointLightComponent.Name);
+        Register<SpotLightComponent>(ecs, SpotLightComponent.Name);
+        Register<AmbientLightComponent>(ecs, AmbientLightComponent.Name);
+        Register<SkyboxComponent>(ecs, SkyboxComponent.Name);
+        // Framework-only component (no kernel counterpart) keeps its own name.
         // MeshRendererComponent is the legacy bgfx material-based path; the v2
         // forward pass reads the "mesh" slot above instead.
         Register<MeshRendererComponent>(ecs, "MeshRenderer");
-        Register<SkyboxComponent>(ecs, "Skybox");
-        Register<AmbientLightComponent>(ecs, "AmbientLight");
     }
 
     /// <summary>Returns the cid registered for the given component struct type.</summary>
