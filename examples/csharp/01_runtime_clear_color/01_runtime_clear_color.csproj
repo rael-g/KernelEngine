@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler.Enki\KernelEngine.Scheduler.Enki.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
   </ItemGroup>
 
 </Project>

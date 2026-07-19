@@ -32,7 +32,7 @@ public sealed class MenuController : Node
 
     protected override void OnBind(NodeWorld nodeWorld)
     {
-        var fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
+        var fontPath = ExamplePaths.SystemFont;
         _font = Font.Load(_resources, _fontLoader, fontPath, pixelSize: 72f);
 
         nodeWorld.AddNode(new Label

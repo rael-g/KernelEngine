@@ -27,7 +27,7 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 14 UI Quad"))
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../build/win/bin/shaders")), clearColor: new Vector4(0.10f, 0.12f, 0.16f, 1.0f)))
+    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.10f, 0.12f, 0.16f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
@@ -36,7 +36,7 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Renderer: webgpu/render-v2");
         Console.WriteLine("[KernelEngine] Features: ui_overlay_pass, labels, stb_truetype");
 
-        var fontPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
+        var fontPath = ExamplePaths.SystemFont;
         var loader   = sp.GetRequiredService<IFontLoader>();
         var font     = Font.Load(resources, loader, fontPath, pixelSize: 48f);
         Console.WriteLine($"[KernelEngine] Font: {fontPath}, lineHeight={font.LineHeight:F1} ascent={font.Ascent:F1}");

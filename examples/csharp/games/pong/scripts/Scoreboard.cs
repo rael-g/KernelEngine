@@ -37,7 +37,7 @@ public sealed class Scoreboard : Node
     protected override void OnBind(NodeWorld nodeWorld)
     {
         var path = string.IsNullOrEmpty(FontPath)
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf")
+            ? ExamplePaths.SystemFont
             : FontPath;
         _font = Font.Load(_resources, _fontLoader, path, pixelSize: FontSize);
 

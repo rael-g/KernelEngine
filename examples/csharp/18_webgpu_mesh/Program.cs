@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 // components; the forward pass (a KE_PHASE_RENDER system installed by the module)
 // reads them and draws. No render calls in the loop — only runtime.Tick.
 
-var render = new WebgpuRenderModule(shaderDir: Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../build/win/bin/shaders")));
+var render = new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir);
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -44,6 +44,7 @@ unsafe { reg = new EcsRegistry(((INativeEcs)ecs).Native); }
 var transformCid = reg.RegisterComponent<TransformComponent>("transform");
 var cameraCid    = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
 var meshCid      = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
+var lightCid     = reg.RegisterComponent<DirectionalLight>("directional_light");
 
 var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
@@ -59,6 +60,18 @@ entT.WorldMatrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
 entM = new MeshComponent { Mesh = cube, Material = orange };
 
+// Shading keeps the directional term switched off until a light entity
+// exists, so without this the cube resolves to black.
+var sun = reg.CreateEntity();
+ref var sunL = ref reg.AddComponent<DirectionalLight>(sun, lightCid)[0];
+sunL = new DirectionalLight
+{
+    Direction = new Vector3(-0.4f, -1.0f, -0.3f),
+    Color     = Vector3.One,
+    Intensity = 3.0f,
+    Ambient   = new Vector3(0.03f, 0.03f, 0.04f),
+};
+
 Console.WriteLine("[18_webgpu_mesh] Drawing a lit cube. Close the window to exit.");
 
 var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -71,3 +84,17 @@ while (!window.ShouldClose())
 }
 
 Console.WriteLine("[18_webgpu_mesh] Exited cleanly.");
+
+/// <summary>
+/// Directional light as the render layer reads it. Declared here rather than
+/// pulled from the framework layer so this sample stays on the raw ECS +
+/// render-core path it is meant to demonstrate; the field order must match the
+/// engine's directional_light component.
+/// </summary>
+struct DirectionalLight
+{
+    public Vector3 Direction;
+    public Vector3 Color;
+    public float   Intensity;
+    public Vector3 Ambient;
+}
