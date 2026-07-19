@@ -1,9 +1,14 @@
 #include "glfw_window_device.hpp"
 #include <GLFW/glfw3.h>
 
-#ifdef _WIN32
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
+#include <cstdint>
+
+#if defined(_WIN32)
+#  define GLFW_EXPOSE_NATIVE_WIN32
+#  include <GLFW/glfw3native.h>
+#elif defined(__linux__)
+#  define GLFW_EXPOSE_NATIVE_X11
+#  include <GLFW/glfw3native.h>
 #endif
 
 namespace kernel_engine::window
@@ -75,8 +80,14 @@ void GlfwWindowDevice::GetSize(uint32_t* width, uint32_t* height) const
 void* GlfwWindowDevice::GetNativeHandle() const
 {
     if (!window_) return nullptr;
-#ifdef _WIN32
+#if defined(_WIN32)
     return glfwGetWin32Window(window_);
+#elif defined(__linux__)
+    // An X11 window is an integer id rather than a pointer; it rides through
+    // the void* slot as an integer-sized value and the consumer converts it
+    // back. Returning the GLFWwindow* here would hand the surface layer a
+    // pointer it would misread as a window id.
+    return reinterpret_cast<void*>(static_cast<uintptr_t>(glfwGetX11Window(window_)));
 #else
     return window_; // Placeholder for other platforms
 #endif
