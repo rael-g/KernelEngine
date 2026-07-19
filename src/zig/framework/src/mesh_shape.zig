@@ -4,9 +4,7 @@
 
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("kernel_engine/asset/mesh_shape.h");
-});
+const c = @import("c.zig").c;
 
 const pi: f32 = 3.14159265358979323846;
 
@@ -188,7 +186,7 @@ fn bakeSphere(vtx: [*]c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void 
     }
 }
 
-export fn ke_mesh_shape_bake_internal(
+pub export fn ke_mesh_shape_bake_internal(
     prim: c.ke_mesh_primitive,
     segments_in: u32,
     out_data: ?*c.ke_mesh_shape_data,
@@ -266,7 +264,7 @@ export fn ke_mesh_shape_bake_internal(
     return true;
 }
 
-export fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
+pub export fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
     const data = data_in orelse return;
     if (data.vertices) |v| std.c.free(v);
     if (data.indices) |i| std.c.free(i);

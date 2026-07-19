@@ -13,7 +13,6 @@ const std = @import("std");
 
 const c_sources = [_][]const u8{
     "src/world.c",
-    "src/asset_resolver.c",
     "src/scene_tree.c",
     "src/input_actions.c",
     "src/scene_loader.c",

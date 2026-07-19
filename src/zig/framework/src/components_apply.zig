@@ -12,10 +12,7 @@
 
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("kernel_engine/ecs/variant.h");
-    @cInclude("kernel_engine/framework/components.h");
-});
+const c = @import("c.zig").c;
 
 const pi: f32 = 3.14159265358979323846;
 
