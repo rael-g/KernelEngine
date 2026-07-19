@@ -48,19 +48,20 @@
     <NativePre></NativePre>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+  <!--
+    The CMake build points both RUNTIME_ and LIBRARY_OUTPUT_DIRECTORY at bin,
+    so shared libraries land there on every platform regardless of the
+    platform's usual convention.
+  -->
+  <PropertyGroup>
     <NativeTypeDir>bin</NativeTypeDir>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
-    <NativeTypeDir>lib</NativeTypeDir>
   </PropertyGroup>
 
 
   <PropertyGroup>
     <!-- Relative to NativeDependencies.targets (src/csharp/) -->
-    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</RepoRoot>
-    <NativeFinalDir>$(RepoRoot)\build\$(NativeOS)\$(NativeTypeDir)</NativeFinalDir>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</RepoRoot>
+    <NativeFinalDir>$(RepoRoot)/build/$(NativeOS)/$(NativeTypeDir)</NativeFinalDir>
   </PropertyGroup>
 
   <!--
@@ -79,8 +80,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="@(NativeDep -> '$(NativeFinalDir)\$(NativePre)%(Identity).$(NativeExt)')">
-      <Link>$(NativePre)%(Filename)%(Extension)</Link>
+    <None Include="@(NativeDep -> '$(NativeFinalDir)/$(NativePre)%(Identity).$(NativeExt)')">
+      <!-- %(Filename) already carries the platform prefix from the resolved
+           path; re-applying $(NativePre) here would double it. -->
+      <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
       <Pack>true</Pack>
