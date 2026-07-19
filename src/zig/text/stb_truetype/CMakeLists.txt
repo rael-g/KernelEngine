@@ -42,11 +42,19 @@ add_custom_command(TARGET ke_text_stb_truetype_zig POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${ZIG_LIB_NAME}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${ZIG_OUT_DIR}/lib/ke_text_stb_truetype.lib"
-        "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/ke_text_stb_truetype.lib"
     VERBATIM
 )
+
+# Only Windows produces a separate import library to link against; ELF links
+# directly against the shared object.
+if(WIN32)
+    add_custom_command(TARGET ke_text_stb_truetype_zig POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${ZIG_OUT_DIR}/lib/ke_text_stb_truetype.lib"
+            "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/ke_text_stb_truetype.lib"
+        VERBATIM
+    )
+endif()
 
 # ── Imported target ──────────────────────────────────────────────────────────
 
