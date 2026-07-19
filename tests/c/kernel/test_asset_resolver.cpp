@@ -5,6 +5,7 @@
 #include <kernel_engine/asset/mesh_data.h>
 #include <kernel_engine/allocator/allocator.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -143,6 +144,82 @@ TEST_F(AssetResolverTest, ResolveMesh_AllPrimitives_Works)
     resolver->free_mesh(resolver, &data);
     EXPECT_TRUE(resolver->resolve_mesh(resolver, "res://primitives/sphere", &data, nullptr));
     resolver->free_mesh(resolver, &data);
+}
+
+TEST_F(AssetResolverTest, ResolveMesh_Cube_EachFaceIsFlatWithCornerUvs)
+{
+    ke_mesh_shape_data data{};
+    ASSERT_TRUE(resolver->resolve_mesh(resolver, "res://primitives/cube", &data, nullptr));
+    ASSERT_EQ(data.vertex_count, 24u);
+    ASSERT_EQ(data.index_count, 36u);
+
+    for (uint32_t f = 0; f < 6; ++f) {
+        const ke_vertex *q = &data.vertices[f * 4];
+        // A face's four corners share one axis-aligned normal.
+        for (uint32_t k = 1; k < 4; ++k) {
+            EXPECT_FLOAT_EQ(q[k].nx, q[0].nx) << "face " << f;
+            EXPECT_FLOAT_EQ(q[k].ny, q[0].ny) << "face " << f;
+            EXPECT_FLOAT_EQ(q[k].nz, q[0].nz) << "face " << f;
+        }
+        EXPECT_FLOAT_EQ(std::fabs(q[0].nx) + std::fabs(q[0].ny) + std::fabs(q[0].nz), 1.0f)
+            << "face " << f;
+        // Corner UVs wind (0,0) (1,0) (1,1) (0,1).
+        EXPECT_FLOAT_EQ(q[0].u, 0.0f); EXPECT_FLOAT_EQ(q[0].v, 0.0f);
+        EXPECT_FLOAT_EQ(q[1].u, 1.0f); EXPECT_FLOAT_EQ(q[1].v, 0.0f);
+        EXPECT_FLOAT_EQ(q[2].u, 1.0f); EXPECT_FLOAT_EQ(q[2].v, 1.0f);
+        EXPECT_FLOAT_EQ(q[3].u, 0.0f); EXPECT_FLOAT_EQ(q[3].v, 1.0f);
+        for (uint32_t k = 0; k < 4; ++k) {
+            EXPECT_FLOAT_EQ(std::fabs(q[k].x), 0.5f);
+            EXPECT_FLOAT_EQ(std::fabs(q[k].y), 0.5f);
+            EXPECT_FLOAT_EQ(std::fabs(q[k].z), 0.5f);
+        }
+    }
+
+    // The six faces must point six different ways.
+    for (uint32_t a = 0; a < 6; ++a) {
+        for (uint32_t b = a + 1; b < 6; ++b) {
+            const ke_vertex &va = data.vertices[a * 4];
+            const ke_vertex &vb = data.vertices[b * 4];
+            EXPECT_FALSE(va.nx == vb.nx && va.ny == vb.ny && va.nz == vb.nz)
+                << "faces " << a << " and " << b << " share a normal";
+        }
+    }
+
+    for (uint32_t i = 0; i < data.index_count; ++i) {
+        EXPECT_LT(data.indices[i], data.vertex_count);
+    }
+    resolver->free_mesh(resolver, &data);
+}
+
+TEST_F(AssetResolverTest, ResolveMesh_Sphere_VerticesLieOnUnitDiameterSphere)
+{
+    ke_mesh_shape_data data{};
+    ASSERT_TRUE(resolver->resolve_mesh(resolver, "res://primitives/sphere", &data, nullptr));
+    ASSERT_GT(data.vertex_count, 0u);
+    for (uint32_t i = 0; i < data.vertex_count; ++i) {
+        const ke_vertex &v = data.vertices[i];
+        EXPECT_NEAR(std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z), 0.5f, 1e-5f) << "vertex " << i;
+        EXPECT_NEAR(std::sqrt(v.nx * v.nx + v.ny * v.ny + v.nz * v.nz), 1.0f, 1e-5f) << "vertex " << i;
+    }
+    for (uint32_t i = 0; i < data.index_count; ++i) {
+        EXPECT_LT(data.indices[i], data.vertex_count);
+    }
+    resolver->free_mesh(resolver, &data);
+}
+
+TEST_F(AssetResolverTest, ResolveMesh_QuadAndPlane_NormalsDiffer)
+{
+    ke_mesh_shape_data quad{};
+    ke_mesh_shape_data plane{};
+    ASSERT_TRUE(resolver->resolve_mesh(resolver, "res://primitives/quad", &quad, nullptr));
+    ASSERT_TRUE(resolver->resolve_mesh(resolver, "res://primitives/plane", &plane, nullptr));
+    // Quad faces +Z in XY; plane faces +Y in XZ.
+    EXPECT_FLOAT_EQ(quad.vertices[0].nz, 1.0f);
+    EXPECT_FLOAT_EQ(plane.vertices[0].ny, 1.0f);
+    EXPECT_FLOAT_EQ(quad.vertices[0].x, -0.5f);
+    EXPECT_FLOAT_EQ(quad.vertices[0].y, -0.5f);
+    resolver->free_mesh(resolver, &quad);
+    resolver->free_mesh(resolver, &plane);
 }
 
 TEST_F(AssetResolverTest, ResolveMesh_UnknownPrimitive_ReturnsNotFound)
