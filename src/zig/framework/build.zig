@@ -12,7 +12,6 @@ const std = @import("std");
 // remaining C still calls ke_error_set; it goes away with the last .c).
 
 const c_sources = [_][]const u8{
-    "src/scene_tree.c",
     "src/input_actions.c",
     "src/scene_loader.c",
     "third_party/tomlc99/toml.c",

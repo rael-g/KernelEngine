@@ -6,7 +6,10 @@
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
+    @cInclude("kernel_engine/common/math.h");
+    @cInclude("kernel_engine/ecs/ke_ecs.h");
     @cInclude("kernel_engine/ecs/variant.h");
+    @cInclude("kernel_engine/runtime/system_ctx.h");
     @cInclude("kernel_engine/asset/mesh_shape.h");
     @cInclude("kernel_engine/framework/components.h");
     @cInclude("kernel_engine/framework/asset_resolver_create.h");

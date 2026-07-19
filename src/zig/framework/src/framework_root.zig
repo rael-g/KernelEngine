@@ -15,4 +15,5 @@ comptime {
     _ = @import("mesh_shape.zig");
     _ = @import("asset_resolver.zig");
     _ = @import("world.zig");
+    _ = @import("scene_tree.zig");
 }
