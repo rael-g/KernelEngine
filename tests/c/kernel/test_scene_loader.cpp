@@ -191,6 +191,142 @@ far_plane = 100.0
     EXPECT_FLOAT_EQ(c->far_plane, 100.0f);
 }
 
+// ── light applies ──────────────────────────────────────────────────────────
+
+TEST_F(SceneLoaderTest, DirectionalLight_VectorAndScalarFormsAgree)
+{
+    // The apply accepts both a vec3 ("direction") and per-axis scalars
+    // ("dir_x"); both spellings must land in the same fields.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "SunVec"
+[entity.components.directional_light]
+direction = [-0.4, -1.0, -0.3]
+color = [1.0, 0.9, 0.8]
+ambient = [0.03, 0.03, 0.04]
+intensity = 3.0
+
+[[entity]]
+name = "SunScalar"
+[entity.components.directional_light]
+dir_x = -0.4
+dir_y = -1.0
+dir_z = -0.3
+r = 1.0
+g = 0.9
+b = 0.8
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "directional_light", &meta, nullptr));
+
+    ke_entity ev = tree->find_node(tree, "SunVec", NULL);
+    ASSERT_NE(ev, KE_ENTITY_INVALID);
+    auto *lv = (ke_directional_light_component *)ecs->component_get(ecs, ev, meta.cid);
+    ASSERT_NE(lv, nullptr);
+    EXPECT_FLOAT_EQ(lv->dir_x, -0.4f);
+    EXPECT_FLOAT_EQ(lv->dir_y, -1.0f);
+    EXPECT_FLOAT_EQ(lv->dir_z, -0.3f);
+    EXPECT_FLOAT_EQ(lv->r, 1.0f);
+    EXPECT_FLOAT_EQ(lv->g, 0.9f);
+    EXPECT_FLOAT_EQ(lv->b, 0.8f);
+    EXPECT_FLOAT_EQ(lv->ambient_r, 0.03f);
+    EXPECT_FLOAT_EQ(lv->ambient_b, 0.04f);
+    EXPECT_FLOAT_EQ(lv->intensity, 3.0f);
+
+    ke_entity es = tree->find_node(tree, "SunScalar", NULL);
+    ASSERT_NE(es, KE_ENTITY_INVALID);
+    auto *ls = (ke_directional_light_component *)ecs->component_get(ecs, es, meta.cid);
+    ASSERT_NE(ls, nullptr);
+    EXPECT_FLOAT_EQ(ls->dir_x, lv->dir_x);
+    EXPECT_FLOAT_EQ(ls->dir_y, lv->dir_y);
+    EXPECT_FLOAT_EQ(ls->dir_z, lv->dir_z);
+    EXPECT_FLOAT_EQ(ls->r, lv->r);
+    EXPECT_FLOAT_EQ(ls->g, lv->g);
+    EXPECT_FLOAT_EQ(ls->b, lv->b);
+}
+
+TEST_F(SceneLoaderTest, PointLight_FieldsApplied)
+{
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Bulb"
+[entity.components.point_light]
+color = [0.2, 0.4, 0.6]
+radius = 12.5
+intensity = 2.0
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Bulb", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "point_light", &meta, nullptr));
+    auto *l = (ke_point_light_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(l, nullptr);
+    EXPECT_FLOAT_EQ(l->r, 0.2f);
+    EXPECT_FLOAT_EQ(l->g, 0.4f);
+    EXPECT_FLOAT_EQ(l->b, 0.6f);
+    EXPECT_FLOAT_EQ(l->radius, 12.5f);
+    EXPECT_FLOAT_EQ(l->intensity, 2.0f);
+}
+
+TEST_F(SceneLoaderTest, SpotLight_FieldsApplied)
+{
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Lamp"
+[entity.components.spot_light]
+direction = [0.0, -1.0, 0.0]
+color = [1.0, 0.5, 0.25]
+inner_angle = 0.3
+outer_angle = 0.6
+range = 20.0
+intensity = 4.0
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Lamp", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "spot_light", &meta, nullptr));
+    auto *l = (ke_spot_light_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(l, nullptr);
+    EXPECT_FLOAT_EQ(l->dir_y, -1.0f);
+    EXPECT_FLOAT_EQ(l->r, 1.0f);
+    EXPECT_FLOAT_EQ(l->g, 0.5f);
+    EXPECT_FLOAT_EQ(l->b, 0.25f);
+    EXPECT_FLOAT_EQ(l->inner_angle, 0.3f);
+    EXPECT_FLOAT_EQ(l->outer_angle, 0.6f);
+    EXPECT_FLOAT_EQ(l->range, 20.0f);
+    EXPECT_FLOAT_EQ(l->intensity, 4.0f);
+}
+
+TEST_F(SceneLoaderTest, Transform_RotationEulerDegreesToQuaternion)
+{
+    // 90° about Y alone: the ZYX intrinsic composition must reduce to
+    // (0, sin45, 0, cos45) with no bleed into the other axes.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Turned"
+[entity.transform]
+rotation_euler = [0.0, 90.0, 0.0]
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Turned", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "transform", &meta, nullptr));
+    auto *t = (ke_transform_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(t, nullptr);
+    EXPECT_NEAR(t->rotation.x, 0.0f, 1e-5f);
+    EXPECT_NEAR(t->rotation.y, 0.70710678f, 1e-5f);
+    EXPECT_NEAR(t->rotation.z, 0.0f, 1e-5f);
+    EXPECT_NEAR(t->rotation.w, 0.70710678f, 1e-5f);
+}
+
 // ── scene_properties bag ───────────────────────────────────────────────────
 
 TEST_F(SceneLoaderTest, Properties_AttachedAsSceneProperties)
