@@ -11,5 +11,5 @@
 // allocator_malloc links, and errors move to the shared kerror seam util.
 
 comptime {
-    // (converted Zig translation units land here, e.g. `_ = @import("world.zig");`)
+    _ = @import("components_apply.zig");
 }
