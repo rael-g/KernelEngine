@@ -10,6 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if !defined(_WIN32)
+#  include <unistd.h>  // _exit
+#endif
+
 // Storage-only flecs wrapper. Implements the ke_ecs vtable by delegating to
 // flecs's archetype storage + query engine. The scheduler is OUR ke_runtime;
 // flecs's pipeline/system/timer addons are not referenced.
