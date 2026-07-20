@@ -54,6 +54,38 @@ TEST_F(SceneTreeTest, CreateNode_AcceptsExplicitParent)
     EXPECT_EQ(tree->find_node(tree, "Parent/Child", NULL), child);
 }
 
+TEST_F(SceneTreeTest, CreateNode_SiblingsUnderOneParentAreAllReachable)
+{
+    // Every consumer that walks a node's children (rendering, transform
+    // propagation) depends on the sibling chain holding all of them.
+    ke_entity parent = tree->create_node(tree, "P", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity a = tree->create_node(tree, "A", parent, NULL, NULL);
+    ke_entity b = tree->create_node(tree, "B", parent, NULL, NULL);
+    ke_entity c = tree->create_node(tree, "C", parent, NULL, NULL);
+    ASSERT_NE(a, KE_ENTITY_INVALID);
+    ASSERT_NE(b, KE_ENTITY_INVALID);
+    ASSERT_NE(c, KE_ENTITY_INVALID);
+
+    EXPECT_EQ(tree->find_node(tree, "P/A", NULL), a);
+    EXPECT_EQ(tree->find_node(tree, "P/B", NULL), b);
+    EXPECT_EQ(tree->find_node(tree, "P/C", NULL), c);
+
+    // Walk the raw hierarchy chain and count what is actually linked.
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_HIERARCHY, &meta, nullptr));
+    auto *ph = (ke_hierarchy_component *)ecs->component_get(ecs, parent, meta.cid);
+    ASSERT_NE(ph, nullptr);
+
+    int walked = 0;
+    for (ke_entity cur = ph->first_child; cur != KE_ENTITY_INVALID && walked < 16; ++walked) {
+        auto *ch = (ke_hierarchy_component *)ecs->component_get(ecs, cur, meta.cid);
+        ASSERT_NE(ch, nullptr);
+        EXPECT_EQ(ch->parent, parent);
+        cur = ch->next_sibling;
+    }
+    EXPECT_EQ(walked, 3);
+}
+
 // ── find_node ───────────────────────────────────────────────────────────────
 
 TEST_F(SceneTreeTest, FindNode_EmptyOrNullReturnsInvalid)

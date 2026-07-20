@@ -191,6 +191,111 @@ far_plane = 100.0
     EXPECT_FLOAT_EQ(c->far_plane, 100.0f);
 }
 
+// ── subscene composition ───────────────────────────────────────────────────
+
+TEST_F(SceneLoaderTest, Subscene_EntitiesAreSplicedUnderTheReferencingName)
+{
+    // Mirrors the shape real scenes use: an outer entity names a subscene file,
+    // and the subscene's own entities back-reference each other by name.
+    auto sub = WriteTempScene(R"(
+[[entity]]
+name = "Root"
+
+[[entity]]
+name   = "Visual"
+parent = "Root"
+[entity.transform]
+scale = [0.3, 1.8, 1.0]
+)");
+
+    auto main = WriteTempScene(std::string(R"(
+[[entity]]
+name = "Holder"
+
+[[entity]]
+name  = "PaddleLeft"
+scene = ")") + sub.string() + R"("
+[entity.transform]
+position = [-7.5, 0.0, 0.0]
+)");
+
+    ASSERT_TRUE(loader->load(loader, main.string().c_str(), NULL));
+
+    // The subscene root takes the referencing entity's name, not its own.
+    ke_entity paddle = tree->find_node(tree, "PaddleLeft", NULL);
+    ASSERT_NE(paddle, KE_ENTITY_INVALID);
+
+    // And the subscene's child came along with it.
+    ke_entity visual = tree->find_node(tree, "Visual", NULL);
+    ASSERT_NE(visual, KE_ENTITY_INVALID);
+
+    ke_component_meta hmeta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_HIERARCHY, &hmeta, nullptr));
+    auto *vh = (ke_hierarchy_component *)ecs->component_get(ecs, visual, hmeta.cid);
+    ASSERT_NE(vh, nullptr);
+    EXPECT_EQ(vh->parent, paddle) << "subscene child must hang off the spliced root";
+
+    // The outer [transform] override must reach the subscene root.
+    ke_component_meta tmeta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_TRANSFORM, &tmeta, nullptr));
+    auto *pt = (ke_transform_component *)ecs->component_get(ecs, paddle, tmeta.cid);
+    ASSERT_NE(pt, nullptr);
+    EXPECT_FLOAT_EQ(pt->position.x, -7.5f);
+
+    // The subscene's own transform survived too.
+    auto *vt = (ke_transform_component *)ecs->component_get(ecs, visual, tmeta.cid);
+    ASSERT_NE(vt, nullptr);
+    EXPECT_FLOAT_EQ(vt->scale.x, 0.3f);
+    EXPECT_FLOAT_EQ(vt->scale.y, 1.8f);
+}
+
+TEST_F(SceneLoaderTest, Subscene_OuterTransformAndComponentOverridesStayPairedPerInstance)
+{
+    // Pong's exact shape: two entities reference the SAME subscene, and each
+    // carries BOTH an outer [transform] override (applied early) and an outer
+    // [components.X] override (applied late). The two overrides for one instance
+    // must land on the same spliced root — a mix-up swaps e.g. paddle position
+    // and control action across the two instances.
+    auto sub = WriteTempScene(R"(
+[[entity]]
+name = "Root"
+)");
+
+    std::string main_text =
+        "[[entity]]\nname = \"Holder\"\n\n"
+        "[[entity]]\nname = \"Left\"\nscene = \"" + sub.string() + "\"\n"
+        "[entity.transform]\nposition = [-7.5, 0.0, 0.0]\n"
+        "[entity.components.camera]\nfar_plane = 111.0\n\n"
+        "[[entity]]\nname = \"Right\"\nscene = \"" + sub.string() + "\"\n"
+        "[entity.transform]\nposition = [7.5, 0.0, 0.0]\n"
+        "[entity.components.camera]\nfar_plane = 222.0\n";
+    auto main = WriteTempScene(main_text);
+
+    ASSERT_TRUE(loader->load(loader, main.string().c_str(), NULL));
+
+    ke_component_meta tmeta, cmeta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_TRANSFORM, &tmeta, nullptr));
+    ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_CAMERA, &cmeta, nullptr));
+
+    ke_entity left = tree->find_node(tree, "Left", NULL);
+    ke_entity right = tree->find_node(tree, "Right", NULL);
+    ASSERT_NE(left, KE_ENTITY_INVALID);
+    ASSERT_NE(right, KE_ENTITY_INVALID);
+
+    auto *lt = (ke_transform_component *)ecs->component_get(ecs, left, tmeta.cid);
+    auto *lc = (ke_camera_component *)ecs->component_get(ecs, left, cmeta.cid);
+    auto *rt = (ke_transform_component *)ecs->component_get(ecs, right, tmeta.cid);
+    auto *rc = (ke_camera_component *)ecs->component_get(ecs, right, cmeta.cid);
+    ASSERT_NE(lt, nullptr); ASSERT_NE(lc, nullptr);
+    ASSERT_NE(rt, nullptr); ASSERT_NE(rc, nullptr);
+
+    // Position -7.5 must be paired with far_plane 111 (both from the Left block).
+    EXPECT_FLOAT_EQ(lt->position.x, -7.5f);
+    EXPECT_FLOAT_EQ(lc->far_plane, 111.0f);
+    EXPECT_FLOAT_EQ(rt->position.x, 7.5f);
+    EXPECT_FLOAT_EQ(rc->far_plane, 222.0f);
+}
+
 // ── light applies ──────────────────────────────────────────────────────────
 
 TEST_F(SceneLoaderTest, DirectionalLight_VectorAndScalarFormsAgree)
