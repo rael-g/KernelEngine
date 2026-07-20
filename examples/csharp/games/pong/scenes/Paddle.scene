@@ -21,7 +21,7 @@ parent = "Root"
 type   = "Sprite2D"
 [entity.transform]
 scale = [0.3, 1.8, 1.0]
-[entity.components.MeshRenderer]
+[entity.components.mesh]
 mesh      = "quad"
 color     = [0.95, 0.95, 0.95, 1.0]
 roughness = 1.0
