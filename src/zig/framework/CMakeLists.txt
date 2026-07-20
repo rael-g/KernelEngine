@@ -1,16 +1,13 @@
 # ke_framework — the engine's composition layer (world, scene tree, scene
 # loader, asset resolver, input actions), built by Zig.
 #
-# Mid-migration: Zig compiles the not-yet-ported .c sources into this DLL (see
-# build.zig), so the C→Zig port advances one file at a time and the build stays
-# green throughout. Mirrors src/zig/runtime's zig-build-as-imported-target shape.
+# Mirrors src/zig/runtime's zig-build-as-imported-target shape.
 
 find_program(ZIG_EXECUTABLE zig REQUIRED)
 
 set(ZIG_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/zig-out")
 set(ZIG_LIB_NAME "${CMAKE_SHARED_LIBRARY_PREFIX}ke_framework${CMAKE_SHARED_LIBRARY_SUFFIX}")
 set(KE_ZIG_ERROR "${CMAKE_SOURCE_DIR}/src/zig/common/kerror.zig")
-set(KE_ALLOCATOR_SRC "${CMAKE_SOURCE_DIR}/src/c/allocator/malloc/src/allocator_malloc.c")
 
 file(GLOB_RECURSE KE_FRAMEWORK_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.zig"
@@ -31,17 +28,13 @@ add_custom_command(
         "-Dke-text-include=${CMAKE_SOURCE_DIR}/src/c/text/include"
         "-Dke-runtime-include=${CMAKE_SOURCE_DIR}/src/c/runtime/include"
         "-Dke-scheduler-include=${CMAKE_SOURCE_DIR}/src/c/scheduler/include"
-        "-Dallocator-src=${KE_ALLOCATOR_SRC}"
         "-Dkerror-src=${KE_ZIG_ERROR}"
-        "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
         ${KE_FRAMEWORK_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/build.zig"
         "${KE_ZIG_ERROR}"
-        "${KE_ALLOCATOR_SRC}"
-        ke_common
     COMMENT "Building ke_framework (Zig)"
     VERBATIM
 )

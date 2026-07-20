@@ -4,15 +4,11 @@ const std = @import("std");
 // opinionated composition layer (world, scene tree, scene loader, asset
 // resolver, input actions).
 //
-// Mid-migration: Zig drives the build and compiles the not-yet-ported .c
-// sources into this DLL, so the C→Zig port advances one file at a time with a
-// green build throughout. Nothing MSVC-built is linked *into* the module:
-// tomlc99 and the allocator are vendored/available C sources that Zig compiles
-// itself, and ke_common is reached across a plain C-ABI DLL boundary (the
-// remaining C still calls ke_error_set; it goes away with the last .c).
+// The module is Zig end to end. The only C left is vendored tomlc99, which Zig
+// compiles itself, so nothing built by another toolchain is linked *into* this
+// module; errors go through the shared Zig kerror seam rather than ke_common.
 
 const c_sources = [_][]const u8{
-    "src/scene_loader.c",
     "third_party/tomlc99/toml.c",
 };
 
@@ -30,9 +26,7 @@ pub fn build(b: *std.Build) void {
     const ke_text = b.option([]const u8, "ke-text-include", "kernel_engine/text include dir") orelse @panic("-Dke-text-include required");
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
-    const allocator_src = b.option([]const u8, "allocator-src", "path to allocator_malloc.c") orelse @panic("-Dallocator-src required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/framework_root.zig"),
@@ -46,27 +40,15 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(b.path("include"));
     mod.addIncludePath(b.path("third_party/tomlc99"));
 
-    // The framework's own C (awaiting translation) plus vendored tomlc99, all
-    // compiled with -fno-sanitize=undefined. Zig's Debug build enables UBSan on
-    // C it compiles; this pre-Zig C carries UB the MSVC build tolerated
-    // silently (the same class that made stb/miniaudio trap). Suppress it while
-    // the C is transitional — each file's real safety comes back when it is
-    // translated to Zig; tomlc99 keeps the flag permanently (vendored, not ours).
+    // Vendored tomlc99, compiled with -fno-sanitize=undefined. Zig's Debug build
+    // enables UBSan on C it compiles, and this third-party source carries UB that
+    // is not ours to fix.
     for (c_sources) |src| {
         mod.addCSourceFile(.{ .file = b.path(src), .flags = &.{"-fno-sanitize=undefined"} });
     }
-    // ke_alloc/ke_free for the remaining C. Compiled here from source rather
-    // than linked: ke_allocator_malloc is an MSVC STATIC lib, and pulling MSVC
-    // objects into this GNU-ABI module is exactly the mismatch to avoid. Drops
-    // out with the last .c (Zig code uses std.heap.c_allocator).
-    mod.addCSourceFile(.{ .file = .{ .cwd_relative = allocator_src }, .flags = &.{} });
-
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
 
-    // ke_error_set, for the C that has not moved to the kerror seam util yet.
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
     mod.addCMacro("KE_FRAMEWORK_EXPORT", "");
 
     const lib = b.addLibrary(.{
