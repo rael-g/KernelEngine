@@ -133,7 +133,7 @@ static query_cache_entry *find_or_create_query(ecs_flecs_state *s, ke_component_
     }
 
     ecs_query_desc_t desc = {0};
-    desc.filter.terms[0].id = (ecs_id_t)cid;
+    desc.terms[0].id = (ecs_id_t)cid;
     ecs_query_t *q = ecs_query_init(s->world, &desc);
     if (!q) return NULL;
 
@@ -150,7 +150,9 @@ static ke_entity ecs_flecs_entity_create(ke_ecs *self)
     if (!self || !self->handle) return 0;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
     KE_FLECS_GUARD("flecs fatal in entity_create", { h->state.world_corrupted = true; return 0; });
-    ke_entity result = (ke_entity)ecs_new_w_id(h->state.world, 0);
+    // ecs_new returns an empty entity, ignoring any ambient scope/with state —
+    // this wrapper hands out bare ids and lets the caller add components.
+    ke_entity result = (ke_entity)ecs_new(h->state.world);
     KE_FLECS_GUARD_END();
     return result;
 }
@@ -160,11 +162,11 @@ static ke_entity ecs_flecs_entity_reserve(ke_ecs *self)
     if (!self || !self->handle) return 0;
     ecs_flecs_handle *h = (ecs_flecs_handle *)self->handle;
     if (h->state.world_corrupted) return 0;
-    // ecs_new_id is the atomic id allocator: safe to call while the world is in
+    // ecs_new is the atomic id allocator: safe to call while the world is in
     // readonly mode (a parallel wave) from any thread. It returns an empty, alive
     // entity — component storage is added later through the defer queue.
     KE_FLECS_GUARD("flecs fatal in entity_reserve", { h->state.world_corrupted = true; return 0; });
-    ke_entity result = (ke_entity)ecs_new_id(h->state.world);
+    ke_entity result = (ke_entity)ecs_new(h->state.world);
     KE_FLECS_GUARD_END();
     return result;
 }
@@ -310,7 +312,7 @@ static ke_query_id ecs_flecs_query_register(ke_ecs *self, const ke_component_id 
 
     ecs_query_desc_t desc = {0};
     for (size_t i = 0; i < cid_count; i++)
-        desc.filter.terms[i].id = (ecs_id_t)cids[i];
+        desc.terms[i].id = (ecs_id_t)cids[i];
     ecs_query_t *q = ecs_query_init(h->state.world, &desc);
     if (!q) { KE_FLECS_GUARD_END(); return KE_QUERY_INVALID; }
 
@@ -365,7 +367,8 @@ static void ecs_flecs_query_resolve(ke_ecs *self, ke_query_id query,
         s->entities = (const ke_entity *)it.entities;
         s->count    = (size_t)it.count;
         for (size_t t = 0; t < rq->term_count; t++)
-            s->columns[t] = rq->elem_sizes[t] ? ecs_field_w_size(&it, rq->elem_sizes[t], (int32_t)(t + 1)) : NULL;
+            // Field indices are 0-based, so term t reads field t.
+            s->columns[t] = rq->elem_sizes[t] ? ecs_field_w_size(&it, rq->elem_sizes[t], (int32_t)t) : NULL;
         for (size_t t = rq->term_count; t < KE_QUERY_MAX_TERMS; t++)
             s->columns[t] = NULL;
         seg++;

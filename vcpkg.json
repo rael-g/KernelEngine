@@ -26,10 +26,6 @@
     {
       "name": "enkits",
       "version": "1.12"
-    },
-    {
-      "name": "flecs",
-      "version": "3.2.11"
     }
   ]
 }
