@@ -4,6 +4,7 @@
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
+#include <kernel_engine/common/error.h>
 
 class SceneTreeTest : public ::testing::Test
 {
@@ -307,4 +308,19 @@ TEST_F(SceneTreeTest, PropagateTransforms_GrandchildAccumulatesWholeChain)
 TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 {
     EXPECT_EQ(ke_scene_tree_create(nullptr, NULL).ref, nullptr);
+}
+
+TEST_F(SceneTreeTest, Create_NullArgs_ErrorTypeNameMatchesTheSharedVocabulary)
+{
+    // A Zig plugin fills ke_error through its own error-type singletons, which
+    // are distinct instances from ke_common's — callers (C# included) match by
+    // NAME, so the two sides' strings must stay byte-identical. A rename on one
+    // side alone would silently stop every `Is("ke.error.invalid_argument")`
+    // check from matching.
+    ke_error *err = nullptr;
+    EXPECT_EQ(ke_scene_tree_create(nullptr, &err).ref, nullptr);
+    ASSERT_NE(err, nullptr);
+    ASSERT_NE(err->type, nullptr);
+    ASSERT_NE(err->type->name, nullptr);
+    EXPECT_STREQ(err->type->name, KE_ERROR_INVALID_ARGUMENT.name);
 }
