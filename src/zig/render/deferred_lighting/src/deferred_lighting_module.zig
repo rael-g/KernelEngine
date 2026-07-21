@@ -79,12 +79,17 @@ const DeferredLightingModule = struct {
 fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
     const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
     const q = cam_tc.rotation;
-    if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        return zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
-    const m = cam_tc.world_matrix.m;
-    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-    const up = zm.f32x4(m[4], m[5], m[6], 0);
-    return zm.lookToLh(eye, fwd, up);
+    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
+        zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
+    else blk: {
+        const m = cam_tc.world_matrix.m;
+        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+        const up = zm.f32x4(m[4], m[5], m[6], 0);
+        break :blk zm.lookToLh(eye, fwd, up);
+    };
+    // Reflect view-space X so world +X reads to the right — same convention as
+    // the forward pass's camera view, keeping the deferred path aligned.
+    return zm.mul(view, zm.scaling(-1.0, 1.0, 1.0));
 }
 
 fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
