@@ -9,17 +9,11 @@ public static unsafe partial class NativeMethods
     [return: NativeTypeName("const ke_error *")]
     public static extern ke_error* error_last();
 
-    [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_copy", ExactSpelling = true)]
-    public static extern ke_error* error_copy([NativeTypeName("const ke_error *")] ke_error* src);
-
-    [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_free", ExactSpelling = true)]
-    public static extern void error_free(ke_error* err);
-
     [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_fatal", ExactSpelling = true)]
     public static extern void error_fatal([NativeTypeName("const ke_error *")] ke_error* err);
 
     [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
-    public const uint KE_RESOURCE_HANDLE_NONE = 0xffffffffU;
+    public const uint KE_RESOURCE_HANDLE_NONE = (4294967295U);
 
     [NativeTypeName("#define KE_COMPONENT_NAME_TRANSFORM \"transform\"")]
     public static ReadOnlySpan<byte> KE_COMPONENT_NAME_TRANSFORM => "transform"u8;

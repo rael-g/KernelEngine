@@ -1,6 +1,10 @@
 // ke_common — the engine's error vocabulary: the generic type singletons, the
-// thread-local slot a failing callee fills, and the deep-copy/teardown pair for
-// carrying an error past that slot's lifetime.
+// thread-local slot a failing callee fills, and the fatal path.
+//
+// Nothing here allocates. Everything an error needs lives in static storage:
+// the type singletons are constants and the slots are a thread-local ring. An
+// error that has to outlive the call producing it is built as a program-lifetime
+// constant by the code that raises it, not copied onto a heap.
 
 const std = @import("std");
 
@@ -101,56 +105,6 @@ export fn ke_error_last() callconv(.c) ?*const c.ke_error {
     // next_slot already advanced past the last write; the filled one is the other.
     const last = 1 - next_slot;
     return if (slots[last].type != null) &slots[last] else null;
-}
-
-// -- heap-owned copies -------------------------------------------------------
-
-/// Deep-copies `src` (message and the whole cause chain) into malloc'd storage
-/// that outlives the thread-local slots. Returns null on allocation failure —
-/// an error path must never itself abort.
-export fn ke_error_copy(src_in: ?*const c.ke_error) callconv(.c) ?*c.ke_error {
-    const src = src_in orelse return null;
-
-    const copy: *c.ke_error = @ptrCast(@alignCast(std.c.malloc(@sizeOf(c.ke_error)) orelse return null));
-    // type and file are program-lifetime pointers (a singleton and a __FILE__
-    // literal), so they are carried over as-is rather than copied.
-    copy.* = .{
-        .type = src.type,
-        .message = null,
-        .file = src.file,
-        .line = src.line,
-        .cause = null,
-    };
-
-    if (src.message != null) {
-        const text = std.mem.span(src.message);
-        const m: [*]u8 = @ptrCast(std.c.malloc(text.len + 1) orelse {
-            std.c.free(copy);
-            return null;
-        });
-        @memcpy(m[0..text.len], text);
-        m[text.len] = 0;
-        copy.message = @ptrCast(m);
-    }
-
-    if (src.cause) |cause| {
-        copy.cause = ke_error_copy(cause) orelse {
-            ke_error_free(copy);
-            return null;
-        };
-    }
-
-    return copy;
-}
-
-export fn ke_error_free(err_in: ?*c.ke_error) callconv(.c) void {
-    var err = err_in;
-    while (err) |e| {
-        const cause: ?*c.ke_error = @constCast(e.cause);
-        if (e.message != null) std.c.free(@constCast(e.message));
-        std.c.free(e);
-        err = cause;
-    }
 }
 
 // -- fatal -------------------------------------------------------------------

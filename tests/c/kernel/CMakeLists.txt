@@ -9,7 +9,6 @@ add_executable(test_ke_kernel
     #   test_array.cpp         -- deleted: array.h removed (domain ejection)
     test_asset_resolver.cpp  # C-phase 1: re-enabled with new ke_framework plugin
     test_resource_cache.cpp  # C-phase 2: re-enabled as kernel built-in
-    test_error.cpp           # ke_error_copy / ke_error_free (owned snapshot)
     test_scene_tree.cpp      # C-phase 3: re-enabled with ecs-backed scene_tree
     test_input_actions.cpp   # C-phase 5: re-enabled with pure-C input_actions impl
     test_scene_loader.cpp    # C-phase 6: re-enabled with pure-C scene_loader + apply registry

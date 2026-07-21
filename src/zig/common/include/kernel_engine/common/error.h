@@ -63,19 +63,10 @@ KE_COMMON_API bool ke_error_is(const ke_error* err, const ke_error_type* type);
 /// no error has been set yet. Valid until the next ke_error_set() call on this thread.
 KE_COMMON_API const ke_error* ke_error_last(void);
 
-/// Deep-copies `src` into a heap-owned error that stays valid after the
-/// originating thread has moved past its thread-local slots — for carrying an
-/// error across a thread boundary (e.g. into an async task's result) or holding
-/// it beyond the depth-2 ring. The message and the whole cause chain are copied
-/// into owned storage; `type`/`file` are program-lifetime pointers, copied as-is.
-/// Returns NULL if `src` is NULL or on allocation failure (never aborts).
-/// Release with ke_error_free().
-KE_COMMON_API ke_error* ke_error_copy(const ke_error* src);
-
-/// Releases an error returned by ke_error_copy(), including its owned message and
-/// cause chain. Must NOT be called on a thread-local error (one from
-/// ke_error_last() or written to *out_error by ke_error_set()).
-KE_COMMON_API void ke_error_free(ke_error* err);
+/// An error that must outlive the call producing it — an async completion runs
+/// after its originating frame is gone — is built as a program-lifetime constant
+/// rather than copied onto the heap. There is deliberately no heap-owned error:
+/// this vocabulary allocates nothing at all.
 
 /// Low-level: fill a thread-local error slot and write to *out_error if non-NULL.
 /// Prefer the KE_ERROR_SET / KE_ERROR_WRAP macros which inject __FILE__ and __LINE__.
