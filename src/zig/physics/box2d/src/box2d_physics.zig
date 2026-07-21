@@ -245,6 +245,13 @@ fn applyImpulse(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, ix: f32, iy: f32) 
     c.b2Body_ApplyLinearImpulseToCenter(body, .{ .x = ix, .y = iy }, true);
 }
 
+fn setBodyFixedRotation(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, fixed: bool) callconv(.c) void {
+    const self = self_in orelse return;
+    if (self.handle == null) return;
+    const body = lookup(stateOf(self), id) orelse return;
+    c.b2Body_SetFixedRotation(body, fixed);
+}
+
 // -- rotation helpers --------------------------------------------------------
 //
 // b2MakeRot / b2Rot_GetAngle are static inline in Box2D's headers, so they
@@ -321,6 +328,7 @@ export fn ke_physics_2d_box2d_create(
     s.api.set_body_position = setBodyPosition;
     s.api.set_body_velocity = setBodyVelocity;
     s.api.apply_impulse = applyImpulse;
+    s.api.set_body_fixed_rotation = setBodyFixedRotation;
 
     logInfo(s.logger, "Box2D physics world initialized");
     return .{ .ref = &s.api, .destroy = destroy };

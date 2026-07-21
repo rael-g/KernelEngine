@@ -65,4 +65,10 @@ public interface IPhysics2D : IDisposable
 
     /// <summary>Applies a linear impulse (kg·m/s) at the body center.</summary>
     void ApplyImpulse(BodyHandle2D body, Vector2 impulse);
+
+    /// <summary>
+    /// Locks or unlocks the body's rotation. A locked body holds its angle and ignores
+    /// every torque, including the one a contact imparts. Bodies start unlocked.
+    /// </summary>
+    void SetBodyFixedRotation(BodyHandle2D body, bool fixedRotation);
 }

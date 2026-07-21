@@ -35,4 +35,7 @@ public unsafe partial struct ke_physics_2d
 
     [NativeTypeName("void (*)(struct ke_physics_2d *, ke_body_2d, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, float, float, void> apply_impulse;
+
+    [NativeTypeName("void (*)(struct ke_physics_2d *, ke_body_2d, bool)")]
+    public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, bool, void> set_body_fixed_rotation;
 }

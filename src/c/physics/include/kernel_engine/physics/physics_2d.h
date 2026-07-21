@@ -77,6 +77,13 @@ extern "C"
         /// @brief Applies a linear impulse (kg*m/s) at the body center.
         void (*apply_impulse)(struct ke_physics_2d *self, ke_body_2d body, float impulse_x, float impulse_y);
 
+        /// @brief Locks or unlocks the body's rotation. A locked body keeps its current
+        ///        angle and ignores every torque, including the one a contact imparts.
+        ///        Bodies start unlocked. Needed by anything that must stay upright —
+        ///        characters, projectiles, and any box whose collisions would otherwise
+        ///        set it spinning.
+        void (*set_body_fixed_rotation)(struct ke_physics_2d *self, ke_body_2d body, bool fixed);
+
     } ke_physics_2d;
 
     typedef struct ke_physics_2d_handle

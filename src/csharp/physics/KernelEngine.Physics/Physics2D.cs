@@ -88,6 +88,12 @@ public sealed unsafe class Physics2D : IPhysics2D
         _native->apply_impulse(_native, body.Value, impulse.X, impulse.Y);
     }
 
+    public void SetBodyFixedRotation(BodyHandle2D body, bool fixedRotation)
+    {
+        if (_native == null || !body.IsValid) return;
+        _native->set_body_fixed_rotation(_native, body.Value, fixedRotation);
+    }
+
     public void Dispose()
     {
         if (_native != null)

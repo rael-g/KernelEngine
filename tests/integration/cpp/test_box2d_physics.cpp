@@ -111,3 +111,53 @@ TEST_F(Box2DPhysicsTest, DestroyBody_Works) {
     physics->destroy_body(physics, id);
     // Should not crash when trying to use it (or we should check it fails)
 }
+
+// A box bouncing head-on is where Box2D v3 differs from v2: its two-point
+// manifold resolves the contact points sequentially, so an otherwise symmetric
+// hit leaves a net torque. Locking rotation is the engine-level answer, and
+// this is the Pong ball's exact setup — frictionless box, full restitution.
+TEST_F(Box2DPhysicsTest, FixedRotation_KeepsABouncingBoxFromSpinning) {
+    physics->set_gravity(physics, 0.0f, 0.0f);
+
+    ke_body_2d wall = physics->create_body(physics, KE_BODY_TYPE_STATIC, 2.0f, 0.0f, nullptr);
+    ASSERT_NE(wall, KE_BODY_2D_INVALID);
+    ASSERT_TRUE(physics->add_box_fixture(physics, wall, 0.25f, 4.0f, 1.0f, 0.0f, 1.0f, nullptr));
+
+    ke_body_2d ball = physics->create_body(physics, KE_BODY_TYPE_DYNAMIC, 0.0f, 0.0f, nullptr);
+    ASSERT_NE(ball, KE_BODY_2D_INVALID);
+    ASSERT_TRUE(physics->add_box_fixture(physics, ball, 0.18f, 0.18f, 1.0f, 0.0f, 1.0f, nullptr));
+    physics->set_body_fixed_rotation(physics, ball, true);
+    physics->set_body_velocity(physics, ball, 6.0f, 0.0f);
+
+    ke_body_state_2d st{};
+    for (int i = 0; i < 120; ++i) {
+        physics->step(physics, 1.0f / 60.0f);
+        physics->get_body_state(physics, ball, &st);
+        ASSERT_NEAR(st.angular_velocity, 0.0f, 1e-5f)
+            << "a rotation-locked body must never pick up spin (step " << i << ")";
+    }
+    EXPECT_NEAR(st.angle, 0.0f, 1e-5f);
+    // The lock must not have cost the bounce: the box has to come back.
+    EXPECT_LT(st.velocity_x, 0.0f);
+}
+
+// Companion to the box case: a frictionless circle has no way to pick up spin
+// from a head-on bounce, so this isolates a contact-manifold asymmetry (box
+// only) from a body mass/inertia problem (both shapes).
+TEST_F(Box2DPhysicsTest, FrictionlessCircle_HeadOnBounce_DoesNotSpin) {
+    physics->set_gravity(physics, 0.0f, 0.0f);
+
+    ke_body_2d wall = physics->create_body(physics, KE_BODY_TYPE_STATIC, 2.0f, 0.0f, nullptr);
+    ASSERT_TRUE(physics->add_box_fixture(physics, wall, 0.25f, 4.0f, 1.0f, 0.0f, 1.0f, nullptr));
+
+    ke_body_2d ball = physics->create_body(physics, KE_BODY_TYPE_DYNAMIC, 0.0f, 0.0f, nullptr);
+    ASSERT_TRUE(physics->add_circle_fixture(physics, ball, 0.18f, 1.0f, 0.0f, 1.0f, nullptr));
+    physics->set_body_velocity(physics, ball, 6.0f, 0.0f);
+
+    ke_body_state_2d st{};
+    for (int i = 0; i < 120; ++i) {
+        physics->step(physics, 1.0f / 60.0f);
+        physics->get_body_state(physics, ball, &st);
+        ASSERT_NEAR(st.angular_velocity, 0.0f, 1e-3f) << "step " << i;
+    }
+}

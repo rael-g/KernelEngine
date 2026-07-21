@@ -38,6 +38,10 @@ public sealed class Ball : Node, IPhysicsBody2D
     {
         var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
         _body = _physics.CreateBody(BodyType2D.Dynamic, pos);
+        // A square ball that tumbles reads as a bug. Its box collider picks up
+        // spin from the two-point contact manifold even at zero friction, so the
+        // rotation is locked rather than left to the solver.
+        _physics.SetBodyFixedRotation(_body, true);
     }
 
     protected override void OnReady()
