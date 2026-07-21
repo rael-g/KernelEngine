@@ -5,7 +5,7 @@ KernelEngine.Scheduler.Enki.Native
 --libraryPath
 ke_scheduler_enki
 --include-directory
-../../../../c/common/include
+../../../../zig/common/include
 --include-directory
 ../../../../c/allocator/include
 --include-directory
@@ -13,11 +13,11 @@ ke_scheduler_enki
 --include-directory
 ../../../../c/scheduler/include
 --include-directory
-../../../../cpp/scheduler/enki/include
+../../../../zig/scheduler/enki/include
 --file
-../../../../cpp/scheduler/enki/include/kernel_engine/scheduler/enki/enki_scheduler.h
+../../../../zig/scheduler/enki/include/kernel_engine/scheduler/enki/enki_scheduler.h
 --traverse
-../../../../cpp/scheduler/enki/include/kernel_engine/scheduler/enki/enki_scheduler.h
+../../../../zig/scheduler/enki/include/kernel_engine/scheduler/enki/enki_scheduler.h
 --methodClassName
 NativeMethods
 --prefixStrip

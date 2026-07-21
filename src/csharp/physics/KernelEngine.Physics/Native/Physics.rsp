@@ -5,7 +5,7 @@ KernelEngine.Physics.Native
 --libraryPath
 ke_physics_box2d
 --include-directory
-../../../../c/common/include
+../../../../zig/common/include
 --include-directory
 ../../../../c/allocator/include
 --include-directory

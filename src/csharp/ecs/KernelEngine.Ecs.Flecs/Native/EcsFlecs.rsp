@@ -5,7 +5,7 @@ KernelEngine.Ecs.Flecs.Native
 --libraryPath
 ke_ecs_flecs
 --include-directory
-../../../../c/common/include
+../../../../zig/common/include
 --include-directory
 ../../../../c/allocator/include
 --include-directory

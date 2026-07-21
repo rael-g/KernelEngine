@@ -5,7 +5,7 @@ KernelEngine.Audio.MiniAudio.Native
 --libraryPath
 ke_audio_miniaudio
 --include-directory
-../../../../c/common/include
+../../../../zig/common/include
 --include-directory
 ../../../../c/allocator/include
 --include-directory
@@ -13,11 +13,11 @@ ke_audio_miniaudio
 --include-directory
 ../../../../c/audio/include
 --include-directory
-../../../../cpp/audio/miniaudio/include
+../../../../zig/audio/miniaudio/include
 --file
-../../../../cpp/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h
+../../../../zig/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h
 --traverse
-../../../../cpp/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h
+../../../../zig/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h
 --methodClassName
 NativeMethods
 --prefixStrip

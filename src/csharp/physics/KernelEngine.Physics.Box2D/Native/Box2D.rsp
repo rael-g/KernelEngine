@@ -5,7 +5,7 @@ KernelEngine.Physics.Box2D.Native
 --libraryPath
 ke_physics_2d_box2d
 --include-directory
-../../../../c/common/include
+../../../../zig/common/include
 --include-directory
 ../../../../c/allocator/include
 --include-directory
@@ -13,11 +13,11 @@ ke_physics_2d_box2d
 --include-directory
 ../../../../c/physics/include
 --include-directory
-../../../../cpp/physics/box2d/include
+../../../../zig/physics/box2d/include
 --file
-../../../../cpp/physics/box2d/include/kernel_engine/physics/box2d/box2d_physics.h
+../../../../zig/physics/box2d/include/kernel_engine/physics/box2d/box2d_physics.h
 --traverse
-../../../../cpp/physics/box2d/include/kernel_engine/physics/box2d/box2d_physics.h
+../../../../zig/physics/box2d/include/kernel_engine/physics/box2d/box2d_physics.h
 --methodClassName
 NativeMethods
 --prefixStrip

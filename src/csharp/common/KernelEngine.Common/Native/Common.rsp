@@ -5,7 +5,7 @@ KernelEngine.Common.Native
 --libraryPath
 ke_common
 --include-directory
-../../../../c/common/include
+../../../../zig/common/include
 --include-directory
 ../../../../c/allocator/include
 --include-directory
@@ -13,9 +13,9 @@ ke_common
 --include-directory
 ../../../../c/resource_cache/include
 --file
-../../../../c/common/include/kernel_engine/common/types.h
-../../../../c/common/include/kernel_engine/common/error.h
-../../../../c/common/include/kernel_engine/common/math.h
+../../../../zig/common/include/kernel_engine/common/types.h
+../../../../zig/common/include/kernel_engine/common/error.h
+../../../../zig/common/include/kernel_engine/common/math.h
 ../../../../c/allocator/include/kernel_engine/allocator/allocator.h
 ../../../../c/resource_cache/include/kernel_engine/resource_cache/resource_cache.h
 ../../../../c/spatial/include/kernel_engine/spatial/transform.h
