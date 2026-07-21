@@ -11,8 +11,37 @@
   ],
   "overrides": [
     {
+      "name": "glfw3",
+      "version": "3.4"
+    },
+    {
+      "name": "stb",
+      "version": "2023-04-11"
+    },
+    {
+      "name": "box2d",
+      "version": "2.4.1",
+      "port-version": 3
+    },
+    {
+      "name": "assimp",
+      "version": "5.4.0"
+    },
+    {
+      "name": "gtest",
+      "version": "1.14.0"
+    },
+    {
       "name": "enkits",
       "version": "1.12"
+    },
+    {
+      "name": "miniaudio",
+      "version": "0.11.21"
+    },
+    {
+      "name": "flecs",
+      "version": "3.2.11"
     }
   ]
 }
