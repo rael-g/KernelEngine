@@ -26,19 +26,21 @@ pub fn Errors(comptime c: type) type {
             already_exists,
         };
 
-        // Program-lifetime type singletons, one per kind. Names mirror
-        // ke_common's KE_ERROR_* so a name-based match still works across the
-        // boundary. parent is null (the generic roots have no parent).
+        // Program-lifetime type singletons, one per kind. Matching across the
+        // boundary is by NAME (a C# caller does err.Is("ke.error.not_found"),
+        // and Zig's singletons are distinct instances from ke_common's), so
+        // these strings must stay byte-identical to ke_common's KE_ERROR_*.
+        // parent is null — the generic roots have no parent.
         const types = blk: {
             var t: [8]c.ke_error_type = undefined;
-            t[@intFromEnum(Kind.general)] = .{ .name = "ke.general", .parent = null };
-            t[@intFromEnum(Kind.not_found)] = .{ .name = "ke.not_found", .parent = null };
-            t[@intFromEnum(Kind.io)] = .{ .name = "ke.io", .parent = null };
-            t[@intFromEnum(Kind.out_of_memory)] = .{ .name = "ke.out_of_memory", .parent = null };
-            t[@intFromEnum(Kind.invalid_argument)] = .{ .name = "ke.invalid_argument", .parent = null };
-            t[@intFromEnum(Kind.not_initialized)] = .{ .name = "ke.not_initialized", .parent = null };
-            t[@intFromEnum(Kind.not_supported)] = .{ .name = "ke.not_supported", .parent = null };
-            t[@intFromEnum(Kind.already_exists)] = .{ .name = "ke.already_exists", .parent = null };
+            t[@intFromEnum(Kind.general)] = .{ .name = "ke.error", .parent = null };
+            t[@intFromEnum(Kind.not_found)] = .{ .name = "ke.error.not_found", .parent = null };
+            t[@intFromEnum(Kind.io)] = .{ .name = "ke.error.io", .parent = null };
+            t[@intFromEnum(Kind.out_of_memory)] = .{ .name = "ke.error.out_of_memory", .parent = null };
+            t[@intFromEnum(Kind.invalid_argument)] = .{ .name = "ke.error.invalid_argument", .parent = null };
+            t[@intFromEnum(Kind.not_initialized)] = .{ .name = "ke.error.not_initialized", .parent = null };
+            t[@intFromEnum(Kind.not_supported)] = .{ .name = "ke.error.not_supported", .parent = null };
+            t[@intFromEnum(Kind.already_exists)] = .{ .name = "ke.error.already_exists", .parent = null };
             break :blk t;
         };
 
