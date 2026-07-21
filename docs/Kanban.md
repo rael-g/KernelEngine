@@ -396,6 +396,14 @@ P7/P8 are quality-of-life and cheap. P9 rides on collision events (already in sp
 - **Filtering / quality.** PCF (NxN taps) as the baseline soft edge; PCSS or a variance/exponential map (VSM/ESM) for contact-hardening soft shadows. Bias as **slope-scaled depth bias + normal-offset** (not the current constant) to remove acne without large peter-panning.
 - **Capability-gated.** Per the universality doctrine, expose a `shadowQuality`/cascade-count knob and degrade gracefully when a backend lacks compare-samplers or array textures (`isSupported`).
 
+##### [OBS.8] `orthographic` camera flag is silently ignored by the render-v2 forward pass (BUG)
+- **Tags**: `bug`
+- **Symptom**: a camera with `orthographic = true` (+ `orthographic_size`) still renders with a perspective projection. No error, no warning — the flag is simply never read.
+- **Root cause (confirmed 2026-07-19)**: `forward_module.zig` builds the projection through `makePerspective(...)` only; there is no orthographic branch anywhere in the pass. `ke_camera_component.orthographic` / `.orthographic_size` are parsed by the scene loader and stored in the component, then dropped on the floor.
+- **Why it went unnoticed**: the only orthographic content is 2D (Pong), where every object sits on the same Z plane — a perspective projection over a single depth plane is visually indistinguishable from an ortho one. It only bites once 2D content spans depth, or a game relies on ortho for a non-2D view.
+- **Fix**: add the ortho branch (build from `orthographic_size` + aspect + near/far, honouring the same `ke_ndc_convention` handling `makePerspective` already does) and select on the component flag. **Audit every camera-projection producer** — the projection is rebuilt independently in the cluster light-cull path (which reconstructs it from `tan(fov/2)`/aspect params in its shader) and the deferred path; an ortho camera must be consistent across all of them or light binning desyncs from rendering. Same duplication trap as the `cameraView` X-reflection fix.
+- **Effort**: M.
+
 ---
 
 ### Tier H — Hygiene & instrumentation carry-overs
