@@ -1,7 +1,24 @@
-﻿#pragma once
+﻿// ke_physics_2d_box2d_create — factory for the Box2D-backed 2D physics world
+// (the only export this plugin has; everything else it offers is reached
+// through the ke_physics_2d vtable the factory returns).
+
+#pragma once
 
 #include <kernel_engine/physics/physics_2d.h>
-#include <kernel_engine/physics/box2d/physics_export.h>
+
+#ifndef KE_PHYSICS_BOX2D_API
+#  if defined(_WIN32) || defined(__CYGWIN__)
+#    if defined(KE_PHYSICS_BOX2D_STATIC)
+#      define KE_PHYSICS_BOX2D_API
+#    elif defined(KE_PHYSICS_BOX2D_EXPORT)
+#      define KE_PHYSICS_BOX2D_API __declspec(dllexport)
+#    else
+#      define KE_PHYSICS_BOX2D_API __declspec(dllimport)
+#    endif
+#  else
+#    define KE_PHYSICS_BOX2D_API __attribute__((visibility("default")))
+#  endif
+#endif
 
 #ifdef __cplusplus
 extern "C" {

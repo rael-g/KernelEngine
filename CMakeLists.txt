@@ -98,7 +98,7 @@ add_subdirectory(src/zig/configuration/toml)
 add_subdirectory(src/cpp/asset/assimp)
 add_subdirectory(src/zig/asset/stb_image)
 add_subdirectory(src/zig/audio/miniaudio)
-add_subdirectory(src/cpp/physics/box2d)
+add_subdirectory(src/zig/physics/box2d)
 add_subdirectory(src/zig/text/stb_truetype)
 
 add_subdirectory(examples/c/01_minimal_log)
