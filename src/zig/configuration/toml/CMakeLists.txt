@@ -12,9 +12,9 @@ add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
-        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/c/common/include"
+        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
         "-Dke-config-include=${CMAKE_SOURCE_DIR}/src/c/configuration/include"
-        "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
+        "-Dke-lib-dir=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS

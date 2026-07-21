@@ -58,7 +58,7 @@ list(APPEND KE_MATERIALS_DIRS "${CMAKE_SOURCE_DIR}/examples/csharp/03_pbr_direct
 set(KE_GENERATE_MATERIAL_WRAPPER_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/generate_material_wrapper.py")
 include(cmake/CompileMaterialShaders.cmake)
 
-add_subdirectory(src/c/common)
+add_subdirectory(src/zig/common)
 add_subdirectory(src/c/allocator)
 add_subdirectory(src/c/logger)
 add_subdirectory(src/c/allocator/malloc)

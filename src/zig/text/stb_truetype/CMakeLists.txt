@@ -16,7 +16,7 @@ add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
-        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/c/common/include"
+        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
         "-Dke-logger-include=${CMAKE_SOURCE_DIR}/src/c/logger/include"
         "-Dke-text-include=${CMAKE_SOURCE_DIR}/src/c/text/include"
         "-Dke-self-include=${CMAKE_CURRENT_SOURCE_DIR}/include"

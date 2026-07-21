@@ -9,7 +9,7 @@ target_include_directories(ke_ecs_flecs PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 target_include_directories(ke_ecs_flecs PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/c/common/src
+    ${CMAKE_SOURCE_DIR}/src/zig/common/src
 )
 
 get_target_property(target_type ke_ecs_flecs TYPE)

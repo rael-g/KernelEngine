@@ -31,7 +31,7 @@ target_link_libraries(test_ke_kernel PRIVATE
 )
 
 target_include_directories(test_ke_kernel PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/c/common/include
+    ${CMAKE_SOURCE_DIR}/src/zig/common/include
     ${CMAKE_SOURCE_DIR}/src/c/allocator/include
     ${CMAKE_SOURCE_DIR}/src/c/logger/include
     ${CMAKE_SOURCE_DIR}/src/c/ecs/include

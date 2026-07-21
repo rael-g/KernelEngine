@@ -38,8 +38,8 @@ add_custom_command(
     OUTPUT "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}" ${ZIG_IMPLIB_OUTPUT}
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
-        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/c/common/include"
-        "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
+        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
+        "-Dke-lib-dir=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
         "-Dke-render-include=${CMAKE_SOURCE_DIR}/src/c/render/include"
         "-Dke-window-include=${CMAKE_SOURCE_DIR}/src/c/window/include"
         "-Dke-scheduler-include=${CMAKE_SOURCE_DIR}/src/c/scheduler/include"

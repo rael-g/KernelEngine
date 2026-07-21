@@ -50,7 +50,7 @@ add_custom_command(
     OUTPUT ${KE_RENDER_CORE_ZIG_OUTPUTS}
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
-        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/c/common/include"
+        "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
         "-Dke-allocator-include=${CMAKE_SOURCE_DIR}/src/c/allocator/include"
         "-Dke-ecs-include=${CMAKE_SOURCE_DIR}/src/c/ecs/include"
         "-Dke-runtime-include=${CMAKE_SOURCE_DIR}/src/c/runtime/include"
@@ -67,7 +67,7 @@ add_custom_command(
         "-Dke-cluster-include=${CMAKE_SOURCE_DIR}/src/zig/render/cluster/include"
         "-Dke-deferred-lighting-include=${CMAKE_SOURCE_DIR}/src/zig/render/deferred_lighting/include"
         "-Dke-forward-include=${CMAKE_SOURCE_DIR}/src/zig/render/forward/include"
-        "-Dke-lib-dir=$<TARGET_LINKER_FILE_DIR:ke_common>"
+        "-Dke-lib-dir=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
         "-Dmagenta-vs-wgsl=${SHADER_GEN_DIR}/magenta.vs.wgsl"
         "-Dmagenta-fs-wgsl=${SHADER_GEN_DIR}/magenta.fs.wgsl"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
