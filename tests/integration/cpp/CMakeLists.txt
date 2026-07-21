@@ -21,7 +21,7 @@ target_include_directories(test_integration_cpp PRIVATE
     
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/stb_image/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/scheduler/enki/include
+    ${CMAKE_SOURCE_DIR}/src/zig/scheduler/enki/include
     ${CMAKE_SOURCE_DIR}/src/cpp/audio/miniaudio/include
     ${CMAKE_SOURCE_DIR}/src/cpp/physics/box2d/include
     ${CMAKE_SOURCE_DIR}/src/cpp/text/stb_truetype/include
