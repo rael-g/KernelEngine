@@ -19,12 +19,10 @@ add_executable(test_integration_cpp
 
 target_include_directories(test_integration_cpp PRIVATE
     
-    ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/asset/stb_image/include
     ${CMAKE_SOURCE_DIR}/src/zig/scheduler/enki/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/audio/miniaudio/include
+    ${CMAKE_SOURCE_DIR}/src/zig/audio/miniaudio/include
     ${CMAKE_SOURCE_DIR}/src/zig/physics/box2d/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/text/stb_truetype/include
+    ${CMAKE_SOURCE_DIR}/src/zig/text/stb_truetype/include
 )
 
 target_link_libraries(test_integration_cpp PRIVATE

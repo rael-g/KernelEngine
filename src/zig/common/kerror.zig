@@ -39,6 +39,15 @@ pub fn Errors(comptime c: type) type {
             break :blk t;
         };
 
+        /// The program-lifetime singleton for `kind`. Needed where an error must
+        /// outlive the call that produced it — an async completion runs after
+        /// its originating frame is gone, so it cannot point at the thread-local
+        /// slot below. Referencing ke_common's exported singletons instead would
+        /// force a link against it, which this seam exists to avoid.
+        pub fn typeOf(kind: Kind) *const c.ke_error_type {
+            return &types[@intFromEnum(kind)];
+        }
+
         // Thread-local slot the written ke_error* points into. Valid until the
         // next fail() on this thread — same contract as ke_common's ring buffer.
         threadlocal var slot: c.ke_error = undefined;
