@@ -5,7 +5,6 @@ find_package(assimp CONFIG REQUIRED)
 # These tests link against the full implementations and may interact with hardware/OS.
 add_executable(test_integration_cpp
     test_world.cpp
-    test_glfw_window_device.cpp
     test_factories.cpp
     test_window_glfw.cpp
     test_asset_loader.cpp
@@ -19,10 +18,7 @@ add_executable(test_integration_cpp
 )
 
 target_include_directories(test_integration_cpp PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/cpp/window/contract/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/window/core/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw/include
-    ${CMAKE_SOURCE_DIR}/src/cpp/window/glfw_device/src
+    
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/assimp/include
     ${CMAKE_SOURCE_DIR}/src/cpp/asset/stb_image/include
     ${CMAKE_SOURCE_DIR}/src/cpp/scheduler/enki/include
@@ -33,7 +29,6 @@ target_include_directories(test_integration_cpp PRIVATE
 
 target_link_libraries(test_integration_cpp PRIVATE
     ke_window_glfw
-    ke_window_glfw_device
     ke_asset_assimp
     ke_asset_stb_image
     ke_scheduler_enki

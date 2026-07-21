@@ -58,6 +58,10 @@ list(APPEND KE_MATERIALS_DIRS "${CMAKE_SOURCE_DIR}/examples/csharp/03_pbr_direct
 set(KE_GENERATE_MATERIAL_WRAPPER_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/generate_material_wrapper.py")
 include(cmake/CompileMaterialShaders.cmake)
 
+# Enabled before the subdirectories so a plugin can register its own tests
+# (the Zig plugins run theirs through `zig build test`, not a gtest binary).
+enable_testing()
+
 add_subdirectory(src/zig/common)
 add_subdirectory(src/c/allocator)
 add_subdirectory(src/c/logger)
@@ -78,10 +82,7 @@ add_subdirectory(src/c/audio)
 add_subdirectory(src/c/text)
 add_subdirectory(src/c/physics)
 add_subdirectory(src/c/asset)
-add_subdirectory(src/cpp/window/contract)
-add_subdirectory(src/cpp/window/core)
-add_subdirectory(src/cpp/window/glfw_device)
-add_subdirectory(src/cpp/window/glfw)
+add_subdirectory(src/zig/window/glfw)
 add_subdirectory(src/zig/render/tonemap)
 add_subdirectory(src/zig/render/skybox)
 add_subdirectory(src/zig/render/ui)
@@ -111,7 +112,6 @@ add_subdirectory(examples/c/12_render_core)
 add_subdirectory(examples/c/13_runtime_clear)
 add_subdirectory(examples/c/14_forward_mesh)
 
-enable_testing()
 add_subdirectory(tests/c/kernel)
 add_subdirectory(tests/cpp)
 add_subdirectory(tests/integration/cpp)

@@ -24,7 +24,7 @@ add_dependencies(c_demo_12 c_demo_12_shaders)
 target_include_directories(c_demo_12 PRIVATE "${SHADER_GEN_DIR}")
 target_link_libraries(c_demo_12 PRIVATE
     ke_common
-    ke_window_contract
+    ke_window
     ke_window_glfw
     ke_gpu_device_webgpu
     ke_render_core
