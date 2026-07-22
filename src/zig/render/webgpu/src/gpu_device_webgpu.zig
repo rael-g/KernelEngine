@@ -833,16 +833,26 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
         .nextInChain = null,
         .label       = .{ .data = pp.entry_point, .length = wgpu.WGPU_STRLEN },
     };
-    const spirv = wgpu.WGPUShaderSourceSPIRV{
-        .chain    = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceSPIRV },
-        .codeSize = @intCast(pp.byte_size / 4),
-        .code     = @ptrCast(@alignCast(pp.code)),
-    };
+    // spirv.code needs 4-byte alignment; only touch @alignCast on the branch
+    // that's actually SPIR-V — WGSL source bytes (e.g. an @embedFile'd shader)
+    // carry no such guarantee, and @alignCast panics on a misaligned pointer
+    // even when the resulting value is never read (Zig still evaluates the
+    // whole struct literal eagerly if constructed unconditionally).
+    var spirv: wgpu.WGPUShaderSourceSPIRV = undefined;
     const wgsl = wgpu.WGPUShaderSourceWGSL{
         .chain = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceWGSL },
         .code  = .{ .data = @ptrCast(pp.code), .length = if (pp.byte_size != 0) pp.byte_size else wgpu.WGPU_STRLEN },
     };
-    desc.nextInChain = if (is_spirv) @ptrCast(&spirv) else @ptrCast(&wgsl);
+    if (is_spirv) {
+        spirv = .{
+            .chain    = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceSPIRV },
+            .codeSize = @intCast(pp.byte_size / 4),
+            .code     = @ptrCast(@alignCast(pp.code)),
+        };
+        desc.nextInChain = @ptrCast(&spirv);
+    } else {
+        desc.nextInChain = @ptrCast(&wgsl);
+    }
 
     // Scope the validation so a bad source surfaces as a described ke_error
     // instead of firing the device's uncaptured-error path (a hard panic).
