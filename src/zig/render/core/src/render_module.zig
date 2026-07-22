@@ -133,9 +133,9 @@ export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.k
 export fn ke_render_module_ui_quad(module: ?*c.ke_render_module, texture: c.ke_texture_handle,
                                    dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
                                    uv0: f32, uv1: f32, uv2: f32, uv3: f32,
-                                   r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+                                   color: [*c]const f32) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(module orelse return));
-    st.ui.ref.*.ui_quad.?(st.ui.ref, texture, dst_x, dst_y, dst_w, dst_h, uv0, uv1, uv2, uv3, r, g, b, a);
+    st.ui.ref.*.ui_quad.?(st.ui.ref, texture, dst_x, dst_y, dst_w, dst_h, uv0, uv1, uv2, uv3, color);
 }
 
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {

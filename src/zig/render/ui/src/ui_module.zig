@@ -86,7 +86,7 @@ fn uiReset(ui: *UiState) void {
 fn uiQuad(self: [*c]c.ke_render_ui, texture: c.ke_texture_handle,
           dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
           uv0: f32, uv1: f32, uv2: f32, uv3: f32,
-          r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
+          color: [*c]const f32) callconv(.c) void {
     const ui = stateOf(self);
     if (ui.vertex_count + 6 > ui.vertices.len) return;
 
@@ -112,7 +112,7 @@ fn uiQuad(self: [*c]c.ke_render_ui, texture: c.ke_texture_handle,
     const y0 = dst_y;
     const x1 = dst_x + dst_w;
     const y1 = dst_y + dst_h;
-    const col = [4]f32{ r, g, b, a };
+    const col = [4]f32{ color[0], color[1], color[2], color[3] };
 
     const verts = [6]UiVertex{
         .{ .position = .{ x0, y0 }, .uv = .{ uv0, uv1 }, .color = col },

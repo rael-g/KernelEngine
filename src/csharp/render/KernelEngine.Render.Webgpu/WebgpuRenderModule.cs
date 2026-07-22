@@ -270,8 +270,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw new InvalidOperationException("UiQuad called before the render module was loaded");
 
         var texH = new ke_texture_handle { bits = texture.Value };
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_ui_quad(_module.@ref, texH, dstX, dstY, dstW, dstH, u0, v0, u1, v1,
-                       premultipliedColor.X, premultipliedColor.Y, premultipliedColor.Z, premultipliedColor.W);
+        var color = stackalloc float[4] { premultipliedColor.X, premultipliedColor.Y, premultipliedColor.Z, premultipliedColor.W };
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_ui_quad(_module.@ref, texH, dstX, dstY, dstW, dstH, u0, v0, u1, v1, color);
     }
 
     private static InvalidOperationException Fail(string what, ke_error* err)

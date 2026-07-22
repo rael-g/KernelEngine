@@ -35,11 +35,12 @@ extern "C"
         // Queues a screen-space quad for this frame — accumulated CPU-side and
         // drawn (batched by texture) when the "render.ui" system runs, then reset.
         // dst_x/y/w/h are pixel-space (top-left origin); uv0..3 = (u0,v0,u1,v1);
-        // r/g/b/a are premultiplied-alpha color.
+        // color is 4 floats (premultiplied r,g,b,a) by pointer, not by value —
+        // see ke_render_module_ui_quad for why.
         void (*ui_quad)(struct ke_render_ui *self, ke_texture_handle texture,
                         float dst_x, float dst_y, float dst_w, float dst_h,
                         float uv0, float uv1, float uv2, float uv3,
-                        float r, float g, float b, float a);
+                        const float color[4]);
     } ke_render_ui;
 
     typedef struct ke_render_ui_handle

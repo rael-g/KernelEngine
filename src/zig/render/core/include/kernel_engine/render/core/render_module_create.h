@@ -77,11 +77,16 @@ KE_RENDER_CORE_API ke_render_core *ke_render_module_core(ke_render_module *modul
 // quad/batch limits. Owned by the module, not the render core: UI overlay is
 // a rendering feature (its own pipeline, shaders, batching state) like
 // tonemap/forward/shadow, not core machinery.
+// color is 4 floats (premultiplied r,g,b,a) passed by pointer rather than as
+// trailing scalar args: dst_x..v1 already uses all 8 SysV XMM argument
+// registers, so 4 more float args would spill onto the stack — a shape .NET's
+// P/Invoke marshaler gets wrong (confirmed: the values it delivers natively
+// for exactly those spilled args are garbage, unrelated to what C# passed).
 KE_RENDER_CORE_API void
 ke_render_module_ui_quad(ke_render_module *module, ke_texture_handle texture,
                          float dst_x, float dst_y, float dst_w, float dst_h,
                          float u0, float v0, float u1, float v1,
-                         float r, float g, float b, float a);
+                         const float color[4]);
 
 #ifdef __cplusplus
 }
