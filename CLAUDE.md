@@ -8,18 +8,19 @@ A microkernel game engine: a small ABI-stable C kernel surrounded by C++ plugin 
 
 ## Build
 
-### Native (CMake + vcpkg + Ninja + Clang)
+### Native (Zig + vcpkg manifest mode)
+
+CMake is gone. The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then invokes every plugin's own `build.zig` with one shared `--prefix` so every `.so`/`.dll` converges into one output directory. Each plugin still owns its own `build.zig`, callable standalone the same way (see any `src/zig/<plugin>/build.zig` header comment for its options).
 
 ```bash
-cmake --preset win                                 # configure (Windows)
-cmake --preset linux                               # configure (Linux)
-cmake --build --preset win                         # build
-cmake --install build/win --prefix build/native    # install (required for C# to find native DLLs)
-ctest --preset win --output-on-failure             # native tests
-./build/win/bin/01_minimal_log.exe                 # run a C example
+export VCPKG_ROOT=/path/to/vcpkg                    # or pass -Dvcpkg-root=<path>
+zig build --prefix build/native                     # configure + build + install, one step
+build/native/bin/c_demo_01                           # run a C example (Linux name; c_demo_01.exe on Windows)
+build/native/bin/test_ke_kernel                      # native kernel/framework tests (GTest)
+build/native/bin/test_integration_cpp                # native integration tests (GTest)
 ```
 
-Build output: `build/win/bin/` (executables + DLLs), `build/win/lib/`. C# expects native libraries at `build/native/bin/` (Windows).
+Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. C# expects native libraries at `build/native/bin/`.
 
 ### Managed (.NET 10)
 
@@ -31,16 +32,16 @@ dotnet test KernelEngine.slnx
 ### Scripts
 
 ```bash
-python scripts/compile_slang.py      # compile a render-v2 .slang shader to WGSL (see src/zig/render/core/CMakeLists.txt for the driven build)
+python scripts/compile_slang.py      # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
 python scripts/generate_bindings.py  # regenerate all C# P/Invoke bindings via ClangSharp
-python scripts/coverage.py           # C/C++ + C# tests with unified coverage report (clean | report subcommands)
+python scripts/coverage.py           # native (GTest suites) + C# tests with unified coverage report (clean | report subcommands)
 ```
 
-Shaders compile to `src/zig/render/core/shaders/` (`.slang` sources) → generated WGSL under the CMake build's shader-gen directory, embedded into `ke_render_core` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
+Shaders compile to `src/zig/render/core/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_core` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
 ### Running examples after a native rebuild
 
-Never pass `--no-build` to `dotnet run` after a `cmake --build`. The native DLL copy step (a `PreserveNewest` item in `NativeDependencies.targets`) runs only during a build; `dotnet run --no-build` silently keeps the stale DLL already in `bin/Debug/net10.0/` and runs the old C++. Always use `dotnet run` / `dotnet build` (no `--no-build`); the timestamp-based copy then refreshes the native side automatically.
+Never pass `--no-build` to `dotnet run` after a `zig build`. The native DLL copy step (a `PreserveNewest` item in `NativeDependencies.targets`) runs only during a build; `dotnet run --no-build` silently keeps the stale DLL already in `bin/Debug/net10.0/` and runs the old C++. Always use `dotnet run` / `dotnet build` (no `--no-build`); the timestamp-based copy then refreshes the native side automatically.
 
 ---
 
@@ -66,7 +67,7 @@ Stable types:
 - `ke_task_scheduler` — single shared worker pool (enkiTS impl) used by every parallel subsystem.
 - `ke_resource_cache` — generic refcount + path-keyed dedup primitive, kernel built-in (`src/c/kernel/src/resource_cache/`).
 
-CMake targets: no `ke_kernel` meta-target. Consumers link specific domain impl targets directly (e.g. `ke_allocator_malloc`, `ke_logger_simple`, `ke_resource_cache_default`).
+No `ke_kernel` meta-target: consumers link specific domain impl `.so`s directly (e.g. `ke_logger_simple`, `ke_resource_cache_default`).
 
 ### Layer 2 — Plugins
 
@@ -182,7 +183,7 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 
 2. **No `InternalsVisibleTo`.** See above. Use public `Native` pointers.
 
-3. **Search precedents before inventing.** The project is mature enough that almost every structural decision has an existing example. Before designing a new plugin layout, a new binding `.rsp`, a new CMakeLists structure, a new vtable split — find the closest existing case in the repo. Match the established pattern; if it's genuinely wrong, propose changing the pattern explicitly rather than diverging in parallel.
+3. **Search precedents before inventing.** The project is mature enough that almost every structural decision has an existing example. Before designing a new plugin layout, a new binding `.rsp`, a new plugin `build.zig`, a new vtable split — find the closest existing case in the repo. Match the established pattern; if it's genuinely wrong, propose changing the pattern explicitly rather than diverging in parallel.
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
