@@ -213,6 +213,50 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
     }, &.{&common.step});
 
+    // ── WebGPU backend ───────────────────────────────────────────────────────
+    // CMake fetched this through eliemichel/WebGPU-distribution, a wrapper
+    // repo whose only job (for our config) is to download the same prebuilt
+    // wgpu-native release archive this fetches directly — cutting out a git
+    // clone of a whole wrapper project to reach one URL its own CMake was
+    // going to build anyway.
+    const wgpu_version = "v24.0.3.1";
+    const wgpu_url_name = switch (target.result.os.tag) {
+        .windows => "wgpu-windows-x86_64-msvc-release",
+        else => "wgpu-linux-x86_64-release",
+    };
+    const wgpu_dir = b.pathJoin(&.{ root, ".cache", wgpu_url_name });
+    const wgpu_zip = b.pathJoin(&.{ wgpu_dir, "wgpu.zip" });
+    const wgpu_url = b.fmt("https://github.com/gfx-rs/wgpu-native/releases/download/{s}/{s}.zip", .{ wgpu_version, wgpu_url_name });
+    const wgpu_marker = b.pathJoin(&.{ wgpu_dir, "lib", "libwgpu_native.so" });
+    const wgpu_fetch = b.addSystemCommand(&.{
+        "sh", "-c",
+        b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
+            wgpu_dir, wgpu_marker, wgpu_zip, wgpu_url, wgpu_zip, wgpu_dir,
+        }),
+    });
+
+    const wgpu_include = b.pathJoin(&.{ wgpu_dir, "include" });
+    const wgpu_lib_dir = b.pathJoin(&.{ wgpu_dir, "lib" });
+    const gpu_device_webgpu = ctx.plugin("ke_gpu_device_webgpu", "src/zig/render/webgpu", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-window-include", b.pathJoin(&.{ src_c, "window/include" })),
+        argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler/include" })),
+        argF(b, "wgpu-include", wgpu_include),
+        argF(b, "wgpu-lib", wgpu_lib_dir),
+    }, &.{ &common.step, &wgpu_fetch.step });
+
+    // wgpu-native is linked dynamically: every consumer needs its .so beside
+    // them at runtime. Copied into the shared lib dir once, here, rather than
+    // every consumer computing its own rpath into the .cache tree.
+    const wgpu_copy = b.addSystemCommand(&.{
+        "cp", "-f",
+        b.pathJoin(&.{ wgpu_lib_dir, "libwgpu_native.so" }),
+        b.pathJoin(&.{ ctx.prefix, "lib", "libwgpu_native.so" }),
+    });
+    wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
+
     // ── render pipeline: 6 standalone passes (plain slang, no material system) ─
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
@@ -240,7 +284,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step });
+    }, &.{ &common.step, &runtime.step, &skybox_vs.step, &skybox_fs.step });
 
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
@@ -251,7 +295,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &ui_vs.step, &ui_fs.step });
+    }, &.{ &common.step, &runtime.step, &ui_vs.step, &ui_fs.step });
 
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
@@ -263,7 +307,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/shadow/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step });
+    }, &.{ &common.step, &runtime.step, &shadow_vs.step, &shadow_fs.step });
 
     const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
     const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
@@ -275,7 +319,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger/include" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/cluster/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &cluster_cs.step });
+    }, &.{ &common.step, &runtime.step, &cluster_cs.step });
 
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
@@ -289,7 +333,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger/include" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step });
+    }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step });
 
     // Every plugin is an independent `zig build` process invocation, not a
     // real Zig module dependency — nothing here transitively pulls the others
@@ -301,9 +345,10 @@ pub fn build(b: *std.Build) void {
         window_glfw,     asset_stb_image,   audio_miniaudio,     text_stb_truetype,
         physics_box2d,   asset_assimp,      configuration,       configuration_toml,
         tonemap,         skybox,            ui,                  shadow,
-        cluster,         deferred_lighting,
+        cluster,         deferred_lighting, gpu_device_webgpu,
     };
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
+    b.getInstallStep().dependOn(&wgpu_copy.step);
 
     // ── one example, end to end, no CMake anywhere in the chain ─────────────
     const demo01 = b.addSystemCommand(&.{

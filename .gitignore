@@ -99,6 +99,7 @@ cscope.*
 # Dependencies and package folders
 /vcpkg_installed/
 /vcpkg_installed_zig/
+/.cache/
 /tools/
 packages/
 node_modules/
