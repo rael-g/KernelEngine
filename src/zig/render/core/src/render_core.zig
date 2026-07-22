@@ -10,7 +10,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
-pub const gpa = std.heap.c_allocator;
+pub const gpa = @import("heap.zig").gpa;
 
 // Fold the render module factory (ke_render_module_create) into this lib so it
 // calls ke_render_core_create in-lib — a separate Zig DLL can't link this one's
