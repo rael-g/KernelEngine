@@ -65,9 +65,7 @@ fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
         const up = zm.f32x4(m[4], m[5], m[6], 0);
         break :blk zm.lookToLh(eye, fwd, up);
     };
-    // Reflect view-space X to match the forward pass's camera view, so the
-    // skybox stays aligned with the world geometry rendered in front of it.
-    return zm.mul(view, zm.scaling(-1.0, 1.0, 1.0));
+    return view;
 }
 
 fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {

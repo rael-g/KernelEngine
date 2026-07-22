@@ -162,11 +162,7 @@ fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
         const up = zm.f32x4(m[4], m[5], m[6], 0);
         break :blk zm.lookToLh(eye, fwd, up);
     };
-    // A left-handed view from a +Z camera puts world +X on the left. Reflect
-    // view-space X so authored scenes read with +X to the right, matching the
-    // convention scene authors assume. Every consumer sharing this view (cluster
-    // light binning, skybox) inherits the same reflection, so they stay aligned.
-    return zm.mul(view, zm.scaling(-1.0, 1.0, 1.0));
+    return view;
 }
 
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
