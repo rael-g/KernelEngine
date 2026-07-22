@@ -7,6 +7,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -78,7 +79,7 @@ fn allocTask(
     on_complete: c.ke_task_on_complete_func,
     user_data: ?*anyopaque,
 ) ?*Task {
-    const task: *Task = @ptrCast(@alignCast(std.c.malloc(@sizeOf(Task)) orelse return null));
+    const task = heap.gpa.create(Task) catch return null;
     task.* = .{
         .func = func,
         .data = data,
@@ -116,7 +117,7 @@ fn dispatchOnComplete(
 
     const task = allocTask(func, data, on_complete, user_data) orelse return null;
     const set = c.enkiCreateTaskSet(ets, taskSetExecute) orelse {
-        std.c.free(task);
+        heap.gpa.destroy(task);
         return null;
     };
     task.handle = set;
@@ -141,7 +142,7 @@ fn dispatchPinned(
 
     const task = allocTask(func, data, null, null) orelse return null;
     const pinned = c.enkiCreatePinnedTask(ets, pinnedTaskExecute, thread_num) orelse {
-        std.c.free(task);
+        heap.gpa.destroy(task);
         return null;
     };
     task.handle = pinned;
@@ -170,7 +171,7 @@ fn wait(self_in: ?*c.ke_scheduler, task_in: ?*c.ke_task) callconv(.c) void {
     }
     // wait() is the task's teardown point, matching the contract callers rely
     // on: the handle is dead once it returns.
-    std.c.free(t.task);
+    heap.gpa.destroy(t.task);
 }
 
 fn isCompleted(self_in: ?*c.ke_scheduler, task_in: ?*c.ke_task) callconv(.c) bool {
@@ -198,7 +199,7 @@ fn destroy(self_in: ?*c.ke_scheduler) callconv(.c) void {
         c.enkiDeleteTaskScheduler(ets);
         s.ets = null;
     }
-    std.c.free(s);
+    heap.gpa.destroy(s);
 }
 
 // -- factory -----------------------------------------------------------------
@@ -206,14 +207,14 @@ fn destroy(self_in: ?*c.ke_scheduler) callconv(.c) void {
 export fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle {
     const null_handle = std.mem.zeroes(c.ke_scheduler_handle);
 
-    const s: *State = @ptrCast(@alignCast(std.c.malloc(@sizeOf(State)) orelse {
+    const s = heap.gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "allocation failed", @src());
         return null_handle;
-    }));
+    };
     s.* = .{ .api = std.mem.zeroes(c.ke_scheduler), .ets = null };
 
     s.ets = c.enkiNewTaskScheduler() orelse {
-        std.c.free(s);
+        heap.gpa.destroy(s);
         E.fail(out_error, .general, "task scheduler creation failed", @src());
         return null_handle;
     };
