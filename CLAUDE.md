@@ -39,6 +39,8 @@ python scripts/coverage.py           # native (GTest suites) + C# tests with uni
 
 Shaders compile to `src/zig/render/core/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_core` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
+**Known debt**: native source-based coverage no longer reaches the engine's own (Zig) logic — only the two GTest suites' own translation units. See the "Clang source-based coverage" line in [`docs/ZigMigrationPlan.md`](docs/ZigMigrationPlan.md) §7 for why (Zig's linker rejects Clang's profiling relocations) and what would need to change to close it.
+
 ### Running examples after a native rebuild
 
 Never pass `--no-build` to `dotnet run` after a `zig build`. The native DLL copy step (a `PreserveNewest` item in `NativeDependencies.targets`) runs only during a build; `dotnet run --no-build` silently keeps the stale DLL already in `bin/Debug/net10.0/` and runs the old C++. Always use `dotnet run` / `dotnet build` (no `--no-build`); the timestamp-based copy then refreshes the native side automatically.
