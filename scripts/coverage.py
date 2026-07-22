@@ -12,6 +12,22 @@ Usage:
     python scripts/coverage.py report     # re-emit summary from cached data
 
 Everything lives under build/coverage/. The script never writes outside it.
+
+Native coverage scope (post-CMake): the engine build is now root build.zig +
+per-plugin build.zig, and almost all engine logic is Zig source, which Zig's
+own linker compiles/links directly — it does not go through Clang, so the
+old scheme of instrumenting every C/C++ translation unit under src/ no
+longer applies (there is no `src/c/kernel/` or `src/cpp/` left to instrument;
+both were fully migrated). Verified attempting it anyway on a Zig-linked
+shared library fails: Zig's linker rejects Clang's profiling-runtime
+relocations ("fatal linker error: unhandled relocation type R_X86_64_PC64
+... __llvm_prf_data"). The two GTest suites are the one exception — their
+build.zig shells out to the SYSTEM clang++ directly for both compile and
+link (an ABI workaround already in place, see tests/c/kernel/build.zig), so
+`-Dcoverage=true` there produces real, valid instrumented binaries. That
+still surfaces meaningful native signal beyond just the test files
+themselves: contract headers with inline definitions get instrumented too,
+since they're `#include`d straight into the test translation units.
 """
 
 from __future__ import annotations
@@ -30,6 +46,7 @@ from pathlib import Path
 
 BASE_DIR        = Path(__file__).resolve().parent.parent
 COVERAGE_DIR    = BASE_DIR / "build" / "coverage"
+ZIG_OUT_DIR     = COVERAGE_DIR / "zig-out"
 PROFRAWS_DIR    = COVERAGE_DIR / "profraws"
 MANAGED_DIR     = COVERAGE_DIR / "managed"
 REPORT_DIR      = COVERAGE_DIR / "report"
@@ -37,18 +54,21 @@ MERGED_PROFDATA = COVERAGE_DIR / "merged.profdata"
 NATIVE_LCOV     = COVERAGE_DIR / "native.lcov"
 SUMMARY_TXT     = COVERAGE_DIR / "summary.txt"
 
-PRESET = "win" if platform.system().lower() == "windows" else "linux"
+IS_WINDOWS = platform.system().lower() == "windows"
+NATIVE_TEST_BINARIES = ["test_ke_kernel", "test_integration_cpp"]
 
 # ── Layer classification ─────────────────────────────────────────────────────
-# Coverage is grouped into kernel/plugins/framework. L3 (auto-generated C#
-# bindings under */Native/Generated/) is excluded from analysis up front.
+# L3 (auto-generated C# bindings under */Native/Generated/) is excluded from
+# analysis up front. "Native" is no longer split into kernel/plugin layers:
+# see the module docstring for why only the GTest suites' own translation
+# units (plus any contract headers they #include) are instrumented today.
 
 def _norm(p: str) -> str:
     return p.replace("\\", "/")
 
 LAYERS = [
-    ("L1", "C kernel",      lambda p: _norm(p).startswith("src/c/kernel/")),
-    ("L2", "C++ plugins",   lambda p: _norm(p).startswith("src/cpp/")),
+    ("L2", "Native (GTest suites + included headers)",
+        lambda p: _norm(p).startswith("tests/") or _norm(p).startswith("src/c/")),
     ("L4", "C# framework",  lambda p: _norm(p).startswith("src/csharp/") and "/Generated/" not in _norm(p)),
 ]
 
@@ -80,68 +100,50 @@ def banner(text: str) -> None:
     print(f"  {text}")
     print("-" * 70)
 
-# ── Phase 1: configure + build ───────────────────────────────────────────────
+# ── Phase 1: build ────────────────────────────────────────────────────────────
 
 def configure_and_build() -> None:
-    banner("[1/4] Configure + build (Clang source-based instrumentation)")
-    args = [
-        "cmake", "-S", BASE_DIR, "-B", COVERAGE_DIR,
-        "-G", "Ninja",
-        "-DCMAKE_BUILD_TYPE=Debug",
-        "-DCMAKE_C_COMPILER=clang",
-        "-DCMAKE_CXX_COMPILER=clang++",
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        "-DKE_COVERAGE=ON",
-    ]
-    if PRESET == "win":
-        vcpkg_root = os.environ.get("VCPKG_ROOT", "C:/vcpkg")
-        args += [
-            "-DVCPKG_TARGET_TRIPLET=x64-windows-static-md",
-            "-DVCPKG_HOST_TRIPLET=x64-windows",
-            f"-DCMAKE_TOOLCHAIN_FILE={vcpkg_root}/scripts/buildsystems/vcpkg.cmake",
-        ]
-    else:
-        args += ["-DVCPKG_TARGET_TRIPLET=x64-linux"]
-    run(args)
-    run(["cmake", "--build", COVERAGE_DIR])
+    banner("[1/4] Build (root build.zig, -Dcoverage=true for the GTest suites)")
+    vcpkg_root = os.environ.get("VCPKG_ROOT")
+    args = ["zig", "build", "--prefix", str(ZIG_OUT_DIR), "-Dcoverage=true"]
+    if vcpkg_root:
+        args.append(f"-Dvcpkg-root={vcpkg_root}")
+    run(args, cwd=BASE_DIR)
 
 # ── Phase 2: native tests + profile merge ────────────────────────────────────
 
-def run_native_tests() -> None:
-    banner("[2/4] Run native tests")
+def run_native_tests() -> list[Path]:
+    banner("[2/4] Run native tests (instrumented GTest suites)")
     if PROFRAWS_DIR.exists(): shutil.rmtree(PROFRAWS_DIR)
     PROFRAWS_DIR.mkdir(parents=True)
-    # %p (PID) + %m (per-binary id) keeps every test run's profraw unique.
-    env = {"LLVM_PROFILE_FILE": str(PROFRAWS_DIR / "test-%p-%m.profraw")}
-    run(["ctest", "--test-dir", COVERAGE_DIR, "--output-on-failure"],
-        env=env, check=False)
+    bin_dir = ZIG_OUT_DIR / "bin"
+    binaries: list[Path] = []
+    for name in NATIVE_TEST_BINARIES:
+        exe = bin_dir / (f"{name}.exe" if IS_WINDOWS else name)
+        if not exe.exists():
+            print(f"  (missing {exe} - skipping)")
+            continue
+        binaries.append(exe)
+        # %p (PID) + %m (per-binary id) keeps every run's profraw unique.
+        env = {"LLVM_PROFILE_FILE": str(PROFRAWS_DIR / f"{name}-%p-%m.profraw")}
+        run([str(exe)], env=env, check=False)
+    return binaries
 
-def merge_native_profile() -> bool:
+def merge_native_profile(binaries: list[Path]) -> bool:
     profraws = list(PROFRAWS_DIR.glob("*.profraw"))
     if not profraws:
         print("  (no .profraw produced - skipping native LCOV export)")
         return False
     print(f"  Merging {len(profraws)} profraw files -> {MERGED_PROFDATA.name}")
-    # llvm-profdata accepts `-f <listfile>` (one path per line) - avoids
-    # Windows' command-line length limit (~32 KiB) when there are thousands.
     profraw_list = COVERAGE_DIR / "profraws.list"
     profraw_list.write_text("\n".join(str(p) for p in profraws), encoding="utf-8")
     run(["llvm-profdata", "merge", "-sparse",
          f"-o={MERGED_PROFDATA}", "-f", str(profraw_list)], capture=True)
-    # Export LCOV across every test binary + every instrumented DLL we built.
-    bin_dir = COVERAGE_DIR / "bin"
-    objects: list[Path] = []
-    exe_glob = "*.exe" if PRESET == "win" else "test_*"
-    objects += [p for p in bin_dir.glob(exe_glob) if p.stem.startswith("test_")]
-    dll_glob = "ke_*.dll" if PRESET == "win" else "libke_*.so"
-    objects += list(bin_dir.glob(dll_glob))
-    if not objects:
-        print(f"  (no instrumented binaries under {bin_dir}/)")
+    if not binaries:
+        print("  (no instrumented binaries ran - skipping native LCOV export)")
         return False
-    # llvm-cov has no list-file flag - but it accepts the first binary positionally
-    # and the rest via -object=. With ~30 binaries this never approaches the limit.
-    print(f"  Exporting LCOV across {len(objects)} binaries -> {NATIVE_LCOV.name}")
-    first, rest = objects[0], objects[1:]
+    print(f"  Exporting LCOV across {len(binaries)} binaries -> {NATIVE_LCOV.name}")
+    first, rest = binaries[0], binaries[1:]
     cmd = ["llvm-cov", "export", "-format=lcov",
            f"-instr-profile={MERGED_PROFDATA}", str(first)]
     cmd += [f"-object={p}" for p in rest]
@@ -183,7 +185,9 @@ def build_report() -> None:
         "-targetdir:" + str(REPORT_DIR),
         "-reporttypes:Cobertura;Html",
         "-sourcedirs:" + str(BASE_DIR),
-        "-filefilters:-*tests*;-*Generated*;-*examples*",
+        # *tests* is no longer excluded: the GTest suites' own .cpp files are
+        # now the primary native coverage signal (see module docstring).
+        "-filefilters:-*Generated*;-*examples*",
         "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*",
     ], check=False)
 
@@ -195,22 +199,16 @@ def _pct(d: dict) -> float:
 def _module_for(layer: str, path: str) -> str:
     """Group a file path into a coarse module bucket for the summary table."""
     parts = _norm(path).split("/")
-    if layer == "L1":
-        return "src/c/kernel"
     if layer == "L2":
-        # src/cpp/<domain>/<impl>/...  -> src/cpp/<domain>/<impl>
-        return "/".join(parts[:4]) if len(parts) >= 4 else "/".join(parts)
+        # tests/c/kernel/... -> tests/c/kernel ; src/c/<domain>/... -> src/c/<domain>
+        return "/".join(parts[:3]) if len(parts) >= 3 else "/".join(parts)
     if layer == "L4":
         # src/csharp/<project>/... -> <project>
         return parts[2] if len(parts) >= 3 else "(unknown)"
     return "(unknown)"
 
 def _short(module: str) -> str:
-    # L2 modules look like "src/cpp/<domain>/<impl>"; keep the last 2 segments
-    # so colliding sibling names ("contract", "src") remain distinguishable.
     parts = module.split("/")
-    if len(parts) >= 4 and parts[0] == "src" and parts[1] == "cpp":
-        return f"{parts[2]}/{parts[3]}"
     return parts[-1] if parts else module
 
 def print_summary() -> None:
@@ -247,8 +245,8 @@ def print_summary() -> None:
             m = L["modules"].setdefault(module, {"covered": 0, "total": 0})
             m["covered"] += covered
             m["total"]   += total
-            (native if lid in ("L1", "L2") else managed)["covered"] += covered
-            (native if lid in ("L1", "L2") else managed)["total"]   += total
+            (native if lid == "L2" else managed)["covered"] += covered
+            (native if lid == "L2" else managed)["total"]   += total
             break
 
     total = {
@@ -305,8 +303,8 @@ def cmd_clean() -> None:
 
 def cmd_run() -> None:
     configure_and_build()
-    run_native_tests()
-    merge_native_profile()
+    binaries = run_native_tests()
+    merge_native_profile(binaries)
     run_managed_tests()
     build_report()
     print_summary()

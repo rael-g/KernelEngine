@@ -22,6 +22,10 @@ pub fn build(b: *std.Build) void {
     const debug = optimize == .Debug;
 
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
+    // Forwarded only to the two GTest suites (system clang++-built): they're
+    // the only native binaries whose linker (system, not Zig's own) can
+    // handle Clang's profiling-runtime relocations. See tests/c/kernel/build.zig.
+    const coverage = b.option(bool, "coverage", "instrument the GTest suites for Clang source-based coverage") orelse false;
     const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         @panic("VCPKG_ROOT not set; pass -Dvcpkg-root=<path> or export VCPKG_ROOT");
@@ -462,6 +466,7 @@ pub fn build(b: *std.Build) void {
     for (kernel_test_sources, 0..) |s, i| kernel_test_sources_abs[i] = b.pathJoin(&.{ tests_c_kernel, s });
 
     const test_ke_kernel = ctx.testBinary("test_ke_kernel", "tests/c/kernel", &.{
+        b.fmt("-Dcoverage={}", .{coverage}),
         argF(b, "sources", joinPaths(b, &kernel_test_sources_abs)),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "logger/include" }),
@@ -510,6 +515,7 @@ pub fn build(b: *std.Build) void {
     for (integration_test_sources, 0..) |s, i| integration_test_sources_abs[i] = b.pathJoin(&.{ tests_integration_cpp, s });
 
     const test_integration_cpp = ctx.testBinary("test_integration_cpp", "tests/integration/cpp", &.{
+        b.fmt("-Dcoverage={}", .{coverage}),
         argF(b, "sources", joinPaths(b, &integration_test_sources_abs)),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window/include" }),
