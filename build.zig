@@ -65,6 +65,7 @@ pub fn build(b: *std.Build) void {
 
     var ctx = Ctx{
         .b = b,
+        .root = root,
         .zig_exe = b.graph.zig_exe,
         .prefix = absolute_prefix,
         .release_flag = if (debug) "--release=off" else "--release=fast",
@@ -212,6 +213,84 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
     }, &.{&common.step});
 
+    // ── render pipeline: 6 standalone passes (plain slang, no material system) ─
+    const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
+    const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
+    const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
+
+    const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
+    const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
+    const tonemap = ctx.plugin("ke_render_tonemap", "src/zig/render/tonemap", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step });
+
+    const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
+    const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
+    const skybox = ctx.plugin("ke_render_skybox", "src/zig/render/skybox", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step });
+
+    const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
+    const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
+    const ui = ctx.plugin("ke_render_ui", "src/zig/render/ui", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &ui_vs.step, &ui_fs.step });
+
+    const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
+    const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
+    const shadow = ctx.plugin("ke_render_shadow", "src/zig/render/shadow", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/shadow/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step });
+
+    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
+    const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/cluster/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &cluster_cs.step });
+
+    const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
+    const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
+    const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
+    const deferred_lighting = ctx.plugin("ke_render_deferred_lighting", "src/zig/render/deferred_lighting", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step });
+
     // Every plugin is an independent `zig build` process invocation, not a
     // real Zig module dependency — nothing here transitively pulls the others
     // in, so the default install step must list every one explicitly (unlike
@@ -221,11 +300,12 @@ pub fn build(b: *std.Build) void {
         resource_cache_default, scheduler_enki, runtime,         framework,
         window_glfw,     asset_stb_image,   audio_miniaudio,     text_stb_truetype,
         physics_box2d,   asset_assimp,      configuration,       configuration_toml,
+        tonemap,         skybox,            ui,                  shadow,
+        cluster,         deferred_lighting,
     };
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
 
     // ── one example, end to end, no CMake anywhere in the chain ─────────────
-    const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
     const demo01 = b.addSystemCommand(&.{
         ctx.zig_exe, "build",
         "--prefix", ctx.prefix,
@@ -244,10 +324,39 @@ pub fn build(b: *std.Build) void {
 
 const Ctx = struct {
     b: *std.Build,
+    root: []const u8,
     zig_exe: []const u8,
     prefix: []const u8,
     release_flag: []const u8,
     vcpkg_step: *std.Build.Step,
+
+    /// Compiles one Slang entry point to WGSL via scripts/compile_slang.py,
+    /// mirroring cmake/CompileSlangShader.cmake's ke_compile_slang_shader.
+    /// Every render pass loads its shaders at runtime by logical name via
+    /// ke_render_core::load_shader, so the output always lands in the one
+    /// shared runtime shaders directory, never embedded in a plugin's own .so
+    /// (render/core's own embedded fallback shader is the one exception —
+    /// handled separately, since @embedFile needs the file before that
+    /// module's own `zig build` even starts).
+    fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8) *std.Build.Step.Run {
+        const b = ctx.b;
+        const suffix = if (std.mem.eql(u8, stage, "vertex"))
+            "vs"
+        else if (std.mem.eql(u8, stage, "fragment"))
+            "fs"
+        else
+            "cs";
+        const out_file = b.pathJoin(&.{ out_dir, b.fmt("{s}.{s}.wgsl", .{ name, suffix }) });
+        const run = b.addSystemCommand(&.{
+            "python3", b.pathJoin(&.{ ctx.root, "scripts/compile_slang.py" }),
+            "--raw",   "--target",                                          "wgsl",
+            "--entry", entry,                                                "--stage", stage,
+        });
+        for (includes) |inc| run.addArgs(&.{ "--include", inc });
+        run.addArgs(&.{ "--input", input, "--output", out_file });
+        run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
+        return run;
+    }
 
     /// Invokes `zig build --prefix <shared prefix> <extra args>` in `dir`,
     /// mirroring exactly what each plugin's CMakeLists.txt custom command used
