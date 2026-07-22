@@ -91,7 +91,7 @@ Plugin vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `src/
 
 - `src/c/kernel/include/` is the **sole** source of public engine API. Every interface, vtable, struct, enum, and function the engine exposes lives here. C ABI only.
 - Each plugin (`src/c/<plugin>/`, `src/cpp/<plugin>/`) exposes exactly **one factory per factory header** in `<plugin>/include/kernel_engine/<domain>/[<plugin>/]<name>_create.h`. Everything else is implementation detail (`.hpp` / `.c` / `.cpp` files under `src/`).
-- Plugin contract headers in `<domain>/include/kernel_engine/<domain>/` declare vtable shapes **only** — no `KE_*_API` export macros, no plain function decls. Exports live exclusively in the impl-side `_create.h` files.
+- Plugin contract headers declare vtable shapes **only** — no `KE_*_API` export macros, no plain function decls. Exports live exclusively in the impl-side `_create.h` files. Domain-only contract dirs (no implementation left in them, fully migrated to Zig plugins elsewhere) live at `src/c/<domain>/kernel_engine/<domain>/*.h` — one `-I src/c/<domain>` per domain, so a consumer only sees the domains it explicitly asked for (want `scheduler`? include `scheduler`).
 - If a "generic utility" feels like it wants to live in a plugin's public header, it belongs in `src/c/kernel/` instead. Implement in C (use C11 `_Thread_local`, etc., not C++).
 
 ### Layer 3 — C# native bindings (`src/csharp/Native/`)

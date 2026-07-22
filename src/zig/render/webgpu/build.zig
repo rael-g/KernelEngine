@@ -6,8 +6,8 @@ const std = @import("std");
 // FetchContent (eliemichel/WebGPU-distribution). For standalone builds:
 //
 //   zig build \
-//     -Dke-common-include=/path/to/src/c/common/include \
-//     -Dke-render-include=/path/to/src/c/render/include \
+//     -Dke-common-include=/path/to/src/zig/common/include \
+//     -Dke-render-include=/path/to/src/c/render \
 //     -Dwgpu-include=/path/to/wgpu-native-release/include \
 //     -Dwgpu-lib=/path/to/wgpu-native-release/lib
 

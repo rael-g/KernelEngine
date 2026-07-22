@@ -5,8 +5,8 @@ const std = @import("std");
 //
 // Standalone / `zig build test`:
 //   zig build \
-//     -Dke-common-include=/path/to/src/c/common/include \
-//     -Dke-config-include=/path/to/src/c/configuration/include \
+//     -Dke-common-include=/path/to/src/zig/common/include \
+//     -Dke-config-include=/path/to/src/c/configuration \
 //     -Dke-lib-dir=/path/to/dir/with/ke_common/import/lib
 
 pub fn build(b: *std.Build) void {
