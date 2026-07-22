@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_SCHEDULER_SCHEDULER_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <stdbool.h>
 #include <stdint.h>
 

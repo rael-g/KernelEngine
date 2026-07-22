@@ -3,7 +3,6 @@
 #include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/mesh_data.h>
-#include <kernel_engine/allocator/allocator.h>
 
 #include <cmath>
 #include <cstdlib>

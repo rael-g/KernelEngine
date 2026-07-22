@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/input/key.h>
 #include <kernel_engine/input/snapshot.h>
 #include <stdint.h>

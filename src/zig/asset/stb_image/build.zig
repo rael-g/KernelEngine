@@ -2,9 +2,7 @@ const std = @import("std");
 
 // Build the ke_asset_stb_image shared library (Zig 0.16 API).
 // A standalone plugin: decodes images via the vendored stb_image.h (vcpkg).
-// Allocates through Zig's own allocator (std.heap.c_allocator, same choice
-// as ke_render_tonemap) — ke_alloc/ke_allocator_malloc are a C/C++-only
-// convention, not something Zig code borrows into.
+// Allocates through Zig's own allocator, not a C/C++ one.
 
 pub fn build(b: *std.Build) void {
     // GNU ABI (Zig's Windows default), matching every other Zig plugin in the

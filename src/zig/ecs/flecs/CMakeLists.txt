@@ -24,7 +24,6 @@ add_custom_command(
         "--prefix" "${ZIG_OUT_DIR}"
         "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
         "-Dke-ecs-include=${CMAKE_SOURCE_DIR}/src/c/ecs/include"
-        "-Dke-allocator-include=${CMAKE_SOURCE_DIR}/src/c/allocator/include"
         "-Dflecs-include=${FLECS_INCLUDE_DIR}"
         "-Dflecs-lib=$<TARGET_FILE:flecs::flecs_static>"
         "-Dkerror-src=${KE_ZIG_ERROR}"
@@ -86,7 +85,6 @@ add_test(NAME ecs_flecs_zig_tests
     COMMAND "${ZIG_EXECUTABLE}" build test
         "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
         "-Dke-ecs-include=${CMAKE_SOURCE_DIR}/src/c/ecs/include"
-        "-Dke-allocator-include=${CMAKE_SOURCE_DIR}/src/c/allocator/include"
         "-Dflecs-include=${FLECS_INCLUDE_DIR}"
         "-Dflecs-lib=$<TARGET_FILE:flecs::flecs_static>"
         "-Dkerror-src=${KE_ZIG_ERROR}"

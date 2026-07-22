@@ -43,7 +43,6 @@ add_custom_command(
         "-Dke-render-include=${CMAKE_SOURCE_DIR}/src/c/render/include"
         "-Dke-window-include=${CMAKE_SOURCE_DIR}/src/c/window/include"
         "-Dke-scheduler-include=${CMAKE_SOURCE_DIR}/src/c/scheduler/include"
-        "-Dke-allocator-include=${CMAKE_SOURCE_DIR}/src/c/allocator/include"
         "-Dwgpu-include=$<TARGET_FILE_DIR:webgpu>/../include"
         "-Dwgpu-lib=$<TARGET_FILE_DIR:webgpu>"
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"

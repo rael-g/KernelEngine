@@ -5,7 +5,7 @@ target_include_directories(ke_physics INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(ke_physics INTERFACE ke_common ke_allocator)
+target_link_libraries(ke_physics INTERFACE ke_common)
 
 install(TARGETS ke_physics EXPORT KernelEngineTargets)
 install(DIRECTORY include/ DESTINATION include)

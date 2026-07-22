@@ -21,7 +21,6 @@ add_custom_command(
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
         "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
-        "-Dke-allocator-include=${CMAKE_SOURCE_DIR}/src/c/allocator/include"
         "-Dke-ecs-include=${CMAKE_SOURCE_DIR}/src/c/ecs/include"
         "-Dke-scheduler-include=${CMAKE_SOURCE_DIR}/src/c/scheduler/include"
         "-Dke-runtime-include=${KE_RUNTIME_INCLUDE}"
@@ -66,7 +65,7 @@ add_dependencies(ke_runtime ke_runtime_zig)
 set_target_properties(ke_runtime PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
     INTERFACE_INCLUDE_DIRECTORIES "${KE_RUNTIME_INCLUDE}"
-    INTERFACE_LINK_LIBRARIES "ke_common;ke_allocator;ke_ecs;ke_scheduler"
+    INTERFACE_LINK_LIBRARIES "ke_common;ke_ecs;ke_scheduler"
 )
 
 if(WIN32)

@@ -19,7 +19,6 @@ add_custom_command(
     COMMAND "${ZIG_EXECUTABLE}" build
         "--prefix" "${ZIG_OUT_DIR}"
         "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
-        "-Dke-allocator-include=${CMAKE_SOURCE_DIR}/src/c/allocator/include"
         "-Dke-ecs-include=${CMAKE_SOURCE_DIR}/src/c/ecs/include"
         "-Dke-spatial-include=${CMAKE_SOURCE_DIR}/src/c/spatial/include"
         "-Dke-input-include=${CMAKE_SOURCE_DIR}/src/c/input/include"
@@ -71,7 +70,7 @@ set_target_properties(ke_framework PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES
         "${CMAKE_CURRENT_SOURCE_DIR}/include;${CMAKE_SOURCE_DIR}/src/c/runtime/include"
     INTERFACE_LINK_LIBRARIES
-        "ke_common;ke_allocator;ke_ecs;ke_spatial;ke_input;ke_render;ke_asset;ke_text"
+        "ke_common;ke_ecs;ke_spatial;ke_input;ke_render;ke_asset;ke_text"
 )
 
 if(WIN32)

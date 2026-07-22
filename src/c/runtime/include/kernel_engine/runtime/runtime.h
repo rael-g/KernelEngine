@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_RUNTIME_RUNTIME_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <stdbool.h>

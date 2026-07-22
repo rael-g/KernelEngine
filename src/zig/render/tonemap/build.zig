@@ -10,7 +10,6 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common    = b.option([]const u8, "ke-common-include",    "kernel_engine/common include dir")    orelse @panic("-Dke-common-include required");
-    const ke_allocator = b.option([]const u8, "ke-allocator-include", "kernel_engine/allocator include dir") orelse @panic("-Dke-allocator-include required");
     const ke_logger  = b.option([]const u8, "ke-logger-include",  "kernel_engine/logger include dir")  orelse @panic("-Dke-logger-include required");
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
     const ke_ecs     = b.option([]const u8, "ke-ecs-include",     "kernel_engine/ecs include dir")     orelse @panic("-Dke-ecs-include required");
@@ -24,7 +23,7 @@ pub fn build(b: *std.Build) void {
         .optimize  = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_allocator, ke_logger, ke_runtime, ke_ecs, ke_render, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_logger, ke_runtime, ke_ecs, ke_render, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });

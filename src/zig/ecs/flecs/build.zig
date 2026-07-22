@@ -13,9 +13,6 @@ pub fn build(b: *std.Build) void {
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
-    // Header path only: ke_ecs.h includes allocator.h. No allocator implementation
-    // is compiled in — this plugin owns its memory through a Zig allocator.
-    const ke_allocator = b.option([]const u8, "ke-allocator-include", "kernel_engine/allocator include dir") orelse @panic("-Dke-allocator-include required");
     const flecs_include = b.option([]const u8, "flecs-include", "flecs headers dir") orelse @panic("-Dflecs-include required");
     // The full path, not a directory + name: vcpkg decorates the debug build
     // as libflecs_staticd, so the library name is not stable across configurations.
@@ -28,7 +25,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_ecs, ke_allocator, flecs_include }) |inc| {
+    inline for (.{ ke_common, ke_ecs, flecs_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
@@ -69,7 +66,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_ecs, ke_allocator, flecs_include }) |inc| {
+    inline for (.{ ke_common, ke_ecs, flecs_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addIncludePath(b.path("include"));
@@ -98,7 +95,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_ecs, ke_allocator, flecs_include }) |inc| {
+    inline for (.{ ke_common, ke_ecs, flecs_include }) |inc| {
         probe_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     probe_mod.addIncludePath(b.path("include"));

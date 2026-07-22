@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_ECS_KE_ECS_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <stddef.h>
 

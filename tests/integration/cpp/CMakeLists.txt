@@ -66,7 +66,6 @@ set(KE_TEST_INTEGRATION_LINK_TARGETS
     ke_audio_miniaudio
     ke_physics_2d_box2d
     ke_text_stb_truetype
-    ke_allocator_malloc
     ke_logger_simple
     ke_input_default
     ke_resource_cache_default
@@ -114,7 +113,6 @@ add_custom_command(
         "-Dinclude-dirs=${KE_TEST_INTEGRATION_INCLUDE_DIRS_JOINED}"
         "-Dlibs=${KE_TEST_INTEGRATION_LIBS}"
         "-Drpaths=${KE_TEST_INTEGRATION_RPATHS}"
-        "-Ddefines=KE_KERNEL_STATIC"
         "-Doutput=${KE_TEST_INTEGRATION_ZIG_OUT}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS

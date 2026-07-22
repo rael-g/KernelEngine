@@ -19,8 +19,6 @@ pub fn build(b: *std.Build) void {
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
     // Header path only: scheduler.h includes allocator.h. No allocator
     // implementation is compiled in — this plugin owns its memory through a
-    // Zig allocator, and nothing here calls ke_alloc.
-    const ke_allocator = b.option([]const u8, "ke-allocator-include", "kernel_engine/allocator include dir") orelse @panic("-Dke-allocator-include required");
     const assimp_include = b.option([]const u8, "assimp-include", "Assimp headers dir") orelse @panic("-Dassimp-include required");
     // "|"-separated absolute paths: Assimp plus the static libraries it depends
     // on, resolved by the build system so this file carries no vcpkg layout.
@@ -35,7 +33,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, ke_allocator, assimp_include, stb_include }) |inc| {
+    inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
@@ -84,7 +82,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, ke_allocator, assimp_include, stb_include }) |inc| {
+    inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addIncludePath(b.path("include"));

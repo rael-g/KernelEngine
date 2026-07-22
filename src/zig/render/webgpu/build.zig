@@ -20,7 +20,6 @@ pub fn build(b: *std.Build) void {
     const ke_render  = b.option([]const u8, "ke-render-include", "Path to kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
     const ke_window  = b.option([]const u8, "ke-window-include", "Path to kernel_engine/window include dir") orelse @panic("-Dke-window-include required");
     const ke_sched   = b.option([]const u8, "ke-scheduler-include", "Path to kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
-    const ke_alloc   = b.option([]const u8, "ke-allocator-include", "Path to kernel_engine/allocator include dir") orelse @panic("-Dke-allocator-include required");
     const wgpu_inc   = b.option([]const u8, "wgpu-include",      "Path containing webgpu/webgpu.h")          orelse @panic("-Dwgpu-include required");
     const wgpu_lib   = b.option([]const u8, "wgpu-lib",          "Path containing wgpu_native DLL/lib")      orelse @panic("-Dwgpu-lib required");
 
@@ -36,7 +35,6 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(.{ .cwd_relative = ke_render });
     mod.addIncludePath(.{ .cwd_relative = ke_window });
     mod.addIncludePath(.{ .cwd_relative = ke_sched });
-    mod.addIncludePath(.{ .cwd_relative = ke_alloc });
     mod.addIncludePath(.{ .cwd_relative = wgpu_inc });
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
@@ -71,7 +69,6 @@ pub fn build(b: *std.Build) void {
     test_mod.addIncludePath(.{ .cwd_relative = ke_render });
     test_mod.addIncludePath(.{ .cwd_relative = ke_window });
     test_mod.addIncludePath(.{ .cwd_relative = ke_sched });
-    test_mod.addIncludePath(.{ .cwd_relative = ke_alloc });
     test_mod.addIncludePath(.{ .cwd_relative = wgpu_inc });
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });

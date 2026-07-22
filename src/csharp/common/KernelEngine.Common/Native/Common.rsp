@@ -7,8 +7,6 @@ ke_common
 --include-directory
 ../../../../zig/common/include
 --include-directory
-../../../../c/allocator/include
---include-directory
 ../../../../c/spatial/include
 --include-directory
 ../../../../c/resource_cache/include
@@ -16,7 +14,6 @@ ke_common
 ../../../../zig/common/include/kernel_engine/common/types.h
 ../../../../zig/common/include/kernel_engine/common/error.h
 ../../../../zig/common/include/kernel_engine/common/math.h
-../../../../c/allocator/include/kernel_engine/allocator/allocator.h
 ../../../../c/resource_cache/include/kernel_engine/resource_cache/resource_cache.h
 ../../../../c/spatial/include/kernel_engine/spatial/transform.h
 --methodClassName
@@ -39,13 +36,6 @@ KE_TEXTURE_NONE
 KE_MATERIAL_NONE
 KE_CUBEMAP_NONE
 KE_SHADOW_MAP_NONE
-ke_alloc
-ke_free
-ke_realloc
-ke_arena_init
-ke_arena_alloc
-ke_arena_reset
-ke_arena_destroy
 ke_resource_cache_create
 ke_thread_check_current
 --config

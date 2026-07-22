@@ -25,7 +25,6 @@
 #include <kernel_engine/asset/mesh_data.h>
 #include <kernel_engine/text/font.h>
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 
 #ifdef __cplusplus
 extern "C"

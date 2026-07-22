@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/allocator/allocator.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/framework/components.h>
 

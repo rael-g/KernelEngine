@@ -37,7 +37,6 @@ add_custom_command(
         "--prefix" "${ZIG_OUT_DIR}"
         "-Dke-common-include=${CMAKE_SOURCE_DIR}/src/zig/common/include"
         "-Dke-scheduler-include=${CMAKE_SOURCE_DIR}/src/c/scheduler/include"
-        "-Dke-allocator-include=${CMAKE_SOURCE_DIR}/src/c/allocator/include"
         "-Denki-include=${ENKI_INCLUDE_DIR}"
         "-Denki-lib=$<TARGET_FILE_DIR:enkiTS::enkiTS>"
         "-Dkerror-src=${KE_ZIG_ERROR}"

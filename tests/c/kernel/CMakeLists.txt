@@ -6,7 +6,7 @@ find_package(GTest CONFIG REQUIRED)
 find_program(ZIG_EXECUTABLE zig REQUIRED)
 
 set(KE_TEST_KERNEL_SOURCES
-    test_allocator.cpp
+    #   test_allocator.cpp     -- deleted: ke_allocator (allocator.h/ke_allocator_malloc) removed, no consumers left
     #   test_hash_map.cpp      -- deleted: hash_map.h removed (domain ejection)
     #   test_ecs.cpp           -- deleted: ke_ecs_registry_create removed (legacy sparse-set ECS replaced by ke_ecs_flecs)
     test_input.cpp
@@ -25,7 +25,6 @@ list(TRANSFORM KE_TEST_KERNEL_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
 list(JOIN KE_TEST_KERNEL_SOURCES "|" KE_TEST_KERNEL_SOURCES_JOINED)
 
 set(KE_TEST_KERNEL_INCLUDE_DIRS
-    ${CMAKE_SOURCE_DIR}/src/c/allocator/include
     ${CMAKE_SOURCE_DIR}/src/c/logger/include
     ${CMAKE_SOURCE_DIR}/src/c/ecs/include
     ${CMAKE_SOURCE_DIR}/src/c/spatial/include
@@ -48,7 +47,6 @@ list(JOIN KE_TEST_KERNEL_INCLUDE_DIRS "|" KE_TEST_KERNEL_INCLUDE_DIRS_JOINED)
 
 # Libraries in the same order CMake's own dependency resolution linked them.
 set(KE_TEST_KERNEL_LINK_TARGETS
-    ke_allocator_malloc
     ke_logger_simple
     ke_input_default
     ke_resource_cache_default
@@ -90,7 +88,6 @@ add_custom_command(
         "-Dinclude-dirs=${KE_TEST_KERNEL_INCLUDE_DIRS_JOINED}"
         "-Dlibs=${KE_TEST_KERNEL_LIBS}"
         "-Drpaths=${KE_TEST_KERNEL_RPATHS}"
-        "-Ddefines=KE_KERNEL_STATIC"
         "-Doutput=${KE_TEST_KERNEL_ZIG_OUT}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS
