@@ -9,6 +9,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -91,15 +92,15 @@ fn createBody(
 
     if (s.body_count == s.body_capacity) {
         const cap = if (s.body_capacity != 0) s.body_capacity * 2 else initial_body_capacity;
-        const buf: [*]Entry = @ptrCast(@alignCast(std.c.malloc(@sizeOf(Entry) * cap) orelse {
+        const buf = heap.gpa.alloc(Entry, cap) catch {
             E.fail(out_error, .out_of_memory, "body table allocation failed", @src());
             return c.KE_BODY_2D_INVALID;
-        }));
+        };
         if (s.bodies) |old| {
             @memcpy(buf[0..s.body_count], old[0..s.body_count]);
-            std.c.free(old);
+            heap.gpa.free(old[0..s.body_capacity]);
         }
-        s.bodies = buf;
+        s.bodies = buf.ptr;
         s.body_capacity = cap;
     }
 
@@ -275,8 +276,8 @@ fn destroy(self_in: ?*c.ke_physics_2d) callconv(.c) void {
     // Destroying the world takes every body with it, so the table only needs
     // its own storage released.
     c.b2DestroyWorld(s.world);
-    if (s.bodies) |b| std.c.free(b);
-    std.c.free(s);
+    if (s.bodies) |b| heap.gpa.free(b[0..s.body_capacity]);
+    heap.gpa.destroy(s);
 }
 
 // -- factory -----------------------------------------------------------------
@@ -292,10 +293,10 @@ export fn ke_physics_2d_box2d_create(
         return null_handle;
     };
 
-    const s: *State = @ptrCast(@alignCast(std.c.malloc(@sizeOf(State)) orelse {
+    const s = heap.gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return null_handle;
-    }));
+    };
     s.* = .{
         .api = std.mem.zeroes(c.ke_physics_2d),
         .logger = params.logger,
@@ -312,7 +313,7 @@ export fn ke_physics_2d_box2d_create(
     world_def.gravity = .{ .x = params.gravity_x, .y = params.gravity_y };
     s.world = c.b2CreateWorld(&world_def);
     if (!c.b2World_IsValid(s.world)) {
-        std.c.free(s);
+        heap.gpa.destroy(s);
         E.fail(out_error, .general, "physics world creation failed", @src());
         return null_handle;
     }
