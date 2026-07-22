@@ -34,6 +34,9 @@ extern "C"
                                      ke_error **out_error);
 
         /// @brief Frees a ke_model_data previously returned by load_model or the async variant.
+        /// @note  The model must be given back to the same loader that produced it. A loader
+        ///        owns its memory, so a foreign or hand-built ke_model_data is not a valid
+        ///        argument. A null @p data is ignored.
         void (*free_model)(struct ke_asset_loader *self, ke_model_data *data);
 
         /// @brief Asynchronously loads a 3D model using @p scheduler.

@@ -159,11 +159,8 @@ test "a triangle converts with its vertices and indices" {
     am.mFaces = &face;
 
     var md: c.ke_mesh_data = undefined;
-    try testing.expect(converter.convertMesh(&am, &md));
-    defer {
-        if (md.vertices) |v| c.ke_free(v);
-        if (md.indices) |i| c.ke_free(i);
-    }
+    try testing.expect(converter.convertMesh(testing.allocator, &am, &md));
+    defer converter.freeMesh(testing.allocator, &md);
 
     try testing.expectEqual(@as(u32, 3), md.vertex_count);
     try testing.expectEqual(@as(u32, 3), md.index_count);
@@ -186,11 +183,8 @@ test "a mesh without normals gets a unit normal and a perpendicular tangent" {
     am.mFaces = &face;
 
     var md: c.ke_mesh_data = undefined;
-    try testing.expect(converter.convertMesh(&am, &md));
-    defer {
-        if (md.vertices) |v| c.ke_free(v);
-        if (md.indices) |i| c.ke_free(i);
-    }
+    try testing.expect(converter.convertMesh(testing.allocator, &am, &md));
+    defer converter.freeMesh(testing.allocator, &md);
 
     const v = md.vertices[0];
     try testing.expectApproxEqAbs(@as(f32, 1.0), v.nz, 1e-6);

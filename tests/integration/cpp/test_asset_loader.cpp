@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include <kernel_engine/asset/assimp/assimp_loader.h>
-#include <kernel_engine/allocator/allocator.h>
 
 #include <cstring>
 
@@ -76,12 +75,17 @@ TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
     struct Context {
         std::atomic<bool> done{false};
         const ke_error *err = nullptr;
+        ke_asset_loader *loader = nullptr;
     } ctx;
+    ctx.loader = loader;
 
     loader->load_model_async(loader, &scheduler, "assets/Box.gltf",
         [](const ke_error *error, ke_model_data* data, void* user) {
             auto* c = (Context*)user;
             c->err = error;
+            // The completion owns the model; releasing it here is the async
+            // counterpart of the free that follows a synchronous load.
+            if (data != nullptr) c->loader->free_model(c->loader, data);
             c->done = true;
         }, &ctx);
 
@@ -91,15 +95,17 @@ TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
     ASSERT_TRUE(ctx.done);
 }
 
+// A model's memory belongs to the loader that produced it, so this exercises
+// the free path on a real load rather than on a hand-built record: every block
+// released here has to be one the loader itself allocated.
 TEST_F(AssetLoaderTest, FreeModel_RealData_Works) {
-    ke_model_data* model = (ke_model_data*)ke_alloc(sizeof(ke_model_data), 0);
-    std::memset(model, 0, sizeof(*model));
+    ke_model_data* model = loader->load_model(loader, "assets/Box.gltf", nullptr);
+    if (model == nullptr) GTEST_SKIP() << "assets/Box.gltf not found at expected path";
 
-    model->mesh_count = 1;
-    model->meshes = (ke_mesh_data*)ke_alloc(sizeof(ke_mesh_data), 0);
-    std::memset(model->meshes, 0, sizeof(ke_mesh_data));
-    strncpy(model->meshes[0].name, "mesh", 63);
-    model->meshes[0].name[63] = '\0';
+    // Meshes, materials and textures each have their own branch in free_model;
+    // a model with all three present is what makes the test worth running.
+    EXPECT_GT(model->mesh_count, 0);
+    EXPECT_GT(model->material_count, 0);
 
     loader->free_model(loader, model);
     SUCCEED();

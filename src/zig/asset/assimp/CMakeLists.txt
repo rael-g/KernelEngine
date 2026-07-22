@@ -76,7 +76,6 @@ add_custom_command(
         "-Dassimp-include=${ASSIMP_INCLUDE_DIR}"
         "-Dassimp-libs=${KE_ASSIMP_LIBS}"
         "-Dstb-include=${STB_INCLUDE_DIR}"
-        "-Dallocator-src=${CMAKE_SOURCE_DIR}/src/c/allocator/malloc/src/allocator_malloc.c"
         "-Dkerror-src=${KE_ZIG_ERROR}"
         ${KE_CXX_RUNTIME_OPT}
         "$<IF:$<CONFIG:Debug>,--release=off,--release=fast>"
@@ -144,7 +143,6 @@ add_test(NAME asset_assimp_zig_tests
         "-Dassimp-include=${ASSIMP_INCLUDE_DIR}"
         "-Dassimp-libs=${KE_ASSIMP_LIBS}"
         "-Dstb-include=${STB_INCLUDE_DIR}"
-        "-Dallocator-src=${CMAKE_SOURCE_DIR}/src/c/allocator/malloc/src/allocator_malloc.c"
         "-Dkerror-src=${KE_ZIG_ERROR}"
         ${KE_CXX_RUNTIME_OPT}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

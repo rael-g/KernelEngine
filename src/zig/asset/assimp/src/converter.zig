@@ -57,23 +57,33 @@ fn fallbackTangent(nx: f32, ny: f32, nz: f32) [3]f32 {
     return .{ tx, ty, tz };
 }
 
-pub fn convertMesh(am: *const c.aiMesh, md: *c.ke_mesh_data) bool {
+/// Releases the buffers `convertMesh` attached to `md`. Both counts on the
+/// record are the exact allocation lengths, which is what the allocator needs
+/// to match the block — see the shrink at the end of `convertMesh`.
+pub fn freeMesh(gpa: std.mem.Allocator, md: *const c.ke_mesh_data) void {
+    if (md.vertices) |v| gpa.free(v[0..md.vertex_count]);
+    if (md.indices) |i| gpa.free(i[0..md.index_count]);
+}
+
+pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_data) bool {
     md.* = std.mem.zeroes(c.ke_mesh_data);
     log.copyString(&md.name, &am.mName.data);
     md.vertex_count = am.mNumVertices;
 
-    const index_capacity = am.mNumFaces * 3;
-    const vertices: [*]c.ke_vertex = @ptrCast(@alignCast(
-        c.ke_alloc(@sizeOf(c.ke_vertex) * am.mNumVertices, @alignOf(c.ke_vertex)) orelse return false,
-    ));
-    const indices: [*]u16 = @ptrCast(@alignCast(
-        c.ke_alloc(@sizeOf(u16) * index_capacity, @alignOf(u16)) orelse {
-            c.ke_free(vertices);
-            return false;
-        },
-    ));
-    md.vertices = vertices;
-    md.indices = indices;
+    // Counted before allocating rather than reserving three per face and
+    // shrinking: triangulation is requested at import, but a degenerate face can
+    // still carry fewer than three indices, and the free path recovers the
+    // length from index_count alone — so the two must agree exactly.
+    var index_count: usize = 0;
+    for (0..am.mNumFaces) |fi| index_count += @min(3, am.mFaces[fi].mNumIndices);
+
+    const vertices = gpa.alloc(c.ke_vertex, am.mNumVertices) catch return false;
+    const indices = gpa.alloc(u16, index_count) catch {
+        gpa.free(vertices);
+        return false;
+    };
+    md.vertices = vertices.ptr;
+    md.indices = indices.ptr;
 
     for (0..am.mNumVertices) |vi| {
         const v = &vertices[vi];
@@ -121,9 +131,6 @@ pub fn convertMesh(am: *const c.aiMesh, md: *c.ke_mesh_data) bool {
         }
     }
 
-    // Triangulation is requested at import, but a degenerate face can still
-    // carry fewer than three indices; the cursor records what was really
-    // written rather than assuming three per face.
     var cursor: usize = 0;
     for (0..am.mNumFaces) |fi| {
         const face = am.mFaces[fi];

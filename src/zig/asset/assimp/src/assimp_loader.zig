@@ -24,10 +24,24 @@ const import_flags: c_uint = c.aiProcess_Triangulate |
 /// Longest texture path (embedded reference or resolved file) the loader tracks.
 const texture_path_max = 1024;
 
+/// In debug the plugin runs on a tracking allocator, so a model that is never
+/// freed is reported by name when the loader is destroyed instead of going
+/// unnoticed. Release uses the lock-free general allocator: model loading is
+/// dispatched onto the shared worker pool, so it must be safe from any thread.
+const debug_heap = @import("builtin").mode == .Debug;
+const TrackingHeap = std.heap.DebugAllocator(.{ .thread_safe = true });
+
 const State = struct {
     api: c.ke_asset_loader,
     logger: ?*c.ke_logger, // borrowed
+    heap: if (debug_heap) TrackingHeap else void,
+    gpa: std.mem.Allocator,
 };
+
+/// Allocates the loader's own State. Bootstrap only: the tracking heap cannot
+/// hold the struct it lives inside, so this one block comes from the process
+/// allocator and is released by the same one in vtDestroy.
+const state_heap = std.heap.smp_allocator;
 
 fn stateOf(self: *c.ke_asset_loader) *State {
     return @ptrCast(@alignCast(self.handle));
@@ -139,7 +153,7 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     const scene = scene_c.*;
     defer c.aiReleaseImport(scene_c);
 
-    const gpa = std.heap.c_allocator;
+    const gpa = s.gpa;
     const dir = converter.directoryOf(std.mem.span(path));
 
     var table = TextureTable{ .items = .empty, .gpa = gpa };
@@ -147,20 +161,18 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
 
     // -- materials, collecting their texture references -----------------------
     const mat_count = scene.mNumMaterials;
-    const mats: [*]c.ke_material_data = @ptrCast(@alignCast(
-        c.ke_alloc(@max(@sizeOf(c.ke_material_data) * mat_count, 1), @alignOf(c.ke_material_data)) orelse {
-            E.fail(out_error, .out_of_memory, "material allocation failed", @src());
-            return null;
-        },
-    ));
+    const mats = gpa.alloc(c.ke_material_data, mat_count) catch {
+        E.fail(out_error, .out_of_memory, "material allocation failed", @src());
+        return null;
+    };
     const albedo_idx = gpa.alloc(i32, mat_count) catch {
-        c.ke_free(mats);
+        gpa.free(mats);
         E.fail(out_error, .out_of_memory, "material allocation failed", @src());
         return null;
     };
     defer gpa.free(albedo_idx);
     const normal_idx = gpa.alloc(i32, mat_count) catch {
-        c.ke_free(mats);
+        gpa.free(mats);
         E.fail(out_error, .out_of_memory, "material allocation failed", @src());
         return null;
     };
@@ -183,23 +195,21 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
 
     // -- decode the collected textures ---------------------------------------
     const tex_count: u32 = @intCast(table.items.items.len);
-    const texs: [*]c.ke_texture_data = @ptrCast(@alignCast(
-        c.ke_alloc(@max(@sizeOf(c.ke_texture_data) * tex_count, 1), @alignOf(c.ke_texture_data)) orelse {
-            c.ke_free(mats);
-            E.fail(out_error, .out_of_memory, "texture allocation failed", @src());
-            return null;
-        },
-    ));
+    const texs = gpa.alloc(c.ke_texture_data, tex_count) catch {
+        gpa.free(mats);
+        E.fail(out_error, .out_of_memory, "texture allocation failed", @src());
+        return null;
+    };
     for (table.items.items, 0..) |*ref, ti| {
         texs[ti] = std.mem.zeroes(c.ke_texture_data);
         if (ref.is_embedded) {
             if (ref.embedded) |et| {
-                _ = textures.decodeEmbedded(et, s.logger, &texs[ti]);
+                _ = textures.decodeEmbedded(gpa, et, s.logger, &texs[ti]);
             } else {
-                _ = textures.decodeExternal(@ptrCast(&ref.resolved_path), s.logger, &texs[ti]);
+                _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), s.logger, &texs[ti]);
             }
         } else {
-            _ = textures.decodeExternal(@ptrCast(&ref.resolved_path), s.logger, &texs[ti]);
+            _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), s.logger, &texs[ti]);
         }
     }
 
@@ -211,17 +221,15 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
 
     // -- meshes ---------------------------------------------------------------
     const mesh_count = scene.mNumMeshes;
-    const meshes: [*]c.ke_mesh_data = @ptrCast(@alignCast(
-        c.ke_alloc(@max(@sizeOf(c.ke_mesh_data) * mesh_count, 1), @alignOf(c.ke_mesh_data)) orelse {
-            c.ke_free(mats);
-            c.ke_free(texs);
-            E.fail(out_error, .out_of_memory, "mesh allocation failed", @src());
-            return null;
-        },
-    ));
+    const meshes = gpa.alloc(c.ke_mesh_data, mesh_count) catch {
+        gpa.free(mats);
+        gpa.free(texs);
+        E.fail(out_error, .out_of_memory, "mesh allocation failed", @src());
+        return null;
+    };
     for (0..mesh_count) |si| {
         const am = scene.mMeshes[si];
-        _ = converter.convertMesh(am, &meshes[si]);
+        _ = converter.convertMesh(gpa, am, &meshes[si]);
         // Out-of-range material references become -1 rather than indexing past
         // the material array.
         meshes[si].material_index = if (am.*.mMaterialIndex < mat_count)
@@ -230,21 +238,19 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
             -1;
     }
 
-    const model: *c.ke_model_data = @ptrCast(@alignCast(
-        c.ke_alloc(@sizeOf(c.ke_model_data), @alignOf(c.ke_model_data)) orelse {
-            c.ke_free(mats);
-            c.ke_free(texs);
-            c.ke_free(meshes);
-            E.fail(out_error, .out_of_memory, "model allocation failed", @src());
-            return null;
-        },
-    ));
+    const model = gpa.create(c.ke_model_data) catch {
+        gpa.free(mats);
+        gpa.free(texs);
+        gpa.free(meshes);
+        E.fail(out_error, .out_of_memory, "model allocation failed", @src());
+        return null;
+    };
     model.* = .{
-        .meshes = meshes,
+        .meshes = meshes.ptr,
         .mesh_count = mesh_count,
-        .materials = mats,
+        .materials = mats.ptr,
         .material_count = mat_count,
-        .textures = texs,
+        .textures = texs.ptr,
         .texture_count = tex_count,
     };
 
@@ -270,24 +276,32 @@ fn vtLoadModel(
     return loadModel(stateOf(self), path, out_error);
 }
 
+/// Releases a model this loader produced. Every block came from the loader's
+/// own allocator, so the model must be handed back to the same loader that
+/// returned it — a foreign or hand-built ke_model_data is not a valid argument.
 fn vtFreeModel(self_in: ?*c.ke_asset_loader, data_in: ?*c.ke_model_data) callconv(.c) void {
-    _ = self_in;
+    const self = self_in orelse return;
+    if (self.handle == null) return;
     const data = data_in orelse return;
-    if (data.meshes) |meshes| {
-        for (0..data.mesh_count) |i| {
-            if (meshes[i].vertices) |v| c.ke_free(v);
-            if (meshes[i].indices) |idx| c.ke_free(idx);
-        }
-        c.ke_free(meshes);
+    const gpa = stateOf(self).gpa;
+
+    // The C records hold [*c] pointers; recast to plain many-item pointers so a
+    // slice can be rebuilt from the count that travels with each array.
+    if (data.meshes) |raw| {
+        const meshes: [*]c.ke_mesh_data = @ptrCast(raw);
+        for (0..data.mesh_count) |i| converter.freeMesh(gpa, &meshes[i]);
+        gpa.free(meshes[0..data.mesh_count]);
     }
-    if (data.materials) |m| c.ke_free(m);
-    if (data.textures) |texs| {
-        for (0..data.texture_count) |i| {
-            if (texs[i].pixels) |p| c.ke_free(p);
-        }
-        c.ke_free(texs);
+    if (data.materials) |raw| {
+        const mats: [*]c.ke_material_data = @ptrCast(raw);
+        gpa.free(mats[0..data.material_count]);
     }
-    c.ke_free(data);
+    if (data.textures) |raw| {
+        const texs: [*]c.ke_texture_data = @ptrCast(raw);
+        for (0..data.texture_count) |i| textures.freePixels(gpa, &texs[i]);
+        gpa.free(texs[0..data.texture_count]);
+    }
+    gpa.destroy(data);
 }
 
 // -- async -------------------------------------------------------------------
@@ -316,19 +330,20 @@ const load_failed_error = c.ke_error{
 
 const AsyncCtx = struct {
     state: *State,
-    path: [*:0]u8, // owned copy; the caller's buffer may not outlive the task
+    path: [:0]u8, // owned copy; the caller's buffer may not outlive the task
     on_complete: c.ke_load_model_complete_func,
     user_data: ?*anyopaque,
 };
 
 fn asyncBody(data: ?*anyopaque) callconv(.c) void {
     const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return));
-    const model = loadModel(ctx.state, ctx.path, null);
+    const gpa = ctx.state.gpa;
+    const model = loadModel(ctx.state, ctx.path.ptr, null);
     if (ctx.on_complete) |done| {
         done(if (model != null) null else &load_failed_error, model, ctx.user_data);
     }
-    std.c.free(ctx.path);
-    std.c.free(ctx);
+    gpa.free(ctx.path);
+    gpa.destroy(ctx);
 }
 
 fn vtLoadModelAsync(
@@ -342,22 +357,22 @@ fn vtLoadModelAsync(
     const scheduler = scheduler_in orelse return null;
     if (self.handle == null or path == null or on_complete == null) return null;
 
-    const text = std.mem.span(path);
-    const ctx: *AsyncCtx = @ptrCast(@alignCast(std.c.malloc(@sizeOf(AsyncCtx)) orelse {
+    const s = stateOf(self);
+    const gpa = s.gpa;
+
+    const ctx = gpa.create(AsyncCtx) catch {
         on_complete.?(&oom_error, null, user_data);
         return null;
-    }));
-    const path_copy: [*]u8 = @ptrCast(std.c.malloc(text.len + 1) orelse {
-        std.c.free(ctx);
+    };
+    const path_copy = gpa.dupeZ(u8, std.mem.span(path)) catch {
+        gpa.destroy(ctx);
         on_complete.?(&oom_error, null, user_data);
         return null;
-    });
-    @memcpy(path_copy[0..text.len], text);
-    path_copy[text.len] = 0;
+    };
 
     ctx.* = .{
-        .state = stateOf(self),
-        .path = @ptrCast(path_copy),
+        .state = s,
+        .path = path_copy,
         .on_complete = on_complete,
         .user_data = user_data,
     };
@@ -368,7 +383,13 @@ fn vtLoadModelAsync(
 fn vtDestroy(self_in: ?*c.ke_asset_loader) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
-    std.c.free(stateOf(self));
+    const s = stateOf(self);
+    if (debug_heap) {
+        // Reports every model the host loaded and never freed, with the stack
+        // that allocated it, instead of letting the leak pass unremarked.
+        if (s.heap.deinit() == .leak) log.warn(s.logger, "Asset loader destroyed with model memory still live");
+    }
+    state_heap.destroy(s);
 }
 
 // -- factory -----------------------------------------------------------------
@@ -384,11 +405,19 @@ export fn ke_asset_loader_assimp_create(
         return null_handle;
     };
 
-    const s: *State = @ptrCast(@alignCast(std.c.malloc(@sizeOf(State)) orelse {
+    const s = state_heap.create(State) catch {
         E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
         return null_handle;
-    }));
-    s.* = .{ .api = std.mem.zeroes(c.ke_asset_loader), .logger = params.logger };
+    };
+    s.* = .{
+        .api = std.mem.zeroes(c.ke_asset_loader),
+        .logger = params.logger,
+        .heap = if (debug_heap) .init else {},
+        .gpa = undefined,
+    };
+    // Bound after the struct is in its final place: the tracking heap's
+    // interface holds a pointer back into the field it lives in.
+    s.gpa = if (debug_heap) s.heap.allocator() else std.heap.smp_allocator;
 
     s.api.handle = s;
     s.api.load_model = vtLoadModel;

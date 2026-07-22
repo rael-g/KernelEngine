@@ -17,6 +17,9 @@ pub fn build(b: *std.Build) void {
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
+    // Header path only: scheduler.h includes allocator.h. No allocator
+    // implementation is compiled in — this plugin owns its memory through a
+    // Zig allocator, and nothing here calls ke_alloc.
     const ke_allocator = b.option([]const u8, "ke-allocator-include", "kernel_engine/allocator include dir") orelse @panic("-Dke-allocator-include required");
     const assimp_include = b.option([]const u8, "assimp-include", "Assimp headers dir") orelse @panic("-Dassimp-include required");
     // "|"-separated absolute paths: Assimp plus the static libraries it depends
@@ -25,7 +28,6 @@ pub fn build(b: *std.Build) void {
     const stb_include = b.option([]const u8, "stb-include", "vcpkg stb_image.h include dir") orelse @panic("-Dstb-include required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
     const cxx_runtime = b.option([]const u8, "cxx-runtime", "absolute path to the C++ runtime Assimp was built against");
-    const allocator_src = b.option([]const u8, "allocator-src", "path to allocator_malloc.c") orelse @panic("-Dallocator-src required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/assimp_loader.zig"),
@@ -37,13 +39,6 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
-
-    // ke_model_data ownership is shared with the host: callers may build one
-    // with ke_alloc and hand it to free_model, and this plugin's own model
-    // memory is released the same way. ke_alloc puts a header in front of the
-    // payload, so plain free() on that pointer corrupts the heap — the engine
-    // allocator is compiled in rather than substituted with libc's.
-    mod.addCSourceFile(.{ .file = .{ .cwd_relative = allocator_src }, .flags = &.{} });
 
     // No stb_image implementation of our own: Assimp's static library already
     // contains one and exports stbi_load/stbi_load_from_memory/stbi_image_free,
@@ -93,7 +88,6 @@ pub fn build(b: *std.Build) void {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addIncludePath(b.path("include"));
-    test_mod.addCSourceFile(.{ .file = .{ .cwd_relative = allocator_src }, .flags = &.{} });
     var test_lib_it = std.mem.splitScalar(u8, assimp_libs, '|');
     while (test_lib_it.next()) |lib_path| {
         if (lib_path.len != 0) test_mod.addObjectFile(.{ .cwd_relative = lib_path });
