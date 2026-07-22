@@ -7,13 +7,11 @@ ke_asset_stb_image
 --include-directory
 ../../../../zig/common/include
 --include-directory
-../../../../c/allocator/include
+../../../../c/logger
 --include-directory
-../../../../c/logger/include
+../../../../c/render
 --include-directory
-../../../../c/render/include
---include-directory
-../../../../c/asset/include
+../../../../c/asset
 --include-directory
 ../../../../zig/asset/stb_image/include
 --file

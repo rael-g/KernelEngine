@@ -7,13 +7,11 @@ ke_text_stb_truetype
 --include-directory
 ../../../../zig/common/include
 --include-directory
-../../../../c/allocator/include
+../../../../c/logger
 --include-directory
-../../../../c/logger/include
+../../../../c/render
 --include-directory
-../../../../c/render/include
---include-directory
-../../../../c/text/include
+../../../../c/text
 --include-directory
 ../../../../zig/text/stb_truetype/include
 --file

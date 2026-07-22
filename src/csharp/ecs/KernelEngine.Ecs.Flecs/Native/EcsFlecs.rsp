@@ -7,11 +7,9 @@ ke_ecs_flecs
 --include-directory
 ../../../../zig/common/include
 --include-directory
-../../../../c/allocator/include
+../../../../c/logger
 --include-directory
-../../../../c/logger/include
---include-directory
-../../../../c/ecs/include
+../../../../c/ecs
 --include-directory
 ../../../../zig/ecs/flecs/include
 --file
@@ -31,7 +29,6 @@ ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_ecs_handle=KernelEngine.Ecs.Native.ke_ecs_handle
 ke_ecs_registry=KernelEngine.Ecs.Native.ke_ecs_registry
 ke_error=KernelEngine.Common.Native.ke_error
-ke_allocator=KernelEngine.Common.Native.ke_allocator
 --exclude
 ke_result
 ke_bool
@@ -46,9 +43,6 @@ ke_variant
 ke_variant_table
 ke_variant_table_entry
 ke_variant_type
-ke_allocator
-ke_allocator_stats
-ke_arena
 ke_vec2
 ke_vec3
 ke_vec4

@@ -7,11 +7,9 @@ ke_scheduler_enki
 --include-directory
 ../../../../zig/common/include
 --include-directory
-../../../../c/allocator/include
+../../../../c/logger
 --include-directory
-../../../../c/logger/include
---include-directory
-../../../../c/scheduler/include
+../../../../c/scheduler
 --include-directory
 ../../../../zig/scheduler/enki/include
 --file

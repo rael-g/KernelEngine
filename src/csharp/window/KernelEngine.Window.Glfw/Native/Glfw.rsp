@@ -7,13 +7,11 @@ ke_window_glfw
 --include-directory
 ../../../../zig/common/include
 --include-directory
-../../../../c/allocator/include
+../../../../c/logger
 --include-directory
-../../../../c/logger/include
+../../../../c/input
 --include-directory
-../../../../c/input/include
---include-directory
-../../../../c/window/include
+../../../../c/window
 --include-directory
 ../../../../zig/window/glfw/include
 --file

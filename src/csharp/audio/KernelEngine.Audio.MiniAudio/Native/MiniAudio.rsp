@@ -7,11 +7,9 @@ ke_audio_miniaudio
 --include-directory
 ../../../../zig/common/include
 --include-directory
-../../../../c/allocator/include
+../../../../c/logger
 --include-directory
-../../../../c/logger/include
---include-directory
-../../../../c/audio/include
+../../../../c/audio
 --include-directory
 ../../../../zig/audio/miniaudio/include
 --file
