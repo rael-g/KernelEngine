@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 
 /// <summary>
@@ -17,13 +18,18 @@ internal static class ExamplePaths
 
     /// <summary>
     /// Path to a TrueType font available on this machine. No font ships with
-    /// the repository, so the usual system locations are probed in turn.
+    /// the repository, so fontconfig resolves the platform's default
+    /// sans-serif font, distro-layout-agnostic, with a hardcoded fallback list
+    /// for platforms without <c>fc-match</c> (Windows, macOS).
     /// </summary>
     /// <exception cref="FileNotFoundException">No candidate font exists.</exception>
     public static string SystemFont
     {
         get
         {
+            var viaFontconfig = ResolveViaFontconfig();
+            if (viaFontconfig is not null) return viaFontconfig;
+
             string[] candidates =
             {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf"),
@@ -39,7 +45,28 @@ internal static class ExamplePaths
             }
 
             throw new FileNotFoundException(
-                "no system TrueType font found in the probed locations");
+                "no system TrueType font found via fontconfig or the probed locations");
+        }
+    }
+
+    private static string? ResolveViaFontconfig()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("fc-match", "--format=%{file} sans-serif")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            };
+            using var proc = Process.Start(psi);
+            if (proc is null) return null;
+            var path = proc.StandardOutput.ReadToEnd().Trim();
+            proc.WaitForExit();
+            return proc.ExitCode == 0 && File.Exists(path) ? path : null;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            return null; // fc-match not installed (Windows, macOS, or a minimal container)
         }
     }
 
