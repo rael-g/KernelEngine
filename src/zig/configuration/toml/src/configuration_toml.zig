@@ -7,6 +7,13 @@
 // vendored and compiled by this module's build.zig (see the VENDOR.md).
 
 const std = @import("std");
+
+// dlopen'd by a foreign (non-Zig) host (the C# runtime) alongside many other
+// plugins in one process. std.Thread's default 256 KiB threadlocal signal
+// stack blows the small glibc static-TLS surplus once enough accumulate
+// (verified: "cannot allocate memory in static TLS block"); the extra crash-
+// handler stack trace it buys isn't worth an unloadable plugin.
+pub const std_options: std.Options = .{ .signal_stack_size = null };
 const toml = @cImport({
     @cInclude("stdio.h");
     @cInclude("toml.h");

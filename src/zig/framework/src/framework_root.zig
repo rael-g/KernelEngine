@@ -10,6 +10,15 @@
 // When the last .c is gone, build.zig drops the C sources plus the ke_common /
 // allocator_malloc links, and errors move to the shared kerror seam util.
 
+const std = @import("std");
+
+// dlopen'd by a foreign (non-Zig) host (the C# runtime) alongside many other
+// plugins in one process. std.Thread's default 256 KiB threadlocal signal
+// stack blows the small glibc static-TLS surplus once enough accumulate
+// (verified: "cannot allocate memory in static TLS block"); the extra crash-
+// handler stack trace it buys isn't worth an unloadable plugin.
+pub const std_options: std.Options = .{ .signal_stack_size = null };
+
 comptime {
     _ = @import("components_apply.zig");
     _ = @import("mesh_shape.zig");

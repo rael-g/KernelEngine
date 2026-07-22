@@ -1,5 +1,12 @@
 const std = @import("std");
 
+// dlopen'd by a foreign (non-Zig) host (the C# runtime) alongside many other
+// plugins in one process. std.Thread's default 256 KiB threadlocal signal
+// stack blows the small glibc static-TLS surplus once enough accumulate
+// (verified: "cannot allocate memory in static TLS block"); the extra crash-
+// handler stack trace it buys isn't worth an unloadable plugin.
+pub const std_options: std.Options = .{ .signal_stack_size = null };
+
 pub const c = @cImport({
     @cInclude("kernel_engine/ecs/ke_ecs.h");
     @cInclude("kernel_engine/render/gpu_device.h");
