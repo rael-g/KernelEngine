@@ -54,6 +54,10 @@ fn flecsAbortHandler() callconv(.c) void {
 
 var os_api_installed: bool = false;
 
+// flecs's own ecs_os_set_api only takes effect on the first call per process
+// (verified empirically: a second override is silently ignored), so these
+// hooks can only ever be installed once — hence the guard, not just an
+// optimization.
 fn installFlecsOsApi() void {
     if (os_api_installed) return;
     // Populate defaults first so we only override the two slots we care about
@@ -455,4 +459,28 @@ test "flecsLogHandler ignores a null message" {
     last_msg_len = 0;
     flecsLogHandler(-1, "flecs_internal.c", 1, null);
     try testing.expectEqual(@as(usize, 0), last_msg_len);
+}
+
+// The end-to-end case — a genuine flecs internal assertion reaching the real
+// abort_ hook and ending the process via E.fatal — needs its own subprocess;
+// see abort_probe.zig and abort_integration_test.zig for why and how.
+
+/// Test-only entry point for abort_probe.zig. Installs the real os_api hooks
+/// (the same call ke_ecs_flecs_create makes) and forces the exact assertion
+/// componentAdd exists to prevent — asking flecs directly for the mutable
+/// storage of a zero-size tag — proving the whole chain (real internal
+/// assertion -> installed hooks -> E.fatal -> process exit) without exposing
+/// anything through the public C surface, which has no path left to reach a
+/// flecs assert once the wrapper's own guards are in the way. Never returns.
+pub fn debugTriggerRealFlecsAssertion() void {
+    installFlecsOsApi();
+
+    const world = c.ecs_init();
+    var edesc: c.ecs_entity_desc_t = std.mem.zeroes(c.ecs_entity_desc_t);
+    edesc.name = "ProbeTag";
+    const tag = c.ecs_entity_init(world, &edesc);
+    const e = c.ecs_new(world);
+    c.ecs_add_id(world, e, tag);
+
+    _ = c.ecs_get_mut_id(world, e, tag);
 }

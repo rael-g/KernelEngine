@@ -84,5 +84,53 @@ pub fn build(b: *std.Build) void {
 
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
-    b.step("test", "Run the ecs_flecs unit tests").dependOn(&run_tests.step);
+
+    // abort_probe — a tiny helper that forces a genuine flecs internal
+    // assertion and lets it run into the real abort_ hook. Only ever run as a
+    // subprocess spawned by the integration test below; see abort_probe.zig
+    // for why this can't be an in-process test. Imports ecs_flecs.zig as a
+    // module (its own compile, not the shared lib) to reach the test-only
+    // debugTriggerRealFlecsAssertion — so it needs the same include paths,
+    // flecs object file and kerror import as the library itself.
+    const probe_mod = b.createModule(.{
+        .root_source_file = b.path("src/abort_probe.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inline for (.{ ke_common, ke_ecs, ke_allocator, flecs_include }) |inc| {
+        probe_mod.addIncludePath(.{ .cwd_relative = inc });
+    }
+    probe_mod.addIncludePath(b.path("include"));
+    probe_mod.addObjectFile(.{ .cwd_relative = flecs_lib });
+    probe_mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
+    probe_mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
+    probe_mod.addCMacro("flecs_STATIC", "");
+
+    const probe_exe = b.addExecutable(.{
+        .name = "ecs_flecs_abort_probe",
+        .root_module = probe_mod,
+    });
+
+    const integration_options = b.addOptions();
+    integration_options.addOptionPath("probe_exe_path", probe_exe.getEmittedBin());
+
+    const integration_mod = b.createModule(.{
+        .root_source_file = b.path("src/abort_integration_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    integration_mod.addOptions("build_options", integration_options);
+
+    const integration_tests = b.addTest(.{ .root_module = integration_mod });
+    const run_integration_tests = b.addRunArtifact(integration_tests);
+
+    const test_step = b.step("test", "Run the ecs_flecs unit + abort-integration tests");
+    test_step.dependOn(&run_tests.step);
+    test_step.dependOn(&run_integration_tests.step);
 }
