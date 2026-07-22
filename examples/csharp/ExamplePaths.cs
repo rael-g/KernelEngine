@@ -43,22 +43,8 @@ internal static class ExamplePaths
         }
     }
 
-    /// <summary>Directory holding the native build output for this platform.</summary>
-    public static string BuildDir => Path.Combine(RepoRoot, "build", BuildFlavor);
-
-    /// <summary>
-    /// Name of the per-platform build directory, matching the CMake presets and
-    /// the NativeOS value used by NativeDependencies.targets.
-    /// </summary>
-    private static string BuildFlavor
-    {
-        get
-        {
-            if (OperatingSystem.IsWindows()) return "win";
-            if (OperatingSystem.IsMacOS()) return "osx";
-            return "linux";
-        }
-    }
+    /// <summary>Directory holding the native build output (root build.zig's --prefix).</summary>
+    public static string BuildDir => Path.Combine(RepoRoot, "build", "native");
 
     private static string RepoRoot
     {
