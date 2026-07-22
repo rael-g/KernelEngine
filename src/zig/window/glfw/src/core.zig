@@ -6,6 +6,7 @@ const std = @import("std");
 
 const c = @import("c.zig").c;
 const device = @import("device.zig");
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -16,7 +17,7 @@ pub const Core = struct {
     initialized: bool,
 
     pub fn create(dev: device.Device, input: ?*c.ke_input) ?*Core {
-        const self: *Core = @ptrCast(@alignCast(std.c.malloc(@sizeOf(Core)) orelse return null));
+        const self = heap.gpa.create(Core) catch return null;
         self.* = .{
             .api = std.mem.zeroes(c.ke_window),
             .dev = dev,
@@ -61,7 +62,7 @@ pub const Core = struct {
         self.shutdownInternal();
         if (self.dev) |dev| dev.destroy();
         self.dev = null;
-        std.c.free(self);
+        heap.gpa.destroy(self);
     }
 
     // -- ke_window vtable ----------------------------------------------------

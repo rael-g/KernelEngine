@@ -8,6 +8,7 @@ const c = @import("c.zig").c;
 
 const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");
+const heap = @import("heap.zig");
 
 comptime {
     _ = @import("device.zig");
@@ -31,7 +32,7 @@ export fn ke_window_glfw_create(
     };
 
     const core = core_mod.Core.create(dev.asDevice(), params.input) orelse {
-        std.c.free(dev);
+        heap.gpa.destroy(dev);
         E.fail(out_error, .out_of_memory, "window state allocation failed", @src());
         return null_handle;
     };

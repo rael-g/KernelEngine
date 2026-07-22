@@ -5,6 +5,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 const device = @import("device.zig");
 
 pub const GlfwDevice = struct {
@@ -14,7 +15,7 @@ pub const GlfwDevice = struct {
     sink: ?device.EventSink = null,
 
     pub fn create() ?*GlfwDevice {
-        const self: *GlfwDevice = @ptrCast(@alignCast(std.c.malloc(@sizeOf(GlfwDevice)) orelse return null));
+        const self = heap.gpa.create(GlfwDevice) catch return null;
         self.* = .{};
         return self;
     }
@@ -115,7 +116,7 @@ pub const GlfwDevice = struct {
     }
 
     fn destroy(ptr: *anyopaque) void {
-        std.c.free(from(ptr));
+        heap.gpa.destroy(from(ptr));
     }
 
     // -- GLFW callbacks ------------------------------------------------------
