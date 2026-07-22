@@ -49,19 +49,23 @@
   </PropertyGroup>
 
   <!--
-    The CMake build points both RUNTIME_ and LIBRARY_OUTPUT_DIRECTORY at bin,
-    so shared libraries land there on every platform regardless of the
-    platform's usual convention.
+    The root build.zig converges every plugin's .so/.dll into one shared
+    install prefix regardless of platform (no separate CMake preset dir per
+    OS anymore), so this is a single path, not one split by $(NativeOS).
+    Every plugin's own build.zig installs its shared library to "lib" under
+    that prefix (executables go to "bin" instead) — a deliberate convention
+    change from CMake, which pointed both RUNTIME_ and LIBRARY_OUTPUT_DIRECTORY
+    at the same "bin" folder.
   -->
   <PropertyGroup>
-    <NativeTypeDir>bin</NativeTypeDir>
+    <NativeTypeDir>lib</NativeTypeDir>
   </PropertyGroup>
 
 
   <PropertyGroup>
     <!-- Relative to NativeDependencies.targets (src/csharp/) -->
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</RepoRoot>
-    <NativeFinalDir>$(RepoRoot)/build/$(NativeOS)/$(NativeTypeDir)</NativeFinalDir>
+    <NativeFinalDir>$(RepoRoot)/build/native/$(NativeTypeDir)</NativeFinalDir>
   </PropertyGroup>
 
   <!--
