@@ -13,9 +13,9 @@ ke_ecs_flecs
 --include-directory
 ../../../../c/ecs/include
 --include-directory
-../../../../c/ecs/flecs/include
+../../../../zig/ecs/flecs/include
 --file
-../../../../c/ecs/flecs/include/kernel_engine/ecs/ke_ecs_flecs.h
+../../../../zig/ecs/flecs/include/kernel_engine/ecs/ke_ecs_flecs.h
 --additional
 -DKE_ECS_FLECS_STATIC
 --methodClassName

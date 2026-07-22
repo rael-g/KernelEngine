@@ -2,6 +2,20 @@ const std = @import("std");
 
 const names = @import("src/error_types.zig");
 
+// stdio + the Windows dialog-suppression call, for fatal() below. Kept
+// self-contained rather than reusing ke_common's — the whole point of this
+// seam is a plugin that never links ke_common.
+const io = @cImport({
+    @cInclude("stdio.h");
+});
+
+const windows = struct {
+    const SEM_FAILCRITICALERRORS: u32 = 0x0001;
+    const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
+    const SEM_NOOPENFILEERRORBOX: u32 = 0x8000;
+    extern "kernel32" fn SetErrorMode(uMode: u32) callconv(.winapi) u32;
+};
+
 // Zig-native error utility for the C-ABI seam. Migrated Zig plugins use Zig's
 // own error handling internally (error unions, errdefer, try) and call fail()
 // only at an exported boundary to translate into the rich ke_error ABI a C/C#
@@ -65,5 +79,44 @@ pub fn Errors(comptime c: type) type {
             };
             if (out_error != null) out_error.* = &slot;
         }
+
+        /// Prints the error chain to stderr and ends the process — no OS crash
+        /// dialog, message always readable first. Mirrors ke_common's
+        /// ke_error_fatal so a backend abort hook (flecs, enkiTS, ...) can give
+        /// up cleanly without linking ke_common or calling libc's abort().
+        pub fn fatal(err_in: ?*const c.ke_error) noreturn {
+            if (@import("builtin").os.tag == .windows) {
+                _ = windows.SetErrorMode(windows.SEM_FAILCRITICALERRORS |
+                    windows.SEM_NOGPFAULTERRORBOX |
+                    windows.SEM_NOOPENFILEERRORBOX);
+            }
+
+            _ = io.fputs("FATAL: ", io.stderr);
+            if (err_in) |first| {
+                var buf: [1024]u8 = undefined;
+                var e: ?*const c.ke_error = first;
+                while (e) |node| {
+                    const text = std.fmt.bufPrintZ(&buf, "[{s}] {s} ({s}:{d})", .{
+                        if (node.type != null) spanOr(node.type.*.name, "?") else "?",
+                        spanOr(node.message, "(no message)"),
+                        spanOr(node.file, "?"),
+                        node.line,
+                    }) catch "[?] (error detail too long to format)";
+                    _ = io.fputs(text.ptr, io.stderr);
+                    e = node.cause;
+                    if (e != null) _ = io.fputs("\n  caused by: ", io.stderr);
+                }
+                _ = io.fputs("\n", io.stderr);
+            } else {
+                _ = io.fputs("no error context provided\n", io.stderr);
+            }
+            _ = io.fflush(io.stderr);
+
+            std.process.exit(1);
+        }
     };
+}
+
+fn spanOr(s: [*c]const u8, fallback: []const u8) []const u8 {
+    return if (s != null) std.mem.span(s) else fallback;
 }
