@@ -335,6 +335,99 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step });
 
+    // ── render pipeline: material-system passes (gbuffer, forward) ──────────
+    // Every authored material × this pass, the cartesian product each pass
+    // would otherwise have to hardcode. Mirrors cmake/CompileMaterialShaders.cmake's
+    // ke_compile_material_shaders: glob every KE_MATERIALS_DIRS directory
+    // (engine defaults + a downstream example's own materials tree, proving a
+    // game can author materials without touching engine source), generate a
+    // per-(material,pass) wrapper via generate_material_wrapper.py, then
+    // compile it the same way any other pass shader compiles.
+    const materials_dirs = [_][]const u8{
+        b.pathJoin(&.{ shader_lib_dir, "materials" }),
+        b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" }),
+    };
+
+    const gbuffer_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/gbuffer/shaders" }) };
+    const gbuffer_material_shaders = ctx.materialShaders(
+        "gbuffer",
+        b.pathJoin(&.{ src_zig, "render/gbuffer/shaders/gbuffer_material.slang.in" }),
+        &gbuffer_includes,
+        shaders_out,
+        &materials_dirs,
+    );
+    const gbuffer = ctx.plugin("ke_render_gbuffer", "src/zig/render/gbuffer", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/gbuffer/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &runtime.step });
+    for (gbuffer_material_shaders) |s| gbuffer.step.dependOn(&s.step);
+
+    const forward_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
+    const forward_material_shaders = ctx.materialShaders(
+        "forward",
+        b.pathJoin(&.{ src_zig, "render/forward/shaders/forward_material.slang.in" }),
+        &forward_includes,
+        shaders_out,
+        &materials_dirs,
+    );
+    const forward = ctx.plugin("ke_render_forward", "src/zig/render/forward", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/forward/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &runtime.step });
+    for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
+
+    // ke_render_core: the forward-renderer aggregator. Its @embedFile of the
+    // magenta fallback shader means those two WGSL files must exist on disk
+    // BEFORE core's own `zig build` starts — a harder ordering constraint than
+    // a normal link dependency, so the compile steps are threaded into core's
+    // deps explicitly rather than relying on the shared shaders_out directory
+    // existing by coincidence.
+    const core_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_core" });
+    const magenta_slang = b.pathJoin(&.{ src_zig, "render/core/shaders/magenta.slang" });
+    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, core_gen_dir, &.{});
+    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, core_gen_dir, &.{});
+    const magenta_vs_wgsl = b.pathJoin(&.{ core_gen_dir, "magenta.vs.wgsl" });
+    const magenta_fs_wgsl = b.pathJoin(&.{ core_gen_dir, "magenta.fs.wgsl" });
+
+    const render_core = ctx.plugin("ke_render_core", "src/zig/render/core", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs/include" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime/include" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render/include" })),
+        argF(b, "ke-resource-cache-include", b.pathJoin(&.{ src_c, "resource_cache/include" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/core/include" })),
+        argF(b, "ke-tonemap-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
+        argF(b, "ke-skybox-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
+        argF(b, "ke-ui-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
+        argF(b, "ke-gbuffer-include", b.pathJoin(&.{ src_zig, "render/gbuffer/include" })),
+        argF(b, "ke-shadow-include", b.pathJoin(&.{ src_zig, "render/shadow/include" })),
+        argF(b, "ke-cluster-include", b.pathJoin(&.{ src_zig, "render/cluster/include" })),
+        argF(b, "ke-deferred-lighting-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
+        argF(b, "ke-forward-include", b.pathJoin(&.{ src_zig, "render/forward/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+        argF(b, "magenta-vs-wgsl", magenta_vs_wgsl),
+        argF(b, "magenta-fs-wgsl", magenta_fs_wgsl),
+    }, &.{
+        &common.step,           &resource_cache_default.step, &runtime.step,
+        &tonemap.step,          &skybox.step,                 &ui.step,
+        &gbuffer.step,          &shadow.step,                 &cluster.step,
+        &deferred_lighting.step, &forward.step,
+        &magenta_vs.step,       &magenta_fs.step,
+    });
+
     // Every plugin is an independent `zig build` process invocation, not a
     // real Zig module dependency — nothing here transitively pulls the others
     // in, so the default install step must list every one explicitly (unlike
@@ -345,26 +438,357 @@ pub fn build(b: *std.Build) void {
         window_glfw,     asset_stb_image,   audio_miniaudio,     text_stb_truetype,
         physics_box2d,   asset_assimp,      configuration,       configuration_toml,
         tonemap,         skybox,            ui,                  shadow,
-        cluster,         deferred_lighting, gpu_device_webgpu,
+        cluster,         deferred_lighting, gpu_device_webgpu,   gbuffer,
+        forward,         render_core,
     };
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
 
-    // ── one example, end to end, no CMake anywhere in the chain ─────────────
-    const demo01 = b.addSystemCommand(&.{
-        ctx.zig_exe, "build",
-        "--prefix", ctx.prefix,
-        b.fmt("-Dinclude-dirs={s}|{s}", .{
+    // ── GTest suites (system C++ compiler — Zig's own libc++ is ABI-incompatible
+    // with vcpkg's libstdc++-built GTest archives) ──────────────────────────────
+    const gtest_include = vcpkg_include;
+    const gtest_a = b.pathJoin(&.{ vcpkg_lib, "libgtest.a" });
+    const gtest_main_a = b.pathJoin(&.{ vcpkg_lib, "manual-link", "libgtest_main.a" });
+    const gmock_a = b.pathJoin(&.{ vcpkg_lib, "libgmock.a" });
+    const tests_c_kernel = b.pathJoin(&.{ root, "tests/c/kernel" });
+    const tests_integration_cpp = b.pathJoin(&.{ root, "tests/integration/cpp" });
+
+    const kernel_test_sources = [_][]const u8{
+        "test_input.cpp",         "test_logger.cpp",       "test_asset_resolver.cpp",
+        "test_resource_cache.cpp", "test_scene_tree.cpp",  "test_input_actions.cpp",
+        "test_scene_loader.cpp",
+    };
+    var kernel_test_sources_abs: [kernel_test_sources.len][]const u8 = undefined;
+    for (kernel_test_sources, 0..) |s, i| kernel_test_sources_abs[i] = b.pathJoin(&.{ tests_c_kernel, s });
+
+    const test_ke_kernel = ctx.testBinary("test_ke_kernel", "tests/c/kernel", &.{
+        argF(b, "sources", joinPaths(b, &kernel_test_sources_abs)),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "logger/include" }),
+            b.pathJoin(&.{ src_c, "ecs/include" }),
+            b.pathJoin(&.{ src_c, "spatial/include" }),
+            b.pathJoin(&.{ src_c, "scheduler/include" }),
+            b.pathJoin(&.{ src_c, "framework/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+            b.pathJoin(&.{ src_c, "input/include" }),
+            b.pathJoin(&.{ src_c, "asset/include" }),
+            b.pathJoin(&.{ src_c, "resource_cache/include" }),
+            b.pathJoin(&.{ src_c, "text/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_c, "runtime/include" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            gtest_include,
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_logger_simple.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_input_default.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_resource_cache_default.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_framework.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
+            gtest_main_a,
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            gtest_a,
+        })),
+        argF(b, "rpaths", lib_dir),
+        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", "test_ke_kernel" })),
+    }, &.{
+        &logger_simple.step, &input_default.step, &resource_cache_default.step, &framework.step,
+        &runtime.step,       &ecs_flecs.step,      &scheduler_enki.step,        &common.step,
+    });
+
+    const integration_test_sources = [_][]const u8{
+        "test_world.cpp",           "test_factories.cpp",        "test_window_glfw.cpp",
+        "test_asset_loader.cpp",    "test_stb_image_loader.cpp", "test_enki_scheduler.cpp",
+        "test_miniaudio_audio.cpp", "test_box2d_physics.cpp",    "test_stb_font.cpp",
+        "test_runtime.cpp",         "test_ecs_parallel_reads.cpp",
+    };
+    var integration_test_sources_abs: [integration_test_sources.len][]const u8 = undefined;
+    for (integration_test_sources, 0..) |s, i| integration_test_sources_abs[i] = b.pathJoin(&.{ tests_integration_cpp, s });
+
+    const test_integration_cpp = ctx.testBinary("test_integration_cpp", "tests/integration/cpp", &.{
+        argF(b, "sources", joinPaths(b, &integration_test_sources_abs)),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+            b.pathJoin(&.{ src_c, "spatial/include" }),
+            b.pathJoin(&.{ src_c, "scheduler/include" }),
+            b.pathJoin(&.{ src_c, "physics/include" }),
+            b.pathJoin(&.{ src_c, "logger/include" }),
+            b.pathJoin(&.{ src_c, "input/include" }),
+            b.pathJoin(&.{ src_c, "resource_cache/include" }),
+            b.pathJoin(&.{ src_c, "ecs/include" }),
+            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_zig, "audio/miniaudio/include" }),
+            b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
+            b.pathJoin(&.{ src_zig, "text/stb_truetype/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "asset/assimp/include" }),
+            b.pathJoin(&.{ src_c, "asset/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_c, "text/include" }),
+            b.pathJoin(&.{ src_zig, "asset/stb_image/include" }),
+            b.pathJoin(&.{ src_c, "audio/include" }),
+            b.pathJoin(&.{ src_c, "runtime/include" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
+            gtest_include,
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_asset_assimp.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_asset_stb_image.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_audio_miniaudio.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_physics_2d_box2d.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_text_stb_truetype.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_logger_simple.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_input_default.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_resource_cache_default.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_framework.so" }),
+            gtest_main_a,
+            gmock_a,
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            gtest_a,
+        })),
+        argF(b, "rpaths", lib_dir),
+        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", "test_integration_cpp" })),
+    }, &.{
+        &window_glfw.step,       &asset_assimp.step,          &asset_stb_image.step,
+        &scheduler_enki.step,    &audio_miniaudio.step,       &physics_box2d.step,
+        &text_stb_truetype.step, &logger_simple.step,         &input_default.step,
+        &resource_cache_default.step, &runtime.step,          &ecs_flecs.step,
+        &framework.step,         &common.step,
+    });
+
+    const test_step = b.step("test", "Build the two GTest suites (system C++ compiler)");
+    test_step.dependOn(&test_ke_kernel.step);
+    test_step.dependOn(&test_integration_cpp.step);
+    b.getInstallStep().dependOn(&test_ke_kernel.step);
+    b.getInstallStep().dependOn(&test_integration_cpp.step);
+
+    // ── C examples ───────────────────────────────────────────────────────────
+    // Every example's own build.zig hardcodes exe name "demo" installed to its
+    // own prefix's bin/ — fine in isolation, but a shared --prefix across all
+    // of them would make every later example overwrite the previous one's
+    // binary. Each example instead builds into its own private sub-prefix,
+    // then gets copied into the shared bin/ under its own c_demo_NN name —
+    // the same two-path pattern CMake used to dodge the IMPORTED_LOCATION
+    // collision bug, applied here to dodge an install-path collision instead.
+    const demo01 = ctx.example("c_demo_01", "examples/c/01_minimal_log", &.{
+        argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "logger/include" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
-        }),
-        b.fmt("-Dlibs={s}", .{b.pathJoin(&.{ lib_dir, "libke_logger_simple.so" })}),
-    });
-    demo01.setCwd(.{ .cwd_relative = b.pathJoin(&.{ root, "examples/c/01_minimal_log" }) });
-    demo01.step.dependOn(&logger_simple.step);
+        })),
+        argF(b, "libs", b.pathJoin(&.{ lib_dir, "libke_logger_simple.so" })),
+    }, &.{&logger_simple.step});
 
     const demo_step = b.step("demo01", "Build examples/c/01_minimal_log with zero CMake involved");
     demo_step.dependOn(&demo01.step);
+
+    // ── remaining C examples ────────────────────────────────────────────────
+    const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
+
+    // glslangValidator (unlike compile_slang.py) never creates its own output
+    // directory — it just fails with "Failed to open file" the first time
+    // zig-out doesn't exist yet, so every glslang-driven example's shader dir
+    // is created up front, mirroring CMake's file(MAKE_DIRECTORY ...) calls.
+    {
+        var threaded: std.Io.Threaded = .init(b.allocator, .{});
+        defer threaded.deinit();
+        const io = threaded.io();
+        for ([_][]const u8{ "06_triangle", "07_uniform", "08_vertex_buffer", "09_texture", "10_depth" }) |name| {
+            std.Io.Dir.cwd().createDirPath(io, b.pathJoin(&.{ examples_gen, name })) catch |err| switch (err) {
+                error.PathAlreadyExists => {},
+                else => @panic("failed to create example shader-out-dir"),
+            };
+        }
+    }
+
+    const demo05 = ctx.example("c_demo_05", "examples/c/05_gpu_device", &.{
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+        })),
+        argF(b, "libs", b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" })),
+    }, &.{&gpu_device_webgpu.step});
+
+    const demo06 = ctx.example("c_demo_06", "examples/c/06_triangle", &.{
+        argF(b, "shader-name", "triangle"),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "06_triangle" })),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+        })),
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+
+    const demo07 = ctx.example("c_demo_07", "examples/c/07_uniform", &.{
+        argF(b, "shader-name", "rotate"),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "07_uniform" })),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+        })),
+        "-Dlink-m=true",
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+
+    const demo08 = ctx.example("c_demo_08", "examples/c/08_vertex_buffer", &.{
+        argF(b, "shader-name", "mesh"),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "08_vertex_buffer" })),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+        })),
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+
+    const demo09 = ctx.example("c_demo_09", "examples/c/09_texture", &.{
+        argF(b, "shader-name", "tex"),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "09_texture" })),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+        })),
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+
+    const demo10 = ctx.example("c_demo_10", "examples/c/10_depth", &.{
+        argF(b, "shader-name", "depth"),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "10_depth" })),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+        })),
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+
+    const demo12 = ctx.example("c_demo_12", "examples/c/12_render_core", &.{
+        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.py" })),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_core" })),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_c, "ecs/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+            b.pathJoin(&.{ src_zig, "render/core/include" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_render_core.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
+        })),
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_core.step, &ecs_flecs.step });
+
+    const demo13 = ctx.example("c_demo_13", "examples/c/13_runtime_clear", &.{
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_c, "ecs/include" }),
+            b.pathJoin(&.{ src_c, "scheduler/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+            b.pathJoin(&.{ src_zig, "render/core/include" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_c, "runtime/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_render_core.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
+        })),
+    }, &.{
+        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_core.step,
+        &ecs_flecs.step,  &scheduler_enki.step, &runtime.step,
+    });
+
+    const demo14 = ctx.example("c_demo_14", "examples/c/14_forward_mesh", &.{
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "spatial/include" }),
+            b.pathJoin(&.{ src_c, "window/include" }),
+            b.pathJoin(&.{ src_c, "ecs/include" }),
+            b.pathJoin(&.{ src_c, "scheduler/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_c, "render/include" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_zig, "render/core/include" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_c, "runtime/include" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_render_core.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
+            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
+        })),
+        "-Dlink-m=true",
+    }, &.{
+        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_core.step,
+        &ecs_flecs.step,  &scheduler_enki.step, &runtime.step,
+    });
+
+    const all_examples = [_]*std.Build.Step.Run{
+        demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14,
+    };
+    for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
 }
 
 const Ctx = struct {
@@ -403,6 +827,65 @@ const Ctx = struct {
         return run;
     }
 
+    /// Compiles every authored material × `pass`, mirroring
+    /// cmake/CompileMaterialShaders.cmake's ke_compile_material_shaders: glob
+    /// every materials directory (globbing happens right here, synchronously,
+    /// during graph construction — the same moment CMake's CONFIGURE_DEPENDS
+    /// glob ran), generate a wrapper binding each material into the pass's
+    /// entry points, then compile the wrapper like any other pass shader. The
+    /// wrapper `import`s the material by module name, so every materials dir
+    /// must be on the compile include path alongside the pass's own.
+    fn materialShaders(
+        ctx: *Ctx,
+        pass: []const u8,
+        template: []const u8,
+        includes: []const []const u8,
+        out_dir: []const u8,
+        materials_dirs: []const []const u8,
+    ) []const *std.Build.Step.Run {
+        const b = ctx.b;
+        var steps: std.ArrayList(*std.Build.Step.Run) = .empty;
+        const gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", pass });
+
+        var wrapper_includes: std.ArrayList([]const u8) = .empty;
+        wrapper_includes.appendSlice(b.allocator, includes) catch @panic("OOM");
+        wrapper_includes.appendSlice(b.allocator, materials_dirs) catch @panic("OOM");
+
+        var threaded: std.Io.Threaded = .init(b.allocator, .{});
+        defer threaded.deinit();
+        const io = threaded.io();
+
+        for (materials_dirs) |mdir| {
+            var dir = std.Io.Dir.openDirAbsolute(io, mdir, .{ .iterate = true }) catch continue;
+            defer dir.close(io);
+            var it = dir.iterate();
+            while (it.next(io) catch null) |entry| {
+                if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".slang")) continue;
+                const material_name = entry.name[0 .. entry.name.len - ".slang".len];
+                const material_path = b.pathJoin(&.{ mdir, entry.name });
+                const combined_name = b.fmt("{s}.{s}", .{ material_name, pass });
+                const wrapper = b.pathJoin(&.{ gen_dir, b.fmt("{s}.slang", .{combined_name}) });
+
+                const gen_wrapper = b.addSystemCommand(&.{
+                    "python3",    b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.py" }),
+                    "--material", material_path,
+                    "--template", template,
+                    "--output",   wrapper,
+                });
+                gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
+
+                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items);
+                vs.step.dependOn(&gen_wrapper.step);
+                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items);
+                fs.step.dependOn(&gen_wrapper.step);
+
+                steps.append(b.allocator, vs) catch @panic("OOM");
+                steps.append(b.allocator, fs) catch @panic("OOM");
+            }
+        }
+        return steps.toOwnedSlice(b.allocator) catch @panic("OOM");
+    }
+
     /// Invokes `zig build --prefix <shared prefix> <extra args>` in `dir`,
     /// mirroring exactly what each plugin's CMakeLists.txt custom command used
     /// to do. Every plugin's own build.zig already installs its .so to "lib"
@@ -421,7 +904,57 @@ const Ctx = struct {
         run.setName(b.fmt("build {s} (Zig)", .{name}));
         return run;
     }
+
+    /// Like `plugin`, but for a C example: every example's own build.zig
+    /// hardcodes its exe name to "demo" and installs to "bin" under whatever
+    /// --prefix it's given, so pointing several examples at the shared
+    /// engine prefix would make each one overwrite the last one's binary.
+    /// Each example instead gets its own private sub-prefix, then the
+    /// resulting "demo" binary is copied into the shared prefix's bin/ under
+    /// its own name — mirroring the exact two-path pattern CMake used to
+    /// dodge its IMPORTED_LOCATION collision bug, applied here to dodge an
+    /// install-path collision instead.
+    fn example(ctx: *Ctx, demo_name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
+        const b = ctx.b;
+        const own_prefix = b.pathJoin(&.{ ctx.prefix, "examples-out", demo_name });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix });
+        run.addArgs(extra_args);
+        run.addArg(ctx.release_flag);
+        run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
+        run.step.dependOn(ctx.vcpkg_step);
+        for (deps) |d| run.step.dependOn(d);
+        run.setName(b.fmt("build {s} (Zig)", .{demo_name}));
+
+        const copy = b.addSystemCommand(&.{
+            "install", "-Dm755",
+            b.pathJoin(&.{ own_prefix, "bin", "demo" }),
+            b.pathJoin(&.{ ctx.prefix, "bin", demo_name }),
+        });
+        copy.step.dependOn(&run.step);
+        copy.setName(b.fmt("install {s}", .{demo_name}));
+        return copy;
+    }
+
+    /// Invokes a GTest suite's own build.zig, which shells out to the SYSTEM
+    /// C++ compiler directly (not `zig build`'s usual target/prefix machinery
+    /// — Zig's bundled libc++ is ABI-incompatible with vcpkg's libstdc++-built
+    /// GTest archives). No --prefix/--release forwarded: the suite's build.zig
+    /// declares no such options, it just writes straight to -Doutput.
+    fn testBinary(ctx: *Ctx, name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
+        const b = ctx.b;
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build" });
+        run.addArgs(extra_args);
+        run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
+        run.step.dependOn(ctx.vcpkg_step);
+        for (deps) |d| run.step.dependOn(d);
+        run.setName(b.fmt("build {s} (system C++)", .{name}));
+        return run;
+    }
 };
+
+fn joinPaths(b: *std.Build, paths: []const []const u8) []const u8 {
+    return std.mem.join(b.allocator, "|", paths) catch @panic("OOM");
+}
 
 fn argF(b: *std.Build, comptime name: []const u8, value: []const u8) []const u8 {
     return b.fmt("-D" ++ name ++ "={s}", .{value});
