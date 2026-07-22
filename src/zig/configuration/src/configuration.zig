@@ -12,8 +12,7 @@ const ke = @cImport({
     @cInclude("kernel_engine/configuration/configuration.h");
 });
 
-// libc malloc backing — same allocator the other Zig libs use (webgpu backend).
-const gpa = std.heap.c_allocator;
+const gpa = @import("heap.zig").gpa;
 
 const NONE: u32 = std.math.maxInt(u32); // == KE_CONFIGURATION_SUBSCRIPTION_NONE
 
