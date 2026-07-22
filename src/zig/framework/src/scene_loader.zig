@@ -17,10 +17,9 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
-
-const arena_chunk_size = 16 * 1024;
 
 /// Longest project root / scene directory path the loader tracks.
 const path_max = 512;
@@ -32,65 +31,31 @@ const res_prefix = "res://";
 // -- arena -------------------------------------------------------------------
 //
 // Backs scene_properties components and the variant entries they point at.
-// Chunked bump allocation: each chunk is a fixed-size buffer; a request that
-// does not fit starts a fresh chunk. Outlives the TOML tree.
-
-const ArenaChunk = struct {
-    next: ?*ArenaChunk,
-    data: [*]u8,
-    used: usize,
-    cap: usize,
-};
+// Nothing here is ever freed individually — the whole arena goes at once when
+// the loader is destroyed — so std.heap.ArenaAllocator over the plugin heap is
+// the exact shape this needs, with none of a chunk allocator's bookkeeping
+// hand-rolled again.
 
 const Arena = struct {
-    head: ?*ArenaChunk = null,
+    inner: std.heap.ArenaAllocator,
 
-    fn alloc(self: *Arena, bytes: usize, alignment: usize) ?[*]u8 {
-        const a = if (alignment != 0) alignment else 8;
-
-        if (self.head) |chunk| {
-            const base = @intFromPtr(chunk.data) + chunk.used;
-            const pad = (a - (base % a)) % a;
-            if (chunk.used + pad + bytes <= chunk.cap) {
-                const p = chunk.data + chunk.used + pad;
-                chunk.used += pad + bytes;
-                return p;
-            }
-        }
-
-        const want = @max(bytes, arena_chunk_size);
-        const raw = std.c.malloc(@sizeOf(ArenaChunk) + want) orelse return null;
-        const chunk: *ArenaChunk = @ptrCast(@alignCast(raw));
-        const data: [*]u8 = @as([*]u8, @ptrCast(raw)) + @sizeOf(ArenaChunk);
-        chunk.* = .{ .next = self.head, .data = data, .used = bytes, .cap = want };
-        self.head = chunk;
-        return data;
+    fn init() Arena {
+        return .{ .inner = .init(heap.gpa) };
     }
 
     fn allocArray(self: *Arena, comptime T: type, n: usize) ?[]T {
         if (n == 0) return &.{};
-        const p = self.alloc(@sizeOf(T) * n, @alignOf(T)) orelse return null;
-        const typed: [*]T = @ptrCast(@alignCast(p));
-        return typed[0..n];
+        return self.inner.allocator().alloc(T, n) catch null;
     }
 
     fn dupeZ(self: *Arena, src: [*c]const u8) ?[*:0]u8 {
         if (src == null) return null;
-        const text = std.mem.span(src);
-        const p = self.alloc(text.len + 1, 1) orelse return null;
-        @memcpy(p[0..text.len], text);
-        p[text.len] = 0;
-        return @ptrCast(p);
+        const owned = self.inner.allocator().dupeZ(u8, std.mem.span(src)) catch return null;
+        return owned.ptr;
     }
 
     fn deinit(self: *Arena) void {
-        var chunk = self.head;
-        while (chunk) |ch| {
-            const next = ch.next;
-            std.c.free(ch);
-            chunk = next;
-        }
-        self.head = null;
+        self.inner.deinit();
     }
 };
 
@@ -384,14 +349,12 @@ const NameMap = struct {
     fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity) void {
         if (self.count == self.capacity) {
             const cap = if (self.capacity != 0) self.capacity * 2 else initial_capacity;
-            const buf: [*]Entry = @ptrCast(@alignCast(
-                std.c.malloc(@sizeOf(Entry) * cap) orelse return,
-            ));
+            const buf = heap.gpa.alloc(Entry, cap) catch return;
             if (self.items) |old| {
                 @memcpy(buf[0..self.count], old[0..self.count]);
-                std.c.free(old);
+                heap.gpa.free(old[0..self.capacity]);
             }
-            self.items = buf;
+            self.items = buf.ptr;
             self.capacity = cap;
         }
         // The name lives in the arena: the TOML datum it came from is freed by
@@ -410,7 +373,7 @@ const NameMap = struct {
     }
 
     fn deinit(self: *NameMap) void {
-        if (self.items) |items| std.c.free(items);
+        if (self.items) |items| heap.gpa.free(items[0..self.capacity]);
         self.items = null;
     }
 };
@@ -622,7 +585,7 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     s.arena.deinit();
-    std.c.free(s);
+    heap.gpa.destroy(s);
 }
 
 // -- factory -----------------------------------------------------------------
@@ -638,10 +601,10 @@ export fn ke_scene_loader_create(
         return null_handle;
     };
 
-    const s: *State = @ptrCast(@alignCast(std.c.malloc(@sizeOf(State)) orelse {
+    const s = heap.gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return null_handle;
-    }));
+    };
     s.* = .{
         .api = std.mem.zeroes(c.ke_scene_loader),
         .world = world,
@@ -649,7 +612,7 @@ export fn ke_scene_loader_create(
         .script_factory = null,
         .script_ctx = null,
         .scene_properties_cid = 0,
-        .arena = .{},
+        .arena = .init(),
     };
 
     if (project_root != null) {
@@ -662,7 +625,7 @@ export fn ke_scene_loader_create(
     // scene_properties has no apply callback: its layout (entries pointer +
     // count) is populated wholesale by attachProperties, not field by field.
     const e = ecsOf(world) orelse {
-        std.c.free(s);
+        heap.gpa.destroy(s);
         E.fail(out_error, .not_initialized, "world has no ecs", @src());
         return null_handle;
     };

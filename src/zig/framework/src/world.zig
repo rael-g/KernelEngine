@@ -5,6 +5,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -88,17 +89,17 @@ fn worldRegisterComponentApply(
 
     if (s.apply_count == s.apply_capacity) {
         const cap = if (s.apply_capacity != 0) s.apply_capacity * 2 else apply_initial_capacity;
-        const new_buf: [*]ApplyEntry = @ptrCast(@alignCast(
-            std.c.malloc(@sizeOf(ApplyEntry) * cap) orelse {
-                E.fail(out_error, .out_of_memory, "apply registry allocation failed", @src());
-                return false;
-            },
-        ));
+        const new_buf = heap.gpa.alloc(ApplyEntry, cap) catch {
+            E.fail(out_error, .out_of_memory, "apply registry allocation failed", @src());
+            return false;
+        };
         if (s.apply_registry) |old| {
             @memcpy(new_buf[0..s.apply_count], old[0..s.apply_count]);
-            std.c.free(old);
+            // Released at the capacity it was allocated with, which the state
+            // still holds until the new one is published below.
+            heap.gpa.free(old[0..s.apply_capacity]);
         }
-        s.apply_registry = new_buf;
+        s.apply_registry = new_buf.ptr;
         s.apply_capacity = cap;
     }
 
@@ -125,11 +126,11 @@ fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
-    if (s.apply_registry) |reg| std.c.free(reg);
+    if (s.apply_registry) |reg| heap.gpa.free(reg[0..s.apply_capacity]);
     // ecs, runtime and scene_tree are borrowed: whoever created them destroys
     // them after world->destroy(). The state sits at the head of the block, so
     // freeing it releases the vtable too.
-    std.c.free(s);
+    heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
 }
 
 /// Registers a built-in component with the ecs (reusing an existing
@@ -164,10 +165,10 @@ export fn ke_world_create(
         return null_handle;
     }
 
-    const block: *Block = @ptrCast(@alignCast(std.c.malloc(@sizeOf(Block)) orelse {
+    const block = heap.gpa.create(Block) catch {
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return null_handle;
-    }));
+    };
     block.* = std.mem.zeroes(Block);
 
     const state = &block.state;

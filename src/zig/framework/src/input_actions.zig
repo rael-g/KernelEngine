@@ -17,6 +17,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -217,15 +218,15 @@ fn growArray(
     if (capacity.* >= needed) return buf;
     var cap = if (capacity.* != 0) capacity.* else initial;
     while (cap < needed) cap *= 2;
-    const new_buf: [*]T = @ptrCast(@alignCast(
-        std.c.malloc(@sizeOf(T) * cap) orelse return null,
-    ));
+    const new_buf = heap.gpa.alloc(T, cap) catch return null;
     if (buf) |old| {
         @memcpy(new_buf[0..count], old[0..count]);
-        std.c.free(old);
+        // The old block is released at the capacity it was allocated with,
+        // which `capacity` still holds until it is overwritten below.
+        heap.gpa.free(old[0..capacity.*]);
     }
     capacity.* = cap;
-    return new_buf;
+    return new_buf.ptr;
 }
 
 fn ensureActionCapacity(s: *State, needed: u32) bool {
@@ -243,7 +244,7 @@ fn ensureBindingCapacity(a: *Action, needed: u32) bool {
 fn clearActions(s: *State) void {
     if (s.actions) |actions| {
         for (actions[0..s.action_count]) |*a| {
-            if (a.bindings) |b| std.c.free(b);
+            if (a.bindings) |b| heap.gpa.free(b[0..a.binding_capacity]);
             a.bindings = null;
             a.binding_count = 0;
             a.binding_capacity = 0;
@@ -707,8 +708,8 @@ fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     clearActions(s);
-    if (s.actions) |actions| std.c.free(actions);
-    std.c.free(s);
+    if (s.actions) |actions| heap.gpa.free(actions[0..s.action_capacity]);
+    heap.gpa.destroy(s);
 }
 
 // -- factory -----------------------------------------------------------------
@@ -716,10 +717,10 @@ fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
 export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_actions_handle {
     const null_handle = std.mem.zeroes(c.ke_input_actions_handle);
 
-    const s: *State = @ptrCast(@alignCast(std.c.malloc(@sizeOf(State)) orelse {
+    const s = heap.gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return null_handle;
-    }));
+    };
     s.* = std.mem.zeroes(State);
 
     s.api.handle = s;

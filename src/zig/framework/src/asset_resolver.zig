@@ -7,6 +7,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -22,7 +23,7 @@ const State = struct {
     api: c.ke_asset_resolver,
     image_loader: ?*c.ke_image_loader, // borrowed; may be null
     font_loader: ?*c.ke_font_loader, // borrowed; may be null
-    project_root: ?[*:0]u8, // owned; may be null
+    project_root: ?[:0]u8, // owned; may be null
 };
 
 fn stateOf(self: *c.ke_asset_resolver) *State {
@@ -31,13 +32,9 @@ fn stateOf(self: *c.ke_asset_resolver) *State {
 
 // -- helpers -----------------------------------------------------------------
 
-fn dupCStr(s: [*c]const u8) ?[*:0]u8 {
+fn dupCStr(s: [*c]const u8) ?[:0]u8 {
     if (s == null) return null;
-    const src = std.mem.span(s);
-    const out: [*]u8 = @ptrCast(std.c.malloc(src.len + 1) orelse return null);
-    @memcpy(out[0..src.len], src);
-    out[src.len] = 0;
-    return @ptrCast(out);
+    return heap.gpa.dupeZ(u8, std.mem.span(s)) catch null;
 }
 
 fn fileExists(path: [*:0]const u8) bool {
@@ -86,7 +83,7 @@ fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
     if (std.mem.startsWith(u8, p, res_prefix)) {
         const remainder = p[res_prefix.len..];
         if (s.project_root) |root| {
-            joinPath(out, std.mem.span(@as([*:0]const u8, root)), remainder);
+            joinPath(out, root, remainder);
         } else {
             copyStringClamped(out, remainder);
         }
@@ -154,6 +151,8 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     if (tomlNumberIn(mat, "ior")) |f| out.ior = f;
     if (tomlNumberIn(mat, "distortion_strength")) |f| out.distortion_strength = f;
 
+    // The strings below are tomlc99's, allocated with malloc inside the parser,
+    // so they go back to free() rather than to the plugin heap.
     const albedo = c.toml_string_in(mat, "albedo");
     if (albedo.ok != 0) {
         copyStringClamped(&out.albedo_path, std.mem.span(albedo.u.s));
@@ -408,11 +407,11 @@ fn vtResolveMeshInto(
 
     const float_count = @as(usize, shape.vertex_count) * gpu_floats_per_vertex;
     const byte_count = float_count * @sizeOf(f32);
-    const gpu_verts: [*]f32 = @ptrCast(@alignCast(std.c.malloc(byte_count) orelse {
+    const gpu_verts = heap.gpa.alloc(f32, float_count) catch {
         vtFreeMesh(self, &shape);
         E.fail(out_error, .out_of_memory, "vertex conversion buffer allocation failed", @src());
         return c.KE_MESH_NONE;
-    }));
+    };
 
     for (0..shape.vertex_count) |i| {
         const v = &shape.vertices[i];
@@ -433,13 +432,13 @@ fn vtResolveMeshInto(
     const h = core.upload_mesh.?(
         core,
         path,
-        gpu_verts,
+        gpu_verts.ptr,
         byte_count,
         shape.indices,
         shape.index_count,
         out_error,
     );
-    std.c.free(gpu_verts);
+    heap.gpa.free(gpu_verts);
     vtFreeMesh(self, &shape);
     return h;
 }
@@ -501,8 +500,8 @@ fn vtDestroy(self_in: ?*c.ke_asset_resolver) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
-    if (s.project_root) |root| std.c.free(root);
-    std.c.free(s);
+    if (s.project_root) |root| heap.gpa.free(root);
+    heap.gpa.destroy(s);
 }
 
 // -- factory -----------------------------------------------------------------
@@ -515,17 +514,17 @@ export fn ke_asset_resolver_create(
 ) callconv(.c) c.ke_asset_resolver_handle {
     const null_handle = std.mem.zeroes(c.ke_asset_resolver_handle);
 
-    const s: *State = @ptrCast(@alignCast(std.c.malloc(@sizeOf(State)) orelse {
+    const s = heap.gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return null_handle;
-    }));
+    };
     s.* = std.mem.zeroes(State);
 
     s.image_loader = image_loader;
     s.font_loader = font_loader;
     s.project_root = dupCStr(project_root);
     if (project_root != null and s.project_root == null) {
-        std.c.free(s);
+        heap.gpa.destroy(s);
         E.fail(out_error, .out_of_memory, "project root allocation failed", @src());
         return null_handle;
     }

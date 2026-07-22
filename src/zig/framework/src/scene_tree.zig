@@ -6,6 +6,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -388,7 +389,7 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     destroyEntitiesRecursive(s, s.root);
-    std.c.free(s);
+    heap.gpa.destroy(s);
 }
 
 // -- factory -----------------------------------------------------------------
@@ -403,10 +404,10 @@ export fn ke_scene_tree_create(
         return null_handle;
     };
 
-    const s: *State = @ptrCast(@alignCast(std.c.malloc(@sizeOf(State)) orelse {
+    const s = heap.gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return null_handle;
-    }));
+    };
     s.* = .{
         .api = std.mem.zeroes(c.ke_scene_tree),
         .ecs = ecs,
@@ -422,7 +423,7 @@ export fn ke_scene_tree_create(
 
     s.root = ecs.entity_create.?(ecs);
     if (s.root == c.KE_ENTITY_INVALID) {
-        std.c.free(s);
+        heap.gpa.destroy(s);
         E.fail(out_error, .general, "root entity creation failed", @src());
         return null_handle;
     }
@@ -432,7 +433,7 @@ export fn ke_scene_tree_create(
         ecs.component_add.?(ecs, s.root, s.name_cid) == null)
     {
         ecs.entity_destroy.?(ecs, s.root);
-        std.c.free(s);
+        heap.gpa.destroy(s);
         E.fail(out_error, .general, "root component setup failed", @src());
         return null_handle;
     }

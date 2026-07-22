@@ -5,17 +5,18 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const heap = @import("heap.zig");
 
 const pi: f32 = 3.14159265358979323846;
 
-// Buffers cross back to C as bare pointers with no size attached, so they are
-// allocated with malloc/free rather than a Zig allocator: the free path must
-// stay callable from either language while the plugin is part C, part Zig.
+// Buffers cross back to C as bare pointers with no length attached. The counts
+// travelling on ke_mesh_shape_data are what the free path reconstructs the
+// slices from, so a bake must never publish a count that differs from what it
+// allocated.
 fn allocArray(comptime T: type, count: u32) ?[*]T {
     if (count == 0) return null;
-    const bytes = @sizeOf(T) * @as(usize, count);
-    const p = std.c.malloc(bytes) orelse return null;
-    return @ptrCast(@alignCast(p));
+    const slice = heap.gpa.alloc(T, count) catch return null;
+    return slice.ptr;
 }
 
 fn setVertex(
@@ -221,7 +222,7 @@ pub export fn ke_mesh_shape_bake_internal(
 
     const vbuf = allocArray(c.ke_vertex, vcount) orelse return false;
     const ibuf = allocArray(u16, icount) orelse {
-        std.c.free(vbuf);
+        heap.gpa.free(vbuf[0..vcount]);
         return false;
     };
 
@@ -251,8 +252,8 @@ pub export fn ke_mesh_shape_bake_internal(
         else => {
             // Unreachable via the sizing switch above, but a bad enum value must
             // surface as a failed bake rather than a trap.
-            std.c.free(vbuf);
-            std.c.free(ibuf);
+            heap.gpa.free(vbuf[0..vcount]);
+            heap.gpa.free(ibuf[0..icount]);
             return false;
         },
     }
@@ -266,8 +267,8 @@ pub export fn ke_mesh_shape_bake_internal(
 
 pub export fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
     const data = data_in orelse return;
-    if (data.vertices) |v| std.c.free(v);
-    if (data.indices) |i| std.c.free(i);
+    if (data.vertices) |v| heap.gpa.free(@as([*]c.ke_vertex, @ptrCast(v))[0..data.vertex_count]);
+    if (data.indices) |i| heap.gpa.free(@as([*]u16, @ptrCast(i))[0..data.index_count]);
     data.vertices = null;
     data.indices = null;
     data.vertex_count = 0;
