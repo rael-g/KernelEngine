@@ -65,7 +65,7 @@ add_dependencies(ke_runtime ke_runtime_zig)
 set_target_properties(ke_runtime PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
     INTERFACE_INCLUDE_DIRECTORIES "${KE_RUNTIME_INCLUDE}"
-    INTERFACE_LINK_LIBRARIES "ke_common;ke_ecs;ke_scheduler"
+    INTERFACE_LINK_LIBRARIES "ke_common"
 )
 
 if(WIN32)

@@ -59,7 +59,6 @@ add_dependencies(ke_logger_simple ke_logger_simple_zig)
 
 set_target_properties(ke_logger_simple PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
-    INTERFACE_LINK_LIBRARIES "ke_logger"
 )
 
 if(WIN32)

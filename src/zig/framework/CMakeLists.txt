@@ -70,7 +70,7 @@ set_target_properties(ke_framework PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES
         "${CMAKE_CURRENT_SOURCE_DIR}/include;${CMAKE_SOURCE_DIR}/src/c/runtime/include"
     INTERFACE_LINK_LIBRARIES
-        "ke_common;ke_ecs;ke_spatial;ke_input;ke_render;ke_asset;ke_text"
+        "ke_common"
 )
 
 if(WIN32)

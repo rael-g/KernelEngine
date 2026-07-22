@@ -117,7 +117,6 @@ add_dependencies(ke_asset_assimp ke_asset_assimp_zig)
 set_target_properties(ke_asset_assimp PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    INTERFACE_LINK_LIBRARIES "ke_asset"
 )
 
 if(WIN32)

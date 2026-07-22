@@ -59,7 +59,6 @@ add_dependencies(ke_resource_cache_default ke_resource_cache_default_zig)
 
 set_target_properties(ke_resource_cache_default PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
-    INTERFACE_LINK_LIBRARIES "ke_resource_cache"
 )
 
 if(WIN32)

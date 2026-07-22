@@ -81,7 +81,6 @@ add_dependencies(ke_scheduler_enki ke_scheduler_enki_zig)
 set_target_properties(ke_scheduler_enki PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    INTERFACE_LINK_LIBRARIES "ke_scheduler"
 )
 
 if(WIN32)

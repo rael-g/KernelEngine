@@ -67,7 +67,6 @@ add_dependencies(ke_ecs_flecs ke_ecs_flecs_zig)
 set_target_properties(ke_ecs_flecs PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    INTERFACE_LINK_LIBRARIES "ke_ecs"
 )
 
 if(WIN32)

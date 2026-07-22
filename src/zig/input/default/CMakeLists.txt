@@ -58,7 +58,6 @@ add_dependencies(ke_input_default ke_input_default_zig)
 
 set_target_properties(ke_input_default PROPERTIES
     IMPORTED_LOCATION "${ZIG_OUT_DIR}/lib/${ZIG_LIB_NAME}"
-    INTERFACE_LINK_LIBRARIES "ke_input"
 )
 
 if(WIN32)
