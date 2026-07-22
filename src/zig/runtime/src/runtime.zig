@@ -20,20 +20,34 @@ const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
-// ── malloc/free helpers (size-agnostic, mirror ke_alloc/ke_free) ────────────
+// ── allocation helpers ───────────────────────────────────────────────────────
+//
+// Every buffer here has its length tracked alongside it (a *_capacity field,
+// or a fixed KE_MAX_* size for the storage that never grows), so a Zig slice
+// can always be reconstructed at the point of freeing.
+
+const heap = @import("heap.zig");
 
 fn cAlloc(comptime T: type, n: usize) ?[*]T {
     if (n == 0) return null;
-    const p = std.c.malloc(@sizeOf(T) *% n) orelse return null;
-    return @ptrCast(@alignCast(p));
+    const slice = heap.gpa.alloc(T, n) catch return null;
+    return slice.ptr;
 }
 
-fn cFreeRaw(p: ?*anyopaque) void {
-    if (p) |pp| std.c.free(pp);
+fn cFree(comptime T: type, p: ?[*]T, n: usize) void {
+    if (p) |pp| heap.gpa.free(pp[0..n]);
 }
 
-fn cFree(p: anytype) void {
-    std.c.free(@ptrCast(p));
+/// For the byte-sized per-column buffers, whose element type is only known at
+/// runtime (it comes from the ECS's component_size).
+fn cAllocBytes(n: usize) ?*anyopaque {
+    if (n == 0) return null;
+    const slice = heap.gpa.alloc(u8, n) catch return null;
+    return slice.ptr;
+}
+
+fn cFreeBytes(p: ?*anyopaque, n: usize) void {
+    if (p) |pp| heap.gpa.free(@as([*]u8, @ptrCast(pp))[0..n]);
 }
 
 // ── Defer queue ─────────────────────────────────────────────────────────────
@@ -209,7 +223,7 @@ fn deferReserve(q: *DeferQueue, needed: usize) bool {
     const buf = cAlloc(DeferCommand, new_cap) orelse return false;
     if (q.cmds) |old| {
         @memcpy(buf[0..q.count], old[0..q.count]);
-        cFree(old);
+        cFree(DeferCommand, old, q.capacity);
     }
     q.cmds = buf;
     q.capacity = new_cap;
@@ -225,7 +239,7 @@ fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
         const buf = cAlloc(u8, new_cap) orelse return std.math.maxInt(usize);
         if (q.arena) |old| {
             @memcpy(buf[0..q.arena_used], old[0..q.arena_used]);
-            cFree(old);
+            cFree(u8, old, q.arena_capacity);
         }
         q.arena = buf;
         q.arena_capacity = new_cap;
@@ -431,7 +445,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         };
         if (h.state.systems) |old| {
             @memcpy(new_buf[0..h.state.system_count], old[0..h.state.system_count]);
-            cFree(old);
+            cFree(?*RegisteredSystem, old, h.state.system_capacity);
         }
         h.state.systems = new_buf;
         h.state.system_capacity = new_cap;
@@ -627,8 +641,8 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
         var t: u32 = 0;
         while (t < wave_size) : (t += 1) {
             deferFlush(&pkgs[t].defer_q, h.state.ecs);
-            if (pkgs[t].defer_q.cmds) |cmds| cFree(cmds);
-            if (pkgs[t].defer_q.arena) |arena| cFree(arena);
+            if (pkgs[t].defer_q.cmds) |cmds| cFree(DeferCommand, cmds, pkgs[t].defer_q.capacity);
+            if (pkgs[t].defer_q.arena) |arena| cFree(u8, arena, pkgs[t].defer_q.arena_capacity);
         }
     }
 }
@@ -684,14 +698,13 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
                 while (new_cap < total) new_cap *= 2;
 
                 if (cAlloc(c.ke_entity, new_cap)) |new_ents| {
-                    if (eq.entities_buf) |old| cFree(old);
+                    if (eq.entities_buf) |old| cFree(c.ke_entity, old, eq.capacity);
                     eq.entities_buf = new_ents;
 
                     for (0..qd.term_count) |t| {
                         if (eq.col_elem_size[t] == 0) continue;
-                        const new_col = std.c.malloc(eq.col_elem_size[t] *% new_cap);
-                        if (new_col == null) continue;
-                        if (eq.col_bufs[t]) |oldc| cFreeRaw(oldc);
+                        const new_col = cAllocBytes(eq.col_elem_size[t] *% new_cap) orelse continue;
+                        if (eq.col_bufs[t]) |oldc| cFreeBytes(oldc, eq.col_elem_size[t] *% eq.capacity);
                         eq.col_bufs[t] = new_col;
                     }
                     eq.capacity = new_cap;
@@ -797,24 +810,24 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     const h = handleOf(self.?);
 
     runtimeJoinPendingRender(h);
-    if (h.state.render_job) |rj| cFree(rj);
+    if (h.state.render_job) |rj| cFree(RenderJob, @ptrCast(rj), 1);
 
     if (h.state.systems) |systems| {
         for (0..h.state.system_count) |i| {
             const rs = systems[i].?;
-            if (rs.seg_storage) |ss| cFree(ss);
+            if (rs.seg_storage) |ss| cFree(c.ke_ecs_segment, ss, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY);
             for (0..KE_MAX_QUERIES_PER_SYSTEM) |q| {
                 const eq = &rs.extracted[q];
-                if (eq.entities_buf) |eb| cFree(eb);
+                if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
                 for (0..MAX_TERMS) |t| {
-                    if (eq.col_bufs[t]) |cb| cFreeRaw(cb);
+                    if (eq.col_bufs[t]) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
                 }
             }
-            cFree(rs);
+            cFree(RegisteredSystem, @ptrCast(rs), 1);
         }
-        cFree(systems);
+        cFree(?*RegisteredSystem, systems, h.state.system_capacity);
     }
-    cFree(h);
+    cFree(RuntimeHandle, @ptrCast(h), 1);
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
