@@ -225,7 +225,7 @@ P7/P8 are quality-of-life and cheap. P9 rides on collision events (already in sp
 **Per-concept migration sequence (apply to each Tier S item — S1 lifecycle hooks, S2 node type registry, S3 SceneLoader, S4 input actions, S5 ECS, S6 resources, S7 tree):**
 
 1. **Define the kernel contract** — vtable in `src/c/kernel/include/kernel_engine/<domain>/<concept>.h`. Header only. Document semantics.
-2. **Regenerate C# bindings** — `python scripts/generate_bindings.py` picks up the new header automatically (rsp already wired). `KernelEngine.Kernel.Native.ke_<concept>` struct + function-pointer fields available in C#.
+2. **Regenerate C# bindings** — `dotnet run scripts/generate_bindings.cs` picks up the new header automatically (rsp already wired). `KernelEngine.Kernel.Native.ke_<concept>` struct + function-pointer fields available in C#.
 3. **C# wrapper that satisfies the contract by calling existing C# Framework code** — write `<Concept>Bridge.cs` that allocates a `ke_<concept>*`, fills its vtable slots with `[UnmanagedCallersOnly]` static methods that internally just call the existing C# Framework implementation (e.g., `ke_scene_loader.load = &CallSceneLoaderLoad;` where the body is `SceneLoader.LoadAsync(...)`). Nothing new in C++ yet.
 4. **Route Framework consumers through the kernel contract** — anywhere the Framework used to call its internal C# class directly, route through the kernel vtable instead. The C# wrapper bounces it BACK to the same C# code, so behavior is identical, but the indirection layer is now in place.
 5. **Validate** — run every example + Pong + the test suite. If anything breaks, the contract shape is wrong and we caught it WITHOUT having lost a single line of C++ work. Iterate on the contract until everything passes.

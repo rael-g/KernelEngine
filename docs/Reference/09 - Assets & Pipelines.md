@@ -56,4 +56,4 @@ Reuse and serialization follow the framework's **"everything is a Scene"** model
 
 ## Build-time asset steps
 
-Shader compilation (`scripts/compile_shaders.py`) and binding generation (`scripts/generate_bindings.py`) are build-time pipelines covered in [10 - Build & Tooling](10%20-%20Build%20%26%20Tooling.md).
+Shader compilation (`scripts/compile_shaders.py`) and binding generation (`scripts/generate_bindings.cs`) are build-time pipelines covered in [10 - Build & Tooling](10%20-%20Build%20%26%20Tooling.md).

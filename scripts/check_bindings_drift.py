@@ -70,7 +70,7 @@ def check_drift():
             drift_detected = True
             
     if drift_detected:
-        print("\n[FAIL] Drift detected! Please run 'python scripts/generate_bindings.py' and commit the changes.")
+        print("\n[FAIL] Drift detected! Please run 'dotnet run scripts/generate_bindings.cs' and commit the changes.")
         sys.exit(1)
     else:
         print("[OK] All bindings are up to date.")

@@ -71,7 +71,7 @@ IEditorSession
 | Operation | Purpose |
 |---|---|
 | `CompileShaders(target?)` | Run the shader compiler over `src/cpp/render/bgfx/shaders/`. Async. |
-| `GenerateBindings()` | Run `generate_bindings.py` equivalent. Async. |
+| `GenerateBindings()` | Run `generate_bindings.cs` equivalent. Async. |
 | `GenerateClassDatabase()` | Regenerate `class_database.toml` (chapter 20). |
 | `Build(target, configuration)` | Full build for a deployment target. Async. |
 | `Run(args?)` | Launch the project (forwards to whatever Application.Run does today). |

@@ -82,7 +82,7 @@ Each domain is self-contained:
 
 - **One behavior contract** (vtable), header-only, static-linked. *(APIs are not DLLs; only implementations are.)*
 - **One or more implementations** (the DLLs): bgfx renderer, miniaudio, Box2D, GLFW window, …
-- **Its own C# binding project** — one per domain, generated via `scripts/generate_bindings.py`. One contract → one `.rsp` → one binding csproj.
+- **Its own C# binding project** — one per domain, generated via `scripts/generate_bindings.cs`. One contract → one `.rsp` → one binding csproj.
 - **Its own components, systems, services, modules** — a domain ships everything it needs. Render ships `camera`/`light`/`mesh` components + the render systems that read them; physics ships its bodies + the physics systems; UI ships `canvas`/`label`/`font`. There is **no central component grab-bag**.
 - Domains couple to each other **only** through Tier-2 data contracts (§3).
 

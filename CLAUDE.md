@@ -33,7 +33,7 @@ dotnet test KernelEngine.slnx
 
 ```bash
 python scripts/compile_slang.py      # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
-python scripts/generate_bindings.py  # regenerate all C# P/Invoke bindings via ClangSharp
+dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
 python scripts/coverage.py           # native (GTest suites) + C# tests with unified coverage report (clean | report subcommands)
 ```
 
@@ -103,7 +103,7 @@ Auto-generated P/Invoke wrappers via ClangSharpPInvokeGenerator. **Never edit `G
 - `KernelEngine.Ecs.Flecs` — wraps the flecs ECS plugin
 - `KernelEngine.Render.Bgfx.Native`, `KernelEngine.Window.Glfw.Native`, `KernelEngine.Asset.Assimp.Native`, `KernelEngine.TaskScheduler.Enki.Native`
 
-Regenerate with `python scripts/generate_bindings.py`. Each project has a `.rsp` file controlling which headers are processed and which types are excluded.
+Regenerate with `dotnet run scripts/generate_bindings.cs`. Each project has a `.rsp` file controlling which headers are processed and which types are excluded.
 
 ### Layer 4 — C# managed (`src/csharp/`)
 

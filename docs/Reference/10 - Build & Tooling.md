@@ -29,7 +29,7 @@ The solution is `KernelEngine.slnx`. Projects are flat under `src/csharp/`; exam
 
 ```bash
 python scripts/compile_shaders.py    # compile all bgfx shaders to SPIR-V
-python scripts/generate_bindings.py  # regenerate all C# P/Invoke bindings (ClangSharp)
+dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings (ClangSharp)
 python scripts/run_tests.py          # C/C++ + C# tests with coverage (gcovr + reportgenerator)
 ```
 

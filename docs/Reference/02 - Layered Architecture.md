@@ -30,7 +30,7 @@ Each plugin is a shared library exposing **exactly one** public C function: `ke_
 
 ## Layer 3 — C# Native bindings
 
-Auto-generated P/Invoke wrappers (ClangSharp) over the C ABI. They live under a `Native/Generated/` subtree **inside each managed wrapper project** (e.g. `KernelEngine.Kernel/Native/Generated/`), in a `*.Native` namespace (e.g. `KernelEngine.Kernel.Native`). Generated from `.rsp` files; **never hand-edited**. Regenerate via `scripts/generate_bindings.py`. See [05 - C# Layers](05%20-%20C%23%20Layers.md) and [10 - Build & Tooling](10%20-%20Build%20%26%20Tooling.md).
+Auto-generated P/Invoke wrappers (ClangSharp) over the C ABI. They live under a `Native/Generated/` subtree **inside each managed wrapper project** (e.g. `KernelEngine.Kernel/Native/Generated/`), in a `*.Native` namespace (e.g. `KernelEngine.Kernel.Native`). Generated from `.rsp` files; **never hand-edited**. Regenerate via `dotnet run scripts/generate_bindings.cs`. See [05 - C# Layers](05%20-%20C%23%20Layers.md) and [10 - Build & Tooling](10%20-%20Build%20%26%20Tooling.md).
 
 > Note: earlier docs described these as standalone `*.Native` *projects*. The current layout folds them into their parent managed project as `Native/Generated/` folders; the `*.Native` *namespace* remains.
 

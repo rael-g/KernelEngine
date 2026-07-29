@@ -293,7 +293,7 @@ hand-build today.
       `zig cc` until/unless ported to `zig build test`).
 - [ ] Install/copy step feeding the C# native-dep copy.
 - [ ] Shader pipeline (`scripts/compile_shaders.py`) and binding regen
-      (`scripts/generate_bindings.py`) are orthogonal — unaffected, but verify.
+      (`scripts/generate_bindings.cs`) are orthogonal — unaffected, but verify.
 - [ ] Linux parity (`x64-linux`), not just Windows.
 
 ---

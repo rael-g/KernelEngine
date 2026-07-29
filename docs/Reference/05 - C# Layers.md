@@ -20,7 +20,7 @@ Native P/Invoke bindings are **not** separate projects — they live as `Native/
 
 ## Layer 3 — Native bindings (generated)
 
-ClangSharp-generated P/Invoke over the C ABI. Generated from `.rsp` files via `scripts/generate_bindings.py`; **never hand-edited**. Each `.rsp` controls which headers are processed and which types are excluded.
+ClangSharp-generated P/Invoke over the C ABI. Generated from `.rsp` files via `scripts/generate_bindings.cs`; **never hand-edited**. Each `.rsp` controls which headers are processed and which types are excluded.
 
 > **Gotcha**: ClangSharp sometimes emits nested `partial struct` forward-declaration stubs that shadow the outer type, breaking function-pointer resolution. The fix is to remove the nested stub. (Documented historically for `ke_ecs_registry`.)
 
