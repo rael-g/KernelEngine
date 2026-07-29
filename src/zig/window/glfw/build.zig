@@ -37,10 +37,16 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("glfw3", .{});
 
     // GLFW's X11 backend pulls the Xlib symbols its native-handle accessor and
-    // window creation need; on Windows the equivalents live in the system libs
-    // GLFW already brings in.
+    // window creation need. On Windows, GLFW's win32/WGL backend needs its own
+    // set of system import libs — statically-linked glfw3 doesn't bundle these,
+    // the final link has to bring them in.
     if (target.result.os.tag == .linux) {
         mod.linkSystemLibrary("X11", .{});
+    } else if (target.result.os.tag == .windows) {
+        mod.linkSystemLibrary("gdi32", .{});
+        mod.linkSystemLibrary("user32", .{});
+        mod.linkSystemLibrary("shell32", .{});
+        mod.linkSystemLibrary("opengl32", .{});
     }
 
     const kerror_mod = b.createModule(.{
@@ -79,6 +85,11 @@ pub fn build(b: *std.Build) void {
     test_mod.linkSystemLibrary("glfw3", .{});
     if (target.result.os.tag == .linux) {
         test_mod.linkSystemLibrary("X11", .{});
+    } else if (target.result.os.tag == .windows) {
+        test_mod.linkSystemLibrary("gdi32", .{});
+        test_mod.linkSystemLibrary("user32", .{});
+        test_mod.linkSystemLibrary("shell32", .{});
+        test_mod.linkSystemLibrary("opengl32", .{});
     }
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },

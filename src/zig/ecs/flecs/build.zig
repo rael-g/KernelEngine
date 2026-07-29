@@ -32,6 +32,14 @@ pub fn build(b: *std.Build) void {
 
     mod.addObjectFile(.{ .cwd_relative = flecs_lib });
 
+    // flecs's HTTP addon (its REST/explorer debug server) uses Winsock
+    // sockets directly, and its backtrace dump uses DbgHelp — both system
+    // libs a statically-linked flecs needs its consumer to supply on Windows.
+    if (target.result.os.tag == .windows) {
+        mod.linkSystemLibrary("ws2_32", .{});
+        mod.linkSystemLibrary("dbghelp", .{});
+    }
+
     const kerror_mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,
@@ -71,6 +79,10 @@ pub fn build(b: *std.Build) void {
     }
     test_mod.addIncludePath(b.path("include"));
     test_mod.addObjectFile(.{ .cwd_relative = flecs_lib });
+    if (target.result.os.tag == .windows) {
+        test_mod.linkSystemLibrary("ws2_32", .{});
+        test_mod.linkSystemLibrary("dbghelp", .{});
+    }
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,
@@ -100,6 +112,10 @@ pub fn build(b: *std.Build) void {
     }
     probe_mod.addIncludePath(b.path("include"));
     probe_mod.addObjectFile(.{ .cwd_relative = flecs_lib });
+    if (target.result.os.tag == .windows) {
+        probe_mod.linkSystemLibrary("ws2_32", .{});
+        probe_mod.linkSystemLibrary("dbghelp", .{});
+    }
     probe_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,

@@ -32,6 +32,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        // Assimp was built (via zig c++) against Zig's own bundled libc++ on
+        // Windows — unlike the Linux path below, there's no system libstdc++.so
+        // to link by absolute path, so pull Zig's bundled runtime in directly.
+        .link_libcpp = target.result.os.tag == .windows,
     });
     inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
@@ -81,6 +85,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        .link_libcpp = target.result.os.tag == .windows,
     });
     inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });

@@ -26,6 +26,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        // enkiTS was built (via zig c++) against Zig's own bundled libc++ on
+        // Windows — unlike the Linux path below, there's no system libstdc++.so
+        // to link by absolute path, so pull Zig's bundled runtime in directly.
+        .link_libcpp = target.result.os.tag == .windows,
     });
     inline for (.{ ke_common, ke_scheduler, enki_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
