@@ -8,6 +8,20 @@ const std = @import("std");
 // accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
+// Windows: hand the DLL entry point back to mingw's crtdll. Zig otherwise
+// exports a stub _DllMainCRTStartup that skips the CRT bring-up mingw's own
+// entry performs — _initialize_onexit_table (so atexit() has a table to write
+// into), _initterm over the C and C++ initializer sections, and __main. Assimp
+// is C++ with global constructors, so without this every entry point reads
+// state that was never constructed; the same libraries linked into an .exe
+// work fine, which is what isolated this. Declaring the symbol is enough:
+// std.start only exports its own stub when the root module has no such decl.
+pub extern fn _DllMainCRTStartup(
+    hinst: std.os.windows.HINSTANCE,
+    reason: std.os.windows.DWORD,
+    reserved: std.os.windows.LPVOID,
+) callconv(.winapi) std.os.windows.BOOL;
+
 const c = @import("c.zig").c;
 const log = @import("log.zig");
 const converter = @import("converter.zig");
