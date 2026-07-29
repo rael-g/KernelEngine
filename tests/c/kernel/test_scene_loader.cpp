@@ -214,7 +214,7 @@ name = "Holder"
 
 [[entity]]
 name  = "PaddleLeft"
-scene = ")") + sub.string() + R"("
+scene = ")") + sub.generic_string() + R"("
 [entity.transform]
 position = [-7.5, 0.0, 0.0]
 )");
@@ -263,10 +263,10 @@ name = "Root"
 
     std::string main_text =
         "[[entity]]\nname = \"Holder\"\n\n"
-        "[[entity]]\nname = \"Left\"\nscene = \"" + sub.string() + "\"\n"
+        "[[entity]]\nname = \"Left\"\nscene = \"" + sub.generic_string() + "\"\n"
         "[entity.transform]\nposition = [-7.5, 0.0, 0.0]\n"
         "[entity.components.camera]\nfar_plane = 111.0\n\n"
-        "[[entity]]\nname = \"Right\"\nscene = \"" + sub.string() + "\"\n"
+        "[[entity]]\nname = \"Right\"\nscene = \"" + sub.generic_string() + "\"\n"
         "[entity.transform]\nposition = [7.5, 0.0, 0.0]\n"
         "[entity.components.camera]\nfar_plane = 222.0\n";
     auto main = WriteTempScene(main_text);
