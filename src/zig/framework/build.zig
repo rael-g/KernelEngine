@@ -8,13 +8,15 @@ const std = @import("std");
 // compiles itself, so nothing built by another toolchain is linked *into* this
 // module; errors go through the shared Zig kerror seam rather than ke_common.
 
-const c_sources = [_][]const u8{
-    "third_party/tomlc99/toml.c",
-};
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
+
+    // The single shared tomlc99 copy lives under src/zig/common. The root
+    // build.zig threads its absolute path in; a standalone `zig build` here
+    // defaults to the in-tree location relative to this plugin.
+    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "path to the shared vendored tomlc99 dir") orelse
+        b.pathJoin(&.{ b.build_root.path.?, "..", "common", "third_party", "tomlc99" });
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
@@ -37,14 +39,7 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
-    mod.addIncludePath(b.path("third_party/tomlc99"));
-
-    // Vendored tomlc99, compiled with -fno-sanitize=undefined. Zig's Debug build
-    // enables UBSan on C it compiles, and this third-party source carries UB that
-    // is not ours to fix.
-    for (c_sources) |src| {
-        mod.addCSourceFile(.{ .file = b.path(src), .flags = &.{"-fno-sanitize=undefined"} });
-    }
+    addTomlc99(b, mod, target, tomlc99_dir);
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
 
@@ -60,4 +55,16 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+}
+
+/// Wires the shared vendored tomlc99 into `mod`: its include dir, `toml.c`
+/// (compiled with -fno-sanitize=undefined — Zig's Debug build enables UBSan on
+/// C it compiles and this third-party source carries UB that is not ours to
+/// fix).
+pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, target: std.Build.ResolvedTarget, dir: []const u8) void {
+    mod.addIncludePath(.{ .cwd_relative = dir });
+    mod.addCSourceFile(.{
+        .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "toml.c" }) },
+        .flags = &.{"-fno-sanitize=undefined"},
+    });
 }
