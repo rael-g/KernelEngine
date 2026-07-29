@@ -115,6 +115,17 @@ export fn ke_error_last() callconv(.c) ?*const c.ke_error {
 
 // -- fatal -------------------------------------------------------------------
 
+/// `stderr` is a plain extern global on glibc but a macro expanding to a
+/// function call on the Windows UCRT (`__acrt_iob_func(2)`) — referencing
+/// `c.stderr` directly forces Zig to comptime-evaluate that call, which
+/// fails. Resolved at runtime instead; the `windows` branch is pruned at
+/// comptime on every other target, so `__acrt_iob_func` (Windows-only) never
+/// needs to resolve there.
+fn stderrFile() [*c]c.FILE {
+    if (@import("builtin").os.tag == .windows) return c.__acrt_iob_func(2);
+    return c.stderr;
+}
+
 /// Prints the whole error chain to stderr and ends the process without going
 /// through abort(): no OS crash dialog, and the message is always readable
 /// first. The engine's only sanctioned give-up path.
@@ -125,7 +136,8 @@ export fn ke_error_fatal(err_in: ?*const c.ke_error) callconv(.c) noreturn {
             windows.SEM_NOOPENFILEERRORBOX);
     }
 
-    _ = c.fputs("FATAL: ", c.stderr);
+    const err = stderrFile();
+    _ = c.fputs("FATAL: ", err);
     if (err_in) |first| {
         var buf: [1024]u8 = undefined;
         var e: ?*const c.ke_error = first;
@@ -136,15 +148,15 @@ export fn ke_error_fatal(err_in: ?*const c.ke_error) callconv(.c) noreturn {
                 spanOr(node.file, "?"),
                 node.line,
             }) catch "[?] (error detail too long to format)";
-            _ = c.fputs(text.ptr, c.stderr);
+            _ = c.fputs(text.ptr, err);
             e = node.cause;
-            if (e != null) _ = c.fputs("\n  caused by: ", c.stderr);
+            if (e != null) _ = c.fputs("\n  caused by: ", err);
         }
-        _ = c.fputs("\n", c.stderr);
+        _ = c.fputs("\n", err);
     } else {
-        _ = c.fputs("no error context provided\n", c.stderr);
+        _ = c.fputs("no error context provided\n", err);
     }
-    _ = c.fflush(c.stderr);
+    _ = c.fflush(err);
 
     std.process.exit(1);
 }

@@ -16,6 +16,16 @@ const windows = struct {
     extern "kernel32" fn SetErrorMode(uMode: u32) callconv(.winapi) u32;
 };
 
+/// `stderr` is a plain extern global on glibc but a macro expanding to a
+/// function call on the Windows UCRT (`__acrt_iob_func(2)`) — referencing
+/// `io.stderr` directly forces Zig to comptime-evaluate that call, which
+/// fails. Resolved at runtime instead; the `windows` branch is pruned at
+/// comptime on every other target.
+fn stderrFile() [*c]io.FILE {
+    if (@import("builtin").os.tag == .windows) return io.__acrt_iob_func(2);
+    return io.stderr;
+}
+
 // Zig-native error utility for the C-ABI seam. Migrated Zig plugins use Zig's
 // own error handling internally (error unions, errdefer, try) and call fail()
 // only at an exported boundary to translate into the rich ke_error ABI a C/C#
@@ -91,7 +101,8 @@ pub fn Errors(comptime c: type) type {
                     windows.SEM_NOOPENFILEERRORBOX);
             }
 
-            _ = io.fputs("FATAL: ", io.stderr);
+            const err = stderrFile();
+            _ = io.fputs("FATAL: ", err);
             if (err_in) |first| {
                 var buf: [1024]u8 = undefined;
                 var e: ?*const c.ke_error = first;
@@ -102,15 +113,15 @@ pub fn Errors(comptime c: type) type {
                         spanOr(node.file, "?"),
                         node.line,
                     }) catch "[?] (error detail too long to format)";
-                    _ = io.fputs(text.ptr, io.stderr);
+                    _ = io.fputs(text.ptr, err);
                     e = node.cause;
-                    if (e != null) _ = io.fputs("\n  caused by: ", io.stderr);
+                    if (e != null) _ = io.fputs("\n  caused by: ", err);
                 }
-                _ = io.fputs("\n", io.stderr);
+                _ = io.fputs("\n", err);
             } else {
-                _ = io.fputs("no error context provided\n", io.stderr);
+                _ = io.fputs("no error context provided\n", err);
             }
-            _ = io.fflush(io.stderr);
+            _ = io.fflush(err);
 
             std.process.exit(1);
         }
