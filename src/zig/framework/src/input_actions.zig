@@ -667,14 +667,20 @@ fn vtIsActionDown(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     return a.curr_active;
 }
 
+// Both edge queries branch and return a literal rather than returning the
+// `and` expression directly: Zig 0.16 materializes such a computed bool into
+// the C-ABI return register as 0xFF instead of 0x01, which a C/C++ caller
+// reads back as an invalid bool. Returning constants sidesteps that.
 fn vtWasActionPressed(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
-    return a.curr_active and !a.prev_active;
+    if (a.curr_active and !a.prev_active) return true;
+    return false;
 }
 
 fn vtWasActionReleased(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
-    return !a.curr_active and a.prev_active;
+    if (!a.curr_active and a.prev_active) return true;
+    return false;
 }
 
 fn vtGetAxis1d(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) f32 {
