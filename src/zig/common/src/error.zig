@@ -121,7 +121,7 @@ export fn ke_error_last() callconv(.c) ?*const c.ke_error {
 /// fails. Resolved at runtime instead; the `windows` branch is pruned at
 /// comptime on every other target, so `__acrt_iob_func` (Windows-only) never
 /// needs to resolve there.
-fn stderrFile() [*c]c.FILE {
+fn stderrFile() ?*c.FILE {
     if (@import("builtin").os.tag == .windows) return c.__acrt_iob_func(2);
     return c.stderr;
 }
