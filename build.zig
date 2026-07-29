@@ -30,21 +30,35 @@ pub fn build(b: *std.Build) void {
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         @panic("VCPKG_ROOT not set; pass -Dvcpkg-root=<path> or export VCPKG_ROOT");
 
+    // Windows equivalent of x64-linux — same shape (dynamic CRT, static lib
+    // linkage), built with `zig cc`/`zig c++` (vcpkg-triplets/x64-windows-zig.cmake)
+    // instead of MSVC, so no Visual Studio / Windows SDK install is required.
+    // See ZigMigrationPlan.md §3 risk 1: this is the "preferred" GNU/mingw
+    // road, validated against glfw3 + assimp (the heaviest C++ port).
     const triplet = switch (target.result.os.tag) {
-        .windows => "x64-windows-static-md",
+        .windows => "x64-windows-zig",
         else => "x64-linux",
     };
 
     // ── vcpkg (manifest mode) ────────────────────────────────────────────────
     const vcpkg_installed = b.pathJoin(&.{ root, "vcpkg_installed_zig" });
     const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg" });
-    const vcpkg_install = b.addSystemCommand(&.{
+    const vcpkg_overlay_triplets = b.pathJoin(&.{ root, "vcpkg-triplets" });
+    var vcpkg_install_args: std.ArrayList([]const u8) = .empty;
+    vcpkg_install_args.appendSlice(b.allocator, &.{
         vcpkg_exe,
         "install",
         b.fmt("--triplet={s}", .{triplet}),
         b.fmt("--x-manifest-root={s}", .{root}),
         b.fmt("--x-install-root={s}", .{vcpkg_installed}),
-    });
+    }) catch @panic("OOM");
+    if (target.result.os.tag == .windows) {
+        vcpkg_install_args.appendSlice(b.allocator, &.{
+            b.fmt("--overlay-triplets={s}", .{vcpkg_overlay_triplets}),
+            b.fmt("--host-triplet={s}", .{triplet}),
+        }) catch @panic("OOM");
+    }
+    const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
 
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
     const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
@@ -57,7 +71,13 @@ pub fn build(b: *std.Build) void {
     const src_c = b.pathJoin(&.{ root, "src/c" });
     const src_zig = b.pathJoin(&.{ root, "src/zig" });
     const kerror_src = b.pathJoin(&.{ src_zig, "common/kerror.zig" });
-    const cxx_runtime = findCxxRuntime(b);
+    // Single shared tomlc99 copy, consumed by every plugin that parses TOML
+    // (ke_framework, ke_configuration_toml).
+    const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
+    // MSVC pulls its C++ runtime in implicitly through the import libraries
+    // (enkiTS's/Assimp's own .lib), so there's nothing to resolve on Windows —
+    // only ELF/libstdc++ toolchains need this probe.
+    const cxx_runtime = if (target.result.os.tag == .windows) null else findCxxRuntime(b);
 
     // Absolute, always: each plugin's `zig build` runs with its OWN directory
     // as cwd, so a relative --prefix here would resolve against the wrong
@@ -74,6 +94,11 @@ pub fn build(b: *std.Build) void {
         .prefix = absolute_prefix,
         .release_flag = if (debug) "--release=off" else "--release=fast",
         .vcpkg_step = &vcpkg_install.step,
+        // Windows' python.org installer provides "python", not "python3" —
+        // and the Store's "python3" app-execution-alias stub, which shadows
+        // it on PATH, only prints an install nag and never runs anything.
+        .python_exe = if (target.result.os.tag == .windows) "python" else "python3",
+        .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
     };
 
     // ── kernel built-ins ─────────────────────────────────────────────────────
@@ -105,14 +130,16 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
     }, &.{});
 
-    const scheduler_enki = ctx.plugin("ke_scheduler_enki", "src/zig/scheduler/enki", &.{
-        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
-        argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
-        argF(b, "enki-include", b.pathJoin(&.{ vcpkg_include, "enkiTS" })),
-        argF(b, "enki-lib", vcpkg_lib),
-        argF(b, "kerror-src", kerror_src),
-        argF(b, "cxx-runtime", cxx_runtime),
-    }, &.{});
+    const scheduler_enki = ctx.plugin("ke_scheduler_enki", "src/zig/scheduler/enki", std.mem.concat(b.allocator, []const u8, &.{
+        &.{
+            argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+            argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
+            argF(b, "enki-include", b.pathJoin(&.{ vcpkg_include, "enkiTS" })),
+            argF(b, "enki-lib", vcpkg_lib),
+            argF(b, "kerror-src", kerror_src),
+        },
+        cxxRuntimeArgs(b, cxx_runtime),
+    }) catch @panic("OOM"), &.{});
 
     const runtime = ctx.plugin("ke_runtime", "src/zig/runtime", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -133,6 +160,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
         argF(b, "kerror-src", kerror_src),
+        argF(b, "tomlc99-dir", tomlc99_dir),
     }, &.{});
 
     const window_glfw = ctx.plugin("ke_window_glfw", "src/zig/window/glfw", &.{
@@ -184,26 +212,35 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
     }, &.{});
 
+    // vcpkg's zlib/minizip ports name their static archives "z"/"minizip" on
+    // x64-linux but "zs"/"minizips" under our x64-windows-zig triplet (port
+    // CMakeLists quirk, not something this build controls).
+    const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
         b.pathJoin(&.{ vcpkg_lib, if (debug) "libassimpd.a" else "libassimp.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpolyclipping.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpoly2tri.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpugixml.a" }),
-        b.pathJoin(&.{ vcpkg_lib_release, "libz.a" }),
-        b.pathJoin(&.{ vcpkg_lib, "libminizip.a" }),
+        b.pathJoin(&.{ vcpkg_lib_release, if (is_windows) "libzs.a" else "libz.a" }),
+        b.pathJoin(&.{ vcpkg_lib, if (is_windows)
+            (if (debug) "libminizipsd.a" else "libminizips.a")
+        else
+            "libminizip.a" }),
     });
-    const asset_assimp = ctx.plugin("ke_asset_assimp", "src/zig/asset/assimp", &.{
-        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
-        argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
-        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
-        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
-        argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
-        argF(b, "assimp-include", vcpkg_include),
-        argF(b, "assimp-libs", assimp_libs),
-        argF(b, "stb-include", vcpkg_include),
-        argF(b, "kerror-src", kerror_src),
-        argF(b, "cxx-runtime", cxx_runtime),
-    }, &.{});
+    const asset_assimp = ctx.plugin("ke_asset_assimp", "src/zig/asset/assimp", std.mem.concat(b.allocator, []const u8, &.{
+        &.{
+            argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+            argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
+            argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
+            argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+            argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
+            argF(b, "assimp-include", vcpkg_include),
+            argF(b, "assimp-libs", assimp_libs),
+            argF(b, "stb-include", vcpkg_include),
+            argF(b, "kerror-src", kerror_src),
+        },
+        cxxRuntimeArgs(b, cxx_runtime),
+    }) catch @panic("OOM"), &.{});
 
     const configuration = ctx.plugin("ke_configuration", "src/zig/configuration", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -215,6 +252,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-config-include", b.pathJoin(&.{ src_c, "configuration" })),
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
+        argF(b, "tomlc99-dir", tomlc99_dir),
     }, &.{&common.step});
 
     // ── WebGPU backend ───────────────────────────────────────────────────────
@@ -231,7 +269,11 @@ pub fn build(b: *std.Build) void {
     const wgpu_dir = b.pathJoin(&.{ root, ".cache", wgpu_url_name });
     const wgpu_zip = b.pathJoin(&.{ wgpu_dir, "wgpu.zip" });
     const wgpu_url = b.fmt("https://github.com/gfx-rs/wgpu-native/releases/download/{s}/{s}.zip", .{ wgpu_version, wgpu_url_name });
-    const wgpu_marker = b.pathJoin(&.{ wgpu_dir, "lib", "libwgpu_native.so" });
+    const wgpu_native_filename = switch (target.result.os.tag) {
+        .windows => "wgpu_native.dll",
+        else => "libwgpu_native.so",
+    };
+    const wgpu_marker = b.pathJoin(&.{ wgpu_dir, "lib", wgpu_native_filename });
     const wgpu_fetch = b.addSystemCommand(&.{
         "sh", "-c",
         b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
@@ -256,8 +298,8 @@ pub fn build(b: *std.Build) void {
     // every consumer computing its own rpath into the .cache tree.
     const wgpu_copy = b.addSystemCommand(&.{
         "cp", "-f",
-        b.pathJoin(&.{ wgpu_lib_dir, "libwgpu_native.so" }),
-        b.pathJoin(&.{ ctx.prefix, "lib", "libwgpu_native.so" }),
+        b.pathJoin(&.{ wgpu_lib_dir, wgpu_native_filename }),
+        b.pathJoin(&.{ ctx.prefix, "lib", wgpu_native_filename }),
     });
     wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
 
@@ -448,6 +490,24 @@ pub fn build(b: *std.Build) void {
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
 
+    // Windows has no rpath equivalent: a consumer .exe in bin/ won't find its
+    // dependency .dlls sitting in a sibling lib/ the way a Linux binary finds
+    // its .so via -rpath. Every plugin still installs to lib/ (matching Linux,
+    // and matching where the .lib import libraries the link step needs live),
+    // so the fix is a straight copy of the built .dlls into bin/ once, here —
+    // matching the "C# expects native libraries at build/native/bin/" contract
+    // CLAUDE.md already documents for the managed side.
+    if (target.result.os.tag == .windows) {
+        const copy_dlls_to_bin = b.addSystemCommand(&.{
+            "sh", "-c",
+            b.fmt("cp -f '{s}'/*.dll '{s}'/", .{ lib_dir, b.pathJoin(&.{ ctx.prefix, "bin" }) }),
+        });
+        for (all_plugins) |p| copy_dlls_to_bin.step.dependOn(&p.step);
+        copy_dlls_to_bin.step.dependOn(&wgpu_copy.step);
+        copy_dlls_to_bin.setName("copy plugin DLLs into bin/");
+        b.getInstallStep().dependOn(&copy_dlls_to_bin.step);
+    }
+
     // ── GTest suites (system C++ compiler — Zig's own libc++ is ABI-incompatible
     // with vcpkg's libstdc++-built GTest archives) ──────────────────────────────
     const gtest_include = vcpkg_include;
@@ -465,7 +525,8 @@ pub fn build(b: *std.Build) void {
     var kernel_test_sources_abs: [kernel_test_sources.len][]const u8 = undefined;
     for (kernel_test_sources, 0..) |s, i| kernel_test_sources_abs[i] = b.pathJoin(&.{ tests_c_kernel, s });
 
-    const test_ke_kernel = ctx.testBinary("test_ke_kernel", "tests/c/kernel", &.{
+    const test_ke_kernel = ctx.testBinary("test_ke_kernel", "tests/c/kernel", std.mem.concat(b.allocator, []const u8, &.{
+        &.{
         b.fmt("-Dcoverage={}", .{coverage}),
         argF(b, "sources", joinPaths(b, &kernel_test_sources_abs)),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -486,20 +547,22 @@ pub fn build(b: *std.Build) void {
             gtest_include,
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_logger_simple.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_input_default.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_resource_cache_default.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_framework.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_resource_cache_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             gtest_main_a,
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             gtest_a,
         })),
         argF(b, "rpaths", lib_dir),
-        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", "test_ke_kernel" })),
-    }, &.{
+        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", exeFileName(b, target, "test_ke_kernel") })),
+        },
+        testCxxArgs(b, target, root),
+    }) catch @panic("OOM"), &.{
         &logger_simple.step, &input_default.step, &resource_cache_default.step, &framework.step,
         &runtime.step,       &ecs_flecs.step,      &scheduler_enki.step,        &common.step,
     });
@@ -513,7 +576,8 @@ pub fn build(b: *std.Build) void {
     var integration_test_sources_abs: [integration_test_sources.len][]const u8 = undefined;
     for (integration_test_sources, 0..) |s, i| integration_test_sources_abs[i] = b.pathJoin(&.{ tests_integration_cpp, s });
 
-    const test_integration_cpp = ctx.testBinary("test_integration_cpp", "tests/integration/cpp", &.{
+    const test_integration_cpp = ctx.testBinary("test_integration_cpp", "tests/integration/cpp", std.mem.concat(b.allocator, []const u8, &.{
+        &.{
         b.fmt("-Dcoverage={}", .{coverage}),
         argF(b, "sources", joinPaths(b, &integration_test_sources_abs)),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -543,27 +607,29 @@ pub fn build(b: *std.Build) void {
             gtest_include,
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_asset_assimp.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_asset_stb_image.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_audio_miniaudio.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_physics_2d_box2d.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_text_stb_truetype.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_logger_simple.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_input_default.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_resource_cache_default.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_framework.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_asset_assimp") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_asset_stb_image") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_audio_miniaudio") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_text_stb_truetype") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_resource_cache_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
             gtest_main_a,
             gmock_a,
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             gtest_a,
         })),
         argF(b, "rpaths", lib_dir),
-        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", "test_integration_cpp" })),
-    }, &.{
+        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", exeFileName(b, target, "test_integration_cpp") })),
+        },
+        testCxxArgs(b, target, root),
+    }) catch @panic("OOM"), &.{
         &window_glfw.step,       &asset_assimp.step,          &asset_stb_image.step,
         &scheduler_enki.step,    &audio_miniaudio.step,       &physics_box2d.step,
         &text_stb_truetype.step, &logger_simple.step,         &input_default.step,
@@ -590,7 +656,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
         })),
-        argF(b, "libs", b.pathJoin(&.{ lib_dir, "libke_logger_simple.so" })),
+        argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") })),
     }, &.{&logger_simple.step});
 
     const demo_step = b.step("demo01", "Build examples/c/01_minimal_log with zero CMake involved");
@@ -621,7 +687,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
         })),
-        argF(b, "libs", b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" })),
+        argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") })),
     }, &.{&gpu_device_webgpu.step});
 
     const demo06 = ctx.example("c_demo_06", "examples/c/06_triangle", &.{
@@ -635,9 +701,9 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
@@ -652,9 +718,9 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
         "-Dlink-m=true",
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
@@ -670,9 +736,9 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
@@ -687,9 +753,9 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
@@ -704,13 +770,14 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo12 = ctx.example("c_demo_12", "examples/c/12_render_core", &.{
+        argF(b, "python", ctx.python_exe),
         argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.py" })),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_core" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -724,11 +791,11 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_render_core.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_core") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         })),
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_core.step, &ecs_flecs.step });
 
@@ -747,13 +814,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "runtime" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_render_core.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_core") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         })),
     }, &.{
         &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_core.step,
@@ -776,13 +843,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "runtime" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, "libke_common.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_window_glfw.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_gpu_device_webgpu.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_render_core.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_ecs_flecs.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_scheduler_enki.so" }),
-            b.pathJoin(&.{ lib_dir, "libke_runtime.so" }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_core") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         })),
         "-Dlink-m=true",
     }, &.{
@@ -803,6 +870,17 @@ const Ctx = struct {
     prefix: []const u8,
     release_flag: []const u8,
     vcpkg_step: *std.Build.Step,
+    python_exe: []const u8,
+    // Forwarded to every sub-`zig build` invocation. Some plugins pin
+    // `.default_target = .{ .abi = .gnu }` themselves (ke_common and other
+    // "pure-logic" built-ins); most don't, including every example and test
+    // binary. Left unset, Zig's native-target resolution picks the msvc ABI
+    // on Windows even with no MSVC installed — a mix of gnu-ABI plugin DLLs
+    // and an msvc-ABI host .exe fails to load at runtime (STATUS_DLL_NOT_FOUND
+    // on a UCRT forwarder). Forcing the same target everywhere, from the one
+    // place that already knows the triplet story, is simpler than auditing
+    // every sub-build.zig for a consistent default.
+    target_arg: []const u8,
 
     /// Compiles one Slang entry point to WGSL via scripts/compile_slang.py,
     /// mirroring cmake/CompileSlangShader.cmake's ke_compile_slang_shader.
@@ -822,9 +900,9 @@ const Ctx = struct {
             "cs";
         const out_file = b.pathJoin(&.{ out_dir, b.fmt("{s}.{s}.wgsl", .{ name, suffix }) });
         const run = b.addSystemCommand(&.{
-            "python3", b.pathJoin(&.{ ctx.root, "scripts/compile_slang.py" }),
-            "--raw",   "--target",                                          "wgsl",
-            "--entry", entry,                                                "--stage", stage,
+            ctx.python_exe, b.pathJoin(&.{ ctx.root, "scripts/compile_slang.py" }),
+            "--raw",         "--target",                                          "wgsl",
+            "--entry",       entry,                                                "--stage", stage,
         });
         for (includes) |inc| run.addArgs(&.{ "--include", inc });
         run.addArgs(&.{ "--input", input, "--output", out_file });
@@ -872,10 +950,10 @@ const Ctx = struct {
                 const wrapper = b.pathJoin(&.{ gen_dir, b.fmt("{s}.slang", .{combined_name}) });
 
                 const gen_wrapper = b.addSystemCommand(&.{
-                    "python3",    b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.py" }),
-                    "--material", material_path,
-                    "--template", template,
-                    "--output",   wrapper,
+                    ctx.python_exe, b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.py" }),
+                    "--material",   material_path,
+                    "--template",   template,
+                    "--output",     wrapper,
                 });
                 gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
 
@@ -903,6 +981,7 @@ const Ctx = struct {
         const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
+        if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
         run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
         run.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| run.step.dependOn(d);
@@ -925,6 +1004,7 @@ const Ctx = struct {
         const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
+        if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
         run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
         run.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| run.step.dependOn(d);
@@ -959,6 +1039,46 @@ const Ctx = struct {
 
 fn joinPaths(b: *std.Build, paths: []const []const u8) []const u8 {
     return std.mem.join(b.allocator, "|", paths) catch @panic("OOM");
+}
+
+/// Every plugin's own build.zig installs a shared library under Zig's default
+/// per-target name — "name.dll" on Windows (no "lib" prefix), "libname.so"
+/// elsewhere — so any consumer resolving one of these paths by hand (an
+/// example's or test suite's `-Dlibs=`) needs to match that convention.
+fn libFileName(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) []const u8 {
+    return if (target.result.os.tag == .windows)
+        b.fmt("{s}.dll", .{name})
+    else
+        b.fmt("lib{s}.so", .{name});
+}
+
+/// The GTest suites are linked via a raw `-o <output>` system-compiler
+/// invocation (tests/c/kernel/build.zig, tests/integration/cpp/build.zig),
+/// not a Zig artifact — so unlike Zig's own addExecutable, nothing appends
+/// ".exe" automatically. Without it, cmd.exe and PowerShell both refuse to
+/// launch the file at all (only a POSIX-style exec layer like Git Bash's
+/// tolerates the missing extension).
+fn exeFileName(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) []const u8 {
+    return if (target.result.os.tag == .windows) b.fmt("{s}.exe", .{name}) else name;
+}
+
+/// enkiTS's and Assimp's own build.zig treat `-Dcxx-runtime` as optional —
+/// absent on toolchains (MSVC) where the C++ runtime comes in implicitly
+/// through the import library. Omit the flag entirely rather than pass an
+/// empty path.
+fn cxxRuntimeArgs(b: *std.Build, cxx_runtime: ?[]const u8) []const []const u8 {
+    const path = cxx_runtime orelse return &.{};
+    return &.{argF(b, "cxx-runtime", path)};
+}
+
+/// The GTest suites default to inlining "clang++" (a system compiler, matching
+/// the vcpkg-built GTest archives' toolchain — see tests/c/kernel/build.zig).
+/// On Windows there is no standalone clang++ on PATH, and vcpkg's GTest was
+/// itself built with `zig c++` (vcpkg-triplets/x64-windows-zig.cmake), so the
+/// matching compiler for this link step is the same zig-cxx.cmd shim.
+fn testCxxArgs(b: *std.Build, target: std.Build.ResolvedTarget, root: []const u8) []const []const u8 {
+    if (target.result.os.tag != .windows) return &.{};
+    return &.{argF(b, "cxx", b.pathJoin(&.{ root, "vcpkg-triplets", "zig-cxx.cmd" }))};
 }
 
 fn argF(b: *std.Build, comptime name: []const u8, value: []const u8) []const u8 {
