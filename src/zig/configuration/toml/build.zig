@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    addTomlc99(b, mod, target, tomlc99_dir);
+    addTomlc99(b, mod, tomlc99_dir);
     mod.addIncludePath(.{ .cwd_relative = ke_common });
     mod.addIncludePath(.{ .cwd_relative = ke_config });
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
@@ -55,7 +55,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    addTomlc99(b, test_mod, target, tomlc99_dir);
+    addTomlc99(b, test_mod, tomlc99_dir);
     test_mod.addIncludePath(.{ .cwd_relative = ke_common });
     test_mod.addIncludePath(.{ .cwd_relative = ke_config });
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
@@ -67,21 +67,13 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
 }
 
-/// Wires the shared vendored tomlc99 into `mod`: its include dir, `toml.c`
-/// (compiled with -fno-sanitize=undefined — this third-party source carries UB
-/// that is not ours to fix), and on Windows `ke_strtod_shim.c` (the UCRT
-/// strtod/strtoll redirect needed to dodge the mingw-gdtoa atexit-in-a-Zig-DLL
-/// heap corruption — see the dir's VENDOR.md).
-pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, target: std.Build.ResolvedTarget, dir: []const u8) void {
+/// Wires the shared vendored tomlc99 into `mod`: its include dir plus
+/// `toml.c`, compiled with -fno-sanitize=undefined because this third-party
+/// source carries UB that is not ours to fix.
+pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{
         .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "toml.c" }) },
         .flags = &.{"-fno-sanitize=undefined"},
     });
-    if (target.result.os.tag == .windows) {
-        mod.addCSourceFile(.{
-            .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "ke_strtod_shim.c" }) },
-            .flags = &.{},
-        });
-    }
 }

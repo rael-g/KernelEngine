@@ -6,6 +6,10 @@ const std = @import("std");
 // accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
+// Windows: mingw's crtdll must own the DLL entry point so the statically
+// linked C/C++ dependency's initializers actually run. See kerror.zig.
+pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+
 const gpa = std.heap.c_allocator;
 
 // Declarations only — the implementation is compiled as C from

@@ -35,20 +35,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* KernelEngine local modification (Windows): redirect strtod/strtoll to
- * UCRT-backed shims. The mingw libc Zig bundles routes strtod through gdtoa,
- * whose first call registers a cleanup via atexit() into an onexit table that
- * mingw's DllMainCRTStartup never initializes in a Zig-built DLL — corrupting
- * the heap. These #defines sit AFTER <stdlib.h> so they win over that header's
- * __mingw_ovr inline. Shims are defined in ke_strtod_shim.c (compiled beside
- * this file on Windows). See VENDOR.md. */
-#ifdef _WIN32
-extern double ke_toml_strtod(const char *, char **);
-extern long long ke_toml_strtoll(const char *, char **, int);
-#define strtod ke_toml_strtod
-#define strtoll ke_toml_strtoll
-#endif
-
 static void *(*ppmalloc)(size_t) = malloc;
 static void (*ppfree)(void *) = free;
 

@@ -39,7 +39,7 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
-    addTomlc99(b, mod, target, tomlc99_dir);
+    addTomlc99(b, mod, tomlc99_dir);
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
 
@@ -57,22 +57,14 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install.step);
 }
 
-/// Wires the shared vendored tomlc99 into `mod`: its include dir, `toml.c`
-/// (compiled with -fno-sanitize=undefined — Zig's Debug build enables UBSan on
-/// C it compiles and this third-party source carries UB that is not ours to
-/// fix), and on Windows `ke_strtod_shim.c` (the UCRT strtod/strtoll redirect
-/// tomlc99 needs to dodge the mingw-gdtoa atexit-in-a-Zig-DLL heap corruption —
-/// see the dir's VENDOR.md).
-pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, target: std.Build.ResolvedTarget, dir: []const u8) void {
+/// Wires the shared vendored tomlc99 into `mod`: its include dir plus
+/// `toml.c`, compiled with -fno-sanitize=undefined because Zig's Debug build
+/// enables UBSan on the C it compiles and this third-party source carries UB
+/// that is not ours to fix.
+pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{
         .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "toml.c" }) },
         .flags = &.{"-fno-sanitize=undefined"},
     });
-    if (target.result.os.tag == .windows) {
-        mod.addCSourceFile(.{
-            .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "ke_strtod_shim.c" }) },
-            .flags = &.{},
-        });
-    }
 }
