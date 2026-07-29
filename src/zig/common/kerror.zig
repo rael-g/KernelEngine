@@ -16,46 +16,25 @@ const windows = struct {
     extern "kernel32" fn SetErrorMode(uMode: u32) callconv(.winapi) u32;
 };
 
-/// Workaround for a Zig toolchain defect on `x86_64-windows-gnu`. Re-export it
-/// from the root module of any plugin that links C or C++ static libraries:
+/// Workaround for a Zig defect on `x86_64-windows-gnu`. Re-export from the root
+/// module of any plugin that links C or C++ static libraries:
 ///
 ///     pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 ///
-/// **What is wrong.** On this target Zig links mingw's libc — `atexit`,
-/// `strtod`, and everything else come from there — but replaces the DLL entry
-/// point with its own stub (`std.start._DllMainCRTStartup`), which does nothing
-/// but forward to a user `DllMain`. mingw's real entry (its `crtdll.c`) is what
-/// performs the CRT bring-up that same libc assumes has happened:
+/// Zig links mingw's libc but replaces the DLL entry point with a stub that
+/// only forwards to a user `DllMain`, skipping the CRT bring-up that libc
+/// assumes has run: `_initialize_onexit_table` (without it `atexit()` writes
+/// through an uninitialized table and corrupts the heap — mingw's `strtod`
+/// reaches it lazily, so parsing a float is enough) and `_initterm` over the C
+/// and C++ initializer sections (without it no global constructor in a linked
+/// dependency ever runs).
 ///
-///   - `_initialize_onexit_table` — gives `atexit()` a table to register into.
-///     Skipped, the first `atexit()` writes through uninitialized memory and
-///     corrupts the heap. Reached from ordinary libc calls, not just explicit
-///     ones: mingw's `strtod` lazily registers a gdtoa lock cleanup this way,
-///     so merely parsing a float is enough.
-///   - `_initterm` over the C and C++ initializer sections — runs every global
-///     constructor in the statically linked dependencies. Skipped, they all
-///     read state that was never constructed.
-///   - `__main`.
+/// Declaring the symbol is the whole fix: `std.start` only exports its stub
+/// when the root module has none, so the linker binds mingw's instead. Do not
+/// hand-roll a `DllMain` calling `_initterm`/`__main` — `__main` registers
+/// destructors through `atexit`, so it runs before that table exists.
 ///
-/// A DLL with no C/C++ linked in never notices, which is why Zig gets away with
-/// the stub; an engine full of native libraries notices immediately. The
-/// failures land far from the cause (segfault or heap corruption inside the
-/// dependency, on Windows only — glibc tolerates the equivalent on Linux), so
-/// it is worth recognising the shape rather than re-deriving it.
-///
-/// **Why declaring it is the whole fix.** `std.start` exports its stub only
-/// when the root module has no `_DllMainCRTStartup` decl. Declaring one makes
-/// it stand down, and the linker then binds mingw's — already present, since
-/// its `crtdll` object is linked for `atexit` regardless.
-///
-/// **Do not** hand-roll a `DllMain` that calls `_initterm`/`__main` instead:
-/// `__main` registers destructors through `atexit`, so it runs before that
-/// table exists and corrupts the heap — a strictly worse failure.
-///
-/// **When this can be dropped:** once Zig's own DLL entry performs the mingw
-/// CRT bring-up (or stops claiming the entry point when mingw's libc is
-/// linked). Verify with a probe DLL that exports a global whose C++
-/// constructor sets a value: without the fix the value reads back unset.
+/// `test/dll_crt_init_test.zig` fails when this stops being necessary.
 pub extern fn _DllMainCRTStartup(
     hinst: std.os.windows.HINSTANCE,
     reason: std.os.windows.DWORD,

@@ -60,6 +60,10 @@ const Probe = struct {
     }
 };
 
+// Failing here means the workaround stopped working — most likely the
+// `_DllMainCRTStartup` re-export was dropped from a plugin root, or Zig changed
+// how std.start decides to export its stub. Do not delete this test to make it
+// pass: it is standing in for a segfault deep inside Assimp.
 test "a plugin DLL that re-exports mingw's entry point runs its C++ static initializers" {
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
@@ -70,6 +74,8 @@ test "a plugin DLL that re-exports mingw's entry point runs its C++ static initi
     try testing.expectEqualStrings("constructed", try probe.marker());
 }
 
+// Failing here is the opposite signal: Zig probably fixed the defect, and the
+// workaround can go. The failure message spells out what to remove.
 test "canary: without the re-export Zig's stub entry point still skips them" {
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
