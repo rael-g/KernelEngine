@@ -387,7 +387,7 @@ fn vtLoad(
         return false;
     };
     var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse_file(@ptrCast(fp), &errbuf, errbuf.len);
+    const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
     if (root == null) {
         E.fail(out_error, .io, "failed to parse input file", @src());

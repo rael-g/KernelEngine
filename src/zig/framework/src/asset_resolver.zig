@@ -130,7 +130,7 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
 
     const fp = std.c.fopen(path, "rb") orelse return false;
     var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse_file(@ptrCast(fp), &errbuf, errbuf.len);
+    const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
     if (root == null) return false;
     defer c.toml_free(root);

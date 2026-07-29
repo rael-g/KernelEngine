@@ -485,7 +485,10 @@ fn loadSceneRecursive(
         return false;
     };
     var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse_file(@ptrCast(fp), &errbuf, errbuf.len);
+    // @alignCast: *std.c.FILE has alignment 1, but the toml.h cimport's
+    // [*c]FILE wants 8 on Windows; the pointer value is a valid FILE* either
+    // way, so assert the alignment across the seam.
+    const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
     if (root == null) {
         E.fail(out_error, .io, "failed to parse scene file", @src());
