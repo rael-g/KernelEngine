@@ -25,17 +25,15 @@ pub fn build(b: *std.Build) void {
     const assimp_libs = b.option([]const u8, "assimp-libs", "'|'-separated Assimp library paths") orelse @panic("-Dassimp-libs required");
     const stb_include = b.option([]const u8, "stb-include", "vcpkg stb_image.h include dir") orelse @panic("-Dstb-include required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const cxx_runtime = b.option([]const u8, "cxx-runtime", "absolute path to the C++ runtime Assimp was built against");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/assimp_loader.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
-        // Assimp was built (via zig c++) against Zig's own bundled libc++ on
-        // Windows — unlike the Linux path below, there's no system libstdc++.so
-        // to link by absolute path, so pull Zig's bundled runtime in directly.
-        .link_libcpp = target.result.os.tag == .windows,
+        // Assimp is built against Zig's bundled libc++; this .so must embed
+        // and export the same runtime for downstream consumers.
+        .link_libcpp = true,
     });
     inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
@@ -52,11 +50,6 @@ pub fn build(b: *std.Build) void {
     while (lib_it.next()) |lib| {
         if (lib.len != 0) mod.addObjectFile(.{ .cwd_relative = lib });
     }
-    // Assimp is C++ behind its C API, so its library needs the C++ runtime it
-    // was built against — linked by absolute path because asking Zig for
-    // "stdc++" hands back Zig's own libc++, whose ABI does not match. The
-    // dependency belongs in this shared object: the managed layer dlopens it.
-    if (cxx_runtime) |path| mod.addObjectFile(.{ .cwd_relative = path });
 
     const kerror_mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
@@ -85,7 +78,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .link_libc = true,
-        .link_libcpp = target.result.os.tag == .windows,
+        .link_libcpp = true,
     });
     inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
@@ -95,11 +88,6 @@ pub fn build(b: *std.Build) void {
     while (test_lib_it.next()) |lib_path| {
         if (lib_path.len != 0) test_mod.addObjectFile(.{ .cwd_relative = lib_path });
     }
-    if (cxx_runtime) |path| test_mod.addObjectFile(.{ .cwd_relative = path });
-    // The test is an executable, so every symbol must resolve now — including
-    // the unwinder Assimp's C++ pulls in. The shared library above can leave it
-    // to load time, which is why only this side needs it named.
-    if (target.result.os.tag == .linux) test_mod.linkSystemLibrary("gcc_s", .{});
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,

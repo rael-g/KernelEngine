@@ -30,14 +30,12 @@ pub fn build(b: *std.Build) void {
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         @panic("VCPKG_ROOT not set; pass -Dvcpkg-root=<path> or export VCPKG_ROOT");
 
-    // Windows equivalent of x64-linux — same shape (dynamic CRT, static lib
-    // linkage), built with `zig cc`/`zig c++` (vcpkg-triplets/x64-windows-zig.cmake)
-    // instead of MSVC, so no Visual Studio / Windows SDK install is required.
-    // See ZigMigrationPlan.md §3 risk 1: this is the "preferred" GNU/mingw
-    // road, validated against glfw3 + assimp (the heaviest C++ port).
+    // vcpkg dependencies build with `zig cc`/`zig c++`
+    // (vcpkg-triplets/x64-{windows,linux}-zig.cmake) instead of the system
+    // toolchain — no Visual Studio/SDK or system C/C++ toolchain required.
     const triplet = switch (target.result.os.tag) {
         .windows => "x64-windows-zig",
-        else => "x64-linux",
+        else => "x64-linux-zig",
     };
 
     // ── vcpkg (manifest mode) ────────────────────────────────────────────────
@@ -51,13 +49,9 @@ pub fn build(b: *std.Build) void {
         b.fmt("--triplet={s}", .{triplet}),
         b.fmt("--x-manifest-root={s}", .{root}),
         b.fmt("--x-install-root={s}", .{vcpkg_installed}),
+        b.fmt("--overlay-triplets={s}", .{vcpkg_overlay_triplets}),
+        b.fmt("--host-triplet={s}", .{triplet}),
     }) catch @panic("OOM");
-    if (target.result.os.tag == .windows) {
-        vcpkg_install_args.appendSlice(b.allocator, &.{
-            b.fmt("--overlay-triplets={s}", .{vcpkg_overlay_triplets}),
-            b.fmt("--host-triplet={s}", .{triplet}),
-        }) catch @panic("OOM");
-    }
     const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
 
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
@@ -74,11 +68,6 @@ pub fn build(b: *std.Build) void {
     // Single shared tomlc99 copy, consumed by every plugin that parses TOML
     // (ke_framework, ke_configuration_toml).
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
-    // MSVC pulls its C++ runtime in implicitly through the import libraries
-    // (enkiTS's/Assimp's own .lib), so there's nothing to resolve on Windows —
-    // only ELF/libstdc++ toolchains need this probe.
-    const cxx_runtime = if (target.result.os.tag == .windows) null else findCxxRuntime(b);
-
     // Absolute, always: each plugin's `zig build` runs with its OWN directory
     // as cwd, so a relative --prefix here would resolve against the wrong
     // place there.
@@ -130,16 +119,13 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
     }, &.{});
 
-    const scheduler_enki = ctx.plugin("ke_scheduler_enki", "src/zig/scheduler/enki", std.mem.concat(b.allocator, []const u8, &.{
-        &.{
-            argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
-            argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
-            argF(b, "enki-include", b.pathJoin(&.{ vcpkg_include, "enkiTS" })),
-            argF(b, "enki-lib", vcpkg_lib),
-            argF(b, "kerror-src", kerror_src),
-        },
-        cxxRuntimeArgs(b, cxx_runtime),
-    }) catch @panic("OOM"), &.{});
+    const scheduler_enki = ctx.plugin("ke_scheduler_enki", "src/zig/scheduler/enki", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
+        argF(b, "enki-include", b.pathJoin(&.{ vcpkg_include, "enkiTS" })),
+        argF(b, "enki-lib", vcpkg_lib),
+        argF(b, "kerror-src", kerror_src),
+    }, &.{});
 
     const runtime = ctx.plugin("ke_runtime", "src/zig/runtime", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -227,20 +213,17 @@ pub fn build(b: *std.Build) void {
         else
             "libminizip.a" }),
     });
-    const asset_assimp = ctx.plugin("ke_asset_assimp", "src/zig/asset/assimp", std.mem.concat(b.allocator, []const u8, &.{
-        &.{
-            argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
-            argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
-            argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
-            argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
-            argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
-            argF(b, "assimp-include", vcpkg_include),
-            argF(b, "assimp-libs", assimp_libs),
-            argF(b, "stb-include", vcpkg_include),
-            argF(b, "kerror-src", kerror_src),
-        },
-        cxxRuntimeArgs(b, cxx_runtime),
-    }) catch @panic("OOM"), &.{});
+    const asset_assimp = ctx.plugin("ke_asset_assimp", "src/zig/asset/assimp", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
+        argF(b, "assimp-include", vcpkg_include),
+        argF(b, "assimp-libs", assimp_libs),
+        argF(b, "stb-include", vcpkg_include),
+        argF(b, "kerror-src", kerror_src),
+    }, &.{});
 
     const configuration = ctx.plugin("ke_configuration", "src/zig/configuration", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -1062,48 +1045,13 @@ fn exeFileName(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8
     return if (target.result.os.tag == .windows) b.fmt("{s}.exe", .{name}) else name;
 }
 
-/// enkiTS's and Assimp's own build.zig treat `-Dcxx-runtime` as optional —
-/// absent on toolchains (MSVC) where the C++ runtime comes in implicitly
-/// through the import library. Omit the flag entirely rather than pass an
-/// empty path.
-fn cxxRuntimeArgs(b: *std.Build, cxx_runtime: ?[]const u8) []const []const u8 {
-    const path = cxx_runtime orelse return &.{};
-    return &.{argF(b, "cxx-runtime", path)};
-}
-
-/// The GTest suites default to inlining "clang++" (a system compiler, matching
-/// the vcpkg-built GTest archives' toolchain — see tests/c/kernel/build.zig).
-/// On Windows there is no standalone clang++ on PATH, and vcpkg's GTest was
-/// itself built with `zig c++` (vcpkg-triplets/x64-windows-zig.cmake), so the
-/// matching compiler for this link step is the same zig-cxx.cmd shim.
+/// Compiler for the two GTest suites' link step: must match vcpkg's GTest,
+/// built with `zig c++` (vcpkg-triplets/x64-{windows,linux}-zig.cmake).
 fn testCxxArgs(b: *std.Build, target: std.Build.ResolvedTarget, root: []const u8) []const []const u8 {
-    if (target.result.os.tag != .windows) return &.{};
-    return &.{argF(b, "cxx", b.pathJoin(&.{ root, "vcpkg-triplets", "zig-cxx.cmd" }))};
+    const shim = if (target.result.os.tag == .windows) "zig-cxx.cmd" else "zig-cxx.sh";
+    return &.{argF(b, "cxx", b.pathJoin(&.{ root, "vcpkg-triplets", shim }))};
 }
 
 fn argF(b: *std.Build, comptime name: []const u8, value: []const u8) []const u8 {
     return b.fmt("-D" ++ name ++ "={s}", .{value});
-}
-
-/// Finds the system C++ runtime .so the same way every plugin's CMakeLists
-/// used to (find_library over CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES) — here via
-/// the C++ compiler's own -print-file-name, since there's no CMake toolchain
-/// probe to ask anymore. Needs the compiler's fully-qualified path: run
-/// through a bare name ("c++"), gcc/clang can't determine their own install
-/// prefix and silently echo the request back unresolved instead of erroring
-/// (verified: -print-file-name only resolves when argv[0] is absolute).
-fn findCxxRuntime(b: *std.Build) []const u8 {
-    var threaded: std.Io.Threaded = .init(b.allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const candidates = [_][]const u8{ "/usr/bin/c++", "/usr/bin/g++", "/usr/bin/clang++" };
-    for (candidates) |cxx| {
-        const result = std.process.run(b.allocator, io, .{
-            .argv = &.{ cxx, "-print-file-name=libstdc++.so" },
-        }) catch continue;
-        const trimmed = std.mem.trimEnd(u8, result.stdout, "\n \t");
-        if (std.fs.path.isAbsolute(trimmed)) return trimmed;
-    }
-    @panic("could not resolve libstdc++.so via any known system C++ compiler path");
 }

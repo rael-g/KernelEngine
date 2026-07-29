@@ -17,19 +17,15 @@ pub fn build(b: *std.Build) void {
     const enki_include = b.option([]const u8, "enki-include", "enkiTS headers dir") orelse @panic("-Denki-include required");
     const enki_lib = b.option([]const u8, "enki-lib", "dir holding the enkiTS library") orelse @panic("-Denki-lib required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    // Optional: absent on toolchains where the C++ runtime comes in implicitly
-    // (MSVC pulls it through enkiTS's own import library).
-    const cxx_runtime = b.option([]const u8, "cxx-runtime", "absolute path to the C++ runtime enkiTS was built against");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/enki_scheduler.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
-        // enkiTS was built (via zig c++) against Zig's own bundled libc++ on
-        // Windows — unlike the Linux path below, there's no system libstdc++.so
-        // to link by absolute path, so pull Zig's bundled runtime in directly.
-        .link_libcpp = target.result.os.tag == .windows,
+        // enkiTS is built against Zig's bundled libc++; this .so must embed
+        // and export the same runtime for downstream consumers.
+        .link_libcpp = true,
     });
     inline for (.{ ke_common, ke_scheduler, enki_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
@@ -38,16 +34,6 @@ pub fn build(b: *std.Build) void {
 
     mod.addLibraryPath(.{ .cwd_relative = enki_lib });
     mod.linkSystemLibrary("enkiTS", .{});
-
-    // enkiTS's C entry points wrap a C++ implementation, so its static library
-    // needs a C++ runtime — specifically the one it was built against. It is
-    // linked by absolute path, supplied by the build system: asking Zig for
-    // "stdc++" hands back Zig's own bundled libc++ instead, whose ABI does not
-    // provide what the host-toolchain objects reference (std::thread's
-    // internals, among others). The dependency has to be recorded in this
-    // shared object rather than left to consumers, because the managed layer
-    // dlopens it directly and an unresolved symbol would fail the load.
-    if (cxx_runtime) |path| mod.addObjectFile(.{ .cwd_relative = path });
 
     const kerror_mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
