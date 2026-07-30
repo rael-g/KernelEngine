@@ -1,0 +1,21 @@
+{
+  "_comment": "Hand-authored manifest of domains migrated to the ke_api.json pipeline (ScriptingArchitectureV3 §8). Each entry drives extract_api.cs + generate_csharp.cs. Adding a domain here is what 'migrating it to Track 2/3' means mechanically. Analogous to a ClangSharp .rsp: an input config, never a derived artifact.",
+  "domains": [
+    {
+      "name": "input",
+      "headers": [
+        "src/c/input/kernel_engine/input/input.h",
+        "src/c/input/kernel_engine/input/snapshot.h",
+        "src/c/input/kernel_engine/input/event.h",
+        "src/c/input/kernel_engine/input/key.h"
+      ],
+      "includeDirs": ["src/c/input", "src/zig/common/include", "src/c/ecs"],
+      "apiJson": "src/csharp/input/ke_api.json",
+      "namespace": "KernelEngine.Input",
+      "nativeNamespace": "KernelEngine.Input.Native",
+      "outDir": "src/csharp/input/KernelEngine.Input/Generated",
+      "abstractionsOutDir": "src/csharp/input/KernelEngine.Input.Abstractions/Generated",
+      "usings": ["KernelEngine.Logger.Native"]
+    }
+  ]
+}

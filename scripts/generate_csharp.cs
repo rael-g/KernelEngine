@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 
-string? apiPath = null, ns = null, nativeNs = null, outDir = null;
+string? apiPath = null, ns = null, nativeNs = null, outDir = null, enumsOutDir = null;
 var explicitProviders = new HashSet<string>();
 var explicitCallbacks = new HashSet<string>();
 var extraUsings = new List<string>();
@@ -43,6 +43,7 @@ for (var i = 0; i < args.Length; i++)
         case "--namespace": ns = args[++i]; break;
         case "--native-namespace": nativeNs = args[++i]; break;
         case "--out": outDir = args[++i]; break;
+        case "--enums-out": enumsOutDir = args[++i]; break;
         case "--provider": explicitProviders.Add(args[++i]); break;
         case "--callback": explicitCallbacks.Add(args[++i]); break;
         // Mirrors generate_bindings.cs's .rsp `--with-using`: a factory param
@@ -68,7 +69,11 @@ var classified = Classifier.Classify(model, explicitProviders, explicitCallbacks
 Directory.CreateDirectory(outDir);
 
 if (model.Enums.Count > 0)
-    File.WriteAllText(Path.Combine(outDir, "Enums.g.cs"), CSharpBackend.RenderEnums(model, ns));
+{
+    var enumsDir = enumsOutDir ?? outDir;
+    Directory.CreateDirectory(enumsDir);
+    File.WriteAllText(Path.Combine(enumsDir, "Enums.g.cs"), CSharpBackend.RenderEnums(model, ns));
+}
 
 foreach (var provider in classified.Providers)
     File.WriteAllText(Path.Combine(outDir, $"{Idioms.StripPrefix(provider.Name)}.g.cs"),
