@@ -1,0 +1,152 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_window",
+      "doc": "OS-level window abstraction.",
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "on_initialize",
+          "returns": "_Bool",
+          "tags": [
+            "lifecycle:init"
+          ],
+          "doc": "Performs backend-specific setup, right after creation.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "on_shutdown",
+          "returns": "_Bool",
+          "tags": [
+            "lifecycle:shutdown"
+          ],
+          "doc": "Performs backend-specific teardown, right before destroy.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "should_close",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true once the user has requested the window to close.",
+          "return_doc": null,
+          "params": []
+        },
+        {
+          "name": "poll_events",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Processes pending OS events. Call once per frame.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "swap_buffers",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Presents the back buffer. Call once per frame, after rendering.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_size",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Retrieves the current client-area size in pixels.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "width",
+              "type": "int32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the client-area width."
+            },
+            {
+              "name": "height",
+              "type": "int32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the client-area height."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_native_handle",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Returns the platform-specific native handle (HWND, X11 Window, ...).",
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    },
+    {
+      "name": "ke_window_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_window *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": []
+}

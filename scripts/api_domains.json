@@ -16,6 +16,18 @@
       "outDir": "src/csharp/input/KernelEngine.Input/Generated",
       "abstractionsOutDir": "src/csharp/input/KernelEngine.Input.Abstractions/Generated",
       "usings": ["KernelEngine.Logger.Native"]
+    },
+    {
+      "name": "window",
+      "headers": [
+        "src/c/window/kernel_engine/window/window.h"
+      ],
+      "includeDirs": ["src/c/window", "src/zig/common/include"],
+      "apiJson": "src/csharp/window/ke_api.json",
+      "namespace": "KernelEngine.Window",
+      "nativeNamespace": "KernelEngine.Window.Native",
+      "outDir": "src/csharp/window/KernelEngine.Window/Generated",
+      "usings": []
     }
   ]
 }

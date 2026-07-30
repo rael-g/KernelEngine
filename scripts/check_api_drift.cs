@@ -54,7 +54,10 @@ try
 
         var tmpApiJson = Path.Combine(tmpRoot, $"{name}.ke_api.json");
         var tmpOutDir = Path.Combine(tmpRoot, name, "out");
-        var tmpEnumsDir = Path.Combine(tmpRoot, name, "abstractions");
+        // Only a real, separate location when the manifest names one (e.g. input's
+        // enums live in a different project/dir than its vtable wrapper); otherwise
+        // enums land in the same dir as everything else, so compare against that.
+        var tmpEnumsDir = d["abstractionsOutDir"] is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
 
         var extractArgs = new List<string> { "run", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
             "--out", tmpApiJson };
@@ -134,7 +137,9 @@ static bool FilesEqual(string a, string b) =>
 
 static bool DirsEqual(string a, string b)
 {
-    if (!Directory.Exists(b)) return false;
+    // Neither side has to exist (a domain with no enums never gets an enums dir).
+    if (!Directory.Exists(a)) return !Directory.Exists(b) || !Directory.EnumerateFileSystemEntries(b).Any();
+    if (!Directory.Exists(b)) return !Directory.EnumerateFileSystemEntries(a).Any();
     var aFiles = Directory.EnumerateFiles(a, "*", SearchOption.AllDirectories)
         .Select(f => Path.GetRelativePath(a, f)).ToHashSet();
     var bFiles = Directory.EnumerateFiles(b, "*", SearchOption.AllDirectories)

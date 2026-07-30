@@ -506,3 +506,26 @@ None was detectable by any test. All three close once the enum, the vtable, and 
 **Third finding — a duplication comment that already rotted.** `key.h` states *"The managed-side mirror lives in KernelEngine.Kernel.Abstractions/Input/Key.cs"*. That project no longer exists; the file is in `KernelEngine.Input.Abstractions`. A hand-maintained mirror whose own pointer to its twin has gone stale is the argument for generation in one line.
 
 **`DrainEvents` reclassified from LEAKED to IDIOM.** `ke_input_event` is already flat and complete; the managed reshape into a `Kind`-discriminated union adds accessors, not capability, so no engine capability is trapped in C#. Noted with a caveat: `event.h` justifies its flat layout as being *"for friction-free C# P/Invoke binding"* — an ABI shaped around one consumer. Harmless here, but the pattern is worth watching in later domains.
+
+### A.2 — `window` (221 hand-written LoC) — audited, migrated, cleared
+
+| File | LoC | Verdict | Note |
+|---|---|---|---|
+| `Window/Window.cs` | 64 | **MECHANICAL** | Provider vtable wrapper; deleted, generated |
+| `Window/INativeWindow.cs` | 13 | **MECHANICAL** | Same `INativeX` shape as `input`'s A.1 correction; deleted, generated |
+| `Window.Abstractions/IWindow.cs` | 9 | IDIOM | Hand-authored interface `kabic` doesn't know about; kept via a zero-logic `partial class Window : IWindow` marker (`Window.Idiom.cs`) — the generated members already match its shape 1:1 |
+| `Window.Glfw/GlfwWindowModule.cs` | 58 | IDIOM | `IRuntimeModule`/DI composition — inherent to how *this* language expresses composition |
+| `Window.Glfw/ServiceCollectionExtensions.cs` | 73 | **LEAKED, deferred** | See below |
+
+**Outcome**: both MECHANICAL files deleted and generated; `Window.g.cs` + a 9-line idiom marker replace 77 hand-written lines. Full solution builds, 124/124 tests pass, `zig build` clean.
+
+**LEAKED, deferred**: `ServiceCollectionExtensions.AddGlfwWindow()` reads `[runtime.window] width/height/title/fullscreen` from the Project file with C#-literal fallback defaults (`1280`, `720`, `"KernelEngine"`, `false`). Confirmed in `glfw_window.h`: `ke_window_glfw_params` has no "unset" sentinel — the native factory has zero default-selection logic of its own, identical in shape to the already-flagged `WebgpuRenderModule` leak (§4). A Lua game wanting the same "override else sane default" behavior would reimplement this from scratch. **Not resolved here**: it is the same underlying design question as `WebgpuRenderModule`'s leak (should `ke_configuration`-driven default resolution move natively, for every module, as one mechanism?) and deserves one unified decision, not two independent one-off patches. Recorded per §4.2's explicit-deferral allowance.
+
+**Three `kabic` extensions this domain forced, all now general (not window-specific)**:
+
+1. **Multiple `[out]` parameters → tuple return.** `get_size(int32_t *width, int32_t *height, ke_error **out_error)` didn't fit the existing single-`[out]`-param shape (§6.1's `ReturnsOutParam`). Added `SlotShape.TupleOutParams`: N-or-more same-slot `[out]` params with nothing else public render as `(T1 Name1, T2 Name2, ...)`. Purely a classification/rendering addition — no new tag.
+2. **`[lifecycle:init]` / `[lifecycle:shutdown]` tags.** `ke_window`'s `on_initialize`/`on_shutdown` must run automatically (once, right after construction; once, right before destroy) rather than be exposed as ordinary callable methods — a shape the existing tag vocabulary had no name for. The tag rides in the *slot's own summary*, not inside an `@param` — the same `[bracket]` convention extended one level, not a new mechanism. `CSharpBackend` wires the tagged slot into the generated constructor/`Dispose` and excludes it from the public method list.
+3. **`[sink]` tag, replacing a naming-convention heuristic.** The pre-existing `on_`-prefix skip rule (written for `input`'s `on_key`/`on_mouse_move`/etc.) happened to also catch `on_initialize`/`on_shutdown` by coincidence — two unrelated concepts sharing one fragile string match. Replaced with an explicit `[sink]` tag on `input.h`'s four sink slots; the skip condition is now `Has("sink") || Has("lifecycle")`, no name-prefix matching anywhere in the generator.
+4. **A fourth provider shape: construction from a bare `ke_X_handle`, no factory of its own.** `ke_window` has no `ke_window_create` — any backend (GLFW, ...) hands back a `ke_window_handle` and construction is generic over that handle. `RenderProvider` now falls back to a `public {Type}({Type}_handle handle)` constructor when no matching `_create` function exists but a `_handle` struct does. **Public, not `internal`** — unlike the factory-parameter case, a `ke_X_handle` is a plain managed-visible value type this wrapper itself owns the shape of, not a raw pointer into a sibling native namespace, so no idiom-layer wrapper is needed to make it callable across assemblies.
+
+**Two generator bugs this domain's regeneration caught, fixed before commit**: tuple-out param types weren't dereferenced (`int32_t * Width` instead of `int Width`); an opaque `void *` return (`get_native_handle`) rendered as a raw unsafe pointer instead of the `nint` idiom the hand-written code already used. Both confirmed against the original hand-written `Window.cs` byte-for-byte in shape after the fix.
