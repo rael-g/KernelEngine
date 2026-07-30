@@ -76,6 +76,26 @@ pub fn build(b: *std.Build) void {
     else
         b.pathJoin(&.{ root, b.install_prefix });
 
+    // ── Slang toolchain (fetched, not a system dependency) ──────────────────
+    // slangc is a standalone shader-slang/slang release — no Vulkan SDK
+    // linkage — fetched the same way wgpu-native is: a direct release archive
+    // download, cached under .cache/, no system package or PATH entry needed.
+    const slang_version = "2025.17.2";
+    const slang_url_name = switch (target.result.os.tag) {
+        .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
+        else => b.fmt("slang-{s}-linux-x86_64", .{slang_version}),
+    };
+    const slang_dir = b.pathJoin(&.{ root, ".cache", slang_url_name });
+    const slang_zip = b.pathJoin(&.{ slang_dir, "slang.zip" });
+    const slang_url = b.fmt("https://github.com/shader-slang/slang/releases/download/v{s}/{s}.zip", .{ slang_version, slang_url_name });
+    const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (target.result.os.tag == .windows) "slangc.exe" else "slangc" });
+    const slang_fetch = b.addSystemCommand(&.{
+        "sh", "-c",
+        b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
+            slang_dir, slangc_exe, slang_zip, slang_url, slang_zip, slang_dir,
+        }),
+    });
+
     var ctx = Ctx{
         .b = b,
         .root = root,
@@ -84,6 +104,8 @@ pub fn build(b: *std.Build) void {
         .release_flag = if (debug) "--release=off" else "--release=fast",
         .vcpkg_step = &vcpkg_install.step,
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
+        .slangc_exe = slangc_exe,
+        .slang_step = &slang_fetch.step,
     };
 
     // ── kernel built-ins ─────────────────────────────────────────────────────
@@ -757,6 +779,7 @@ pub fn build(b: *std.Build) void {
 
     const demo12 = ctx.example("c_demo_12", "examples/c/12_render_core", &.{
         argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_core" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -775,7 +798,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_core") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_core.step, &ecs_flecs.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_core.step, &ecs_flecs.step, ctx.slang_step });
 
     const demo13 = ctx.example("c_demo_13", "examples/c/13_runtime_clear", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -858,6 +881,8 @@ const Ctx = struct {
     // place that already knows the triplet story, is simpler than auditing
     // every sub-build.zig for a consistent default.
     target_arg: []const u8,
+    slangc_exe: []const u8,
+    slang_step: *std.Build.Step,
 
     /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs,
     /// mirroring cmake/CompileSlangShader.cmake's ke_compile_slang_shader.
@@ -877,10 +902,12 @@ const Ctx = struct {
             "cs";
         const out_file = b.pathJoin(&.{ out_dir, b.fmt("{s}.{s}.wgsl", .{ name, suffix }) });
         const run = b.addSystemCommand(&.{
-            "dotnet", "run", b.pathJoin(&.{ ctx.root, "scripts/compile_slang.cs" }),
-            "--raw",  "--target",                                                  "wgsl",
-            "--entry", entry,                                                      "--stage", stage,
+            "dotnet",  "run",    b.pathJoin(&.{ ctx.root, "scripts/compile_slang.cs" }),
+            "--slangc", ctx.slangc_exe,
+            "--raw",    "--target",                                                 "wgsl",
+            "--entry",  entry,                                                      "--stage", stage,
         });
+        run.step.dependOn(ctx.slang_step);
         for (includes) |inc| run.addArgs(&.{ "--include", inc });
         run.addArgs(&.{ "--input", input, "--output", out_file });
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));

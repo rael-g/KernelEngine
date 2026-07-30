@@ -10,13 +10,15 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const compile_slang = b.option([]const u8, "compile-slang", "path to scripts/compile_slang.cs") orelse @panic("-Dcompile-slang required");
+    const slangc = b.option([]const u8, "slangc", "path to the fetched slangc executable") orelse @panic("-Dslangc required");
     const shader_out_dir = b.option([]const u8, "shader-out-dir", "directory to write the generated shader header into") orelse @panic("-Dshader-out-dir required");
     const include_dirs = b.option([]const u8, "include-dirs", "'|'-separated include directories") orelse "";
     const libs = b.option([]const u8, "libs", "'|'-separated absolute shared-library paths, in link order") orelse @panic("-Dlibs required");
 
     const header = b.pathJoin(&.{ shader_out_dir, "triangle_wgsl.h" });
     const gen = b.addSystemCommand(&.{
-        "dotnet", "run", compile_slang,
+        "dotnet",  "run",     compile_slang,
+        "--slangc", slangc,
         "--input",  b.pathFromRoot("triangle.slang"),
         "--output", header,
         "--name",   "triangle_wgsl",

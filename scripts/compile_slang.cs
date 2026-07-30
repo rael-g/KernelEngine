@@ -10,11 +10,11 @@
 // stdout is the only path that produces a valid module, so this compiles via
 // stdout capture and does the C-string embedding here.
 //
-// slangc is located via PATH or the Vulkan SDK ($VULKAN_SDK/Bin or /bin).
+// slangc is resolved via --slangc, else PATH, else the Vulkan SDK ($VULKAN_SDK/Bin or /bin).
 
 using System.Diagnostics;
 
-string? input = null, output = null, name = null, target = "wgsl", entry = null, stage = null;
+string? input = null, output = null, name = null, target = "wgsl", entry = null, stage = null, slangcOverride = null;
 var includes = new List<string>();
 var raw = false;
 
@@ -30,6 +30,7 @@ for (var i = 0; i < args.Length; i++)
         case "--stage": stage = args[++i]; break;
         case "--include": includes.Add(args[++i]); break;
         case "--raw": raw = true; break;
+        case "--slangc": slangcOverride = args[++i]; break;
         default:
             Console.Error.WriteLine($"Unknown argument: {args[i]}");
             return 1;
@@ -47,10 +48,10 @@ if (!raw && name is null)
     return 1;
 }
 
-var slangc = FindSlangc();
+var slangc = slangcOverride ?? FindSlangc();
 if (slangc is null)
 {
-    Console.Error.WriteLine("Error: slangc not found on PATH or under $VULKAN_SDK.");
+    Console.Error.WriteLine("Error: slangc not found (pass --slangc, or place it on PATH / $VULKAN_SDK).");
     return 1;
 }
 
