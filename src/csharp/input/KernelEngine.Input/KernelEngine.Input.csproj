@@ -14,12 +14,6 @@
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
-    <!-- ke_logger is excluded from generation but ClangSharp emits a forward stub that would shadow
-         the KernelEngine.Kernel.Native.ke_logger type. Exclude it; the using directive resolves the type. -->
-    <Compile Remove="Native/Generated/InputDefault/ke_logger.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Input.Abstractions\KernelEngine.Input.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
