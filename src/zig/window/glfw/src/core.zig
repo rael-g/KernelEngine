@@ -135,14 +135,14 @@ pub const Core = struct {
         const input = self.input orelse return;
         switch (ev.type) {
             .key_down, .key_up => {
-                const action: c_int = if (ev.type == .key_down) 1 else 0;
+                const action: c_int = if (ev.type == .key_down) c.KE_INPUT_ACTION_PRESS else c.KE_INPUT_ACTION_RELEASE;
                 if (input.on_key) |f| f(input, @intCast(ev.data.key.key_code), action);
             },
             .mouse_move => {
                 if (input.on_mouse_move) |f| f(input, ev.data.mouse_move.x, ev.data.mouse_move.y);
             },
             .mouse_button_down, .mouse_button_up => {
-                const action: c_int = if (ev.type == .mouse_button_down) 1 else 0;
+                const action: c_int = if (ev.type == .mouse_button_down) c.KE_INPUT_ACTION_PRESS else c.KE_INPUT_ACTION_RELEASE;
                 if (input.on_mouse_button) |f| f(input, @intCast(ev.data.mouse_button.button), action);
             },
             .mouse_scroll => {

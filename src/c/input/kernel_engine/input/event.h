@@ -8,7 +8,17 @@ extern "C"
 {
 #endif
 
-    /// @brief Discriminator for ke_input_event.
+    /**
+     * Direction of a key or mouse-button transition, as reported to the
+     * ke_input sinks by a window backend.
+     */
+    typedef enum ke_input_action
+    {
+        KE_INPUT_ACTION_RELEASE = 0,
+        KE_INPUT_ACTION_PRESS   = 1,
+    } ke_input_action;
+
+    /** Discriminator for ke_input_event. */
     typedef enum ke_input_event_kind
     {
         KE_INPUT_EVENT_NONE               = 0,
