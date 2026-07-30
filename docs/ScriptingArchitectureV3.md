@@ -529,3 +529,36 @@ None was detectable by any test. All three close once the enum, the vtable, and 
 4. **A fourth provider shape: construction from a bare `ke_X_handle`, no factory of its own.** `ke_window` has no `ke_window_create` — any backend (GLFW, ...) hands back a `ke_window_handle` and construction is generic over that handle. `RenderProvider` now falls back to a `public {Type}({Type}_handle handle)` constructor when no matching `_create` function exists but a `_handle` struct does. **Public, not `internal`** — unlike the factory-parameter case, a `ke_X_handle` is a plain managed-visible value type this wrapper itself owns the shape of, not a raw pointer into a sibling native namespace, so no idiom-layer wrapper is needed to make it callable across assemblies.
 
 **Two generator bugs this domain's regeneration caught, fixed before commit**: tuple-out param types weren't dereferenced (`int32_t * Width` instead of `int Width`); an opaque `void *` return (`get_native_handle`) rendered as a raw unsafe pointer instead of the `nint` idiom the hand-written code already used. Both confirmed against the original hand-written `Window.cs` byte-for-byte in shape after the fix.
+
+### A.3 — `logger` (244 hand-written LoC) — audited, migrated, cleared
+
+| File | LoC | Verdict | Note |
+|---|---|---|---|
+| `Logger/Logger.cs` | 118 | Split: MECHANICAL (vtable forwarding, `INativeLogger`) generated; string marshaling + `Trace`/`Debug`/.../`Critical` convenience + `ILoggerSink` adapter kept as `Logger.Idiom.cs` | |
+| `Logger/INativeLogger.cs` | 13 | **MECHANICAL** | Same `INativeX` shape; deleted, generated |
+| `Logger/ConsoleSink.cs` | 25 | **LEAKED, fixed** | See below |
+| `Logger.Abstractions/LogLevel.cs` | 16 | **MECHANICAL** | Mirrors `ke_log_level`; deleted, generated from `log_level.h` |
+| `Logger.Abstractions/ILogger.cs` (`ILogger`+`ILoggerSink`) | 27 | IDIOM | Hand-authored game-facing interfaces; `Logger` declares conformance via `Logger.Idiom.cs`, no marker file needed since it already carries real logic |
+| `Logger/ServiceCollectionExtensions.cs` | 43 | IDIOM, rewritten | Now builds sinks from the native factory instead of the deleted `ConsoleSink`; a separate, unrelated wiring bug found here (below) |
+
+**Outcome**: `Logger.cs`/`INativeLogger.cs`/`ConsoleSink.cs`/`LogLevel.cs` deleted (172 lines); `Generated/Logger.g.cs` + `Generated/LoggerSinkNative.g.cs` + `Generated/LoggerSinkFunctions.g.cs` + `Generated/Enums.g.cs` (generated) + `Logger.Idiom.cs` (58 hand-written lines: string marshaling, six severity-named convenience methods, the `ILoggerSink`→`ILoggerSinkNative` adapter) replace them. Full solution builds, 122/122 C# tests pass (one deleted — `ConsoleSinkTests.cs`, which asserted C#-side formatting logic that no longer exists), `zig build` clean, native probe confirms the new console sink's output matches the old one byte-for-byte.
+
+**LEAKED, fixed**: `ConsoleSink.cs`'s own doc comment claimed to mirror *"the native `ke_console_sink`"* — which did not exist. It also hand-maintained a level-name table (`"CRIT"` for critical) that had already drifted from the native `ke_log_level_to_string("CRITICAL")`. Every language wants a stderr sink with a stable format; fixed natively:
+
+- `ke_console_sink_create()` added to `logger.h`, implemented in `logger_simple.zig` (`fprintf`/`fflush` via libc — Zig 0.16 moved file IO behind an `std.Io` instance this plugin has no reason to plumb through, matching the same call the project's own `configuration_toml.zig` already makes for the identical reason).
+- Verified with a standalone C probe before any C# work: `[INFO] test: hello from console sink`, matching the old hand-written format exactly.
+- `ServiceCollectionExtensions.cs` rewritten to build sinks from the native factory (`NativeConsoleLoggerSink`, wrapping the raw value behind `ILoggerSink` for the existing DI registration shape) instead of reimplementing formatting.
+
+**Unrelated bug found, not fixed here, flagged separately**: nothing in the codebase ever resolves `ILoggerSink` from the DI container and calls `logger.AddSink(sink)` on it — `AddConsoleSink()` has registered a sink that's never attached, in every one of the 22+ examples that call it, since before this migration. Preserved as-is (same registration shape, same non-consumption) to avoid an unrelated behavior change mid-migration; a follow-up task was spawned instead of fixed inline.
+
+**Two `kabic` extensions this domain forced, both now general**:
+
+1. **A "value factory" shape**: a free function producing a `[callback]`-classified vtable *by value*, with no owning first-parameter (`ke_console_sink_create() -> ke_logger_sink`) — distinct from the existing "operation on a value type" free-function shape (`ke_input_snapshot_is_key_down(snapshot, key)`), which takes the owner *by reference* as its first argument. `Classifier` now also groups a free function by its *return* type when no param matches an owner; `RenderFreeFunctions` renders either shape correctly (with or without a `self` parameter) from the same file.
+2. **`AddSinkRaw`**: a callback slot (`add_sink`) now also gets a second, raw overload that forwards an already-built callback-vtable value straight through, with no `GCHandle`/trampoline wrapping — for a value that came from a native factory (case 1) rather than a managed implementation of the generated interface.
+
+**Two more `kabic` bugs found and fixed while regenerating**:
+
+1. **The factory constructor was unconditionally `internal`.** The rule ("raw pointer params from a sibling native namespace need an idiom-layer public wrapper") doesn't apply to a factory with no such param — `ke_logger_create()` takes nothing but the trailing error param, so `public Logger()` needed no idiom-layer wrapper at all. `RenderProvider` now checks whether any factory param is actually a pointer before marking the constructor `internal`; retested against `input` (factory takes `ke_logger*`, stays `internal`, unaffected) and `window` (no factory, unaffected).
+2. **A missing `using System.Runtime.CompilerServices;`** in the provider template — never surfaced before because `logger` is the first domain whose *provider* (not just its standalone callback-interface file) also contains a `[callback]`-classified slot rendered inline, needing `CallConvCdecl` in the same file.
+
+**A free function found but deliberately not wired**: `ke_log_level_to_string(int32_t level)` doesn't fit any current grouping rule — its single parameter is a bare `int32_t`, not one of this domain's own structs, so it has no natural "owner" to attach to. Left unexposed rather than inventing a placement for it; nothing currently needs it now that the native console sink calls it internally. `Classifier` was tightened alongside this fix to only group free functions by first-param type when that type is one of the domain's own known structs — it had been grouping by *any* first-param type, which briefly misfired by grouping this function under a spurious `Int32T` bucket.
