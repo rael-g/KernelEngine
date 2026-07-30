@@ -12,7 +12,7 @@ const c = cimport.c;
 const gpa = std.heap.c_allocator;
 
 // Shadow-depth pass — a standalone plugin: talks to the rest of the render
-// pipeline only through the borrowed ke_render_core/ke_runtime handles passed
+// pipeline only through the borrowed ke_render_service/ke_runtime handles passed
 // to create() — it never sees another pass's private struct. It publishes its
 // outputs ("shadow_map" view, "shadow_lvp" buffer) through the named-resource
 // table; deferred/forward resolve them by name. When `enabled` is false,
@@ -39,7 +39,7 @@ const ShadowModule = struct {
 
     // Borrowed cross-cutting refs, captured once at setup so the system body
     // never reaches into the parent ModuleState.
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     ndc: c.ke_ndc_convention = undefined,
     mesh_cid: c.ke_component_id = undefined,
     transform_cid: c.ke_component_id = undefined,
@@ -159,7 +159,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 // neutral-default hook resource) and, only when `enabled`, the expensive
 // resources: the shadow_map/shadow_depth render targets, the shadow pipeline,
 // and the per-draw uniform ring.
-fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, enabled: bool, mesh_cid: c.ke_component_id,
          transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
          frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
@@ -283,7 +283,7 @@ fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
     gpa.destroy(sh);
 }
 
-export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                    enabled: c.ke_bool, mesh_cid: c.ke_component_id,
                                    transform_cid: c.ke_component_id, light_cid: c.ke_component_id,

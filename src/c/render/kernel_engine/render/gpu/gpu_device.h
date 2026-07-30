@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_GPU_DEVICE_H_
 #define KERNEL_ENGINE_RENDER_GPU_DEVICE_H_
 
-#include <kernel_engine/render/gpu_enums.h>
+#include <kernel_engine/render/gpu/gpu_enums.h>
 #include <kernel_engine/common/error.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -405,7 +405,7 @@ typedef struct ke_gpu_device
     /// caller's thread; `on_ready` fires later (during this device's normal
     /// event pump, e.g. at queue_present) with the finished pipeline, or
     /// KE_GPU_INVALID_HANDLE on failure. The raw async primitive: no caching,
-    /// no fallback — see ke_render_core::get_or_create_pipeline (§6 Mechanism
+    /// no fallback — see ke_render_service::get_or_create_pipeline (§6 Mechanism
     /// 1 of RenderArchitectureV2.md) for the policy layer built on top.
     /// Appended at the tail so adding it never shifts existing slot offsets.
     void (*create_render_pipeline_async)(struct ke_gpu_device *self,
@@ -416,7 +416,7 @@ typedef struct ke_gpu_device
     /// Blocks until every pipeline compile kicked via
     /// create_render_pipeline_async has invoked its on_ready callback. Call
     /// before destroying anything an in-flight callback might still write
-    /// into (e.g. before destroying a ke_render_core PSO cache that owns the
+    /// into (e.g. before destroying a ke_render_service PSO cache that owns the
     /// entries those callbacks update). A no-op if nothing is pending.
     void (*flush_pipeline_compiles)(struct ke_gpu_device *self);
 } ke_gpu_device;

@@ -1,10 +1,10 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/render/gpu_device.h>
-#include <kernel_engine/render/gpu_commands.h>
-#include <kernel_engine/render/gpu_enums.h>
-#include <kernel_engine/render/gpu_surface_ext.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_commands.h>
+#include <kernel_engine/render/gpu/gpu_enums.h>
+#include <kernel_engine/render/gpu/gpu_surface_ext.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 
 #include "rotate_vert.h"

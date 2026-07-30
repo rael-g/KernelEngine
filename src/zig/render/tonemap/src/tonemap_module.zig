@@ -16,12 +16,12 @@ const gpa = std.heap.c_allocator;
 // work is rebuilding the bind group against that frame's "hdr" texture view.
 //
 // A standalone plugin: talks to the rest of the render pipeline only through
-// the borrowed ke_render_core/ke_runtime handles passed to create() — it
+// the borrowed ke_render_service/ke_runtime handles passed to create() — it
 // never sees another pass's private struct. "hdr" is resolved by name (the
 // producing pass declares it before this one registers its own system).
 
 pub const TonemapModule = struct {
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     logger: ?*c.ke_logger = null,
 
@@ -85,7 +85,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.end_pass.?(core, pc);
 }
 
-fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          logger: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) bool {
     tm.core = core;
     tm.device = dev;
@@ -167,7 +167,7 @@ fn destroyHandle(self: ?*c.ke_render_tonemap) callconv(.c) void {
     gpa.destroy(tm);
 }
 
-export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_tonemap_handle {
     const empty = c.ke_render_tonemap_handle{ .ref = null, .destroy = null };

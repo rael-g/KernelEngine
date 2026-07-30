@@ -458,20 +458,20 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &runtime.step });
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
-    // ke_render_core: the forward-renderer aggregator. Its @embedFile of the
+    // ke_render_service: the forward-renderer aggregator. Its @embedFile of the
     // magenta fallback shader means those two WGSL files must exist on disk
     // BEFORE core's own `zig build` starts — a harder ordering constraint than
     // a normal link dependency, so the compile steps are threaded into core's
     // deps explicitly rather than relying on the shared shaders_out directory
     // existing by coincidence.
-    const core_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_core" });
-    const magenta_slang = b.pathJoin(&.{ src_zig, "render/core/shaders/magenta.slang" });
-    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, core_gen_dir, &.{});
-    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, core_gen_dir, &.{});
-    const magenta_vs_wgsl = b.pathJoin(&.{ core_gen_dir, "magenta.vs.wgsl" });
-    const magenta_fs_wgsl = b.pathJoin(&.{ core_gen_dir, "magenta.fs.wgsl" });
+    const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
+    const magenta_slang = b.pathJoin(&.{ src_zig, "render/service/shaders/magenta.slang" });
+    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{});
+    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{});
+    const magenta_vs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.vs.wgsl" });
+    const magenta_fs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.fs.wgsl" });
 
-    const render_core = ctx.plugin("ke_render_core", "src/zig/render/core", &.{
+    const render_service = ctx.plugin("ke_render_service", "src/zig/render/service", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -479,7 +479,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-resource-cache-include", b.pathJoin(&.{ src_c, "resource_cache" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
-        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/core/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/service/include" })),
         argF(b, "ke-tonemap-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
         argF(b, "ke-skybox-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
         argF(b, "ke-ui-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
@@ -510,7 +510,7 @@ pub fn build(b: *std.Build) void {
         physics_box2d,   asset_assimp,      configuration,       configuration_toml,
         tonemap,         skybox,            ui,                  shadow,
         cluster,         deferred_lighting, gpu_device_webgpu,   gbuffer,
-        forward,         render_core,
+        forward,         render_service,
     };
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
@@ -801,10 +801,10 @@ pub fn build(b: *std.Build) void {
         })),
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
-    const demo12 = ctx.example("c_demo_12", "examples/c/12_render_core", &.{
+    const demo12 = ctx.example("c_demo_12", "examples/c/12_render_service", &.{
         argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
         argF(b, "slangc", ctx.slangc_exe),
-        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_core" })),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_service" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
@@ -812,17 +812,17 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_zig, "render/core/include" }),
+            b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_core") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_core.step, &ecs_flecs.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &ecs_flecs.step, ctx.slang_step });
 
     const demo13 = ctx.example("c_demo_13", "examples/c/13_runtime_clear", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -833,7 +833,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_zig, "render/core/include" }),
+            b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
@@ -842,13 +842,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_core") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         })),
     }, &.{
-        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_core.step,
+        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_service.step,
         &ecs_flecs.step,  &scheduler_enki.step, &runtime.step,
     });
 
@@ -862,7 +862,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_zig, "render/core/include" }),
+            b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
@@ -871,14 +871,14 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_core") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         })),
         "-Dlink-m=true",
     }, &.{
-        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_core.step,
+        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_service.step,
         &ecs_flecs.step,  &scheduler_enki.step, &runtime.step,
     });
 
@@ -911,9 +911,9 @@ const Ctx = struct {
     /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs,
     /// mirroring cmake/CompileSlangShader.cmake's ke_compile_slang_shader.
     /// Every render pass loads its shaders at runtime by logical name via
-    /// ke_render_core::load_shader, so the output always lands in the one
+    /// ke_render_service::load_shader, so the output always lands in the one
     /// shared runtime shaders directory, never embedded in a plugin's own .so
-    /// (render/core's own embedded fallback shader is the one exception —
+    /// (render/service's own embedded fallback shader is the one exception —
     /// handled separately, since @embedFile needs the file before that
     /// module's own `zig build` even starts).
     fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8) *std.Build.Step.Run {

@@ -1,4 +1,4 @@
-const rc = @import("render_core.zig");
+const rc = @import("render_service.zig");
 const c = rc.c;
 const gpa = rc.gpa;
 
@@ -9,7 +9,7 @@ const gpa = rc.gpa;
 // proxy that appends commands into a per-slot ComputeRecord instead of a live
 // device pass; end_frame (frame_lifecycle.zig) replays it single-threaded.
 
-pub fn beginPass(self: [*c]c.ke_render_core, sys: ?*c.ke_system_ctx, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
+pub fn beginPass(self: [*c]c.ke_render_service, sys: ?*c.ke_system_ctx, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     _ = sys;
     const st = rc.coreOf(self);
     const ps = gpa.create(rc.PassState) catch return null;
@@ -40,7 +40,7 @@ pub fn beginPass(self: [*c]c.ke_render_core, sys: ?*c.ke_system_ctx, io: [*c]con
     return ctx;
 }
 
-pub fn endPass(self: [*c]c.ke_render_core, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
+pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
     const st = rc.coreOf(self);
     const ps = rc.passOf(ctx);
     // Park the encoder in this pass's slot; end_frame finishes it single-threaded.

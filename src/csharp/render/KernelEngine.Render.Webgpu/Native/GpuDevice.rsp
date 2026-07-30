@@ -17,8 +17,8 @@ ke_gpu_device_webgpu
 --file
 ../../../../zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h
 --traverse
-../../../../c/render/kernel_engine/render/gpu_enums.h
-../../../../c/render/kernel_engine/render/gpu_device.h
+../../../../c/render/kernel_engine/render/gpu/gpu_enums.h
+../../../../c/render/kernel_engine/render/gpu/gpu_device.h
 ../../../../zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h
 --methodClassName
 NativeMethods

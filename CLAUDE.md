@@ -40,7 +40,7 @@ dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings v
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 ```
 
-Shaders compile to `src/zig/render/core/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_core` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
+Shaders compile to `src/zig/render/service/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_service` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
 **Known debt — no native/Zig coverage story.** `scripts/coverage.cs` only measures C#. Zig's own compiler has no source-coverage instrumentation. DWARF-based tools don't fill the gap either: `kcov` (which works via `libdw`, compiler-agnostic in principle) was tried directly against a Zig-compiled binary and produces silent 0% coverage — Zig 0.16 emits a line-table extended opcode `libdw` doesn't decode, confirmed by comparing against an identical `gcc`/`zig cc`-compiled C binary (which `kcov` measures correctly) and by inspecting the raw DWARF with `readelf --debug-dump=decodedline`. This blocks coverage for both `zig build test` targets and the two legacy GTest suites equally, so there's no coverage-driven reason to keep writing new tests in C++.
 
@@ -82,7 +82,7 @@ Active plugins:
 - `src/c/runtime/` → `ke_runtime_create` — scheduler
 - `src/c/ecs/flecs/` → `ke_ecs_flecs_create` — flecs-backed storage
 - `src/c/framework/` → `ke_world_create`, `ke_asset_resolver_create`, `ke_scene_tree_create`, `ke_scene_loader_create`, `ke_input_actions_create` — the engine's opinionated composition layer (vocabulary + scene file format + lifecycle aggregator)
-- `src/zig/render/core/` + `src/zig/render/webgpu/` → `ke_render_core_create` / `ke_gpu_device_webgpu_create` — the render-v2 forward renderer (WebGPU via wgpu-native). The only renderer; the legacy bgfx backend was removed once every example had migrated (see `docs/RenderArchitectureV2.md`).
+- `src/zig/render/service/` + `src/zig/render/webgpu/` → `ke_render_service_create` / `ke_gpu_device_webgpu_create` — the render-v2 forward renderer (WebGPU via wgpu-native). The only renderer; the legacy bgfx backend was removed once every example had migrated (see `docs/RenderArchitectureV2.md`).
 - `src/cpp/window/glfw/` → `ke_window_glfw_create` — GLFW window
 - `src/cpp/asset/assimp/`, `src/cpp/asset/stb_image/` — asset loaders
 - `src/cpp/task_scheduler/enki/` → `ke_task_scheduler_enki_create` — enkiTS worker pool

@@ -62,7 +62,7 @@ This doc defines the **target renderer architecture** — what we build *alongsi
 - Each layer talks only to the layer immediately below. A high-level pass *never* calls L3 core directly — extensions are the one sanctioned reach-through (§4.5, §7.2).
 - **L3 is the C ABI** — lives at `src/c/render/include/kernel_engine/render/gpu_device.h`, in the render domain. C ABI only; no privileged caller language (see §4.0).
 - L3 extensions (ray tracing, mesh shaders, bindless, etc.) are queried from the device via `query_extension` — the engine knows nothing about them individually. See §4.5.
-- **L4 and L5 are C ABI** (Option A, §13.3). L4 (`gpu_commands.h`) is the typed recording surface — `ke_gpu_command_encoder` / `ke_gpu_render_pass` / `ke_gpu_compute_pass` are C structs the device fills via `create_command_encoder`. L5 (the render core: a `ke_render_core` service + the `ke_render_pass_ctx` handed to each pass) is a C ABI whose implementation is Zig. Any module — C, Zig, or C# — authors render passes against L4+L5.
+- **L4 and L5 are C ABI** (Option A, §13.3). L4 (`gpu_commands.h`) is the typed recording surface — `ke_gpu_command_encoder` / `ke_gpu_render_pass` / `ke_gpu_compute_pass` are C structs the device fills via `create_command_encoder`. L5 (the render core: a `ke_render_service` service + the `ke_render_pass_ctx` handed to each pass) is a C ABI whose implementation is Zig. Any module — C, Zig, or C# — authors render passes against L4+L5.
 - **There is no render-graph object and no `ke_render` (L7 vtable) in V2.** A render pass is a plain runtime system; the runtime orders passes (§7). `render.h` / `render_graph.h` / `frame_packet.h` are V1 (bgfx) legacy — untouched by V2 and not part of this design.
 - High-level capabilities (L7) ship as render passes (or pass sets) registered as runtime systems — in plugins (`KernelEngine.Render.<Feature>`) or in the game itself.
 - The Zig source tree is `src/zig/render/` (backend + core); the C ABI headers live in `src/c/render/include/` (§13.2).
@@ -351,7 +351,7 @@ So a consumer stays **render-math-free**: it sets `Camera { fov, near, far }` + 
 
 This is where the architecture earns its keep. Every render technique above (RenderPass setup, draw issuance, resource binding) is **expressed in terms of these helpers, not directly against the device**. When we swap backends or evolve the device ABI, only a handful of Zig files change instead of 500 call sites.
 
-These helpers ship as the **render core**: a **C ABI service** (Option A, §13.3) — so any module, C/Zig/C#, can author render passes — whose implementation is Zig consuming the L3 C ABI in-language. The C ABI surface is two things: the `ke_render_core` service (resource registry + transient pool + barriers, §7) and the `ke_render_pass_ctx` handed to each pass's `execute` body (§7.2). The Zig helpers below (`RenderPassBuilder`, `MaterialBinding`, `PipelineCache`, …) are reached *through* that context — a pass calls `ke_render_core_begin_pass` and records against the returned `ke_render_pass_ctx`; it never constructs an encoder or touches the device.
+These helpers ship as the **render core**: a **C ABI service** (Option A, §13.3) — so any module, C/Zig/C#, can author render passes — whose implementation is Zig consuming the L3 C ABI in-language. The C ABI surface is two things: the `ke_render_service` service (resource registry + transient pool + barriers, §7) and the `ke_render_pass_ctx` handed to each pass's `execute` body (§7.2). The Zig helpers below (`RenderPassBuilder`, `MaterialBinding`, `PipelineCache`, …) are reached *through* that context — a pass calls `ke_render_service_begin_pass` and records against the returned `ke_render_pass_ctx`; it never constructs an encoder or touches the device.
 
 ### 5.1 `RenderPassBuilder`
 
@@ -402,7 +402,7 @@ Sorts queued draws by material/depth/whatever, builds the command buffer in one 
 ### 5.6 `PipelineCache`
 
 Owns PSO lifecycle. Detailed in §6. **Status: Mechanism 1 shipped** (2026-07-11/13,
-`refactor/ecs-memory-safety`) — `ke_render_core::get_or_create_pipeline` is the sole PSO authority
+`refactor/ecs-memory-safety`) — `ke_render_service::get_or_create_pipeline` is the sole PSO authority
 every pass (in-tree or a game's own) routes through; see §6 Mechanism 1 for the as-built record.
 
 ---
@@ -435,7 +435,7 @@ With that doctrine in place, **three independent mechanisms** make PSO compilati
 ### Mechanism 1 — Ubershader fallback (runtime safety net)
 
 **Status (2026-07-13): the dedup + magenta-fallback + async-compile half shipped; the ubershader half
-did not.** `ke_render_core::get_or_create_pipeline(params)` is the PSO authority every pass (in-tree
+did not.** `ke_render_service::get_or_create_pipeline(params)` is the PSO authority every pass (in-tree
 or a game's own — the core has no privileged passes, §7) calls every frame instead of
 `ke_gpu_device::create_render_pipeline` directly:
 
@@ -452,7 +452,7 @@ or a game's own — the core has no privileged passes, §7) calls every frame in
 - **The async primitive is emulated, not native**: `wgpuDeviceCreateRenderPipelineAsync` is listed as
   unimplemented in wgpu-native (confirmed on trunk, not just the vendored release — it panics
   "not implemented" if called). `ke_gpu_device::create_render_pipeline_async` stays an
-  implementation-agnostic ABI contract (`ke_render_core` has no idea which strategy backs it, nor
+  implementation-agnostic ABI contract (`ke_render_service` has no idea which strategy backs it, nor
   would a browser backend need to); the webgpu backend specifically emulates it by dispatching the
   real, synchronous compile onto a caller-supplied `ke_scheduler` (falls back to synchronous
   compile-then-callback if no scheduler is wired — never hangs, just isn't async). Two real bugs were
@@ -463,7 +463,7 @@ or a game's own — the core has no privileged passes, §7) calls every frame in
   memory is only freed by `wait()`, called exactly once — the compile job now retains a caller-added
   shader-module ref (since the pass's own `defer destroy_shader_module` fires before the async compile
   actually runs) and the device reaps/`flush`es dispatched tasks (`flush_pipeline_compiles`, called
-  before `ke_render_core`'s own teardown — the same shutdown-ordering fix shape as
+  before `ke_render_service`'s own teardown — the same shutdown-ordering fix shape as
   `ke_runtime::flush_render`).
 - **Manual verification seam**: `KE_PSO_ASYNC_DELAY_MS` (+ `KE_PSO_ASYNC_DELAY_BLEND_ONLY=1` to scope
   it to blend-enabled PSOs only, so an already-warm opaque scene stays correct while one new
@@ -619,7 +619,7 @@ The V1 render graph (`render_graph.h` with `add_pass` / `compile` / `execute`) *
 
 ### 7.1 Render resources are tag-component cids
 
-The mechanism that lets the runtime order passes by *texture* dependency — not just by ECS-component dependency — is that **each render resource is registered as a zero-size tag component** in the ECS. `ke_render_core_declare("scene_color", …)` calls `ke_ecs_component_register(reg, "rg.scene_color", 0)` and gets back a real `ke_component_id`. The cid has no per-entity storage; nobody ever calls `ke_system_ctx_get` on it. It exists purely as a dependency key.
+The mechanism that lets the runtime order passes by *texture* dependency — not just by ECS-component dependency — is that **each render resource is registered as a zero-size tag component** in the ECS. `ke_render_service_declare("scene_color", …)` calls `ke_ecs_component_register(reg, "rg.scene_color", 0)` and gets back a real `ke_component_id`. The cid has no per-entity storage; nobody ever calls `ke_system_ctx_get` on it. It exists purely as a dependency key.
 
 A pass declares its resource reads/writes as access-list entries alongside its component reads:
 
@@ -643,11 +643,11 @@ runtime->register_system(rt, &(ke_runtime_system_params){
 
 void forward_execute(ke_system_ctx *ctx, void *user, float dt) {
     forward_pass *p = user;
-    ke_render_pass_ctx *pc = ke_render_core_begin_pass(p->core, ctx, &p->io);
+    ke_render_pass_ctx *pc = ke_render_service_begin_pass(p->core, ctx, &p->io);
     ke_gpu_render_pass *rp = pc->begin_render(pc);     // L4 recording object
     /* read components via ctx, resolve resource→view via pc, issue draws */
     rp->end(rp);
-    ke_render_core_end_pass(p->core, pc);
+    ke_render_service_end_pass(p->core, pc);
 }
 ```
 
@@ -904,7 +904,7 @@ The `IMaterial` seam (§8.4–§8.6) is **one** of three. Naming all three is wh
 
 The load-bearing consequences:
 
-- **The core (L5) owns no pass.** `ke_render_core` is resource registry + pass context + transient pool + barriers (§5, §7). `forward` is a system a module registers — exactly as `shadow` or `tonemap` is. Forward is **not** privileged; `render_module.zig` is now a thin composition-root aggregator, not a pass owner — each pass ships as its own physical plugin (§9.8).
+- **The core (L5) owns no pass.** `ke_render_service` is resource registry + pass context + transient pool + barriers (§5, §7). `forward` is a system a module registers — exactly as `shadow` or `tonemap` is. Forward is **not** privileged; `render_module.zig` is now a thin composition-root aggregator, not a pass owner — each pass ships as its own physical plugin (§9.8).
 - **The shading math is a shared library, not a pass.** `ke.pbr` (Cook-Torrance BRDF), `SurfaceState`, and the contribution *interfaces* live in the core shader library (`ke.*`). Whichever pass performs shading — a forward fragment, or a deferred-lighting fullscreen pass — calls the **same** library. No pass owns lighting; lighting is a library the shading pass invokes.
 - Three tiers, each ignorant of the tier above the seam:
   - **Core shader library** (`ke.*`): math, BRDF, `SurfaceState`, contribution interfaces. Knows no feature, no pass.
@@ -999,7 +999,7 @@ attach a *second* component to the same entity without an ABI change to `registe
 ripples through every existing apply callback. Instead, `alpha_mode` is queried **by material handle**,
 mirroring the existing `material_bind_group(core, handle)` lookup: `material_alpha_mode(core, handle)`.
 The render core already resolves material handles into CPU-side storage at creation time (`materials[idx]`
-in `render_core.zig`, not GPU-only), so this is the same cost and the same "derived, never authored"
+in `render_service.zig`, not GPU-only), so this is the same cost and the same "derived, never authored"
 guarantee the tag would have given — gbuffer and forward each call it per draw and skip/include accordingly.
 
 #### 8.15.2 Why transparency cannot be deferred, precisely
@@ -1086,7 +1086,7 @@ therefore costs per-target blend in the ABI, two resources, and one resolve pass
 ### 9.2 What the render module DOES own
 
 - **The `ke_gpu_device` instance.** Created at module `on_load`, destroyed at `on_unload` (via the `ke_gpu_device_handle` owner-wrapper). Device + Queue + PipelineCache + the ResourceUploader's staging ring live here. Lifetime = module lifetime.
-- **The render passes** declared as runtime systems (there is no render-graph object — §7). Each pass is one `register_system` with `phase = KE_PHASE_UPDATE`/`POST_UPDATE`, `pinned_thread = 0` (unpinned), an `access_list` mixing the components it reads with the render-resource tag-cids it reads/writes, and an `execute` callback that records draws through the render core's pass context (§7.2). The `ke_render_core` service (device + transient pool + barriers + PipelineCache + ResourceUploader staging ring) is created here at `on_load`.
+- **The render passes** declared as runtime systems (there is no render-graph object — §7). Each pass is one `register_system` with `phase = KE_PHASE_UPDATE`/`POST_UPDATE`, `pinned_thread = 0` (unpinned), an `access_list` mixing the components it reads with the render-resource tag-cids it reads/writes, and an `execute` callback that records draws through the render core's pass context (§7.2). The `ke_render_service` service (device + transient pool + barriers + PipelineCache + ResourceUploader staging ring) is created here at `on_load`.
 - **PSO compilation, shader hot reload, asset upload kickoff** — all dispatched to the shared `ke_task_scheduler` pool from inside pass execute bodies.
 
 ### 9.3 The component-snapshot boundary (R6+)
@@ -1254,7 +1254,7 @@ Doc carried onto `feat/render-v2-zig`; Slang shaders + L3 C ABI headers ported a
 
 ### Phase G2 — L4/L5 render core (Zig impl behind C ABI) (3-5 sessions)
 - `gpu_commands.h` L4 typed objects (`CommandEncoder`/`RenderPass`/`ComputePass`) filled by the Zig device.
-- The **render core** (`ke_render_core` service + `ke_render_pass_ctx`, C ABI) with its Zig impl: resource registry (tag-cid minting), transient pool, barrier tracking, and the `RenderPassBuilder`/`MaterialBinding`/`PipelineCache`/`ResourceUploader` helpers reached through the pass context (§5, §7).
+- The **render core** (`ke_render_service` service + `ke_render_pass_ctx`, C ABI) with its Zig impl: resource registry (tag-cid minting), transient pool, barrier tracking, and the `RenderPassBuilder`/`MaterialBinding`/`PipelineCache`/`ResourceUploader` helpers reached through the pass context (§5, §7).
 - A throwaway pass registered as a runtime system proves the `register_system` → `begin_pass` → record → submit path end to end. No render-graph object.
 
 ### Phase G3 — Runtime module + first engine scene (2-3 sessions)
@@ -1381,7 +1381,7 @@ Neither is a regression — they're just not solved yet. Noting so this doesn't 
 
 1. **Direct Vulkan/D3D12 backend** as a second `ke_gpu_device` impl after webgpu-native. Decided for now: webgpu-native first (§4.6). Revisit if a capability is missing or the Rust-runtime dependency becomes unacceptable. The §2 layering makes the second backend additive.
 2. **Zig source layout for L2/L4/L5 — DECIDED.** `src/zig/render/` parallel to `src/c` / `src/cpp`: `src/zig/render/webgpu/` (L2 backend, shipped) + `src/zig/render/core/` (L5 render core, to land), with the C ABI headers in `src/c/render/include/`. Backend done; core directory lands with the L5 headers.
-3. **L4/L5/L6 surface — LOCKED (was deferred).** L4 (`gpu_commands.h`) and L5 (the render core: `ke_render_core` service + `ke_render_pass_ctx`) are **C ABI** so any module — C, Zig, or C# — authors render passes; the Zig helpers are the implementation behind that contract (Option A). The L6 render-graph object is **eliminated**: a pass is a plain runtime system, ordering is the runtime's wave-builder, and render resources are zero-size tag-component cids in the access list (§7). The double recording surface (§4.0.5) and inline forwarders (§4.0.1) stay collapsed.
+3. **L4/L5/L6 surface — LOCKED (was deferred).** L4 (`gpu_commands.h`) and L5 (the render core: `ke_render_service` service + `ke_render_pass_ctx`) are **C ABI** so any module — C, Zig, or C# — authors render passes; the Zig helpers are the implementation behind that contract (Option A). The L6 render-graph object is **eliminated**: a pass is a plain runtime system, ordering is the runtime's wave-builder, and render resources are zero-size tag-component cids in the access list (§7). The double recording surface (§4.0.5) and inline forwarders (§4.0.1) stay collapsed.
 4. **Disk PSO cache location** — per-user (`%LOCALAPPDATA%`) keyed by project + engine version. Lock during G4.1.
 5. **GPU handle type safety** — bare `uint64_t` (WebGPU style) vs struct-wrapped `{ uint64_t id; }` (engine `handles.h` style). Lock during G1.
 6. **Bindless** — WebGPU is conservative; Vulkan/D3D12 allow effectively-bindless descriptor sets. Exposed via the `ke_gpu_bindless` extension (§4.5). Lock the extension API shape when the first GPU-driven pass needs it.
@@ -1437,7 +1437,7 @@ The previous branch (`feat/render-v2`) was authored before the kernel include re
 - [x] **Module decomposition (§9.8), including the physical-plugin split.** Every render pass (tonemap, skybox, ui, gbuffer, shadow, cluster, deferred_lighting, forward) is its own Zig-built shared library with its own factory/shaders/build files; `render_module.zig` is a thin composition-root aggregator. Native `ke_configuration` (§9.9) also shipped. Remaining: wire each pass's tunables through `ke_configuration` instead of hardcoded factory-param defaults (Phase G7).
 - [x] Validate wgpu-native thread-safety (§13.8) for parallel command recording — confirmed (§9.7). The shutdown crash once suspected to be a surface acquire/present thread-affinity issue was root-caused as an unjoined-render-task lifecycle bug instead (§9.4/§9.7, `RuntimeArchitectureV2.md` §16.9) and is fixed; no thread-affinity gate remains on this branch. `frames_in_flight` depth (§13.9) still unpicked.
 - [x] **Runtime snapshot (§9.4) — MERGE-BLOCKING gate — SATISFIED.** `RuntimeArchitectureV2.md` §16.9 is the as-built record: the extension in §16.3 (`ke_ecs` double-buffer + `swap_snapshots`) turned out unbuildable (flecs readonly mode is non-reentrant); what shipped is a runtime-owned extract + async `tick()` that joins the previous render before each extract. Sim/render genuinely pipeline (measured ~55-60% FPS gain on `09_many_lights`, not yet isolated from the extract-vs-shadow-entity substrate change in the same measurement). The shutdown crash that briefly held merge confidence was root-caused (an unjoined render task racing `UnloadModules`, not thread affinity) and fixed via `ke_runtime::flush_render` — no open blocker remains on the pipelining gate.
-- [x] **PSO Mechanism 1 (§6) — dedup + never-stall half shipped.** `ke_render_core::get_or_create_pipeline` is the sole PSO authority; async compile emulated via a caller-supplied `ke_scheduler` (wgpu-native's own async primitive is unimplemented, confirmed on trunk); magenta fallback verified end-to-end visually (isolated to a single new object, pre-existing geometry unaffected). **Not built**: the ubershader (ubershader-vs-magenta compatibility split) — every miss falls back to magenta today regardless of compatibility. Mechanisms 2 (build-time manifest) and 3 (disk cache) remain ~0% — see §6.6.
+- [x] **PSO Mechanism 1 (§6) — dedup + never-stall half shipped.** `ke_render_service::get_or_create_pipeline` is the sole PSO authority; async compile emulated via a caller-supplied `ke_scheduler` (wgpu-native's own async primitive is unimplemented, confirmed on trunk); magenta fallback verified end-to-end visually (isolated to a single new object, pre-existing geometry unaffected). **Not built**: the ubershader (ubershader-vs-magenta compatibility split) — every miss falls back to magenta today regardless of compatibility. Mechanisms 2 (build-time manifest) and 3 (disk cache) remain ~0% — see §6.6.
 - [ ] **Start G1**: render-v2 `build.zig` linking the webgpu distribution + a triangle through L3 from a `.slang` module.
 
 **This doc is the contract.** When G1-G3 ship, every word in §3 + §4 + §5 should match the code or this doc gets revised.

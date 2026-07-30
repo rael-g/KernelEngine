@@ -19,7 +19,7 @@
 
 #include <kernel_engine/render/material_file.h>
 #include <kernel_engine/render/handles.h>
-#include <kernel_engine/render/core/render_core.h>
+#include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/asset/mesh_shape.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/mesh_data.h>
@@ -101,21 +101,21 @@ extern "C"
         /// nothing is decoded. KE_TEXTURE_NONE on failure (see resolve_texture's
         /// error cases; upload failure also reports via out_error).
         ke_texture_handle (*resolve_texture_into)(struct ke_asset_resolver *self,
-                                                  ke_render_core *core, const char *path,
+                                                  ke_render_service *core, const char *path,
                                                   ke_error **out_error);
 
         /// Resolves and uploads a mesh, deduped by `path`. Today only the
         /// "res://primitives/*" shapes resolve_mesh understands; a broader
         /// path is a future-loader concern. KE_MESH_NONE on failure.
         ke_mesh_handle (*resolve_mesh_into)(struct ke_asset_resolver *self,
-                                           ke_render_core *core, const char *path,
+                                           ke_render_service *core, const char *path,
                                            ke_error **out_error);
 
         /// Resolves a `.material` file, resolving/uploading its albedo and normal
         /// textures (each deduped by their own path) and creating the material,
         /// deduped by `path`. KE_MATERIAL_NONE on failure.
         ke_material_handle (*resolve_material_into)(struct ke_asset_resolver *self,
-                                                    ke_render_core *core, const char *path,
+                                                    ke_render_service *core, const char *path,
                                                     ke_error **out_error);
 
     } ke_asset_resolver;

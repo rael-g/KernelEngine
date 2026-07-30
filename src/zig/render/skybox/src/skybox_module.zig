@@ -19,7 +19,7 @@ const gpa = std.heap.c_allocator;
 // texel-fetching the depth buffer.
 //
 // A standalone plugin: talks to the rest of the render pipeline only through
-// the borrowed ke_render_core/ke_runtime handles passed to create() — it never
+// the borrowed ke_render_service/ke_runtime handles passed to create() — it never
 // sees another pass's private struct. "depth" is resolved by name (the
 // producing pass declares it before this one registers its own system).
 
@@ -27,7 +27,7 @@ const gpa = std.heap.c_allocator;
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
 const SkyboxModule = struct {
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
 
@@ -155,7 +155,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.end_pass.?(core, pc);
 }
 
-fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
          skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     sm.core = core;
@@ -257,7 +257,7 @@ fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
     gpa.destroy(sm);
 }
 
-export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                    camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
                                    skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,

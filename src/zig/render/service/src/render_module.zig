@@ -1,7 +1,7 @@
 const std = @import("std");
 const cimport = @import("cimport.zig");
 
-// Compiled into the ke_render_core library (folded here because a separate Zig
+// Compiled into the ke_render_service library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
 // core factory in-lib; the device is caller-created and borrowed. Shared with
 // shadow_module.zig via cimport.zig — a second @cImport of the same headers
@@ -28,7 +28,7 @@ const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
 
 // The device is borrowed (caller-owned); only the render core is owned here.
 const ModuleState = struct {
-    core: c.ke_render_core_handle,
+    core: c.ke_render_service_handle,
     device: *c.ke_gpu_device,
     ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
     logger: ?*c.ke_logger, // borrowed, optional — runtime diagnostics route through it when present
@@ -122,14 +122,14 @@ fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
     _ = rt.register_system.?(rt, &params, null);
 }
 
-export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.ke_render_core {
+export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.ke_render_service {
     const st: *ModuleState = @alignCast(@ptrCast(module orelse return null));
     return st.core.ref;
 }
 
 // Queues a screen-space UI quad for this frame — forwarded into the ui plugin's
-// own vtable (ke_render_ui.ui_quad), not handled by ke_render_core. Replaces
-// the old ke_render_core.ui_quad vtable slot; see ke_render_ui for why it moved.
+// own vtable (ke_render_ui.ui_quad), not handled by ke_render_service. Replaces
+// the old ke_render_service.ui_quad vtable slot; see ke_render_ui for why it moved.
 export fn ke_render_module_ui_quad(module: ?*c.ke_render_module, texture: c.ke_texture_handle,
                                    dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
                                    uv0: f32, uv1: f32, uv2: f32, uv3: f32,
@@ -163,7 +163,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     const e = ecs orelse return empty;
     const dev = device orelse return empty;
 
-    const core_h = c.ke_render_core_create(dev, e, shader_dir, out_error);
+    const core_h = c.ke_render_service_create(dev, e, shader_dir, out_error);
     if (core_h.ref == null) return empty;
 
     const st = gpa.create(ModuleState) catch {
@@ -310,7 +310,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         // Deferred lighting is its own physical plugin: create() both decodes
         // the G-buffer setup (reading shadow/cluster's outputs by name through
-        // ke_render_core) and registers its runtime system, in the position
+        // ke_render_service) and registers its runtime system, in the position
         // its old registerSys call used to occupy.
         st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
                                                             camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
@@ -330,7 +330,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         }
         // Forward is its own physical plugin: create() both configures the
         // transparent-only pipeline (reading shadow/cluster's outputs by name
-        // through ke_render_core, sharing deferred-lighting's shading hooks)
+        // through ke_render_service, sharing deferred-lighting's shading hooks)
         // and registers its runtime system, in the position its old
         // registerSys call used to occupy.
         st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),

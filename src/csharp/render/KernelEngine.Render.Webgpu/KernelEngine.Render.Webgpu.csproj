@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <NativeDep Include="ke_gpu_device_webgpu" />
-    <NativeDep Include="ke_render_core" />
+    <NativeDep Include="ke_render_service" />
     <NativeDep Include="ke_resource_cache_default" />
     <NativeDep Include="ke_render_tonemap" />
     <NativeDep Include="ke_render_skybox" />

@@ -8,18 +8,18 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 pub const c = @cImport({
     @cInclude("kernel_engine/ecs/ke_ecs.h");
-    @cInclude("kernel_engine/render/gpu_device.h");
-    @cInclude("kernel_engine/render/gpu_commands.h");
-    @cInclude("kernel_engine/render/gpu_surface_ext.h");
-    @cInclude("kernel_engine/render/core/render_core.h");
-    @cInclude("kernel_engine/render/core/pass_context.h");
+    @cInclude("kernel_engine/render/gpu/gpu_device.h");
+    @cInclude("kernel_engine/render/gpu/gpu_commands.h");
+    @cInclude("kernel_engine/render/gpu/gpu_surface_ext.h");
+    @cInclude("kernel_engine/render/service/render_service.h");
+    @cInclude("kernel_engine/render/service/pass_context.h");
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
 pub const gpa = @import("heap.zig").gpa;
 
 // Fold the render module factory (ke_render_module_create) into this lib so it
-// calls ke_render_core_create in-lib — a separate Zig DLL can't link this one's
+// calls ke_render_service_create in-lib — a separate Zig DLL can't link this one's
 // import lib on Windows. Force-referenced so its export fn is emitted.
 comptime {
     _ = @import("render_module.zig");
@@ -250,7 +250,7 @@ pub const PassState = struct {
     is_compute: bool, // set when begin_compute was called → recording was accumulated
 };
 
-pub inline fn coreOf(self: [*c]c.ke_render_core) *CoreState {
+pub inline fn coreOf(self: [*c]c.ke_render_service) *CoreState {
     return @alignCast(@ptrCast(self.*.handle));
 }
 pub inline fn passOf(self: [*c]c.ke_render_pass_ctx) *PassState {
@@ -263,7 +263,7 @@ pub fn isDepthFormat(fmt: c.ke_gpu_texture_format) bool {
 
 // ── Factory + destroy ───────────────────────────────────────────────────────
 
-fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
+fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
     // Must run before pipeline_cache.destroyAll: an in-flight async compile's
     // on_ready callback writes into a pipeline_cache Entry, so destroying the
@@ -295,14 +295,14 @@ fn destroyCore(self: [*c]c.ke_render_core) callconv(.c) void {
     gpa.free(st.upload_arena);
     gpa.free(@constCast(st.shader_dir));
     gpa.destroy(st);
-    gpa.destroy(@as(*c.ke_render_core, @ptrCast(self)));
+    gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
 }
 
-export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_core_handle {
+export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
     const dev = device orelse return .{ .ref = null, .destroy = null };
     const e = ecs orelse return .{ .ref = null, .destroy = null };
     const shader_dir_span = if (shader_dir != null) std.mem.span(shader_dir) else {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_core_create: shader_dir is required", @src().file, @intCast(@src().line), null);
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: shader_dir is required", @src().file, @intCast(@src().line), null);
         return .{ .ref = null, .destroy = null };
     };
 
@@ -410,7 +410,7 @@ export fn ke_render_core_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shad
     };
     st.resource_count = 1;
 
-    const core = gpa.create(c.ke_render_core) catch {
+    const core = gpa.create(c.ke_render_service) catch {
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
     };

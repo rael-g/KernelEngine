@@ -21,7 +21,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 {
     private ke_gpu_device_handle _device;
     private ke_render_module_handle _module;
-    private ke_render_core* _core;
+    private ke_render_service* _core;
     private readonly string _shaderDir;
     private readonly System.Numerics.Vector4? _clearColorOverride;
     private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;

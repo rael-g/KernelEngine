@@ -4,8 +4,8 @@
 #include <kernel_engine/common/types.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/logger/logger.h>
-#include <kernel_engine/render/core/render_core.h>
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -28,7 +28,7 @@ extern "C"
     // Opaque — nothing outside this plugin calls into it; it registers its own
     // render.forward_transparent system into `runtime` at create time. Reads
     // shadow's and cluster's outputs by name through the borrowed
-    // ke_render_core (same pattern as ke_render_deferred_lighting) rather than
+    // ke_render_service (same pattern as ke_render_deferred_lighting) rather than
     // a *ShadowModule/*ClusterModule pointer.
     typedef struct ke_render_forward ke_render_forward;
 
@@ -45,7 +45,7 @@ extern "C"
     // camera_cid/light_cid/ambient_cid/skybox_cid/frame_cid are cids the
     // aggregator already registered. Handle's ref is NULL on failure.
     KE_RENDER_FORWARD_API ke_render_forward_handle ke_render_forward_create(
-        ke_runtime *runtime, ke_render_core *core, ke_gpu_device *device,
+        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_logger *logger, ke_bool ibl_enabled,
         ke_component_id mesh_cid, ke_component_id transform_cid,
         ke_component_id camera_cid, ke_component_id light_cid,

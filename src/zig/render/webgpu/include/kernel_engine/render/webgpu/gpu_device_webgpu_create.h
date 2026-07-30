@@ -1,7 +1,7 @@
 #pragma once
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 
 struct ke_window;
 struct ke_scheduler;

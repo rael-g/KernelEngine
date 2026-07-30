@@ -12,8 +12,8 @@ const wgpu = @cImport({
 });
 const ke = @cImport({
     @cInclude("kernel_engine/common/error.h");
-    @cInclude("kernel_engine/render/gpu_device.h");
-    @cInclude("kernel_engine/render/gpu_commands.h");
+    @cInclude("kernel_engine/render/gpu/gpu_device.h");
+    @cInclude("kernel_engine/render/gpu/gpu_commands.h");
     @cInclude("kernel_engine/window/window.h");
     @cInclude("kernel_engine/scheduler/scheduler.h");
 });
@@ -71,7 +71,7 @@ const DeviceState = struct {
     pending_compiles_count:  u32,
 };
 
-const MAX_PENDING_COMPILES = 64; // mirrors ke_render_core's PipelineCache.MAX_PIPELINES — one async compile per cache miss, ever
+const MAX_PENDING_COMPILES = 64; // mirrors ke_render_service's PipelineCache.MAX_PIPELINES — one async compile per cache miss, ever
 
 fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
     return @ptrCast(dev);
@@ -1054,7 +1054,7 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
 // CONTRACT itself (dispatch off-thread, callback when ready) by running the
 // real, synchronous wgpuDeviceCreateRenderPipeline call on this device's own
 // scheduler instead of relying on the (absent) native async primitive. This
-// is an implementation detail of THIS backend only — ke_render_core's
+// is an implementation detail of THIS backend only — ke_render_service's
 // get_or_create_pipeline (the caller) has no idea which strategy is in play,
 // and neither would a browser backend (where the real async primitive exists
 // and this emulation would never be reached).

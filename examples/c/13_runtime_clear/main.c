@@ -1,9 +1,9 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
-#include <kernel_engine/render/core/render_module_create.h>
+#include <kernel_engine/render/service/render_module_create.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/scheduler/scheduler.h>

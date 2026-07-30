@@ -2,8 +2,8 @@ const std = @import("std");
 
 // Build the ke_render_deferred_lighting shared library (Zig 0.16 API).
 // A standalone render pass plugin: talks to the rest of the pipeline only
-// through the borrowed ke_runtime/ke_render_core/ke_gpu_device handles passed
-// to its factory — no link to ke_render_core's Zig sources.
+// through the borrowed ke_runtime/ke_render_service/ke_gpu_device handles passed
+// to its factory — no link to ke_render_service's Zig sources.
 
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});

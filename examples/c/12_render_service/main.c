@@ -1,13 +1,13 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/render/gpu_device.h>
-#include <kernel_engine/render/gpu_enums.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_enums.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
-#include <kernel_engine/render/core/render_core.h>
-#include <kernel_engine/render/core/pass_context.h>
-#include <kernel_engine/render/core/render_core_create.h>
-#include <kernel_engine/render/gpu_commands.h>
+#include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/service/pass_context.h>
+#include <kernel_engine/render/service/render_service_create.h>
+#include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 
@@ -44,7 +44,7 @@ int main(void)
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
-    ke_render_core_handle core = ke_render_core_create(gpu.ref, ecs.ref, "shaders", &err);
+    ke_render_service_handle core = ke_render_service_create(gpu.ref, ecs.ref, "shaders", &err);
     if (!core.ref) die("render core", err);
 
     // ── Triangle pipeline — engine-level setup via the device ────────────────
@@ -77,7 +77,7 @@ int main(void)
     const char *writes[] = { "backbuffer" };
     ke_render_pass_io io = { .reads = NULL, .reads_count = 0, .writes = writes, .writes_count = 1 };
 
-    printf("Triangle drawn through ke_render_core. Close the window to exit.\n");
+    printf("Triangle drawn through ke_render_service. Close the window to exit.\n");
     while (!win.ref->should_close(win.ref))
     {
         win.ref->poll_events(win.ref, NULL);

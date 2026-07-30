@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_GPU_SURFACE_EXT_H_
 #define KERNEL_ENGINE_RENDER_GPU_SURFACE_EXT_H_
 
-#include <kernel_engine/render/gpu_enums.h>
+#include <kernel_engine/render/gpu/gpu_enums.h>
 
 #ifdef __cplusplus
 extern "C"

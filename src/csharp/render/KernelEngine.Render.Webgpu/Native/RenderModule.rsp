@@ -3,7 +3,7 @@ Generated/RenderModule/
 --namespace
 KernelEngine.Render.Webgpu.Native
 --libraryPath
-ke_render_core
+ke_render_service
 --include-directory
 ../../../../zig/common/include
 --include-directory
@@ -13,13 +13,13 @@ ke_render_core
 --include-directory
 ../../../../c/render
 --include-directory
-../../../../zig/render/core/include
+../../../../zig/render/service/include
 --file
-../../../../zig/render/core/include/kernel_engine/render/core/render_module_create.h
+../../../../zig/render/service/include/kernel_engine/render/service/render_module_create.h
 --traverse
 ../../../../c/render/kernel_engine/render/handles.h
-../../../../c/render/kernel_engine/render/core/render_core.h
-../../../../zig/render/core/include/kernel_engine/render/core/render_module_create.h
+../../../../c/render/kernel_engine/render/service/render_service.h
+../../../../zig/render/service/include/kernel_engine/render/service/render_module_create.h
 --methodClassName
 NativeMethods
 --prefixStrip

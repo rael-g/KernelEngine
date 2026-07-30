@@ -27,12 +27,12 @@ public unsafe partial struct ke_asset_resolver
     [NativeTypeName("void (*)(struct ke_asset_resolver *, ke_font_data *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, KernelEngine.Text.Native.ke_font_data*, void> free_font;
 
-    [NativeTypeName("ke_texture_handle (*)(struct ke_asset_resolver *, ke_render_core *, const char *, ke_error **)")]
+    [NativeTypeName("ke_texture_handle (*)(struct ke_asset_resolver *, ke_render_service *, const char *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, void*, sbyte*, ke_error**, KernelEngine.Render.Native.ke_texture_handle> resolve_texture_into;
 
-    [NativeTypeName("ke_mesh_handle (*)(struct ke_asset_resolver *, ke_render_core *, const char *, ke_error **)")]
+    [NativeTypeName("ke_mesh_handle (*)(struct ke_asset_resolver *, ke_render_service *, const char *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, void*, sbyte*, ke_error**, KernelEngine.Render.Native.ke_mesh_handle> resolve_mesh_into;
 
-    [NativeTypeName("ke_material_handle (*)(struct ke_asset_resolver *, ke_render_core *, const char *, ke_error **)")]
+    [NativeTypeName("ke_material_handle (*)(struct ke_asset_resolver *, ke_render_service *, const char *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, void*, sbyte*, ke_error**, KernelEngine.Render.Native.ke_material_handle> resolve_material_into;
 }

@@ -14,7 +14,7 @@ const gpa = std.heap.c_allocator;
 // UI overlay — screen-space quad batching + its own pipeline/shaders, drawn
 // after tonemap so it composites over the rendered scene. A standalone
 // plugin: talks to the rest of the pipeline only through the borrowed
-// ke_render_core/ke_runtime handles passed to create() — it never sees
+// ke_render_service/ke_runtime handles passed to create() — it never sees
 // another pass's private struct. Game code queues quads via the ui_quad
 // vtable method, which is why (unlike tonemap/skybox) this plugin exposes a
 // real vtable instead of an opaque fire-and-forget handle.
@@ -41,7 +41,7 @@ const UiBatch = struct {
 const UiState = struct {
     api: c.ke_render_ui = undefined,
 
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
 
@@ -203,7 +203,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 // Pipeline + buffers for the UI overlay pass. Premultiplied-alpha blend so
 // both solid quads and glyph coverage composite correctly over whatever the
 // tonemap pass already wrote.
-fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, bb_cid: c.ke_component_id,
          cmd_slot: u32, out_error: [*c][*c]c.ke_error) bool {
     ui.core = core;
@@ -343,7 +343,7 @@ fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
     gpa.destroy(ui);
 }
 
-export fn ke_render_ui_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_ui_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                bb_cid: c.ke_component_id, cmd_slot: u32,
                                out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_ui_handle {

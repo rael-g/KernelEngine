@@ -2,8 +2,8 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/render/core/render_core.h>
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/handles.h>
 #include <kernel_engine/runtime/runtime.h>
 
@@ -55,7 +55,7 @@ extern "C"
     // slot (must come after whatever writes "backbuffer" last, e.g. tonemap).
     // Handle's ref is NULL on failure.
     KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(
-        ke_runtime *runtime, ke_render_core *core, ke_gpu_device *device,
+        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_component_id bb_cid, uint32_t cmd_slot,
         ke_error **out_error);
 

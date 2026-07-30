@@ -22,7 +22,7 @@ const c = cimport.c;
 //   set 2: empty (the features leave set 2 unused; the positional array needs it)
 //   set 3: cluster light lists — same as forward
 // Shadow's and cluster's outputs (LVP uniform, shadow view, light-list bind
-// group + layout) are looked up by name through the borrowed ke_render_core —
+// group + layout) are looked up by name through the borrowed ke_render_service —
 // this plugin never holds a pointer to the shadow/cluster plugins. Owns the
 // env-cubemap tracking its IBL sampling needs (rebuilding set 0 when the
 // environment changes).
@@ -43,7 +43,7 @@ const DeferredFrame = extern struct {
 
 
 const DeferredLightingModule = struct {
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
     logger: ?*c.ke_logger = null,
@@ -279,7 +279,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.end_pass.?(core, pc);
 }
 
-fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
          camera_cid: c.ke_component_id, transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
          ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
@@ -467,7 +467,7 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
     gpa.destroy(dl);
 }
 
-export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                               device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                               logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
                                               camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,

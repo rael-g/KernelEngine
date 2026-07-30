@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_GPU_COMMANDS_H_
 #define KERNEL_ENGINE_RENDER_GPU_COMMANDS_H_
 
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 
 #ifdef __cplusplus
 extern "C"

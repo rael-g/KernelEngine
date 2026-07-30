@@ -65,7 +65,7 @@ fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
 }
 
 const ForwardModule = struct {
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
     logger: ?*c.ke_logger = null,
@@ -134,7 +134,7 @@ const ForwardModule = struct {
 };
 
 const PASS_NAME = "forward";
-// The engine default material shader — the name ke_render_core resolves an
+// The engine default material shader — the name ke_render_service resolves an
 // unknown/none material to. Duplicated here (not imported) per the plugin
 // decoupling precedent, only to warm a PSO at setup before any scene material.
 const DEFAULT_MATERIAL_SHADER = "standard";
@@ -371,7 +371,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.end_pass.?(core, pc);
 }
 
-fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
          mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
          light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
@@ -602,7 +602,7 @@ fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
     gpa.destroy(fwd);
 }
 
-export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                     logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
                                     mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,

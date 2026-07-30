@@ -347,7 +347,7 @@ fn vtFreeFont(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_font_data) callconv(.
 
 fn vtResolveTextureInto(
     self_in: ?*c.ke_asset_resolver,
-    core_in: ?*c.ke_render_core,
+    core_in: ?*c.ke_render_service,
     path: [*c]const u8,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_texture_handle {
@@ -376,13 +376,13 @@ fn vtResolveTextureInto(
     return h;
 }
 
-/// ke_render_core's vertex-buffer layout is 11 floats (pos3+nrm3+uv2+tan3);
+/// ke_render_service's vertex-buffer layout is 11 floats (pos3+nrm3+uv2+tan3);
 /// ke_vertex carries a 12th (bitangent-sign tw) the GPU pipeline never binds.
 const gpu_floats_per_vertex = 11;
 
 fn vtResolveMeshInto(
     self_in: ?*c.ke_asset_resolver,
-    core_in: ?*c.ke_render_core,
+    core_in: ?*c.ke_render_service,
     path: [*c]const u8,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_mesh_handle {
@@ -445,7 +445,7 @@ fn vtResolveMeshInto(
 
 fn vtResolveMaterialInto(
     self_in: ?*c.ke_asset_resolver,
-    core_in: ?*c.ke_render_core,
+    core_in: ?*c.ke_render_service,
     path: [*c]const u8,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_material_handle {

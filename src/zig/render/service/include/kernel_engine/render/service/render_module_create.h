@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel_engine/render/core/render_core_create.h>
+#include <kernel_engine/render/service/render_service_create.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <stdint.h>
 
@@ -56,7 +56,7 @@ typedef struct ke_render_feature_params
 // of staying silent. `cluster_params` and `feature_params` are optional (NULL
 // = all defaults). `shader_dir` is required — an absolute path to the
 // directory every pass's build-time-compiled shaders were installed into (see
-// ke_render_core_create); forwarded to the render core unchanged.
+// ke_render_service_create); forwarded to the render core unchanged.
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_bool default_passes, struct ke_logger *logger,
@@ -66,7 +66,7 @@ ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
 
 // Borrows the render core the module owns — used to upload meshes and declare
 // resources. Valid for the module's lifetime; the caller must not destroy it.
-KE_RENDER_CORE_API ke_render_core *ke_render_module_core(ke_render_module *module);
+KE_RENDER_CORE_API ke_render_service *ke_render_module_core(ke_render_module *module);
 
 // Queues a screen-space UI quad for this frame, drawn after tonemap so it
 // composites over the rendered scene. Coordinates are pixels (top-left

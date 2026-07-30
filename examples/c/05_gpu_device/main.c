@@ -1,5 +1,5 @@
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <stdio.h>
 

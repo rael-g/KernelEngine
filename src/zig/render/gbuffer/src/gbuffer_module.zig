@@ -25,16 +25,16 @@ const gpa = std.heap.c_allocator;
 // Depth32Float is written here and sampled by deferred to reconstruct position.
 //
 // A standalone plugin: talks to the rest of the render pipeline only through
-// the borrowed ke_render_core/ke_runtime handles passed to create() — it never
+// the borrowed ke_render_service/ke_runtime handles passed to create() — it never
 // sees another pass's private struct.
 
 // The pass draws any authored material: at draw time it reads the material's
-// shader name (ke_render_core::material_shader), resolves "<name>.gbuffer"
+// shader name (ke_render_service::material_shader), resolves "<name>.gbuffer"
 // through load_shader, and gets the matching PSO. It hardcodes no material and
 // carries no fixed variant count — the (material x pass) set is a build
 // artifact (see cmake/CompileMaterialShaders.cmake), not a runtime constant.
 const PASS_NAME = "gbuffer";
-// The engine's default material shader — the same name ke_render_core resolves
+// The engine's default material shader — the same name ke_render_service resolves
 // an unknown/none material to. Duplicated here (not imported) per the plugin
 // decoupling precedent, only to warm a PSO at setup before any scene material.
 const DEFAULT_MATERIAL_SHADER = "standard";
@@ -51,7 +51,7 @@ const PerObject = extern struct {
 };
 
 const GBufferModule = struct {
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
 
@@ -233,7 +233,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.end_pass.?(core, pc);
 }
 
-fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
          camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     gb.core = core;
@@ -417,7 +417,7 @@ fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
     gpa.destroy(gb);
 }
 
-export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                     mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, frame_cid: c.ke_component_id,

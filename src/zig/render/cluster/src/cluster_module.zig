@@ -14,7 +14,7 @@ const gpa = std.heap.c_allocator;
 // Clustered light cull — bins point/spot lights into a froxel grid so a shading
 // pass iterates only the lights touching its pixel. A standalone plugin: talks
 // to the rest of the render pipeline only through the borrowed
-// ke_render_core/ke_runtime handles passed to create() — it never sees another
+// ke_render_service/ke_runtime handles passed to create() — it never sees another
 // pass's private struct. Publishes its outputs ("cluster_lights" bind group +
 // layout, "light_clusters" ordering tag) through the named-resource table;
 // deferred/forward resolve them by name. Uploads its own grid UBO inside its
@@ -90,7 +90,7 @@ const ClusterParams = extern struct {
 const ClusterModule = struct {
     // Borrowed cross-cutting refs, captured once at setup so the system body
     // never reaches into the parent ModuleState.
-    core: *c.ke_render_core = undefined,
+    core: *c.ke_render_service = undefined,
     logger: ?*c.ke_logger = null,
     point_light_cid: c.ke_component_id = undefined,
     spot_light_cid: c.ke_component_id = undefined,
@@ -158,7 +158,7 @@ fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: 
     const lg = logger orelse return;
     var buf: [192]u8 = undefined;
     const msg = std.fmt.bufPrintZ(&buf, "{s} light count ({d}) exceeds the storage capacity ({d}); only the first {d} are culled/shaded this run", .{ kind, total, cap, cap }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "render_core", .message = msg.ptr };
+    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "render_service", .message = msg.ptr };
     lg.log.?(lg, &ev);
 }
 
@@ -314,7 +314,7 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize, out_error: [*c][*c]c.ke
 
 // Storage buffers + the cull compute pipeline + the forward's set-3 light bind
 // group. The cull pass writes the per-cluster index lists; the forward reads them.
-fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_core,
+fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
              transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
@@ -498,7 +498,7 @@ fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
     gpa.destroy(cm);
 }
 
-export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_core,
+export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
                                     grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
                                     point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,

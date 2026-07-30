@@ -1,6 +1,6 @@
 const std = @import("std");
 
-// Build the ke_render_core shared library (Zig 0.16 API).
+// Build the ke_render_service shared library (Zig 0.16 API).
 // Backend-agnostic: it talks only to the ke_gpu_device / ke_ecs vtables passed
 // to its factory. No webgpu/window link.
 
@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) void {
     const magenta_fs_wgsl = b.option([]const u8, "magenta-fs-wgsl", "generated magenta placeholder fragment WGSL path") orelse @panic("-Dmagenta-fs-wgsl required");
 
     const mod = b.createModule(.{
-        .root_source_file = b.path("src/render_core.zig"),
+        .root_source_file = b.path("src/render_service.zig"),
         .target    = target,
         .optimize  = optimize,
         .link_libc = true,
@@ -55,7 +55,7 @@ pub fn build(b: *std.Build) void {
     mod.addAnonymousImport("magenta.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_fs_wgsl } });
 
     const lib = b.addLibrary(.{
-        .name = "ke_render_core",
+        .name = "ke_render_service",
         .root_module = mod,
         .linkage = .dynamic,
     });

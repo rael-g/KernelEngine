@@ -2,10 +2,10 @@
 #include <kernel_engine/common/math.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
-#include <kernel_engine/render/core/render_core.h>
-#include <kernel_engine/render/core/render_module_create.h>
+#include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/service/render_module_create.h>
 #include <kernel_engine/render/components.h>
 #include <kernel_engine/spatial/transform.h>
 #include <kernel_engine/ecs/ke_ecs.h>
@@ -83,7 +83,7 @@ int main(void)
 
     ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, 1, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
-    ke_render_core *core = ke_render_module_core(render.ref);
+    ke_render_service *core = ke_render_module_core(render.ref);
 
     // ── Upload the cube + populate the scene (camera + one mesh entity) ──────
     ke_mesh_handle cube_h = core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,

@@ -1,4 +1,4 @@
-const rc = @import("render_core.zig");
+const rc = @import("render_service.zig");
 const c = rc.c;
 
 // Frame begin/end + the deferred-upload recorder. wgpuQueueWriteBuffer and
@@ -7,7 +7,7 @@ const c = rc.c;
 // frame those run single-threaded, ordered so the data/commands land before
 // the submit.
 
-pub fn beginFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
+pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = rc.coreOf(self);
     @memset(st.cmd_valid[0..], false); // open the frame: no pass has recorded yet
@@ -37,7 +37,7 @@ pub fn beginFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) cal
     return 1;
 }
 
-pub fn endFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
+pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = rc.coreOf(self);
 
@@ -113,7 +113,7 @@ pub fn endFrame(self: [*c]c.ke_render_core, out_error: [*c][*c]c.ke_error) callc
 // and the arena slice are each reserved with an atomic bump, then the data is copied
 // in. end_frame replays the records single-threaded (wgpuQueueWriteBuffer is unsafe
 // concurrently with pass recording on wgpu-native).
-pub fn uploadBuffer(self: [*c]c.ke_render_core, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
+pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     if (size == 0 or data == null) return;
     const st = rc.coreOf(self);
     const idx = st.upload_count.fetchAdd(1, .monotonic);

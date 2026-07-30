@@ -1,5 +1,5 @@
 const std = @import("std");
-const rc = @import("render_core.zig");
+const rc = @import("render_service.zig");
 const c = rc.c;
 
 // Generational slot map: a dense, growable store of T where each live element

@@ -1,9 +1,9 @@
 const std = @import("std");
-const rc = @import("render_core.zig");
+const rc = @import("render_service.zig");
 const c = rc.c;
 
 // PSO dedup + lifecycle for the render core (§6 Mechanism 1 of
-// RenderArchitectureV2.md). ke_render_core owns no passes — every pass
+// RenderArchitectureV2.md). ke_render_service owns no passes — every pass
 // (forward, gbuffer, shadow, a game's own custom pass, ...) is an alien
 // consumer that asks the core for a pipeline by full state; none of them
 // creates or destroys a ke_gpu_pipeline directly anymore. This file is the
@@ -201,7 +201,7 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
 // real, cached PSO (O(1)). Every alien pass calls this instead of
 // dev.create_render_pipeline directly — the cache, not the pass, owns the
 // pipeline's lifetime.
-pub fn getOrCreatePipeline(self: [*c]c.ke_render_core, params: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
+pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
     const st = rc.coreOf(self);
     const key = PsoKey.fromParams(params);
 

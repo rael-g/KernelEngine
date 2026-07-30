@@ -1,8 +1,8 @@
 #ifndef KERNEL_ENGINE_RENDER_CORE_PASS_CONTEXT_H_
 #define KERNEL_ENGINE_RENDER_CORE_PASS_CONTEXT_H_
 
-#include <kernel_engine/render/gpu_device.h>
-#include <kernel_engine/render/gpu_commands.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_commands.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -12,7 +12,7 @@ extern "C"
 // ══════════════════════════════════════════════════════════════════════════
 // L5 — Per-pass recording context
 //
-// Handed to a render system's body by ke_render_core_begin_pass. Resolves the
+// Handed to a render system's body by ke_render_service_begin_pass. Resolves the
 // pass's declared resources to live GPU views, opens L4 recording objects with
 // the pass's writes already bound as attachments, and reaches device
 // extensions. Lifetime = the begin_pass/end_pass span; do not retain.

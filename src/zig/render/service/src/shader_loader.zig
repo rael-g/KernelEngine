@@ -1,5 +1,5 @@
 const std = @import("std");
-const rc = @import("render_core.zig");
+const rc = @import("render_service.zig");
 const c = rc.c;
 
 // Zig 0.16 moved file IO behind std.Io (needs an Io instance to construct;
@@ -12,7 +12,7 @@ const libc = @cImport({
     @cInclude("stdio.h");
 });
 
-// ke_render_core::load_shader — resolves a shader by logical name + stage to a
+// ke_render_service::load_shader — resolves a shader by logical name + stage to a
 // device-ready module, without the caller ever naming a path or a format. The
 // core asks the device for its accepted language (WGSL/SPIR-V/MSL/DXIL), maps
 // that to a file extension, and reads "<shader_dir>/<name>.<stage>.<ext>" — a
@@ -43,7 +43,7 @@ fn stageSuffix(stage: c.ke_gpu_shader_stage) ?[]const u8 {
     };
 }
 
-pub fn loadShader(self: [*c]c.ke_render_core, name: [*c]const u8, stage: c.ke_gpu_shader_stage, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
+pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke_gpu_shader_stage, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
     const st = rc.coreOf(self);
 
     const suffix = stageSuffix(stage) orelse {

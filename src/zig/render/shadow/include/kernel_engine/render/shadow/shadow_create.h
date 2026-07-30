@@ -3,8 +3,8 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/common/types.h>
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/render/core/render_core.h>
-#include <kernel_engine/render/gpu_device.h>
+#include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -26,7 +26,7 @@ extern "C"
 
     // Opaque — nothing outside this plugin calls into it; it registers its own
     // render.shadow system into `runtime` at create time (only when `enabled`)
-    // and publishes its outputs through the borrowed ke_render_core's named-
+    // and publishes its outputs through the borrowed ke_render_service's named-
     // resource table ("shadow_map" view, "shadow_lvp" buffer) rather than a
     // vtable another pass would call into.
     typedef struct ke_render_shadow ke_render_shadow;
@@ -45,7 +45,7 @@ extern "C"
     // forward's setup resolves shadow_map's absence as the "off" signal.
     // Handle's ref is NULL on failure.
     KE_RENDER_SHADOW_API ke_render_shadow_handle ke_render_shadow_create(
-        ke_runtime *runtime, ke_render_core *core, ke_gpu_device *device,
+        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_bool enabled,
         ke_component_id mesh_cid, ke_component_id transform_cid,
         ke_component_id light_cid, ke_component_id frame_cid,
