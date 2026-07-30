@@ -562,3 +562,17 @@ None was detectable by any test. All three close once the enum, the vtable, and 
 2. **A missing `using System.Runtime.CompilerServices;`** in the provider template — never surfaced before because `logger` is the first domain whose *provider* (not just its standalone callback-interface file) also contains a `[callback]`-classified slot rendered inline, needing `CallConvCdecl` in the same file.
 
 **A free function found but deliberately not wired**: `ke_log_level_to_string(int32_t level)` doesn't fit any current grouping rule — its single parameter is a bare `int32_t`, not one of this domain's own structs, so it has no natural "owner" to attach to. Left unexposed rather than inventing a placement for it; nothing currently needs it now that the native console sink calls it internally. `Classifier` was tightened alongside this fix to only group free functions by first-param type when that type is one of the domain's own known structs — it had been grouping by *any* first-param type, which briefly misfired by grouping this function under a spurious `Int32T` bucket.
+
+### Note — kabic promoted from a 914-line script to real projects
+
+`scripts/generate_csharp.cs` had grown to 914 lines and, on inspection, had started re-deriving decisions inline (constructor shape, callback `min_level` presence, free-function "self" detection) instead of reading them from `ClassifiedModel` — the exact drift §6.1/§6.2's separation exists to prevent, just subtler than the original §5.5 prototype's version of the same mistake.
+
+Fixed two ways at once:
+
+1. **Every such decision moved into `Classifier`**, computed once: `ConstructorPlan` (factory vs. handle vs. none, and whether the factory ctor needs an idiom wrapper), `CallbackHasLevel`, and `GroupedFunction.SelfParam`. `CSharpBackend` now only reads these; it does not re-derive them from raw `ApiFunction`/`ApiStruct` shapes anywhere.
+2. **kabic moved from `scripts/*.cs` file-based apps into real projects under `src/csharp/kabic/`**, next to every other real C# project in the repo (`KernelEngine.Input`, `KernelEngine.Window`, ...), added to `KernelEngine.slnx`:
+   - `Kabic.Core` — the middle-end: `ApiModel`/`ApiReader` (the IR reader), `Classifier`/`ClassifiedModel` (§6.1), `CTypes` (pure C-type string operations — `IsPointer`/`Deref` — needed by every backend, not a C# idiom).
+   - `Kabic.CSharpBackend` — the backend: `Idioms` (C#-only naming/type-mapping conventions) and `CSharpBackend` (the `Render*` methods), referencing `Kabic.Core`.
+   - `scripts/generate_csharp.cs` stays a thin CLI shell (`#:project ../src/csharp/kabic/Kabic.CSharpBackend/Kabic.CSharpBackend.csproj`, ~100 lines: argument parsing and file-writing orchestration only) — the `dotnet run scripts/generate_csharp.cs` invocation is unchanged.
+
+A future Lua/Python/Zig backend is a sibling project referencing `Kabic.Core` the same way — it cannot access anything `Kabic.CSharpBackend`-specific even by accident, because it is a different assembly. Verified byte-for-byte identical output against the pre-refactor generator for all three migrated domains; full solution builds, all tests pass, `check_api_drift.cs` clean.

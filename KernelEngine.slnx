@@ -40,6 +40,8 @@
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/toolkit/KernelEngine.Toolkit/KernelEngine.Toolkit.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Core/Kabic.Core.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.CSharpBackend/Kabic.CSharpBackend.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
