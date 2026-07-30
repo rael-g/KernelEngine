@@ -23,7 +23,16 @@ Run(["dotnet", "tool", "restore"], csharpDir);
 const string ClangVersion = "21.1.8";
 var resourceDir = Path.Combine(rootDir, ".cache", $"clang-resource-dir-{ClangVersion}");
 await EnsureClangResourceDir(resourceDir, ClangVersion);
-var extraArgs = new[] { "-a", $"-resource-dir={resourceDir}" };
+
+// uint64_t/int64_t are platform-independent by the C standard's own guarantee (always
+// exactly 64 bits) — but glibc happens to implement that guarantee via `unsigned long`
+// (ambiguous-width in general C, though not here), while Windows' CRT uses `unsigned
+// long long` (unambiguous). ClangSharp keys off which spelling was used rather than the
+// typedef's actual guarantee, so it emits `nuint`/`nint` (a *genuinely* dynamic-width
+// C# type) only on Linux. Remapping the two stdint.h typedefs directly makes every
+// derived type (ke_entity, GPU handles, ...) and every raw field/param resolve
+// identically regardless of which OS ran the generator.
+var extraArgs = new[] { "-a", $"-resource-dir={resourceDir}", "-r", "uint64_t=ulong", "-r", "int64_t=long" };
 
 // Same package also fails to resolve libclang.so itself via normal shared-library
 // search paths when invoked through `dotnet tool run` — needs its own directory
