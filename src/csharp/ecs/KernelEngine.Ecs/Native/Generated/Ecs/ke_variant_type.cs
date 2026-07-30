@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Ecs.Native;
 
-public enum ke_variant_type
+[NativeTypeName("unsigned int")]
+public enum ke_variant_type : uint
 {
     KE_VARIANT_NULL = 0,
     KE_VARIANT_BOOL = 1,

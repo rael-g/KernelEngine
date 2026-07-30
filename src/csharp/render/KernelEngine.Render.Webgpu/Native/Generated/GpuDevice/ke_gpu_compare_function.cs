@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public enum ke_gpu_compare_function
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_compare_function : uint
 {
     KE_GPU_COMPARE_UNDEFINED = 0,
     KE_GPU_COMPARE_NEVER,

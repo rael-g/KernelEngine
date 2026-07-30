@@ -4,8 +4,6 @@ namespace KernelEngine.Render.Native;
 
 public partial struct ke_point_light_component
 {
-    public float radius;
-
     public float r;
 
     public float g;
@@ -13,4 +11,6 @@ public partial struct ke_point_light_component
     public float b;
 
     public float intensity;
+
+    public float radius;
 }

@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public enum ke_gpu_stencil_op
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_stencil_op : uint
 {
     KE_GPU_STENCIL_OP_KEEP,
     KE_GPU_STENCIL_OP_ZERO,

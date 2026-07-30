@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Asset.Native;
 
-public enum ke_mesh_primitive
+[NativeTypeName("unsigned int")]
+public enum ke_mesh_primitive : uint
 {
     KE_MESH_PRIMITIVE_QUAD = 0,
     KE_MESH_PRIMITIVE_PLANE = 1,

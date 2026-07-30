@@ -10,12 +10,6 @@ public partial struct ke_spot_light_component
 
     public float dir_z;
 
-    public float inner_angle;
-
-    public float outer_angle;
-
-    public float range;
-
     public float r;
 
     public float g;
@@ -23,4 +17,10 @@ public partial struct ke_spot_light_component
     public float b;
 
     public float intensity;
+
+    public float range;
+
+    public float inner_angle;
+
+    public float outer_angle;
 }

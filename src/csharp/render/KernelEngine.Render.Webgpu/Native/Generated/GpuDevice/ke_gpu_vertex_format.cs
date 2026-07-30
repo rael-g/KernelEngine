@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public enum ke_gpu_vertex_format
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_vertex_format : uint
 {
     KE_GPU_VERTEX_FORMAT_FLOAT32X2,
     KE_GPU_VERTEX_FORMAT_FLOAT32X3,

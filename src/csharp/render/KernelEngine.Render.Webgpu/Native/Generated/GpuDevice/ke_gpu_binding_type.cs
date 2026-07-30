@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public enum ke_gpu_binding_type
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_binding_type : uint
 {
     KE_GPU_BINDING_TYPE_BUFFER,
     KE_GPU_BINDING_TYPE_SAMPLER,

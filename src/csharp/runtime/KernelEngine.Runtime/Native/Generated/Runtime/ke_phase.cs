@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Runtime.Native;
 
-public enum ke_phase
+[NativeTypeName("unsigned int")]
+public enum ke_phase : uint
 {
     KE_PHASE_STARTUP = 0,
     KE_PHASE_PRE_UPDATE = 1,

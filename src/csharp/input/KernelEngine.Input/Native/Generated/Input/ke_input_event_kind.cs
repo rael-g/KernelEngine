@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Input.Native;
 
-public enum ke_input_event_kind
+[NativeTypeName("unsigned int")]
+public enum ke_input_event_kind : uint
 {
     KE_INPUT_EVENT_NONE = 0,
     KE_INPUT_EVENT_KEY_DOWN = 1,

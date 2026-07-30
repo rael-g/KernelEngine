@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Logger.Native;
 
-public enum ke_log_level
+[NativeTypeName("unsigned int")]
+public enum ke_log_level : uint
 {
     KE_LOG_LEVEL_TRACE = 0,
     KE_LOG_LEVEL_DEBUG = 1,

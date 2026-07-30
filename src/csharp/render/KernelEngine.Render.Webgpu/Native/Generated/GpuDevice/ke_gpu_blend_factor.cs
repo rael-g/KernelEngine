@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public enum ke_gpu_blend_factor
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_blend_factor : uint
 {
     KE_GPU_BLEND_FACTOR_ZERO,
     KE_GPU_BLEND_FACTOR_ONE,

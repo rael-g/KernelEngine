@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public enum ke_gpu_texture_format
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_texture_format : uint
 {
     KE_GPU_TEXTURE_FORMAT_INVALID = 0,
     KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,

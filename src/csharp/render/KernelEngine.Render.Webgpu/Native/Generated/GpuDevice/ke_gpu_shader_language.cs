@@ -2,7 +2,8 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public enum ke_gpu_shader_language
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_shader_language : uint
 {
     KE_GPU_SHADER_LANG_WGSL = 0,
     KE_GPU_SHADER_LANG_SPIRV = 1,
