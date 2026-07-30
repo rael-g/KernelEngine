@@ -15,7 +15,7 @@ const c = @cImport({
 // Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
-const MAX_KEYS = 512;
+const MAX_KEYS = c.KE_INPUT_MAX_KEYS;
 const EVENT_CAPACITY = 512;
 
 const State = struct {
@@ -86,11 +86,11 @@ fn inputOnKey(self: ?*c.ke_input, key: i32, action: i32) callconv(.c) void {
     if (key < 0 or key >= MAX_KEYS) return;
     const s = stateOf(api);
     const k: usize = @intCast(key);
-    if (action == 1) {
+    if (action == c.KE_INPUT_ACTION_PRESS) {
         if (!s.keys_down[k]) s.keys_pressed[k] = true;
         s.keys_down[k] = true;
         pushEvent(s, c.KE_INPUT_EVENT_KEY_DOWN, key, 0, 0);
-    } else if (action == 0) {
+    } else if (action == c.KE_INPUT_ACTION_RELEASE) {
         s.keys_released[k] = true;
         s.keys_down[k] = false;
         pushEvent(s, c.KE_INPUT_EVENT_KEY_UP, key, 0, 0);
@@ -109,14 +109,14 @@ fn inputOnMouseMove(self: ?*c.ke_input, x: f32, y: f32) callconv(.c) void {
 
 fn inputOnMouseButton(self: ?*c.ke_input, button: i32, action: i32) callconv(.c) void {
     const api = self orelse return;
-    if (button < 0 or button >= 32) return;
+    if (button < 0 or button >= c.KE_INPUT_MAX_MOUSE_BUTTONS) return;
     const s = stateOf(api);
     const mask = @as(u32, 1) << @intCast(button);
-    if (action == 1) {
+    if (action == c.KE_INPUT_ACTION_PRESS) {
         if ((s.mouse_buttons_down & mask) == 0) s.mouse_buttons_pressed |= mask;
         s.mouse_buttons_down |= mask;
         pushEvent(s, c.KE_INPUT_EVENT_MOUSE_BUTTON_DOWN, button, 0, 0);
-    } else if (action == 0) {
+    } else if (action == c.KE_INPUT_ACTION_RELEASE) {
         s.mouse_buttons_released |= mask;
         s.mouse_buttons_down &= ~mask;
         pushEvent(s, c.KE_INPUT_EVENT_MOUSE_BUTTON_UP, button, 0, 0);
@@ -184,6 +184,55 @@ fn inputGetSnapshot(self: ?*c.ke_input, out: [*c]c.ke_input_snapshot) callconv(.
     o.mouse_buttons_down = s.mouse_buttons_down;
     o.mouse_buttons_pressed = s.mouse_buttons_pressed;
     o.mouse_buttons_released = s.mouse_buttons_released;
+}
+
+// -- snapshot accessors ------------------------------------------------------
+// The snapshot travels as a plain value with no vtable, so its bitset packing
+// would otherwise have to be re-derived by every consumer. These are the one
+// canonical decode; nothing outside this file needs to know the word/bit split.
+
+fn keyBit(snapshot: [*c]const c.ke_input_snapshot, words: *const [c.KE_INPUT_KEY_WORDS]u64, key: i32) c.ke_bool {
+    if (snapshot == null) return 0;
+    if (key < 0 or key >= MAX_KEYS) return 0;
+    const idx: usize = @intCast(key);
+    const bit = @as(u64, 1) << @intCast(idx % 64);
+    return @intFromBool((words[idx / 64] & bit) != 0);
+}
+
+fn buttonBit(snapshot: [*c]const c.ke_input_snapshot, mask: u32, button: i32) c.ke_bool {
+    if (snapshot == null) return 0;
+    if (button < 0 or button >= c.KE_INPUT_MAX_MOUSE_BUTTONS) return 0;
+    return @intFromBool((mask & (@as(u32, 1) << @intCast(button))) != 0);
+}
+
+export fn ke_input_snapshot_is_key_down(snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+    if (snapshot == null) return 0;
+    return keyBit(snapshot, &snapshot.*.keys_down, key);
+}
+
+export fn ke_input_snapshot_is_key_pressed(snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+    if (snapshot == null) return 0;
+    return keyBit(snapshot, &snapshot.*.keys_pressed, key);
+}
+
+export fn ke_input_snapshot_is_key_released(snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+    if (snapshot == null) return 0;
+    return keyBit(snapshot, &snapshot.*.keys_released, key);
+}
+
+export fn ke_input_snapshot_is_mouse_button_down(snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+    if (snapshot == null) return 0;
+    return buttonBit(snapshot, snapshot.*.mouse_buttons_down, button);
+}
+
+export fn ke_input_snapshot_is_mouse_button_pressed(snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+    if (snapshot == null) return 0;
+    return buttonBit(snapshot, snapshot.*.mouse_buttons_pressed, button);
+}
+
+export fn ke_input_snapshot_is_mouse_button_released(snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+    if (snapshot == null) return 0;
+    return buttonBit(snapshot, snapshot.*.mouse_buttons_released, button);
 }
 
 fn inputDestroy(self: ?*c.ke_input) callconv(.c) void {
