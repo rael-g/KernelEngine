@@ -2,17 +2,6 @@
 
 namespace KernelEngine.Input;
 
-/// <summary>Discriminator for <see cref="InputEvent"/>.</summary>
-public enum InputEventKind
-{
-    None             = 0,
-    KeyDown          = 1,
-    KeyUp            = 2,
-    MouseButtonDown  = 3,
-    MouseButtonUp    = 4,
-    MouseScroll      = 6,
-}
-
 /// <summary>
 /// One discrete input event produced on ke.main and dispatched through the node tree on ke.sim.
 /// Flat layout; field meaning depends on <see cref="Kind"/>:

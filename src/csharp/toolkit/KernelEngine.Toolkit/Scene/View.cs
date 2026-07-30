@@ -36,14 +36,14 @@ public readonly ref struct View
     /// Returns false when no input service is registered.
     /// Key codes follow the GLFW convention (e.g. 87='W', 262=Right Arrow).
     /// </summary>
-    public bool IsKeyDown(int key) => _input?.IsKeyDown(key) ?? false;
+    public bool IsKeyDown(int key) => _input?.IsKeyDown((Key)key) ?? false;
 
     /// <summary>
     /// True if the given key transitioned from up to down this tick (rising edge).
     /// Returns false when no input service is registered.
     /// </summary>
     public bool IsKeyJustPressed(int key)
-        => (_input?.IsKeyDown(key) ?? false) && !(_prevInput?.IsKeyDown(key) ?? false);
+        => (_input?.IsKeyDown((Key)key) ?? false) && !(_prevInput?.IsKeyDown((Key)key) ?? false);
 
     internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input,
                   IInputReader? prevInput = null, nint systemCtx = default)

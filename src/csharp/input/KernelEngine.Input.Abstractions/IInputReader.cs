@@ -20,11 +20,11 @@ namespace KernelEngine.Input;
 /// </summary>
 public interface IInputReader
 {
-    bool IsKeyDown(int keyCode);
+    bool IsKeyDown(Key key);
 
     Vector2 MousePosition { get; }
     Vector2 MouseDelta { get; }
     Vector2 ScrollDelta { get; }
 
-    bool IsMouseButtonDown(int button);
+    bool IsMouseButtonDown(MouseButton button);
 }

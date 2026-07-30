@@ -60,20 +60,17 @@ public unsafe class InputDrainTests
     }
 
     [Fact]
-    public void SnapshotReader_CorrectlyReadsBits()
+    public void SnapshotAccessors_DecodeBitsets()
     {
         var data = new ke_input_snapshot();
         // Key 65 (A) -> word 1, bit 1
         data.keys_down[1] = 1UL << (65 % 64);
-        data.mouse_x = 100;
-        data.mouse_y = 200;
         data.mouse_buttons_down = 1u << (int)MouseButton.Right;
 
-        var reader = new InputSnapshotReader(data);
-
-        Assert.True(reader.IsKeyDown(65));
-        Assert.False(reader.IsKeyDown(64));
-        Assert.Equal(100, reader.MousePosition.X);
-        Assert.True(reader.IsMouseButtonDown((int)MouseButton.Right));
+        Assert.True(InputSnapshot.IsKeyDown(data, Key.A));
+        Assert.False(InputSnapshot.IsKeyDown(data, (Key)64));
+        Assert.False(InputSnapshot.IsKeyPressed(data, Key.A));
+        Assert.True(InputSnapshot.IsMouseButtonDown(data, MouseButton.Right));
+        Assert.False(InputSnapshot.IsMouseButtonDown(data, MouseButton.Left));
     }
 }
