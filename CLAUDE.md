@@ -34,7 +34,7 @@ dotnet test KernelEngine.slnx
 ```bash
 dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
 dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
-python scripts/coverage.py           # native (GTest suites) + C# tests with unified coverage report (clean | report subcommands)
+dotnet run scripts/coverage.cs        # native (GTest suites) + C# tests with unified coverage report (clean | report subcommands)
 ```
 
 Shaders compile to `src/zig/render/core/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_core` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
