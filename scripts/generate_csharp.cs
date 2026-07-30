@@ -31,7 +31,7 @@ using System.Text.RegularExpressions;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 
-string? apiPath = null, ns = null, nativeNs = null, outDir = null, enumsOutDir = null;
+string? apiPath = null, ns = null, nativeNs = null, outDir = null, enumsOutDir = null, library = null;
 var explicitProviders = new HashSet<string>();
 var explicitCallbacks = new HashSet<string>();
 var extraUsings = new List<string>();
@@ -52,6 +52,12 @@ for (var i = 0; i < args.Length; i++)
         // `ke_logger*`) needs that domain's Native namespace in scope; nothing
         // in one domain's ke_api.json can name it, so the caller supplies it.
         case "--using": extraUsings.Add(args[++i]); break;
+        // The native .so a value-type's free functions DllImport against. Not
+        // derivable from ke_api.json (no plugin-to-.so mapping in the
+        // description); required whenever a domain has free-function groups —
+        // guessing it from the domain name is how ke_logger_simple almost
+        // shipped as a DllImport against "ke_logger_default", which doesn't exist.
+        case "--library": library = args[++i]; break;
     }
 }
 
@@ -59,7 +65,7 @@ if (apiPath is null || ns is null || nativeNs is null || outDir is null)
 {
     Console.Error.WriteLine("usage: dotnet run scripts/generate_csharp.cs -- --api <ke_api.json> "
         + "--namespace <NS> --native-namespace <NS.Native> --out <dir> "
-        + "[--provider <vtable>]... [--callback <vtable>]... [--using <NS>]...");
+        + "[--provider <vtable>]... [--callback <vtable>]... [--using <NS>]... [--library <so-name>]");
     return 1;
 }
 
@@ -86,8 +92,15 @@ foreach (var callback in classified.Callbacks)
 
 if (classified.FreeFunctionGroups.Count > 0)
     foreach (var (owner, fns) in classified.FreeFunctionGroups)
+    {
+        if (library is null)
+        {
+            Console.Error.WriteLine($"error: domain has free functions on '{owner}' but --library was not given");
+            return 1;
+        }
         File.WriteAllText(Path.Combine(outDir, $"{Idioms.StripPrefix(owner)}Functions.g.cs"),
-            CSharpBackend.RenderFreeFunctions(owner, fns, ns, nativeNs));
+            CSharpBackend.RenderFreeFunctions(owner, fns, ns, nativeNs, library));
+    }
 
 Console.WriteLine($"wrote {classified.Providers.Count} provider(s), {classified.Callbacks.Count} callback(s), "
     + $"{classified.FreeFunctionGroups.Count} free-function group(s) to {outDir}");
@@ -246,13 +259,27 @@ static class Classifier
         // parameter — this is the ke_input_snapshot_is_key_down(snapshot, key)
         // shape: a value type with no vtable, so its ABI-side operations are
         // free functions rather than slots.
+        //
+        // A DIFFERENT shape (e.g. ke_console_sink_create() -> ke_logger_sink):
+        // a plain factory function with no owning first-param at all, producing
+        // a callback-vtable VALUE meant to be handed to some other slot (like
+        // ke_logger.add_sink) rather than one it belongs to itself. Grouped by
+        // its RETURN type instead, into the same FreeFunctionGroups bucket the
+        // callback interface's file already gets rendered into.
         foreach (var fn in model.Functions)
         {
             if (fn.Name.EndsWith("_create") && fn.Params.Any(p => p.Type.Contains("ke_error"))
                 && vtables.Any(v => fn.Returns.Contains(v.Name + "_handle")))
                 continue; // factory function; the provider constructor handles it
-            var owner = fn.Params.FirstOrDefault()?.Type.Replace("const ", "").Replace("struct ", "").TrimEnd('*', ' ');
-            if (owner is null) continue;
+
+            // Only group by first-param type when that type is one of OUR OWN
+            // structs (a genuine value-type domain concept, e.g. ke_input_snapshot) —
+            // not a bare C primitive (int32_t, float, ...), which ke_log_level_to_string's
+            // single int param would otherwise misidentify as its "owner".
+            var firstParamType = fn.Params.FirstOrDefault()?.Type.Replace("const ", "").Replace("struct ", "").TrimEnd('*', ' ');
+            var owner = firstParamType is not null && model.Structs.Any(s => s.Name == firstParamType) ? firstParamType : null;
+            owner ??= vtables.Select(v => v.Name).FirstOrDefault(n => fn.Returns.Trim() == n);
+            if (owner is null) continue; // no known owner yet (e.g. ke_log_level_to_string) — not wired until something needs it
             (result.FreeFunctionGroups.TryGetValue(owner, out var list)
                 ? list : result.FreeFunctionGroups[owner] = []).Add(fn);
         }
@@ -451,6 +478,7 @@ static class CSharpBackend
         var o = new List<string>
         {
             Header,
+            "using System.Runtime.CompilerServices;", // CallConvCdecl, needed whenever a slot has a [callback] param
             "using System.Runtime.InteropServices;",
             "using KernelEngine.Common;",
             "using KernelEngine.Common.Native;",
@@ -507,10 +535,14 @@ static class CSharpBackend
             var call = string.Join(", ", fparams.Select(p => Idioms.Ident(p.Name!)));
             o.Add(XmlDoc("    ", factory.Doc, fparams.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                 throwsOnFail: true).TrimEnd());
-            // internal: raw vtable-pointer params from sibling native layers aren't
-            // constructible by managed callers without an unsafe context — the
-            // hand-written idiom partial exposes the public constructor form.
-            o.Add($"    internal {typeName}({sig})");
+            // internal only when a param is a raw pointer from a sibling native
+            // layer that a managed caller cannot supply without an unsafe
+            // context (the hand-written idiom partial then exposes a public
+            // constructor form instead). A factory with no such param — often
+            // zero params at all, like ke_logger_create() — has nothing to hide
+            // and stays public directly; no idiom wrapper needed.
+            var needsIdiomWrapper = fparams.Any(p => Idioms.IsPointer(p.Type));
+            o.Add($"    {(needsIdiomWrapper ? "internal" : "public")} {typeName}({sig})");
             o.Add("    {");
             o.Add("        ke_error* err = null;");
             o.Add($"        var handle = {nativeNs}.NativeMethods.{StripKe(factory.Name)}({(call.Length > 0 ? call + ", " : "")}&err);");
@@ -721,6 +753,21 @@ static class CSharpBackend
         o.Add("    }");
         o.Add("");
 
+        // A second overload, forwarding an already-built value straight through
+        // with no GCHandle/trampoline wrapping: for a callback-vtable VALUE that
+        // came from a native value-factory (e.g. ke_console_sink_create(), see
+        // ClassifiedModel.FreeFunctionGroups) rather than a managed
+        // implementation of the interface above.
+        var cbParamCsType = Idioms.Deref(cbParam.Type);
+        o.Add($"    /// <summary>{slot.Doc} Takes an already-built <c>{cbType.Name}</c> value directly — for one produced by a native factory, not a managed <see cref=\"{ifaceName}\"/>.</summary>");
+        o.Add(XmlDoc("    ", null, otherParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), throwsOnFail: true).TrimEnd());
+        o.Add($"    public void {Idioms.Pascal(slot.Name)}Raw({cbParamCsType} {Idioms.Ident(cbParam.Name!)}{otherArgs})");
+        o.Add("    {");
+        o.Add("        ke_error* err = null;");
+        o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle, {Idioms.Ident(cbParam.Name!)}{extraCall}, &err), err, \"{slot.Name}\");");
+        o.Add("    }");
+        o.Add("");
+
         foreach (var s in cbType.Slots)
         {
             var trampParams = s.Params.Select(p =>
@@ -777,11 +824,10 @@ static class CSharpBackend
 
     // -------------------------------------------------------- free functions
 
-    public static string RenderFreeFunctions(string owner, List<ApiFunction> fns, string ns, string nativeNs)
+    public static string RenderFreeFunctions(string owner, List<ApiFunction> fns, string ns, string nativeNs, string libraryName)
     {
         var ownerCs = Idioms.StripPrefix(owner);
         var prefix = owner + "_";
-        var libraryName = InferLibrary(owner);
 
         var o = new List<string>
         {
@@ -795,24 +841,47 @@ static class CSharpBackend
             "{",
         };
 
+        // Two shapes share this file: an operation ON a value type (self is the
+        // group's own owner, taken `in`/by-ref — ke_input_snapshot_is_key_down),
+        // and a plain factory producing one BY VALUE with no owner param at all
+        // (ke_console_sink_create() -> ke_logger_sink). Told apart by whether
+        // the function's first param (if any) actually IS the owner type.
+        bool HasSelf(ApiFunction f) => f.Params.Count > 0 && Idioms.Deref(f.Params[0].Type) == owner;
+
         foreach (var f in fns)
         {
-            var self = f.Params[0];
-            var rest = f.Params.Skip(1).ToList();
-            var methodName = Idioms.Pascal(f.Name.StartsWith(prefix) ? f.Name[prefix.Length..] : f.Name);
+            var hasSelf = HasSelf(f);
+            var self = hasSelf ? f.Params[0] : null;
+            var rest = hasSelf ? f.Params.Skip(1).ToList() : f.Params;
+            // Not every value-factory function follows the {owner}_{verb} naming
+            // convention (ke_console_sink_create doesn't start with ke_logger_sink_);
+            // fall back to stripping the generic ke_ prefix so it still reads as a
+            // method name instead of repeating the whole C symbol.
+            var strippedName = f.Name.StartsWith(prefix) ? f.Name[prefix.Length..]
+                : f.Name.StartsWith("ke_") ? f.Name[3..] : f.Name;
+            var methodName = Idioms.Pascal(strippedName);
             var sig = string.Join(", ", rest.Select(p =>
                 (p.Has("enum") ? Idioms.StripPrefix(p.TagValue("enum")!) : Idioms.CsPrimitive(p.Type)) + " " + Idioms.Ident(p.Name!)));
             var call = string.Concat(rest.Select(p => ", " + (p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!))));
             var retType = f.Returns == "ke_bool" ? "bool" : Idioms.CsPrimitive(f.Returns);
+            var selfSig = self is not null ? $"in {Idioms.Deref(self.Type)} {Idioms.Ident(self.Name!)}" : null;
+            var fullSig = string.Join(", ", new[] { selfSig }.Where(s => s is not null).Append(sig).Where(s => s!.Length > 0));
 
             o.Add(XmlDoc("    ", f.Doc, rest.Select(p => (Idioms.Ident(p.Name!), p.Doc))).TrimEnd());
-            o.Add($"    public static {retType} {methodName}(in {Idioms.Deref(self.Type)} {Idioms.Ident(self.Name!)}{(sig.Length > 0 ? ", " + sig : "")})");
+            o.Add($"    public static {retType} {methodName}({fullSig})");
             o.Add("    {");
-            o.Add($"        fixed ({Idioms.Deref(self.Type)}* p = &{Idioms.Ident(self.Name!)})");
-            if (f.Returns == "ke_bool")
-                o.Add($"            return Native.{f.Name}(p{call}) != 0;");
+            if (self is not null)
+            {
+                o.Add($"        fixed ({Idioms.Deref(self.Type)}* p = &{Idioms.Ident(self.Name!)})");
+                o.Add((f.Returns == "ke_bool" ? $"            return Native.{f.Name}(p{call}) != 0;"
+                                               : $"            return Native.{f.Name}(p{call});"));
+            }
             else
-                o.Add($"            return Native.{f.Name}(p{call});");
+            {
+                var call2 = string.Join(", ", rest.Select(p => p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!)));
+                o.Add((f.Returns == "ke_bool" ? $"        return Native.{f.Name}({call2}) != 0;"
+                                               : $"        return Native.{f.Name}({call2});"));
+            }
             o.Add("    }");
             o.Add("");
         }
@@ -824,12 +893,14 @@ static class CSharpBackend
         o.Add("    {");
         foreach (var f in fns)
         {
-            var rest = f.Params.Skip(1).ToList();
-            var restSig = string.Concat(rest.Select(p => $", {(p.Has("enum") ? "int" : Idioms.CsPrimitive(p.Type))} {Idioms.Ident(p.Name!)}"));
+            var hasSelf = HasSelf(f);
+            var rest = (hasSelf ? f.Params.Skip(1) : f.Params)
+                .Select(p => $"{(p.Has("enum") ? "int" : Idioms.CsPrimitive(p.Type))} {Idioms.Ident(p.Name!)}").ToList();
+            var selfParamSig = hasSelf ? $"{Idioms.Deref(f.Params[0].Type)}* {Idioms.Ident(f.Params[0].Name!)}" : null;
+            var nativeSig = string.Join(", ", (selfParamSig is not null ? [selfParamSig] : Array.Empty<string>()).Concat(rest));
             o.Add($"        [DllImport(\"{libraryName}\", CallingConvention = CallingConvention.Cdecl,");
             o.Add($"                   EntryPoint = \"{f.Name}\", ExactSpelling = true)]");
-            o.Add($"        public static extern {(f.Returns == "ke_bool" ? "byte" : Idioms.CsPrimitive(f.Returns))} {f.Name}"
-                + $"({Idioms.Deref(f.Params[0].Type)}* {Idioms.Ident(f.Params[0].Name!)}{restSig});");
+            o.Add($"        public static extern {(f.Returns == "ke_bool" ? "byte" : Idioms.CsPrimitive(f.Returns))} {f.Name}({nativeSig});");
             o.Add("");
         }
         o.Add("    }");
@@ -837,13 +908,6 @@ static class CSharpBackend
         o.Add("");
         return string.Join('\n', o);
     }
-
-    /// The native shared-library name a free function's DllImport targets. Not
-    /// derivable from ke_api.json alone (the description has no plugin-to-.so
-    /// mapping yet); callers of the generator pass it, defaulting to a guess
-    /// from the owning type's domain prefix for the common case.
-    static string InferLibrary(string ownerType) =>
-        "ke_" + ownerType.Replace("ke_", "").Split('_')[0] + "_default";
 
     static string StripKe(string factoryName) => factoryName.StartsWith("ke_") ? factoryName[3..] : factoryName;
 }
