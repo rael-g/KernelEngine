@@ -198,12 +198,13 @@ record ApiField(string Name, string Type, string? Doc)
     public JsonObject ToJson() => new() { ["name"] = Name, ["type"] = Type, ["doc"] = Doc };
 }
 
-record ApiSlot(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
+record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
 {
     public JsonObject ToJson() => new()
     {
         ["name"] = Name,
         ["returns"] = Returns,
+        ["tags"] = new JsonArray(Tags.Select(t => (JsonNode)t).ToArray()),
         ["doc"] = Doc,
         ["return_doc"] = ReturnDoc,
         ["params"] = new JsonArray(Params.Select(p => (JsonNode)p.ToJson()).ToArray()),
@@ -265,7 +266,7 @@ static class DocParser
 {
     static readonly Regex TagBlock = new(@"^\s*\[([^\]]+)\]\s*");
 
-    public static (string Summary, Dictionary<string, (List<string> Tags, string Doc)> Params, string ReturnDoc)
+    public static (List<string> SummaryTags, string Summary, Dictionary<string, (List<string> Tags, string Doc)> Params, string ReturnDoc)
         Parse(JsonObject? node)
     {
         var summary = new List<string>();
@@ -306,7 +307,11 @@ static class DocParser
         }
 
         var pmap = paramChunks.ToDictionary(kv => kv.Key, kv => SplitTags(kv.Value));
-        return (string.Join(' ', string.Join(' ', summary).Split(' ', StringSplitOptions.RemoveEmptyEntries)),
+        // A slot's own summary can lead with a [tag] block too — the same bracket
+        // convention as @param, just describing the SLOT (e.g. [lifecycle:init]
+        // on ke_window.on_initialize) rather than one of its parameters.
+        var (summaryTags, summaryText) = SplitTags(summary);
+        return (summaryTags, summaryText,
                 pmap, string.Join(' ', string.Join(' ', returnChunks).Split(' ', StringSplitOptions.RemoveEmptyEntries)));
     }
 
@@ -477,7 +482,7 @@ static class Extractor
             var fieldName = f["name"]!.GetValue<string>();
             var qual = f["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
             var (ret, paramTypes) = SplitFnPtr(qual);
-            var (summary, pdocs, retDoc) = DocParser.Parse(f);
+            var (summaryTags, summary, pdocs, retDoc) = DocParser.Parse(f);
 
             if (ret is null)
             {
@@ -501,7 +506,7 @@ static class Extractor
                     ? (d.Tags, d.Doc) : ([], "");
                 slotParams.Add(new ApiParam(pname, paramTypes[i], tags, doc.Length > 0 ? doc : null));
             }
-            slots.Add(new ApiSlot(fieldName, ret, summary.Length > 0 ? summary : null,
+            slots.Add(new ApiSlot(fieldName, ret, summaryTags, summary.Length > 0 ? summary : null,
                 retDoc.Length > 0 ? retDoc : null, slotParams));
         }
 
@@ -511,7 +516,7 @@ static class Extractor
 
     static ApiFunction ExtractFunction(JsonObject node, string name, List<string> errors)
     {
-        var (summary, pdocs, retDoc) = DocParser.Parse(node);
+        var (_, summary, pdocs, retDoc) = DocParser.Parse(node); // functions don't carry slot-shape tags today
         var paramDecls = ((node["inner"] as JsonArray) ?? [])
             .Where(c => c!["kind"]?.GetValue<string>() == "ParmVarDecl").Select(c => c!.AsObject()).ToList();
         var pnames = paramDecls.Select(p => p["name"]?.GetValue<string>()).ToList();
