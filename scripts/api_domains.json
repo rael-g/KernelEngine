@@ -15,7 +15,8 @@
       "nativeNamespace": "KernelEngine.Input.Native",
       "outDir": "src/csharp/input/KernelEngine.Input/Generated",
       "abstractionsOutDir": "src/csharp/input/KernelEngine.Input.Abstractions/Generated",
-      "usings": ["KernelEngine.Logger.Native"]
+      "usings": ["KernelEngine.Logger.Native"],
+      "library": "ke_input_default"
     },
     {
       "name": "window",
@@ -28,6 +29,21 @@
       "nativeNamespace": "KernelEngine.Window.Native",
       "outDir": "src/csharp/window/KernelEngine.Window/Generated",
       "usings": []
+    },
+    {
+      "name": "logger",
+      "headers": [
+        "src/c/logger/kernel_engine/logger/logger.h",
+        "src/c/logger/kernel_engine/logger/log_level.h"
+      ],
+      "includeDirs": ["src/c/logger", "src/zig/common/include"],
+      "apiJson": "src/csharp/logger/ke_api.json",
+      "namespace": "KernelEngine.Logger",
+      "nativeNamespace": "KernelEngine.Logger.Native",
+      "outDir": "src/csharp/logger/KernelEngine.Logger/Generated",
+      "abstractionsOutDir": "src/csharp/logger/KernelEngine.Logger.Abstractions/Generated",
+      "usings": [],
+      "library": "ke_logger_simple"
     }
   ]
 }

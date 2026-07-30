@@ -51,6 +51,7 @@ try
         var committedAbstractionsDir = d["abstractionsOutDir"] is not null
             ? Path.Combine(rootDir, d["abstractionsOutDir"]!.GetValue<string>()) : committedOutDir;
         var usings = d["usings"]?.AsArray().Select(u => u!.GetValue<string>()).ToList() ?? [];
+        var library = d["library"]?.GetValue<string>();
 
         var tmpApiJson = Path.Combine(tmpRoot, $"{name}.ke_api.json");
         var tmpOutDir = Path.Combine(tmpRoot, name, "out");
@@ -83,6 +84,7 @@ try
             "--api", tmpApiJson, "--namespace", ns, "--native-namespace", nativeNs,
             "--out", tmpOutDir, "--enums-out", tmpEnumsDir };
         foreach (var u in usings) genArgs.AddRange(["--using", u]);
+        if (library is not null) genArgs.AddRange(["--library", library]);
 
         if (!RunDotnet(genArgs, out var genErr))
         {
