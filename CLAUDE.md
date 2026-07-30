@@ -23,6 +23,8 @@ build/native/bin/test_integration_cpp                # native integration tests 
 
 Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. C# expects native libraries at `build/native/bin/`.
 
+**`test_ke_kernel` and `test_integration_cpp` (C++/GTest) are frozen — new tests are written in Zig, not C++.** They exist only because they predate the engine's move to Zig; keep them passing, but grow them only as a byproduct of touching that file for another reason, never to house new coverage. A new test for Zig-implemented engine logic belongs in that plugin's own `zig build test` (see any `src/zig/<plugin>/build.zig` for the pattern — `b.addTest` against the plugin's own source, run via `b.addRunArtifact`).
+
 ### Managed (.NET 10)
 
 ```bash
@@ -35,12 +37,12 @@ dotnet test KernelEngine.slnx
 ```bash
 dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
 dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
-dotnet run scripts/coverage.cs        # native (GTest suites) + C# tests with unified coverage report (clean | report subcommands)
+dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 ```
 
 Shaders compile to `src/zig/render/core/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_core` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
-**Known debt**: native source-based coverage no longer reaches the engine's own (Zig) logic — only the two GTest suites' own translation units. See the "Clang source-based coverage" line in [`docs/ZigMigrationPlan.md`](docs/ZigMigrationPlan.md) §7 for why (Zig's linker rejects Clang's profiling relocations) and what would need to change to close it.
+**Known debt — no native/Zig coverage story.** `scripts/coverage.cs` only measures C#. Zig's own compiler has no source-coverage instrumentation. DWARF-based tools don't fill the gap either: `kcov` (which works via `libdw`, compiler-agnostic in principle) was tried directly against a Zig-compiled binary and produces silent 0% coverage — Zig 0.16 emits a line-table extended opcode `libdw` doesn't decode, confirmed by comparing against an identical `gcc`/`zig cc`-compiled C binary (which `kcov` measures correctly) and by inspecting the raw DWARF with `readelf --debug-dump=decodedline`. This blocks coverage for both `zig build test` targets and the two legacy GTest suites equally, so there's no coverage-driven reason to keep writing new tests in C++.
 
 ### Running examples after a native rebuild
 

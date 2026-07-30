@@ -2,10 +2,8 @@
 
 // KernelEngine Coverage.
 //
-// Builds + runs the test suite under Clang source-based coverage instrumentation
-// (native: -fprofile-instr-generate / .profraw / llvm-profdata / llvm-cov;
-// managed: dotnet test + coverlet), then merges both worlds into a single
-// ReportGenerator output and prints a structured summary.
+// Runs the managed (C#) test suite under coverlet, then feeds it through
+// ReportGenerator and prints a structured summary.
 //
 // Usage:
 //     dotnet run scripts/coverage.cs            # full pipeline
@@ -14,16 +12,14 @@
 //
 // Everything lives under build/coverage/. The script never writes outside it.
 //
-// Native coverage scope: almost all engine logic is Zig source, which Zig's own
-// linker compiles/links directly — it does not go through Clang, so instrumenting
-// every C/C++ translation unit under src/ does not apply. The two GTest suites are
-// the one exception — their build.zig shells out to the SYSTEM clang++ directly
-// for both compile and link (an ABI workaround already in place, see
-// tests/c/kernel/build.zig), so -Dcoverage=true there produces real, valid
-// instrumented binaries. That still surfaces meaningful native signal beyond just
-// the test files themselves: contract headers with inline definitions get
-// instrumented too, since they're #include'd straight into the test translation
-// units.
+// C# only. There is no native coverage story: Zig's own compiler has no
+// source-coverage instrumentation, and DWARF-based tools (kcov) can't fill
+// that gap either — Zig 0.16 emits a line-table extended opcode `libdw`
+// (which kcov depends on) doesn't decode, so kcov silently reports 0% for
+// any Zig binary regardless of what actually ran. This affects `zig build
+// test` targets the same way it affects the two legacy GTest suites
+// (tests/c/kernel, tests/integration/cpp) — neither produces real coverage
+// data today, so this script no longer tries to build or run them.
 
 using System.Diagnostics;
 using System.Globalization;
@@ -49,64 +45,36 @@ static class Coverage
 {
     static readonly string BaseDir = Path.GetFullPath(Path.Combine(ScriptPaths.Dir, ".."));
     static readonly string CoverageDir = Path.Combine(BaseDir, "build", "coverage");
-    static readonly string ZigOutDir = Path.Combine(CoverageDir, "zig-out");
-    static readonly string ProfrawsDir = Path.Combine(CoverageDir, "profraws");
     static readonly string ManagedDir = Path.Combine(CoverageDir, "managed");
     static readonly string ReportDir = Path.Combine(CoverageDir, "report");
-    static readonly string MergedProfdata = Path.Combine(CoverageDir, "merged.profdata");
-    static readonly string NativeLcov = Path.Combine(CoverageDir, "native.lcov");
     static readonly string SummaryTxt = Path.Combine(CoverageDir, "summary.txt");
-
-    static readonly string[] NativeTestBinaries = ["test_ke_kernel", "test_integration_cpp"];
-
-    // L3 (auto-generated C# bindings under */Native/Generated/) is excluded from
-    // analysis up front. "Native" is no longer split into kernel/plugin layers:
-    // see the file header for why only the GTest suites' own translation units
-    // (plus any contract headers they #include) are instrumented today.
-    static readonly (string Id, string Name, Func<string, bool> Predicate)[] Layers =
-    [
-        ("L2", "Native (GTest suites + included headers)",
-            p => Norm(p).StartsWith("tests/") || Norm(p).StartsWith("src/c/")),
-        ("L4", "C# framework",
-            p => Norm(p).StartsWith("src/csharp/") && !Norm(p).Contains("/Generated/")),
-    ];
 
     const double GapThresholdPct = 30.0;
     const int GapThresholdLines = 50;
 
     static string Norm(string p) => p.Replace('\\', '/');
 
-    // ── Subprocess helpers ───────────────────────────────────────────────────
-
-    static int Run(IReadOnlyList<string> cmd, IReadOnlyDictionary<string, string>? env = null,
-        bool check = true, string? cwd = null, string? stdoutFile = null)
+    // src/csharp/<project>/... -> <project>
+    static string ModuleFor(string path)
     {
-        // Long argv (e.g. thousands of profraw paths) is uninteresting noise.
-        // Show only the program name and a count of the rest.
-        Console.WriteLine(cmd.Count > 6
-            ? $"  $ {cmd[0]} ... ({cmd.Count - 1} args)"
-            : $"  $ {string.Join(' ', cmd)}");
+        var parts = Norm(path).Split('/');
+        return parts.Length >= 3 ? parts[2] : "(unknown)";
+    }
 
+    static string Short(string module) => module.Split('/') is { Length: > 0 } parts ? parts[^1] : module;
+
+    // ── Subprocess helper ────────────────────────────────────────────────────
+
+    static int Run(IReadOnlyList<string> cmd, bool check = true, string? cwd = null)
+    {
+        Console.WriteLine($"  $ {string.Join(' ', cmd)}");
         using var process = new Process
         {
-            StartInfo = new ProcessStartInfo(cmd[0])
-            {
-                WorkingDirectory = cwd ?? "",
-                RedirectStandardOutput = stdoutFile is not null,
-            },
+            StartInfo = new ProcessStartInfo(cmd[0]) { WorkingDirectory = cwd ?? "" },
         };
         foreach (var a in cmd.Skip(1)) process.StartInfo.ArgumentList.Add(a);
-        if (env is not null)
-            foreach (var (k, v) in env) process.StartInfo.Environment[k] = v;
-
         process.Start();
-        if (stdoutFile is not null)
-        {
-            using var writer = new StreamWriter(stdoutFile);
-            writer.Write(process.StandardOutput.ReadToEnd());
-        }
         process.WaitForExit();
-
         if (check && process.ExitCode != 0)
             throw new InvalidOperationException($"Command failed ({process.ExitCode}): {string.Join(' ', cmd)}");
         return process.ExitCode;
@@ -120,79 +88,11 @@ static class Coverage
         Console.WriteLine(new string('-', 70));
     }
 
-    // ── Phase 1: build ───────────────────────────────────────────────────────
-
-    static void ConfigureAndBuild()
-    {
-        Banner("[1/4] Build (root build.zig, -Dcoverage=true for the GTest suites)");
-        var vcpkgRoot = Environment.GetEnvironmentVariable("VCPKG_ROOT");
-        List<string> cmdArgs = ["zig", "build", "--prefix", ZigOutDir, "-Dcoverage=true"];
-        if (vcpkgRoot is not null) cmdArgs.Add($"-Dvcpkg-root={vcpkgRoot}");
-        Run(cmdArgs, cwd: BaseDir);
-    }
-
-    // ── Phase 2: native tests + profile merge ───────────────────────────────
-
-    static List<string> RunNativeTests()
-    {
-        Banner("[2/4] Run native tests (instrumented GTest suites)");
-        if (Directory.Exists(ProfrawsDir)) Directory.Delete(ProfrawsDir, recursive: true);
-        Directory.CreateDirectory(ProfrawsDir);
-        var binDir = Path.Combine(ZigOutDir, "bin");
-        var binaries = new List<string>();
-        foreach (var name in NativeTestBinaries)
-        {
-            var exe = Path.Combine(binDir, OperatingSystem.IsWindows() ? $"{name}.exe" : name);
-            if (!File.Exists(exe))
-            {
-                Console.WriteLine($"  (missing {exe} - skipping)");
-                continue;
-            }
-            binaries.Add(exe);
-            // %p (PID) + %m (per-binary id) keeps every run's profraw unique.
-            var env = new Dictionary<string, string>
-            {
-                ["LLVM_PROFILE_FILE"] = Path.Combine(ProfrawsDir, $"{name}-%p-%m.profraw"),
-            };
-            Run([exe], env: env, check: false);
-        }
-        return binaries;
-    }
-
-    static bool MergeNativeProfile(List<string> binaries)
-    {
-        var profraws = Directory.Exists(ProfrawsDir)
-            ? Directory.GetFiles(ProfrawsDir, "*.profraw")
-            : [];
-        if (profraws.Length == 0)
-        {
-            Console.WriteLine("  (no .profraw produced - skipping native LCOV export)");
-            return false;
-        }
-        Console.WriteLine($"  Merging {profraws.Length} profraw files -> {Path.GetFileName(MergedProfdata)}");
-        var profrawList = Path.Combine(CoverageDir, "profraws.list");
-        File.WriteAllText(profrawList, string.Join('\n', profraws));
-        Run(["llvm-profdata", "merge", "-sparse", $"-o={MergedProfdata}", "-f", profrawList]);
-
-        if (binaries.Count == 0)
-        {
-            Console.WriteLine("  (no instrumented binaries ran - skipping native LCOV export)");
-            return false;
-        }
-        Console.WriteLine($"  Exporting LCOV across {binaries.Count} binaries -> {Path.GetFileName(NativeLcov)}");
-        var first = binaries[0];
-        var rest = binaries.Skip(1);
-        List<string> cmd = ["llvm-cov", "export", "-format=lcov", $"-instr-profile={MergedProfdata}", first];
-        cmd.AddRange(rest.Select(p => $"-object={p}"));
-        Run(cmd, cwd: BaseDir, stdoutFile: NativeLcov);
-        return true;
-    }
-
-    // ── Phase 3: managed tests ───────────────────────────────────────────────
+    // ── Phase 1: managed tests ───────────────────────────────────────────────
 
     static void RunManagedTests()
     {
-        Banner("[3/4] Run managed (C#) tests");
+        Banner("[1/2] Run managed (C#) tests");
         if (Directory.Exists(ManagedDir)) Directory.Delete(ManagedDir, recursive: true);
         Directory.CreateDirectory(ManagedDir);
         Run([
@@ -205,21 +105,18 @@ static class Coverage
         ], check: false);
     }
 
-    // ── Phase 4: unified report ──────────────────────────────────────────────
+    // ── Phase 2: report ──────────────────────────────────────────────────────
 
     static void BuildReport()
     {
-        Banner("[4/4] Generate unified report");
+        Banner("[2/2] Generate report");
         if (Directory.Exists(ReportDir)) Directory.Delete(ReportDir, recursive: true);
         Directory.CreateDirectory(ReportDir);
 
-        var inputs = new List<string>();
-        if (File.Exists(NativeLcov) && new FileInfo(NativeLcov).Length > 0)
-            inputs.Add(NativeLcov);
-        if (Directory.Exists(ManagedDir))
-            inputs.AddRange(Directory.GetFiles(ManagedDir, "*.xml", SearchOption.AllDirectories));
-
-        if (inputs.Count == 0)
+        var inputs = Directory.Exists(ManagedDir)
+            ? Directory.GetFiles(ManagedDir, "*.xml", SearchOption.AllDirectories)
+            : [];
+        if (inputs.Length == 0)
         {
             Console.WriteLine("  (no coverage data - nothing to report)");
             return;
@@ -230,8 +127,6 @@ static class Coverage
             "-targetdir:" + ReportDir,
             "-reporttypes:Cobertura;Html",
             "-sourcedirs:" + BaseDir,
-            // *tests* is no longer excluded: the GTest suites' own .cpp files are
-            // now the primary native coverage signal (see file header).
             "-filefilters:-*Generated*;-*examples*",
             "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*",
         ], check: false);
@@ -245,21 +140,6 @@ static class Coverage
         public double Pct => Total != 0 ? 100.0 * Covered / Total : 0.0;
     }
 
-    static string ModuleFor(string layer, string path)
-    {
-        var parts = Norm(path).Split('/');
-        return layer switch
-        {
-            // tests/c/kernel/... -> tests/c/kernel ; src/c/<domain>/... -> src/c/<domain>
-            "L2" => parts.Length >= 3 ? string.Join('/', parts[..3]) : string.Join('/', parts),
-            // src/csharp/<project>/... -> <project>
-            "L4" => parts.Length >= 3 ? parts[2] : "(unknown)",
-            _ => "(unknown)",
-        };
-    }
-
-    static string Short(string module) => module.Split('/') is { Length: > 0 } parts ? parts[^1] : module;
-
     static void PrintSummary()
     {
         var cobertura = Path.Combine(ReportDir, "Cobertura.xml");
@@ -270,14 +150,8 @@ static class Coverage
         }
 
         var root = XDocument.Load(cobertura).Root!;
-
-        var perLayer = Layers.ToDictionary(l => l.Id, _ => new
-        {
-            Totals = new Counts(),
-            Modules = new Dictionary<string, Counts>(),
-        });
-        var native = new Counts();
-        var managed = new Counts();
+        var total = new Counts();
+        var modules = new Dictionary<string, Counts>();
 
         var baseUri = Norm(BaseDir).TrimEnd('/') + "/";
 
@@ -285,64 +159,43 @@ static class Coverage
         {
             var filePath = Norm(clazz.Attribute("filename")?.Value ?? "");
             if (filePath.StartsWith(baseUri)) filePath = filePath[baseUri.Length..];
+            if (!filePath.StartsWith("src/csharp/") || filePath.Contains("/Generated/")) continue;
 
             var lines = clazz.Descendants("line").ToList();
             if (lines.Count == 0) continue;
             var covered = lines.Count(ln => int.Parse(ln.Attribute("hits")?.Value ?? "0") > 0);
             var lineTotal = lines.Count;
 
-            foreach (var (id, _, predicate) in Layers)
-            {
-                if (!predicate(filePath)) continue;
-                var l = perLayer[id];
-                l.Totals.Covered += covered;
-                l.Totals.Total += lineTotal;
-                var module = ModuleFor(id, filePath);
-                if (!l.Modules.TryGetValue(module, out var m)) l.Modules[module] = m = new Counts();
-                m.Covered += covered;
-                m.Total += lineTotal;
-                var bucket = id == "L2" ? native : managed;
-                bucket.Covered += covered;
-                bucket.Total += lineTotal;
-                break;
-            }
+            total.Covered += covered;
+            total.Total += lineTotal;
+            var module = ModuleFor(filePath);
+            if (!modules.TryGetValue(module, out var m)) modules[module] = m = new Counts();
+            m.Covered += covered;
+            m.Total += lineTotal;
         }
-
-        var total = new Counts { Covered = native.Covered + managed.Covered, Total = native.Total + managed.Total };
 
         var outLines = new List<string>();
         void W(string s = "") => outLines.Add(s);
 
         var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
         W(new string('=', 70));
-        W($"  KernelEngine Coverage - {now}");
+        W($"  KernelEngine Coverage (C#) - {now}");
         W(new string('=', 70));
         W();
         W($"  TOTAL                                          {total.Pct,5:F1}%   {total.Covered}/{total.Total}");
         W();
-        W($"  Native  (C/C++)                                {native.Pct,5:F1}%   {native.Covered}/{native.Total}");
-        W($"  Managed (C#)                                   {managed.Pct,5:F1}%   {managed.Covered}/{managed.Total}");
-        W();
-        W("  Per layer:");
-        foreach (var (id, name, _) in Layers)
-        {
-            var l = perLayer[id];
-            W($"    {id} - {name,-22} {l.Totals.Pct,5:F1}%   {l.Totals.Covered}/{l.Totals.Total}");
-            foreach (var (module, m) in l.Modules.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-                W($"        {Short(module),-38} {m.Pct,5:F1}%");
-        }
+        foreach (var (module, m) in modules.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            W($"    {Short(module),-38} {m.Pct,5:F1}%");
         W();
 
-        var gaps = new List<(string Module, double Pct, int Total)>();
-        foreach (var (id, _, _) in Layers)
-            foreach (var (module, m) in perLayer[id].Modules)
-                if (m.Total >= GapThresholdLines && m.Pct < GapThresholdPct)
-                    gaps.Add((module, m.Pct, m.Total));
-
+        var gaps = modules.Where(kv => kv.Value.Total >= GapThresholdLines && kv.Value.Pct < GapThresholdPct)
+            .Select(kv => (Module: kv.Key, kv.Value.Pct, kv.Value.Total))
+            .OrderBy(g => g.Pct)
+            .ToList();
         if (gaps.Count > 0)
         {
             W($"  Critical gaps (< {GapThresholdPct:F0}% AND > {GapThresholdLines} lines):");
-            foreach (var (module, p, n) in gaps.OrderBy(g => g.Pct))
+            foreach (var (module, p, n) in gaps)
                 W($"    - {Short(module),-38} {p,5:F1}%   ({n} lines)");
             W();
         }
@@ -372,9 +225,6 @@ static class Coverage
 
     public static void CmdRun()
     {
-        ConfigureAndBuild();
-        var binaries = RunNativeTests();
-        MergeNativeProfile(binaries);
         RunManagedTests();
         BuildReport();
         PrintSummary();
