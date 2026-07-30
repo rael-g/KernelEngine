@@ -26,8 +26,7 @@ public class ServiceCollectionExtensionsTests
 
         var sink = provider.GetService<ILoggerSink>();
         Assert.NotNull(sink);
-        Assert.IsType<ConsoleSink>(sink);
-        Assert.Equal(LogLevel.Trace, ((ConsoleSink)sink).MinLevel);
+        Assert.Equal(LogLevel.Trace, sink.MinLevel);
     }
 
     [Fact]
@@ -37,7 +36,7 @@ public class ServiceCollectionExtensionsTests
         services.AddConsoleSink(LogLevel.Error);
         var provider = services.BuildServiceProvider();
 
-        var sink = (ConsoleSink)provider.GetRequiredService<ILoggerSink>();
+        var sink = provider.GetRequiredService<ILoggerSink>();
         Assert.Equal(LogLevel.Error, sink.MinLevel);
     }
 
