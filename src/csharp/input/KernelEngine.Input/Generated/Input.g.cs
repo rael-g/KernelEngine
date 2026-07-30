@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Input.Native;
+using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Input;
 
@@ -20,7 +21,7 @@ public sealed unsafe partial class Input : IDisposable
     /// <summary>Creates an input system.</summary>
     /// <param name="logger">Optional logger; pass NULL to disable logging.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    internal Input(KernelEngine.Logger.Native.ke_logger* logger)
+    internal Input(ke_logger* logger)
     {
         ke_error* err = null;
         var handle = KernelEngine.Input.Native.NativeMethods.input_create(logger, &err);
@@ -75,92 +76,11 @@ public sealed unsafe partial class Input : IDisposable
             return (int)Handle->drain_events(Handle, p, (uint)outBuf.Length);
     }
 
-    /// <summary>Releases the native input system.</summary>
+    /// <summary>Releases the native input.</summary>
     public void Dispose()
     {
         if (_native == null) return;
         _destroy(_native);
         _native = null;
-    }
-}
-
-/// <summary>Reads a captured <see cref="ke_input_snapshot"/>.
-/// The bitset packing lives behind these accessors, not in the caller.</summary>
-public static unsafe class InputSnapshot
-{
-    /// <summary>Returns true while the key is held down.</summary>
-    /// <param name="key">Key to query. Out-of-range codes read as false.</param>
-    public static bool IsKeyDown(in ke_input_snapshot snapshot, Key key)
-    {
-        fixed (ke_input_snapshot* p = &snapshot)
-            return Native.ke_input_snapshot_is_key_down(p, (int)key) != 0;
-    }
-
-    /// <summary>Returns true if the key transitioned to down during the snapshot's frame.</summary>
-    /// <param name="key">Key to query. Out-of-range codes read as false.</param>
-    public static bool IsKeyPressed(in ke_input_snapshot snapshot, Key key)
-    {
-        fixed (ke_input_snapshot* p = &snapshot)
-            return Native.ke_input_snapshot_is_key_pressed(p, (int)key) != 0;
-    }
-
-    /// <summary>Returns true if the key transitioned to up during the snapshot's frame.</summary>
-    /// <param name="key">Key to query. Out-of-range codes read as false.</param>
-    public static bool IsKeyReleased(in ke_input_snapshot snapshot, Key key)
-    {
-        fixed (ke_input_snapshot* p = &snapshot)
-            return Native.ke_input_snapshot_is_key_released(p, (int)key) != 0;
-    }
-
-    /// <summary>Returns true while the mouse button is held down.</summary>
-    /// <param name="button">Button to query. Out-of-range indices read as false.</param>
-    public static bool IsMouseButtonDown(in ke_input_snapshot snapshot, MouseButton button)
-    {
-        fixed (ke_input_snapshot* p = &snapshot)
-            return Native.ke_input_snapshot_is_mouse_button_down(p, (int)button) != 0;
-    }
-
-    /// <summary>Returns true if the mouse button transitioned to down during the snapshot's frame.</summary>
-    /// <param name="button">Button to query. Out-of-range indices read as false.</param>
-    public static bool IsMouseButtonPressed(in ke_input_snapshot snapshot, MouseButton button)
-    {
-        fixed (ke_input_snapshot* p = &snapshot)
-            return Native.ke_input_snapshot_is_mouse_button_pressed(p, (int)button) != 0;
-    }
-
-    /// <summary>Returns true if the mouse button transitioned to up during the snapshot's frame.</summary>
-    /// <param name="button">Button to query. Out-of-range indices read as false.</param>
-    public static bool IsMouseButtonReleased(in ke_input_snapshot snapshot, MouseButton button)
-    {
-        fixed (ke_input_snapshot* p = &snapshot)
-            return Native.ke_input_snapshot_is_mouse_button_released(p, (int)button) != 0;
-    }
-
-    private static class Native
-    {
-        [DllImport("ke_input_default", CallingConvention = CallingConvention.Cdecl,
-                   EntryPoint = "ke_input_snapshot_is_key_down", ExactSpelling = true)]
-        public static extern byte ke_input_snapshot_is_key_down(ke_input_snapshot* snapshot, int code);
-
-        [DllImport("ke_input_default", CallingConvention = CallingConvention.Cdecl,
-                   EntryPoint = "ke_input_snapshot_is_key_pressed", ExactSpelling = true)]
-        public static extern byte ke_input_snapshot_is_key_pressed(ke_input_snapshot* snapshot, int code);
-
-        [DllImport("ke_input_default", CallingConvention = CallingConvention.Cdecl,
-                   EntryPoint = "ke_input_snapshot_is_key_released", ExactSpelling = true)]
-        public static extern byte ke_input_snapshot_is_key_released(ke_input_snapshot* snapshot, int code);
-
-        [DllImport("ke_input_default", CallingConvention = CallingConvention.Cdecl,
-                   EntryPoint = "ke_input_snapshot_is_mouse_button_down", ExactSpelling = true)]
-        public static extern byte ke_input_snapshot_is_mouse_button_down(ke_input_snapshot* snapshot, int code);
-
-        [DllImport("ke_input_default", CallingConvention = CallingConvention.Cdecl,
-                   EntryPoint = "ke_input_snapshot_is_mouse_button_pressed", ExactSpelling = true)]
-        public static extern byte ke_input_snapshot_is_mouse_button_pressed(ke_input_snapshot* snapshot, int code);
-
-        [DllImport("ke_input_default", CallingConvention = CallingConvention.Cdecl,
-                   EntryPoint = "ke_input_snapshot_is_mouse_button_released", ExactSpelling = true)]
-        public static extern byte ke_input_snapshot_is_mouse_button_released(ke_input_snapshot* snapshot, int code);
-
     }
 }
