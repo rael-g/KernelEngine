@@ -839,6 +839,7 @@
         {
           "name": "update",
           "returns": "_Bool",
+          "tags": [],
           "doc": "Updates internal state, clearing this frame\u0027s pressed/released edges. Call once per tick, before any query.",
           "return_doc": null,
           "params": [
@@ -853,6 +854,7 @@
         {
           "name": "is_key_pressed",
           "returns": "ke_bool",
+          "tags": [],
           "doc": "Returns true if the key transitioned to down during this tick.",
           "return_doc": null,
           "params": [
@@ -869,6 +871,7 @@
         {
           "name": "is_key_released",
           "returns": "ke_bool",
+          "tags": [],
           "doc": "Returns true if the key transitioned to up during this tick.",
           "return_doc": null,
           "params": [
@@ -885,6 +888,7 @@
         {
           "name": "is_key_down",
           "returns": "ke_bool",
+          "tags": [],
           "doc": "Returns true while the key is held down.",
           "return_doc": null,
           "params": [
@@ -901,6 +905,7 @@
         {
           "name": "get_snapshot",
           "returns": "void",
+          "tags": [],
           "doc": "Captures a frozen copy of the current state, safe to read from another thread while this instance keeps updating.",
           "return_doc": null,
           "params": [
@@ -917,6 +922,7 @@
         {
           "name": "drain_events",
           "returns": "uint32_t",
+          "tags": [],
           "doc": "Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.",
           "return_doc": "Number of events written.",
           "params": [
@@ -940,6 +946,9 @@
         {
           "name": "on_key",
           "returns": "void",
+          "tags": [
+            "sink"
+          ],
           "doc": "Reports a key transition from the window backend.",
           "return_doc": null,
           "params": [
@@ -964,6 +973,9 @@
         {
           "name": "on_mouse_move",
           "returns": "void",
+          "tags": [
+            "sink"
+          ],
           "doc": "Reports an absolute cursor position from the window backend.",
           "return_doc": null,
           "params": [
@@ -984,6 +996,9 @@
         {
           "name": "on_mouse_button",
           "returns": "void",
+          "tags": [
+            "sink"
+          ],
           "doc": "Reports a mouse-button transition from the window backend.",
           "return_doc": null,
           "params": [
@@ -1008,6 +1023,9 @@
         {
           "name": "on_mouse_scroll",
           "returns": "void",
+          "tags": [
+            "sink"
+          ],
           "doc": "Reports a scroll-wheel delta from the window backend.",
           "return_doc": null,
           "params": [
@@ -1041,6 +1059,7 @@
         {
           "name": "destroy",
           "returns": "void",
+          "tags": [],
           "doc": null,
           "return_doc": null,
           "params": []

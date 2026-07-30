@@ -61,28 +61,28 @@ extern "C"
         uint32_t (*drain_events)(struct ke_input *self, ke_input_event *out_buf, uint32_t capacity);
 
         /**
-         * Reports a key transition from the window backend.
+         * [sink] Reports a key transition from the window backend.
          * @param key [enum:ke_key] Key that changed.
          * @param action [enum:ke_input_action] Whether the key went down or up.
          */
         void (*on_key)(struct ke_input *self, int32_t key, int32_t action);
 
         /**
-         * Reports an absolute cursor position from the window backend.
+         * [sink] Reports an absolute cursor position from the window backend.
          * @param x Cursor position on the horizontal axis, in pixels.
          * @param y Cursor position on the vertical axis, in pixels.
          */
         void (*on_mouse_move)(struct ke_input *self, float x, float y);
 
         /**
-         * Reports a mouse-button transition from the window backend.
+         * [sink] Reports a mouse-button transition from the window backend.
          * @param button [enum:ke_mouse_button] Button that changed.
          * @param action [enum:ke_input_action] Whether the button went down or up.
          */
         void (*on_mouse_button)(struct ke_input *self, int32_t button, int32_t action);
 
         /**
-         * Reports a scroll-wheel delta from the window backend.
+         * [sink] Reports a scroll-wheel delta from the window backend.
          * @param dx Horizontal scroll delta.
          * @param dy Vertical scroll delta.
          */
