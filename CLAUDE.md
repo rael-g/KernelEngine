@@ -12,8 +12,9 @@ A microkernel game engine: a small ABI-stable C kernel surrounded by C++ plugin 
 
 CMake is gone. The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then invokes every plugin's own `build.zig` with one shared `--prefix` so every `.so`/`.dll` converges into one output directory. Each plugin still owns its own `build.zig`, callable standalone the same way (see any `src/zig/<plugin>/build.zig` header comment for its options).
 
+vcpkg itself is fetched automatically (`.cache/vcpkg-<version>/`) — no manual install, no `VCPKG_ROOT` needed. Pass `-Dvcpkg-root=<path>` (or export `VCPKG_ROOT`) only to point at an existing vcpkg checkout instead.
+
 ```bash
-export VCPKG_ROOT=/path/to/vcpkg                    # or pass -Dvcpkg-root=<path>
 zig build --prefix build/native                     # configure + build + install, one step
 build/native/bin/c_demo_01                           # run a C example (Linux name; c_demo_01.exe on Windows)
 build/native/bin/test_ke_kernel                      # native kernel/framework tests (GTest)

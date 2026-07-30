@@ -26,9 +26,6 @@ pub fn build(b: *std.Build) void {
     // the only native binaries whose linker (system, not Zig's own) can
     // handle Clang's profiling-runtime relocations. See tests/c/kernel/build.zig.
     const coverage = b.option(bool, "coverage", "instrument the GTest suites for Clang source-based coverage") orelse false;
-    const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
-        b.graph.environ_map.get("VCPKG_ROOT") orelse
-        @panic("VCPKG_ROOT not set; pass -Dvcpkg-root=<path> or export VCPKG_ROOT");
 
     // vcpkg dependencies build with `zig cc`/`zig c++`
     // (vcpkg-triplets/x64-{windows,linux}-zig.cmake) instead of the system
@@ -38,9 +35,35 @@ pub fn build(b: *std.Build) void {
         else => "x64-linux-zig",
     };
 
+    // ── vcpkg (fetched, not a system dependency) ─────────────────────────────
+    // vcpkg itself is a small orchestrator binary (microsoft/vcpkg-tool) plus
+    // the scripts/triplets it needs to run standalone (the "standalone
+    // bundle" release asset) — fetched the same way wgpu-native/Slang are.
+    // Port recipes and the C/C++ library sources they build are resolved by
+    // vcpkg itself at install time via its git registry (vcpkg-configuration.json),
+    // same as any vcpkg install; that isn't something a build-time fetch can
+    // shortcut. `-Dvcpkg-root=`/`$VCPKG_ROOT` still override this for anyone
+    // who already has vcpkg installed.
+    const vcpkg_tool_version = "2026-07-13";
+    const vcpkg_dir_default = b.pathJoin(&.{ root, ".cache", b.fmt("vcpkg-{s}", .{vcpkg_tool_version}) });
+    const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
+        b.graph.environ_map.get("VCPKG_ROOT") orelse
+        vcpkg_dir_default;
+    const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg" });
+    const vcpkg_bundle_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/vcpkg-standalone-bundle.tar.gz", .{vcpkg_tool_version});
+    const vcpkg_bin_asset = if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg-glibc";
+    const vcpkg_bin_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_bin_asset });
+    const vcpkg_bundle_tar = b.pathJoin(&.{ vcpkg_root, "bundle.tar.gz" });
+    const vcpkg_fetch = b.addSystemCommand(&.{
+        "sh", "-c",
+        b.fmt(
+            "mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && tar -xzf '{s}' -C '{s}' && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
+            .{ vcpkg_root, vcpkg_exe, vcpkg_bundle_tar, vcpkg_bundle_url, vcpkg_bundle_tar, vcpkg_root, vcpkg_exe, vcpkg_bin_url, vcpkg_exe },
+        ),
+    });
+
     // ── vcpkg (manifest mode) ────────────────────────────────────────────────
     const vcpkg_installed = b.pathJoin(&.{ root, "vcpkg_installed_zig" });
-    const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg" });
     const vcpkg_overlay_triplets = b.pathJoin(&.{ root, "vcpkg-triplets" });
     var vcpkg_install_args: std.ArrayList([]const u8) = .empty;
     vcpkg_install_args.appendSlice(b.allocator, &.{
@@ -53,6 +76,7 @@ pub fn build(b: *std.Build) void {
         b.fmt("--host-triplet={s}", .{triplet}),
     }) catch @panic("OOM");
     const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
+    vcpkg_install.step.dependOn(&vcpkg_fetch.step);
 
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
     const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
