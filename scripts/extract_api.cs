@@ -1,6 +1,7 @@
 #!/usr/bin/env dotnet run
 
-// Extracts a semantic description (ke_api.json) of one or more public headers:
+// kabic's frontend: extracts a semantic description (ke_api.json) of one or
+// more public headers —
 // enums, plain structs, vtable structs (structs holding function-pointer
 // fields), and free functions, together with each slot's doc comment and the
 // bracketed [tag] semantics riding inside it — see docs/ScriptingArchitectureV3.md

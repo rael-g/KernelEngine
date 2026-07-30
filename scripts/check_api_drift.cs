@@ -1,6 +1,6 @@
 #!/usr/bin/env dotnet run
 
-// Detects drift between the C headers and the ke_api.json-driven generated
+// kabic's drift gate: detects drift between the C headers and the ke_api.json-driven generated
 // C# for every domain in scripts/api_domains.json (ScriptingArchitectureV3
 // §8.7: "ke_api.json is an output, regenerated from headers"). Run after
 // editing any migrated domain's headers to catch a forgotten

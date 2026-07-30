@@ -1,8 +1,9 @@
 #!/usr/bin/env dotnet run
 
-// Generates an idiomatic C# layer from a ke_api.json description (produced by
-// scripts/extract_api.cs). See docs/ScriptingArchitectureV3.md §6: this file
-// deliberately keeps two passes separate —
+// kabic's Classifier + CSharpBackend: generates an idiomatic C# layer from a
+// ke_api.json description (produced by kabic's frontend, scripts/extract_api.cs).
+// See docs/ScriptingArchitectureV3.md §6: this file deliberately keeps two
+// passes separate —
 //
 //   §6.1 classification (language-independent): decide what a slot MEANS —
 //     fallible, owned, a sequence, an enum, a callback — from the description

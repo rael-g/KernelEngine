@@ -72,7 +72,7 @@ What differs per language is not *whether* the layer is needed — it is how the
 
 The corrected reading of the C# baseline (§1.1) follows: those 5 195 lines were **not bloat**. They are roughly the right amount of idiom for one language. The defect was never their size — it was that they were written by hand instead of derived.
 
-This makes the generator's justification stronger, not weaker: it is not a way to shrink C#, it is **the only way to give any language a native feel without O(N) hand-written work**.
+This makes `kabic`'s justification stronger, not weaker: it is not a way to shrink C#, it is **the only way to give any language a native feel without O(N) hand-written work**.
 
 ---
 
@@ -83,7 +83,7 @@ Everything in this document serves one two-clause invariant:
 > **(A) Every engine capability is reachable through the C ABI.**
 > **(B) Everything in the C ABI is machine-describable.**
 
-Clause A fails today: engine functionality lives *above* the ABI, in C#, where no other language can reach it (§4). Clause B fails today: the headers carry syntax but not semantics, so a generator cannot produce an idiomatic layer (§5).
+Clause A fails today: engine functionality lives *above* the ABI, in C#, where no other language can reach it (§4). Clause B fails today: the headers carry syntax but not semantics, so `kabic` cannot produce an idiomatic layer (§5).
 
 Restore both clauses and the per-language cost collapses to generation. Restore only one and it does not: describing an incomplete ABI generates bindings to a subset, and completing an undescribable ABI still requires hand-writing the wrappers.
 
@@ -134,7 +134,7 @@ Per domain: an audit table with one verdict per file, and for every LEAKED verdi
 
 ## 5. Track 2 — Describability: annotate the ABI, emit a description
 
-**Problem.** The headers carry types but not meaning. A generator sees `const char*` and cannot know it is borrowed UTF-8; sees `float*` and cannot know it is four floats (this exact gap already produced a real defect — a `const float base_color[4]` parameter lowered to a scalar `float` in generated bindings); sees `int` and cannot know it is a `ke_key`; sees `ke_entity*` next to `size_t count` and cannot know they are paired.
+**Problem.** The headers carry types but not meaning. `kabic` sees `const char*` and cannot know it is borrowed UTF-8; sees `float*` and cannot know it is four floats (this exact gap already produced a real defect — a `const float base_color[4]` parameter lowered to a scalar `float` in generated bindings); sees `int` and cannot know it is a `ke_key`; sees `ke_entity*` next to `size_t count` and cannot know they are paired.
 
 ### 5.1 Attribute-based annotation does not work here — measured
 
@@ -191,7 +191,7 @@ clang AST JSON
    ▼
 ke_api.json          ← committed, drift-checked
    │
-   ├─► C# generator  ─► idiomatic managed layer
+   ├─► CSharpBackend  ─► idiomatic managed layer
    ├─► Lua / Python  ─► loaded at runtime (§6.2)
    └─► doc site
 ```
@@ -202,9 +202,9 @@ ke_api.json          ← committed, drift-checked
 
 This mirrors Godot's `extension_api.json`, with one deliberate simplification: **Godot's description exists to support dynamic dispatch by name at runtime** (`ClassDB`, method binds, hashes), because GDScript resolves calls live. Our vtables are static and known at build time, so the description carries types and semantics but needs **no runtime registry, no method hashes, no name-based dispatch**. Strictly less machinery than Godot, not more.
 
-### 5.4 Worked example — what the generator produces
+### 5.4 Worked example — what `kabic` produces
 
-From the annotated slot in §5.2, the C# generator emits what `Framework/Input/NativeInputActions.cs` writes by hand today:
+From the annotated slot in §5.2, `CSharpBackend` emits what `Framework/Input/NativeInputActions.cs` writes by hand today:
 
 ```csharp
 /// <summary>Loads action bindings from a `.input` file, clearing previous actions.</summary>
@@ -239,28 +239,31 @@ Roughly 70 of 130 lines generated. Only three tags were needed across the whole 
 **Two findings that matter more than the ratio:**
 
 1. **The generated wrapper is better than the hand-written one.** `Input.cs` declares `IsKeyDown(int key)` — the fact that the value is a `ke_key` was lost in hand translation. And `is_key_pressed` exists in the ABI but is silently absent from the managed surface. Hand-written wrappers lose both type information and ABI surface, and nothing detects it.
-2. **Tag drift fails the build.** Because parameter names are recovered by slicing the declaration clang validated (§5.3), the extractor can check that each `@param` names a real parameter. Renaming a parameter without updating its tag produces:
+2. **Tag drift fails the build.** Because parameter names are recovered by slicing the declaration clang validated (§5.3), `kabic`'s frontend can check that each `@param` names a real parameter. Renaming a parameter without updating its tag produces:
    ```
    ERROR: ke_input.is_key_down: @param 'keyy' is not a parameter (signature has ['key'])
    ```
    An annotation that rots breaks the build instead of silently generating a wrong binding.
 
-**Caveats.** The prototype extractor and generator are throwaway scripts. They do not yet emit factories/constructors, structs, or enums, and the type map is incomplete. These are implementation gaps, not mechanism gaps — the pipeline itself is proven.
+**Caveats.** The §5.5 prototype was a throwaway script; the production version is `kabic` itself (§8.2). Early versions did not yet emit factories/constructors, structs, or enums, and the type map was incomplete — implementation gaps, not mechanism gaps; the mechanism itself is proven.
 
 ---
 
-## 6. Track 3 — Derivation: shared classification + per-language backend
+## 6. Track 3 — `kabic`: shared classification + per-language backend
 
-Track 3 is **not one generator**. It splits at a seam that §2 makes obvious: deciding *what a slot means* is language-independent; deciding *how to say it* is not.
+**Naming it.** What Track 3 builds is not a generator — a generator takes input and emits code. This parses (§5.3's clang AST dump), performs semantic analysis (§5.3's `@param`-vs-signature validation, which fails the build on mismatch rather than emitting silently), classifies (§6.1, below), and only then emits, per target. That shape — frontend, semantic model, analysis, per-target codegen — is a compiler's, and it earns a name the way `ke_node_host` or `kerror` did rather than staying "the generator" across a dozen inconsistent mentions. Named **`kabic`** (Kernel ABI Compiler): `scripts/extract_api.cs` is its frontend, `ke_api.json` its IR, `Classifier` its semantic-analysis pass, and each `*Backend` (`CSharpBackend` today) one of its targets — the same relationship `clang`/LLVM have to their passes and backends. Calibrate the analogy honestly: no optimization passes, no multi-stage IR, and today's verifier checks one thing (parameter-name/tag agreement) — a compiler in shape, not yet in sophistication.
+
+`kabic` is **not one generator-shaped blob**. It splits at a seam that §2 makes obvious: deciding *what a slot means* is language-independent; deciding *how to say it* is not.
 
 ```
-headers ──► ke_api.json ──► semantic model ──┬──► C# backend
- (§5)        description        classification │──► Lua backend
-             syntax + tags       fallible /    │──► Python backend
-             + docs              owned /       └──► Zig backend
-                                 sequence /
-                                 callback /
-                                 enum
+headers ──► extract_api.cs ──► ke_api.json ──► Classifier ──┬──► CSharpBackend
+ (§5)         (frontend)         (IR:            (semantic  │──► LuaBackend
+                                  description)     analysis)  │──► PythonBackend
+                                                    fallible / └──► ZigBackend
+                                                    owned /
+                                                    sequence /
+                                                    callback /
+                                                    enum
 ```
 
 ### 6.1 The shared middle — classification
@@ -303,9 +306,9 @@ Seven decisions plus a runtime shim. That is a checklist, so it is possible to k
 
 This is a scheduling difference, not a cost difference. A dynamic language still needs every one of §6.2's seven decisions — idiomatic Lua is far from C. An earlier draft claimed dynamic languages would be *cheaper* than C# and therefore under-test Track 3; under §0 that is withdrawn. **Every language exercises the full backend surface.**
 
-### 6.3 ClangSharp's future
+### 6.4 ClangSharp's future
 
-ClangSharp is retained for the raw P/Invoke layer while the description-driven generator is built on top of it. Once the new generator can emit both layers, ClangSharp is removed — two parsers claiming to be the source of truth is exactly the drift this architecture exists to prevent. **Named as planned debt**, with the removal gated on the new generator reaching parity, not on a date.
+ClangSharp is retained for the raw P/Invoke layer while `kabic` is built on top of it. Once `CSharpBackend` can emit both layers, ClangSharp is removed — two parsers claiming to be the source of truth is exactly the drift this architecture exists to prevent. **Named as planned debt**, with the removal gated on `kabic` reaching parity, not on a date.
 
 ---
 
@@ -329,30 +332,30 @@ Scope check: it removes ~600 LoC of the C# baseline. Real, but it is the smalles
 
 Measured target against the §1.1 baseline: **5 195 hand-written code lines → ≤ 500**, and **1 793 doc lines → 0** (they move into the headers and serve every language).
 
-### 8.2 Stage 0 — infrastructure (once)
+### 8.2 Stage 0 — `kabic` infrastructure (done)
 
-| Step | Deliverable | Done when |
+| Step | Deliverable | Status |
 |---|---|---|
-| 0.1 | Tag vocabulary (§5.2) documented as a reference table | Every tag has a definition and a generation rule |
-| 0.2 | `scripts/extract_api.cs` — AST JSON → `ke_api.json`, with `@param` name validation | Runs over one domain, fails on tag drift |
-| 0.3 | `ke_api.json` committed + drift check wired into the build | A header edit without re-extraction fails the build |
-| 0.4 | `scripts/generate_csharp.cs` — `ke_api.json` → managed layer | Generates the pilot domain |
+| 0.1 | Tag vocabulary (§5.2) | Proven on `ke_input`/`ke_logger`: `[enum:T]`, `[out]`, `[out,array_of:count]`, `[borrowed]`, `[nullable]`, `[callback]` |
+| 0.2 | `scripts/extract_api.cs` — `kabic`'s frontend: clang AST → `ke_api.json`, `@param` validated against the real signature | Done |
+| 0.3 | `scripts/check_api_drift.cs` + `scripts/api_domains.json` — content-based drift gate (regenerates to a temp dir and diffs bytes, not mtimes) | Done |
+| 0.4 | `scripts/generate_csharp.cs` — `Classifier` + `CSharpBackend`, covering provider vtables, `[callback]` vtables, free functions, and enums | Done |
 
-The prototype in §5.5 proves all four are reachable; Stage 0 is about making them production-shaped (C# scripts matching the existing `scripts/` precedent, complete type map, factories, structs, enums).
+Verified end to end on `ke_input` (§8.3) and the `ke_logger`/`ke_logger_sink` callback shape (compile-probed). Not yet done: the tag vocabulary will grow as harder domains surface needs it doesn't cover (§8.4) — Stage 0's infrastructure is stable, its tag *vocabulary* is deliberately open-ended per §8.7.
 
-### 8.3 Stage 1 — pilot domain (`ke_input`)
+### 8.3 Stage 1 — pilot domain (`ke_input`) — done
 
-The cheapest possible falsification of the entire strategy. Chosen because it is small, stable, well shaped, and already partly proven.
+The cheapest possible falsification of the entire strategy. Chosen because it is small, stable, well shaped, and already partly proven. All seven steps landed:
 
-1. **Audit** every file in `src/csharp/input/` against the §4.1 rubric.
-2. **Resolve LEAKED verdicts** — notably the `ke_input_event` → `InputEvent` reshape (§5.5).
-3. **Annotate** `input.h`, `event.h`, `key.h`, `snapshot.h` with doc comments + tags.
-4. **Extract** → `ke_api.json`.
-5. **Generate** the managed layer.
-6. **Delete** the hand-written files the generator replaced.
-7. **Verify** — every example and test that touches input builds and runs unchanged.
+1. **Audit** every file in `src/csharp/input/` against the §4.1 rubric — Appendix A.1.
+2. **Resolve LEAKED verdicts** — the snapshot bitset accessors moved into the ABI (`ke_input_snapshot_is_key_down` etc.); `ke_mouse_button` completed from 3 to 8 values to match the managed enum; `ke_input_action` named for the previously-untyped `1`/`0` convention.
+3. **Annotate** `input.h`, `event.h`, `key.h`, `snapshot.h`, plus `logger.h` for the callback shape.
+4. **Extract** → `src/csharp/input/ke_api.json`, committed.
+5. **Generate** the managed layer via `kabic`.
+6. **Delete** the hand-written files `kabic` replaced — `Key.cs`, `MouseButton.cs`, `InputReaderExtensions.cs`, `Input.cs`, `InputSnapshotReader.cs`.
+7. **Verify** — full solution builds, 124/124 C# tests pass, `zig build` clean.
 
-**Gate**: if the generated layer is not at least as good as the hand-written one, the tag vocabulary is wrong. Fix it here, with one domain burned, not fifteen.
+**Gate held**: the generated layer came out *better* than the hand-written one it replaced — it preserved the `Key` type on `IsKeyDown` (the hand translation had widened it to `int`) and exposed `IsKeyPressed`, which the hand-written wrapper silently omitted despite it existing in the ABI all along.
 
 ### 8.4 Stage 2 — roll out, easiest first
 
@@ -369,7 +372,7 @@ Wave D is where the strategy either lands or reveals that a capability genuinely
 
 ### 8.5 Stage 3 — acceptance test: a second language
 
-Implement a Lua or Python binding: one generator template plus a runtime shim, consuming the same `ke_api.json`. For a dynamic language this should require **no build-time codegen at all** (§6.2).
+Implement a Lua or Python `kabic` backend plus a runtime shim, consuming the same `ke_api.json`. For a dynamic language this should require **no build-time codegen at all** (§6.2).
 
 **Pass condition**: no native change, no hand-written per-domain wrapper. If either is needed, the strategy has a gap and the gap is now visible with a concrete failing case.
 
@@ -382,7 +385,7 @@ Last, and only now, because it registers into an ABI that Stages 1–2 are still
 - **No big bang.** Each domain lands independently; the build and every example stay green between domains.
 - **Generated code is never edited.** Same rule that already governs `Native/Generated/`.
 - **`ke_api.json` is an output.** Regenerated from headers, committed only so the drift check has something to compare against.
-- **Deletion is the deliverable.** A domain is not done when the generator produces output — it is done when the hand-written files it replaces are gone.
+- **Deletion is the deliverable.** A domain is not done when `kabic` produces output — it is done when the hand-written files it replaces are gone.
 
 ---
 
@@ -414,7 +417,7 @@ Per language, permanently hand-written:
 ## 11. Open questions
 
 - **Tag vocabulary and syntax inside `@param`.** `[array:4]`, `[borrowed,utf8]`, `[out,nullable]` is the shape proven in §5.2; the exact set and spelling is the step-1 deliverable. Resolved already: it rides in doc comments, not in attributes (§5.1) and not in a sidecar.
-- **Export macros.** There are 28 distinct `KE_<PLUGIN>_API` macros, each repeating the same four-branch `dllexport`/`dllimport`/`visibility` block, alongside a general `KE_EXPORT` in `common/export.h`. The per-plugin split exists because `dllimport` vs `dllexport` depends on a per-plugin "am I building this?" define — a standard pattern, not dead code. But with Zig as the only toolchain and exports declared Zig-side, whether 28 macros can collapse to one is worth checking. **Not blocking**: the extractor ignores them, or uses them to identify exported factories. Its own cleanup card.
+- **Export macros.** There are 28 distinct `KE_<PLUGIN>_API` macros, each repeating the same four-branch `dllexport`/`dllimport`/`visibility` block, alongside a general `KE_EXPORT` in `common/export.h`. The per-plugin split exists because `dllimport` vs `dllexport` depends on a per-plugin "am I building this?" define — a standard pattern, not dead code. But with Zig as the only toolchain and exports declared Zig-side, whether 28 macros can collapse to one is worth checking. **Not blocking**: `kabic`'s frontend ignores them, or uses them to identify exported factories. Its own cleanup card.
 - **How idiomatic can generation get before it needs hints?** Some conversions (a paired `T*` + `count` into a `Span<T>`) are mechanical; others (should `try_get` return a tuple, a nullable, or throw?) are taste. Likely a small per-slot hint vocabulary layered on §5.1 — but do not design it speculatively; let step 3 surface what is actually needed.
 - **Do the `*.Abstractions` interface projects survive?** ~400 LoC of `IEcs`/`IWorld`/`IInput`/`ISystem` exist for DI and testing. If the concrete generated type is already thin, the interface may be pure ceremony. Decide during step 3.
 - **Where does the composition root go?** §9 names it as a floor, but a native bootstrap ("give me a window + gpu + ecs + runtime + render with sane defaults") would shrink it for every language at once. Out of scope here; worth its own card.
@@ -440,7 +443,7 @@ The answer to *"can a GDExtension-style strategy remove the hand-written per-dom
 
 ## Appendix A — Domain audits (Track 1, §4.1)
 
-Each domain's audit table lands here as it is completed. Verdicts per §4.1: MECHANICAL (generator replaces it), LEAKED (capability must move below the ABI), IDIOM (stays, must be in the §9 floor), DEAD (delete).
+Each domain's audit table lands here as it is completed. Verdicts per §4.1: MECHANICAL (`kabic` replaces it), LEAKED (capability must move below the ABI), IDIOM (stays, must be in the §9 floor), DEAD (delete).
 
 ### A.1 — `input` (615 hand-written LoC) — audited, cleared for Track 2
 
@@ -486,7 +489,7 @@ bool ke_input_snapshot_is_key_released(const ke_input_snapshot *s, int32_t key);
 
 Precisely: the packing does **not** become private — `ke_input_snapshot` crosses the ABI by value, so its layout is public whether or not accessors exist. What the accessors provide is the single *canonical* decode, so no consumer has to re-derive it and none silently breaks if the packing changes. The same reasoning gave the constants (`KE_INPUT_MAX_KEYS`, `KE_INPUT_KEY_WORDS`) names in the header instead of leaving them as prose.
 
-**Why not a `[bitset:512]` tag (Track 2)?** A tag would make every language's generator emit the shift, keeping the encoding a public contract that every binding replicates. The rule: *a tag describes what the C type cannot say; it is not a way to publish an internal detail that should not be public.*
+**Why not a `[bitset:512]` tag (Track 2)?** A tag would make every language's `kabic` backend emit the shift, keeping the encoding a public contract that every binding replicates. The rule: *a tag describes what the C type cannot say; it is not a way to publish an internal detail that should not be public.*
 
 **Three ABI-surface losses found, all silent:**
 
