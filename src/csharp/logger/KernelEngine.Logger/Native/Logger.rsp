@@ -25,6 +25,7 @@ ke_bool=byte
 --exclude
 ke_result
 ke_bool
+ke_log_level_to_string
 --config
 multi-file
 latest-codegen

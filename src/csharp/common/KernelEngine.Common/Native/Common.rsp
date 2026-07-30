@@ -38,6 +38,8 @@ KE_CUBEMAP_NONE
 KE_SHADOW_MAP_NONE
 ke_resource_cache_create
 ke_thread_check_current
+ke_error_last
+ke_error_fatal
 --config
 multi-file
 latest-codegen
