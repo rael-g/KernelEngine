@@ -1,11 +1,9 @@
 #ifndef KERNEL_ENGINE_INPUT_KEY_H_
 #define KERNEL_ENGINE_INPUT_KEY_H_
 
-// Keyboard key codes. Values mirror the GLFW key constants — kept identical so
-// callers can pass either a ke_key or a raw int through the kernel's input
-// snapshot without converting. Indices into ke_input_snapshot.keys_down[8].
-//
-// The managed-side mirror lives in KernelEngine.Kernel.Abstractions/Input/Key.cs.
+// Keyboard and mouse-button codes. Values mirror the GLFW constants — kept
+// identical so a caller can pass either a ke_key or a raw int through the input
+// snapshot without converting. Key codes index the snapshot's key bitsets.
 
 #ifdef __cplusplus
 extern "C"
@@ -139,9 +137,18 @@ extern "C"
 
     typedef enum ke_mouse_button
     {
-        KE_MOUSE_BUTTON_LEFT   = 0,
-        KE_MOUSE_BUTTON_RIGHT  = 1,
-        KE_MOUSE_BUTTON_MIDDLE = 2,
+        KE_MOUSE_BUTTON_1      = 0,
+        KE_MOUSE_BUTTON_2      = 1,
+        KE_MOUSE_BUTTON_3      = 2,
+        KE_MOUSE_BUTTON_4      = 3,
+        KE_MOUSE_BUTTON_5      = 4,
+        KE_MOUSE_BUTTON_6      = 5,
+        KE_MOUSE_BUTTON_7      = 6,
+        KE_MOUSE_BUTTON_8      = 7,
+
+        KE_MOUSE_BUTTON_LEFT   = KE_MOUSE_BUTTON_1,
+        KE_MOUSE_BUTTON_RIGHT  = KE_MOUSE_BUTTON_2,
+        KE_MOUSE_BUTTON_MIDDLE = KE_MOUSE_BUTTON_3,
     } ke_mouse_button;
 
 #ifdef __cplusplus
