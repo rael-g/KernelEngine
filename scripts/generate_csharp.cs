@@ -103,7 +103,11 @@ record ApiParam(string? Name, string Type, IReadOnlyList<string> Tags, string? D
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
-record ApiSlot(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params);
+record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
+{
+    public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
+    public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
+}
 
 record ApiEnumValue(string Name, string RawValue, bool IsInt, string? Doc);
 
@@ -167,7 +171,8 @@ static class ApiReader
         return m;
     }
 
-    static ApiSlot ReadSlot(JsonObject o) => new(Str(o, "name")!, Str(o, "returns")!, Str(o, "doc"),
+    static ApiSlot ReadSlot(JsonObject o) => new(Str(o, "name")!, Str(o, "returns")!,
+        o["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [], Str(o, "doc"),
         Str(o, "return_doc"), o["params"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList());
 
     static ApiParam ReadParam(JsonObject o) => new(Str(o, "name"), Str(o, "type")!,
@@ -180,10 +185,10 @@ static class ApiReader
 // -- §6.1 shared classification: what a slot MEANS, no C# yet ----------------
 // =============================================================================
 
-enum SlotShape { Fallible, ReturnsOutParam, Sequence, Plain }
+enum SlotShape { Fallible, ReturnsOutParam, TupleOutParams, Sequence, Plain }
 
-record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, ApiParam? OutParam, ApiParam? SequenceParam,
-    IReadOnlyList<ApiParam> PublicParams);
+record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiParam? OutParam, ApiParam? SequenceParam,
+    IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams);
 
 class ClassifiedModel
 {
@@ -191,6 +196,13 @@ class ClassifiedModel
     public List<ApiStruct> Callbacks { get; } = [];
     public Dictionary<string, List<ClassifiedSlot>> SlotsByVtable { get; } = [];
     public Dictionary<string, List<ApiFunction>> FreeFunctionGroups { get; } = [];
+    // ke_window's shape: no ke_X_create of its own (backend-agnostic — any
+    // window backend hands back a ke_window_handle), plus two slots that must
+    // run automatically rather than be called again by the consumer:
+    // [lifecycle:init] once right after construction, [lifecycle:shutdown]
+    // once right before destroy. Per vtable name.
+    public Dictionary<string, string> LifecycleInit { get; } = [];
+    public Dictionary<string, string> LifecycleShutdown { get; } = [];
 }
 
 static class Classifier
@@ -222,6 +234,11 @@ static class Classifier
                 result.Providers.Add(v);
 
             result.SlotsByVtable[v.Name] = v.Slots.Select(ClassifySlot).ToList();
+
+            var init = v.Slots.FirstOrDefault(s => s.Has("lifecycle") && s.TagValue("lifecycle") == "init");
+            if (init is not null) result.LifecycleInit[v.Name] = init.Name;
+            var shutdown = v.Slots.FirstOrDefault(s => s.Has("lifecycle") && s.TagValue("lifecycle") == "shutdown");
+            if (shutdown is not null) result.LifecycleShutdown[v.Name] = shutdown.Name;
         }
 
         // Free functions (not ke_X_create factories, which the provider's own
@@ -250,15 +267,23 @@ static class Classifier
             && ps[^1].Type.Replace(" ", "").Contains("ke_error**");
         if (fallible) ps = ps[..^1];
 
-        var outParam = ps.Count == 1 && ps[0].Has("out") && !ps[0].Has("array_of") ? ps[0] : null;
+        var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
+        var outParam = allOut.Count == 1 && ps.Count == 1 ? allOut[0] : null;
         var seqParam = ps.FirstOrDefault(p => p.Has("array_of"));
 
+        // get_size(int32_t *width, int32_t *height, ke_error **out_error) shape:
+        // more than one [out] parameter and nothing else public — a tuple return,
+        // not a single value and not a sequence. Distinct from ReturnsOutParam
+        // (exactly one [out] param, no siblings) purely by count.
+        var tupleOut = allOut.Count >= 2 && allOut.Count == ps.Count ? allOut : null;
+
         var shape = outParam is not null ? SlotShape.ReturnsOutParam
+            : tupleOut is not null ? SlotShape.TupleOutParams
             : seqParam is not null ? SlotShape.Sequence
             : fallible ? SlotShape.Fallible
             : SlotShape.Plain;
 
-        return new ClassifiedSlot(slot, shape, outParam, seqParam, ps);
+        return new ClassifiedSlot(slot, shape, fallible, outParam, seqParam, tupleOut ?? [], ps);
     }
 }
 
@@ -322,7 +347,15 @@ static class Idioms
 
     public static string StripPrefix(string name) => Pascal(name.StartsWith("ke_") ? name[3..] : name);
 
-    public static string CsPrimitive(string cType) => Prim.GetValueOrDefault(cType.Trim(), cType.Trim());
+    public static string CsPrimitive(string cType)
+    {
+        var t = cType.Trim();
+        // An opaque `void *` return (a platform handle: HWND, X11 Window, ...)
+        // is `nint` by convention here, not a raw unsafe pointer — matches the
+        // hand-written precedent this replaces (`(nint)get_native_handle(...)`).
+        if (t is "void *" or "void*") return "nint";
+        return Prim.GetValueOrDefault(t, t);
+    }
 
     public static bool IsPointer(string cType) => cType.TrimEnd().EndsWith('*');
 
@@ -458,6 +491,15 @@ static class CSharpBackend
         o.Add($"    {vtable.Name}* {nativeIface}.Native => Handle;");
         o.Add("");
 
+        classified.LifecycleInit.TryGetValue(vtable.Name, out var initSlot);
+        classified.LifecycleShutdown.TryGetValue(vtable.Name, out var shutdownSlot);
+        var initCall = initSlot is not null
+            ? $"        {{ ke_error* err2 = null; KernelError.ThrowIfFailed(_native->{initSlot}(_native, &err2), err2, \"{initSlot}\"); }}"
+            : null;
+
+        var handleType = vtable.Name + "_handle";
+        var hasHandleType = model.Structs.Any(s => s.Name == handleType);
+
         if (factory is not null)
         {
             var fparams = factory.Params.Where(p => !p.Type.Contains("ke_error")).ToList();
@@ -475,13 +517,37 @@ static class CSharpBackend
             o.Add($"        if (handle.@ref == null) throw KernelError.FromNative(err, \"{factory.Name}\");");
             o.Add("        _native = handle.@ref;");
             o.Add("        _destroy = handle.destroy;");
+            if (initCall is not null) o.Add(initCall);
+            o.Add("    }");
+            o.Add("");
+        }
+        else if (hasHandleType)
+        {
+            // ke_window's shape: no factory of its own — any backend (GLFW, ...)
+            // hands back a ke_window_handle, and construction is generic over
+            // that handle rather than tied to one specific creator function.
+            // Public, unlike the factory ctor above: a ke_X_handle is a plain
+            // managed-visible value type this wrapper itself owns the shape of,
+            // not a raw pointer into a sibling native namespace — any assembly
+            // holding a valid handle (from calling a backend's own factory) can
+            // legitimately construct the wrapper directly.
+            o.Add($"    /// <summary>Wraps an owner <c>{handleType}</c> and runs {typeName.ToLowerInvariant()}'s startup lifecycle hook.</summary>");
+            if (initCall is not null) o.Add("    /// <exception cref=\"KernelError\">The native call failed.</exception>");
+            o.Add($"    public {typeName}({handleType} handle)");
+            o.Add("    {");
+            o.Add("        _native = handle.@ref;");
+            o.Add("        _destroy = handle.destroy;");
+            if (initCall is not null) o.Add(initCall);
             o.Add("    }");
             o.Add("");
         }
 
         foreach (var cs in slots)
         {
-            if (cs.Slot.Name.StartsWith("on_")) continue; // backend-facing event sinks, not game-facing API
+            // [sink]: a backend-facing event callback (e.g. ke_input.on_key), not
+            // game-facing API. [lifecycle:*]: invoked automatically below, not
+            // meant to be called again by the consumer.
+            if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle")) continue;
             if (cs.PublicParams.Any(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
                 RenderCallbackMethod(o, vtable, cs, classified, typeName);
@@ -494,6 +560,8 @@ static class CSharpBackend
         o.Add("    public void Dispose()");
         o.Add("    {");
         o.Add("        if (_native == null) return;");
+        if (shutdownSlot is not null)
+            o.Add($"        _native->{shutdownSlot}(_native, null);");
         o.Add("        _destroy(_native);");
         o.Add("        _native = null;");
         o.Add("    }");
@@ -512,12 +580,49 @@ static class CSharpBackend
             case SlotShape.ReturnsOutParam:
             {
                 var ret = Idioms.Deref(cs.OutParam!.Type);
-                o.Add(XmlDoc("    ", slot.Doc, ret: slot.ReturnDoc).TrimEnd());
+                o.Add(XmlDoc("    ", slot.Doc, ret: slot.ReturnDoc, throwsOnFail: cs.Fallible).TrimEnd());
                 o.Add($"    public {ret} {name}()");
                 o.Add("    {");
                 o.Add($"        {ret} result;");
-                o.Add($"        Handle->{slot.Name}(Handle, &result);");
+                if (cs.Fallible)
+                {
+                    o.Add("        ke_error* err = null;");
+                    o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle, &result, &err), err, \"{slot.Name}\");");
+                }
+                else
+                {
+                    o.Add($"        Handle->{slot.Name}(Handle, &result);");
+                }
                 o.Add("        return result;");
+                o.Add("    }");
+                o.Add("");
+                return;
+            }
+            case SlotShape.TupleOutParams:
+            {
+                // e.g. ke_window.get_size(int32_t *width, int32_t *height, ke_error**)
+                // -> (int Width, int Height) GetSize() — a tuple return, not a Span
+                // (the values are independent scalars, not a homogeneous sequence).
+                var names = cs.OutParams.Select(p => Idioms.Pascal(p.Name!)).ToList();
+                var types = cs.OutParams.Select(p => Idioms.CsPrimitive(Idioms.Deref(p.Type))).ToList();
+                var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
+                var locals = cs.OutParams.Select(p => Idioms.Ident(p.Name!)).ToList();
+                var callArgs = string.Concat(locals.Select(n => $", &{n}"));
+
+                o.Add(XmlDoc("    ", slot.Doc, throwsOnFail: cs.Fallible).TrimEnd());
+                o.Add($"    public ({retTuple}) {name}()");
+                o.Add("    {");
+                foreach (var (t, n) in types.Zip(locals)) o.Add($"        {t} {n};");
+                if (cs.Fallible)
+                {
+                    o.Add("        ke_error* err = null;");
+                    o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{callArgs}, &err), err, \"{slot.Name}\");");
+                }
+                else
+                {
+                    o.Add($"        Handle->{slot.Name}(Handle{callArgs});");
+                }
+                o.Add($"        return ({string.Join(", ", locals)});");
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -558,6 +663,7 @@ static class CSharpBackend
                 var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p)} {Idioms.Ident(p.Name!)}"));
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 var retType = slot.Returns == "ke_bool" ? "bool" : Idioms.CsPrimitive(slot.Returns);
+                var needsCast = retType == "nint"; // CsPrimitive maps `void *` -> nint; the raw call still returns void*
                 o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
                 o.Add($"    public {retType} {name}({sig})");
                 o.Add("    {");
@@ -565,6 +671,8 @@ static class CSharpBackend
                     o.Add($"        return Handle->{slot.Name}(Handle{call}) != 0;");
                 else if (retType == "void")
                     o.Add($"        Handle->{slot.Name}(Handle{call});");
+                else if (needsCast)
+                    o.Add($"        return (nint)Handle->{slot.Name}(Handle{call});");
                 else
                     o.Add($"        return Handle->{slot.Name}(Handle{call});");
                 o.Add("    }");
