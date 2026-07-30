@@ -1,0 +1,80 @@
+// Writing ke_api.json from Kabic.Core's model. Only the frontend writes this
+// file (every reader — Kabic.Core.ApiReader, and therefore every backend —
+// only ever reads it), so the serializer lives here, not in Kabic.Core: a
+// type shared for reading doesn't need to also carry its own write path.
+//
+// Built as a JsonNode tree, not JsonSerializer.Serialize<T>: file-based
+// `dotnet run` apps disable reflection-based serialization by default in
+// .NET 10, and a manual tree needs no source-generated JsonSerializerContext
+// to route around that.
+
+using System.Text.Json.Nodes;
+
+namespace Kabic.Frontend;
+
+public static class Serialization
+{
+    public static JsonObject ToJson(this ApiModel m) => new()
+    {
+        ["enums"] = new JsonArray(m.Enums.Select(e => (JsonNode)e.ToJson()).ToArray()),
+        ["structs"] = new JsonArray(m.Structs.Where(s => !s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
+        ["vtables"] = new JsonArray(m.Structs.Where(s => s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
+        ["functions"] = new JsonArray(m.Functions.Select(f => (JsonNode)f.ToJson()).ToArray()),
+    };
+
+    public static JsonObject ToJson(this ApiParam p) => new()
+    {
+        ["name"] = p.Name,
+        ["type"] = p.Type,
+        ["tags"] = new JsonArray(p.Tags.Select(t => (JsonNode)t).ToArray()),
+        ["doc"] = p.Doc,
+    };
+
+    public static JsonObject ToJson(this ApiEnumValue v) => new()
+    {
+        ["name"] = v.Name,
+        ["value"] = v.IsInt ? JsonValue.Create(long.Parse(v.RawValue)) : JsonValue.Create(v.RawValue),
+        ["doc"] = v.Doc,
+    };
+
+    public static JsonObject ToJson(this ApiEnum e) => new()
+    {
+        ["name"] = e.Name,
+        ["doc"] = e.Doc,
+        ["values"] = new JsonArray(e.Values.Select(v => (JsonNode)v.ToJson()).ToArray()),
+    };
+
+    public static JsonObject ToJson(this ApiField f) => new() { ["name"] = f.Name, ["type"] = f.Type, ["doc"] = f.Doc };
+
+    public static JsonObject ToJson(this ApiSlot s) => new()
+    {
+        ["name"] = s.Name,
+        ["returns"] = s.Returns,
+        ["tags"] = new JsonArray(s.Tags.Select(t => (JsonNode)t).ToArray()),
+        ["doc"] = s.Doc,
+        ["return_doc"] = s.ReturnDoc,
+        ["params"] = new JsonArray(s.Params.Select(p => (JsonNode)p.ToJson()).ToArray()),
+    };
+
+    public static JsonObject ToJson(this ApiStruct s)
+    {
+        var o = new JsonObject
+        {
+            ["name"] = s.Name,
+            ["doc"] = s.Doc,
+            ["fields"] = new JsonArray(s.Fields.Select(f => (JsonNode)f.ToJson()).ToArray()),
+        };
+        if (s.Slots.Count > 0)
+            o["slots"] = new JsonArray(s.Slots.Select(slot => (JsonNode)slot.ToJson()).ToArray());
+        return o;
+    }
+
+    public static JsonObject ToJson(this ApiFunction f) => new()
+    {
+        ["name"] = f.Name,
+        ["returns"] = f.Returns,
+        ["doc"] = f.Doc,
+        ["return_doc"] = f.ReturnDoc,
+        ["params"] = new JsonArray(f.Params.Select(p => (JsonNode)p.ToJson()).ToArray()),
+    };
+}

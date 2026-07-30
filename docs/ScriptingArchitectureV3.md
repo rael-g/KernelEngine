@@ -576,3 +576,13 @@ Fixed two ways at once:
    - `scripts/generate_csharp.cs` stays a thin CLI shell (`#:project ../src/csharp/kabic/Kabic.CSharpBackend/Kabic.CSharpBackend.csproj`, ~100 lines: argument parsing and file-writing orchestration only) — the `dotnet run scripts/generate_csharp.cs` invocation is unchanged.
 
 A future Lua/Python/Zig backend is a sibling project referencing `Kabic.Core` the same way — it cannot access anything `Kabic.CSharpBackend`-specific even by accident, because it is a different assembly. Verified byte-for-byte identical output against the pre-refactor generator for all three migrated domains; full solution builds, all tests pass, `check_api_drift.cs` clean.
+
+### Note — kabic's frontend promoted too, and a real bug found doing it
+
+`scripts/extract_api.cs` had the same disease from a different angle: it defined its **own copy** of `ApiParam`/`ApiSlot`/`ApiEnum`/`ApiStruct`/`ApiFunction`/`ApiModel` — parallel to `Kabic.Core`'s, hand-kept in sync as the write side of `ke_api.json` while `Kabic.Core.ApiReader` is the read side of the exact same file. They had **already diverged**: `ApiEnumValue.Value` was `object` (`long` or `string`) in the extractor's copy, `RawValue: string` + `IsInt: bool` in `Kabic.Core`'s. Only luck (both encode/decode consistently to the same JSON shape) kept it working.
+
+Fixed by promoting the frontend the same way: `src/csharp/kabic/Kabic.Frontend/` (`DocParser`, `DeclText`, `Extractor`, `Serialization` — the last one new, since only the write side needs `ToJson()`; nothing that only *reads* `ke_api.json` needs it, so it doesn't belong in `Kabic.Core`), referencing `Kabic.Core.csproj`, using its model types directly. `scripts/extract_api.cs` is now a ~160-line CLI shell: argument parsing, `zig` resolution, and the `zig cc` process invocation (environment/tooling concerns that don't belong in a reusable library) calling into `Kabic.Frontend`.
+
+Two dead methods found and deleted while moving code, not before: `DocParser.SplitTagsSingle` and `DeclText.FreeFnParamNames` — each had exactly one reference, its own definition.
+
+Verified byte-for-byte identical `ke_api.json` output against the pre-refactor extractor for all three migrated domains; full solution builds, all tests pass, `check_api_drift.cs` clean.
