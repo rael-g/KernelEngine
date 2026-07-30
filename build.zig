@@ -83,10 +83,6 @@ pub fn build(b: *std.Build) void {
         .prefix = absolute_prefix,
         .release_flag = if (debug) "--release=off" else "--release=fast",
         .vcpkg_step = &vcpkg_install.step,
-        // Windows' python.org installer provides "python", not "python3" —
-        // and the Store's "python3" app-execution-alias stub, which shadows
-        // it on PATH, only prints an install nag and never runs anything.
-        .python_exe = if (target.result.os.tag == .windows) "python" else "python3",
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
     };
 
@@ -370,7 +366,7 @@ pub fn build(b: *std.Build) void {
     // ke_compile_material_shaders: glob every KE_MATERIALS_DIRS directory
     // (engine defaults + a downstream example's own materials tree, proving a
     // game can author materials without touching engine source), generate a
-    // per-(material,pass) wrapper via generate_material_wrapper.py, then
+    // per-(material,pass) wrapper via generate_material_wrapper.cs, then
     // compile it the same way any other pass shader compiles.
     const materials_dirs = [_][]const u8{
         b.pathJoin(&.{ shader_lib_dir, "materials" }),
@@ -648,7 +644,7 @@ pub fn build(b: *std.Build) void {
     // ── remaining C examples ────────────────────────────────────────────────
     const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
 
-    // glslangValidator (unlike compile_slang.py) never creates its own output
+    // glslangValidator (unlike compile_slang.cs) never creates its own output
     // directory — it just fails with "Failed to open file" the first time
     // zig-out doesn't exist yet, so every glslang-driven example's shader dir
     // is created up front, mirroring CMake's file(MAKE_DIRECTORY ...) calls.
@@ -760,8 +756,7 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo12 = ctx.example("c_demo_12", "examples/c/12_render_core", &.{
-        argF(b, "python", ctx.python_exe),
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.py" })),
+        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_core" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -853,7 +848,6 @@ const Ctx = struct {
     prefix: []const u8,
     release_flag: []const u8,
     vcpkg_step: *std.Build.Step,
-    python_exe: []const u8,
     // Forwarded to every sub-`zig build` invocation. Some plugins pin
     // `.default_target = .{ .abi = .gnu }` themselves (ke_common and other
     // "pure-logic" built-ins); most don't, including every example and test
@@ -865,7 +859,7 @@ const Ctx = struct {
     // every sub-build.zig for a consistent default.
     target_arg: []const u8,
 
-    /// Compiles one Slang entry point to WGSL via scripts/compile_slang.py,
+    /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs,
     /// mirroring cmake/CompileSlangShader.cmake's ke_compile_slang_shader.
     /// Every render pass loads its shaders at runtime by logical name via
     /// ke_render_core::load_shader, so the output always lands in the one
@@ -883,9 +877,9 @@ const Ctx = struct {
             "cs";
         const out_file = b.pathJoin(&.{ out_dir, b.fmt("{s}.{s}.wgsl", .{ name, suffix }) });
         const run = b.addSystemCommand(&.{
-            ctx.python_exe, b.pathJoin(&.{ ctx.root, "scripts/compile_slang.py" }),
-            "--raw",         "--target",                                          "wgsl",
-            "--entry",       entry,                                                "--stage", stage,
+            "dotnet", "run", b.pathJoin(&.{ ctx.root, "scripts/compile_slang.cs" }),
+            "--raw",  "--target",                                                  "wgsl",
+            "--entry", entry,                                                      "--stage", stage,
         });
         for (includes) |inc| run.addArgs(&.{ "--include", inc });
         run.addArgs(&.{ "--input", input, "--output", out_file });
@@ -933,10 +927,10 @@ const Ctx = struct {
                 const wrapper = b.pathJoin(&.{ gen_dir, b.fmt("{s}.slang", .{combined_name}) });
 
                 const gen_wrapper = b.addSystemCommand(&.{
-                    ctx.python_exe, b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.py" }),
-                    "--material",   material_path,
-                    "--template",   template,
-                    "--output",     wrapper,
+                    "dotnet",     "run", b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.cs" }),
+                    "--material", material_path,
+                    "--template", template,
+                    "--output",   wrapper,
                 });
                 gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
 

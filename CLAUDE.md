@@ -32,7 +32,7 @@ dotnet test KernelEngine.slnx
 ### Scripts
 
 ```bash
-python scripts/compile_slang.py      # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
+dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
 dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
 python scripts/coverage.py           # native (GTest suites) + C# tests with unified coverage report (clean | report subcommands)
 ```
