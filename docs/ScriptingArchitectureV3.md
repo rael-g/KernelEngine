@@ -461,7 +461,7 @@ Each domain's audit table lands here as it is completed. Verdicts per §4.1: MEC
 | `Input/Input.cs` | 130 | MECHANICAL (~70) + IDIOM (~45) | See note below on `DrainEvents` |
 | `Input/InputSnapshotReader.cs` | 36 | **LEAKED** | Replicates the snapshot's bit layout — see below |
 | `Input/ServiceCollectionExtensions.cs` | 16 | IDIOM | DI registration |
-| `Input/INativeInput.cs` | 13 | **DEAD** | Exposes the raw `ke_input*`; already doctrine-rejected |
+| `Input/INativeInput.cs` | 13 | **MECHANICAL** (corrected — see below) | Cross-domain pointer accessor; `kabic` now generates this shape |
 
 **Outcome**: ~375 of 615 lines generated or deleted (61%); ~165 IDIOM, all within the §9 floor. **One LEAKED verdict must land before the domain is cleared for Track 2.**
 
@@ -500,6 +500,8 @@ Precisely: the packing does **not** become private — `ke_input_snapshot` cross
 None was detectable by any test. All three close once the enum, the vtable, and the snapshot accessors are generated.
 
 **Audit lesson.** `InputSnapshotReader` was first classified MECHANICAL because it *looks* like forwarding — short, and it only reads fields. It computes. Apply §4.1's test literally rather than judging by shape: **does this file compute, decide, or store anything?** If yes, it is LEAKED regardless of how thin it looks.
+
+**Second audit correction (found migrating `window`, §8.4).** `INativeInput.Native` was first classified **DEAD**, reasoned from a stale memory note calling the `INativeX.Native` pattern doctrine-rejected. It is not dead: `window.glfw`'s `ServiceCollectionExtensions` consumes it to pass `Input`'s raw pointer into `ke_window_glfw_params`, and the identical `INativeX { ke_x* Native { get; } }` shape is already load-bearing in twelve other domains (`INativeLogger` alone: Audio, Assimp, StbImage, Physics.Box2D, WebgpuRenderModule, Text.StbTrueType, Window.Glfw). This is the project's actual, established answer to cross-domain composition wiring — `InternalsVisibleTo` is banned because it requires the *producer* to enumerate every consumer (the inversion of the inversion this project's DI doctrine exists to prevent); a public `Native` accessor on the wrapper lets any consumer opt in without the producer knowing who they are. Corrected verdict: **MECHANICAL** — the shape is so repeated and boilerplate that `CSharpBackend` now generates it for every provider (§6.2 update).
 
 **Third finding — a duplication comment that already rotted.** `key.h` states *"The managed-side mirror lives in KernelEngine.Kernel.Abstractions/Input/Key.cs"*. That project no longer exists; the file is in `KernelEngine.Input.Abstractions`. A hand-maintained mirror whose own pointer to its twin has gone stale is the argument for generation in one line.
 

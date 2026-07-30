@@ -428,14 +428,34 @@ static class CSharpBackend
         o.Add($"namespace {ns};");
         o.Add("");
 
+        // The INativeX{ ke_x* Native } accessor is this project's sanctioned
+        // cross-domain composition mechanism (see ScriptingArchitectureV3.md
+        // Appendix A.1's second correction): InternalsVisibleTo is banned
+        // because it forces the producer to enumerate every consumer, the
+        // inversion of the inversion this project's DI doctrine forbids. A
+        // public Native accessor lets any consumer opt in without the producer
+        // knowing who they are. Already load-bearing, hand-written, and
+        // identical in shape across a dozen domains (INativeLogger,
+        // INativeWindow, ...) before kabic existed — generating it here just
+        // stops it being copy-pasted per domain.
+        var nativeIface = "INative" + typeName;
+        o.Add($"/// <summary>Exposes the raw native {typeName.ToLowerInvariant()} pointer for cross-domain composition wiring.</summary>");
+        o.Add($"public unsafe interface {nativeIface}");
+        o.Add("{");
+        o.Add($"    {vtable.Name}* Native {{ get; }}");
+        o.Add("}");
+        o.Add("");
+
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
-        o.Add($"public sealed unsafe partial class {typeName} : IDisposable");
+        o.Add($"public sealed unsafe partial class {typeName} : IDisposable, {nativeIface}");
         o.Add("{");
         o.Add($"    private {vtable.Name}* _native;");
         o.Add($"    private readonly delegate* unmanaged[Cdecl]<{vtable.Name}*, void> _destroy;");
         o.Add("");
         o.Add($"    private {vtable.Name}* Handle => _native != null ? _native");
         o.Add($"        : throw new ObjectDisposedException(nameof({typeName}));");
+        o.Add("");
+        o.Add($"    {vtable.Name}* {nativeIface}.Native => Handle;");
         o.Add("");
 
         if (factory is not null)

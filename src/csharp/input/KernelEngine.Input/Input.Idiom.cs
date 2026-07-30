@@ -11,13 +11,11 @@ namespace KernelEngine.Input;
 /// adapter, and the flat-to-discriminated event translation. Everything that is
 /// a direct image of the C ABI is generated in <c>Generated/Input.g.cs</c>.
 /// </summary>
-public sealed unsafe partial class Input : IInput, INativeInput
+public sealed unsafe partial class Input : IInput
 {
     /// <summary>Creates an input system logging through a managed logger.</summary>
     public Input(INativeLogger? logger)
         : this(logger is null ? null : logger.Native) { }
-
-    ke_input* INativeInput.Native => Handle;
 
     /// <inheritdoc/>
     public IInputReader CaptureSnapshot() => new SnapshotReader(GetSnapshot());

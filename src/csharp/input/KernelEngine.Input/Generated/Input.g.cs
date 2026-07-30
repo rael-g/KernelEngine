@@ -9,14 +9,22 @@ using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Input;
 
+/// <summary>Exposes the raw native input pointer for cross-domain composition wiring.</summary>
+public unsafe interface INativeInput
+{
+    ke_input* Native { get; }
+}
+
 /// <summary>Live keyboard and mouse state for one window.</summary>
-public sealed unsafe partial class Input : IDisposable
+public sealed unsafe partial class Input : IDisposable, INativeInput
 {
     private ke_input* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_input*, void> _destroy;
 
     private ke_input* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Input));
+
+    ke_input* INativeInput.Native => Handle;
 
     /// <summary>Creates an input system.</summary>
     /// <param name="logger">Optional logger; pass NULL to disable logging.</param>
