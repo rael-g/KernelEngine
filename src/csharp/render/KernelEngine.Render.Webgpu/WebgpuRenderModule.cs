@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu.Native;
@@ -22,8 +23,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_render_module_handle _module;
     private ke_render_core* _core;
     private readonly string _shaderDir;
-    private readonly System.Numerics.Vector4 _clearColor;
-    private readonly ke_render_cluster_params _clusterParams;
+    private readonly System.Numerics.Vector4? _clearColorOverride;
+    private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
     private readonly ke_render_feature_params _featureParams;
 
     /// <param name="shaderDir">
@@ -32,11 +33,23 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// ke_compile_slang_shader (<c>&lt;cmake build dir&gt;/bin/shaders</c>). No
     /// default — a game must know where its own build placed this.
     /// </param>
-    /// <param name="clearColor">Background color the default passes clear to (RGBA).</param>
-    /// <param name="clusterGridX">Clustered-forward screen-tile columns; 0 = engine default (32).</param>
-    /// <param name="clusterGridY">Clustered-forward screen-tile rows; 0 = engine default (18).</param>
-    /// <param name="clusterGridZ">Clustered-forward depth slices; 0 = engine default (24).</param>
-    /// <param name="maxLightsPerCluster">Per-froxel light-index-list cap; 0 = engine default (256). Raise this for scenes denser than the default sweet spot.</param>
+    /// <param name="clearColor">
+    /// Explicit background color override (RGBA), bypassing the Project file. Default
+    /// (all-zero) reads <c>[render] clear_color_r/g/b/a</c> from <see cref="IConfiguration"/>
+    /// at <see cref="OnLoad"/> instead, falling back to a dark blue if that's absent too.
+    /// </param>
+    /// <param name="clusterGridX">
+    /// Clustered-forward screen-tile columns, bypassing the Project file. 0 (default) reads
+    /// <c>[render] cluster_grid_x</c> from <see cref="IConfiguration"/> at <see cref="OnLoad"/>
+    /// instead; if that's also absent, the native module applies its own default (32).
+    /// </param>
+    /// <param name="clusterGridY">Same as <paramref name="clusterGridX"/>, key <c>cluster_grid_y</c>, native default 18.</param>
+    /// <param name="clusterGridZ">Same as <paramref name="clusterGridX"/>, key <c>cluster_grid_z</c>, native default 24.</param>
+    /// <param name="maxLightsPerCluster">
+    /// Per-froxel light-index-list cap, bypassing the Project file. 0 (default) reads
+    /// <c>[render] max_lights_per_cluster</c> from config; native default 256 if absent there
+    /// too. Raise this for scenes denser than the default sweet spot.
+    /// </param>
     /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist — a game without shadows carries zero shadow-pass footprint. Default true (matches prior behavior).</param>
     /// <param name="enableIbl">When false, materials sample a forced-black environment regardless of any skybox (no ambient/reflection contribution). Skybox rendering itself is unaffected. Default true (matches prior behavior).</param>
     public WebgpuRenderModule(string shaderDir, System.Numerics.Vector4 clearColor = default,
@@ -45,14 +58,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         ArgumentException.ThrowIfNullOrEmpty(shaderDir);
         _shaderDir = shaderDir;
-        _clearColor = clearColor == default ? new(0.10f, 0.15f, 0.30f, 1.0f) : clearColor;
-        _clusterParams = new ke_render_cluster_params
-        {
-            grid_x = clusterGridX,
-            grid_y = clusterGridY,
-            grid_z = clusterGridZ,
-            max_lights_per_cluster = maxLightsPerCluster,
-        };
+        _clearColorOverride = clearColor == default ? null : clearColor;
+        _clusterGridXOverride = clusterGridX;
+        _clusterGridYOverride = clusterGridY;
+        _clusterGridZOverride = clusterGridZ;
+        _maxLightsPerClusterOverride = maxLightsPerCluster;
         _featureParams = new ke_render_feature_params
         {
             enable_shadows = (byte)(enableShadows ? 1 : 0),
@@ -90,7 +100,16 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_device.@ref == null)
             throw Fail("webgpu device create failed", err);
 
-        var cp = _clusterParams;
+        var config = services.GetService<IConfiguration>();
+        var cp = new ke_render_cluster_params
+        {
+            grid_x = _clusterGridXOverride != 0 ? _clusterGridXOverride : (uint)(config?.GetInt("render", "cluster_grid_x", 0) ?? 0),
+            grid_y = _clusterGridYOverride != 0 ? _clusterGridYOverride : (uint)(config?.GetInt("render", "cluster_grid_y", 0) ?? 0),
+            grid_z = _clusterGridZOverride != 0 ? _clusterGridZOverride : (uint)(config?.GetInt("render", "cluster_grid_z", 0) ?? 0),
+            max_lights_per_cluster = _maxLightsPerClusterOverride != 0
+                ? _maxLightsPerClusterOverride
+                : (uint)(config?.GetInt("render", "max_lights_per_cluster", 0) ?? 0),
+        };
         var fp = _featureParams;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
@@ -99,7 +118,24 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw Fail("render module create failed", err);
 
         _core = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_core(_module.@ref);
-        _core->set_clear_color(_core, _clearColor.X, _clearColor.Y, _clearColor.Z, _clearColor.W);
+        var clearColor = _clearColorOverride ?? ResolveClearColor(config);
+        _core->set_clear_color(_core, clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
+    }
+
+    /// <summary>
+    /// Reads <c>[render] clear_color_r/g/b/a</c> from config. Split into four scalar keys
+    /// rather than one array key — the native TOML loader (ke_configuration_toml) skips
+    /// arrays, so a game wanting a config-driven clear color authors this shape.
+    /// </summary>
+    private static System.Numerics.Vector4 ResolveClearColor(IConfiguration? config)
+    {
+        const float defaultR = 0.10f, defaultG = 0.15f, defaultB = 0.30f, defaultA = 1.0f;
+        if (config is null) return new(defaultR, defaultG, defaultB, defaultA);
+        return new(
+            (float)config.GetDouble("render", "clear_color_r", defaultR),
+            (float)config.GetDouble("render", "clear_color_g", defaultG),
+            (float)config.GetDouble("render", "clear_color_b", defaultB),
+            (float)config.GetDouble("render", "clear_color_a", defaultA));
     }
 
     /// <summary>

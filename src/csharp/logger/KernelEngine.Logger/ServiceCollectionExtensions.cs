@@ -1,15 +1,7 @@
 ﻿using KernelEngine.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace KernelEngine.Logger;
-
-/// <summary>POCO bound to <c>[logging]</c> in the Project file. Default level matches the prior
-/// parameterless behavior (all levels through).</summary>
-public sealed class ConsoleSinkOptions
-{
-    public LogLevel ConsoleLevel { get; set; } = LogLevel.Trace;
-}
 
 public static class LoggerServiceCollectionExtensions
 {
@@ -24,28 +16,28 @@ public static class LoggerServiceCollectionExtensions
 
     /// <summary>
     /// Registers the built-in <see cref="ConsoleSink"/> that mirrors the native <c>ke_console_sink</c>.
-    /// Reads <c>[logging]</c> from the Project file when present; otherwise uses
-    /// <see cref="ConsoleSinkOptions"/> defaults.
+    /// Reads <c>[logging] console_level</c> from the Project file when present; otherwise passes
+    /// through every level.
     /// </summary>
     public static IServiceCollection AddConsoleSink(this IServiceCollection services)
     {
-        services.AddProjectConfigSection<ConsoleSinkOptions>("logging");
+        services.TryAddConfigurationSingleton();
         services.AddSingleton<ILoggerSink>(sp =>
         {
-            var opts = sp.GetRequiredService<IOptions<ConsoleSinkOptions>>().Value;
-            return new ConsoleSink { MinLevel = opts.ConsoleLevel };
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var level = cfg.GetString("logging", "console_level", nameof(LogLevel.Trace));
+            return new ConsoleSink { MinLevel = Enum.Parse<LogLevel>(level, ignoreCase: true) };
         });
         return services;
     }
 
     /// <summary>
-    /// Backward-compatible overload that passes the level inline. Equivalent to <c>AddConsoleSink()</c>
-    /// + <c>Configure&lt;ConsoleSinkOptions&gt;</c>; examples that have not migrated to Project keep working.
+    /// Backward-compatible overload that passes the level inline, bypassing the Project file.
+    /// Lets examples that have not migrated to Project keep working.
     /// </summary>
     public static IServiceCollection AddConsoleSink(this IServiceCollection services, LogLevel minLevel)
     {
-        services.AddConsoleSink();
-        services.Configure<ConsoleSinkOptions>(o => o.ConsoleLevel = minLevel);
+        services.AddSingleton<ILoggerSink>(new ConsoleSink { MinLevel = minLevel });
         return services;
     }
 }

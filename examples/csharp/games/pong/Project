@@ -21,7 +21,10 @@ gravity_x = 0.0
 gravity_y = 0.0
 
 [render]
-clear_color = [0.04, 0.04, 0.08, 1.0]
+clear_color_r = 0.04
+clear_color_g = 0.04
+clear_color_b = 0.08
+clear_color_a = 1.0
 ambient_light = [1.0, 1.0, 1.0]
 
 [input]

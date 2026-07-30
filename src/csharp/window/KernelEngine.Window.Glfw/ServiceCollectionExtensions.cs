@@ -3,7 +3,6 @@ using KernelEngine.Configuration;
 using KernelEngine.Window.Glfw.Native;
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using KernelEngine.Input;
 using KernelEngine.Logger;
 
@@ -12,42 +11,40 @@ namespace KernelEngine.Window.Glfw;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers a GLFW-backed <see cref="KernelEngine.Window.Window"/> singleton.
-    /// Reads <c>[runtime.window]</c> from Project.toml when present; otherwise uses
-    /// <see cref="WindowOptions"/> defaults.
+    /// Registers a GLFW-backed <see cref="KernelEngine.Window.Window"/> singleton. Reads
+    /// <c>[runtime.window] width/height/title/fullscreen</c> from the Project file when
+    /// present; otherwise defaults to 1280x720 windowed, titled "KernelEngine".
     /// </summary>
     public static IServiceCollection AddGlfwWindow(this IServiceCollection services)
     {
-        services.AddProjectConfigSection<WindowOptions>("runtime.window");
+        services.TryAddConfigurationSingleton();
         services.AddSingleton<IWindow>(sp =>
         {
-            var opts = sp.GetRequiredService<IOptions<WindowOptions>>().Value;
-            return CreateWindow(sp, opts);
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var width      = (int)cfg.GetInt("runtime.window", "width", 1280);
+            var height     = (int)cfg.GetInt("runtime.window", "height", 720);
+            var title      = cfg.GetString("runtime.window", "title", "KernelEngine");
+            var fullscreen = cfg.GetBool("runtime.window", "fullscreen", false);
+            return CreateWindow(sp, width, height, title, fullscreen);
         });
         return services;
     }
 
     /// <summary>
-    /// Backward-compatible overload that passes window settings inline. Equivalent to
-    /// <c>AddGlfwWindow()</c> + <c>Configure&lt;WindowOptions&gt;(o =&gt; ...)</c>; lets
-    /// examples that have not migrated to Project.toml keep working.
+    /// Backward-compatible overload that passes window settings inline, bypassing the
+    /// Project file. Lets examples that have not migrated to Project keep working.
     /// </summary>
     public static IServiceCollection AddGlfwWindow(
         this IServiceCollection services, int width, int height, string title)
     {
-        services.AddGlfwWindow();
-        services.Configure<WindowOptions>(o =>
-        {
-            o.Width = width;
-            o.Height = height;
-            o.Title = title;
-        });
+        services.AddSingleton<IWindow>(sp => CreateWindow(sp, width, height, title, fullscreen: false));
         return services;
     }
 
-    private static unsafe IWindow CreateWindow(IServiceProvider sp, WindowOptions opts)
+    private static unsafe IWindow CreateWindow(
+        IServiceProvider sp, int width, int height, string title, bool fullscreen)
     {
-        var titlePtr = Marshal.StringToHGlobalAnsi(opts.Title);
+        var titlePtr = Marshal.StringToHGlobalAnsi(title);
         try
         {
             var logger = sp.GetService<INativeLogger>();
@@ -58,9 +55,9 @@ public static class ServiceCollectionExtensions
                 logger = logger != null ? logger.Native : null,
                 input      = input  != null ? input.Native  : null,
                 title      = (sbyte*)titlePtr,
-                width      = opts.Width,
-                height     = opts.Height,
-                fullscreen = opts.Fullscreen,
+                width      = width,
+                height     = height,
+                fullscreen = fullscreen,
             };
 
             ke_error* err = null;

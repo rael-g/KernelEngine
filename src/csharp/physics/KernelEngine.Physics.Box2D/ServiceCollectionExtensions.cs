@@ -2,62 +2,54 @@ using KernelEngine.Configuration;
 using KernelEngine.Common.Native;
 using KernelEngine.Physics.Box2D.Native;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using KernelEngine.Logger;
 
 namespace KernelEngine.Physics.Box2D;
-
-/// <summary>
-/// POCO bound to <c>[runtime.physics_2d]</c> in the Project file. Defaults to Earth-like downward
-/// gravity (matches Box2D's expected MKS units, chapter 24 §7.5).
-/// </summary>
-public sealed class Box2DOptions
-{
-    public float GravityX { get; set; } = 0f;
-    public float GravityY { get; set; } = -9.81f;
-}
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers a Box2D-backed <see cref="IPhysics2D"/> singleton. Reads
-    /// <c>[runtime.physics_2d]</c> from the Project file when present; otherwise uses
-    /// <see cref="Box2DOptions"/> defaults.
+    /// <c>[runtime.physics_2d] gravity_x/gravity_y</c> from the Project file when present;
+    /// otherwise defaults to Earth-like downward gravity (matches Box2D's expected MKS units).
     /// </summary>
     public static IServiceCollection AddBox2D(this IServiceCollection services)
     {
-        services.AddProjectConfigSection<Box2DOptions>("runtime.physics_2d");
+        services.TryAddConfigurationSingleton();
         services.AddSingleton<IPhysics2D>(sp =>
         {
-            var opts = sp.GetRequiredService<IOptions<Box2DOptions>>().Value;
-            unsafe
-            {
-                var logger = sp.GetService<INativeLogger>();
-                var @params = new ke_physics_2d_box2d_params
-                {
-                    logger    = logger != null ? logger.Native : null,
-                    gravity_x = opts.GravityX,
-                    gravity_y = opts.GravityY,
-                };
-
-                ke_error* err = null;
-                var handle = KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(&@params, &err);
-                if (handle.@ref == null) throw KernelError.FromNative(err, "physics_2d_box2d_create");
-                return new Physics2D(handle);
-            }
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var gravityX = (float)cfg.GetDouble("runtime.physics_2d", "gravity_x", 0.0);
+            var gravityY = (float)cfg.GetDouble("runtime.physics_2d", "gravity_y", -9.81);
+            return CreatePhysics(sp, gravityX, gravityY);
         });
         return services;
     }
 
     /// <summary>
-    /// Backward-compatible overload that passes gravity inline. Equivalent to <c>AddBox2D()</c> +
-    /// <c>Configure&lt;Box2DOptions&gt;</c>; lets examples that have not migrated to Project keep working.
+    /// Backward-compatible overload that passes gravity inline, bypassing the Project file.
+    /// Lets examples that have not migrated to Project keep working.
     /// </summary>
     public static IServiceCollection AddBox2D(
         this IServiceCollection services, float gravityX, float gravityY)
     {
-        services.AddBox2D();
-        services.Configure<Box2DOptions>(o => { o.GravityX = gravityX; o.GravityY = gravityY; });
+        services.AddSingleton<IPhysics2D>(sp => CreatePhysics(sp, gravityX, gravityY));
         return services;
+    }
+
+    private static unsafe IPhysics2D CreatePhysics(IServiceProvider sp, float gravityX, float gravityY)
+    {
+        var logger = sp.GetService<INativeLogger>();
+        var @params = new ke_physics_2d_box2d_params
+        {
+            logger    = logger != null ? logger.Native : null,
+            gravity_x = gravityX,
+            gravity_y = gravityY,
+        };
+
+        ke_error* err = null;
+        var handle = KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(&@params, &err);
+        if (handle.@ref == null) throw KernelError.FromNative(err, "physics_2d_box2d_create");
+        return new Physics2D(handle);
     }
 }

@@ -19,14 +19,14 @@ public sealed class GlfwWindowModule : IRuntimeModule
 
     /// <summary>
     /// Reads window settings from the Project file's <c>[runtime.window]</c>
-    /// section (width / height / title / fullscreen). Falls back to
-    /// <see cref="WindowOptions"/> defaults if the section / file is absent.
+    /// section (width / height / title / fullscreen), falling back to
+    /// compile-time defaults if the section / file is absent.
     /// </summary>
     public GlfwWindowModule() { }
 
     /// <summary>
-    /// Inline overrides — equivalent to the no-arg ctor + <c>.Configure&lt;WindowOptions&gt;(...)</c>.
-    /// Useful for examples that don't ship a Project file.
+    /// Inline overrides, bypassing the Project file. Useful for examples that
+    /// don't ship one.
     /// </summary>
     public GlfwWindowModule(int width, int height, string title)
     {
