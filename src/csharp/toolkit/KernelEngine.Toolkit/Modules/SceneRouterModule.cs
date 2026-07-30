@@ -86,13 +86,9 @@ public sealed class SceneRouterModule : IRuntimeModule
     {
         if (!string.IsNullOrEmpty(_initialSceneOverride)) return _initialSceneOverride;
 
-        var config  = services.GetService<IProjectConfig>();
-        var project = config?.GetSection("project");
-        if (project is not null && project.TryGetValue("default_scene", out var raw) && raw is string s
-            && !string.IsNullOrWhiteSpace(s))
-        {
-            return NormalizeSceneName(s);
-        }
+        var config = services.GetService<IConfiguration>();
+        var raw = config?.GetString("project", "default_scene", "") ?? "";
+        if (!string.IsNullOrWhiteSpace(raw)) return NormalizeSceneName(raw);
         return "Main";
     }
 

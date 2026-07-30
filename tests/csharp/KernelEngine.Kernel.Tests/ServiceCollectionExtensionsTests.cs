@@ -1,8 +1,6 @@
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using KernelEngine.Configuration;
-using NSubstitute;
 
 namespace EngineTests;
 
@@ -23,10 +21,6 @@ public class ServiceCollectionExtensionsTests
     public void AddConsoleSink_RegistersSinkWithDefaultLevel()
     {
         var services = new ServiceCollection();
-        // ConsoleSink needs IProjectConfig for AddProjectConfigSection
-        var config = Substitute.For<IProjectConfig>();
-        services.AddSingleton(config);
-        
         services.AddConsoleSink();
         var provider = services.BuildServiceProvider();
 
@@ -40,9 +34,6 @@ public class ServiceCollectionExtensionsTests
     public void AddConsoleSink_WithMinLevel_RegistersSinkWithSpecifiedLevel()
     {
         var services = new ServiceCollection();
-        var config = Substitute.For<IProjectConfig>();
-        services.AddSingleton(config);
-
         services.AddConsoleSink(LogLevel.Error);
         var provider = services.BuildServiceProvider();
 

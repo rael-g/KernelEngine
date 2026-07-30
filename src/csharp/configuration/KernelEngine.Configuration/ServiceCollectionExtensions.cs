@@ -1,49 +1,40 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 
 namespace KernelEngine.Configuration;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers an <see cref="IProjectConfig"/> singleton. With no arguments, looks for a
-    /// <c>Project</c> file next to the executable (<see cref="AppContext.BaseDirectory"/>).
-    /// Plugins call <see cref="AddProjectConfigSection{TOptions}"/> separately to bind their
-    /// section. Safe to call when the file does not exist — every plugin then sees POCO
-    /// defaults (chapter 16 §2.4).
+    /// Registers an <see cref="IConfiguration"/> singleton backed by the native
+    /// <c>ke_configuration</c> store. With no arguments, looks for a <c>Project</c>
+    /// file next to the executable (<see cref="AppContext.BaseDirectory"/>). Safe
+    /// to call when the file does not exist — every reader's fallback then applies.
     /// </summary>
     /// <param name="path">
     /// Absolute or relative path to the project manifest. Relative paths resolve against
     /// <see cref="AppContext.BaseDirectory"/>. <c>null</c> means "auto-discover <c>Project</c>
-    /// in the base directory, fall back to defaults if absent".
+    /// in the base directory".
     /// </param>
     public static IServiceCollection AddProjectConfig(this IServiceCollection services, string? path = null)
     {
-        services.AddOptions();
-        services.AddSingleton<IProjectConfig>(_ => new ProjectConfig(ResolvePath(path ?? "Project")));
+        services.TryAddConfigurationSingleton(path);
         return services;
     }
 
     /// <summary>
-    /// Binds the TOML section at <paramref name="sectionPath"/> (e.g. <c>"runtime.window"</c>)
-    /// onto <typeparamref name="TOptions"/>. Called from each plugin's own DI extension.
-    /// If the section is missing the POCO keeps its compile-time defaults.
+    /// Registers <see cref="IConfiguration"/> if not already registered. Plugins that need
+    /// config but may be composed without an explicit <see cref="AddProjectConfig"/> call
+    /// (e.g. examples wiring modules directly) call this from their own <c>AddX()</c>.
     /// </summary>
-    public static IServiceCollection AddProjectConfigSection<TOptions>(
-        this IServiceCollection services, string sectionPath) where TOptions : class
+    public static void TryAddConfigurationSingleton(this IServiceCollection services, string? path = null)
     {
-        // Plugins call this from their AddX() — a plugin may be added without an explicit
-        // AddProjectConfig() (e.g. examples that pass settings inline via legacy overloads).
-        // Register a default IProjectConfig so the Options-based path still resolves; POCO
-        // defaults apply when no Project file is present.
-        services.TryAddSingleton<IProjectConfig>(_ => new ProjectConfig(ResolvePath("Project")));
-        services.AddOptions<TOptions>().Configure<IProjectConfig>((opts, config) =>
+        services.TryAddSingleton<IConfiguration>(_ =>
         {
-            var section = config.GetSection(sectionPath);
-            if (section is not null) TomlOptionsBinder.Apply(section, opts);
+            var cfg = new Configuration();
+            cfg.LoadToml(ResolvePath(path ?? "Project")!);
+            return cfg;
         });
-        return services;
     }
 
     private static string? ResolvePath(string? path)

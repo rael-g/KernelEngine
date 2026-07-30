@@ -1,48 +1,38 @@
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using KernelEngine.Configuration;
 
 namespace KernelEngine.Configuration.Tests;
 
 public class ServiceCollectionExtensionsTests
 {
-    public class TestOptions
-    {
-        public string Name { get; set; } = "Default";
-    }
-
     [Fact]
     public void AddProjectConfig_RegistersSingleton()
     {
         var services = new ServiceCollection();
         services.AddProjectConfig();
         var provider = services.BuildServiceProvider();
-        var config = provider.GetService<IProjectConfig>();
+        var config = provider.GetService<IConfiguration>();
         Assert.NotNull(config);
     }
 
     [Fact]
-    public void AddProjectConfigSection_RegistersOptions()
+    public void AddProjectConfig_MissingFile_FallsBackToDefaults()
     {
         var services = new ServiceCollection();
-        services.AddProjectConfigSection<TestOptions>("test");
+        services.AddProjectConfig("non_existent.toml");
         var provider = services.BuildServiceProvider();
-        var options = provider.GetService<IOptions<TestOptions>>();
-        Assert.NotNull(options);
+        var config = provider.GetRequiredService<IConfiguration>();
+        Assert.Equal(1280, config.GetInt("runtime.window", "width", 1280));
     }
 
     [Fact]
-    public void AddProjectConfigSection_UsesDefaults_WhenSectionMissing()
+    public void TryAddConfigurationSingleton_DoesNotDuplicateRegistration()
     {
         var services = new ServiceCollection();
-        // Force a config that won't have the section
-        services.AddSingleton<IProjectConfig>(new ProjectConfig(null));
-        services.AddProjectConfigSection<TestOptions>("missing");
-        
-        var provider = services.BuildServiceProvider();
-        var options = provider.GetRequiredService<IOptions<TestOptions>>().Value;
-        
-        Assert.Equal("Default", options.Name);
+        services.AddProjectConfig();
+        services.TryAddConfigurationSingleton();
+
+        Assert.Single(services, d => d.ServiceType == typeof(IConfiguration));
     }
 }
