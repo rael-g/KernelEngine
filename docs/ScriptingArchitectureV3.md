@@ -396,6 +396,22 @@ Unresolved, and each can invalidate part of §7.4:
 
 Same shape as Stage 1 (§8.3): prove on one domain before generalising. `PointLight` is the pilot — the pure case (one component, three scalar fields, no logic). The gate is whether the generated C# type is equivalent to the hand-written one. If it is not, the thesis fails cheaply and before any domain header has been annotated.
 
+### 7.9 Pilot result — surface passes, component identity does not
+
+Run on `ke_point_light_component` tagged `[node:PointLight,base:Node]`.
+
+**Passed — the generated surface is a drop-in.** `kabic` emits `Vector3 Color` / `float Intensity` / `float Radius` with the documented defaults, and the four examples that construct point lights (`07_point_lights`, `09_many_lights`, `10_hdr_bloom`, `13_full_scene`) compile unchanged against it. The property surface, the defaults, and the write-through-on-set behaviour are all derivable from the header alone, as §7.3 claimed.
+
+**Failed — the component identity is not.** At runtime: `Component type 'ke_point_light_component' is not registered with the framework.` `ComponentRegistry` maps a *managed* struct type to a cid (`Register<PointLightComponent>(ecs, "point_light")`); a generated node holds the *header* struct, which no registration mentions. The generated node writes a component the framework cannot name.
+
+This is the concrete form of the duplication §7.6 predicted, now located precisely: **the same component is declared twice — once in the header, once as a hand-written C# mirror — and the managed one is what the registry keys on.** Until a component's identity comes from its header declaration, a generated node cannot address it.
+
+**Correction to an earlier reading of this duplication.** The three declarations of `point_light` (header, C# `PointLightComponent`, a hand-copied Zig struct) were *layout-identical*; the render path worked because they agreed, not because anything linked them. A comment in the cluster pass asserted the header "orders them differently" — it did not. The hazard was latent, not active.
+
+What the pilot changed as a consequence: the Zig cull pass now reads `c.ke_point_light_component` from the header instead of its own copy, and the header spells the colour as `float color[3]` rather than three scalars — the same twelve bytes, now expressing the grouping a node surface needs. Four producers had to move together (header, cull pass, the scene-loader apply path, and a GTest asserting the old field names), which is itself the measure of how unlinked the declarations were.
+
+**The remaining step before generalising**: component identity must derive from the header — either the managed mirror is generated from it, or the registry registers the header type directly. Node-type generation is blocked on that, not on anything in §7.4.
+
 ---
 
 ## 8. The plan — stages to zero hand-written wrappers
