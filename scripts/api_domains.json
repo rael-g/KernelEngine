@@ -119,6 +119,26 @@
       "nativeNamespace": "KernelEngine.Render.Webgpu.Native",
       "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Generated",
       "usings": []
+    },
+    {
+      "name": "asset_loader",
+      "headers": ["src/c/asset/kernel_engine/asset/asset_loader.h"],
+      "includeDirs": ["src/c/asset", "src/c/scheduler", "src/c/render", "src/zig/common/include"],
+      "apiJson": "src/csharp/asset/asset_loader.ke_api.json",
+      "namespace": "KernelEngine.Asset.Assimp",
+      "nativeNamespace": "KernelEngine.Asset.Native",
+      "outDir": "src/csharp/asset/KernelEngine.Asset.Assimp/Generated",
+      "usings": []
+    },
+    {
+      "name": "image_loader",
+      "headers": ["src/c/asset/kernel_engine/asset/image_loader.h"],
+      "includeDirs": ["src/c/asset", "src/c/render", "src/zig/common/include"],
+      "apiJson": "src/csharp/asset/image_loader.ke_api.json",
+      "namespace": "KernelEngine.Asset.StbImage",
+      "nativeNamespace": "KernelEngine.Asset.Native",
+      "outDir": "src/csharp/asset/KernelEngine.Asset.StbImage/Generated",
+      "usings": []
     }
   ]
 }

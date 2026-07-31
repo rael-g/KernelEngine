@@ -1,0 +1,117 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_asset_loader",
+      "doc": "ABI-stable vtable interface for loading 3D assets. Concrete implementations (e.g., Assimp) are provided as separate plugins.",
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load_model",
+          "returns": "ke_model_data *",
+          "tags": [],
+          "doc": "Loads a 3D model from into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Absolute or relative file path (.gltf, .glb, .obj, .fbx, \u2026)."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "free_model",
+          "returns": "void",
+          "tags": [],
+          "doc": "Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "data",
+              "type": "ke_model_data *",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "load_model_async",
+          "returns": "ke_task *",
+          "tags": [],
+          "doc": "Asynchronously loads a 3D model using Returns a ke_task* that can be waited on; is invoked on the scheduler thread when the load finishes (or fails).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "scheduler",
+              "type": "ke_scheduler *",
+              "tags": [],
+              "doc": "Non-null task scheduler."
+            },
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "File path (copied internally; caller may free after return)."
+            },
+            {
+              "name": "on_complete",
+              "type": "ke_load_model_complete_func",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": "Callback invoked with the result; must not be NULL."
+            },
+            {
+              "name": "user_data",
+              "type": "void *",
+              "tags": [],
+              "doc": "Forwarded unchanged to"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ke_asset_loader_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_asset_loader *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "type_aliases": {}
+}
