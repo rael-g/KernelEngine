@@ -91,6 +91,16 @@
       "outDir": "src/csharp/physics/KernelEngine.Physics/Generated",
       "abstractionsOutDir": "src/csharp/physics/KernelEngine.Physics.Abstractions/Generated",
       "usings": []
+    },
+    {
+      "name": "text",
+      "headers": ["src/c/text/kernel_engine/text/font.h"],
+      "includeDirs": ["src/c/text", "src/zig/common/include"],
+      "apiJson": "src/csharp/text/ke_api.json",
+      "namespace": "KernelEngine.Text",
+      "nativeNamespace": "KernelEngine.Text.Native",
+      "outDir": "src/csharp/text/KernelEngine.Text/Generated",
+      "usings": []
     }
   ]
 }
