@@ -99,7 +99,10 @@ public sealed class Convention
         FactorySuffix = "_create",
         ErrorOutParamType = "ke_error**",
         // C spells `bool` as `_Bool` after preprocessing; both reach the description.
-        BooleanReturnTypes = ["_Bool", "bool"],
+        // `ke_bool` is this ABI's own boolean typedef, used interchangeably with
+        // the two — ClangSharp maps it to a raw `byte` return rather than `bool`,
+        // so a caller of this list must still know to compare it against zero.
+        BooleanReturnTypes = ["_Bool", "bool", "ke_bool"],
         TypeNameOverrides = new Dictionary<string, string>
         {
             // Would derive to `Ecs` inside namespace KernelEngine.Ecs, making the

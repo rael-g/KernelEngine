@@ -443,7 +443,10 @@ public static class CSharpBackend
                     .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
                     .Select(p => outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local" : CallArg(p));
                 var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
-                    + (cs.Fallible ? ", null)" : ")");
+                    + (cs.Fallible ? ", null)" : ")")
+                    // ClangSharp maps the C typedef `ke_bool` to a raw `byte`
+                    // delegate return (unlike the literal keyword `bool`/`_Bool`).
+                    + (slot.Returns == "ke_bool" ? " != 0" : "");
                 o.Add($"{tInd}var found = {tryCall};");
                 foreach (var op in outs) o.Add($"{tInd}{Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
                 o.Add($"{tInd}return found;");
@@ -469,7 +472,13 @@ public static class CSharpBackend
                 o.Add($"{fInd}ke_error* err = null;");
                 if (byReturn)
                 {
-                    o.Add($"{fInd}KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{call}, &err), err, \"{slot.Name}\");");
+                    // ClangSharp maps the C typedef `ke_bool` (unlike the literal
+                    // keyword `bool`/`_Bool`) to a raw `byte` delegate return, so
+                    // the call needs the same `!= 0` a Plain-shape ke_bool slot
+                    // already gets — ThrowIfFailed takes a real C# bool.
+                    var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
+                        + (slot.Returns == "ke_bool" ? " != 0" : "");
+                    o.Add($"{fInd}KernelError.ThrowIfFailed({boolCall}, err, \"{slot.Name}\");");
                 }
                 else
                 {

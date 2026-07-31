@@ -12,34 +12,53 @@ namespace Kabic.Frontend;
 public static class Extractor
 {
     public static (ApiModel Model, List<string> Errors) Extract(JsonObject ast, HashSet<string> headerNames,
-        Dictionary<string, byte[]> sourceBytes)
+        Dictionary<string, byte[]> sourceBytes, HashSet<string>? auxHeaderNames = null)
     {
         var api = new ApiModel();
         var errors = new List<string>();
         string? currentFile = null;
+        auxHeaderNames ??= [];
 
         // clang's JSON AST is delta-encoded: loc.file (NOT includedFrom.file,
         // which names the *including* file and would misattribute every
         // declaration to the synthesized translation unit) appears only when
         // it changes from the previous node, so the current file has to be
         // carried forward across siblings.
-        (bool Owned, string? File) Owns(JsonObject node)
+        (bool Owned, bool AuxOnly, string? File) Owns(JsonObject node)
         {
             var f = node["loc"]?.AsObject()["file"]?.GetValue<string>();
-            if (f is not null) currentFile = f;
-            return (currentFile is not null && headerNames.Contains(Path.GetFileName(currentFile)), currentFile);
+            // Normalized once here so every downstream sourceBytes[file] lookup
+            // matches regardless of whether clang echoed this particular include
+            // as absolute, relative, or through a bind-mount prefix (observed to
+            // vary run-to-run for the same header set) — the caller's sourceBytes
+            // dictionary is keyed the same way. An unnormalized mismatch doesn't
+            // throw; it silently falls back to the WRONG file's bytes, corrupting
+            // every byte-offset slice (param names, enum literals) taken from it.
+            if (f is not null) currentFile = Path.GetFullPath(f);
+            if (currentFile is null) return (false, false, null);
+            var fileName = Path.GetFileName(currentFile);
+            var full = headerNames.Contains(fileName);
+            var aux = !full && auxHeaderNames.Contains(fileName);
+            return (full || aux, aux, currentFile);
         }
 
         var top = ast["inner"]!.AsArray();
         foreach (var nodeRaw in top)
         {
             var node = nodeRaw!.AsObject();
-            var (owned, file) = Owns(node);
+            var (owned, auxOnly, file) = Owns(node);
             if (!owned) continue;
 
             var kind = node["kind"]?.GetValue<string>();
             var name = node["name"]?.GetValue<string>();
             var bytes = file is not null && sourceBytes.TryGetValue(file, out var b) ? b : sourceBytes.Values.First();
+
+            // A header pulled in purely so a foreign domain's typedef'd primitives
+            // resolve (--aux) contributes ONLY those typedefs — its own vtables,
+            // enums, and functions are somebody else's domain to describe, and
+            // parsing them here just adds unused noise (and, empirically, a
+            // flakier param-name extraction on declarations nothing here consumes).
+            if (auxOnly && kind != "TypedefDecl") continue;
 
             switch (kind)
             {

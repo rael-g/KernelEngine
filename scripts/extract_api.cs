@@ -21,7 +21,13 @@
 // ke_api.json is a build artifact: regenerate it from headers, never hand-edit
 // it, same rule that already governs src/csharp/*/Native/Generated/.
 //
-// Usage: dotnet run scripts/extract_api.cs -- --out <path> [-I <dir>]... <header.h>...
+// Usage: dotnet run scripts/extract_api.cs -- --out <path> [-I <dir>]... [--aux <header.h>]... <header.h>...
+//
+// --aux names a header included purely so a foreign domain's typedef'd
+// primitives resolve (e.g. gpu_device.h's `typedef uint64_t ke_gpu_buffer`,
+// needed for ke_render_service's own params) — only its TypedefDecls are
+// recorded; its own vtables/enums/functions are somebody else's domain to
+// describe and would otherwise show up as unused, unstable noise here.
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -36,6 +42,7 @@ string? outPath = null;
 string? zigOverride = null;
 var includeDirs = new List<string>();
 var headers = new List<string>();
+var auxHeaders = new List<string>();
 
 for (var i = 0; i < args.Length; i++)
 {
@@ -44,26 +51,30 @@ for (var i = 0; i < args.Length; i++)
         case "--out": outPath = args[++i]; break;
         case "--zig": zigOverride = args[++i]; break;
         case "-I": includeDirs.Add(args[++i]); break;
+        case "--aux": auxHeaders.Add(args[++i]); break;
         default: headers.Add(args[i]); break;
     }
 }
 
 if (outPath is null || headers.Count == 0)
 {
-    Console.Error.WriteLine("usage: dotnet run scripts/extract_api.cs -- --out <path> [-I <dir>]... <header.h>...");
+    Console.Error.WriteLine("usage: dotnet run scripts/extract_api.cs -- --out <path> [-I <dir>]... "
+        + "[--aux <header.h>]... <header.h>...");
     return 1;
 }
 
 var zig = ResolveZig(zigOverride);
 var headerPaths = headers.Select(Path.GetFullPath).ToList();
+var auxHeaderPaths = auxHeaders.Select(Path.GetFullPath).ToList();
 var headerNames = headerPaths.Select(Path.GetFileName).Where(n => n is not null).Select(n => n!).ToHashSet();
+var auxHeaderNames = auxHeaderPaths.Select(Path.GetFileName).Where(n => n is not null).Select(n => n!).ToHashSet();
 
 // -- run clang's AST dumper via `zig cc` (zig IS clang; no extra toolchain) --
 
 var tuDir = Path.Combine(Path.GetTempPath(), "ke_extract_api_" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(tuDir);
 var tuPath = Path.Combine(tuDir, "tu.c");
-File.WriteAllLines(tuPath, headerPaths.Select(h => $"#include \"{h.Replace('\\', '/')}\""));
+File.WriteAllLines(tuPath, headerPaths.Concat(auxHeaderPaths).Select(h => $"#include \"{h.Replace('\\', '/')}\""));
 
 string astJson;
 try
@@ -80,9 +91,12 @@ var ast = JsonNode.Parse(astJson)!.AsObject();
 // Raw bytes (not decoded text) of every header, because clang reports byte
 // offsets and this codebase has non-ASCII box-drawing characters in comments;
 // slicing a decoded string silently shifts every offset after the first one.
-var sourceBytes = headerPaths.ToDictionary(p => p, File.ReadAllBytes);
+// Keyed by the same normalized form Extractor.Owns() builds from clang's own
+// loc.file, so the lookup matches regardless of how this path was spelled
+// on the command line.
+var sourceBytes = headerPaths.Concat(auxHeaderPaths).ToDictionary(Path.GetFullPath, File.ReadAllBytes);
 
-var (api, errors) = Extractor.Extract(ast, headerNames, sourceBytes);
+var (api, errors) = Extractor.Extract(ast, headerNames, sourceBytes, auxHeaderNames);
 
 if (errors.Count > 0)
 {
