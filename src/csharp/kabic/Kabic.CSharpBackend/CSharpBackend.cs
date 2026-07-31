@@ -52,6 +52,10 @@ public static class CSharpBackend
         return (lines, depth);
     }
 
+    /// A C type mapped to C#, resolving typedef aliases first (ke_entity is
+    /// uint64_t, which a language with no typedef concept must see through).
+    static string CsType(ApiModel model, string cType) => Idioms.CsPrimitive(model.ResolveAlias(cType));
+
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
     {
         var tagEnum = p.TagValue("enum");
@@ -65,7 +69,7 @@ public static class CSharpBackend
         // cross-domain — same rule as the factory-parameter case).
         if (CTypes.IsPointer(p.Type))
             return CTypes.Deref(p.Type) + "*";
-        return Idioms.CsPrimitive(p.Type);
+        return CsType(model, p.Type);
     }
 
     // -------------------------------------------------------------- enums
@@ -126,7 +130,13 @@ public static class CSharpBackend
         // identical in shape across a dozen domains (INativeLogger,
         // INativeWindow, ...) before kabic existed — generating it here just
         // stops it being copy-pasted per domain.
-        var nativeIface = "INative" + typeName;
+        // Named from the ABI symbol, NOT from the (possibly overridden) wrapper
+        // type name: this interface exists to hand out the native pointer, so it
+        // is named after the native type it exposes. ke_ecs's wrapper is renamed
+        // to EcsRegistry to dodge a namespace clash, but its pointer accessor is
+        // still INativeEcs — that name is what every cross-domain consumer of the
+        // ke_ecs pointer already knows it by.
+        var nativeIface = "INative" + Idioms.Pascal(convention.StripPrefix(vtable.Name));
         o.Add($"/// <summary>Exposes the raw native {typeName.ToLowerInvariant()} pointer for cross-domain composition wiring.</summary>");
         o.Add($"public unsafe interface {nativeIface}");
         o.Add("{");
@@ -145,6 +155,9 @@ public static class CSharpBackend
         o.Add("{");
         o.Add($"    private {vtable.Name}* _native;");
         o.Add($"    private readonly delegate* unmanaged[Cdecl]<{vtable.Name}*, void> _destroy;");
+        o.Add("    // Set when this wrapper only borrows a pointer someone else owns");
+        o.Add("    // (see the borrowing constructor): Dispose must not destroy it.");
+        o.Add("    private readonly bool _borrowed;");
         o.Add("");
         o.Add($"    private {vtable.Name}* Handle => _native != null ? _native");
         o.Add($"        : throw new ObjectDisposedException(nameof({typeName}));");
@@ -204,6 +217,26 @@ public static class CSharpBackend
             o.Add("");
         }
 
+        // Borrowing constructor, always available: an owner elsewhere holds the
+        // handle and this wrapper only reads through the pointer (ke_ecs's shape —
+        // FlecsEcs owns the ke_ecs_handle, the registry wrapper borrows the
+        // ke_ecs* out of it). Disposing a borrowed wrapper releases nothing.
+        // A named factory rather than a constructor overload: `new X(somePointer)`
+        // would be ambiguous against an idiom layer's own managed-typed
+        // constructor whenever a caller passes null, and "Borrow" states the
+        // ownership semantics at every call site instead of leaving them to a
+        // parameter type.
+        o.Add($"    /// <summary>Wraps a <c>{vtable.Name}*</c> owned elsewhere. Disposing the result does not destroy it.</summary>");
+        o.Add($"    public static {typeName} Borrow({vtable.Name}* native) => new(native, borrowed: true);");
+        o.Add("");
+        o.Add($"    private {typeName}({vtable.Name}* native, bool borrowed)");
+        o.Add("    {");
+        o.Add("        _native = native;");
+        o.Add("        _destroy = null;");
+        o.Add("        _borrowed = borrowed;");
+        o.Add("    }");
+        o.Add("");
+
         foreach (var cs in slots)
         {
             // [sink]: a backend-facing event callback (e.g. ke_input.on_key), not
@@ -229,6 +262,7 @@ public static class CSharpBackend
         o.Add("    public void Dispose()");
         o.Add("    {");
         o.Add("        if (_native == null) return;");
+        o.Add("        if (_borrowed) { _native = null; return; }");
         if (shutdownSlot is not null)
             o.Add($"        _native->{shutdownSlot}(_native, null);");
         o.Add("        _destroy(_native);");
@@ -248,7 +282,7 @@ public static class CSharpBackend
         {
             case SlotShape.ReturnsOutParam:
             {
-                var ret = CTypes.Deref(cs.OutParam!.Type);
+                var ret = CsType(model, CTypes.Deref(cs.OutParam!.Type));
                 o.Add(XmlDoc("    ", slot.Doc, ret: slot.ReturnDoc, throwsOnFail: cs.Fallible).TrimEnd());
                 o.Add($"    public {ret} {name}()");
                 o.Add("    {");
@@ -273,7 +307,7 @@ public static class CSharpBackend
                 // -> (int Width, int Height) GetSize() — a tuple return, not a Span
                 // (the values are independent scalars, not a homogeneous sequence).
                 var names = cs.OutParams.Select(p => Idioms.Pascal(p.Name!)).ToList();
-                var types = cs.OutParams.Select(p => Idioms.CsPrimitive(CTypes.Deref(p.Type))).ToList();
+                var types = cs.OutParams.Select(p => CsType(model, CTypes.Deref(p.Type))).ToList();
                 var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
                 var locals = cs.OutParams.Select(p => Idioms.Ident(p.Name!)).ToList();
                 var callArgs = string.Concat(locals.Select(n => $", &{n}"));
@@ -302,7 +336,7 @@ public static class CSharpBackend
                 // parameter stays exactly as declared, and the return type is
                 // whatever C says it is — not assumed to be the written count
                 // (ke_ecs.query_register returns a query id, not a length).
-                var elem = CTypes.Deref(cs.SequenceParam!.Type);
+                var elem = CsType(model, CTypes.Deref(cs.SequenceParam!.Type));
                 var pname = Idioms.Ident(cs.SequenceParam!.Name!);
                 var others = cs.PublicParams.Where(p => p != cs.SequenceParam).ToList();
                 var outs = others.Where(p => p.Has("out")).ToList();
@@ -310,10 +344,10 @@ public static class CSharpBackend
 
                 var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
                     .Append($"Span<{elem}> {pname}")
-                    .Concat(outs.Select(p => $"out {Idioms.CsPrimitive(CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
+                    .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
 
                 var retType = cs.Fallible || slot.Returns == "void" ? "void"
-                    : Idioms.CsPrimitive(slot.Returns);
+                    : CsType(model, slot.Returns);
 
                 o.Add(XmlDoc("    ", slot.Doc,
                     ins.Select(p => (Idioms.Ident(p.Name!), p.Doc))
@@ -322,7 +356,7 @@ public static class CSharpBackend
                     slot.ReturnDoc, cs.Fallible).TrimEnd());
                 o.Add($"    public {retType} {name}Raw({string.Join(", ", sigParts)})");
                 o.Add("    {");
-                foreach (var op in outs) o.Add($"        {Idioms.CsPrimitive(CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
+                foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
 
                 // Native argument order must follow the ORIGINAL declaration, not
                 // the reshaped public signature.
@@ -330,7 +364,7 @@ public static class CSharpBackend
                     .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
                     .Select(p =>
                         p == cs.SequenceParam ? "p"
-                        : p == cs.CountParam ? $"({Idioms.CsPrimitive(p.Type)}){pname}.Length"
+                        : p == cs.CountParam ? $"({CsType(model, p.Type)}){pname}.Length"
                         : outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local"
                         : Idioms.Ident(p.Name!));
 
@@ -364,13 +398,13 @@ public static class CSharpBackend
                 var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
                 var outs = cs.OutParams;
                 var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
-                    .Concat(outs.Select(p => $"out {CTypes.Deref(p.Type)} {Idioms.Ident(p.Name!)}"));
+                    .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
 
                 o.Add(XmlDoc("    ", slot.Doc,
                     cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
                 o.Add($"    public bool Try{name}({string.Join(", ", sigParts)})");
                 o.Add("    {");
-                foreach (var op in outs) o.Add($"        {CTypes.Deref(op.Type)} {Idioms.Ident(op.Name!)}Local;");
+                foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
                 o.AddRange(tPro);
                 var tInd = new string(' ', 8 + tDepth * 4);
@@ -411,7 +445,7 @@ public static class CSharpBackend
                 var args = cs.PublicParams;
                 var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
-                var retType = slot.Returns == "ke_bool" ? "bool" : Idioms.CsPrimitive(slot.Returns);
+                var retType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
                 var needsCast = retType == "nint"; // CsPrimitive maps `void *` -> nint; the raw call still returns void*
                 o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
                 o.Add($"    public {retType} {name}({sig})");

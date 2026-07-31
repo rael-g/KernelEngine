@@ -56,6 +56,20 @@
       "nativeNamespace": "KernelEngine.Scheduler.Native",
       "outDir": "src/csharp/scheduler/KernelEngine.Scheduler/Generated",
       "usings": []
+    },
+    {
+      "name": "ecs",
+      "headers": [
+        "src/c/ecs/kernel_engine/ecs/ke_ecs.h",
+        "src/c/ecs/kernel_engine/ecs/ecs.h",
+        "src/c/ecs/kernel_engine/ecs/component_field.h"
+      ],
+      "includeDirs": ["src/c/ecs", "src/zig/common/include"],
+      "apiJson": "src/csharp/ecs/ke_api.json",
+      "namespace": "KernelEngine.Ecs",
+      "nativeNamespace": "KernelEngine.Ecs.Native",
+      "outDir": "src/csharp/ecs/KernelEngine.Ecs/Generated",
+      "usings": []
     }
   ]
 }

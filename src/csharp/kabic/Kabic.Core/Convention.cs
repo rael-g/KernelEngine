@@ -67,6 +67,15 @@ public sealed class Convention
     public bool IsFallible(string returns, IReadOnlyList<ApiParam> parameters) =>
         BooleanReturnTypes.Contains(returns) && parameters.Count > 0 && IsErrorOutParam(parameters[^1]);
 
+    /// <summary>
+    /// Explicit target-language type names for ABI symbols whose derived name is
+    /// unusable — chiefly a vtable whose name matches its own namespace's last
+    /// segment (<c>ke_ecs</c> in <c>KernelEngine.Ecs</c> would derive to
+    /// <c>Ecs</c>, forcing every reference to be fully qualified).
+    /// </summary>
+    public IReadOnlyDictionary<string, string> TypeNameOverrides { get; init; } =
+        new Dictionary<string, string>();
+
     /// <summary>Strips <see cref="SymbolPrefix"/> from a symbol, leaving the rest untouched.</summary>
     public string StripPrefix(string name) =>
         name.StartsWith(SymbolPrefix) ? name[SymbolPrefix.Length..] : name;
@@ -83,5 +92,11 @@ public sealed class Convention
         ErrorOutParamType = "ke_error**",
         // C spells `bool` as `_Bool` after preprocessing; both reach the description.
         BooleanReturnTypes = ["_Bool", "bool"],
+        TypeNameOverrides = new Dictionary<string, string>
+        {
+            // Would derive to `Ecs` inside namespace KernelEngine.Ecs, making the
+            // type unreferenceable without full qualification everywhere.
+            ["ke_ecs"] = "EcsRegistry",
+        },
     };
 }

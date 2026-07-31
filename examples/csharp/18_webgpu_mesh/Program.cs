@@ -39,7 +39,7 @@ var cube   = MeshPrimitives.Cube(render);
 var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
 EcsRegistry reg;
-unsafe { reg = new EcsRegistry(((INativeEcs)ecs).Native); }
+unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
 var transformCid = reg.RegisterComponent<TransformComponent>("transform");
 var cameraCid    = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);

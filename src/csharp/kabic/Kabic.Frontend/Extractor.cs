@@ -54,6 +54,18 @@ public static class Extractor
                 case "FunctionDecl" when name is not null && name.StartsWith("ke_"):
                     api.Functions.Add(ExtractFunction(node, name, errors));
                     break;
+
+                // A typedef naming a plain primitive (ke_entity -> uint64_t) is an
+                // alias every backend must see through; one naming a struct or enum
+                // is a real type the description already carries under its own key.
+                case "TypedefDecl" when name is not null:
+                {
+                    var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
+                    if (!target.StartsWith("struct ") && !target.StartsWith("enum ")
+                        && !target.Contains('(') && target != name)
+                        api.TypeAliases[name] = target;
+                    break;
+                }
             }
         }
 

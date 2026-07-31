@@ -20,6 +20,8 @@ public static class Serialization
         ["structs"] = new JsonArray(m.Structs.Where(s => !s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
         ["vtables"] = new JsonArray(m.Structs.Where(s => s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
         ["functions"] = new JsonArray(m.Functions.Select(f => (JsonNode)f.ToJson()).ToArray()),
+        ["type_aliases"] = m.TypeAliases.Aggregate(new JsonObject(),
+            (o, kv) => { o[kv.Key] = kv.Value; return o; }),
     };
 
     public static JsonObject ToJson(this ApiParam p) => new()

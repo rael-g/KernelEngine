@@ -34,6 +34,22 @@ public class ApiModel
     public List<ApiEnum> Enums { get; } = [];
     public List<ApiStruct> Structs { get; } = [];   // includes vtables; use IsVtable to distinguish
     public List<ApiFunction> Functions { get; } = [];
+
+    /// <summary>
+    /// Typedefs that resolve to a plain C primitive (<c>ke_entity</c> -> <c>uint64_t</c>),
+    /// which every backend must see through — a language with no typedef concept has
+    /// nothing to map <c>ke_entity</c> onto otherwise. Typedefs naming a struct or enum
+    /// are absent: those are real types the description already carries.
+    /// </summary>
+    public Dictionary<string, string> TypeAliases { get; } = [];
+
+    /// <summary>Resolves a type through <see cref="TypeAliases"/> until it is no longer an alias.</summary>
+    public string ResolveAlias(string type)
+    {
+        var t = type.Trim();
+        for (var i = 0; i < 8 && TypeAliases.TryGetValue(t, out var next); i++) t = next;
+        return t;
+    }
 }
 
 public static class ApiReader
@@ -68,6 +84,10 @@ public static class ApiReader
 
         foreach (var s in root["structs"]!.AsArray()) ReadStructLike(s!.AsObject(), vtable: false);
         foreach (var v in root["vtables"]!.AsArray()) ReadStructLike(v!.AsObject(), vtable: true);
+
+        if (root["type_aliases"] is System.Text.Json.Nodes.JsonObject aliases)
+            foreach (var kv in aliases)
+                m.TypeAliases[kv.Key] = kv.Value!.GetValue<string>();
 
         foreach (var f in root["functions"]!.AsArray())
         {

@@ -21,6 +21,9 @@ public unsafe partial class Input : IDisposable, INativeInput
 {
     private ke_input* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_input*, void> _destroy;
+    // Set when this wrapper only borrows a pointer someone else owns
+    // (see the borrowing constructor): Dispose must not destroy it.
+    private readonly bool _borrowed;
 
     private ke_input* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Input));
@@ -37,6 +40,16 @@ public unsafe partial class Input : IDisposable, INativeInput
         if (handle.@ref == null) throw KernelError.FromNative(err, "ke_input_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
+    }
+
+    /// <summary>Wraps a <c>ke_input*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static Input Borrow(ke_input* native) => new(native, borrowed: true);
+
+    private Input(ke_input* native, bool borrowed)
+    {
+        _native = native;
+        _destroy = null;
+        _borrowed = borrowed;
     }
 
     /// <summary>Updates internal state, clearing this frame's pressed/released edges. Call once per tick, before any query.</summary>
@@ -92,6 +105,7 @@ public unsafe partial class Input : IDisposable, INativeInput
     public void Dispose()
     {
         if (_native == null) return;
+        if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;
     }

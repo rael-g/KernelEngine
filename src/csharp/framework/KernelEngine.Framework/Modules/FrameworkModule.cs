@@ -25,7 +25,7 @@ public sealed class FrameworkModule : IRuntimeModule
         services.AddSingleton<IEcsRegistry>(sp =>
         {
             var flecsEcs = (FlecsEcs)sp.GetRequiredService<IEcs>();
-            unsafe { return new EcsRegistry(((INativeEcs)flecsEcs).Native); }
+            unsafe { return EcsRegistry.Borrow(((INativeEcs)flecsEcs).Native); }
         });
 
         services.AddSingleton<World>(sp =>

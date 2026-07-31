@@ -148,5 +148,6 @@
       ]
     }
   ],
-  "functions": []
+  "functions": [],
+  "type_aliases": {}
 }

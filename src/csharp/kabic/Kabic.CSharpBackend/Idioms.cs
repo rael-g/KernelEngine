@@ -69,7 +69,10 @@ public static class Idioms
 
     /// The C# type name for an ABI symbol: strips the ABI's own symbol prefix
     /// (which carries no meaning in a namespaced language) and PascalCases the rest.
-    public static string TypeName(string name, Convention convention) => Pascal(convention.StripPrefix(name));
+    public static string TypeName(string name, Convention convention) =>
+        convention.TypeNameOverrides.TryGetValue(name, out var overridden)
+            ? overridden
+            : Pascal(convention.StripPrefix(name));
 
     public static string CsPrimitive(string cType)
     {

@@ -20,6 +20,9 @@ public unsafe partial class Logger : IDisposable, INativeLogger
 {
     private ke_logger* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_logger*, void> _destroy;
+    // Set when this wrapper only borrows a pointer someone else owns
+    // (see the borrowing constructor): Dispose must not destroy it.
+    private readonly bool _borrowed;
 
     private ke_logger* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Logger));
@@ -35,6 +38,16 @@ public unsafe partial class Logger : IDisposable, INativeLogger
         if (handle.@ref == null) throw KernelError.FromNative(err, "ke_logger_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
+    }
+
+    /// <summary>Wraps a <c>ke_logger*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static Logger Borrow(ke_logger* native) => new(native, borrowed: true);
+
+    private Logger(ke_logger* native, bool borrowed)
+    {
+        _native = native;
+        _destroy = null;
+        _borrowed = borrowed;
     }
 
     /// <summary>Dispatches one entry to every registered sink whose `min_level` it clears.</summary>
@@ -105,6 +118,7 @@ public unsafe partial class Logger : IDisposable, INativeLogger
     public void Dispose()
     {
         if (_native == null) return;
+        if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;
     }

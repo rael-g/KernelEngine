@@ -615,3 +615,29 @@ They are now one `Convention` class in `Kabic.Core`, threaded through `Classifie
 **The remaining debt, deliberately not paid yet**: `Convention` is still a hardcoded instance rather than a per-project input. The intended end state is the M×N shape §9.2 of `ScriptingArchitectureV2.md` established this project *isn't* (M languages × 1 ABI) but that `kabic` itself *is* (M projects × N languages): a `kabic` core knowing nothing about any specific ABI, plus a thin per-project definition (`Kabic.KernelEngine`, or whatever the engine is renamed to) supplying a `Convention`.
 
 Not done now because the split's shape can't be validated from one data point — a second real consumer is what reveals which axes genuinely vary, and inventing that shape blind risks getting it wrong in a way that's worse than the coupling. **Scheduled for the end of this branch**, and it is debt with a date rather than speculation: the engine is slated for a rename, which forces this refactor regardless — every domain migrated in the meantime only makes it more expensive.
+
+### A.5 — `ecs` (473 hand-written LoC) — audited, migrated, cleared
+
+| File | LoC | Verdict | Note |
+|---|---|---|---|
+| `Ecs/EcsRegistry.cs` | 86 | Split: MECHANICAL (every vtable slot) generated; the generic span accessors kept as `EcsRegistry.Idiom.cs` | See below |
+| `Ecs/INativeEcs.cs` | 13 | **MECHANICAL** | Same `INativeX` shape; deleted, generated |
+| `Ecs/VariantReader.cs` | 174 | IDIOM | Managed reader over `ke_variant`; a separate domain concern, untouched |
+| `Ecs.Abstractions/*` (`IEcs`, `IEcsRegistry`, component structs) | ~150 | IDIOM | Hand-authored interfaces and managed component mirrors |
+| `Ecs.Flecs/FlecsEcs.cs` | 33 | IDIOM | Backend factory wiring |
+
+**Outcome**: `EcsRegistry.cs`/`INativeEcs.cs` deleted (99 lines); `Generated/EcsRegistry.g.cs` + `EcsRegistry.Idiom.cs` (56 lines: the `Span<T>`-returning generic accessors) replace them. The idiom half is irreducible — the ABI trades in `void*` plus an element size, and turning that into `Span<T>` with `T` supplying its own size is a C# generics trick with no ABI counterpart.
+
+Two dead internals found and dropped while migrating: `AddComponentRaw<T>` and `GetComponentRaw<T>`, each with exactly one reference — its own definition.
+
+**This domain broke `kabic` in four separate ways**, all invisible until an ABI this shape hit it:
+
+1. **The sequence shape generated nonsense.** `query_resolve(query, out_segments, max_segments, out_count)` emitted `(uint)span.Length` once per *other* parameter — three times in one call. It also hardcoded the return as the written count, true for `drain_events` but false for `query_register`, which returns a query id. Rewritten: the count parameter is identified *by name* from its own `[array_of:name]` tag and removed from the public signature; every other parameter stays as declared; remaining `[out]` params become C# `out`; the return type is whatever C declares.
+2. **`bool` did not always mean "succeeded".** `component_lookup` returns `false` for *"no component by that name"* — a normal outcome to branch on, which the fallible rule turned into a thrown exception. Nothing in the C signature distinguishes the two cases, so the header now says so with `[try]`, rendering `bool TryX(..., out T)`.
+3. **String parameters were unusable.** `const char *name` rendered as a raw `char*` no managed caller could supply. The `[utf8]` tag (named in §5.2 but never implemented until now) renders `string`, with an emitted encode-and-pin prologue.
+4. **Primitive typedefs were opaque.** `ke_entity`, `ke_component_id`, and `ke_query_id` are `typedef`s of `uint64_t`/`uint32_t`; the extractor ignored `TypedefDecl` entirely, so they reached C# as undefined type names. The frontend now emits a `type_aliases` map (only for typedefs resolving to a primitive — one naming a struct or enum is a real type the description already carries), and every backend type mapping resolves through it.
+
+**Two further generalizations this domain forced**:
+
+- **A borrowing wrapper.** `EcsRegistry` never owned its `ke_ecs*` — `FlecsEcs` owns the handle and the registry reads through the pointer. Every provider now also gets `static X Borrow(ke_x* native)`, whose result's `Dispose` releases nothing. Deliberately a named factory rather than a constructor overload: `new X(ptr)` would be ambiguous against an idiom layer's own managed-typed constructor whenever a caller passes `null`, and `Borrow` states the ownership at the call site.
+- **Type-name overrides.** `ke_ecs` derives to `Ecs`, which inside namespace `KernelEngine.Ecs` is unreferenceable without full qualification. `Convention.TypeNameOverrides` maps it back to `EcsRegistry`. Note the generated `INativeEcs` interface is deliberately *not* renamed with it — it exists to hand out the native pointer, so it is named after the native type, which is also the name every cross-domain consumer already knows it by.

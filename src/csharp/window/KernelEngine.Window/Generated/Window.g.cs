@@ -20,6 +20,9 @@ public unsafe partial class Window : IDisposable, INativeWindow
 {
     private ke_window* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_window*, void> _destroy;
+    // Set when this wrapper only borrows a pointer someone else owns
+    // (see the borrowing constructor): Dispose must not destroy it.
+    private readonly bool _borrowed;
 
     private ke_window* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Window));
@@ -33,6 +36,16 @@ public unsafe partial class Window : IDisposable, INativeWindow
         _native = handle.@ref;
         _destroy = handle.destroy;
         { ke_error* err2 = null; KernelError.ThrowIfFailed(_native->on_initialize(_native, &err2), err2, "on_initialize"); }
+    }
+
+    /// <summary>Wraps a <c>ke_window*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static Window Borrow(ke_window* native) => new(native, borrowed: true);
+
+    private Window(ke_window* native, bool borrowed)
+    {
+        _native = native;
+        _destroy = null;
+        _borrowed = borrowed;
     }
 
     /// <summary>Returns true once the user has requested the window to close.</summary>
@@ -78,6 +91,7 @@ public unsafe partial class Window : IDisposable, INativeWindow
     public void Dispose()
     {
         if (_native == null) return;
+        if (_borrowed) { _native = null; return; }
         _native->on_shutdown(_native, null);
         _destroy(_native);
         _native = null;

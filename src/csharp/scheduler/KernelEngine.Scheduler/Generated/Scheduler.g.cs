@@ -20,6 +20,9 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler
 {
     private ke_scheduler* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_scheduler*, void> _destroy;
+    // Set when this wrapper only borrows a pointer someone else owns
+    // (see the borrowing constructor): Dispose must not destroy it.
+    private readonly bool _borrowed;
 
     private ke_scheduler* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Scheduler));
@@ -31,6 +34,16 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler
     {
         _native = handle.@ref;
         _destroy = handle.destroy;
+    }
+
+    /// <summary>Wraps a <c>ke_scheduler*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static Scheduler Borrow(ke_scheduler* native) => new(native, borrowed: true);
+
+    private Scheduler(ke_scheduler* native, bool borrowed)
+    {
+        _native = native;
+        _destroy = null;
+        _borrowed = borrowed;
     }
 
     /// <summary>Blocks the calling thread until the task completes.</summary>
@@ -55,6 +68,7 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler
     public void Dispose()
     {
         if (_native == null) return;
+        if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;
     }
