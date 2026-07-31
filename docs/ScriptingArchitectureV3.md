@@ -318,6 +318,84 @@ Separate, smaller, and lowest priority of the four: a native middle-end that col
 
 Scope check: it removes ~600 LoC of the C# baseline. Real, but it is the smallest of the four tracks and it does not change the answer to "can any language use this engine". **It should not be started before Tracks 1 and 2 have a per-domain rhythm going**, because it registers into an ABI those tracks are still reshaping.
 
+### 7.1 The growth problem node ergonomics create
+
+Tracks 1–3 give a domain author this deal: write a C header, run `kabic`, every target language is supported. Node ergonomics break that deal if the node layer is per-language handwritten code.
+
+Every domain eventually wants ergonomic nodes (`PointLight`, `CollisionShape2D`, `AudioPlayer`, …). If those live in a per-language toolkit, then a domain is not done when its header is done — it is done when someone has written its node classes in C#, *and* Lua, *and* Zig. The floor stops being `O(languages)` and becomes `O(languages × domains)`, and a community-authored domain is no longer "run `kabic` and ship".
+
+That is the problem this track has to solve, and it is a stronger requirement than "remove ~600 LoC".
+
+### 7.2 Finding: a node is a typed facade over a component
+
+Measured against the current toolkit:
+
+| Node | LoC | What it contains |
+|---|---|---|
+| `Sprite2D` | 12 | component fields |
+| `AmbientLight` | 20 | component fields |
+| `PointLight` | 25 | 3 fields; setter writes the component. No logic. |
+| `MeshRenderer` | 26 | 2 handles; writes 2 components on bind |
+| `DirectionalLight` / `SpotLight` | 27 / 31 | component fields |
+| `AudioPlayer` | 48 | reads two scene properties, calls `load_sound`, exposes `Play()` |
+| `CollisionShape2D` | 67 | ancestor search + `add_*_fixture` |
+
+The base `Node` (151 LoC) is mostly component access (`LocalTransform`), lifecycle declarations, and a `Parent`/`_children` pair that **duplicates hierarchy the native `ke_scene_tree` already owns** — divergent state, not just redundancy, and the same class of leak the Track 1 rubric exists to catch.
+
+So the dominant case is not code. It is a component schema plus a name.
+
+### 7.3 Thesis: a node type is data, therefore `kabic` can emit it
+
+If a node type is describable — name, base, backing component(s), property schema, defaults — then `kabic` generates the ergonomic type per language exactly as it already generates provider wrappers. The domain author writes no per-language code, and the floor returns to `O(languages)`.
+
+The corollary is structural: **there is no `toolkit.<domain>`. A domain declares its own node types in its own header**, and `kabic` emits them into whatever that language calls that domain's module.
+
+### 7.4 Mechanism: a tag on the component struct
+
+The declaration reuses the tag vocabulary (§5.2) rather than introducing a second description mechanism:
+
+```c
+/**
+ * [node:PointLight,base:Node3D] Emits light in all directions from this entity.
+ */
+typedef struct ke_point_light_component {
+    float color[3];   ///< [default:1,1,1] Linear RGB.
+    float intensity;  ///< [default:1]
+    float radius;     ///< [default:10]
+} ke_point_light_component;
+```
+
+`kabic` already extracts struct name, doc, field names, field types, and field docs. `[node:]` and `[default:]` add no new extraction concept — they ride the machinery `[utf8]`/`[out]`/`[try]` already proved. From this single declaration each backend emits its own idiom (a C# class with properties, a Lua metatable, a Zig struct with accessors), and `[default:]` supplies both the construction defaults and the scene-file property defaults.
+
+### 7.5 What still will not generate
+
+Additions to the §9 floor — each is **fixed per language and does not grow with the engine**:
+
+- The `Node` / `Node3D` / `Node2D` base type (~150–250 LoC per language).
+- The `ke_node_host` binding: registering a script instance for an entity and dispatching its lifecycle callbacks.
+- The DI / composition idiom.
+- Game code (`Paddle`, `Ball`, …) — target-language by design, per §0.
+
+A node behaviour that is genuinely imperative is not floor: it is misplaced. It belongs natively in the domain that owns it, as a system.
+
+### 7.6 Open design questions
+
+Unresolved, and each can invalidate part of §7.4:
+
+1. **Imperative node behaviour.** `CollisionShape2D` searches ancestors for a physics body and attaches a fixture. That is physics-domain logic in toolkit clothing; it should be a native system in `ke_physics_2d` reacting to component add, leaving the node pure data. Until that migration is proven, "nodes are data" is a claim about most nodes, not all.
+2. **Node methods.** `AudioPlayer.Play()` is a method, not a property. Generating it needs a declarable rule binding a node to one of its domain's vtable slots. This is the least obvious piece of the design and has no precedent in the tag vocabulary.
+3. **Behaviour detection without reflection.** `Node.CompleteBind` uses reflection to discover whether `OnUpdate` was overridden. That is C#-specific and conflicts with the script safety model's ban on reflection in script code. A different mechanism is required.
+4. **Base hierarchy prerequisite.** `base:Node3D` assumes the Node3D/Node2D/Control split exists natively. It is decided but unimplemented — a prerequisite of this design, not a byproduct.
+
+### 7.7 Alternatives rejected
+
+- **No node types; a generic typed view** (`world.Get<PointLight>(e).Intensity = 5`). Removes the generated-type surface entirely, but discards the construction and subclassing ergonomics that are the reason this track exists.
+- **A separate node manifest (TOML/JSON) instead of header tags.** A richer schema without C-comment constraints, but it establishes a second source of truth to keep synchronised with the headers — the exact failure mode §5.3 exists to prevent.
+
+### 7.8 Validation plan
+
+Same shape as Stage 1 (§8.3): prove on one domain before generalising. `PointLight` is the pilot — the pure case (one component, three scalar fields, no logic). The gate is whether the generated C# type is equivalent to the hand-written one. If it is not, the thesis fails cheaply and before any domain header has been annotated.
+
 ---
 
 ## 8. The plan — stages to zero hand-written wrappers
@@ -378,9 +456,9 @@ Implement a Lua or Python `kabic` backend plus a runtime shim, consuming the sam
 
 **Pass condition**: no native change, no hand-written per-domain wrapper. If either is needed, the strategy has a gap and the gap is now visible with a concrete failing case.
 
-### 8.6 Stage 4 — `ke_node_host` (Track 4)
+### 8.6 Stage 4 — Node ergonomics (Track 4)
 
-Last, and only now, because it registers into an ABI that Stages 1–2 are still reshaping. Design in `ScriptingArchitectureV2.md` §4/§5.
+Last, and only now, because it registers into an ABI that Stages 1–2 are still reshaping. Lifecycle-host design in `ScriptingArchitectureV2.md` §4/§5; the generated-node-type design, its open questions, and its pilot gate are in §7.1–§7.8 above.
 
 ### 8.7 Invariants held throughout
 
