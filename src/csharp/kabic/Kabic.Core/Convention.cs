@@ -108,6 +108,10 @@ public sealed class Convention
             // Would derive to `Ecs` inside namespace KernelEngine.Ecs, making the
             // type unreferenceable without full qualification everywhere.
             ["ke_ecs"] = "EcsRegistry",
+            // Preserves the pre-migration public name; nothing else in the
+            // rename would be gained (no namespace collision), but every
+            // existing call site already knows this type as NativeAssetResolver.
+            ["ke_asset_resolver"] = "NativeAssetResolver",
             // Derived casing would be Physics2d/BodyType2d; this ABI's managed
             // surface has always spelled the dimension suffix with a capital D.
             ["ke_physics_2d"] = "Physics2D",
