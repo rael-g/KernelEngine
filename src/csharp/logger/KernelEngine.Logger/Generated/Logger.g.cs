@@ -16,7 +16,7 @@ public unsafe interface INativeLogger
 }
 
 /// <summary>Engine logging system. Dispatches events to every registered sink.</summary>
-public sealed unsafe partial class Logger : IDisposable, INativeLogger
+public unsafe partial class Logger : IDisposable, INativeLogger
 {
     private ke_logger* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_logger*, void> _destroy;

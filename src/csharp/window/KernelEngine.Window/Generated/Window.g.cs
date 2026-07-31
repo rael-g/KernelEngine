@@ -16,7 +16,7 @@ public unsafe interface INativeWindow
 }
 
 /// <summary>OS-level window abstraction.</summary>
-public sealed unsafe partial class Window : IDisposable, INativeWindow
+public unsafe partial class Window : IDisposable, INativeWindow
 {
     private ke_window* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_window*, void> _destroy;

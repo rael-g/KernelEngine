@@ -44,6 +44,18 @@
       "abstractionsOutDir": "src/csharp/logger/KernelEngine.Logger.Abstractions/Generated",
       "usings": [],
       "library": "ke_logger_simple"
+    },
+    {
+      "name": "scheduler",
+      "headers": [
+        "src/c/scheduler/kernel_engine/scheduler/scheduler.h"
+      ],
+      "includeDirs": ["src/c/scheduler", "src/zig/common/include"],
+      "apiJson": "src/csharp/scheduler/ke_api.json",
+      "namespace": "KernelEngine.Scheduler",
+      "nativeNamespace": "KernelEngine.Scheduler.Native",
+      "outDir": "src/csharp/scheduler/KernelEngine.Scheduler/Generated",
+      "usings": []
     }
   ]
 }

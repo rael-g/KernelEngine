@@ -1,0 +1,176 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_scheduler",
+      "doc": "Dispatches work to a native thread pool.",
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "dispatch",
+          "returns": "ke_task *",
+          "tags": [],
+          "doc": "Schedules a fire-and-forget task.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "func",
+              "type": "ke_task_func",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": "Entry point invoked on a worker thread."
+            },
+            {
+              "name": "data",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Opaque context passed to func unchanged."
+            }
+          ]
+        },
+        {
+          "name": "dispatch_on_complete",
+          "returns": "ke_task *",
+          "tags": [],
+          "doc": "Schedules a task and a completion callback run once it finishes.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "func",
+              "type": "ke_task_func",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": "Entry point invoked on a worker thread."
+            },
+            {
+              "name": "data",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Opaque context passed to func unchanged."
+            },
+            {
+              "name": "on_complete",
+              "type": "ke_task_on_complete_func",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": "Invoked after func returns."
+            },
+            {
+              "name": "user_data",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Opaque context passed to on_complete unchanged."
+            }
+          ]
+        },
+        {
+          "name": "wait",
+          "returns": "void",
+          "tags": [],
+          "doc": "Blocks the calling thread until the task completes.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "task",
+              "type": "ke_task *",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "is_completed",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Returns true if the task has finished.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "task",
+              "type": "ke_task *",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "dispatch_pinned",
+          "returns": "ke_task *",
+          "tags": [],
+          "doc": "Schedules a fire-and-forget task on one specific worker thread.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "thread_num",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "Index of the worker to run on."
+            },
+            {
+              "name": "func",
+              "type": "ke_task_func",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": "Entry point invoked on that worker thread."
+            },
+            {
+              "name": "data",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Opaque context passed to func unchanged."
+            }
+          ]
+        },
+        {
+          "name": "get_num_workers",
+          "returns": "uint32_t",
+          "tags": [],
+          "doc": "Returns the number of worker threads in the pool.",
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    },
+    {
+      "name": "ke_scheduler_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scheduler *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": []
+}

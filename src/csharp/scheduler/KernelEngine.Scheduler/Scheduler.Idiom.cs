@@ -1,41 +1,36 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using KernelEngine.Common.Native;
+using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Scheduler;
 
 /// <summary>
-/// Managed wrapper around <c>ke_scheduler</c>.
-/// Dispatches work items to a native thread pool and bridges them to awaitable <see cref="Task"/>s.
+/// The parts of <see cref="Scheduler"/> that express fire-and-forget native
+/// dispatch as C# async — Task/TaskCompletionSource bridging, GCHandle-rooted
+/// trampolines for the three [raw_callback] slots kabic does not generate a
+/// method for (there is no ABI-derivable answer to "what should this look
+/// like in C#" the way there is for a fallible slot or a sequence; the value
+/// surface here is inherently this language's own async idiom). Everything
+/// that is a direct image of the C ABI is generated in
+/// <c>Generated/Scheduler.g.cs</c>.
 /// </summary>
-public unsafe class Scheduler : IScheduler, INativeScheduler
+public unsafe partial class Scheduler : IScheduler
 {
-    private ke_scheduler* _native;
-    private readonly delegate* unmanaged[Cdecl]<ke_scheduler*, void> _destroy;
-
     /// <inheritdoc/>
     void IScheduler.Dispatch(Action action) => Dispatch(action);  // fire-and-forget
 
     /// <inheritdoc/>
     void IScheduler.DispatchPinned(uint threadNum, Action action)
     {
-        ObjectDisposedException.ThrowIf(_native == null, this);
         ArgumentNullException.ThrowIfNull(action);
 
         var handle = GCHandle.Alloc(action);
-        _native->dispatch_pinned(_native, threadNum, &NativePinnedCallback, (void*)GCHandle.ToIntPtr(handle));
+        Handle->dispatch_pinned(Handle, threadNum, &NativePinnedCallback, (void*)GCHandle.ToIntPtr(handle));
         // Fire-and-forget; native callback frees the handle.
     }
 
     /// <inheritdoc/>
-    public uint NumWorkers
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_native == null, this);
-            return _native->get_num_workers(_native);
-        }
-    }
+    public uint NumWorkers => GetNumWorkers();
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void NativePinnedCallback(void* data)
@@ -45,21 +40,6 @@ public unsafe class Scheduler : IScheduler, INativeScheduler
         try   { action(); }
         catch { /* fire-and-forget; future versions can surface via on_complete */ }
         finally { handle.Free(); }
-    }
-
-    ke_scheduler* INativeScheduler.Native
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_native == null, this);
-            return _native;
-        }
-    }
-
-    public Scheduler(ke_scheduler_handle handle)
-    {
-        _native = handle.@ref;
-        _destroy = handle.destroy;
     }
 
     /// <summary>
@@ -77,15 +57,13 @@ public unsafe class Scheduler : IScheduler, INativeScheduler
     /// <summary>Schedules an <see cref="Action"/> on the native thread pool and returns an awaitable <see cref="Task"/>.</summary>
     public Task Dispatch(Action action)
     {
-        ObjectDisposedException.ThrowIf(_native == null, this);
-
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var actionHandle = GCHandle.Alloc(action);
         var tcsHandle = GCHandle.Alloc(tcs);
 
-        _native->dispatch_on_complete(
-            _native,
+        Handle->dispatch_on_complete(
+            Handle,
             &NativeWorkCallback,
             (void*)GCHandle.ToIntPtr(actionHandle),
             &NativeCompletionCallback,
@@ -98,8 +76,6 @@ public unsafe class Scheduler : IScheduler, INativeScheduler
     /// <summary>Schedules a <see cref="Func{TResult}"/> on the native thread pool and returns an awaitable <see cref="Task{TResult}"/>.</summary>
     public Task<T> Dispatch<T>(Func<T> func)
     {
-        ObjectDisposedException.ThrowIf(_native == null, this);
-
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         Action wrapper = () =>
@@ -111,8 +87,8 @@ public unsafe class Scheduler : IScheduler, INativeScheduler
         var actionHandle = GCHandle.Alloc(wrapper);
         var tcsHandle = GCHandle.Alloc(tcs);
 
-        _native->dispatch_on_complete(
-            _native,
+        Handle->dispatch_on_complete(
+            Handle,
             &NativeWorkCallback,
             (void*)GCHandle.ToIntPtr(actionHandle),
             &NativeGenericCompletionCallback,
@@ -146,15 +122,5 @@ public unsafe class Scheduler : IScheduler, INativeScheduler
     {
         var handle = GCHandle.FromIntPtr((IntPtr)userData);
         handle.Free();
-    }
-
-    /// <inheritdoc/>
-    public void Dispose()
-    {
-        if (_native != null)
-        {
-            if (_destroy != null) _destroy(_native);
-            _native = null;
-        }
     }
 }

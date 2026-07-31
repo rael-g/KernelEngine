@@ -586,3 +586,22 @@ Fixed by promoting the frontend the same way: `src/csharp/kabic/Kabic.Frontend/`
 Two dead methods found and deleted while moving code, not before: `DocParser.SplitTagsSingle` and `DeclText.FreeFnParamNames` — each had exactly one reference, its own definition.
 
 Verified byte-for-byte identical `ke_api.json` output against the pre-refactor extractor for all three migrated domains; full solution builds, all tests pass, `check_api_drift.cs` clean.
+
+### A.4 — `scheduler` (301 hand-written LoC) — audited, migrated, cleared
+
+| File | LoC | Verdict | Note |
+|---|---|---|---|
+| `Scheduler/Scheduler.cs` | 160 | Split: MECHANICAL (`wait`/`is_completed`/`get_num_workers`, `INativeScheduler`, handle ctor) generated; Task/GCHandle async bridging kept as `Scheduler.Idiom.cs` | See `[raw_callback]` below |
+| `Scheduler/INativeScheduler.cs` | 13 | **MECHANICAL** | Same `INativeX` shape; deleted, generated |
+| `Scheduler/KernelTask.cs` | 50 | IDIOM | `Task`-shaped awaitable wrapper; no ABI counterpart in any form |
+| `Scheduler.Abstractions/IScheduler.cs` | 19 | IDIOM | Hand-authored game-facing interface |
+| `Scheduler.Enki/EnkiScheduler.cs` | 31 | IDIOM | Backend factory wiring — see the inheritance finding below |
+| `Scheduler.Enki/ServiceCollectionExtensions.cs` | 24 | IDIOM | DI composition |
+
+**Outcome**: `Scheduler.cs`/`INativeScheduler.cs` deleted (173 lines); `Generated/Scheduler.g.cs` (generated) + `Scheduler.Idiom.cs` (117 hand-written lines: the four `[UnmanagedCallersOnly]` trampolines, `Dispatch`/`Dispatch<T>`/`DispatchPinned`/`DispatchKernelTask` Task-bridging, and the `NumWorkers` property) replace them. Full solution builds, 122/122 C# tests pass, `zig build` clean.
+
+**A real `kabic` bug found before generating anything**: `EnkiScheduler : KernelEngine.Scheduler.Scheduler` — a genuine subclass, inheriting the base wrapper to layer its own native construction on top. `RenderProvider` marked every generated class `sealed` unconditionally; had it been generated as-is, this domain would not have compiled. Fixed by dropping `sealed` from the template — the C ABI says nothing about whether a managed wrapper should be inheritable, so imposing it was a restriction `kabic` invented with no basis in the description. Re-verified `input`/`window`/`logger` after the fix: only the `sealed` keyword changed in each, nothing else, confirming the fix has no other effect.
+
+**A new tag, `[raw_callback]`, for the shape this domain introduced**: `dispatch`/`dispatch_on_complete`/`dispatch_pinned` take a bare C function-pointer *parameter* (`ke_task_func`, `ke_task_on_complete_func`) directly — not a `[callback]`-tagged vtable passed by value like `ke_logger_sink`. Unlike the vtable-callback case, there is no ABI-derivable answer to "what should the C# surface look like" here: the value a caller actually wants (`Task`, a coroutine, a plain callback registration — whichever idiom the target language uses for async) cannot be inferred from a bare function pointer and a `void*` context the way `[callback]`'s trampoline shape can be. `[raw_callback]`-tagged slots are therefore excluded from generation entirely (joining `[sink]`/`[lifecycle]` in `RenderProvider`'s skip list) and left whole to the idiom layer, which calls the slot directly through the generated `Handle` property.
+
+**Tooling gotcha hit while verifying the `sealed` fix, worth recording**: `dotnet run scripts/generate_csharp.cs` (a `#:project`-referencing file-based app) caches its build under `~/.local/share/dotnet/runfile/<hash>/`, keyed off the *entry script's* content — editing a `#:project`-referenced file (i.e. anything in `Kabic.Core`/`Kabic.CSharpBackend`) does not reliably invalidate that cache. Regenerating after a kabic code change produced stale output twice in a row despite the referenced project rebuilding correctly on its own; only clearing `~/.local/share/dotnet/runfile/generate_csharp-*` (or `extract_api-*`) fixed it. Byte-diff the output after any kabic change that should have visibly altered it — don't trust a clean run alone.

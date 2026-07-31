@@ -17,7 +17,7 @@ public unsafe interface INativeInput
 }
 
 /// <summary>Live keyboard and mouse state for one window.</summary>
-public sealed unsafe partial class Input : IDisposable, INativeInput
+public unsafe partial class Input : IDisposable, INativeInput
 {
     private ke_input* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_input*, void> _destroy;

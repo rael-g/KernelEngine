@@ -116,7 +116,13 @@ public static class CSharpBackend
         o.Add("");
 
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
-        o.Add($"public sealed unsafe partial class {typeName} : IDisposable, {nativeIface}");
+        // Not sealed: at least one provider (EnkiScheduler : Scheduler) is
+        // legitimately subclassed by a backend layering its own native
+        // construction on top of the generic wrapper. Sealing by default
+        // would have been a restriction kabic imposed with no ABI basis for
+        // it — the C type says nothing about whether the managed wrapper
+        // should be inheritable.
+        o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}");
         o.Add("{");
         o.Add($"    private {vtable.Name}* _native;");
         o.Add($"    private readonly delegate* unmanaged[Cdecl]<{vtable.Name}*, void> _destroy;");
@@ -183,8 +189,15 @@ public static class CSharpBackend
         {
             // [sink]: a backend-facing event callback (e.g. ke_input.on_key), not
             // game-facing API. [lifecycle:*]: invoked automatically below, not
-            // meant to be called again by the consumer.
-            if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle")) continue;
+            // meant to be called again by the consumer. [raw_callback]: a bare
+            // C function-pointer parameter (not a [callback] vtable-by-value
+            // struct) — trampolining it generically buys nothing, since the
+            // value surface a caller actually wants (Task/async, a coroutine,
+            // whatever this language's idiom is) can't be inferred from the
+            // ABI either way; left to the idiom layer entirely.
+            if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle")
+                || cs.PublicParams.Any(p => p.Has("raw_callback")))
+                continue;
             if (cs.PublicParams.Any(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
                 RenderCallbackMethod(o, vtable, cs, classified, typeName);
