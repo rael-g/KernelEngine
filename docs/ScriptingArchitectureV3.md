@@ -412,6 +412,27 @@ What the pilot changed as a consequence: the Zig cull pass now reads `c.ke_point
 
 **The remaining step before generalising**: component identity must derive from the header — either the managed mirror is generated from it, or the registry registers the header type directly. Node-type generation is blocked on that, not on anything in §7.4.
 
+### 7.10 Component identity is a name, not a type — and that is what makes user-defined nodes work
+
+Both options §7.9 closes on assume a header exists. For a game-authored node type there is none, and there never will be: a game's `Paddle` is not exported to any other language, so nothing would generate a header for it. Posing the choice as "generate the managed mirror" versus "register the native type" was therefore a false dichotomy — neither serves the case that matters most for the toolkit growth curve.
+
+What both paths do share is the ECS contract itself: `component_register(name, size) -> cid`. **Name plus size is the identity; a managed `Type` or a C struct is only ever a local handle onto it.** `ComponentRegistry.CidOf<T>()` is a convenience over that truth, and it is exactly the convenience that failed the pilot.
+
+So a generated node resolves its cid by name:
+
+| | engine node type (`PointLight`) | game node type (`Paddle`) |
+|---|---|---|
+| source of truth | the domain's header | the class, in the game's own language |
+| who generates | `kabic`, into every language | that language's own codegen |
+| exists in | every target language | only the game's language |
+| result | a **named component** in the ECS | a **named component** in the ECS |
+
+The runtime cannot tell which path produced a component, and does not need to. The name for an engine type is derived from its component struct (`ke_point_light_component` -> `point_light`, via `Convention.ComponentSuffix`); the name for a game type comes from whatever its language's codegen assigns.
+
+This is what keeps the per-language floor flat. Engine node types grow with the engine but cost nothing per language, because they are generated — a community domain ships a header with `[node:]` tags, runs `kabic`, and every language has the type. Game node types never enter any toolkit at all. What each language implements by hand stays fixed: the `Node` base, the lifecycle host, and the codegen that turns a class's fields into a named component.
+
+**Pilot re-run, passing.** With name-based resolution, `PointLight.g.cs` replaces the hand-written class outright: the four examples that construct point lights compile and run against it, 122 managed tests and 236 native tests pass, and no other domain's generated output changes except for comment removal. `NodeWorld` gained `SetByCid` and `CidOfName` — the two operations a name-identified component needs, both of which a game-authored node will use unchanged.
+
 ---
 
 ## 8. The plan — stages to zero hand-written wrappers
