@@ -370,6 +370,8 @@ Each domain repeats §8.3's seven steps. Order is by ascending leakage and coupl
 
 Wave D is where the strategy either lands or reveals that a capability genuinely belongs in a managed layer. Do not pre-judge it.
 
+**Wave D result**: `toolkit` (1585 lines across `Scene/`, `Modules/`, `Input/`, `Systems/`, `Text/`, `Assets/`) has zero raw ABI touches — no `ke_*` pointer, no `unsafe` block anywhere in it. Every file reaches the kernel exclusively through the wrapper types Waves A–C already produced (`World`, `SceneTree`, `IEcsRegistry`, `IRenderResources`, `NativeInputActions`, ...). There is no vtable here for `kabic` to mechanize — `NodeWorld` (278 lines, the largest file) is the "node access funnel" §8.1 already named as part of the permanent floor: entity/name lookup dictionaries, behavior registration, system-context scoping — genuine Track 4 idiom with no ABI counterpart by design, not leakage waiting to be moved. Wave D closes with **no migration performed**, because there was nothing left in it that Track 3 governs — every domain with a real C ABI vtable (Waves A/B/C, 16 domains total) is now migrated; `toolkit` was always downstream of them, never a wrapper layer in its own right.
+
 ### 8.5 Stage 3 — acceptance test: a second language
 
 Implement a Lua or Python `kabic` backend plus a runtime shim, consuming the same `ke_api.json`. For a dynamic language this should require **no build-time codegen at all** (§6.2).
