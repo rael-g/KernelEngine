@@ -4,55 +4,66 @@
     {
       "name": "ke_glyph_metrics",
       "doc": "Per-glyph layout \u002B atlas-sampling info, in pixels at the baked size. \u0060bearing_x\u0060 shifts the quad right of the pen; \u0060bearing_y\u0060 shifts up from the baseline. \u0060width\u0060/\u0060height\u0060 is the quad size; \u0060u0,v0,u1,v1\u0060 is the source rect in the atlas.",
+      "tags": [],
       "fields": [
         {
           "name": "codepoint",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "u0",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "v0",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "u1",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "v1",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "bearing_x",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "bearing_y",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "width",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "height",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "advance_x",
           "type": "float",
+          "tags": [],
           "doc": null
         }
       ]
@@ -60,40 +71,48 @@
     {
       "name": "ke_font_data",
       "doc": "CPU-side font data produced by a loader. Caller owns; release via the loader\u0027s free_font. Atlas is RGBA8 (white RGB \u002B alpha from coverage) so it goes through ke_render.create_texture_rgba without a new texture format.",
+      "tags": [],
       "fields": [
         {
           "name": "atlas_rgba",
           "type": "uint8_t *",
+          "tags": [],
           "doc": "width * height * 4 bytes"
         },
         {
           "name": "atlas_width",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "atlas_height",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "glyphs",
           "type": "ke_glyph_metrics *",
+          "tags": [],
           "doc": "glyph_count entries"
         },
         {
           "name": "glyph_count",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "line_height",
           "type": "float",
+          "tags": [],
           "doc": "Recommended line spacing in pixels"
         },
         {
           "name": "ascent",
           "type": "float",
+          "tags": [],
           "doc": "Pixels above baseline to top of tallest glyph"
         }
       ]
@@ -103,10 +122,12 @@
     {
       "name": "ke_font_loader",
       "doc": "ABI-stable vtable for decoding font files (TTF/OTF/\u2026) on CPU. Async dispatch is the caller\u0027s concern (C# wraps with Task.Run on a worker); this contract stays minimal. Mirrors the ke_image_loader pattern \u2014 load returns raw bytes \u002B metadata, texture upload happens later via ke_render.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -178,10 +199,12 @@
     {
       "name": "ke_font_loader_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_font_loader *",
+          "tags": [],
           "doc": null
         }
       ],

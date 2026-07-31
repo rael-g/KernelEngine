@@ -5,10 +5,12 @@
     {
       "name": "ke_scheduler",
       "doc": "Dispatches work to a native thread pool.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -153,10 +155,12 @@
     {
       "name": "ke_scheduler_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_scheduler *",
+          "tags": [],
           "doc": null
         }
       ],

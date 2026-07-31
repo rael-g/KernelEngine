@@ -5,10 +5,12 @@
     {
       "name": "ke_asset_resolver",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -304,10 +306,12 @@
     {
       "name": "ke_asset_resolver_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_asset_resolver *",
+          "tags": [],
           "doc": null
         }
       ],

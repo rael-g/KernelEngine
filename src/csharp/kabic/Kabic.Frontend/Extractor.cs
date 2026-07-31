@@ -143,7 +143,7 @@ public static class Extractor
 
             if (ret is null)
             {
-                fields.Add(new ApiField(fieldName, qual, summary.Length > 0 ? summary : null));
+                fields.Add(new ApiField(fieldName, qual, summaryTags, summary.Length > 0 ? summary : null));
                 continue;
             }
 
@@ -167,8 +167,8 @@ public static class Extractor
                 retDoc.Length > 0 ? retDoc : null, slotParams));
         }
 
-        var structDoc = DocParser.Parse(node).Summary;
-        return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, fields, slots);
+        var (structTags, structDoc, _, _) = DocParser.Parse(node);
+        return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, structTags, fields, slots);
     }
 
     static ApiFunction ExtractFunction(JsonObject node, string name, List<string> errors)

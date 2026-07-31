@@ -5,10 +5,12 @@
     {
       "name": "ke_audio",
       "doc": "Audio playback. Concrete implementations ship as separate plugins (miniaudio, FMOD, ...). Every slot is safe to call from ke.sim \u2014 backends marshal internally to their own audio thread.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -120,10 +122,12 @@
     {
       "name": "ke_audio_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_audio *",
+          "tags": [],
           "doc": null
         }
       ],

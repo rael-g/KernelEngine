@@ -26,35 +26,42 @@
     {
       "name": "ke_body_state_2d",
       "doc": "Snapshot of a body\u0027s pose \u002B motion at a point in time. Position is the body\u0027s local origin in world space; angle is in radians.",
+      "tags": [],
       "fields": [
         {
           "name": "x",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "y",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "angle",
           "type": "float",
+          "tags": [],
           "doc": "radians, CCW positive"
         },
         {
           "name": "velocity_x",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "velocity_y",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "angular_velocity",
           "type": "float",
+          "tags": [],
           "doc": "radians per second"
         }
       ]
@@ -64,10 +71,12 @@
     {
       "name": "ke_physics_2d",
       "doc": "ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins (Box2D for now). Not thread-safe \u2014 call all methods on the same thread (typically ke.sim).",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -388,10 +397,12 @@
     {
       "name": "ke_physics_2d_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_physics_2d *",
+          "tags": [],
           "doc": null
         }
       ],

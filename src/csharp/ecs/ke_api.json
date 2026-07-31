@@ -4,25 +4,30 @@
     {
       "name": "ke_component_field",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "name",
           "type": "const char *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "type",
           "type": "ke_variant_type",
+          "tags": [],
           "doc": null
         },
         {
           "name": "offset",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "size",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         }
       ]
@@ -30,25 +35,30 @@
     {
       "name": "ke_component_meta",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "cid",
           "type": "ke_component_id",
+          "tags": [],
           "doc": null
         },
         {
           "name": "size",
           "type": "size_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "fields",
           "type": "const ke_component_field *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "field_count",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         }
       ]
@@ -56,20 +66,24 @@
     {
       "name": "ke_ecs_segment",
       "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term (term order = the order passed to query_register; columns[i] is the storage for cids[i], aligned 1:1 with entities). A tag term (zero-size component) has columns[i] == NULL. Pointers stay valid until the next structural change \u2014 deferred to the wave barrier \u2014 so they are stable for the whole parallel wave.",
+      "tags": [],
       "fields": [
         {
           "name": "entities",
           "type": "const ke_entity *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "columns",
           "type": "void *[8]",
+          "tags": [],
           "doc": null
         },
         {
           "name": "count",
           "type": "size_t",
+          "tags": [],
           "doc": null
         }
       ]
@@ -79,10 +93,12 @@
     {
       "name": "ke_ecs",
       "doc": "Entity lifetime plus component storage: the engine\u0027s ECS contract.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -321,10 +337,12 @@
     {
       "name": "ke_ecs_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_ecs *",
+          "tags": [],
           "doc": null
         }
       ],

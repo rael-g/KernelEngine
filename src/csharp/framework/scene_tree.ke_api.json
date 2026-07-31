@@ -5,10 +5,12 @@
     {
       "name": "ke_scene_tree",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -129,10 +131,12 @@
     {
       "name": "ke_scene_tree_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_scene_tree *",
+          "tags": [],
           "doc": null
         }
       ],

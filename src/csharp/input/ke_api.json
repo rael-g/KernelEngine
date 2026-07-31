@@ -734,65 +734,78 @@
     {
       "name": "ke_input_snapshot",
       "doc": "Frozen snapshot of all input state for a single frame. Passed from ke.main to ke.sim so reads are consistent and thread-safe. The key fields are bitsets. Read them through the accessors below rather than indexing directly: the packing is a detail of this contract, and a caller that reimplements it silently breaks if the packing ever changes.",
+      "tags": [],
       "fields": [
         {
           "name": "keys_down",
           "type": "uint64_t[8]",
+          "tags": [],
           "doc": "Bitset of keys currently held down."
         },
         {
           "name": "keys_pressed",
           "type": "uint64_t[8]",
+          "tags": [],
           "doc": "Bitset of keys that transitioned to down this frame."
         },
         {
           "name": "keys_released",
           "type": "uint64_t[8]",
+          "tags": [],
           "doc": "Bitset of keys that transitioned to up this frame."
         },
         {
           "name": "mouse_x",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "mouse_y",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "mouse_dx",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "mouse_dy",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "scroll_dx",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "scroll_dy",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "mouse_buttons_down",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "mouse_buttons_pressed",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "mouse_buttons_released",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         }
       ]
@@ -800,25 +813,30 @@
     {
       "name": "ke_input_event",
       "doc": "One discrete input event captured during ke.main\u0027s poll phase. Flat layout (no anonymous unions) for friction-free C# P/Invoke binding. Field interpretation depends on - KEY_DOWN / KEY_UP: code = key code (GLFW codes) - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
+      "tags": [],
       "fields": [
         {
           "name": "kind",
           "type": "ke_input_event_kind",
+          "tags": [],
           "doc": null
         },
         {
           "name": "code",
           "type": "int32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "x",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "y",
           "type": "float",
+          "tags": [],
           "doc": null
         }
       ]
@@ -828,10 +846,12 @@
     {
       "name": "ke_input",
       "doc": "Live keyboard and mouse state for one window.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -1048,10 +1068,12 @@
     {
       "name": "ke_input_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_input *",
+          "tags": [],
           "doc": null
         }
       ],

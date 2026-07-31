@@ -46,7 +46,13 @@ public static class Serialization
         ["values"] = new JsonArray(e.Values.Select(v => (JsonNode)v.ToJson()).ToArray()),
     };
 
-    public static JsonObject ToJson(this ApiField f) => new() { ["name"] = f.Name, ["type"] = f.Type, ["doc"] = f.Doc };
+    public static JsonObject ToJson(this ApiField f) => new()
+    {
+        ["name"] = f.Name,
+        ["type"] = f.Type,
+        ["tags"] = new JsonArray(f.Tags.Select(t => (JsonNode)t).ToArray()),
+        ["doc"] = f.Doc,
+    };
 
     public static JsonObject ToJson(this ApiSlot s) => new()
     {
@@ -64,6 +70,7 @@ public static class Serialization
         {
             ["name"] = s.Name,
             ["doc"] = s.Doc,
+            ["tags"] = new JsonArray(s.Tags.Select(t => (JsonNode)t).ToArray()),
             ["fields"] = new JsonArray(s.Fields.Select(f => (JsonNode)f.ToJson()).ToArray()),
         };
         if (s.Slots.Count > 0)

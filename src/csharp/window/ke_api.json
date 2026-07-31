@@ -5,10 +5,12 @@
     {
       "name": "ke_window",
       "doc": "OS-level window abstraction.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -129,10 +131,12 @@
     {
       "name": "ke_window_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_window *",
+          "tags": [],
           "doc": null
         }
       ],

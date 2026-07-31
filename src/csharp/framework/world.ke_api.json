@@ -4,35 +4,42 @@
     {
       "name": "ke_world_params",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "scheduler",
           "type": "struct ke_scheduler *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "ecs",
           "type": "ke_ecs *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "runtime",
           "type": "ke_runtime *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "scene_tree",
           "type": "struct ke_scene_tree *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "project_root",
           "type": "const char *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "logger",
           "type": "struct ke_logger *",
+          "tags": [],
           "doc": null
         }
       ]
@@ -42,10 +49,12 @@
     {
       "name": "ke_world",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -131,10 +140,12 @@
     {
       "name": "ke_world_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_world *",
+          "tags": [],
           "doc": null
         }
       ],

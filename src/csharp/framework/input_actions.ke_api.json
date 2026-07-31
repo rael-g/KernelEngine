@@ -52,35 +52,42 @@
     {
       "name": "ke_input_action_event",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "action_id",
           "type": "int32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "type",
           "type": "ke_action_type",
+          "tags": [],
           "doc": null
         },
         {
           "name": "phase",
           "type": "ke_action_phase",
+          "tags": [],
           "doc": null
         },
         {
           "name": "x",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "y",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "z",
           "type": "float",
+          "tags": [],
           "doc": null
         }
       ]
@@ -90,10 +97,12 @@
     {
       "name": "ke_input_actions",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -463,10 +472,12 @@
     {
       "name": "ke_input_actions_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_input_actions *",
+          "tags": [],
           "doc": null
         }
       ],

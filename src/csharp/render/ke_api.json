@@ -37,50 +37,60 @@
     {
       "name": "ke_render_resource_desc",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "name",
           "type": "const char *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "type",
           "type": "ke_render_resource_type",
+          "tags": [],
           "doc": null
         },
         {
           "name": "format",
           "type": "ke_gpu_texture_format",
+          "tags": [],
           "doc": null
         },
         {
           "name": "size_mode",
           "type": "ke_render_size_mode",
+          "tags": [],
           "doc": null
         },
         {
           "name": "width",
           "type": "uint32_t",
+          "tags": [],
           "doc": "used when size_mode = ABSOLUTE"
         },
         {
           "name": "height",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "scale_x",
           "type": "float",
+          "tags": [],
           "doc": "used when size_mode = RELATIVE_TO_BACKBUFFER"
         },
         {
           "name": "scale_y",
           "type": "float",
+          "tags": [],
           "doc": null
         },
         {
           "name": "clear_value",
           "type": "float[4]",
+          "tags": [],
           "doc": "Per-resource clear color. Alpha == 0 (default/zeroed) defers to the core\u0027s global clear color set via set_clear_color(). Alpha != 0 uses these values."
         }
       ]
@@ -88,35 +98,42 @@
     {
       "name": "ke_render_pass_io",
       "doc": "A pass\u0027s declared resource I/O by name. The module turns these names into the access_list cids (via cid()) at register_system time; begin_pass uses the same names to resolve views and bind the writes as attachments.",
+      "tags": [],
       "fields": [
         {
           "name": "reads",
           "type": "const char *const *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "reads_count",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "writes",
           "type": "const char *const *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "writes_count",
           "type": "uint32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "cmd_slot",
           "type": "uint32_t",
+          "tags": [],
           "doc": "The frame command-buffer slot this pass records into. Each pass owns a distinct slot, so passes that run in parallel append without a shared counter (no atomic, no race). end_frame submits the populated slots in ascending order, so the module must assign slots in dependency order (a pass whose output a later pass samples gets the lower slot)."
         },
         {
           "name": "load",
           "type": "uint32_t",
+          "tags": [],
           "doc": "When non-zero, color attachments load their existing contents instead of clearing. An overlay pass (e.g. UI on top of the tonemapped scene) sets this so it composites rather than wipes the target. Default 0 = clear."
         }
       ]
@@ -126,10 +143,12 @@
     {
       "name": "ke_render_service",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -1065,10 +1084,12 @@
     {
       "name": "ke_render_service_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_render_service *",
+          "tags": [],
           "doc": null
         }
       ],

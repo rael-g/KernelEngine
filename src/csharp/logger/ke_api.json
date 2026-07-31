@@ -41,20 +41,24 @@
     {
       "name": "ke_log_event",
       "doc": "One log entry. \u0060tag\u0060/\u0060message\u0060 are valid only for the duration of the call they\u0027re passed to.",
+      "tags": [],
       "fields": [
         {
           "name": "level",
           "type": "int32_t",
+          "tags": [],
           "doc": null
         },
         {
           "name": "tag",
           "type": "const char *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "message",
           "type": "const char *",
+          "tags": [],
           "doc": null
         }
       ]
@@ -64,15 +68,18 @@
     {
       "name": "ke_logger_sink",
       "doc": "Output target for log messages. Implemented by the caller and handed to a logger; the logger owns it from that point and calls destroy on teardown.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         },
         {
           "name": "min_level",
           "type": "int32_t",
+          "tags": [],
           "doc": null
         }
       ],
@@ -115,10 +122,12 @@
     {
       "name": "ke_logger",
       "doc": "Engine logging system. Dispatches events to every registered sink.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -176,10 +185,12 @@
     {
       "name": "ke_logger_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_logger *",
+          "tags": [],
           "doc": null
         }
       ],

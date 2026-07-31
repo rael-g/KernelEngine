@@ -5,10 +5,12 @@
     {
       "name": "ke_asset_loader",
       "doc": "ABI-stable vtable interface for loading 3D assets. Concrete implementations (e.g., Assimp) are provided as separate plugins.",
+      "tags": [],
       "fields": [
         {
           "name": "handle",
           "type": "void *",
+          "tags": [],
           "doc": null
         }
       ],
@@ -93,10 +95,12 @@
     {
       "name": "ke_asset_loader_handle",
       "doc": null,
+      "tags": [],
       "fields": [
         {
           "name": "ref",
           "type": "ke_asset_loader *",
+          "tags": [],
           "doc": null
         }
       ],

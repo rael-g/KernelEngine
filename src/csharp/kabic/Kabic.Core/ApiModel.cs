@@ -20,11 +20,17 @@ public record ApiEnumValue(string Name, string RawValue, bool IsInt, string? Doc
 
 public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Values);
 
-public record ApiField(string Name, string Type, string? Doc);
+public record ApiField(string Name, string Type, IReadOnlyList<string> Tags, string? Doc)
+{
+    public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
+    public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
+}
 
-public record ApiStruct(string Name, string? Doc, IReadOnlyList<ApiField> Fields, IReadOnlyList<ApiSlot> Slots)
+public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IReadOnlyList<ApiField> Fields, IReadOnlyList<ApiSlot> Slots)
 {
     public bool IsVtable => Slots.Count > 0;
+    public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
+    public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
 public record ApiFunction(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params);
@@ -77,9 +83,15 @@ public static class ApiReader
                 ? o["slots"]!.AsArray().Select(s => ReadSlot(s!.AsObject())).ToList()
                 : [];
             var fields = o["fields"]!.AsArray()
-                .Select(fRaw => { var f = fRaw!.AsObject(); return new ApiField(Str(f, "name")!, Str(f, "type")!, Str(f, "doc")); })
+                .Select(fRaw =>
+                {
+                    var f = fRaw!.AsObject();
+                    return new ApiField(Str(f, "name")!, Str(f, "type")!,
+                        f["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [], Str(f, "doc"));
+                })
                 .ToList();
-            m.Structs.Add(new ApiStruct(Str(o, "name")!, Str(o, "doc"), fields, slots));
+            var tags = o["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [];
+            m.Structs.Add(new ApiStruct(Str(o, "name")!, Str(o, "doc"), tags, fields, slots));
         }
 
         foreach (var s in root["structs"]!.AsArray()) ReadStructLike(s!.AsObject(), vtable: false);
