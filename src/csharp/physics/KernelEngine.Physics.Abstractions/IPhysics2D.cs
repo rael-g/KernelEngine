@@ -2,19 +2,6 @@
 
 namespace KernelEngine.Physics;
 
-/// <summary>
-/// Body kind in a 2D rigid-body world.
-/// </summary>
-public enum BodyType2D
-{
-    /// <summary>Never moves; infinite mass. Floors, walls.</summary>
-    Static = 0,
-    /// <summary>Moved by code only; ignores forces and collisions push it.</summary>
-    Kinematic = 1,
-    /// <summary>Full simulation: gravity, forces, collisions all apply.</summary>
-    Dynamic = 2,
-}
-
 /// <summary>Opaque per-world handle for a body. Compare with <see cref="None"/> for validity.</summary>
 public readonly record struct BodyHandle2D(uint Value)
 {

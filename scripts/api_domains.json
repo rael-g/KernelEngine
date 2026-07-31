@@ -80,6 +80,17 @@
       "nativeNamespace": "KernelEngine.Audio.Native",
       "outDir": "src/csharp/audio/KernelEngine.Audio/Generated",
       "usings": []
+    },
+    {
+      "name": "physics",
+      "headers": ["src/c/physics/kernel_engine/physics/physics_2d.h"],
+      "includeDirs": ["src/c/physics", "src/zig/common/include"],
+      "apiJson": "src/csharp/physics/ke_api.json",
+      "namespace": "KernelEngine.Physics",
+      "nativeNamespace": "KernelEngine.Physics.Native",
+      "outDir": "src/csharp/physics/KernelEngine.Physics/Generated",
+      "abstractionsOutDir": "src/csharp/physics/KernelEngine.Physics.Abstractions/Generated",
+      "usings": []
     }
   ]
 }

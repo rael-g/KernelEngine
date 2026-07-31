@@ -1,0 +1,414 @@
+{
+  "enums": [
+    {
+      "name": "ke_body_type_2d",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_BODY_TYPE_STATIC",
+          "value": 0,
+          "doc": "Never moves; infinite mass. Floors, walls."
+        },
+        {
+          "name": "KE_BODY_TYPE_KINEMATIC",
+          "value": 1,
+          "doc": "Moved by code (set_position/set_velocity), unaffected by forces."
+        },
+        {
+          "name": "KE_BODY_TYPE_DYNAMIC",
+          "value": 2,
+          "doc": "Driven by forces, collisions, gravity."
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_body_state_2d",
+      "doc": "Snapshot of a body\u0027s pose \u002B motion at a point in time. Position is the body\u0027s local origin in world space; angle is in radians.",
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "doc": null
+        },
+        {
+          "name": "angle",
+          "type": "float",
+          "doc": "radians, CCW positive"
+        },
+        {
+          "name": "velocity_x",
+          "type": "float",
+          "doc": null
+        },
+        {
+          "name": "velocity_y",
+          "type": "float",
+          "doc": null
+        },
+        {
+          "name": "angular_velocity",
+          "type": "float",
+          "doc": "radians per second"
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_physics_2d",
+      "doc": "ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins (Box2D for now). Not thread-safe \u2014 call all methods on the same thread (typically ke.sim).",
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "set_gravity",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets world gravity (m/s^2). Default is (0, -9.81).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "step",
+          "returns": "void",
+          "tags": [],
+          "doc": "Advances the simulation by dt seconds. Variable steps are accepted, but deterministic replay requires the caller to supply a fixed one.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "dt",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "create_body",
+          "returns": "ke_body_2d",
+          "tags": [],
+          "doc": "Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_body_type_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "destroy_body",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "add_box_fixture",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Attaches an axis-aligned box fixture (half-extents from body origin).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "half_w",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "half_h",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "density",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "friction",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "restitution",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "add_circle_fixture",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Attaches a circle fixture centered at the body origin.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "radius",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "density",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "friction",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "restitution",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_body_state",
+          "returns": "void",
+          "tags": [],
+          "doc": "Reads the body\u0027s current pose and motion.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "ke_body_state_2d *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives position, angle, and velocities."
+            }
+          ]
+        },
+        {
+          "name": "set_body_position",
+          "returns": "void",
+          "tags": [],
+          "doc": "Teleports the body. Skips collision response \u2014 prefer apply_impulse for dynamic moves.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "angle",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "set_body_velocity",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets linear velocity directly (m/s).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "vx",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "vy",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "apply_impulse",
+          "returns": "void",
+          "tags": [],
+          "doc": "Applies a linear impulse (kg*m/s) at the body center.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "impulse_x",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "impulse_y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "set_body_fixed_rotation",
+          "returns": "void",
+          "tags": [],
+          "doc": "Locks or unlocks the body\u0027s rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked. Needed by anything that must stay upright \u2014 characters, projectiles, and any box whose collisions would otherwise set it spinning.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "fixed",
+              "type": "_Bool",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ke_physics_2d_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_physics_2d *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "type_aliases": {
+    "ke_body_2d": "uint32_t"
+  }
+}
