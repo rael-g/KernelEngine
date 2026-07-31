@@ -177,7 +177,10 @@ public static class Classifier
         // more than one [out] parameter and nothing else public — a tuple return,
         // not a single value and not a sequence. Distinct from ReturnsOutParam
         // (exactly one [out] param, no siblings) purely by count.
-        var tupleOut = allOut.Count >= 2 && allOut.Count == ps.Count ? allOut : null;
+        // Two-or-more [out] params is a tuple return regardless of whatever
+        // other ordinary inputs the slot also takes (e.g. get_axis2d's
+        // action_id) — same relaxation ReturnsOutParam already got.
+        var tupleOut = allOut.Count >= 2 ? allOut : null;
 
         // Sequence outranks the out-param shapes: a slot with BOTH a pointer+count
         // pair and a separate [out] (query_resolve's out_count) is a sequence call

@@ -139,15 +139,17 @@ static bool RunDotnet(List<string> args, out string stderr)
 static bool FilesEqual(string a, string b) =>
     File.Exists(b) && File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
 
+// `a` is this domain's OWN fresh regeneration; `b` is the committed dir. Checks
+// that everything `a` produced is present and byte-identical in `b` — NOT that
+// `b` has nothing else, since several small domains (e.g. world/scene_tree/
+// scene_loader/input_actions, all under KernelEngine.Framework) legitimately
+// share one physical Generated/ directory, each contributing its own files
+// alongside siblings this domain's own regeneration never touches.
 static bool DirsEqual(string a, string b)
 {
-    // Neither side has to exist (a domain with no enums never gets an enums dir).
-    if (!Directory.Exists(a)) return !Directory.Exists(b) || !Directory.EnumerateFileSystemEntries(b).Any();
+    if (!Directory.Exists(a)) return true; // a domain with no enums never gets an enums dir
     if (!Directory.Exists(b)) return !Directory.EnumerateFileSystemEntries(a).Any();
     var aFiles = Directory.EnumerateFiles(a, "*", SearchOption.AllDirectories)
-        .Select(f => Path.GetRelativePath(a, f)).ToHashSet();
-    var bFiles = Directory.EnumerateFiles(b, "*", SearchOption.AllDirectories)
-        .Select(f => Path.GetRelativePath(b, f)).ToHashSet();
-    if (!aFiles.SetEquals(bFiles)) return false;
+        .Select(f => Path.GetRelativePath(a, f));
     return aFiles.All(rel => FilesEqual(Path.Combine(a, rel), Path.Combine(b, rel)));
 }

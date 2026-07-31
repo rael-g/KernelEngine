@@ -277,9 +277,14 @@ public static class CSharpBackend
             // nothing, since the value surface a caller actually wants
             // (Task/async, a coroutine, whatever this language's idiom is)
             // can't be inferred from the ABI either way; left to the idiom
-            // layer entirely.
+            // layer entirely. [idiom]: the managed surface for this slot is
+            // a hand-written member whose NAME already collides with what
+            // this generator would derive (e.g. a raw `ke_scene_tree*` getter
+            // vs. an existing richer `SceneTree SceneTree { get; }` property
+            // of the same name) — the idiom layer reaches the slot directly
+            // through `Handle` instead.
             if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle") || cs.Slot.Has("raw_callback")
-                || cs.PublicParams.Any(p => p.Has("raw_callback")))
+                || cs.Slot.Has("idiom") || cs.PublicParams.Any(p => p.Has("raw_callback")))
                 continue;
             if (cs.PublicParams.Any(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
@@ -292,6 +297,12 @@ public static class CSharpBackend
         o.Add($"    /// <summary>Releases the native {typeName.ToLowerInvariant()}.</summary>");
         o.Add("    public void Dispose()");
         o.Add("    {");
+        // A hook for idiom-layer resources with no ABI counterpart (e.g. an
+        // owned handle from a DIFFERENT domain, or GCHandles pinning managed
+        // callback trampolines) that must be released alongside this one.
+        // Elided entirely when the idiom layer never implements it — a C#
+        // partial method with no implementation compiles to nothing.
+        o.Add("        OnDispose();");
         o.Add("        if (_native == null) return;");
         o.Add("        if (_borrowed) { _native = null; return; }");
         if (shutdownSlot is not null)
@@ -299,6 +310,8 @@ public static class CSharpBackend
         o.Add("        _destroy(_native);");
         o.Add("        _native = null;");
         o.Add("    }");
+        o.Add("");
+        o.Add("    partial void OnDispose();");
         o.Add("}");
         o.Add("");
         return string.Join('\n', o);
@@ -347,26 +360,40 @@ public static class CSharpBackend
                 // e.g. ke_window.get_size(int32_t *width, int32_t *height, ke_error**)
                 // -> (int Width, int Height) GetSize() — a tuple return, not a Span
                 // (the values are independent scalars, not a homogeneous sequence).
+                // Any OTHER public param (e.g. get_axis2d's action_id) stays an
+                // ordinary input, same as ReturnsOutParam's `ins`.
+                var ins = cs.PublicParams.Where(p => !cs.OutParams.Contains(p)).ToList();
+                var sig = string.Join(", ", ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
                 var names = cs.OutParams.Select(p => Idioms.Pascal(p.Name!)).ToList();
                 var types = cs.OutParams.Select(p => CsType(model, CTypes.Deref(p.Type))).ToList();
                 var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
                 var locals = cs.OutParams.Select(p => Idioms.Ident(p.Name!)).ToList();
-                var callArgs = string.Concat(locals.Select(n => $", &{n}"));
+                // Native argument order follows the ORIGINAL declaration, not the
+                // reshaped public signature (mirrors Sequence's nativeArgs).
+                var nativeArgs = cs.Slot.Params
+                    .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
+                    .Select(p => cs.OutParams.Contains(p) ? $"&{Idioms.Ident(p.Name!)}" : CallArg(p));
+                var callArgs = string.Concat(nativeArgs.Select(a => ", " + a));
 
-                o.Add(XmlDoc("    ", slot.Doc, throwsOnFail: cs.Fallible).TrimEnd());
-                o.Add($"    public ({retTuple}) {name}()");
+                o.Add(XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
+                    throwsOnFail: cs.Fallible).TrimEnd());
+                o.Add($"    public ({retTuple}) {name}({sig})");
                 o.Add("    {");
-                foreach (var (t, n) in types.Zip(locals)) o.Add($"        {t} {n};");
+                var (tuPro, tuDepth) = Utf8Prologue(ins, new string(' ', 8));
+                o.AddRange(tuPro);
+                var tuInd = new string(' ', 8 + tuDepth * 4);
+                foreach (var (t, n) in types.Zip(locals)) o.Add($"{tuInd}{t} {n};");
                 if (cs.Fallible)
                 {
-                    o.Add("        ke_error* err = null;");
-                    o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{callArgs}, &err), err, \"{slot.Name}\");");
+                    o.Add($"{tuInd}ke_error* err = null;");
+                    o.Add($"{tuInd}KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{callArgs}, &err), err, \"{slot.Name}\");");
                 }
                 else
                 {
-                    o.Add($"        Handle->{slot.Name}(Handle{callArgs});");
+                    o.Add($"{tuInd}Handle->{slot.Name}(Handle{callArgs});");
                 }
-                o.Add($"        return ({string.Join(", ", locals)});");
+                o.Add($"{tuInd}return ({string.Join(", ", locals)});");
+                for (var d = tuDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
                 return;
