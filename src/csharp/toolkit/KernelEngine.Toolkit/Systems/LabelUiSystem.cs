@@ -5,10 +5,11 @@ using KernelEngine.Window;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Expands every <see cref="Label"/> node into <see cref="IRenderResources.UiQuad"/>
-/// calls, one per glyph. render-v2's equivalent of the legacy bgfx <c>LabelContributor</c>
-/// — the render module has no frame-packet/contributor bridge, so this runs as an
-/// ordinary runtime system instead.
+/// Resolves each visible <see cref="Label"/>'s anchor/pivot into a pen origin and
+/// baseline, then queues the whole string in one <see cref="IRenderResources.TextQuad"/>
+/// call — the UI overlay pass expands it into per-glyph quads natively. render-v2's
+/// equivalent of the legacy bgfx <c>LabelContributor</c> — the render module has no
+/// frame-packet/contributor bridge, so this runs as an ordinary runtime system instead.
 /// </summary>
 internal static class LabelUiSystem
 {
@@ -55,20 +56,7 @@ internal static class LabelUiSystem
                 var c      = label.Color;
                 var premul = new Vector4(c.X * c.W, c.Y * c.W, c.Z * c.W, c.W);
 
-                float pen   = originX;
-                var   atlas = font.AtlasHandle;
-                foreach (var ch in label.Text)
-                {
-                    if (!font.TryGlyph(ch, out var g))
-                    {
-                        pen += font.LineHeight * 0.25f;
-                        continue;
-                    }
-                    float x = pen + g.BearingX;
-                    float y = baselineY - g.BearingY;
-                    resources.UiQuad(atlas, x, y, g.Width, g.Height, g.U0, g.V0, g.U1, g.V1, premul);
-                    pen += g.AdvanceX;
-                }
+                resources.TextQuad(font.Handle, label.Text, originX, baselineY, premul);
             }
         }, pinnedThread: 1);
     }

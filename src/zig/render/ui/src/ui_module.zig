@@ -24,6 +24,7 @@ const gpa = std.heap.c_allocator;
 const MAX_UI_QUADS = 8192;
 const MAX_UI_BATCHES = 512;
 const MAX_UI_TEXTURES = 256; // bind-group cache size — must cover every texture handle a quad might reference
+const MAX_UI_FONTS = 64; // loaded fonts are a handful per game; raise if a real caller hits this
 
 const UiVertex = extern struct {
     position: [2]f32,
@@ -34,6 +35,18 @@ const UiBatch = struct {
     texture: c.ke_texture_handle, // full generational handle; its slot index keys the bind-group cache
     first_vertex: u32,
     vertex_count: u32,
+};
+
+// A loaded font's glyph table, owned copies so the caller's own ke_font_data
+// (freed via ke_asset_resolver's free_font right after load_font returns) can
+// go away without this outliving it.
+const UiFont = struct {
+    key: []u8 = &.{},
+    atlas: c.ke_texture_handle = undefined,
+    glyphs: []c.ke_glyph_metrics = &.{},
+    line_height: f32 = 0,
+    ascent: f32 = 0,
+    in_use: bool = false,
 };
 
 // api is the first field so &state.api == &state (the same trick
@@ -64,6 +77,8 @@ const UiState = struct {
     batches: [MAX_UI_BATCHES]UiBatch = undefined,
     batch_count: u32 = 0,
     bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = undefined, // lazily built, keyed by texture index; INVALID_HANDLE = unbuilt
+
+    fonts: [MAX_UI_FONTS]UiFont = undefined,
 
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -125,6 +140,77 @@ fn uiQuad(self: [*c]c.ke_render_ui, texture: c.ke_texture_handle,
     @memcpy(ui.vertices[ui.vertex_count .. ui.vertex_count + 6], &verts);
     ui.vertex_count += 6;
     ui.batches[ui.batch_count - 1].vertex_count += 6;
+}
+
+fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_handle,
+              glyphs: [*c]const c.ke_glyph_metrics, glyph_count: u32,
+              line_height: f32, ascent: f32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ui_font_handle {
+    const ui = stateOf(self);
+    const key_slice = std.mem.span(key);
+
+    for (ui.fonts, 0..) |f, i| {
+        if (f.in_use and std.mem.eql(u8, f.key, key_slice))
+            return .{ .bits = c.ke_handle_make(@intCast(i), 0) };
+    }
+
+    var slot: ?usize = null;
+    for (ui.fonts, 0..) |f, i| {
+        if (!f.in_use) { slot = i; break; }
+    }
+    const idx = slot orelse {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: no free font slots", @src().file, @intCast(@src().line), null);
+        return c.KE_UI_FONT_NONE;
+    };
+
+    const owned_key = gpa.dupe(u8, key_slice) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: font key alloc failed", @src().file, @intCast(@src().line), null);
+        return c.KE_UI_FONT_NONE;
+    };
+    const owned_glyphs = gpa.dupe(c.ke_glyph_metrics, glyphs[0..glyph_count]) catch {
+        gpa.free(owned_key);
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: glyph table alloc failed", @src().file, @intCast(@src().line), null);
+        return c.KE_UI_FONT_NONE;
+    };
+
+    ui.fonts[idx] = .{
+        .key = owned_key,
+        .atlas = atlas,
+        .glyphs = owned_glyphs,
+        .line_height = line_height,
+        .ascent = ascent,
+        .in_use = true,
+    };
+    return .{ .bits = c.ke_handle_make(@intCast(idx), 0) };
+}
+
+fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_metrics {
+    for (glyphs) |g| {
+        if (g.codepoint == codepoint) return g;
+    }
+    return null;
+}
+
+fn uiTextQuad(self: [*c]c.ke_render_ui, font: c.ke_ui_font_handle, text: [*c]const u8,
+              origin_x: f32, baseline_y: f32, color: [*c]const f32) callconv(.c) void {
+    const ui = stateOf(self);
+    const idx = c.ke_handle_index(font.bits);
+    if (idx >= MAX_UI_FONTS or !ui.fonts[idx].in_use) return;
+    const f = &ui.fonts[idx];
+
+    const text_slice = std.mem.span(text);
+    const view = std.unicode.Utf8View.init(text_slice) catch return;
+    var it = view.iterator();
+    var pen: f32 = origin_x;
+    while (it.nextCodepoint()) |cp| {
+        const glyph = findGlyph(f.glyphs, @as(u32, cp)) orelse {
+            pen += f.line_height * 0.25;
+            continue;
+        };
+        const x = pen + glyph.bearing_x;
+        const y = baseline_y - glyph.bearing_y;
+        uiQuad(self, f.atlas, x, y, glyph.width, glyph.height, glyph.u0, glyph.v0, glyph.u1, glyph.v1, color);
+        pen += glyph.advance_x;
+    }
 }
 
 // The set-1 (texture+sampler) bind group for a texture index, built once and
@@ -313,6 +399,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     ui.vertex_count = 0;
     ui.batch_count = 0;
     for (&ui.bind_group_cache) |*e| e.* = c.KE_GPU_INVALID_HANDLE;
+    for (&ui.fonts) |*f| f.* = .{};
 
     // UI overlay pass: loads (doesn't clear) the backbuffer tonemap just wrote,
     // so text/quads composite on top.
@@ -335,6 +422,12 @@ fn destroyState(ui: *const UiState) void {
     for (ui.bind_group_cache) |bg| {
         if (bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, bg);
     }
+    for (ui.fonts) |f| {
+        if (f.in_use) {
+            gpa.free(f.key);
+            gpa.free(f.glyphs);
+        }
+    }
 }
 
 fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
@@ -354,7 +447,7 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_servi
 
     const ui = gpa.create(UiState) catch return empty;
     ui.* = .{};
-    ui.api = .{ .handle = ui, .ui_quad = uiQuad };
+    ui.api = .{ .handle = ui, .ui_quad = uiQuad, .load_font = uiLoadFont, .text_quad = uiTextQuad };
     if (!setup(ui, dev, core_ref, ndc, bb_cid, cmd_slot, out_error)) {
         gpa.destroy(ui);
         return empty;

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <kernel_engine/render/service/render_service_create.h>
+#include <kernel_engine/render/ui/ui_create.h>
+#include <kernel_engine/text/font.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <stdint.h>
 
@@ -87,6 +89,28 @@ ke_render_module_ui_quad(ke_render_module *module, ke_texture_handle texture,
                          float dst_x, float dst_y, float dst_w, float dst_h,
                          float u0, float v0, float u1, float v1,
                          const float color[4]);
+
+/**
+ * Registers a font's glyph table (see ke_render_ui.load_font) for
+ * ke_render_module_text_quad, deduped by @p key. KE_UI_FONT_NONE on failure.
+ * @param key [utf8]
+ * @param glyphs [borrowed,array_of:glyph_count]
+ */
+KE_RENDER_CORE_API ke_ui_font_handle
+ke_render_module_load_font(ke_render_module *module, const char *key,
+                           ke_texture_handle atlas, const ke_glyph_metrics *glyphs,
+                           uint32_t glyph_count, float line_height, float ascent,
+                           ke_error **out_error);
+
+/**
+ * Expands @p text into one queued UI quad per glyph (see ke_render_ui.text_quad).
+ * Call from any render-phase system body, before the "render.ui" pass runs.
+ * @param text [utf8]
+ */
+KE_RENDER_CORE_API void
+ke_render_module_text_quad(ke_render_module *module, ke_ui_font_handle font,
+                           const char *text, float origin_x, float baseline_y,
+                           const float color[4]);
 
 #ifdef __cplusplus
 }

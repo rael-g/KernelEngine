@@ -275,6 +275,55 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_ui_quad(_module.@ref, texH, dstX, dstY, dstW, dstH, u0, v0, u1, v1, color);
     }
 
+    /// <inheritdoc/>
+    public FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,
+                               float lineHeight, float ascent)
+    {
+        if (_module.@ref == null)
+            throw new InvalidOperationException("LoadFont called before the render module was loaded");
+        ArgumentException.ThrowIfNullOrEmpty(key);
+
+        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        var native = stackalloc ke_glyph_metrics[glyphs.Length];
+        for (int i = 0; i < glyphs.Length; i++)
+        {
+            var g = glyphs[i];
+            native[i] = new ke_glyph_metrics
+            {
+                codepoint = g.Codepoint,
+                u0 = g.U0, v0 = g.V0, u1 = g.U1, v1 = g.V1,
+                bearing_x = g.BearingX, bearing_y = g.BearingY,
+                width = g.Width, height = g.Height,
+                advance_x = g.AdvanceX,
+            };
+        }
+
+        var texH = new ke_texture_handle { bits = atlas.Value };
+        ke_error* err = null;
+        ke_ui_font_handle h;
+        fixed (byte* k = keyBytes)
+            h = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_load_font(
+                _module.@ref, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &err);
+        if (h.bits == uint.MaxValue)
+            throw Fail("load_font failed", err);
+        return new FontHandle(h.bits);
+    }
+
+    /// <inheritdoc/>
+    public void TextQuad(FontHandle font, string text, float originX, float baselineY,
+                         System.Numerics.Vector4 premultipliedColor)
+    {
+        if (_module.@ref == null)
+            throw new InvalidOperationException("TextQuad called before the render module was loaded");
+
+        var fontH = new ke_ui_font_handle { bits = font.Value };
+        var textBytes = System.Text.Encoding.UTF8.GetBytes(text + '\0');
+        var color = stackalloc float[4] { premultipliedColor.X, premultipliedColor.Y, premultipliedColor.Z, premultipliedColor.W };
+        fixed (byte* t = textBytes)
+            KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_text_quad(
+                _module.@ref, fontH, (sbyte*)t, originX, baselineY, color);
+    }
+
     private static InvalidOperationException Fail(string what, ke_error* err)
     {
         if (err != null)

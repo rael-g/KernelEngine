@@ -138,6 +138,23 @@ export fn ke_render_module_ui_quad(module: ?*c.ke_render_module, texture: c.ke_t
     st.ui.ref.*.ui_quad.?(st.ui.ref, texture, dst_x, dst_y, dst_w, dst_h, uv0, uv1, uv2, uv3, color);
 }
 
+// See ke_render_module_ui_quad's comment — same forwarding shape, into the ui
+// plugin's load_font/text_quad vtable slots.
+export fn ke_render_module_load_font(module: ?*c.ke_render_module, key: [*c]const u8,
+                                     atlas: c.ke_texture_handle, glyphs: [*c]const c.ke_glyph_metrics,
+                                     glyph_count: u32, line_height: f32, ascent: f32,
+                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ui_font_handle {
+    const st: *ModuleState = @alignCast(@ptrCast(module orelse return c.KE_UI_FONT_NONE));
+    return st.ui.ref.*.load_font.?(st.ui.ref, key, atlas, glyphs, glyph_count, line_height, ascent, out_error);
+}
+
+export fn ke_render_module_text_quad(module: ?*c.ke_render_module, font: c.ke_ui_font_handle,
+                                     text: [*c]const u8, origin_x: f32, baseline_y: f32,
+                                     color: [*c]const f32) callconv(.c) void {
+    const st: *ModuleState = @alignCast(@ptrCast(module orelse return));
+    st.ui.ref.*.text_quad.?(st.ui.ref, font, text, origin_x, baseline_y, color);
+}
+
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);

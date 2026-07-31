@@ -108,4 +108,21 @@ public interface IRenderResources
     /// </summary>
     void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
                float u0, float v0, float u1, float v1, Vector4 premultipliedColor);
+
+    /// <summary>
+    /// Registers a font's glyph table with the UI overlay pass for <see cref="TextQuad"/>,
+    /// deduped by <paramref name="key"/> (same convention as <see cref="UploadTexture"/>).
+    /// </summary>
+    FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,
+                        float lineHeight, float ascent);
+
+    /// <summary>
+    /// Expands <paramref name="text"/> into one <see cref="UiQuad"/> call per glyph, batched
+    /// the same way. <paramref name="originX"/> is the pen start (pixels, top-left origin);
+    /// <paramref name="baselineY"/> is where each glyph's baseline sits. An unknown codepoint
+    /// advances the pen by a quarter of the font's line height and emits nothing. Call from a
+    /// render-phase system, before the frame's UI pass runs.
+    /// </summary>
+    void TextQuad(FontHandle font, string text, float originX, float baselineY,
+                 Vector4 premultipliedColor);
 }
