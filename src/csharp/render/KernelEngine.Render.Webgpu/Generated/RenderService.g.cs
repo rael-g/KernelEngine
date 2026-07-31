@@ -397,9 +397,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     /// <summary>Releases the native renderservice.</summary>
     public void Dispose()
     {
+        OnDispose();
         if (_native == null) return;
         if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;
     }
+
+    partial void OnDispose();
 }

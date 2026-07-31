@@ -71,9 +71,12 @@ public unsafe partial class ImageLoader : IDisposable, INativeImageLoader
     /// <summary>Releases the native imageloader.</summary>
     public void Dispose()
     {
+        OnDispose();
         if (_native == null) return;
         if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;
     }
+
+    partial void OnDispose();
 }

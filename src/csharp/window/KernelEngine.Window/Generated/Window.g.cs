@@ -91,10 +91,13 @@ public unsafe partial class Window : IDisposable, INativeWindow
     /// <summary>Releases the native window.</summary>
     public void Dispose()
     {
+        OnDispose();
         if (_native == null) return;
         if (_borrowed) { _native = null; return; }
         _native->on_shutdown(_native, null);
         _destroy(_native);
         _native = null;
     }
+
+    partial void OnDispose();
 }

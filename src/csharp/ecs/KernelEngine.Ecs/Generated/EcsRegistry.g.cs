@@ -146,9 +146,12 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <summary>Releases the native ecsregistry.</summary>
     public void Dispose()
     {
+        OnDispose();
         if (_native == null) return;
         if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;
     }
+
+    partial void OnDispose();
 }

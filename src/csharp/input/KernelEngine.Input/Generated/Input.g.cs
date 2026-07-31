@@ -104,9 +104,12 @@ public unsafe partial class Input : IDisposable, INativeInput
     /// <summary>Releases the native input.</summary>
     public void Dispose()
     {
+        OnDispose();
         if (_native == null) return;
         if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;
     }
+
+    partial void OnDispose();
 }
