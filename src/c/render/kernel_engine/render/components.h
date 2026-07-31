@@ -27,11 +27,12 @@ extern "C"
         float ambient_r, ambient_g, ambient_b;
     } ke_directional_light_component;
 
+    /** [node:PointLight,base:Node] Point light node — emits light in all directions from this entity's world position. */
     typedef struct ke_point_light_component
     {
-        float r, g, b;
-        float intensity;
-        float radius;
+        float color[3]; ///< [default:1 1 1] Linear RGB.
+        float intensity; ///< [default:1]
+        float radius; ///< [default:10]
     } ke_point_light_component;
 
     typedef struct ke_spot_light_component

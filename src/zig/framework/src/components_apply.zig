@@ -182,20 +182,20 @@ pub export fn ke_framework_apply_point_light(ptr: ?*anyopaque, e: [*c]const c.ke
         const v = &entry.value;
         if (keyIs(entry, "color")) {
             if (v.type == c.KE_VARIANT_VEC3) {
-                l.r = v.unnamed_0.v3.x;
-                l.g = v.unnamed_0.v3.y;
-                l.b = v.unnamed_0.v3.z;
+                l.color[0] = v.unnamed_0.v3.x;
+                l.color[1] = v.unnamed_0.v3.y;
+                l.color[2] = v.unnamed_0.v3.z;
             }
         } else if (keyIs(entry, "radius")) {
             if (asFloat(v)) |f| l.radius = f;
         } else if (keyIs(entry, "intensity")) {
             if (asFloat(v)) |f| l.intensity = f;
         } else if (keyIs(entry, "r")) {
-            if (asFloat(v)) |f| l.r = f;
+            if (asFloat(v)) |f| l.color[0] = f;
         } else if (keyIs(entry, "g")) {
-            if (asFloat(v)) |f| l.g = f;
+            if (asFloat(v)) |f| l.color[1] = f;
         } else if (keyIs(entry, "b")) {
-            if (asFloat(v)) |f| l.b = f;
+            if (asFloat(v)) |f| l.color[2] = f;
         }
     }
 }

@@ -48,20 +48,9 @@ const SpotLightGpu = extern struct {
     cone: [4]f32, // x = cos(outer angle); yzw pad
 };
 
-// Mirrors the C# PointLightComponent { Vector3 Color, float Intensity, float Radius }
-// (registered as "point_light"). NOTE the field order is the C# struct's, not the
-// kernel ke_point_light_component header (which orders them differently).
-// Exported: render_module.zig registers the component (its cid is shared with
-// forward's own access list), so it needs this struct's size at registration.
-const PointLightComp = extern struct {
-    color: [3]f32,
-    intensity: f32,
-    radius: f32,
-};
-
 // Mirrors the C# SpotLightComponent { Vector3 Direction, Vector3 Color, float
 // Intensity, float Range, float InnerAngleDeg, float OuterAngleDeg } (registered
-// "spot_light"). Field order is the C# struct's, not the kernel header's.
+// "spot_light").
 const SpotLightComp = extern struct {
     dir: [3]f32,
     color: [3]f32,
@@ -186,7 +175,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         const segs = c.ke_system_ctx_view(ctx, 0, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
-            const pls: [*c]const PointLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
+            const pls: [*c]const c.ke_point_light_component = @ptrCast(@alignCast(segs[s].columns[0]));
             const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
             point_total += segs[s].count;
             var i: usize = 0;

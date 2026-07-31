@@ -370,9 +370,9 @@ intensity = 2.0
     ASSERT_TRUE(ecs->component_lookup(ecs, "point_light", &meta, nullptr));
     auto *l = (ke_point_light_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(l, nullptr);
-    EXPECT_FLOAT_EQ(l->r, 0.2f);
-    EXPECT_FLOAT_EQ(l->g, 0.4f);
-    EXPECT_FLOAT_EQ(l->b, 0.6f);
+    EXPECT_FLOAT_EQ(l->color[0], 0.2f);
+    EXPECT_FLOAT_EQ(l->color[1], 0.4f);
+    EXPECT_FLOAT_EQ(l->color[2], 0.6f);
     EXPECT_FLOAT_EQ(l->radius, 12.5f);
     EXPECT_FLOAT_EQ(l->intensity, 2.0f);
 }
