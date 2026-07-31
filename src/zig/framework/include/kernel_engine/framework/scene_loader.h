@@ -26,8 +26,12 @@ extern "C"
     {
         void *handle;
 
+        /** [idiom] Superseded by the managed Load method, same name — it also
+         * rethrows a managed exception the script-factory trampoline caught
+         * mid-call, which has no ABI-derivable shape. */
         bool (*load)(struct ke_scene_loader *self, const char *path, ke_error **out_error);
 
+        /** @param factory [raw_callback] */
         bool (*register_script_factory)(struct ke_scene_loader *self,
                                         ke_script_factory_func factory,
                                         void *ctx, ke_error **out_error);

@@ -1,0 +1,156 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_scene_tree",
+      "doc": null,
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "root",
+          "returns": "ke_entity",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Superseded by the managed Root property, same name.",
+          "return_doc": null,
+          "params": []
+        },
+        {
+          "name": "create_node",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "ctx",
+              "type": "ke_system_ctx *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "destroy_node",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "ctx",
+              "type": "ke_system_ctx *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "destroy_all",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        },
+        {
+          "name": "find_node",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name_or_path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "propagate_transforms",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    },
+    {
+      "name": "ke_scene_tree_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scene_tree *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t"
+  }
+}

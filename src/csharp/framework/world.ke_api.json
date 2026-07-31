@@ -1,0 +1,158 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_world_params",
+      "doc": null,
+      "fields": [
+        {
+          "name": "scheduler",
+          "type": "struct ke_scheduler *",
+          "doc": null
+        },
+        {
+          "name": "ecs",
+          "type": "ke_ecs *",
+          "doc": null
+        },
+        {
+          "name": "runtime",
+          "type": "ke_runtime *",
+          "doc": null
+        },
+        {
+          "name": "scene_tree",
+          "type": "struct ke_scene_tree *",
+          "doc": null
+        },
+        {
+          "name": "project_root",
+          "type": "const char *",
+          "doc": null
+        },
+        {
+          "name": "logger",
+          "type": "struct ke_logger *",
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_world",
+      "doc": null,
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "ecs",
+          "returns": "ke_ecs *",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Superseded by the managed Ecs property (DI-injected IEcsRegistry), same name.",
+          "return_doc": null,
+          "params": []
+        },
+        {
+          "name": "runtime",
+          "returns": "ke_runtime *",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Superseded by the managed Runtime property (DI-injected IRuntime), same name.",
+          "return_doc": null,
+          "params": []
+        },
+        {
+          "name": "scene_tree",
+          "returns": "struct ke_scene_tree *",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Superseded by the managed SceneTree property, same name.",
+          "return_doc": null,
+          "params": []
+        },
+        {
+          "name": "register_component_apply",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "apply",
+              "type": "ke_component_apply_fn",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_component_apply",
+          "returns": "ke_component_apply_fn",
+          "tags": [
+            "raw_callback"
+          ],
+          "doc": "Returns a bare C function pointer with no ABI-derivable managed shape, same reasoning as any [raw_callback] parameter \u2014 left to the idiom layer entirely.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ke_world_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_world *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t"
+  }
+}

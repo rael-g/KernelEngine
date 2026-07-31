@@ -155,6 +155,49 @@
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
       "usings": ["KernelEngine.Asset.Native", "KernelEngine.Text.Native", "KernelEngine.Render.Native"]
+    },
+    {
+      "name": "world",
+      "headers": ["src/zig/framework/include/kernel_engine/framework/world.h"],
+      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
+      "includeDirs": ["src/zig/framework/include", "src/c/ecs", "src/c/runtime", "src/c/scheduler", "src/c/logger", "src/zig/common/include"],
+      "apiJson": "src/csharp/framework/world.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": ["KernelEngine.Ecs.Native", "KernelEngine.Runtime.Native"]
+    },
+    {
+      "name": "scene_tree",
+      "headers": ["src/zig/framework/include/kernel_engine/framework/scene_tree.h"],
+      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
+      "includeDirs": ["src/zig/framework/include", "src/c/ecs", "src/c/render", "src/c/spatial", "src/zig/common/include"],
+      "apiJson": "src/csharp/framework/scene_tree.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": []
+    },
+    {
+      "name": "scene_loader",
+      "headers": ["src/zig/framework/include/kernel_engine/framework/scene_loader.h"],
+      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
+      "includeDirs": ["src/zig/framework/include", "src/c/ecs", "src/zig/common/include"],
+      "apiJson": "src/csharp/framework/scene_loader.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": []
+    },
+    {
+      "name": "input_actions",
+      "headers": ["src/zig/framework/include/kernel_engine/framework/input_actions.h"],
+      "includeDirs": ["src/zig/framework/include", "src/c/input", "src/zig/common/include"],
+      "apiJson": "src/csharp/framework/input_actions.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": ["KernelEngine.Input.Native"]
     }
   ]
 }

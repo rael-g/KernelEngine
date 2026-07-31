@@ -112,6 +112,7 @@ public sealed class Convention
             // rename would be gained (no namespace collision), but every
             // existing call site already knows this type as NativeAssetResolver.
             ["ke_asset_resolver"] = "NativeAssetResolver",
+            ["ke_input_actions"] = "NativeInputActions",
             // Derived casing would be Physics2d/BodyType2d; this ABI's managed
             // surface has always spelled the dimension suffix with a capital D.
             ["ke_physics_2d"] = "Physics2D",

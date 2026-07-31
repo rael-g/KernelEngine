@@ -1,36 +1,29 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
-using KernelEngine.Ecs.Native;
 using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
 using KernelEngine.Runtime;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Managed wrapper over the native <c>ke_world</c> vtable. Exposes scene-level
-/// operations (loading, component apply registration) as managed APIs; does not
-/// re-expose the underlying ECS, runtime, or scene-tree native pointers.
+/// The parts of <see cref="World"/> that are not a direct image of the C ABI: the
+/// scene-tree/apply-registration surface (<c>register_component_apply</c> takes a bare
+/// C function pointer with no ABI-derivable managed shape — a GC-pinned bridge per
+/// registered component type is entirely hand-written), and the <c>Ecs</c>/<c>Runtime</c>/
+/// <c>SceneTree</c> properties, which expose the already-owned managed wrappers this
+/// world was constructed with rather than re-deriving them from the native accessors.
+/// Everything that mirrors the vtable 1:1 is generated in <c>Generated/World.g.cs</c>.
 /// </summary>
-public sealed unsafe class World : IDisposable, INativeWorld
+public unsafe partial class World : IDisposable
 {
-    private ke_world*      _native;
     private ke_scene_tree* _ownedTree;
-    private readonly delegate* unmanaged[Cdecl]<ke_world*, void>      _destroyWorld;
     private readonly delegate* unmanaged[Cdecl]<ke_scene_tree*, void> _destroyTree;
-    private SceneTree?     _sceneTree;
+    private SceneTree? _sceneTree;
 
     // Keeps managed apply delegate wrappers alive so the GC doesn't collect
     // them while native code holds the function pointer.
     private readonly List<GCHandle> _applyHandles = [];
-
-    ke_world* INativeWorld.Native
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_native == null, this);
-            return _native;
-        }
-    }
 
     /// <summary>ECS registry borrowed by this world. Same instance as the DI-registered <see cref="IEcsRegistry"/>.</summary>
     public IEcsRegistry Ecs { get; }
@@ -43,26 +36,19 @@ public sealed unsafe class World : IDisposable, INativeWorld
     /// destroying it on <see cref="Dispose"/> after the world is destroyed.
     /// </summary>
     public World(ke_world_handle worldHandle, ke_scene_tree_handle treeHandle, IEcsRegistry ecs, IRuntime runtime)
+        : this(worldHandle)
     {
-        _native       = worldHandle.@ref;
-        _destroyWorld = worldHandle.destroy;
-        _ownedTree    = treeHandle.@ref;
-        _destroyTree  = treeHandle.destroy;
-        Ecs           = ecs;
-        Runtime       = runtime;
+        _ownedTree   = treeHandle.@ref;
+        _destroyTree = treeHandle.destroy;
+        Ecs          = ecs;
+        Runtime      = runtime;
     }
 
     /// <summary>
     /// Managed wrapper over the scene tree embedded in this world. Created on
     /// first access and cached for the lifetime of the world.
     /// </summary>
-    public SceneTree SceneTree
-    {
-        get
-        {
-            return _sceneTree ??= new SceneTree(_native->scene_tree(_native));
-        }
-    }
+    public SceneTree SceneTree => _sceneTree ??= SceneTree.Borrow(((INativeWorld)this).Native->scene_tree(((INativeWorld)this).Native));
 
     /// <summary>
     /// Registers a managed apply callback for the given component id. The callback
@@ -81,9 +67,10 @@ public sealed unsafe class World : IDisposable, INativeWorld
         var fnPtr = (delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>)
             Marshal.GetFunctionPointerForDelegate(del).ToPointer();
 
+        var native = ((INativeWorld)this).Native;
         ke_error* err = null;
         KernelError.ThrowIfFailed(
-            _native->register_component_apply(_native, cid, fnPtr, &err), err, "register_component_apply");
+            native->register_component_apply(native, cid, fnPtr, &err), err, "register_component_apply");
     }
 
     private uint _scenePropertiesCid;
@@ -106,14 +93,9 @@ public sealed unsafe class World : IDisposable, INativeWorld
         return true;
     }
 
-    /// <inheritdoc cref="IDisposable.Dispose"/>
-    public void Dispose()
+    /// <summary>Also releases the owned scene tree and the GC handles kept for registered apply callbacks.</summary>
+    partial void OnDispose()
     {
-        if (_native is not null)
-        {
-            if (_destroyWorld != null) _destroyWorld(_native);
-            _native = null;
-        }
         if (_ownedTree is not null)
         {
             if (_destroyTree != null) _destroyTree(_ownedTree);

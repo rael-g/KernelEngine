@@ -41,10 +41,13 @@ extern "C"
     {
         void *handle;
 
+        /** @param path [utf8] */
         bool (*load)(struct ke_input_actions *self, const char *path, ke_error **out_error);
 
+        /** @param name [utf8] */
         int32_t (*get_action_id)(struct ke_input_actions *self, const char *name);
 
+        /** @param name [utf8] */
         int32_t (*add_action)(struct ke_input_actions *self, const char *name,
                               ke_action_type type);
 
@@ -59,6 +62,7 @@ extern "C"
         bool (*bind_key_quad)(struct ke_input_actions *self, int32_t action_id,
                               ke_key up, ke_key down, ke_key left, ke_key right, ke_error **out_error);
 
+        /** @param on_event [raw_callback] */
         bool (*evaluate)(struct ke_input_actions *self,
                          const ke_input_snapshot    *snapshot,
                          ke_input_action_event_func  on_event,
@@ -69,8 +73,10 @@ extern "C"
         bool  (*was_action_pressed)(struct ke_input_actions *self, int32_t action_id);
         bool  (*was_action_released)(struct ke_input_actions *self, int32_t action_id);
         float (*get_axis1d)(struct ke_input_actions *self, int32_t action_id);
+        /** @param out_x [out] @param out_y [out] */
         void  (*get_axis2d)(struct ke_input_actions *self, int32_t action_id,
                              float *out_x, float *out_y);
+        /** @param out_x [out] @param out_y [out] @param out_z [out] */
         void  (*get_axis3d)(struct ke_input_actions *self, int32_t action_id,
                              float *out_x, float *out_y, float *out_z);
 

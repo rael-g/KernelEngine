@@ -1,15 +1,18 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using KernelEngine.Common.Native;
-using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Managed wrapper over the native <c>ke_scene_loader</c> vtable. The C plugin
-/// handles TOML parsing, transform application, component-field writes via the
-/// world's apply registry, and script-factory dispatch. This shell only owns
-/// the unmanaged handle and presents the path-string ABI in a managed-friendly form.
+/// The parts of <see cref="SceneLoader"/> that are not a direct image of the C ABI:
+/// the constructor's factory call (<c>ke_scene_loader_create</c> lives outside this
+/// domain's own headers, alongside the world/asset-resolver factories), <see cref="Load"/>'s
+/// pending-exception rethrow (a script factory can throw mid-load; the trampoline
+/// catches it and this rethrows once the native stack has unwound — no ABI counterpart),
+/// and <see cref="RegisterScriptFactory"/>'s GCHandle/trampoline bridging for the bare
+/// <c>[raw_callback]</c> function pointer. Everything that mirrors the vtable 1:1 is
+/// generated in <c>Generated/SceneLoader.g.cs</c>.
 /// </summary>
 /// <remarks>
 /// Scene grammar (native TOML loader):
@@ -32,10 +35,8 @@ namespace KernelEngine.Framework;
 /// it writes. Dispose this object only after the world has shut down (or after
 /// all scene_properties components have been removed).
 /// </remarks>
-public sealed unsafe class SceneLoader : IDisposable
+public unsafe partial class SceneLoader
 {
-    private ke_scene_loader* _native;
-    private readonly delegate* unmanaged[Cdecl]<ke_scene_loader*, void> _destroy;
     private GCHandle _scriptHandle;
     private Func<ulong, string, bool>? _scriptClosure;
 
@@ -53,7 +54,11 @@ public sealed unsafe class SceneLoader : IDisposable
     /// Optional project root for resolving <c>res://</c>-prefixed paths. Pass
     /// <see langword="null"/> to disable res:// resolution.
     /// </param>
-    public SceneLoader(World world, string? projectRoot = null)
+    public SceneLoader(World world, string? projectRoot = null) : this(Create(world, projectRoot))
+    {
+    }
+
+    private static ke_scene_loader_handle Create(World world, string? projectRoot)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -64,8 +69,7 @@ public sealed unsafe class SceneLoader : IDisposable
             var handle = KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
                 ((INativeWorld)world).Native, (sbyte*)rootPtr, &err);
             if (handle.@ref == null) throw KernelError.FromNative(err, "scene_loader_create");
-            _native = handle.@ref;
-            _destroy = handle.destroy;
+            return handle;
         }
     }
 
@@ -76,15 +80,15 @@ public sealed unsafe class SceneLoader : IDisposable
     /// <exception cref="KernelError">Any other native failure.</exception>
     public void Load(string path)
     {
-        ObjectDisposedException.ThrowIf(_native == null, this);
         ArgumentException.ThrowIfNullOrEmpty(path);
+        var native = ((INativeSceneLoader)this).Native;
 
         var bytes = Encoding.UTF8.GetBytes(path + "\0");
         s_pendingException = null;
         ke_error* err = null;
         bool result;
         fixed (byte* p = bytes)
-            result = _native->load(_native, (sbyte*)p, &err);
+            result = native->load(native, (sbyte*)p, &err);
 
         if (s_pendingException is { } pending)
         {
@@ -103,7 +107,7 @@ public sealed unsafe class SceneLoader : IDisposable
     public void RegisterScriptFactory(Func<ulong, string, bool> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        ObjectDisposedException.ThrowIf(_native == null, this);
+        var native = ((INativeSceneLoader)this).Native;
 
         if (_scriptHandle.IsAllocated) _scriptHandle.Free();
         _scriptClosure = factory;
@@ -112,7 +116,7 @@ public sealed unsafe class SceneLoader : IDisposable
 
         ke_error* err = null;
         KernelError.ThrowIfFailed(
-            _native->register_script_factory(_native, &ScriptTrampoline, (void*)ctx, &err), err, "register_script_factory");
+            native->register_script_factory(native, &ScriptTrampoline, (void*)ctx, &err), err, "register_script_factory");
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -134,14 +138,9 @@ public sealed unsafe class SceneLoader : IDisposable
         return false;
     }
 
-    /// <inheritdoc cref="IDisposable.Dispose"/>
-    public void Dispose()
+    /// <summary>Also releases the GC handle kept for the registered script factory.</summary>
+    partial void OnDispose()
     {
-        if (_native is not null)
-        {
-            if (_destroy != null) _destroy(_native);
-            _native = null;
-        }
         if (_scriptHandle.IsAllocated) _scriptHandle.Free();
         _scriptClosure = null;
     }

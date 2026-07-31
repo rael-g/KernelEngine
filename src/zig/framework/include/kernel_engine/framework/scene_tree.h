@@ -19,14 +19,17 @@ extern "C"
     {
         void *handle;
 
+        /** [idiom] Superseded by the managed Root property, same name. */
         ke_entity (*root)(struct ke_scene_tree *self);
 
+        /** @param name [utf8] */
         ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_system_ctx *ctx, ke_error **out_error);
 
         bool (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_system_ctx *ctx, ke_error **out_error);
 
         void (*destroy_all)(struct ke_scene_tree *self);
 
+        /** @param name_or_path [utf8] */
         ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path, ke_error **out_error);
 
         void (*propagate_transforms)(struct ke_scene_tree *self);

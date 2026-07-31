@@ -36,15 +36,22 @@ extern "C"
     {
         void *handle;
 
+        /** [idiom] Superseded by the managed Ecs property (DI-injected IEcsRegistry), same name. */
         ke_ecs         *(*ecs)(struct ke_world *self);
+        /** [idiom] Superseded by the managed Runtime property (DI-injected IRuntime), same name. */
         ke_runtime     *(*runtime)(struct ke_world *self);
+        /** [idiom] Superseded by the managed SceneTree property, same name. */
         struct ke_scene_tree *(*scene_tree)(struct ke_world *self);
 
+        /** @param apply [raw_callback] */
         bool (*register_component_apply)(struct ke_world      *self,
                                          ke_component_id       cid,
                                          ke_component_apply_fn apply,
                                          ke_error            **out_error);
 
+        /** [raw_callback] Returns a bare C function pointer with no
+         * ABI-derivable managed shape, same reasoning as any [raw_callback]
+         * parameter — left to the idiom layer entirely. */
         ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
                                                       ke_component_id  cid);
 

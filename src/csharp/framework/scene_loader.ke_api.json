@@ -1,0 +1,114 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_scene_properties",
+      "doc": null,
+      "fields": [
+        {
+          "name": "entries",
+          "type": "const ke_variant_table_entry *",
+          "doc": null
+        },
+        {
+          "name": "count",
+          "type": "uint32_t",
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_scene_loader",
+      "doc": null,
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load",
+          "returns": "_Bool",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Superseded by the managed Load method, same name \u2014 it also rethrows a managed exception the script-factory trampoline caught mid-call, which has no ABI-derivable shape.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "register_script_factory",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "factory",
+              "type": "ke_script_factory_func",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": null
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ke_scene_loader_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scene_loader *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t"
+  }
+}

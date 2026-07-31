@@ -1,0 +1,487 @@
+{
+  "enums": [
+    {
+      "name": "ke_action_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ACTION_TYPE_BUTTON",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_ACTION_TYPE_AXIS1D",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ACTION_TYPE_AXIS2D",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_ACTION_TYPE_AXIS3D",
+          "value": 3,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_action_phase",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ACTION_PHASE_STARTED",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ACTION_PHASE_PERFORMED",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_ACTION_PHASE_CANCELED",
+          "value": 3,
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_input_action_event",
+      "doc": null,
+      "fields": [
+        {
+          "name": "action_id",
+          "type": "int32_t",
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_action_type",
+          "doc": null
+        },
+        {
+          "name": "phase",
+          "type": "ke_action_phase",
+          "doc": null
+        },
+        {
+          "name": "x",
+          "type": "float",
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_input_actions",
+      "doc": null,
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_action_id",
+          "returns": "int32_t",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "add_action",
+          "returns": "int32_t",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "type",
+              "type": "ke_action_type",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "bind_key",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "key",
+              "type": "ke_key",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "bind_mouse_button",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "button",
+              "type": "ke_mouse_button",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "bind_key_pair",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "negative",
+              "type": "ke_key",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "positive",
+              "type": "ke_key",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "bind_key_quad",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "up",
+              "type": "ke_key",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "down",
+              "type": "ke_key",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "left",
+              "type": "ke_key",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "right",
+              "type": "ke_key",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "evaluate",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_input_snapshot *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "on_event",
+              "type": "ke_input_action_event_func",
+              "tags": [
+                "raw_callback"
+              ],
+              "doc": null
+            },
+            {
+              "name": "event_ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "is_action_down",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "was_action_pressed",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "was_action_released",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_axis1d",
+          "returns": "float",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_axis2d",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_x",
+              "type": "float *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_y",
+              "type": "float *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_axis3d",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_x",
+              "type": "float *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_y",
+              "type": "float *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_z",
+              "type": "float *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ke_input_actions_handle",
+      "doc": null,
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_input_actions *",
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "type_aliases": {}
+}
