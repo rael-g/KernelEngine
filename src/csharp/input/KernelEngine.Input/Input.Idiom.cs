@@ -60,6 +60,8 @@ public sealed unsafe partial class Input : IInput
         public SnapshotReader(ke_input_snapshot data) => _data = data;
 
         public bool IsKeyDown(Key key) => InputSnapshot.IsKeyDown(_data, key);
+        public bool IsKeyPressed(Key key) => InputSnapshot.IsKeyPressed(_data, key);
+        public bool IsKeyReleased(Key key) => InputSnapshot.IsKeyReleased(_data, key);
         public bool IsMouseButtonDown(MouseButton button) => InputSnapshot.IsMouseButtonDown(_data, button);
 
         public Vector2 MousePosition => new(_data.mouse_x, _data.mouse_y);

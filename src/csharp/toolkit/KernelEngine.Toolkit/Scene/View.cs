@@ -22,7 +22,6 @@ public readonly ref struct View
     public NodeWorld NodeWorld { get; }
 
     private readonly IInputReader? _input;
-    private readonly IInputReader? _prevInput;
 
     /// <summary>
     /// The native system context for this tick. Opaque handle forwarded to
@@ -42,16 +41,13 @@ public readonly ref struct View
     /// True if the given key transitioned from up to down this tick (rising edge).
     /// Returns false when no input service is registered.
     /// </summary>
-    public bool IsKeyJustPressed(int key)
-        => (_input?.IsKeyDown((Key)key) ?? false) && !(_prevInput?.IsKeyDown((Key)key) ?? false);
+    public bool IsKeyJustPressed(int key) => _input?.IsKeyPressed((Key)key) ?? false;
 
-    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input,
-                  IInputReader? prevInput = null, nint systemCtx = default)
+    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input, nint systemCtx = default)
     {
         NodeWorld     = nodeWorld;
         DeltaTime     = deltaTime;
         _input        = input;
-        _prevInput    = prevInput;
         SystemContext = systemCtx;
     }
 }

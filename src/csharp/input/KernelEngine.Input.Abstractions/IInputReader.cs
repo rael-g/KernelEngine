@@ -22,6 +22,12 @@ public interface IInputReader
 {
     bool IsKeyDown(Key key);
 
+    /// <summary>True for exactly the tick the key transitioned from up to down (rising edge).</summary>
+    bool IsKeyPressed(Key key);
+
+    /// <summary>True for exactly the tick the key transitioned from down to up (falling edge).</summary>
+    bool IsKeyReleased(Key key);
+
     Vector2 MousePosition { get; }
     Vector2 MouseDelta { get; }
     Vector2 ScrollDelta { get; }

@@ -65,7 +65,6 @@ public sealed class SceneNodesModule : IRuntimeModule
                 if (reader.TryGetVec3("Color", out var c)) comp.Color = c;
             });
 
-        IInputReader? prevSnapshot = null;
         // The ctx-aware overload hands each tick its system context. Node create/
         // destroy issued from a behavior routes through it and defers the structural
         // change to the wave barrier — so this runs as an ordinary parallel-wave
@@ -76,14 +75,13 @@ public sealed class SceneNodesModule : IRuntimeModule
             sceneTree.PropagateTransforms();
             var snapshot  = input?.CaptureSnapshot();
             evaluator?.Evaluate(snapshot);
-            var view      = new View(nodeWorld, dt, snapshot, prevSnapshot, ctx);
+            var view      = new View(nodeWorld, dt, snapshot, ctx);
             var behaviors = nodeWorld.Behaviors;
             using (nodeWorld.EnterSystem(ctx))
             {
                 for (int i = 0; i < behaviors.Count; i++)
                     behaviors[i].OnUpdate(in view);
             }
-            prevSnapshot = snapshot;
         }, pinnedThread: 1);
 
         // Optional: only registered when the active render module implements
