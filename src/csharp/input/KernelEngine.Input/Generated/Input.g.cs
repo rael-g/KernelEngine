@@ -21,8 +21,6 @@ public unsafe partial class Input : IDisposable, INativeInput
 {
     private ke_input* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_input*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_input* Handle => _native != null ? _native

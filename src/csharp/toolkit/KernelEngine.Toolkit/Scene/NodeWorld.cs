@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
@@ -26,10 +26,6 @@ public sealed class NodeWorld
     internal IReadOnlyList<Node>  Behaviors => _behaviors;
     internal IReadOnlyList<Label> Labels    => _labels;
 
-    // The native system context for the tick currently executing. Set by the
-    // behavior system around its OnUpdate loop so node create/destroy issued from
-    // a behavior defers its structural change to the wave barrier. Zero (default)
-    // outside a tick — creation then happens immediately (scene setup, load).
     private nint _systemCtx;
 
     /// <summary>
@@ -55,10 +51,6 @@ public sealed class NodeWorld
     internal void RegisterBehavior(Node node) => _behaviors.Add(node);
     internal void RegisterLabel(Label label)  => _labels.Add(label);
 
-    // Native "transform" component CID (registered by ke_world_create under "transform").
-    // Distinct from the C# "Transform" component (ComponentRegistry, 40 bytes) —
-    // this is the kernel 104-byte TransformComponent that includes WorldMatrix.
-    // Used in BindNativeEntity to seed the node's _transform before OnBind.
     private readonly uint _nativeTransformCid;
     private readonly uint _hierarchyCid;
 
@@ -164,8 +156,6 @@ public sealed class NodeWorld
         for (int i = 0; i < roots.Length; i++) DestroyNode(roots[i]);
     }
 
-    // ── Native scene loader integration ──────────────────────────────────────
-
     /// <summary>
     /// Binds a managed Node to an entity that was already created by the native
     /// scene loader. Reads the name from the entity's <c>ke_name_component</c>,
@@ -182,9 +172,6 @@ public sealed class NodeWorld
             name = Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
         }
 
-        // Seed node._transform from the native "transform" component so that
-        // OnBind (called inside BindToNodeWorld) sees the position/scale the
-        // scene loader applied before invoking the script factory.
         var tsp = _ecs.GetComponent<TransformComponent>(entity, _nativeTransformCid);
         if (!tsp.IsEmpty)
         {
@@ -197,8 +184,6 @@ public sealed class NodeWorld
             });
         }
 
-        // Wire parent-child via the native HierarchyComponent so Children/Parent
-        // reflect the hierarchy declared in the scene file.
         var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
         Node? parent = null;
         if (!hsp.IsEmpty && hsp[0].Parent != 0 && hsp[0].Parent != ulong.MaxValue)
@@ -211,8 +196,6 @@ public sealed class NodeWorld
         _allNodes.Add(node);
         _byEntity[entity] = node;
     }
-
-    // ── Generic component access ──────────────────────────────────────────────
 
     /// <summary>
     /// Reads a component by its ECS registration name. Intended for game-specific
@@ -233,21 +216,31 @@ public sealed class NodeWorld
     }
 
     internal void Set<T>(ulong entity, in T value) where T : unmanaged
+        => SetByCid(entity, _components.CidOf<T>(), in value);
+
+    /// <summary>
+    /// Writes <paramref name="value"/> into the component registered under
+    /// <paramref name="cid"/>, attaching it when the entity does not carry it yet.
+    /// Takes the cid directly so a caller whose component identity is a registered
+    /// name rather than a managed type can write without a type-to-cid mapping.
+    /// </summary>
+    public void SetByCid<T>(ulong entity, uint cid, in T value) where T : unmanaged
     {
-        var cid = _components.CidOf<T>();
         if (_systemCtx != 0)
         {
-            // Inside a running system. If the entity already carries the component,
-            // this is a plain data write (safe mid-wave). If not, adding it is a
-            // structural change that must defer to the wave barrier.
             var existing = _ecs.GetComponent<T>(entity, cid);
             if (!existing.IsEmpty) { existing[0] = value; return; }
             if (Runtime.SystemContext.Attach(_systemCtx, entity, cid, in value)) return;
-            // No context / defer failed: fall through to the immediate path.
         }
         var sp = _ecs.AddComponent<T>(entity, cid);
         if (!sp.IsEmpty) sp[0] = value;
     }
+
+    /// <summary>Resolves the cid a component is registered under, or throws when the name is unknown.</summary>
+    public uint CidOfName(string name) =>
+        _ecs.TryLookupComponent(name, out var cid)
+            ? cid
+            : throw new InvalidOperationException($"Component '{name}' is not registered.");
 
     internal bool TryGet<T>(ulong entity, out T value) where T : unmanaged
     {

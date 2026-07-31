@@ -20,8 +20,6 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
 {
     private ke_ecs* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_ecs* Handle => _native != null ? _native

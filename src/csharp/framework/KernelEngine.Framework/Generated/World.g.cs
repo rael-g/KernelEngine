@@ -22,8 +22,6 @@ public unsafe partial class World : IDisposable, INativeWorld
 {
     private ke_world* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_world*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_world* Handle => _native != null ? _native

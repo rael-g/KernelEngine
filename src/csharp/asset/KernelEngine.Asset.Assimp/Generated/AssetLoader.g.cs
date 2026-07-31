@@ -20,8 +20,6 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader
 {
     private ke_asset_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_asset_loader*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_asset_loader* Handle => _native != null ? _native

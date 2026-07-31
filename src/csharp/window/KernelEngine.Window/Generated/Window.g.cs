@@ -20,8 +20,6 @@ public unsafe partial class Window : IDisposable, INativeWindow
 {
     private ke_window* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_window*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_window* Handle => _native != null ? _native

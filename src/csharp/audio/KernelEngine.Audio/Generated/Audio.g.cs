@@ -20,8 +20,6 @@ public unsafe partial class Audio : IDisposable, INativeAudio
 {
     private ke_audio* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_audio*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_audio* Handle => _native != null ? _native

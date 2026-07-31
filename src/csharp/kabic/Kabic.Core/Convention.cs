@@ -39,6 +39,20 @@ public sealed class Convention
     public required string FactorySuffix { get; init; }
 
     /// <summary>
+    /// Suffix marking an ECS component struct (<c>ke_point_light_component</c>). Stripped
+    /// along with <see cref="SymbolPrefix"/> to recover the name the component is registered
+    /// under at runtime (<c>point_light</c>), which is its only cross-language identity.
+    /// </summary>
+    public required string ComponentSuffix { get; init; }
+
+    /// <summary>The registered component name for a component struct (<c>ke_point_light_component</c> → <c>point_light</c>).</summary>
+    public string ComponentNameFor(string structName)
+    {
+        var n = StripPrefix(structName);
+        return n.EndsWith(ComponentSuffix) ? n[..^ComponentSuffix.Length] : n;
+    }
+
+    /// <summary>
     /// The out-parameter type spelling that makes a slot fallible. A slot returning boolean-true-on-success
     /// whose last parameter is this type reports failure through it rather than through its return value.
     /// </summary>
@@ -97,6 +111,7 @@ public sealed class Convention
         SymbolPrefix = "ke_",
         HandleSuffix = "_handle",
         FactorySuffix = "_create",
+        ComponentSuffix = "_component",
         ErrorOutParamType = "ke_error**",
         // C spells `bool` as `_Bool` after preprocessing; both reach the description.
         // `ke_bool` is this ABI's own boolean typedef, used interchangeably with

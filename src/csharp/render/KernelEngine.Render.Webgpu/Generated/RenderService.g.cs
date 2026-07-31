@@ -20,8 +20,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
 {
     private ke_render_service* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_render_service*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_render_service* Handle => _native != null ? _native

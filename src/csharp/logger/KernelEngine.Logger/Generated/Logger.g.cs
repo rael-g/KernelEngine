@@ -20,8 +20,6 @@ public unsafe partial class Logger : IDisposable, INativeLogger
 {
     private ke_logger* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_logger*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_logger* Handle => _native != null ? _native

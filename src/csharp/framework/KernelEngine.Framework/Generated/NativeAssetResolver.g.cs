@@ -23,8 +23,6 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
 {
     private ke_asset_resolver* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_asset_resolver*, void> _destroy;
-    // Set when this wrapper only borrows a pointer someone else owns
-    // (see the borrowing constructor): Dispose must not destroy it.
     private readonly bool _borrowed;
 
     private ke_asset_resolver* Handle => _native != null ? _native

@@ -1,19 +1,7 @@
-// kabic's C# backend (ScriptingArchitectureV3 §6.2): renders the
-// language-independent ClassifiedModel (Kabic.Core's Classifier) into
-// idiomatic C# — throw, IDisposable, Span<T>, GCHandle +
-// [UnmanagedCallersOnly]. Everything here decides how to SAY a slot's
-// already-decided meaning; nothing here re-derives what a slot means from
-// raw ApiFunction/ApiStruct shapes. A Lua/Python/Zig backend would be a
-// sibling project referencing Kabic.Core the same way this one does, writing
-// only its own version of this file.
 
 namespace Kabic.CSharp;
 
 using Kabic;
-
-// =============================================================================
-// -- §6.2 the C# backend: rendering the shared classification into C# idiom -
-// =============================================================================
 
 public static class CSharpBackend
 {
@@ -33,10 +21,9 @@ public static class CSharpBackend
 
     static string Escape(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
-    /// Emits the `fixed` pinning prologue for every [utf8] parameter in a slot,
-    /// returning the lines plus how many braces the caller must close. A managed
-    /// string cannot cross the ABI directly; each is encoded NUL-terminated and
-    /// pinned for the duration of the native call.
+    /// Emits the `fixed` pinning prologue encoding every [utf8] parameter as a
+    /// NUL-terminated byte buffer, returning the lines and the number of braces
+    /// the caller must close.
     static (List<string> Lines, int Depth) Utf8Prologue(IEnumerable<ApiParam> ps, string indent)
     {
         var lines = new List<string>();
@@ -52,20 +39,12 @@ public static class CSharpBackend
         return (lines, depth);
     }
 
-    /// A C type mapped to C#, resolving typedef aliases first (ke_entity is
-    /// uint64_t, which a language with no typedef concept must see through) and
-    /// recursing through pointers so `const`/`struct` never leak into the C#
-    /// spelling and the pointee gets the same primitive/alias treatment as any
-    /// other parameter — a bare `struct ke_render_pass_ctx *` return or a
-    /// `const char *` param handled anywhere but here silently reproduced the
-    /// C spelling verbatim (invalid C#), and only the pointee's OWN type
-    /// (never the pointer as a whole) is a primitive `Prim` can know about.
+    /// A C type mapped to C#. Typedef aliases resolve first; pointers recurse so
+    /// `const`/`struct` qualifiers are dropped and the pointee receives the same
+    /// mapping as any other type. An opaque `void *` maps to `nint`.
     static string CsType(ApiModel model, string cType)
     {
         var t = cType.Trim();
-        // The one pointer whose whole spelling (not just its pointee) is special-
-        // cased: an opaque `void *` platform handle renders as `nint`, matching
-        // every hand-written precedent this replaces.
         if (t is "void *" or "void*") return "nint";
         if (CTypes.IsPointer(t))
         {
@@ -81,32 +60,13 @@ public static class CSharpBackend
     {
         var tagEnum = p.TagValue("enum");
         if (tagEnum is not null) return Idioms.TypeName(tagEnum, convention);
-        // [utf8]: a NUL-terminated C string, not a raw char pointer a caller
-        // should ever see. Marshaled at the boundary (see CallArg).
         if (p.Has("utf8")) return "string";
-        // [opaque]: this consumer must not depend on the pointee's own binding
-        // (typically a cross-domain type this consumer can't reference — e.g.
-        // Framework can't name a specific render backend's own struct). Mirrors
-        // what ClangSharp itself already does for a forward-declared pointer it
-        // never saw the full definition of when generating THIS project's own
-        // native bindings: the delegate field is typed `void*`, not the real
-        // struct pointer kabic's own (fuller) AST view would otherwise resolve.
         if (p.Has("opaque")) return "void*";
-        // A parameter whose type IS one of this description's enums needs no tag —
-        // [enum:T] exists only for an integer that is *secretly* an enum.
         if (model.Enums.Any(e => e.Name == p.Type.Trim()))
             return Idioms.TypeName(p.Type.Trim(), convention);
         return CsType(model, p.Type);
     }
 
-    // -------------------------------------------------------------- node types (spike, §7.8)
-    //
-    // Renders a [node:Name,base:Base]-tagged plain struct (a component, not a
-    // vtable) into a toolkit-shaped node class: one property per field, each
-    // writing straight through to a private native-struct instance that IS the
-    // node's component state, plus the OnBind that materializes it. This is
-    // the pilot for Track 4 §7.3-7.4 — proving whether a node type can be
-    // fully data-derived, not a generalized/wired-into-the-CLI capability yet.
     public static string RenderNodeType(ApiModel model, ApiStruct component, string ns, string nativeNs, Convention convention)
     {
         var nodeName = component.TagValue("node") ?? throw new InvalidOperationException($"{component.Name} has no [node:] tag");
@@ -120,6 +80,7 @@ public static class CSharpBackend
         o.Add("{");
 
         o.Add($"    private {nativeType} _state = new();");
+        o.Add("    private uint _cid;");
         o.Add("");
         o.Add($"    public {nodeName}()");
         o.Add("    {");
@@ -144,17 +105,22 @@ public static class CSharpBackend
             o.Add("    }");
         }
 
+        var componentName = convention.ComponentNameFor(component.Name);
         o.Add("");
-        o.Add("    private void WriteIfBound() { if (IsBound) NodeWorld!.Set(Entity, _state); }");
+        o.Add("    private void WriteIfBound()");
+        o.Add("    {");
+        o.Add("        if (IsBound) NodeWorld!.SetByCid(Entity, _cid, _state);");
+        o.Add("    }");
         o.Add("");
-        o.Add("    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.Set(Entity, _state);");
+        o.Add("    protected internal override void OnBind(NodeWorld nodeWorld)");
+        o.Add("    {");
+        o.Add($"        _cid = nodeWorld.CidOfName(\"{componentName}\");");
+        o.Add("        nodeWorld.SetByCid(Entity, _cid, _state);");
+        o.Add("    }");
         o.Add("}");
         return string.Join('\n', o);
     }
 
-    // A fixed-size float array is the ABI's only way to spell a vector; the
-    // node surface exposes the language's own vector type instead, since that
-    // is what a caller composes with (`light.Color = Vector3.One`).
     static int? VectorArity(string cType)
     {
         var m = System.Text.RegularExpressions.Regex.Match(cType.Trim(), @"^float\s*\[(\d+)\]$");
@@ -176,17 +142,12 @@ public static class CSharpBackend
             ? Enumerable.Range(0, n).Select(i => $"{owner}.{f.Name}[{i}] = {value}.{VectorLanes[i]};")
             : [$"{owner}.{f.Name} = {value};"];
 
-    // [default:...] seeds the field in the node's constructor. A field without
-    // one keeps whatever the struct's own zero-init gives it rather than
-    // inventing a value the header never stated.
     static IEnumerable<string> FieldInit(ApiModel model, ApiField f)
     {
         var d = f.TagValue("default");
         if (d is null) return [];
         if (VectorArity(f.Type) is int n)
         {
-            // Space-separated, not comma: the tag block itself is comma-separated
-            // (`[a,b]` is two tags), so a comma inside a value would split the tag.
             var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length != n)
                 throw new InvalidOperationException(
@@ -195,8 +156,6 @@ public static class CSharpBackend
         }
         return [$"_state.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
     }
-
-    // -------------------------------------------------------------- enums
 
     public static string RenderEnums(ApiModel model, string ns, Convention convention)
     {
@@ -221,8 +180,6 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
-    // ------------------------------------------------------------ provider
-
     public static string RenderProvider(ApiModel model, ApiStruct vtable, ClassifiedModel classified,
         string ns, string nativeNs, IReadOnlyList<string> extraUsings, Convention convention)
     {
@@ -244,22 +201,6 @@ public static class CSharpBackend
         o.Add($"namespace {ns};");
         o.Add("");
 
-        // The INativeX{ ke_x* Native } accessor is this project's sanctioned
-        // cross-domain composition mechanism (see ScriptingArchitectureV3.md
-        // Appendix A.1's second correction): InternalsVisibleTo is banned
-        // because it forces the producer to enumerate every consumer, the
-        // inversion of the inversion this project's DI doctrine forbids. A
-        // public Native accessor lets any consumer opt in without the producer
-        // knowing who they are. Already load-bearing, hand-written, and
-        // identical in shape across a dozen domains (INativeLogger,
-        // INativeWindow, ...) before kabic existed — generating it here just
-        // stops it being copy-pasted per domain.
-        // Named from the ABI symbol, NOT from the (possibly overridden) wrapper
-        // type name: this interface exists to hand out the native pointer, so it
-        // is named after the native type it exposes. ke_ecs's wrapper is renamed
-        // to EcsRegistry to dodge a namespace clash, but its pointer accessor is
-        // still INativeEcs — that name is what every cross-domain consumer of the
-        // ke_ecs pointer already knows it by.
         var nativeIface = "INative" + Idioms.Pascal(convention.StripPrefix(vtable.Name));
         o.Add($"/// <summary>Exposes the raw native {typeName.ToLowerInvariant()} pointer for cross-domain composition wiring.</summary>");
         o.Add($"public unsafe interface {nativeIface}");
@@ -269,18 +210,10 @@ public static class CSharpBackend
         o.Add("");
 
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
-        // Not sealed: at least one provider (EnkiScheduler : Scheduler) is
-        // legitimately subclassed by a backend layering its own native
-        // construction on top of the generic wrapper. Sealing by default
-        // would have been a restriction kabic imposed with no ABI basis for
-        // it — the C type says nothing about whether the managed wrapper
-        // should be inheritable.
         o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}");
         o.Add("{");
         o.Add($"    private {vtable.Name}* _native;");
         o.Add($"    private readonly delegate* unmanaged[Cdecl]<{vtable.Name}*, void> _destroy;");
-        o.Add("    // Set when this wrapper only borrows a pointer someone else owns");
-        o.Add("    // (see the borrowing constructor): Dispose must not destroy it.");
         o.Add("    private readonly bool _borrowed;");
         o.Add("");
         o.Add($"    private {vtable.Name}* Handle => _native != null ? _native");
@@ -303,11 +236,6 @@ public static class CSharpBackend
             var call = string.Join(", ", fparams.Select(p => Idioms.Ident(p.Name!)));
             o.Add(XmlDoc("    ", factory.Doc, fparams.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                 throwsOnFail: true).TrimEnd());
-            // internal only when a param is a raw pointer from a sibling native
-            // layer that a managed caller cannot supply without an unsafe
-            // context (the hand-written idiom partial then exposes a public
-            // constructor form instead). Decided once in Classifier
-            // (plan.NeedsWrapper), not re-derived here.
             o.Add($"    {(plan.NeedsWrapper ? "internal" : "public")} {typeName}({sig})");
             o.Add("    {");
             o.Add("        ke_error* err = null;");
@@ -322,20 +250,10 @@ public static class CSharpBackend
         else if (plan.Kind == ConstructorKind.FromHandle)
         {
             var handleType = plan.HandleTypeName!;
-            // ke_window's shape: no factory of its own — any backend (GLFW, ...)
-            // hands back a ke_window_handle, and construction is generic over
-            // that handle rather than tied to one specific creator function.
-            // Public, unlike the factory ctor above: a ke_X_handle is a plain
-            // managed-visible value type this wrapper itself owns the shape of,
-            // not a raw pointer into a sibling native namespace — any assembly
-            // holding a valid handle (from calling a backend's own factory) can
-            // legitimately construct the wrapper directly.
             o.Add($"    /// <summary>Wraps an owner <c>{handleType}</c> and runs {typeName.ToLowerInvariant()}'s startup lifecycle hook.</summary>");
             if (initCall is not null) o.Add("    /// <exception cref=\"KernelError\">The native call failed.</exception>");
             o.Add($"    public {typeName}({handleType} handle)");
             o.Add("    {");
-            // A handle whose ref is null carries nothing — constructing from it
-            // would yield a wrapper that only fails later, at the first call.
             o.Add("        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));");
             o.Add("        _native = handle.@ref;");
             o.Add("        _destroy = handle.destroy;");
@@ -344,15 +262,6 @@ public static class CSharpBackend
             o.Add("");
         }
 
-        // Borrowing constructor, always available: an owner elsewhere holds the
-        // handle and this wrapper only reads through the pointer (ke_ecs's shape —
-        // FlecsEcs owns the ke_ecs_handle, the registry wrapper borrows the
-        // ke_ecs* out of it). Disposing a borrowed wrapper releases nothing.
-        // A named factory rather than a constructor overload: `new X(somePointer)`
-        // would be ambiguous against an idiom layer's own managed-typed
-        // constructor whenever a caller passes null, and "Borrow" states the
-        // ownership semantics at every call site instead of leaving them to a
-        // parameter type.
         o.Add($"    /// <summary>Wraps a <c>{vtable.Name}*</c> owned elsewhere. Disposing the result does not destroy it.</summary>");
         o.Add($"    public static {typeName} Borrow({vtable.Name}* native) => new(native, borrowed: true);");
         o.Add("");
@@ -366,20 +275,6 @@ public static class CSharpBackend
 
         foreach (var cs in slots)
         {
-            // [sink]: a backend-facing event callback (e.g. ke_input.on_key), not
-            // game-facing API. [lifecycle:*]: invoked automatically below, not
-            // meant to be called again by the consumer. [raw_callback]: a bare
-            // C function-pointer parameter OR return (not a [callback]
-            // vtable-by-value struct) — trampolining it generically buys
-            // nothing, since the value surface a caller actually wants
-            // (Task/async, a coroutine, whatever this language's idiom is)
-            // can't be inferred from the ABI either way; left to the idiom
-            // layer entirely. [idiom]: the managed surface for this slot is
-            // a hand-written member whose NAME already collides with what
-            // this generator would derive (e.g. a raw `ke_scene_tree*` getter
-            // vs. an existing richer `SceneTree SceneTree { get; }` property
-            // of the same name) — the idiom layer reaches the slot directly
-            // through `Handle` instead.
             if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle") || cs.Slot.Has("raw_callback")
                 || cs.Slot.Has("idiom") || cs.PublicParams.Any(p => p.Has("raw_callback")))
                 continue;
@@ -394,11 +289,6 @@ public static class CSharpBackend
         o.Add($"    /// <summary>Releases the native {typeName.ToLowerInvariant()}.</summary>");
         o.Add("    public void Dispose()");
         o.Add("    {");
-        // A hook for idiom-layer resources with no ABI counterpart (e.g. an
-        // owned handle from a DIFFERENT domain, or GCHandles pinning managed
-        // callback trampolines) that must be released alongside this one.
-        // Elided entirely when the idiom layer never implements it — a C#
-        // partial method with no implementation compiles to nothing.
         o.Add("        OnDispose();");
         o.Add("        if (_native == null) return;");
         o.Add("        if (_borrowed) { _native = null; return; }");
@@ -454,19 +344,12 @@ public static class CSharpBackend
             }
             case SlotShape.TupleOutParams:
             {
-                // e.g. ke_window.get_size(int32_t *width, int32_t *height, ke_error**)
-                // -> (int Width, int Height) GetSize() — a tuple return, not a Span
-                // (the values are independent scalars, not a homogeneous sequence).
-                // Any OTHER public param (e.g. get_axis2d's action_id) stays an
-                // ordinary input, same as ReturnsOutParam's `ins`.
                 var ins = cs.PublicParams.Where(p => !cs.OutParams.Contains(p)).ToList();
                 var sig = string.Join(", ", ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
                 var names = cs.OutParams.Select(p => Idioms.Pascal(p.Name!)).ToList();
                 var types = cs.OutParams.Select(p => CsType(model, CTypes.Deref(p.Type))).ToList();
                 var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
                 var locals = cs.OutParams.Select(p => Idioms.Ident(p.Name!)).ToList();
-                // Native argument order follows the ORIGINAL declaration, not the
-                // reshaped public signature (mirrors Sequence's nativeArgs).
                 var nativeArgs = cs.Slot.Params
                     .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
                     .Select(p => cs.OutParams.Contains(p) ? $"&{Idioms.Ident(p.Name!)}" : CallArg(p));
@@ -497,10 +380,6 @@ public static class CSharpBackend
             }
             case SlotShape.Sequence:
             {
-                // The pointer+count pair collapses into one Span; every OTHER
-                // parameter stays exactly as declared, and the return type is
-                // whatever C says it is — not assumed to be the written count
-                // (ke_ecs.query_register returns a query id, not a length).
                 var elem = CsType(model, CTypes.Deref(cs.SequenceParam!.Type));
                 var pname = Idioms.Ident(cs.SequenceParam!.Name!);
                 var others = cs.PublicParams.Where(p => p != cs.SequenceParam).ToList();
@@ -523,8 +402,6 @@ public static class CSharpBackend
                 o.Add("    {");
                 foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
 
-                // Native argument order must follow the ORIGINAL declaration, not
-                // the reshaped public signature.
                 var nativeArgs = cs.Slot.Params
                     .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
                     .Select(p =>
@@ -558,15 +435,11 @@ public static class CSharpBackend
             }
             case SlotShape.Try:
             {
-                // [try]: the boolean is a found/not-found outcome, not an error —
-                // renders as bool TryX(..., out T) rather than throwing.
                 var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
                 var outs = cs.OutParams;
                 var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
                     .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
 
-                // The slot may already be named try_get_x (Pascal: TryGetX) — don't
-                // double up into TryTryGetX.
                 var tryName = name.StartsWith("Try") ? name : $"Try{name}";
                 o.Add(XmlDoc("    ", slot.Doc,
                     cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
@@ -581,8 +454,6 @@ public static class CSharpBackend
                     .Select(p => outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local" : CallArg(p));
                 var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
                     + (cs.Fallible ? ", null)" : ")")
-                    // ClangSharp maps the C typedef `ke_bool` to a raw `byte`
-                    // delegate return (unlike the literal keyword `bool`/`_Bool`).
                     + (slot.Returns == "ke_bool" ? " != 0" : "");
                 o.Add($"{tInd}var found = {tryCall};");
                 foreach (var op in outs) o.Add($"{tInd}{Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
@@ -609,10 +480,6 @@ public static class CSharpBackend
                 o.Add($"{fInd}ke_error* err = null;");
                 if (byReturn)
                 {
-                    // ClangSharp maps the C typedef `ke_bool` (unlike the literal
-                    // keyword `bool`/`_Bool`) to a raw `byte` delegate return, so
-                    // the call needs the same `!= 0` a Plain-shape ke_bool slot
-                    // already gets — ThrowIfFailed takes a real C# bool.
                     var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
                         + (slot.Returns == "ke_bool" ? " != 0" : "");
                     o.Add($"{fInd}KernelError.ThrowIfFailed({boolCall}, err, \"{slot.Name}\");");
@@ -621,13 +488,8 @@ public static class CSharpBackend
                 {
                     o.Add($"{fInd}var result = Handle->{slot.Name}(Handle{call}, &err);");
                     if (CTypes.IsPointer(slot.Returns))
-                        // A pointer-returning slot signals failure by returning NULL — the
-                        // error out-param may or may not also be set, so it isn't the check.
                         o.Add($"{fInd}if (result == null) throw KernelError.FromNative(err, \"{slot.Name}\");");
                     else
-                        // Any other value-returning slot reports failure by writing the
-                        // error out-param, which stays NULL on success — so the written
-                        // pointer, not the return value, is what says it failed.
                         o.Add($"{fInd}if (err != null) throw KernelError.FromNative(err, \"{slot.Name}\");");
                     o.Add($"{fInd}return result;");
                 }
@@ -664,20 +526,13 @@ public static class CSharpBackend
             }
         }
 
-        // A [utf8] param is pinned into a local by the emitted prologue (see
-        // Utf8Prologue) and passed as that pointer, never as the managed string.
         string CallArg(ApiParam p) =>
             p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
-            // ke_bool is a byte across the ABI but a bool in the signature.
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
-            // A natively-enum-typed param renders as this language's own enum, so
-            // it casts back to the ABI enum at the call.
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!);
     }
-
-    // ----------------------------------------------------- callback slot
 
     static void RenderCallbackMethod(List<string> o, ApiStruct vtable, ClassifiedSlot cs,
         ClassifiedModel classified, string ownerType, Convention convention)
@@ -714,11 +569,6 @@ public static class CSharpBackend
         o.Add("    }");
         o.Add("");
 
-        // A second overload, forwarding an already-built value straight through
-        // with no GCHandle/trampoline wrapping: for a callback-vtable VALUE that
-        // came from a native value-factory (e.g. ke_console_sink_create(), see
-        // ClassifiedModel.FreeFunctionGroups) rather than a managed
-        // implementation of the interface above.
         var cbParamCsType = CTypes.Deref(cbParam.Type);
         o.Add($"    /// <summary>{slot.Doc} Takes an already-built <c>{cbType.Name}</c> value directly — for one produced by a native factory, not a managed <see cref=\"{ifaceName}\"/>.</summary>");
         o.Add(XmlDoc("    ", null, otherParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), throwsOnFail: true).TrimEnd());
@@ -783,8 +633,6 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
-    // -------------------------------------------------------- free functions
-
     public static string RenderFreeFunctions(string owner, List<GroupedFunction> fns, string ns, string nativeNs,
         string libraryName, Convention convention)
     {
@@ -803,20 +651,11 @@ public static class CSharpBackend
             "{",
         };
 
-        // Two shapes share this file: an operation ON a value type (self is the
-        // group's own owner, taken `in`/by-ref — ke_input_snapshot_is_key_down),
-        // and a plain factory producing one BY VALUE with no owner param at all
-        // (ke_console_sink_create() -> ke_logger_sink). Which one, per function,
-        // was already decided once in Classifier (GroupedFunction.SelfParam).
         foreach (var g in fns)
         {
             var f = g.Fn;
             var self = g.SelfParam;
             var rest = self is not null ? f.Params.Skip(1).ToList() : f.Params;
-            // Not every value-factory function follows the {owner}_{verb} naming
-            // convention (ke_console_sink_create doesn't start with ke_logger_sink_);
-            // fall back to stripping the generic ke_ prefix so it still reads as a
-            // method name instead of repeating the whole C symbol.
             var strippedName = f.Name.StartsWith(prefix) ? f.Name[prefix.Length..]
                 : convention.StripPrefix(f.Name);
             var methodName = Idioms.Pascal(strippedName);
@@ -846,9 +685,6 @@ public static class CSharpBackend
             o.Add("");
         }
 
-        // Declared directly here (not via the ClangSharp-generated NativeMethods,
-        // which only covers what the .rsp knew about at its last regen) so these
-        // stay in sync with ke_api.json without waiting on a separate binding run.
         o.Add("    private static unsafe class Native");
         o.Add("    {");
         foreach (var g in fns)
@@ -869,6 +705,4 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
-
 }
-
