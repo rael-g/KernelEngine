@@ -33,10 +33,32 @@ public static class CSharpBackend
 
     static string Escape(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
+    /// Emits the `fixed` pinning prologue for every [utf8] parameter in a slot,
+    /// returning the lines plus how many braces the caller must close. A managed
+    /// string cannot cross the ABI directly; each is encoded NUL-terminated and
+    /// pinned for the duration of the native call.
+    static (List<string> Lines, int Depth) Utf8Prologue(IEnumerable<ApiParam> ps, string indent)
+    {
+        var lines = new List<string>();
+        var depth = 0;
+        foreach (var p in ps.Where(x => x.Has("utf8")))
+        {
+            var n = Idioms.Ident(p.Name!);
+            lines.Add($"{indent}var {n}Bytes = System.Text.Encoding.UTF8.GetBytes({n} + '\\0');");
+            lines.Add($"{indent}fixed (byte* {n}Ptr = {n}Bytes)");
+            lines.Add($"{indent}{{");
+            depth++;
+        }
+        return (lines, depth);
+    }
+
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
     {
         var tagEnum = p.TagValue("enum");
         if (tagEnum is not null) return Idioms.TypeName(tagEnum, convention);
+        // [utf8]: a NUL-terminated C string, not a raw char pointer a caller
+        // should ever see. Marshaled at the boundary (see CallArg).
+        if (p.Has("utf8")) return "string";
         // A pointer to a struct this same ke_api.json declares renders as a C#
         // pointer to that (already in-namespace) struct; anything else falls
         // back to CsForeignType's normalization (still needs a --using if it's
@@ -276,15 +298,91 @@ public static class CSharpBackend
             }
             case SlotShape.Sequence:
             {
+                // The pointer+count pair collapses into one Span; every OTHER
+                // parameter stays exactly as declared, and the return type is
+                // whatever C says it is — not assumed to be the written count
+                // (ke_ecs.query_register returns a query id, not a length).
                 var elem = CTypes.Deref(cs.SequenceParam!.Type);
                 var pname = Idioms.Ident(cs.SequenceParam!.Name!);
-                var otherArgs = cs.PublicParams.Where(p => p != cs.SequenceParam).ToList();
-                var extra = string.Concat(otherArgs.Select(p => $", (uint){pname}.Length"));
-                o.Add(XmlDoc("    ", slot.Doc, [(pname, cs.SequenceParam.Doc)], slot.ReturnDoc).TrimEnd());
-                o.Add($"    public int {name}Raw(Span<{elem}> {pname})");
+                var others = cs.PublicParams.Where(p => p != cs.SequenceParam).ToList();
+                var outs = others.Where(p => p.Has("out")).ToList();
+                var ins = others.Where(p => !p.Has("out")).ToList();
+
+                var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
+                    .Append($"Span<{elem}> {pname}")
+                    .Concat(outs.Select(p => $"out {Idioms.CsPrimitive(CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
+
+                var retType = cs.Fallible || slot.Returns == "void" ? "void"
+                    : Idioms.CsPrimitive(slot.Returns);
+
+                o.Add(XmlDoc("    ", slot.Doc,
+                    ins.Select(p => (Idioms.Ident(p.Name!), p.Doc))
+                       .Append((pname, cs.SequenceParam.Doc))
+                       .Concat(outs.Select(p => (Idioms.Ident(p.Name!), p.Doc))),
+                    slot.ReturnDoc, cs.Fallible).TrimEnd());
+                o.Add($"    public {retType} {name}Raw({string.Join(", ", sigParts)})");
                 o.Add("    {");
+                foreach (var op in outs) o.Add($"        {Idioms.CsPrimitive(CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
+
+                // Native argument order must follow the ORIGINAL declaration, not
+                // the reshaped public signature.
+                var nativeArgs = cs.Slot.Params
+                    .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
+                    .Select(p =>
+                        p == cs.SequenceParam ? "p"
+                        : p == cs.CountParam ? $"({Idioms.CsPrimitive(p.Type)}){pname}.Length"
+                        : outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local"
+                        : Idioms.Ident(p.Name!));
+
+                var call = $"Handle->{slot.Name}(Handle, {string.Join(", ", nativeArgs)}";
                 o.Add($"        fixed ({elem}* p = {pname})");
-                o.Add($"            return (int)Handle->{slot.Name}(Handle, p{extra});");
+                o.Add("        {");
+                if (cs.Fallible)
+                {
+                    o.Add("            ke_error* err = null;");
+                    o.Add($"            KernelError.ThrowIfFailed({call}, &err), err, \"{slot.Name}\");");
+                }
+                else if (retType == "void")
+                {
+                    o.Add($"            {call});");
+                }
+                else
+                {
+                    o.Add($"            var result = {call});");
+                }
+                foreach (var op in outs) o.Add($"            {Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
+                if (retType != "void" && !cs.Fallible) o.Add("            return result;");
+                o.Add("        }");
+                o.Add("    }");
+                o.Add("");
+                return;
+            }
+            case SlotShape.Try:
+            {
+                // [try]: the boolean is a found/not-found outcome, not an error —
+                // renders as bool TryX(..., out T) rather than throwing.
+                var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
+                var outs = cs.OutParams;
+                var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
+                    .Concat(outs.Select(p => $"out {CTypes.Deref(p.Type)} {Idioms.Ident(p.Name!)}"));
+
+                o.Add(XmlDoc("    ", slot.Doc,
+                    cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
+                o.Add($"    public bool Try{name}({string.Join(", ", sigParts)})");
+                o.Add("    {");
+                foreach (var op in outs) o.Add($"        {CTypes.Deref(op.Type)} {Idioms.Ident(op.Name!)}Local;");
+                var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
+                o.AddRange(tPro);
+                var tInd = new string(' ', 8 + tDepth * 4);
+                var tryArgs = cs.Slot.Params
+                    .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
+                    .Select(p => outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local" : CallArg(p));
+                var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
+                    + (cs.Fallible ? ", null)" : ")");
+                o.Add($"{tInd}var found = {tryCall};");
+                foreach (var op in outs) o.Add($"{tInd}{Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
+                o.Add($"{tInd}return found;");
+                for (var d = tDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -298,8 +396,12 @@ public static class CSharpBackend
                     slot.ReturnDoc, throwsOnFail: true).TrimEnd());
                 o.Add($"    public void {name}({sig})");
                 o.Add("    {");
-                o.Add("        ke_error* err = null;");
-                o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{call}, &err), err, \"{slot.Name}\");");
+                var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
+                o.AddRange(fPro);
+                var fInd = new string(' ', 8 + fDepth * 4);
+                o.Add($"{fInd}ke_error* err = null;");
+                o.Add($"{fInd}KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{call}, &err), err, \"{slot.Name}\");");
+                for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -314,21 +416,30 @@ public static class CSharpBackend
                 o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
                 o.Add($"    public {retType} {name}({sig})");
                 o.Add("    {");
+                var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
+                o.AddRange(pPro);
+                var pInd = new string(' ', 8 + pDepth * 4);
                 if (slot.Returns == "ke_bool")
-                    o.Add($"        return Handle->{slot.Name}(Handle{call}) != 0;");
+                    o.Add($"{pInd}return Handle->{slot.Name}(Handle{call}) != 0;");
                 else if (retType == "void")
-                    o.Add($"        Handle->{slot.Name}(Handle{call});");
+                    o.Add($"{pInd}Handle->{slot.Name}(Handle{call});");
                 else if (needsCast)
-                    o.Add($"        return (nint)Handle->{slot.Name}(Handle{call});");
+                    o.Add($"{pInd}return (nint)Handle->{slot.Name}(Handle{call});");
                 else
-                    o.Add($"        return Handle->{slot.Name}(Handle{call});");
+                    o.Add($"{pInd}return Handle->{slot.Name}(Handle{call});");
+                for (var d = pDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
                 return;
             }
         }
 
-        string CallArg(ApiParam p) => p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!);
+        // A [utf8] param is pinned into a local by the emitted prologue (see
+        // Utf8Prologue) and passed as that pointer, never as the managed string.
+        string CallArg(ApiParam p) =>
+            p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
+            : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
+            : Idioms.Ident(p.Name!);
     }
 
     // ----------------------------------------------------- callback slot

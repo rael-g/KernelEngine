@@ -26,7 +26,7 @@ public sealed unsafe partial class Input : IInput
         if (buffer.IsEmpty) return 0;
 
         Span<ke_input_event> native = stackalloc ke_input_event[buffer.Length];
-        int count = DrainEventsRaw(native);
+        int count = (int)DrainEventsRaw(native);
 
         for (int i = 0; i < count; i++)
         {

@@ -79,10 +79,13 @@ public unsafe partial class Input : IDisposable, INativeInput
     /// <summary>Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.</summary>
     /// <param name="outBuf">Receives the drained events.</param>
     /// <returns>Number of events written.</returns>
-    public int DrainEventsRaw(Span<ke_input_event> outBuf)
+    public uint DrainEventsRaw(Span<ke_input_event> outBuf)
     {
         fixed (ke_input_event* p = outBuf)
-            return (int)Handle->drain_events(Handle, p, (uint)outBuf.Length);
+        {
+            var result = Handle->drain_events(Handle, p, (uint)outBuf.Length);
+            return result;
+        }
     }
 
     /// <summary>Releases the native input.</summary>

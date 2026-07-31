@@ -7,10 +7,20 @@
 
 namespace Kabic;
 
-public enum SlotShape { Fallible, ReturnsOutParam, TupleOutParams, Sequence, Plain }
+public enum SlotShape { Fallible, Try, ReturnsOutParam, TupleOutParams, Sequence, Plain }
 
+/// <param name="SequenceParam">The pointer half of a pointer+count pair, if any.</param>
+/// <param name="CountParam">
+/// The count half named by <c>[array_of:name]</c> — it disappears from the public
+/// signature (the sequence carries its own length) but is still passed natively.
+/// </param>
+/// <param name="OutParams">All <c>[out]</c> params other than a sequence, in declaration order.</param>
+/// <param name="PublicParams">
+/// Every parameter a caller still supplies: the trailing error out-param, and the
+/// count paired with a sequence, are already removed.
+/// </param>
 public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiParam? OutParam, ApiParam? SequenceParam,
-    IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams);
+    ApiParam? CountParam, IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams);
 
 // How a provider is built, decided once here so no backend re-derives it from
 // raw factory/handle shapes: FromFactory (normal case — a ke_X_create exists;
@@ -144,9 +154,21 @@ public static class Classifier
         var fallible = convention.IsFallible(slot.Returns, ps);
         if (fallible) ps = ps[..^1];
 
+        // [try]: the boolean return means "found / not found", not "succeeded /
+        // failed" — a normal outcome the caller branches on, not an error to
+        // raise. Nothing in the C signature distinguishes this from a fallible
+        // slot (both are bool + error out-param), so the header has to say so.
+        var isTry = slot.Has("try");
+
+        var seqParam = ps.FirstOrDefault(p => p.Has("array_of"));
+        // The count is named by the sequence's own tag; it leaves the public
+        // signature because the sequence type already carries its length.
+        var countName = seqParam?.TagValue("array_of");
+        var countParam = countName is not null ? ps.FirstOrDefault(p => p.Name == countName) : null;
+        if (countParam is not null) ps = ps.Where(p => p != countParam).ToList();
+
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
         var outParam = allOut.Count == 1 && ps.Count == 1 ? allOut[0] : null;
-        var seqParam = ps.FirstOrDefault(p => p.Has("array_of"));
 
         // get_size(int32_t *width, int32_t *height, ke_error **out_error) shape:
         // more than one [out] parameter and nothing else public — a tuple return,
@@ -154,12 +176,14 @@ public static class Classifier
         // (exactly one [out] param, no siblings) purely by count.
         var tupleOut = allOut.Count >= 2 && allOut.Count == ps.Count ? allOut : null;
 
-        var shape = outParam is not null ? SlotShape.ReturnsOutParam
+        var shape = isTry ? SlotShape.Try
+            : outParam is not null ? SlotShape.ReturnsOutParam
             : tupleOut is not null ? SlotShape.TupleOutParams
             : seqParam is not null ? SlotShape.Sequence
             : fallible ? SlotShape.Fallible
             : SlotShape.Plain;
 
-        return new ClassifiedSlot(slot, shape, fallible, outParam, seqParam, tupleOut ?? [], ps);
+        return new ClassifiedSlot(slot, shape, fallible, outParam, seqParam, countParam,
+            isTry ? allOut : tupleOut ?? [], ps);
     }
 }
