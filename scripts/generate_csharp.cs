@@ -67,7 +67,11 @@ if (apiPath is null || ns is null || nativeNs is null || outDir is null)
 
 var api = JsonNode.Parse(File.ReadAllText(apiPath))!.AsObject();
 var model = ApiReader.Read(api);
-var classified = Classifier.Classify(model, explicitProviders, explicitCallbacks);
+// The ABI vocabulary being compiled. Hardcoded to KernelEngine's for now; the
+// eventual split (a kabic core taking a Convention, plus a thin per-project
+// definition supplying one) is recorded as debt in ScriptingArchitectureV3.md.
+var convention = Convention.KernelEngine;
+var classified = Classifier.Classify(model, explicitProviders, explicitCallbacks, convention);
 
 Directory.CreateDirectory(outDir);
 
@@ -75,16 +79,16 @@ if (model.Enums.Count > 0)
 {
     var enumsDir = enumsOutDir ?? outDir;
     Directory.CreateDirectory(enumsDir);
-    File.WriteAllText(Path.Combine(enumsDir, "Enums.g.cs"), CSharpBackend.RenderEnums(model, ns));
+    File.WriteAllText(Path.Combine(enumsDir, "Enums.g.cs"), CSharpBackend.RenderEnums(model, ns, convention));
 }
 
 foreach (var provider in classified.Providers)
-    File.WriteAllText(Path.Combine(outDir, $"{Idioms.StripPrefix(provider.Name)}.g.cs"),
-        CSharpBackend.RenderProvider(model, provider, classified, ns, nativeNs, extraUsings));
+    File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(provider.Name, convention)}.g.cs"),
+        CSharpBackend.RenderProvider(model, provider, classified, ns, nativeNs, extraUsings, convention));
 
 foreach (var callback in classified.Callbacks)
-    File.WriteAllText(Path.Combine(outDir, $"{Idioms.StripPrefix(callback.Name)}Native.g.cs"),
-        CSharpBackend.RenderCallbackInterface(callback, ns, nativeNs));
+    File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(callback.Name, convention)}Native.g.cs"),
+        CSharpBackend.RenderCallbackInterface(callback, ns, nativeNs, convention));
 
 if (classified.FreeFunctionGroups.Count > 0)
     foreach (var (owner, fns) in classified.FreeFunctionGroups)
@@ -94,8 +98,8 @@ if (classified.FreeFunctionGroups.Count > 0)
             Console.Error.WriteLine($"error: domain has free functions on '{owner}' but --library was not given");
             return 1;
         }
-        File.WriteAllText(Path.Combine(outDir, $"{Idioms.StripPrefix(owner)}Functions.g.cs"),
-            CSharpBackend.RenderFreeFunctions(owner, fns, ns, nativeNs, library));
+        File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(owner, convention)}Functions.g.cs"),
+            CSharpBackend.RenderFreeFunctions(owner, fns, ns, nativeNs, library, convention));
     }
 
 Console.WriteLine($"wrote {classified.Providers.Count} provider(s), {classified.Callbacks.Count} callback(s), "

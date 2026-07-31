@@ -33,13 +33,10 @@ public static class CSharpBackend
 
     static string Escape(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
-    /// The C# type an enum-tagged int becomes; enum name -> PascalCase type name.
-    static string EnumTypeFor(ApiParam p) => Idioms.Pascal(p.TagValue("enum")![3..]);
-
-    static string CsParamType(ApiModel model, ApiParam p)
+    static string CsParamType(ApiModel model, ApiParam p, Convention convention)
     {
         var tagEnum = p.TagValue("enum");
-        if (tagEnum is not null) return Idioms.StripPrefix(tagEnum);
+        if (tagEnum is not null) return Idioms.TypeName(tagEnum, convention);
         // A pointer to a struct this same ke_api.json declares renders as a C#
         // pointer to that (already in-namespace) struct; anything else falls
         // back to CsForeignType's normalization (still needs a --using if it's
@@ -51,7 +48,7 @@ public static class CSharpBackend
 
     // -------------------------------------------------------------- enums
 
-    public static string RenderEnums(ApiModel model, string ns)
+    public static string RenderEnums(ApiModel model, string ns, Convention convention)
     {
         var o = new List<string> { Header, $"namespace {ns};\n" };
         foreach (var e in model.Enums)
@@ -59,7 +56,7 @@ public static class CSharpBackend
             o.Add(e.Doc is not null
                 ? XmlDoc("", e.Doc).TrimEnd()
                 : $"/// <summary>Mirrors <c>{e.Name}</c>.</summary>");
-            o.Add($"public enum {Idioms.StripPrefix(e.Name)}");
+            o.Add($"public enum {Idioms.TypeName(e.Name, convention)}");
             o.Add("{");
             foreach (var v in e.Values)
             {
@@ -77,9 +74,9 @@ public static class CSharpBackend
     // ------------------------------------------------------------ provider
 
     public static string RenderProvider(ApiModel model, ApiStruct vtable, ClassifiedModel classified,
-        string ns, string nativeNs, IReadOnlyList<string> extraUsings)
+        string ns, string nativeNs, IReadOnlyList<string> extraUsings, Convention convention)
     {
-        var typeName = Idioms.StripPrefix(vtable.Name);
+        var typeName = Idioms.TypeName(vtable.Name, convention);
         var slots = classified.SlotsByVtable[vtable.Name];
         var plan = classified.Constructors[vtable.Name];
 
@@ -142,7 +139,7 @@ public static class CSharpBackend
         if (plan.Kind == ConstructorKind.FromFactory)
         {
             var factory = plan.Factory!;
-            var fparams = factory.Params.Where(p => !p.Type.Contains("ke_error")).ToList();
+            var fparams = factory.Params.Where(p => !convention.IsErrorOutParam(p)).ToList();
             var sig = string.Join(", ", fparams.Select(p => $"{Idioms.CsForeignType(p.Type)} {Idioms.Ident(p.Name!)}"));
             var call = string.Join(", ", fparams.Select(p => Idioms.Ident(p.Name!)));
             o.Add(XmlDoc("    ", factory.Doc, fparams.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
@@ -155,7 +152,7 @@ public static class CSharpBackend
             o.Add($"    {(plan.NeedsWrapper ? "internal" : "public")} {typeName}({sig})");
             o.Add("    {");
             o.Add("        ke_error* err = null;");
-            o.Add($"        var handle = {nativeNs}.NativeMethods.{StripKe(factory.Name)}({(call.Length > 0 ? call + ", " : "")}&err);");
+            o.Add($"        var handle = {nativeNs}.NativeMethods.{convention.StripPrefix(factory.Name)}({(call.Length > 0 ? call + ", " : "")}&err);");
             o.Add($"        if (handle.@ref == null) throw KernelError.FromNative(err, \"{factory.Name}\");");
             o.Add("        _native = handle.@ref;");
             o.Add("        _destroy = handle.destroy;");
@@ -200,10 +197,10 @@ public static class CSharpBackend
                 continue;
             if (cs.PublicParams.Any(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
-                RenderCallbackMethod(o, vtable, cs, classified, typeName);
+                RenderCallbackMethod(o, vtable, cs, classified, typeName, convention);
                 continue;
             }
-            RenderSlotMethod(model, o, cs);
+            RenderSlotMethod(model, o, cs, convention);
         }
 
         o.Add($"    /// <summary>Releases the native {typeName.ToLowerInvariant()}.</summary>");
@@ -220,7 +217,7 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
-    static void RenderSlotMethod(ApiModel model, List<string> o, ClassifiedSlot cs)
+    static void RenderSlotMethod(ApiModel model, List<string> o, ClassifiedSlot cs, Convention convention)
     {
         var slot = cs.Slot;
         var name = Idioms.Pascal(slot.Name);
@@ -295,7 +292,7 @@ public static class CSharpBackend
             case SlotShape.Fallible:
             {
                 var args = cs.PublicParams;
-                var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p)} {Idioms.Ident(p.Name!)}"));
+                var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                     slot.ReturnDoc, throwsOnFail: true).TrimEnd());
@@ -310,7 +307,7 @@ public static class CSharpBackend
             default:
             {
                 var args = cs.PublicParams;
-                var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p)} {Idioms.Ident(p.Name!)}"));
+                var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 var retType = slot.Returns == "ke_bool" ? "bool" : Idioms.CsPrimitive(slot.Returns);
                 var needsCast = retType == "nint"; // CsPrimitive maps `void *` -> nint; the raw call still returns void*
@@ -337,12 +334,12 @@ public static class CSharpBackend
     // ----------------------------------------------------- callback slot
 
     static void RenderCallbackMethod(List<string> o, ApiStruct vtable, ClassifiedSlot cs,
-        ClassifiedModel classified, string ownerType)
+        ClassifiedModel classified, string ownerType, Convention convention)
     {
         var slot = cs.Slot;
         var cbParam = cs.PublicParams.First(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim()));
         var cbType = classified.Callbacks.First(c => c.Name == cbParam.Type.Trim());
-        var ifaceName = "I" + Idioms.StripPrefix(cbType.Name) + "Native";
+        var ifaceName = "I" + Idioms.TypeName(cbType.Name, convention) + "Native";
         var hasLevel = classified.CallbackHasLevel.GetValueOrDefault(cbType.Name);
         var handlesField = $"_{Idioms.Camel(slot.Name)}Handles";
         var otherParams = cs.PublicParams.Where(p => p != cbParam).ToList();
@@ -409,12 +406,12 @@ public static class CSharpBackend
             o.Add("");
         }
 
-        string CsParamType2(ApiParam p) => p.Has("enum") ? Idioms.StripPrefix(p.TagValue("enum")!) : Idioms.CsPrimitive(p.Type);
+        string CsParamType2(ApiParam p) => p.Has("enum") ? Idioms.TypeName(p.TagValue("enum")!, convention) : Idioms.CsPrimitive(p.Type);
     }
 
-    public static string RenderCallbackInterface(ApiStruct cbType, string ns, string nativeNs)
+    public static string RenderCallbackInterface(ApiStruct cbType, string ns, string nativeNs, Convention convention)
     {
-        var ifaceName = "I" + Idioms.StripPrefix(cbType.Name) + "Native";
+        var ifaceName = "I" + Idioms.TypeName(cbType.Name, convention) + "Native";
         var owned = cbType.Slots.Where(s => s.Name != "destroy").ToList();
 
         var o = new List<string>
@@ -442,9 +439,10 @@ public static class CSharpBackend
 
     // -------------------------------------------------------- free functions
 
-    public static string RenderFreeFunctions(string owner, List<GroupedFunction> fns, string ns, string nativeNs, string libraryName)
+    public static string RenderFreeFunctions(string owner, List<GroupedFunction> fns, string ns, string nativeNs,
+        string libraryName, Convention convention)
     {
-        var ownerCs = Idioms.StripPrefix(owner);
+        var ownerCs = Idioms.TypeName(owner, convention);
         var prefix = owner + "_";
 
         var o = new List<string>
@@ -474,10 +472,10 @@ public static class CSharpBackend
             // fall back to stripping the generic ke_ prefix so it still reads as a
             // method name instead of repeating the whole C symbol.
             var strippedName = f.Name.StartsWith(prefix) ? f.Name[prefix.Length..]
-                : f.Name.StartsWith("ke_") ? f.Name[3..] : f.Name;
+                : convention.StripPrefix(f.Name);
             var methodName = Idioms.Pascal(strippedName);
             var sig = string.Join(", ", rest.Select(p =>
-                (p.Has("enum") ? Idioms.StripPrefix(p.TagValue("enum")!) : Idioms.CsPrimitive(p.Type)) + " " + Idioms.Ident(p.Name!)));
+                (p.Has("enum") ? Idioms.TypeName(p.TagValue("enum")!, convention) : Idioms.CsPrimitive(p.Type)) + " " + Idioms.Ident(p.Name!)));
             var call = string.Concat(rest.Select(p => ", " + (p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!))));
             var retType = f.Returns == "ke_bool" ? "bool" : Idioms.CsPrimitive(f.Returns);
             var selfSig = self is not null ? $"in {CTypes.Deref(self.Type)} {Idioms.Ident(self.Name!)}" : null;
@@ -525,6 +523,6 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
-    static string StripKe(string factoryName) => factoryName.StartsWith("ke_") ? factoryName[3..] : factoryName;
+
 }
 

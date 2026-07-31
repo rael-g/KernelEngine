@@ -49,13 +49,13 @@ public class ClassifiedModel
 public static class Classifier
 {
     public static ClassifiedModel Classify(ApiModel model, HashSet<string> explicitProviders,
-        HashSet<string> explicitCallbacks)
+        HashSet<string> explicitCallbacks, Convention convention)
     {
         var result = new ClassifiedModel();
-        // ke_X_handle{ref, destroy} is a plain owner-wrapper, not something a
-        // caller registers a provider/callback for in its own right — its
-        // `destroy` slot is consumed inline by the owning provider's Dispose.
-        var vtables = model.Structs.Where(s => s.IsVtable && !s.Name.EndsWith("_handle")).ToList();
+        // An owner-wrapper struct ({ref, destroy}) is a plain lifetime holder, not
+        // something a caller registers a provider/callback for in its own right —
+        // its `destroy` slot is consumed inline by the owning provider's Dispose.
+        var vtables = model.Structs.Where(s => s.IsVtable && !convention.IsHandleType(s.Name)).ToList();
 
         // A vtable is a callback type if some slot anywhere takes it BY VALUE
         // (not by pointer) with the [callback] tag — the caller implements it,
@@ -74,7 +74,7 @@ public static class Classifier
             else
                 result.Providers.Add(v);
 
-            result.SlotsByVtable[v.Name] = v.Slots.Select(ClassifySlot).ToList();
+            result.SlotsByVtable[v.Name] = v.Slots.Select(s => ClassifySlot(s, convention)).ToList();
 
             var init = v.Slots.FirstOrDefault(s => s.Has("lifecycle") && s.TagValue("lifecycle") == "init");
             if (init is not null) result.LifecycleInit[v.Name] = init.Name;
@@ -90,15 +90,15 @@ public static class Classifier
         // there is nothing to construct it with yet.
         foreach (var v in result.Providers)
         {
-            var factory = model.Functions.FirstOrDefault(f => f.Name == v.Name + "_create");
+            var factory = model.Functions.FirstOrDefault(f => f.Name == convention.FactoryNameFor(v.Name));
             if (factory is not null)
             {
-                var fparams = factory.Params.Where(p => !p.Type.Contains("ke_error"));
+                var fparams = factory.Params.Where(p => !convention.IsErrorOutParam(p));
                 result.Constructors[v.Name] = new ConstructorPlan(ConstructorKind.FromFactory, factory, null,
                     NeedsWrapper: fparams.Any(p => CTypes.IsPointer(p.Type)));
                 continue;
             }
-            var handleType = v.Name + "_handle";
+            var handleType = convention.HandleTypeFor(v.Name);
             result.Constructors[v.Name] = model.Structs.Any(s => s.Name == handleType)
                 ? new ConstructorPlan(ConstructorKind.FromHandle, null, handleType, NeedsWrapper: false)
                 : new ConstructorPlan(ConstructorKind.None, null, null, NeedsWrapper: false);
@@ -118,8 +118,8 @@ public static class Classifier
         // callback interface's file already gets rendered into.
         foreach (var fn in model.Functions)
         {
-            if (fn.Name.EndsWith("_create") && fn.Params.Any(p => p.Type.Contains("ke_error"))
-                && vtables.Any(v => fn.Returns.Contains(v.Name + "_handle")))
+            if (convention.IsFactoryName(fn.Name) && fn.Params.Any(convention.IsErrorOutParam)
+                && vtables.Any(v => fn.Returns.Contains(convention.HandleTypeFor(v.Name))))
                 continue; // factory function; the provider constructor handles it
 
             // Only group by first-param type when that type is one of OUR OWN
@@ -138,11 +138,10 @@ public static class Classifier
         return result;
     }
 
-    static ClassifiedSlot ClassifySlot(ApiSlot slot)
+    static ClassifiedSlot ClassifySlot(ApiSlot slot, Convention convention)
     {
         var ps = slot.Params.ToList();
-        var fallible = (slot.Returns is "_Bool" or "bool") && ps.Count > 0
-            && ps[^1].Type.Replace(" ", "").Contains("ke_error**");
+        var fallible = convention.IsFallible(slot.Returns, ps);
         if (fallible) ps = ps[..^1];
 
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
