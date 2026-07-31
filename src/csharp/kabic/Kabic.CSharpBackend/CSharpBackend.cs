@@ -99,6 +99,103 @@ public static class CSharpBackend
         return CsType(model, p.Type);
     }
 
+    // -------------------------------------------------------------- node types (spike, §7.8)
+    //
+    // Renders a [node:Name,base:Base]-tagged plain struct (a component, not a
+    // vtable) into a toolkit-shaped node class: one property per field, each
+    // writing straight through to a private native-struct instance that IS the
+    // node's component state, plus the OnBind that materializes it. This is
+    // the pilot for Track 4 §7.3-7.4 — proving whether a node type can be
+    // fully data-derived, not a generalized/wired-into-the-CLI capability yet.
+    public static string RenderNodeType(ApiModel model, ApiStruct component, string ns, string nativeNs, Convention convention)
+    {
+        var nodeName = component.TagValue("node") ?? throw new InvalidOperationException($"{component.Name} has no [node:] tag");
+        var baseName = component.TagValue("base") ?? "Node";
+        var nativeType = component.Name;
+
+        var o = new List<string> { Header, "using System.Numerics;", $"using {nativeNs};\n", $"namespace {ns};\n" };
+        o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
+            : $"/// <summary>Mirrors <c>{nativeType}</c>.</summary>");
+        o.Add($"public class {nodeName} : {baseName}");
+        o.Add("{");
+
+        o.Add($"    private {nativeType} _state = new();");
+        o.Add("");
+        o.Add($"    public {nodeName}()");
+        o.Add("    {");
+        foreach (var f in component.Fields)
+            foreach (var line in FieldInit(model, f)) o.Add($"        {line}");
+        o.Add("    }");
+        o.Add("");
+
+        foreach (var f in component.Fields)
+        {
+            var propName = Idioms.Pascal(f.Name);
+            var propType = NodePropertyType(model, f);
+            if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
+            o.Add($"    public {propType} {propName}");
+            o.Add("    {");
+            o.Add($"        get => {ReadField(f, "_state")};");
+            o.Add("        set");
+            o.Add("        {");
+            foreach (var line in AssignField(f, "_state", "value")) o.Add($"            {line}");
+            o.Add("            WriteIfBound();");
+            o.Add("        }");
+            o.Add("    }");
+        }
+
+        o.Add("");
+        o.Add("    private void WriteIfBound() { if (IsBound) NodeWorld!.Set(Entity, _state); }");
+        o.Add("");
+        o.Add("    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.Set(Entity, _state);");
+        o.Add("}");
+        return string.Join('\n', o);
+    }
+
+    // A fixed-size float array is the ABI's only way to spell a vector; the
+    // node surface exposes the language's own vector type instead, since that
+    // is what a caller composes with (`light.Color = Vector3.One`).
+    static int? VectorArity(string cType)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(cType.Trim(), @"^float\s*\[(\d+)\]$");
+        return m.Success && int.Parse(m.Groups[1].Value) is >= 2 and <= 4 ? int.Parse(m.Groups[1].Value) : null;
+    }
+
+    static string NodePropertyType(ApiModel model, ApiField f) =>
+        VectorArity(f.Type) is int n ? $"Vector{n}" : CsType(model, f.Type);
+
+    static string ReadField(ApiField f, string owner) =>
+        VectorArity(f.Type) is int n
+            ? $"new({string.Join(", ", Enumerable.Range(0, n).Select(i => $"{owner}.{f.Name}[{i}]"))})"
+            : $"{owner}.{f.Name}";
+
+    static readonly string[] VectorLanes = ["X", "Y", "Z", "W"];
+
+    static IEnumerable<string> AssignField(ApiField f, string owner, string value) =>
+        VectorArity(f.Type) is int n
+            ? Enumerable.Range(0, n).Select(i => $"{owner}.{f.Name}[{i}] = {value}.{VectorLanes[i]};")
+            : [$"{owner}.{f.Name} = {value};"];
+
+    // [default:...] seeds the field in the node's constructor. A field without
+    // one keeps whatever the struct's own zero-init gives it rather than
+    // inventing a value the header never stated.
+    static IEnumerable<string> FieldInit(ApiModel model, ApiField f)
+    {
+        var d = f.TagValue("default");
+        if (d is null) return [];
+        if (VectorArity(f.Type) is int n)
+        {
+            // Space-separated, not comma: the tag block itself is comma-separated
+            // (`[a,b]` is two tags), so a comma inside a value would split the tag.
+            var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length != n)
+                throw new InvalidOperationException(
+                    $"{f.Name}: [default:{d}] has {parts.Length} components but the field is float[{n}]");
+            return parts.Select((p, i) => $"_state.{f.Name}[{i}] = {p}f;");
+        }
+        return [$"_state.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
+    }
+
     // -------------------------------------------------------------- enums
 
     public static string RenderEnums(ApiModel model, string ns, Convention convention)

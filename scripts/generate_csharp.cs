@@ -90,6 +90,16 @@ foreach (var callback in classified.Callbacks)
     File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(callback.Name, convention)}Native.g.cs"),
         CSharpBackend.RenderCallbackInterface(callback, ns, nativeNs, convention));
 
+// Spike (ScriptingArchitectureV3 §7.8): a plain struct tagged [node:Name,base:Base]
+// emits a toolkit-shaped node class. Not yet wired per-domain like providers/
+// enums are — every [node:]-tagged struct in this one ke_api.json is rendered.
+foreach (var component in model.Structs.Where(s => !s.IsVtable && s.Has("node")))
+{
+    var nodeName = component.TagValue("node")!;
+    File.WriteAllText(Path.Combine(outDir, $"{nodeName}.g.cs"),
+        CSharpBackend.RenderNodeType(model, component, ns, nativeNs, convention));
+}
+
 if (classified.FreeFunctionGroups.Count > 0)
     foreach (var (owner, fns) in classified.FreeFunctionGroups)
     {
