@@ -53,7 +53,7 @@ public sealed unsafe partial class Input : IInput
     }
 
     /// <summary>Adapts a captured snapshot to the reader interface the sim tick consumes.</summary>
-    private sealed class SnapshotReader : IInputReader
+    private sealed class SnapshotReader : IInputReader, INativeInputReader
     {
         private readonly ke_input_snapshot _data;
 
@@ -65,5 +65,7 @@ public sealed unsafe partial class Input : IInput
         public Vector2 MousePosition => new(_data.mouse_x, _data.mouse_y);
         public Vector2 MouseDelta => new(_data.mouse_dx, _data.mouse_dy);
         public Vector2 ScrollDelta => new(_data.scroll_dx, _data.scroll_dy);
+
+        ke_input_snapshot INativeInputReader.Native => _data;
     }
 }

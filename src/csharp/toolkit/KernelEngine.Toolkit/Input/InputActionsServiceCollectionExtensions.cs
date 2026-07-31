@@ -18,7 +18,9 @@ public static class InputActionsServiceCollectionExtensions
             ? Path.Combine(AppContext.BaseDirectory, "actions.input")
             : (Path.IsPathRooted(path) ? path : Path.Combine(AppContext.BaseDirectory, path));
 
-        services.AddSingleton<IInputActionMap<TEnum>>(_ => InputActionMap<TEnum>.LoadFromFile(resolvedPath));
+        services.AddSingleton(_ => InputActionMap<TEnum>.LoadFromFile(resolvedPath));
+        services.AddSingleton<IInputActionMap<TEnum>>(sp => sp.GetRequiredService<InputActionMap<TEnum>>());
+        services.AddSingleton<IActionEvaluator>(sp => sp.GetRequiredService<InputActionMap<TEnum>>());
         return services;
     }
 }

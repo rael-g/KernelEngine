@@ -53,6 +53,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         var sceneTree = world.SceneTree;
         var input     = services.GetService<IInput>();
         var scheduler = services.GetRequiredService<IScheduler>();
+        var evaluator = services.GetService<IActionEvaluator>();
 
         // [entity.components.AmbientLight] — backend-agnostic data mapping, no GPU
         // resources touched, so it's safe to register unconditionally.
@@ -74,6 +75,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             input?.Update();
             sceneTree.PropagateTransforms();
             var snapshot  = input?.CaptureSnapshot();
+            evaluator?.Evaluate(snapshot);
             var view      = new View(nodeWorld, dt, snapshot, prevSnapshot, ctx);
             var behaviors = nodeWorld.Behaviors;
             using (nodeWorld.EnterSystem(ctx))
