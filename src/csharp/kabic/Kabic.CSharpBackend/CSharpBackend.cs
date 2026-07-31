@@ -272,12 +272,13 @@ public static class CSharpBackend
             // [sink]: a backend-facing event callback (e.g. ke_input.on_key), not
             // game-facing API. [lifecycle:*]: invoked automatically below, not
             // meant to be called again by the consumer. [raw_callback]: a bare
-            // C function-pointer parameter (not a [callback] vtable-by-value
-            // struct) — trampolining it generically buys nothing, since the
-            // value surface a caller actually wants (Task/async, a coroutine,
-            // whatever this language's idiom is) can't be inferred from the
-            // ABI either way; left to the idiom layer entirely.
-            if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle")
+            // C function-pointer parameter OR return (not a [callback]
+            // vtable-by-value struct) — trampolining it generically buys
+            // nothing, since the value surface a caller actually wants
+            // (Task/async, a coroutine, whatever this language's idiom is)
+            // can't be inferred from the ABI either way; left to the idiom
+            // layer entirely.
+            if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle") || cs.Slot.Has("raw_callback")
                 || cs.PublicParams.Any(p => p.Has("raw_callback")))
                 continue;
             if (cs.PublicParams.Any(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
