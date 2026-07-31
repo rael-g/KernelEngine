@@ -455,11 +455,16 @@ public static class CSharpBackend
                 }
                 else
                 {
-                    // A value-returning slot reports failure by writing the error
-                    // out-param, which stays NULL on success — so the written
-                    // pointer, not the return value, is what says it failed.
                     o.Add($"{fInd}var result = Handle->{slot.Name}(Handle{call}, &err);");
-                    o.Add($"{fInd}if (err != null) throw KernelError.FromNative(err, \"{slot.Name}\");");
+                    if (CTypes.IsPointer(slot.Returns))
+                        // A pointer-returning slot signals failure by returning NULL — the
+                        // error out-param may or may not also be set, so it isn't the check.
+                        o.Add($"{fInd}if (result == null) throw KernelError.FromNative(err, \"{slot.Name}\");");
+                    else
+                        // Any other value-returning slot reports failure by writing the
+                        // error out-param, which stays NULL on success — so the written
+                        // pointer, not the return value, is what says it failed.
+                        o.Add($"{fInd}if (err != null) throw KernelError.FromNative(err, \"{slot.Name}\");");
                     o.Add($"{fInd}return result;");
                 }
                 for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
