@@ -7,4 +7,7 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_logger_simple", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_logger_create", ExactSpelling = true)]
     public static extern ke_logger_handle logger_create(ke_error** out_error);
+
+    [DllImport("ke_logger_simple", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_console_sink_create", ExactSpelling = true)]
+    public static extern ke_logger_sink console_sink_create();
 }
