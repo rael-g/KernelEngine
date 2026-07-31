@@ -20,6 +20,11 @@ public static class Idioms
         ["_Bool"] = "bool", ["ke_bool"] = "bool", ["uint32_t"] = "uint", ["int32_t"] = "int",
         ["uint64_t"] = "ulong", ["int64_t"] = "long", ["float"] = "float", ["double"] = "double",
         ["void"] = "void", ["size_t"] = "nuint",
+        ["uint16_t"] = "ushort", ["int16_t"] = "short", ["uint8_t"] = "byte", ["int8_t"] = "sbyte",
+        // A bare `char` crossing the ABI is a single UTF-8/ASCII byte, never the
+        // UTF-16 C# `char` — matches the `sbyte*` convention every hand-written
+        // string marshal in this codebase already uses for `const char *`.
+        ["char"] = "sbyte",
     };
 
     static readonly HashSet<string> CsKeywords = ["event", "base", "params", "object", "string", "lock",

@@ -107,7 +107,17 @@ public static class Extractor
         {
             var f = c!.AsObject();
             if (f["kind"]?.GetValue<string>() != "FieldDecl") continue;
-            var fieldName = f["name"]!.GetValue<string>();
+            var fieldName = f["name"]?.GetValue<string>();
+            // An anonymous union/struct member has no name and no ABI-portable
+            // description (which member is "active" isn't derivable from the type
+            // alone) — skip it rather than crash; a consumer needing it stays on
+            // the idiom layer, same as [raw_callback].
+            if (fieldName is null)
+            {
+                Console.Error.WriteLine($"note: {name}: skipping unnamed field (anonymous union/struct) — "
+                    + "not describable, handle in the idiom layer");
+                continue;
+            }
             var qual = f["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
             var (ret, paramTypes) = SplitFnPtr(qual);
             var (summaryTags, summary, pdocs, retDoc) = DocParser.Parse(f);

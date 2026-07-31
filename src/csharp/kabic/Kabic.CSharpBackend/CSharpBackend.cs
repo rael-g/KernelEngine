@@ -53,8 +53,29 @@ public static class CSharpBackend
     }
 
     /// A C type mapped to C#, resolving typedef aliases first (ke_entity is
-    /// uint64_t, which a language with no typedef concept must see through).
-    static string CsType(ApiModel model, string cType) => Idioms.CsPrimitive(model.ResolveAlias(cType));
+    /// uint64_t, which a language with no typedef concept must see through) and
+    /// recursing through pointers so `const`/`struct` never leak into the C#
+    /// spelling and the pointee gets the same primitive/alias treatment as any
+    /// other parameter — a bare `struct ke_render_pass_ctx *` return or a
+    /// `const char *` param handled anywhere but here silently reproduced the
+    /// C spelling verbatim (invalid C#), and only the pointee's OWN type
+    /// (never the pointer as a whole) is a primitive `Prim` can know about.
+    static string CsType(ApiModel model, string cType)
+    {
+        var t = cType.Trim();
+        // The one pointer whose whole spelling (not just its pointee) is special-
+        // cased: an opaque `void *` platform handle renders as `nint`, matching
+        // every hand-written precedent this replaces.
+        if (t is "void *" or "void*") return "nint";
+        if (CTypes.IsPointer(t))
+        {
+            var inner = CTypes.Deref(t).Trim();
+            if (inner.StartsWith("const ")) inner = inner["const ".Length..];
+            if (inner.StartsWith("struct ")) inner = inner["struct ".Length..];
+            return CsType(model, inner) + "*";
+        }
+        return Idioms.CsPrimitive(model.ResolveAlias(t));
+    }
 
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
     {
@@ -67,12 +88,6 @@ public static class CSharpBackend
         // [enum:T] exists only for an integer that is *secretly* an enum.
         if (model.Enums.Any(e => e.Name == p.Type.Trim()))
             return Idioms.TypeName(p.Type.Trim(), convention);
-        // A pointer to a struct this same ke_api.json declares renders as a C#
-        // pointer to that (already in-namespace) struct; anything else falls
-        // back to CsForeignType's normalization (still needs a --using if it's
-        // cross-domain — same rule as the factory-parameter case).
-        if (CTypes.IsPointer(p.Type))
-            return CTypes.Deref(p.Type) + "*";
         return CsType(model, p.Type);
     }
 
@@ -413,9 +428,12 @@ public static class CSharpBackend
                 var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
                     .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
 
+                // The slot may already be named try_get_x (Pascal: TryGetX) — don't
+                // double up into TryTryGetX.
+                var tryName = name.StartsWith("Try") ? name : $"Try{name}";
                 o.Add(XmlDoc("    ", slot.Doc,
                     cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
-                o.Add($"    public bool Try{name}({string.Join(", ", sigParts)})");
+                o.Add($"    public bool {tryName}({string.Join(", ", sigParts)})");
                 o.Add("    {");
                 foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
