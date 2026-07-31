@@ -63,6 +63,10 @@ public static class CSharpBackend
         // [utf8]: a NUL-terminated C string, not a raw char pointer a caller
         // should ever see. Marshaled at the boundary (see CallArg).
         if (p.Has("utf8")) return "string";
+        // A parameter whose type IS one of this description's enums needs no tag —
+        // [enum:T] exists only for an integer that is *secretly* an enum.
+        if (model.Enums.Any(e => e.Name == p.Type.Trim()))
+            return Idioms.TypeName(p.Type.Trim(), convention);
         // A pointer to a struct this same ke_api.json declares renders as a C#
         // pointer to that (already in-namespace) struct; anything else falls
         // back to CsForeignType's normalization (still needs a --using if it's
@@ -286,18 +290,24 @@ public static class CSharpBackend
             case SlotShape.ReturnsOutParam:
             {
                 var ret = CsType(model, CTypes.Deref(cs.OutParam!.Type));
-                o.Add(XmlDoc("    ", slot.Doc, ret: slot.ReturnDoc, throwsOnFail: cs.Fallible).TrimEnd());
-                o.Add($"    public {ret} {name}()");
+                var ins = cs.PublicParams.Where(p => p != cs.OutParam).ToList();
+                var sig = string.Join(", ", ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
+                var nativeArgs = string.Concat(cs.PublicParams.Select(p =>
+                    ", " + (p == cs.OutParam ? "&result" : CallArg(p))));
+
+                o.Add(XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
+                    slot.ReturnDoc, cs.Fallible).TrimEnd());
+                o.Add($"    public {ret} {name}({sig})");
                 o.Add("    {");
                 o.Add($"        {ret} result;");
                 if (cs.Fallible)
                 {
                     o.Add("        ke_error* err = null;");
-                    o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle, &result, &err), err, \"{slot.Name}\");");
+                    o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{nativeArgs}, &err), err, \"{slot.Name}\");");
                 }
                 else
                 {
-                    o.Add($"        Handle->{slot.Name}(Handle, &result);");
+                    o.Add($"        Handle->{slot.Name}(Handle{nativeArgs});");
                 }
                 o.Add("        return result;");
                 o.Add("    }");
@@ -491,6 +501,9 @@ public static class CSharpBackend
             p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
             // ke_bool is a byte across the ABI but a bool in the signature.
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
+            // A natively-enum-typed param renders as this language's own enum, so
+            // it casts back to the ABI enum at the call.
+            : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!);
     }

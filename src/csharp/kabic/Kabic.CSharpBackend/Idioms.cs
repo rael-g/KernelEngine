@@ -23,7 +23,12 @@ public static class Idioms
     };
 
     static readonly HashSet<string> CsKeywords = ["event", "base", "params", "object", "string", "lock",
-        "ref", "out", "in", "checked", "default", "null", "delegate"];
+        "ref", "out", "in", "checked", "default", "null", "delegate", "fixed", "unsafe", "class",
+        "struct", "interface", "namespace", "using", "static", "public", "private", "internal",
+        "new", "this", "value", "operator", "is", "as", "sizeof", "typeof", "switch", "case",
+        "for", "foreach", "while", "do", "if", "else", "return", "break", "continue", "goto",
+        "try", "catch", "finally", "throw", "int", "uint", "long", "ulong", "short", "ushort",
+        "byte", "sbyte", "float", "double", "decimal", "bool", "char", "void", "enum", "const"];
 
     public static string Pascal(string s)
     {

@@ -168,7 +168,10 @@ public static class Classifier
         if (countParam is not null) ps = ps.Where(p => p != countParam).ToList();
 
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
-        var outParam = allOut.Count == 1 && ps.Count == 1 ? allOut[0] : null;
+        // Exactly one [out] param becomes the return value; any remaining params
+        // stay as ordinary inputs (get_body_state(body, out state) reads as
+        // `State GetBodyState(body)`, not as a pointer-taking void method).
+        var outParam = allOut.Count == 1 ? allOut[0] : null;
 
         // get_size(int32_t *width, int32_t *height, ke_error **out_error) shape:
         // more than one [out] parameter and nothing else public — a tuple return,
@@ -176,10 +179,14 @@ public static class Classifier
         // (exactly one [out] param, no siblings) purely by count.
         var tupleOut = allOut.Count >= 2 && allOut.Count == ps.Count ? allOut : null;
 
+        // Sequence outranks the out-param shapes: a slot with BOTH a pointer+count
+        // pair and a separate [out] (query_resolve's out_count) is a sequence call
+        // whose count comes back as an out, not an out-returning call that happens
+        // to take a pointer.
         var shape = isTry ? SlotShape.Try
+            : seqParam is not null ? SlotShape.Sequence
             : outParam is not null ? SlotShape.ReturnsOutParam
             : tupleOut is not null ? SlotShape.TupleOutParams
-            : seqParam is not null ? SlotShape.Sequence
             : fallible ? SlotShape.Fallible
             : SlotShape.Plain;
 
