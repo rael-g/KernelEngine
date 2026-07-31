@@ -84,6 +84,14 @@ public static class CSharpBackend
         // [utf8]: a NUL-terminated C string, not a raw char pointer a caller
         // should ever see. Marshaled at the boundary (see CallArg).
         if (p.Has("utf8")) return "string";
+        // [opaque]: this consumer must not depend on the pointee's own binding
+        // (typically a cross-domain type this consumer can't reference — e.g.
+        // Framework can't name a specific render backend's own struct). Mirrors
+        // what ClangSharp itself already does for a forward-declared pointer it
+        // never saw the full definition of when generating THIS project's own
+        // native bindings: the delegate field is typed `void*`, not the real
+        // struct pointer kabic's own (fuller) AST view would otherwise resolve.
+        if (p.Has("opaque")) return "void*";
         // A parameter whose type IS one of this description's enums needs no tag —
         // [enum:T] exists only for an integer that is *secretly* an enum.
         if (model.Enums.Any(e => e.Name == p.Type.Trim()))
@@ -314,17 +322,21 @@ public static class CSharpBackend
                     slot.ReturnDoc, cs.Fallible).TrimEnd());
                 o.Add($"    public {ret} {name}({sig})");
                 o.Add("    {");
-                o.Add($"        {ret} result;");
+                var (roPro, roDepth) = Utf8Prologue(ins, new string(' ', 8));
+                o.AddRange(roPro);
+                var roInd = new string(' ', 8 + roDepth * 4);
+                o.Add($"{roInd}{ret} result;");
                 if (cs.Fallible)
                 {
-                    o.Add("        ke_error* err = null;");
-                    o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{nativeArgs}, &err), err, \"{slot.Name}\");");
+                    o.Add($"{roInd}ke_error* err = null;");
+                    o.Add($"{roInd}KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{nativeArgs}, &err), err, \"{slot.Name}\");");
                 }
                 else
                 {
-                    o.Add($"        Handle->{slot.Name}(Handle{nativeArgs});");
+                    o.Add($"{roInd}Handle->{slot.Name}(Handle{nativeArgs});");
                 }
-                o.Add("        return result;");
+                o.Add($"{roInd}return result;");
+                for (var d = roDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
                 return;
