@@ -101,6 +101,24 @@
       "nativeNamespace": "KernelEngine.Text.Native",
       "outDir": "src/csharp/text/KernelEngine.Text/Generated",
       "usings": []
+    },
+    {
+      "_comment": "auxHeaders are included purely so ke_render_service's own typedef'd primitives (ke_gpu_buffer et al.) and enum params (ke_alpha_mode) resolve to real C# types instead of an unresolvable bare name; only their TypedefDecls are extracted (see extract_api.cs --aux), so their own vtables/enums/functions never get described or re-emitted here, avoiding both noise and a duplicate/shadowing definition of bindings ClangSharp already generated elsewhere under their own literal names.",
+      "name": "render",
+      "headers": [
+        "src/c/render/kernel_engine/render/service/render_service.h"
+      ],
+      "auxHeaders": [
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": ["src/c/render", "src/c/ecs", "src/zig/common/include"],
+      "apiJson": "src/csharp/render/ke_api.json",
+      "namespace": "KernelEngine.Render.Webgpu",
+      "nativeNamespace": "KernelEngine.Render.Webgpu.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Generated",
+      "usings": []
     }
   ]
 }

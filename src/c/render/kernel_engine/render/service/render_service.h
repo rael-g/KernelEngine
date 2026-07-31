@@ -142,6 +142,7 @@ struct ke_render_service
     // (procedural geometry) key by their own generation parameters, e.g.
     // "primitive:cube" or "primitive:sphere:0.5:24:32" — identical calls then
     // dedup automatically, same as file-backed content.
+    /** @param key [utf8] Dedup cache key; required. */
     ke_mesh_handle (*upload_mesh)(struct ke_render_service *self, const char *key,
                                   const void *vertices, size_t vertices_size,
                                   const uint16_t *indices, uint32_t index_count,
@@ -161,6 +162,7 @@ struct ke_render_service
     // white texture is available via white_texture(). KE_TEXTURE_NONE on failure.
     // `key` is required, same rule as upload_mesh. Cubemaps share this texture
     // cache and keyspace.
+    /** @param key [utf8] Dedup cache key; required. */
     ke_texture_handle (*upload_texture)(struct ke_render_service *self, const char *key,
                                         uint32_t width, uint32_t height,
                                         const void *rgba, ke_error **out_error);
@@ -185,6 +187,10 @@ struct ke_render_service
     // path (a scene-authored inline material, say) keys by its own parameters —
     // e.g. a hash/concatenation of base_color+metallic+roughness+alpha_mode — so
     // two nodes authored with identical values share one material.
+    /**
+     * @param key [utf8] Dedup cache key; required.
+     * @param shader [utf8,nullable] Authored material name; NULL/empty selects the engine default.
+     */
     ke_material_handle (*create_material)(struct ke_render_service *self, const char *key,
                                           const float *base_color, // rgba (4 floats)
                                           float metallic, float roughness,
@@ -215,6 +221,7 @@ struct ke_render_service
     // KE_TEXTURE_NONE on failure.
     // `key` is required, same rule as upload_mesh. Cubemaps live in the same
     // texture cache as upload_texture and share its keyspace.
+    /** @param key [utf8] Dedup cache key; required. */
     ke_texture_handle (*upload_cubemap)(struct ke_render_service *self, const char *key,
                                         uint32_t face_size, const void *faces,
                                         ke_error **out_error);
@@ -285,13 +292,26 @@ struct ke_render_service
     void (*retain_material)(struct ke_render_service *self, ke_material_handle h);
     void (*release_material)(struct ke_render_service *self, ke_material_handle h);
 
-    // Path-keyed probe: on a cache hit returns true, writes the resident handle,
-    // and retains it on the caller's behalf (as a keyed upload would). Lets a
-    // loader skip decoding a file whose upload is already resident. `key` must be
-    // non-NULL. A miss returns false and leaves *out untouched. try_get_texture
-    // also serves cubemaps (shared cache).
+    /**
+     * [try] Path-keyed probe for a resident mesh upload: on a hit, retains and
+     * writes the resident handle on the caller's behalf, so a loader can skip
+     * decoding a file whose upload is already resident. try_get_texture also
+     * serves cubemaps (shared cache).
+     * @param key [utf8] Dedup cache key.
+     * @param out [out] Receives the resident handle on a cache hit.
+     */
     ke_bool (*try_get_mesh)(struct ke_render_service *self, const char *key, ke_mesh_handle *out);
+    /**
+     * [try] Path-keyed probe for a resident texture upload.
+     * @param key [utf8] Dedup cache key.
+     * @param out [out] Receives the resident handle on a cache hit.
+     */
     ke_bool (*try_get_texture)(struct ke_render_service *self, const char *key, ke_texture_handle *out);
+    /**
+     * [try] Path-keyed probe for a resident material.
+     * @param key [utf8] Dedup cache key.
+     * @param out [out] Receives the resident handle on a cache hit.
+     */
     ke_bool (*try_get_material)(struct ke_render_service *self, const char *key, ke_material_handle *out);
 
     // The built-in 1×1 white texture, resolvable everywhere a neutral albedo is

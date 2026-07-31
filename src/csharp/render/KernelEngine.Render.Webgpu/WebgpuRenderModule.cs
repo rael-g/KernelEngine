@@ -22,6 +22,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_gpu_device_handle _device;
     private ke_render_module_handle _module;
     private ke_render_service* _core;
+    private RenderService? _renderService;
     private readonly string _shaderDir;
     private readonly System.Numerics.Vector4? _clearColorOverride;
     private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
@@ -118,8 +119,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw Fail("render module create failed", err);
 
         _core = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_core(_module.@ref);
+        // Borrowed, not owned: the render module (not this wrapper) destroys
+        // ke_render_service, via _module.destroy in OnUnload.
+        _renderService = RenderService.Borrow(_core);
         var clearColor = _clearColorOverride ?? ResolveClearColor(config);
-        _core->set_clear_color(_core, clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
+        _renderService.SetClearColor(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
     }
 
     /// <summary>
@@ -146,59 +150,44 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </summary>
     public MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices)
     {
-        if (_core == null)
+        if (_renderService == null)
             throw new InvalidOperationException("UploadMesh called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        ke_error* err = null;
-        ke_mesh_handle h;
-        var keyBytes = Utf8(key);
         fixed (MeshVertex* v = vertices)
         fixed (ushort* i = indices)
-        fixed (byte* k = keyBytes)
         {
-            h = _core->upload_mesh(_core, (sbyte*)k, v, (nuint)(vertices.Length * sizeof(MeshVertex)),
-                                   i, (uint)indices.Length, &err);
+            var h = _renderService.UploadMesh(key, v, (nuint)(vertices.Length * sizeof(MeshVertex)), i, (uint)indices.Length);
+            return new MeshHandle(h.bits);
         }
-        if (h.bits == uint.MaxValue)
-            throw Fail("upload_mesh failed", err);
-        return new MeshHandle(h.bits);
     }
 
     /// <inheritdoc/>
     public TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba)
     {
-        if (_core == null)
+        if (_renderService == null)
             throw new InvalidOperationException("UploadTexture called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        ke_error* err = null;
-        ke_texture_handle h;
-        var keyBytes = Utf8(key);
         fixed (byte* p = rgba)
-        fixed (byte* k = keyBytes)
-            h = _core->upload_texture(_core, (sbyte*)k, width, height, p, &err);
-        if (h.bits == uint.MaxValue)
-            throw Fail("upload_texture failed", err);
-        return new TextureHandle(h.bits);
+        {
+            var h = _renderService.UploadTexture(key, width, height, p);
+            return new TextureHandle(h.bits);
+        }
     }
 
     /// <inheritdoc/>
     public TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces)
     {
-        if (_core == null)
+        if (_renderService == null)
             throw new InvalidOperationException("UploadCubemap called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        ke_error* err = null;
-        ke_texture_handle h;
-        var keyBytes = Utf8(key);
         fixed (byte* p = faces)
-        fixed (byte* k = keyBytes)
-            h = _core->upload_cubemap(_core, (sbyte*)k, faceSize, p, &err);
-        if (h.bits == uint.MaxValue)
-            throw Fail("upload_cubemap failed", err);
-        return new TextureHandle(h.bits);
+        {
+            var h = _renderService.UploadCubemap(key, faceSize, p);
+            return new TextureHandle(h.bits);
+        }
     }
 
     /// <inheritdoc/>
@@ -208,22 +197,14 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                                          float ior = 1.5f, float distortionStrength = 0.05f,
                                          string? shader = null)
     {
-        if (_core == null)
+        if (_renderService == null)
             throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        ke_error* err = null;
-        ke_material_handle h;
         var albedoH = new ke_texture_handle { bits = albedo?.Value ?? uint.MaxValue };
         var normalH = new ke_texture_handle { bits = normalMap?.Value ?? uint.MaxValue };
-        var keyBytes = Utf8(key);
-        var shaderBytes = shader is null ? null : Utf8(shader);
-        fixed (byte* k = keyBytes)
-        fixed (byte* sh = shaderBytes)
-            h = _core->create_material(_core, (sbyte*)k, &baseColor.X, metallic, roughness, albedoH, normalH,
-                                        (ke_alpha_mode)(int)alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)sh, &err);
-        if (h.bits == uint.MaxValue)
-            throw Fail("create_material failed", err);
+        var h = _renderService.CreateMaterial(key, &baseColor.X, metallic, roughness, albedoH, normalH,
+            (ke_alpha_mode)(int)alphaMode, alphaCutoff, ior, distortionStrength, shader ?? "");
         return new MaterialHandle(h.bits);
     }
 
@@ -239,64 +220,48 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         get
         {
-            if (_core == null)
+            if (_renderService == null)
                 throw new InvalidOperationException("WhiteTexture read before the render module was loaded");
-            return new TextureHandle(_core->white_texture(_core).bits);
+            return new TextureHandle(_renderService.WhiteTexture().bits);
         }
     }
 
     /// <inheritdoc/>
-    public void RetainMesh(MeshHandle h) => _core->retain_mesh(_core, new ke_mesh_handle { bits = h.Value });
+    public void RetainMesh(MeshHandle h) => _renderService!.RetainMesh(new ke_mesh_handle { bits = h.Value });
     /// <inheritdoc/>
-    public void ReleaseMesh(MeshHandle h) => _core->release_mesh(_core, new ke_mesh_handle { bits = h.Value });
+    public void ReleaseMesh(MeshHandle h) => _renderService!.ReleaseMesh(new ke_mesh_handle { bits = h.Value });
     /// <inheritdoc/>
-    public void RetainTexture(TextureHandle h) => _core->retain_texture(_core, new ke_texture_handle { bits = h.Value });
+    public void RetainTexture(TextureHandle h) => _renderService!.RetainTexture(new ke_texture_handle { bits = h.Value });
     /// <inheritdoc/>
-    public void ReleaseTexture(TextureHandle h) => _core->release_texture(_core, new ke_texture_handle { bits = h.Value });
+    public void ReleaseTexture(TextureHandle h) => _renderService!.ReleaseTexture(new ke_texture_handle { bits = h.Value });
     /// <inheritdoc/>
-    public void RetainMaterial(MaterialHandle h) => _core->retain_material(_core, new ke_material_handle { bits = h.Value });
+    public void RetainMaterial(MaterialHandle h) => _renderService!.RetainMaterial(new ke_material_handle { bits = h.Value });
     /// <inheritdoc/>
-    public void ReleaseMaterial(MaterialHandle h) => _core->release_material(_core, new ke_material_handle { bits = h.Value });
+    public void ReleaseMaterial(MaterialHandle h) => _renderService!.ReleaseMaterial(new ke_material_handle { bits = h.Value });
 
     /// <inheritdoc/>
     public bool TryGetMesh(string key, out MeshHandle handle)
     {
-        ke_mesh_handle h;
-        var keyBytes = Utf8(key);
-        byte ok;
-        fixed (byte* k = keyBytes)
-            ok = _core->try_get_mesh(_core, (sbyte*)k, &h);
+        var found = _renderService!.TryGetMesh(key, out var h);
         handle = new MeshHandle(h.bits);
-        return ok != 0;
+        return found;
     }
 
     /// <inheritdoc/>
     public bool TryGetTexture(string key, out TextureHandle handle)
     {
-        ke_texture_handle h;
-        var keyBytes = Utf8(key);
-        byte ok;
-        fixed (byte* k = keyBytes)
-            ok = _core->try_get_texture(_core, (sbyte*)k, &h);
+        var found = _renderService!.TryGetTexture(key, out var h);
         handle = new TextureHandle(h.bits);
-        return ok != 0;
+        return found;
     }
 
     /// <inheritdoc/>
     public bool TryGetMaterial(string key, out MaterialHandle handle)
     {
-        ke_material_handle h;
-        var keyBytes = Utf8(key);
-        byte ok;
-        fixed (byte* k = keyBytes)
-            ok = _core->try_get_material(_core, (sbyte*)k, &h);
+        var found = _renderService!.TryGetMaterial(key, out var h);
         handle = new MaterialHandle(h.bits);
-        return ok != 0;
+        return found;
     }
-
-    // NUL-terminated UTF-8 so the native side can hash the key as a C string.
-    private static byte[] Utf8(string s)
-        => System.Text.Encoding.UTF8.GetBytes(s + '\0');
 
     /// <inheritdoc/>
     public void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
