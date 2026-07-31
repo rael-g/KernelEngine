@@ -641,3 +641,23 @@ Two dead internals found and dropped while migrating: `AddComponentRaw<T>` and `
 
 - **A borrowing wrapper.** `EcsRegistry` never owned its `ke_ecs*` — `FlecsEcs` owns the handle and the registry reads through the pointer. Every provider now also gets `static X Borrow(ke_x* native)`, whose result's `Dispose` releases nothing. Deliberately a named factory rather than a constructor overload: `new X(ptr)` would be ambiguous against an idiom layer's own managed-typed constructor whenever a caller passes `null`, and `Borrow` states the ownership at the call site.
 - **Type-name overrides.** `ke_ecs` derives to `Ecs`, which inside namespace `KernelEngine.Ecs` is unreferenceable without full qualification. `Convention.TypeNameOverrides` maps it back to `EcsRegistry`. Note the generated `INativeEcs` interface is deliberately *not* renamed with it — it exists to hand out the native pointer, so it is named after the native type, which is also the name every cross-domain consumer already knows it by.
+
+### A.6 — `audio` (small, single-provider) — audited, migrated, cleared
+
+`Audio.cs` deleted; `Generated/Audio.g.cs` + `Audio.Idiom.cs` (a `SoundHandle` wrapping the bare `uint` id) replace it.
+
+**Fallibility was wrongly tied to a `bool` return.** `load_sound` returns `ke_audio_sound` (a value), not a boolean, but still takes the trailing `ke_error**` — a fallible call whose failure shows up in the out-param, not the return. `Convention.IsFallible` no longer requires a boolean return; a new `Convention.SignalsFailureByReturn` distinguishes the two shapes so `RenderSlotMethod`'s `Fallible` case can pick the right one: bool-returning slots still use `KernelError.ThrowIfFailed`; value-returning ones capture the result, check the out-param, and return the value.
+
+**Two smaller fixes surfaced by the same domain**: a `ke_bool`-typed *parameter* (not just a return) rendered as C# `bool` without converting to a native byte at the call site; and a handle-based constructor didn't validate `handle.@ref == null`, so a caller passing an empty handle failed later at first use instead of immediately. Both fixed in the shared render path, so every previously migrated domain benefits too.
+
+### A.7 — `physics` (`ke_physics_2d`, single provider + one enum + one struct) — audited, migrated, cleared
+
+`Physics2D.cs` deleted; `Generated/Physics2D.g.cs` + `Physics2D.Idiom.cs` (`Vector2`-shaped overloads over the ABI's loose floats, `BodyHandle2D`/`BodyState2D` projections, and the "invalid handle is a silent no-op" policy) replace it. `BodyType2D` is no longer hand-written — generated from `ke_body_type_2d`.
+
+**This domain forced three more `kabic` generalizations**:
+
+1. **An `[out]` param with other input params in the same slot.** `get_body_state(body, out state)` reads as `State GetBodyState(body)`, not a pointer-taking void method — the classifier previously required the `[out]` param to be the *only* param before treating a slot as `ReturnsOutParam`. Relaxed to just require exactly one `[out]` param, keeping every other input in the signature.
+2. **That relaxation regressed `ecs`'s `query_resolve`**, which also has exactly one non-sequence `[out]` param (`out_count`) alongside its sequence pair, and got misclassified as `ReturnsOutParam` instead of `Sequence`. Fixed by re-ordering the shape checks so `Sequence` is always evaluated first — a slot with both a pointer+count pair and a separate `[out]` is a sequence call whose count comes back as an out, never the other way around. Re-verified `ecs`'s generated output was unaffected by the reordering itself, only by the actual regression.
+3. **A parameter typed directly as one of the description's own enums** (`ke_body_type_2d type`, no `[enum:]` tag needed) wasn't recognized — the backend only knew `[enum:]`-tagged primitive params. Added a check against `model.Enums` so a native-enum-typed parameter renders as the C# enum and casts back to the native type at the call site, same as the tagged case.
+
+**Also found**: `Idioms.CsKeywords` covered only ~13 reserved words. `set_body_fixed_rotation`'s `fixed` parameter rendered as literal invalid C# (`bool fixed`) — the list was expanded to the full C# keyword set.
