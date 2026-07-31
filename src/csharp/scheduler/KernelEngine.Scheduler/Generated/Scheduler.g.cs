@@ -32,6 +32,7 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler
     /// <summary>Wraps an owner <c>ke_scheduler_handle</c> and runs scheduler's startup lifecycle hook.</summary>
     public Scheduler(ke_scheduler_handle handle)
     {
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
         _destroy = handle.destroy;
     }

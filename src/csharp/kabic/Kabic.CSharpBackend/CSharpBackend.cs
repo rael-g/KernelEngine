@@ -210,6 +210,9 @@ public static class CSharpBackend
             if (initCall is not null) o.Add("    /// <exception cref=\"KernelError\">The native call failed.</exception>");
             o.Add($"    public {typeName}({handleType} handle)");
             o.Add("    {");
+            // A handle whose ref is null carries nothing — constructing from it
+            // would yield a wrapper that only fails later, at the first call.
+            o.Add("        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));");
             o.Add("        _native = handle.@ref;");
             o.Add("        _destroy = handle.destroy;");
             if (initCall is not null) o.Add(initCall);
@@ -424,17 +427,31 @@ public static class CSharpBackend
             case SlotShape.Fallible:
             {
                 var args = cs.PublicParams;
+                var byReturn = convention.SignalsFailureByReturn(slot.Returns);
+                var retType = byReturn ? "void" : CsType(model, slot.Returns);
                 var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
-                    slot.ReturnDoc, throwsOnFail: true).TrimEnd());
-                o.Add($"    public void {name}({sig})");
+                    byReturn ? slot.ReturnDoc : null, throwsOnFail: true).TrimEnd());
+                o.Add($"    public {retType} {name}({sig})");
                 o.Add("    {");
                 var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
                 o.AddRange(fPro);
                 var fInd = new string(' ', 8 + fDepth * 4);
                 o.Add($"{fInd}ke_error* err = null;");
-                o.Add($"{fInd}KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{call}, &err), err, \"{slot.Name}\");");
+                if (byReturn)
+                {
+                    o.Add($"{fInd}KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle{call}, &err), err, \"{slot.Name}\");");
+                }
+                else
+                {
+                    // A value-returning slot reports failure by writing the error
+                    // out-param, which stays NULL on success — so the written
+                    // pointer, not the return value, is what says it failed.
+                    o.Add($"{fInd}var result = Handle->{slot.Name}(Handle{call}, &err);");
+                    o.Add($"{fInd}if (err != null) throw KernelError.FromNative(err, \"{slot.Name}\");");
+                    o.Add($"{fInd}return result;");
+                }
                 for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
@@ -472,6 +489,8 @@ public static class CSharpBackend
         // Utf8Prologue) and passed as that pointer, never as the managed string.
         string CallArg(ApiParam p) =>
             p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
+            // ke_bool is a byte across the ABI but a bool in the signature.
+            : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!);
     }

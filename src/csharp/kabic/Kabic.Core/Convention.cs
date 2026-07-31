@@ -63,9 +63,17 @@ public sealed class Convention
     public bool IsErrorOutParam(ApiParam p) =>
         p.Type.Replace(" ", "").Contains(ErrorOutParamType.Replace(" ", ""));
 
-    /// <summary>True if a slot with this return type and parameter list reports failure via an error out-param.</summary>
+    /// <summary>
+    /// True if a slot reports failure through a trailing error out-parameter — whatever
+    /// it returns. A boolean-returning slot signals failure with the return value; one
+    /// returning a value signals it by writing the out-param (which stays NULL on
+    /// success), so both are fallible and neither should expose the parameter.
+    /// </summary>
     public bool IsFallible(string returns, IReadOnlyList<ApiParam> parameters) =>
-        BooleanReturnTypes.Contains(returns) && parameters.Count > 0 && IsErrorOutParam(parameters[^1]);
+        parameters.Count > 0 && IsErrorOutParam(parameters[^1]);
+
+    /// <summary>True if this slot signals failure through its boolean return rather than by writing the error out-param.</summary>
+    public bool SignalsFailureByReturn(string returns) => BooleanReturnTypes.Contains(returns);
 
     /// <summary>
     /// Explicit target-language type names for ABI symbols whose derived name is

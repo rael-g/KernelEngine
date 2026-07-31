@@ -33,6 +33,7 @@ public unsafe partial class Window : IDisposable, INativeWindow
     /// <exception cref="KernelError">The native call failed.</exception>
     public Window(ke_window_handle handle)
     {
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
         _destroy = handle.destroy;
         { ke_error* err2 = null; KernelError.ThrowIfFailed(_native->on_initialize(_native, &err2), err2, "on_initialize"); }

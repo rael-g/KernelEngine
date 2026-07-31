@@ -32,6 +32,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <summary>Wraps an owner <c>ke_ecs_handle</c> and runs ecsregistry's startup lifecycle hook.</summary>
     public EcsRegistry(ke_ecs_handle handle)
     {
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
         _destroy = handle.destroy;
     }

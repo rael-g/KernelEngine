@@ -70,6 +70,16 @@
       "nativeNamespace": "KernelEngine.Ecs.Native",
       "outDir": "src/csharp/ecs/KernelEngine.Ecs/Generated",
       "usings": []
+    },
+    {
+      "name": "audio",
+      "headers": ["src/c/audio/kernel_engine/audio/audio.h"],
+      "includeDirs": ["src/c/audio", "src/zig/common/include"],
+      "apiJson": "src/csharp/audio/ke_api.json",
+      "namespace": "KernelEngine.Audio",
+      "nativeNamespace": "KernelEngine.Audio.Native",
+      "outDir": "src/csharp/audio/KernelEngine.Audio/Generated",
+      "usings": []
     }
   ]
 }

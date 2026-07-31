@@ -13,33 +13,40 @@ extern "C"
 
 #define KE_ID_AUDIO "ke_audio"
 
-    /// @brief Opaque sound identifier owned by an audio backend. 0 is reserved as "invalid".
+    /** Opaque sound identifier owned by an audio backend. 0 is reserved as "invalid". */
     typedef uint32_t ke_audio_sound;
 #define KE_AUDIO_SOUND_INVALID ((ke_audio_sound)0)
 
-    /// @brief ABI-stable vtable for audio playback. Concrete implementations are provided as
-    ///        separate plugins (e.g. miniaudio, FMOD). All function-pointer calls are safe from
-    ///        ke.sim — backends internally marshal to their own audio thread.
+    /**
+     * Audio playback. Concrete implementations ship as separate plugins
+     * (miniaudio, FMOD, ...). Every slot is safe to call from ke.sim — backends
+     * marshal internally to their own audio thread.
+     */
     typedef struct ke_audio
     {
         void *handle;
 
-
-        /// @brief Loads a sound from @p path (format autodetected by the backend) and returns a
-        ///        handle suitable for repeated playback. Returns KE_AUDIO_SOUND_INVALID on error.
+        /**
+         * Loads a sound for repeated playback; the backend autodetects the format.
+         * @param path [borrowed,utf8] Filesystem path to the audio file.
+         * @return KE_AUDIO_SOUND_INVALID on error.
+         */
         ke_audio_sound (*load_sound)(struct ke_audio *self, const char *path, ke_error **out_error);
 
-        /// @brief Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID.
+        /** Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID. */
         void (*unload_sound)(struct ke_audio *self, ke_audio_sound sound);
 
-        /// @brief Plays @p sound at @p volume (0..1). If @p loop is non-zero the sound restarts
-        ///        on end. Calling on an already-playing handle restarts playback from the start.
+        /**
+         * Plays a sound, restarting it from the beginning if already playing.
+         * @param volume Playback volume in 0..1.
+         * @param loop Non-zero to restart the sound when it ends.
+         */
         bool (*play)(struct ke_audio *self, ke_audio_sound sound, float volume, ke_bool loop, ke_error **out_error);
 
-        /// @brief Stops a currently playing sound; no-op when @p sound is not playing.
+        /** Stops a playing sound; no-op when it is not playing. */
         void (*stop)(struct ke_audio *self, ke_audio_sound sound);
 
-        /// @brief Sets a global volume multiplier applied on top of per-sound volumes (0..1).
+        /** Sets a global multiplier applied on top of per-sound volumes (0..1). */
         void (*set_master_volume)(struct ke_audio *self, float volume);
 
     } ke_audio;
