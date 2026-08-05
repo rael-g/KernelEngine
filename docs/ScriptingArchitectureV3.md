@@ -371,8 +371,7 @@ typedef struct ke_point_light_component {
 
 Additions to the §9 floor — each is **fixed per language and does not grow with the engine**:
 
-- The `Node` / `Node3D` / `Node2D` base type (~150–250 LoC per language).
-- The `ke_node_host` binding: registering a script instance for an entity and dispatching its lifecycle callbacks.
+- The object-model adapter inside `kabic`'s own backend that turns "class with a virtual method" into "entity + registered callback" for that language (§7.11) — not a per-language `Node` class, see the correction below.
 - The DI / composition idiom.
 - Game code (`Paddle`, `Ball`, …) — target-language by design, per §0.
 
@@ -382,10 +381,10 @@ A node behaviour that is genuinely imperative is not floor: it is misplaced. It 
 
 Unresolved, and each can invalidate part of §7.4:
 
-1. **Imperative node behaviour.** `CollisionShape2D` searches ancestors for a physics body and attaches a fixture. That is physics-domain logic in toolkit clothing; it should be a native system in `ke_physics_2d` reacting to component add, leaving the node pure data. Until that migration is proven, "nodes are data" is a claim about most nodes, not all.
-2. **Node methods.** `AudioPlayer.Play()` is a method, not a property. Generating it needs a declarable rule binding a node to one of its domain's vtable slots. This is the least obvious piece of the design and has no precedent in the tag vocabulary.
-3. **Behaviour detection without reflection.** `Node.CompleteBind` uses reflection to discover whether `OnUpdate` was overridden. That is C#-specific and conflicts with the script safety model's ban on reflection in script code. A different mechanism is required.
-4. **Base hierarchy prerequisite.** `base:Node3D` assumes the Node3D/Node2D/Control split exists natively. It is decided but unimplemented — a prerequisite of this design, not a byproduct.
+1. **Imperative node behaviour — still open.** `CollisionShape2D` (physics: ancestor search + fixture attach) and `AudioPlayer` (audio: scene-property load + `Play()`) are still hand-written, still in their own domain's C# project as of the 2026-08-05 dispersal (§8.4). Neither migrated to a native system reacting to component add. "Nodes are data" remains a claim about most nodes (5 of 7 examined), not all.
+2. **Node methods — still open.** `AudioPlayer.Play()` is a method, not a property; no declarable rule exists yet binding a node to one of its domain's vtable slots.
+3. **Behaviour detection without reflection — still open.** `Node.CompleteBind` (now in `KernelEngine.Framework/Scene/Node.cs`) still uses `GetType().GetMethod(nameof(OnUpdate), ...)` reflection to discover an override. Unchanged since this was written.
+4. **Base hierarchy prerequisite — partially resolved, differently than planned.** `Node2D` shipped 2026-08-05, but as a C# facade over the *same* `ke_transform_component`/`Node3D` every 3D node uses (`Position`/`Scale` as `Vector2`, `Rotation` as one angle, `Depth` for Z) — not the locked `FrameworkArchitectureV2.md` §7 design (a distinct `ke_transform2d_component`, a parent-chain restricted to Node2D-under-Node2D). The facade was the right call for the immediate need (Pong-style 2D games mixing freely with 3D nodes) and required zero native change, but it does not close this prerequisite for `Canvas`/`Control`, which still don't exist. `base:Node3D` node types (the 5 in §7.13) sidestep this question entirely — they don't need Node2D at all.
 
 ### 7.7 Alternatives rejected
 
@@ -429,9 +428,89 @@ So a generated node resolves its cid by name:
 
 The runtime cannot tell which path produced a component, and does not need to. The name for an engine type is derived from its component struct (`ke_point_light_component` -> `point_light`, via `Convention.ComponentSuffix`); the name for a game type comes from whatever its language's codegen assigns.
 
-This is what keeps the per-language floor flat. Engine node types grow with the engine but cost nothing per language, because they are generated — a community domain ships a header with `[node:]` tags, runs `kabic`, and every language has the type. Game node types never enter any toolkit at all. What each language implements by hand stays fixed: the `Node` base, the lifecycle host, and the codegen that turns a class's fields into a named component.
+This is what keeps the per-language floor flat. Engine node types grow with the engine but cost nothing per language, because they are generated — a community domain ships a header with `[node:]` tags, runs `kabic`, and every language has the type. Game node types never enter any toolkit at all. What each language implements by hand stays fixed: the codegen that turns a class's fields into a named component, and the object-model adapter in §7.11.
 
 **Pilot re-run, passing.** With name-based resolution, `PointLight.g.cs` replaces the hand-written class outright: the four examples that construct point lights compile and run against it, 122 managed tests and 236 native tests pass, and no other domain's generated output changes except for comment removal. `NodeWorld` gained `SetByCid` and `CidOfName` — the two operations a name-identified component needs, both of which a game-authored node will use unchanged.
+
+### 7.11 Correction — `Node` is not hand-written floor either, it is native state duplicated in C#
+
+§7.5 previously counted `Node` (~150–250 LoC) as fixed per-language floor, on the assumption that entity lifetime, hierarchy, and lookup have no native form and must be reimplemented per language. That assumption is false, checked against what already ships:
+
+- `ke_scene_tree` (`scene_tree.h`) already exports `create_node`, `destroy_node`, `find_node`, `root`, and `propagate_transforms` as vtable slots.
+- Entity name is `ke_name_component`; parent/children is `ke_hierarchy_component`. Both are native components, not C# state.
+
+Read against that, `NodeWorld`'s `_byName`, `_allNodes`, `_byEntity` are a fifth leak of the same shape as the three closed this session: a managed mirror of state the native side already owns, kept in sync by hand instead of queried. `Node.Parent`/`_children` is the same leak inside the node object itself.
+
+What is genuinely irreducible is narrower than "the whole base class": dispatching a call from native code into a script object's overridden method. That needs a small native primitive, `ke_node_host`, mirroring the existing callback-vtable pattern already proven for e.g. `ke_logger_sink`:
+
+```c
+typedef struct ke_node_host {
+    void (*register_behavior)(struct ke_node_host *self, ke_entity entity,
+                               void (*on_update)(void *user_data, float dt),
+                               void *user_data);
+    void (*unregister_behavior)(struct ke_node_host *self, ke_entity entity);
+} ke_node_host;
+```
+
+With `ke_scene_tree` for lifetime/hierarchy/lookup and `ke_node_host` for behavior dispatch, nothing is left that needs per-language hand state. `Node` becomes a **generated** wrapper — same mechanism as `[node:]` on a component, but its "component" is the pair `(ke_name_component, ke_hierarchy_component)` plus a callback registration, not a single data struct. `Node3D`/`Node2D`/`Control`/`Canvas` then generate as `base:Node` types the same way `PointLight` generates as `base:Node3D` — no hand-written class at any level of the chain.
+
+The only thing that stays genuinely per-language, because it cannot be anything else, is the adapter inside `kabic`'s own backend translating "this language's virtual-dispatch idiom" into a call to `register_behavior` — a C# `delegate`, a Lua closure over a table, a Zig function pointer stored on a struct. That code lives once, in the backend, not once per domain and not once per game.
+
+### 7.12 C#'s node properties move to a shared Roslyn generator, not per-field kabic output
+
+`RenderNodeType`'s first working version (§7.9/§7.10) emits a full get/set body per field directly into the `.g.cs` — each property reads the live component via `Current()`/`TryGetByCid` and writes it back via `SetByCid`, correcting the caching bug §7.9 originally shipped with. That body is identical in shape for every field of every node type; kabic was hand-rolling, per domain, exactly the boilerplate a single generator should own once.
+
+C# 13 (stable on this project's `net10.0` target, verified in-session) allows a **partial property**: one partial declaration gives the signature, another supplies the accessor bodies. This closes the gap the C# side of `FrameworkArchitectureV2.md` §5.5 was reaching for — not by rewriting fields (Roslyn generators are additive-only; a field's backing storage cannot be intercepted, only a `partial` property's body can), but by generating properties. `kabic`'s C# backend now only needs to emit:
+
+```csharp
+public partial class PointLight : Node3D
+{
+    public partial Vector3 Color { get; set; }
+    public partial float   Intensity { get; set; }
+    public partial float   Radius { get; set; }
+}
+```
+
+**Implemented** as `KernelEngine.SourceGenerators` (`src/csharp/generators/`), a single Roslyn `IIncrementalGenerator` finding every `partial` property on any `Node`-derived class and emitting the second partial declaration with the ECS-backed body. It is the same generator, unmodified, whether the declaring partial class came from `kabic` (an engine node type, header-derived) or was hand-written by a game author (§7.10's game-node-type case, and `FrameworkArchitectureV2.md` §5.5's original goal of game code not needing to know it is in an ECS).
+
+Building it surfaced a case §7.4's tag vocabulary doesn't cover from the property signature alone: `PointLight.Color` is `Vector3` in C# but `float color[3]` in the header — same twelve bytes, different shape, and the field is even named in a different casing. A generic "infer everything from the property" rule cannot bridge that; it needs two small markers, both plain C# attributes living in `KernelEngine.Toolkit`, not new tag-vocabulary syntax:
+
+- `[GeneratedNodeComponent(typeof(ke_point_light_component), "point_light")]` on the class — present only on `kabic` output. Its absence is exactly what tells the generator "no header, synthesize a backing struct named `<Class>_Data` and register it fresh via `NodeWorld.RegisterComponent`" instead of resolving an existing name via `NodeWorld.CidOfName`.
+- `[NativeField("color")]` on a property — names the backing field when it is not simply the property name, and (paired with the property's own `Vector2/3/4` type) is what tells the generator to expand a lane-grouped native field into per-component array writes, the same transform `VectorArity`/`FieldInit` did inline in the pre-generator `RenderNodeType`.
+
+So `kabic`'s job is exactly: emit the class, the two attributes, the `partial` property signatures, and a constructor seeding `[default:]` values into the private field the generator itself declares (`_generatedState` — a private member is visible across every partial declaration of the same class, which is what lets `kabic`'s constructor and the generator's accessors share it without either seeing the other's file). Never an accessor body.
+
+This also answers §7.6 open question 3 (behaviour detection without reflection) for the property-backing case: everything resolves at compile time from the partial declarations and attributes Roslyn already sees, no runtime `GetMethod` lookup.
+
+**Checked against every hand-written node in the toolkit, not just `PointLight`: `OnBind` never does anything but write the class's own component(s).** `AudioPlayer`'s scene-property read and `CollisionShape2D`'s ancestor search — both imperative, both real — live in `OnReady`, a different hook the generator does not touch; their `OnBind` is empty. So the generator owning `OnBind` outright, as it does today, is not the constraint it first looked like — it costs nothing on any node examined. The one real holdout was `MeshRenderer`, which wrote *two* components from the same two fields (`MeshRendererComponent` for the removed legacy bgfx path, `MeshComponent` for render-v2) — the generator resolves exactly one backing component per class. That duplication was dead-path debt, not a case the generator needed a feature for: `MeshRendererComponent` had zero native readers left (bgfx is gone), so it and its registration were deleted outright rather than accommodated; `MeshRenderer` now writes only `MeshComponent`.
+
+Verified: `PointLight` regenerated through this path (attribute-driven, zero hand-written accessor) compiles unchanged into the four examples that construct point lights, and the full managed suite (94/95, the one failure pre-existing and unrelated — a native `configuration_create` environment issue, confirmed via `git stash`) passes. `AmbientLight`, `DirectionalLight`, `SpotLight`, and `Skybox` converted the same way immediately after — all four backing structs (`Render.Abstractions/Components.cs`) already mirror their property names and types 1:1, so no `[NativeField]` was needed on any of them, only `[GeneratedNodeComponent]` plus the `partial` signatures. Same result: unchanged callers, same test count.
+
+**`Camera` surfaced a third field-mapping gap the marker mechanism does not cover yet: a type conversion, not just a name or a vector-arity difference.** `CameraComponent.Orthographic` is `byte` (the ABI has no `bool`); the property is `bool`. `[NativeField]` renames a field; it does not know how to convert one. Left hand-written rather than forced through the mechanism as-is — `Camera`'s own properties don't even write-through after bind today (`{ get; set; }` plain auto-properties, written once at `OnBind` and never again), a separate, older gap from the caching bug §7.9 fixed everywhere else. Both are the same class of problem the generator will need a real answer for before `Camera` converts: a declarative type-coercion rule (bool↔byte, and whatever the next domain's header throws at it) rather than one-off cases.
+
+**Fields are out of scope for this mechanism, permanently — not a scheduling gap, a Roslyn constraint.** A generator cannot intercept a plain field's backing storage or a plain auto-property's existing accessor bodies; only a `partial` property's body is open for a second declaration to fill in. `public float Speed = 5f;` silently backed by ECS, with no `partial` anywhere, needs IL post-processing after compilation (Fody-style) — the same technique Unity DOTS uses for its own component authoring. That is a distinct, heavier mechanism (a build-time IL rewrite step, not a source generator) and is not started; it is the known path if `partial` on properties ever proves to be real adoption friction for game authors, not a hypothetical fallback invented to sound complete.
+
+Consequences that ride for free once a property is generator-backed: uniform serialization (save/load = serialize the world), hot reload (state in ECS, not C# heap), networking (replicate the backing component), determinism (no hidden heap state), editor inspection (reads the backing component directly).
+
+### 7.13 The pilot generalized — 5 of 7 render node types now generate (2026-08-05)
+
+§7.9's pilot resolved `PointLight`; this session ran the same mechanism across the rest of `components.h`. `[node:]`/`[default:]` tags added to `ke_camera_component`, `ke_directional_light_component`, `ke_spot_light_component`, `ke_ambient_light_component`; `kabic` now emits `Camera.g.cs`, `DirectionalLight.g.cs`, `SpotLight.g.cs`, `AmbientLight.g.cs` alongside `PointLight.g.cs` — the 4 hand-written classes they replaced are deleted.
+
+**Two tag-vocabulary gaps closed to make this generalize:**
+
+- **`[bool]`.** `ke_camera_component.orthographic` is `uint8_t` (no `bool` in C) but the idiomatic C# property is `bool`. `CSharpBackend.NodePropertyType` now checks `f.Has("bool")` and emits `bool` instead of the raw byte type; `NodePropertyGenerator`'s existing `CoercionFor(bool, byte)` (already written for this exact case, previously unreachable) bridges the accessor body. No change needed on the generator side — the gap was entirely in what `kabic` chose to *render* as the property type, not in the generator's ability to back it.
+- **`[name:X]`.** A field's Pascal-cased name (`near_plane` → `NearPlane`) doesn't always match the idiomatic property name callers already use (`Near`). Rather than rename 14 examples, `kabic`'s field loop now checks `f.TagValue("name")` before falling back to `Idioms.Pascal(f.Name)` — one line in `CSharpBackend.RenderNodeType`, matching the existing `[default:]` tag's shape. Used on `ke_camera_component.near_plane`/`far_plane` (→ `Near`/`Far`) and `ke_spot_light_component.inner_angle`/`outer_angle` (→ `InnerAngleDeg`/`OuterAngleDeg`).
+
+**A third, larger gap surfaced and was *not* closed — two node types stay hand-written on purpose:**
+
+- **`MeshRenderer`** (`ke_mesh_component`) has a `char primitive[32]` field. `NodePropertyType`/`FieldInit` only understand scalars, `[bool]`, and `float[N]` (→ `VectorN`); a fixed char buffer has no mapping and — separately — that field is written by the scene-loader's property-apply path, never by the node itself, so generating a property for it would be both wrong and unwanted.
+- **`Skybox`** (`ke_skybox_component`) has `ke_texture_handle cubemap`. `CsType` would render the raw ClangSharp struct name (`ke_texture_handle`), not the idiomatic wrapper (`TextureHandle`) every hand-written node/example actually uses — the same class of gap `[bool]` just closed, but for handle types instead of booleans, and not designed yet.
+
+Both gaps are noted in `components.h` itself (next to the un-tagged structs) so a future pass doesn't have to rediscover them by reading the generator.
+
+**Directional/spot/ambient light's underlying ABI changed as a side effect, audited across every producer.** Making `Color`/`Direction`/`Ambient` into `Vector3` requires the native field to be a contiguous `float[3]`, not three named scalars (`r, g, b` / `dir_x, dir_y, dir_z` / `ambient_r, ambient_g, ambient_b`) — same layout, different field spelling. Every native reader was updated in the same change: `shadow_module.zig`, `forward_module.zig`, `deferred_lighting_module.zig` (direct field reads), `components_apply.zig`'s scene-loader appliers (kept the old scalar TOML keys — `dir_x`, `r`, `g`, `b` — as accepted aliases writing into the new array slots, so no `.scene` file needed to change), the frozen `test_scene_loader.cpp` GTest, and one C example (`examples/c/14_forward_mesh/main.c`).
+
+**Where the generated node types physically live changed too — see §8.4.** `Camera.g.cs`/etc. are no longer under a `toolkit` project; the manifest entry that drives their generation (`scripts/api_domains.json`, entry `render_components`) is explicit that it is *not* a separate native plugin — `components.h` is part of `src/c/render`, same as `world`/`scene_tree`/`scene_loader`/`input_actions` are four manifest entries under one native `framework` plugin, not four plugins.
 
 ---
 
@@ -456,7 +535,7 @@ Measured target against the §1.1 baseline: **5 195 hand-written code lines → 
 | 0.3 | `scripts/check_api_drift.cs` + `scripts/api_domains.json` — content-based drift gate (regenerates to a temp dir and diffs bytes, not mtimes) | Done |
 | 0.4 | `scripts/generate_csharp.cs` — `Classifier` + `CSharpBackend`, covering provider vtables, `[callback]` vtables, free functions, and enums | Done |
 
-Verified end to end on `ke_input` (§8.3) and the `ke_logger`/`ke_logger_sink` callback shape (compile-probed). Not yet done: the tag vocabulary will grow as harder domains surface needs it doesn't cover (§8.4) — Stage 0's infrastructure is stable, its tag *vocabulary* is deliberately open-ended per §8.7.
+Verified end to end on `ke_input` (§8.3) and the `ke_logger`/`ke_logger_sink` callback shape (compile-probed). Not yet done: the tag vocabulary will grow as harder domains surface needs it doesn't cover (§8.4) — Stage 0's infrastructure is stable, its tag *vocabulary* is deliberately open-ended per §8.8.
 
 ### 8.3 Stage 1 — pilot domain (`ke_input`) — done
 
@@ -485,7 +564,28 @@ Each domain repeats §8.3's seven steps. Order is by ascending leakage and coupl
 
 Wave D is where the strategy either lands or reveals that a capability genuinely belongs in a managed layer. Do not pre-judge it.
 
-**Wave D result**: `toolkit` (1585 lines across `Scene/`, `Modules/`, `Input/`, `Systems/`, `Text/`, `Assets/`) has zero raw ABI touches — no `ke_*` pointer, no `unsafe` block anywhere in it. Every file reaches the kernel exclusively through the wrapper types Waves A–C already produced (`World`, `SceneTree`, `IEcsRegistry`, `IRenderResources`, `NativeInputActions`, ...). There is no vtable here for `kabic` to mechanize — `NodeWorld` (278 lines, the largest file) is the "node access funnel" §8.1 already named as part of the permanent floor: entity/name lookup dictionaries, behavior registration, system-context scoping — genuine Track 4 idiom with no ABI counterpart by design, not leakage waiting to be moved. Wave D closes with **no migration performed**, because there was nothing left in it that Track 3 governs — every domain with a real C ABI vtable (Waves A/B/C, 16 domains total) is now migrated; `toolkit` was always downstream of them, never a wrapper layer in its own right.
+**Wave D result**: `toolkit` (1585 lines across `Scene/`, `Modules/`, `Input/`, `Systems/`, `Text/`, `Assets/`) had zero raw ABI touches — no `ke_*` pointer, no `unsafe` block anywhere in it. Every file reached the kernel exclusively through the wrapper types Waves A–C already produced (`World`, `SceneTree`, `IEcsRegistry`, `IRenderResources`, `NativeInputActions`, ...). There was no vtable here for `kabic` to mechanize — `NodeWorld` (278 lines, the largest file) is the "node access funnel" §8.1 already named as part of the permanent floor: entity/name lookup dictionaries, behavior registration, system-context scoping — genuine Track 4 idiom with no ABI counterpart by design, not leakage waiting to be moved. Wave D closed with **no migration performed**, because there was nothing left in it that Track 3 governs — every domain with a real C ABI vtable (Waves A/B/C, 16 domains total) was migrated; `toolkit` was always downstream of them, never a wrapper layer in its own right.
+
+**2026-08-05 correction: "no migration performed" did not mean "leave it as one project."** `toolkit` being architecturally downstream of every real domain was true and is why Track 3 (kabic) never touched it — but physically bundling five domains' node ergonomics (render's lights/camera/mesh, physics's `CollisionShape2D`, audio's `AudioPlayer`, the framework's own `Node`/`NodeWorld`) into one `KernelEngine.Toolkit` project was itself a leak of the same shape Track 1's rubric exists to catch, just one level up: a domain's ergonomic surface living outside that domain's own project. `src/csharp/toolkit/` is deleted. Every file moved into the project of the domain that actually owns it:
+
+| Old (`toolkit/.../Scene|Modules|Input|Systems|Text`) | New home | Why |
+|---|---|---|
+| `Node.cs`, `Node2D.cs`, `Node3D.cs`, `NodeWorld.cs`, `View.cs`, `SceneRouter.cs`, `NodeTypeRegistry.cs`, `SceneServiceCollectionExtensions.cs`, `GeneratedNodeComponentAttribute.cs`, `SceneNodesModule.cs`, `SceneRouterModule.cs`, `Input/*` | `KernelEngine.Framework` | Owns `ke_scene_tree`/`ke_world`; no other domain's data |
+| `Camera.g.cs`…`AmbientLight.g.cs`, `MeshRenderer.cs`, `Skybox.cs`, `Sprite2D.cs`, `UiQuadComponent.cs`, `Label.cs`, `Font.cs`, `ModelExtensions.cs` | `KernelEngine.Render.Webgpu` | render's own component vocabulary (§7.13) |
+| `CollisionShape2D.cs`, `IPhysicsBody2D.cs` | `KernelEngine.Physics` | physics-only data/logic |
+| `AudioPlayer.cs` | `KernelEngine.Audio` | audio-only data/logic |
+
+The `LabelUiSystem.cs`/`Systems/` C# text-shaping system moved to `Render.Webgpu` first, then was deleted outright — its logic became a native system inside `ui_module.zig` (see below), which is what §7.6 open question 1 always said this class of code should become.
+
+Two further leaks of the identical "one place hardcodes every other domain's vocabulary" shape were found and fixed while doing this move, mirroring §6.5's `world.zig` correction (below) at the C# layer:
+
+- `NodeWorld` held a hardcoded `List<Label>`/`RegisterLabel` — `Label` is render's node type, `NodeWorld` is framework's. Replaced with a generic `AllNodes` (every bound node); `LabelUiSystem` filtered `OfType<Label>()` itself before it was deleted, and any future per-type consumer does the same.
+- `SceneServiceCollectionExtensions.EnsureRegistry` pre-registered every builtin node type (`Camera`, `PointLight`, `AudioPlayer`, `CollisionShape2D`, …) directly in `KernelEngine.Framework`. Removed; each domain's own composition entry point (`WebgpuRenderModule.Configure`, and the equivalent for physics/audio once they have one) calls `services.AddNodeType<T>()` for its own types only.
+- `SceneNodesModule.OnLoad` ran render's `[entity.components.AmbientLight]`/`[entity.components.MeshRenderer]` property-apply callbacks and called `LabelUiSystem.Register` directly. Moved into `WebgpuRenderModule.OnLoad`; `SceneNodesModule` now only does what is genuinely domain-agnostic (the `NodeWorld` behavior-dispatch system and the one-shot scene-setup dispatch).
+
+**The native side had the same leak, one layer down, and got the same fix.** `src/zig/framework/src/world.zig`'s `world_create` hardcoded `registerBuiltin` calls for `camera`/`mesh`/`directional_light`/`point_light`/`spot_light` — all render-domain components — and `kernel_engine/framework/components.h` `#include`d `kernel_engine/render/components.h` to get their types. `ke_world.register_component_apply` (a public vtable slot, already existed, was simply unused by anyone but the framework plugin itself) is exactly the extension point meant for this: `ke_render_module_create` gained a `ke_world *world` parameter and now calls `ke_render_register_scene_apply(ecs, world)` (`src/zig/render/service/src/component_apply.zig`, new file) to register its own cids/applies. `world.zig` now registers only `transform` — framework's own, via `scene_tree`. The `render/components.h` include was removed from `framework/components.h`.
+
+**Native UI text shaping moved out of C# entirely.** `ke_label_component` (`ui_create.h`) is a new native component — `font`/`anchor`/`offset`/`color`/`text[256]` as caller input, `glyph_count`/`glyphs[256]` as output. `render.ui`'s own runtime system now shapes each label's glyphs (measuring text, computing anchor/baseline against the real backbuffer size, which is only available inside its own render-pass context — this is why shaping happens as part of `render.ui` itself rather than a separate `KE_PHASE_UPDATE` system) and draws them the same way it draws `ui_quad` entries, sharing the font/glyph tables `ke_render_ui.load_font` already populated. `Label.cs` is now pure data — every property setter writes straight into `ke_label_component` via `SetByCid`. No per-glyph entity, no pool, no C# system.
 
 ### 8.5 Stage 3 — acceptance test: a second language
 
@@ -493,11 +593,33 @@ Implement a Lua or Python `kabic` backend plus a runtime shim, consuming the sam
 
 **Pass condition**: no native change, no hand-written per-domain wrapper. If either is needed, the strategy has a gap and the gap is now visible with a concrete failing case.
 
-### 8.6 Stage 4 — Node ergonomics (Track 4)
+### 8.6 Validation strategy for generated code — required before merge
+
+**Why this is its own stage, not folded into "write tests."** Checked in-session what the existing 95 C# tests (`tests/csharp/KernelEngine.Kernel.Tests/`) actually validate: mostly the hand-written idiom layer's live behavior against the real native runtime (`Physics2DTests`, `TaskSchedulerTests`, `WindowTests`, `HandleTests`), not `kabic`'s codegen correctness. One (`NodeTests.Node_Properties_InitialValues`) is a placeholder tautology (`Assert.Equal(0u, 0u)`) that tests nothing. `src/csharp/kabic/VERIFICATION.md` is real and thorough, but it is a **manual, C#-specific checklist** ("read every method body," `Encoding.UTF8.GetBytes`, C# reserved words) — none of it transfers to Stage 3's second-language backend for free. Writing more hand-written per-domain C# tests from here on, as if they validated `kabic` itself, would misdirect effort the same way the 95 already do: they'd keep testing the shrinking hand-written remainder, not the generator responsible for everything else.
+
+**The fix is separating validation into what is backend-agnostic (pays for every future backend, including Stage 3's) and what is genuinely backend-specific (must be re-derived per backend, but by a repeatable method, not from scratch):**
+
+**Backend-agnostic — invest here first, before Stage 3's second language exists:**
+
+1. **IR-level snapshot tests.** `ke_api.json` is the one artifact every backend shares. A parsing/tag/classification bug is caught once, here, independent of any backend existing yet — committed `ke_api.json` per domain already serves as the fixture; formalize the comparison as an actual test rather than the manual "read the JSON" step in `VERIFICATION.md` §2.
+2. **Idempotency.** Generate twice from the same IR, diff must be zero bytes. Done manually this session (every domain regenerated, confirmed byte-identical except intentional changes) and already a manual step in `VERIFICATION.md` §2 — promote it to an automated test. Catches non-determinism (dictionary ordering, etc.), which is a real generator defect class, in every backend uniformly.
+3. **Cross-backend structural assertions**, the same technique `AgnosticDriftTests.cs` already uses (scan source text/AST for a structural invariant) pointed at `kabic`'s own output instead of the engine's layers: for every `[node:]`-tagged struct in the IR, does *each* backend's output have exactly one type, with the same property count as fields, matching `[default:]` values? This is checkable without deeply understanding the target language — counting declarations, not evaluating semantics — so it is the one category that literally runs unmodified against a Python or Lua backend the day it exists.
+
+**Backend-specific — the method generalizes, the checklist text does not:**
+
+4. **"Does it compile," using that backend's own toolchain, as the cheapest per-backend gate.** `dotnet build` today; `python -m py_compile` / `mypy` for a Python backend later. Weak alone, but free — no test-writing, and it already catches a large defect class in every language it's run against.
+5. **A `VERIFICATION.md`-shaped manual checklist stays necessary per backend**, because idiom concerns are genuinely language-specific (C#'s UTF-8 marshalling prologue has no Python equivalent, Python will have its own). What transfers is the *method* — read every slot shape (`Plain`/`Fallible`/`Try`/...) once per combination that backend has never rendered before, not once per domain — not the checklist's text.
+6. **Runtime/integration tests stay minimal by design**, mirroring what this session already did rather than growing per domain: a handful of pilot domains proving the pipeline end-to-end (`PointLight`, `ke_input`'s Stage 1), not a hand-written test suite re-proving every migrated domain individually. This is the corrective for the 95-test pattern above — the count should stop growing as a proxy for coverage.
+
+**Gate for merge**: items 1-3 exist as automated tests (not manual checklist steps) before this branch merges — they are the ones that pay off for Stage 3 (§8.5) without being rewritten, so deferring them past merge means Stage 3 starts with the same "no oracle beyond the header" problem `VERIFICATION.md`'s own opening line already names, except now for a language nobody has looked at yet.
+
+**Status as of 2026-08-05: still not paid.** Items 1-3 do not exist as automated tests — `tests/csharp/KernelEngine.Kernel.Tests/AgnosticDriftTests.cs` is a different check (the hand-written idiom layer vs. the ABI, not `kabic`'s own codegen). `NodeTests.Node_Properties_InitialValues`'s `Assert.Equal(0u, 0u)` placeholder, named above, is also still in the tree, unchanged. §7.13 generalized the node-ergonomics pilot to 5 domains without this gate being met first — a gap opened, not closed, by that work; paying it off is the highest-leverage next step under this document's own terms, since every domain generation since `PointLight` has been validated by hand (build + run + read the diff) rather than by an oracle that would catch a regression automatically.
+
+### 8.7 Stage 4 — Node ergonomics (Track 4)
 
 Last, and only now, because it registers into an ABI that Stages 1–2 are still reshaping. Lifecycle-host design in `ScriptingArchitectureV2.md` §4/§5; the generated-node-type design, its open questions, and its pilot gate are in §7.1–§7.8 above.
 
-### 8.7 Invariants held throughout
+### 8.8 Invariants held throughout
 
 - **No big bang.** Each domain lands independently; the build and every example stay green between domains.
 - **Generated code is never edited.** Same rule that already governs `Native/Generated/`.
@@ -538,6 +660,7 @@ Per language, permanently hand-written:
 - **How idiomatic can generation get before it needs hints?** Some conversions (a paired `T*` + `count` into a `Span<T>`) are mechanical; others (should `try_get` return a tuple, a nullable, or throw?) are taste. Likely a small per-slot hint vocabulary layered on §5.1 — but do not design it speculatively; let step 3 surface what is actually needed.
 - **Do the `*.Abstractions` interface projects survive?** ~400 LoC of `IEcs`/`IWorld`/`IInput`/`ISystem` exist for DI and testing. If the concrete generated type is already thin, the interface may be pure ceremony. Decide during step 3.
 - **Where does the composition root go?** §9 names it as a floor, but a native bootstrap ("give me a window + gpu + ecs + runtime + render with sane defaults") would shrink it for every language at once. Out of scope here; worth its own card.
+- **ClangSharp is a kept dependency, not scheduled for removal — do not reimplement it.** Checked in-session: even the 16 domains `api_domains.json` already lists as migrated still carry their ClangSharp `.rsp` and `Native/Generated/*.g.cs` (25 `.rsp` files, 222 generated files, present), and this is correct, current-state, not debt. `kabic` only replaces the *ergonomic* wrapper layer — providers, callbacks, enums, node types — sitting on top of the raw struct/delegate declarations ClangSharp still emits; `PointLight.g.cs` itself directly uses `ke_point_light_component`, a ClangSharp-produced type, today and for the foreseeable future. The two generators coexist by design, and `kabic` depends on ClangSharp's output — it is not redundant with it. There is a theoretical future where `kabic`'s own frontend (it already parses the same clang AST via `extract_api.cs`) could emit the raw layer too and retire ClangSharpPInvokeGenerator, and *if* that is ever deliberately taken on, there would be no obligation to keep mirroring ClangSharp's `Native/Generated/` directory shape or its per-project `.rsp` convention. But that is speculative, unscoped, and explicitly **not planned** — recorded here only so a future reading of this document does not mistake "ClangSharp could theoretically be replaced" for "ClangSharp is being replaced" and start reimplementing binding generation that is not needed.
 
 ---
 
@@ -550,7 +673,7 @@ Per language, permanently hand-written:
 | 3 — Derivation | Wrappers written by hand | ~3 600 of the 5 195 | After 2, per domain |
 | 3a — shared classification | Each backend re-deriving slot semantics, and diverging | — | Once (§6.1) |
 | 3b — per-language backend | Seven rendering decisions + shim | — | Once per language (§6.2) |
-| 4 — Node ergonomics | Registration mechanics per language | ~600 | Last (§8.6) |
+| 4 — Node ergonomics | Registration mechanics per language | ~600 | Last (§8.7) |
 
 Tracks 1→2→3 are not phases across the project; they are the **order within each domain**, repeated domain by domain per §8.4.
 
@@ -729,7 +852,9 @@ Verified byte-for-byte identical `ke_api.json` output against the pre-refactor e
 
 They are now one `Convention` class in `Kabic.Core`, threaded through `Classifier` and the backend as a parameter, with a single hardcoded `Convention.KernelEngine` instance supplying today's values. Verified byte-for-byte identical output across all four migrated domains — purely structural.
 
-**The remaining debt, deliberately not paid yet**: `Convention` is still a hardcoded instance rather than a per-project input. The intended end state is the M×N shape §9.2 of `ScriptingArchitectureV2.md` established this project *isn't* (M languages × 1 ABI) but that `kabic` itself *is* (M projects × N languages): a `kabic` core knowing nothing about any specific ABI, plus a thin per-project definition (`Kabic.KernelEngine`, or whatever the engine is renamed to) supplying a `Convention`.
+**The remaining debt, deliberately not paid yet**: `Convention` is still a hardcoded instance rather than a per-project input. The intended end state is the M×N shape §9.2 of `ScriptingArchitectureV2.md` established this project *isn't* (M languages × 1 ABI) but that `kabic` itself *is* (M projects × N languages): a `kabic` core knowing nothing about any specific ABI, plus a thin per-project definition supplying a `Convention`.
+
+**Shape of that per-project definition, when it's paid**: not a second hardcoded C# class per consumer (`Kabic.KernelEngine`, `Kabic.SomeOtherEngine`, ...) — that only relocates the coupling §6.5 exists to remove, one file per project instead of one field. The precedent already in this repo is the ClangSharp `.rsp` file (`src/csharp/*/Native/*.rsp`): a per-binding, declarative, non-code input controlling what a code-generation tool does, versioned next to the project it describes. `Convention` should follow that shape — a `.toml` file (`kabic.toml` or similar, read the same way `ke_configuration_toml` already reads project config elsewhere in the engine) supplying `symbol_prefix`, `handle_suffix`, `factory_suffix`, `component_suffix`, the error/boolean spellings, and the type-name override table — instead of a compiled `Convention.KernelEngine` instance. `kabic` becomes an engine with zero compiled knowledge of any consumer; a new project adding `kabic` support ships a `.toml`, not a C# file.
 
 Not done now because the split's shape can't be validated from one data point — a second real consumer is what reveals which axes genuinely vary, and inventing that shape blind risks getting it wrong in a way that's worse than the coupling. **Scheduled for the end of this branch**, and it is debt with a date rather than speculation: the engine is slated for a rename, which forces this refactor regardless — every domain migrated in the meantime only makes it more expensive.
 
