@@ -381,9 +381,9 @@ A node behaviour that is genuinely imperative is not floor: it is misplaced. It 
 
 Unresolved, and each can invalidate part of §7.4:
 
-1. **Imperative node behaviour — still open.** `CollisionShape2D` (physics: ancestor search + fixture attach) and `AudioPlayer` (audio: scene-property load + `Play()`) are still hand-written, still in their own domain's C# project as of the 2026-08-05 dispersal (§8.4). Neither migrated to a native system reacting to component add. "Nodes are data" remains a claim about most nodes (5 of 7 examined), not all.
-2. **Node methods — still open.** `AudioPlayer.Play()` is a method, not a property; no declarable rule exists yet binding a node to one of its domain's vtable slots.
-3. **Behaviour detection without reflection — still open.** `Node.CompleteBind` (now in `KernelEngine.Framework/Scene/Node.cs`) still uses `GetType().GetMethod(nameof(OnUpdate), ...)` reflection to discover an override. Unchanged since this was written.
+1. **Imperative node behaviour — design closed by §7.14.2/§7.13's correction, implementation still open.** `render.mesh.resolve` (§7.13's correction) proved the pattern on `MeshRenderer`'s scene-apply logic; `CollisionShape2D` (physics: ancestor search + fixture attach) and `AudioPlayer` (audio: scene-property load + `Play()`) are still hand-written, still imperative, as of the 2026-08-05 dispersal (§8.4) — the same conversion, not yet done for either.
+2. **Node methods — design closed, see §7.14.2.** Not a missing vtable-binding rule; inside a wave-parallel ECS a system body cannot call arbitrary domain code regardless of any declared rule. `Play()` is a command component (`play_requested`) a domain system consumes, the identical shape as §7.13's mesh resolution.
+3. **Behaviour detection without reflection — design closed, see §7.14.4.** `Node.CompleteBind` (now in `KernelEngine.Framework/Scene/Node.cs`) still uses `GetType().GetMethod(nameof(OnUpdate), ...)` reflection, unchanged. `ke_node_host` (§7.14.4) replaces the discovery with a lookup against its own registration table — implementation not started.
 4. **Base hierarchy prerequisite — partially resolved, differently than planned.** `Node2D` shipped 2026-08-05, but as a C# facade over the *same* `ke_transform_component`/`Node3D` every 3D node uses (`Position`/`Scale` as `Vector2`, `Rotation` as one angle, `Depth` for Z) — not the locked `FrameworkArchitectureV2.md` §7 design (a distinct `ke_transform2d_component`, a parent-chain restricted to Node2D-under-Node2D). The facade was the right call for the immediate need (Pong-style 2D games mixing freely with 3D nodes) and required zero native change, but it does not close this prerequisite for `Canvas`/`Control`, which still don't exist. `base:Node3D` node types (the 5 in §7.13) sidestep this question entirely — they don't need Node2D at all.
 
 ### 7.7 Alternatives rejected
@@ -431,6 +431,8 @@ The runtime cannot tell which path produced a component, and does not need to. T
 This is what keeps the per-language floor flat. Engine node types grow with the engine but cost nothing per language, because they are generated — a community domain ships a header with `[node:]` tags, runs `kabic`, and every language has the type. Game node types never enter any toolkit at all. What each language implements by hand stays fixed: the codegen that turns a class's fields into a named component, and the object-model adapter in §7.11.
 
 **Pilot re-run, passing.** With name-based resolution, `PointLight.g.cs` replaces the hand-written class outright: the four examples that construct point lights compile and run against it, 122 managed tests and 236 native tests pass, and no other domain's generated output changes except for comment removal. `NodeWorld` gained `SetByCid` and `CidOfName` — the two operations a name-identified component needs, both of which a game-authored node will use unchanged.
+
+**Open hazard, found 2026-08-05, not yet fixed — see §7.14's own §7.14.7.** "Name plus size is the identity" is only true if `component_register` actually *checks* the size on a name collision. It does not: `ecs_flecs.zig`'s `componentRegister` looks the name up and, if found, returns the existing cid unconditionally — no size comparison. Two unrelated game-authored `Paddle` types (different projects, different field layouts, generator-assigned the same name) silently alias the same cid; the second registrant's writes land at the first's (smaller or larger) stride. This is the identical bug class already paid for once — `FrameworkModule.cs`'s comment on `ComponentRegistry` registration order describes the same corruption from `transform` registered at two different sizes — now generalized from "wrong init order within one process" to "two strangers' generated names collide," which becomes a real scenario the moment user-defined node types ship in a product (§7.14).
 
 ### 7.11 Correction — `Node` is not hand-written floor either, it is native state duplicated in C#
 
@@ -508,9 +510,101 @@ Consequences that ride for free once a property is generator-backed: uniform ser
 
 Both gaps are noted in `components.h` itself (next to the un-tagged structs) so a future pass doesn't have to rediscover them by reading the generator.
 
+**Correction, 2026-08-05, same day: `MeshRenderer`'s gap was never a `kabic` problem.** The reasoning above ("the field is written by the scene-loader's property-apply path, never by the node itself") undersold what was actually going on — `MeshRenderer.cs` was, and remains, a pure two-field facade (`MeshHandle`/`MaterialHandle`, written straight through); it never touched `primitive` at all. The real hardcoded logic (primitive-name → mesh handle, color/roughness/alpha → material handle) lived in `WebgpuRenderModule.OnLoad`'s C# apply callback — imperative resolution logic sitting *beside* the node, not inside it, misdiagnosed here as a node-generation gap because the symptom (a field kabic can't map) and the disease (logic in the wrong place) happened to point at the same struct. Moving that resolution into `render.mesh.resolve` (a native `KE_PHASE_UPDATE` system, §7.14's thesis applied concretely) fixed the actual problem; `MeshRenderer` itself needed zero changes, because it was never broken. The `char primitive[32]` mapping gap this section describes is real and still open, but it now blocks only one thing honestly: kabic generating `MeshRenderer.g.cs` outright to replace 6 hand-written lines, not "MeshRenderer working."
+
 **Directional/spot/ambient light's underlying ABI changed as a side effect, audited across every producer.** Making `Color`/`Direction`/`Ambient` into `Vector3` requires the native field to be a contiguous `float[3]`, not three named scalars (`r, g, b` / `dir_x, dir_y, dir_z` / `ambient_r, ambient_g, ambient_b`) — same layout, different field spelling. Every native reader was updated in the same change: `shadow_module.zig`, `forward_module.zig`, `deferred_lighting_module.zig` (direct field reads), `components_apply.zig`'s scene-loader appliers (kept the old scalar TOML keys — `dir_x`, `r`, `g`, `b` — as accepted aliases writing into the new array slots, so no `.scene` file needed to change), the frozen `test_scene_loader.cpp` GTest, and one C example (`examples/c/14_forward_mesh/main.c`).
 
 **Where the generated node types physically live changed too — see §8.4.** `Camera.g.cs`/etc. are no longer under a `toolkit` project; the manifest entry that drives their generation (`scripts/api_domains.json`, entry `render_components`) is explicit that it is *not* a separate native plugin — `components.h` is part of `src/c/render`, same as `world`/`scene_tree`/`scene_loader`/`input_actions` are four manifest entries under one native `framework` plugin, not four plugins.
+
+### 7.14 The node facade architecture — designed 2026-08-05, not started
+
+Everything above (§7.1–§7.13) treats one node at a time: can `kabic` generate *this* node's properties. That question kept surfacing the same deeper one — `MeshRenderer` "looked" hard to generate for the same reason `Skybox` didn't (§7.13's correction) and the same reason the original `LabelUiSystem` sat inside the `render.ui` draw pass instead of its own system (§8.4's UI-ownership work): **logic was hardcoded beside or inside a node, instead of living in a system.** A node with logic can't be generated, because generating it means generating the logic too, and logic is exactly the part that has no mechanical shape. A node that is pure data can always be generated, because "pure data" is by definition just a schema. So the node-generation question was never really about `kabic` — it is about whether the *architecture* keeps nodes as data. This section designs that architecture, prompted by asking what a Godot-rich node system (signals, groups, coexisting builtin and user node types) would need on top of what §7.1–§7.13 already built, and finding that the current `Node`/`NodeWorld` (even after §8.4's toolkit split) still carry state that should not exist.
+
+#### 7.14.1 The principle: a node is a projection, not an object
+
+`Node` today is a hybrid: some of its state is genuinely its own (nothing — checked, see below), and some is a **managed copy of native truth**, kept in sync by hand:
+
+| Field | Duplicates |
+|---|---|
+| `Node.Name` | `ke_name_component` |
+| `Node.Parent` / `_children` | `ke_hierarchy_component` |
+| `Node.HasBehavior` | computed via reflection over `OnUpdate` |
+| `NodeWorld._byName` | `ke_scene_tree.find_node` |
+| `NodeWorld._allNodes` | a query over every bound node |
+| `NodeWorld._behaviors` | what `ke_node_host` (§7.14.4) should own |
+
+Every one of these is the same shape of leak §6.5/world.zig/§8.4's toolkit-dispersal work already found and fixed at the native and C# layers, just one level up: a managed mirror of state the ECS already owns. As long as any of it exists, a node type is not just a schema — it is a schema *plus* synchronization code, and synchronization code cannot be generated from a header. Emptying it is the precondition for everything else in this section, including for §7.6's still-open questions 1–3.
+
+#### 7.14.2 Decomposition — what a rich node system needs, and what actually requires new native machinery
+
+| Capability | Where it lives | New native machinery? |
+|---|---|---|
+| Identity | `ke_entity` | no |
+| Name | `ke_name_component` | no |
+| Hierarchy | `ke_hierarchy_component` + `ke_scene_tree` | no |
+| Typed data | a domain's own component(s) | no |
+| **Groups** | a zero-size tag component per group | **no — already works, unused** |
+| **Node methods** (`AudioPlayer.Play()`) | a command component the owning domain's system consumes | **no — same shape as `render.mesh.resolve`** |
+| Imperative behavior | domain systems (native, KE_PHASE_UPDATE/RENDER) | no |
+| **Signals** | a native bus; connections are components (durable), emission is transient | **yes** |
+| **Callback dispatch** (`OnUpdate`, etc.) | `ke_node_host` | **yes** |
+
+Two capabilities collapse into the existing component/query machinery with no new design at all:
+
+- **Groups are tags.** `AddToGroup("enemies")` is `component_register("group.enemies", 0)` + `attach`; `GetNodesInGroup` is a query. `component_register` with `element_size = 0` already exists and is already used (`"backbuffer"`, `"render.frame"`) — groups are not a future feature, they are an unused application of a mechanism this engine already has.
+- **Node methods are commands, not vtable slots.** §7.6 open question 2 ("Node methods — no declarable rule exists yet binding a node to one of its domain's vtable slots") was posed the wrong way: inside a wave-parallel ECS, a system body cannot call arbitrary domain code directly regardless of any declared rule — the wave-parallelism itself forbids it, independent of code generation. `AudioPlayer.Play()` is not a method to generate a binding for; it is `attach(entity, play_requested_tag)`, consumed by an audio-domain system the same way `render.mesh.resolve` (§7.13's correction) consumes `ke_mesh_component`. This closes §7.6 question 2 as a design question — what remains is applying it to `AudioPlayer`/`CollisionShape2D`, an implementation task, not an open question.
+
+#### 7.14.3 Signals — connections are durable, emission is not
+
+Godot's signal system splits into two lifetimes that must not be conflated:
+
+- **Emission** is a single frame's event — transient, drained at a phase boundary (a ring buffer, same shape as any other per-frame producer/consumer split in this engine).
+- **Connection** (node A's signal wired to node B's handler) is **durable** — it must survive scene serialization (Godot saves connections in the `.tscn`) and, in this engine's actual current use case, must be visible cross-language: if a Lua-authored node connects to a signal a C# builtin node exposes, the connection cannot live only in Lua's runtime, because nothing about a *component* is language-scoped (§7.14.5) and a signal connection is exactly that kind of fact. **A connection is a component** (`ke_signal_connection_component` — source entity/signal id, target entity, handler command shape), not a callback closure kept in one language's heap. This is the one piece of §7.14.2 that is not already free: a signal bus (registration + emission + drain) is new native surface, `src/c/framework/` or a sibling to `ke_scene_loader`.
+
+#### 7.14.4 `ke_node_host` — the callback trampoline, and what it fixes
+
+The dispatch primitive `ScriptingArchitectureV2.md` §4/§5 already specified and §7.11 already named as the honest floor. Two jobs: register a behavior callback for an entity, and call it. Landing it fixes §7.6 question 3 outright — `Node.CompleteBind`'s `GetType().GetMethod(nameof(OnUpdate), ...)` reflection (still present, unchanged, as of this section) exists only because nothing native currently tracks "does this entity have behavior registered"; once `ke_node_host` owns that table, discovery is a lookup, not a reflection probe, and the result is no longer C#-specific (it stops being a `Node.CompleteBind` mechanism and becomes a runtime one, satisfying the script-safety model's reflection ban for the same reason `ke_render_ui`'s font table replaced C#'s per-`Font` `Dictionary` in §8.4's label work).
+
+#### 7.14.5 The name-collision hazard `component_register` doesn't guard against
+
+`§7.10`'s "name plus size is the identity" is only as strong as the registration function that enforces it. It doesn't: `ecs_flecs.zig`'s `componentRegister` does `ecs_lookup(world, name)`, and if that finds an existing entity, returns its cid **without comparing `size`**. Two independently-authored `Paddle` node types (different projects or plugins, generator-assigned the same name because nothing today qualifies it beyond a bare class name) silently alias the same cid; whichever registers second gets the first's cid at the first's stride, and every write past that boundary corrupts adjacent component storage. This is not hypothetical — it is the identical failure `FrameworkModule.cs`'s registration-order comment already documents having hit once (`transform` at 104 bytes vs. 40), generalized from "wrong init order in one process" to "two node authors who never met." It becomes a real, not theoretical, scenario the moment user-defined node types ship in a product with plugins or multiple contributors — which is exactly this section's premise. Two independent, cheap fixes, both blocking before user-defined nodes are a real feature:
+
+1. **`component_register` must reject a size mismatch** instead of silently returning the existing cid — `KE_COMPONENT_INVALID` + `ke_error`, the `ke_result` doctrine already used everywhere else, in place of the corruption-on-write this currently degrades to.
+2. **Generated component names must be collision-resistant** — qualified by the owning assembly/module (or an explicit namespace a build declares), not a bare class or namespace name, so two strangers' `Paddle` never collide by coincidence.
+
+#### 7.14.6 What survives in the managed layer, deliberately
+
+Not everything in `NodeWorld` is a leak. `_byEntity` (the identity map: entity → the one live managed instance) stays — it is not a copy of native truth, it is the thing every object-oriented host language's own model requires: `Find("Player")` called twice must return the *same* instance (reference equality, subclass state, anything the game stored on it), and nothing native can hand that back — an entity id is not an object identity in C#'s sense. This is the "node access funnel" §9 already names as permanent floor, now scoped precisely: one map, keyed by entity, owned per language runtime, nothing else.
+
+#### 7.14.7 `Find<T>()` across languages — resolved by publication, not by which language authored the node
+
+First pass at this question conflated "which language created the node" with "which languages can consume it" — wrong axis, corrected in discussion. The real axis is **whether a node type's schema is published**, independent of source language:
+
+| | schema published? | `Find<T>()` |
+|---|---|---|
+| Engine builtin node (`PointLight`) | yes, the domain's header | works everywhere — `kabic` generates `T` per language, as §7.1–§7.13 already do |
+| Game node, exported | yes, the game publishes its own schema | identical machinery — no privileged path for "the engine's own" node types |
+| Game node, internal (not exported) | no | only the authoring language has `T`; every other language sees the entity's raw component data, untyped — which is what *not* exporting means, not a limitation to route around |
+
+Within one language, sharing a node type across two projects needs nothing new — it is that language's own module system (an assembly reference, an `import`, a `@import`), the same way any two C# projects already share a type today. Component **identity**, in the ECS, is always the registered name regardless of which axis is in play; that part of §7.10 was already correct and needs no revision.
+
+The consequence that makes the whole design close: because every node is either **data** (a component, always projectable into any language that has the schema), a **command** (§7.14.2, likewise), or a **dispatched callback** (`ke_node_host`, §7.14.4, which does not care which language registered it), there is no remaining category of "thing a node does" that only one language's runtime can reach. The earlier draft of this design flagged a cross-language `Find<T>()` gap as an inherent limitation; it was not — it was two capabilities (dynamic-language export, size-checked registration) not yet built, not a ceiling on the design.
+
+**One consequence for dynamic-language export specifically.** A Lua- or Python-authored node exporting its schema needs more than today's `component_register(name, size)` runtime call — that is enough for the ECS to store the data, but not enough for `kabic` to *generate* `T` in another language, which needs the field list, same as any `[node:]`-tagged C struct does. Exporting a dynamic-language node type is therefore a reverse-codegen path (source → `kabic`'s IR), not just a registration call; not designed yet.
+
+#### 7.14.8 A concrete behavioral hazard, found auditing `scene_tree.zig` for this section
+
+Emptying `Node._children` to read live from `ke_hierarchy_component` changes observable order, not just internal wiring. `scene_tree.zig`'s `populateNode` **prepends** each new child (`h.next_sibling = ph.first_child; ph.first_child = entity`) — a native child list iterates in reverse insertion order. `Node._children`, today, is a C# `List<Node>` built with `Add` — insertion order. Any game code iterating a node's children (UI layout, turn order, anything positional) observes different behavior the moment `_children` stops being its own list and starts reading the native list directly. This needs a conscious decision before §7.14.1 removes it — most likely reversing `scene_tree.zig`'s link direction to append (an O(1) prepend-to-tail-pointer change, not an O(n) walk), matching Godot's own stable indexed child order, rather than teaching every consumer to expect reverse order.
+
+#### 7.14.9 Proposed order
+
+Ranked by what unlocks the most next, per discussion:
+
+1. **`component_register` size-validation** (§7.14.5) — cheapest, and every day it's not fixed is a day a silent-corruption bug can be introduced by two unrelated node types. Do this regardless of when the rest starts.
+2. **Empty `Node`/`NodeWorld`** (§7.14.1, §7.14.8) — the precondition for the rest; nothing else here is generatable while it duplicates native state.
+3. **`ke_node_host`** (§7.14.4) — closes §7.6 question 3, removes the last reflection dependency blocking generated nodes from having behavior.
+4. **Groups** (§7.14.2) — cheap, and proves the "everything is a component" thesis end-to-end before the harder case.
+5. **Signals** (§7.14.3) — the largest, and the one that most benefits from 2–4 already landing (connections are components; components are cheap once nodes are pure facades).
 
 ---
 
