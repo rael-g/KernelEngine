@@ -2,6 +2,7 @@
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/components.h>
+#include <kernel_engine/spatial/transform.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/common/error.h>

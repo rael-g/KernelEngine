@@ -1,0 +1,252 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_camera_component",
+      "doc": "Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.",
+      "tags": [
+        "node:Camera",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "fov",
+          "type": "float",
+          "tags": [
+            "default:60"
+          ],
+          "doc": null
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [
+            "default:0.1",
+            "name:Near"
+          ],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [
+            "default:1000",
+            "name:Far"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic_size",
+          "type": "float",
+          "tags": [
+            "default:5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_directional_light_component",
+      "doc": "Directional light node. Init properties feed the per-frame light state the renderer consumes.",
+      "tags": [
+        "node:DirectionalLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "float[3]",
+          "tags": [
+            "default:0.2 1 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "float[3]",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ambient",
+          "type": "float[3]",
+          "tags": [
+            "default:0.2 0.2 0.2"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_point_light_component",
+      "doc": "Point light node \u2014 emits light in all directions from this entity\u0027s world position.",
+      "tags": [
+        "node:PointLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "float[3]",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:10"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_spot_light_component",
+      "doc": "Spot light node \u2014 emits a cone of light from this entity\u0027s world position.",
+      "tags": [
+        "node:SpotLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "float[3]",
+          "tags": [
+            "default:0 -1 0"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "float[3]",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "range",
+          "type": "float",
+          "tags": [
+            "default:20"
+          ],
+          "doc": null
+        },
+        {
+          "name": "inner_angle",
+          "type": "float",
+          "tags": [
+            "default:25",
+            "name:InnerAngleDeg"
+          ],
+          "doc": null
+        },
+        {
+          "name": "outer_angle",
+          "type": "float",
+          "tags": [
+            "default:35",
+            "name:OuterAngleDeg"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_ambient_light_component",
+      "doc": "Scene-wide ambient light node. First entity with this component wins.",
+      "tags": [
+        "node:AmbientLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "float[3]",
+          "tags": [
+            "default:0.05 0.05 0.05"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_skybox_component",
+      "doc": "Environment cubemap driving both the skybox and image-based lighting. Not [node:]-tagged: kabic\u0027s node generator has no rule yet for a handle-typed field (it would emit the raw ke_texture_handle instead of the idiomatic TextureHandle wrapper) \u2014 Skybox stays hand-written until that lands.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "cubemap",
+          "type": "ke_texture_handle",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_mesh_component",
+      "doc": "Not [node:]-tagged: kabic\u0027s node generator only supports scalar/[bool]/ float[N] fields; \u0060primitive\u0060 is a fixed char buffer written by the scene-loader property-apply path, not by the MeshRenderer node type, so generating a property for it would be both wrong (no char[N] mapping) and unwanted (the node never sets it). MeshRenderer stays hand-written.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "mesh",
+          "type": "ke_mesh_handle",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "material",
+          "type": "ke_material_handle",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "primitive",
+          "type": "char[32]",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [],
+  "functions": [],
+  "type_aliases": {}
+}

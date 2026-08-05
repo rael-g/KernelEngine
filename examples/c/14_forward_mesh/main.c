@@ -81,7 +81,7 @@ int main(void)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, 1, NULL, NULL, NULL, "shaders", &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, NULL, 1, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
     ke_render_service *core = ke_render_module_core(render.ref);
 
@@ -119,10 +119,10 @@ int main(void)
     ke_entity sun = ecs.ref->entity_create(ecs.ref);
     ke_directional_light_component *sun_l = ecs.ref->component_add(ecs.ref, sun, light_cid);
     *sun_l = (ke_directional_light_component){
-        .dir_x = -0.4f, .dir_y = -1.0f, .dir_z = -0.3f,
-        .r = 1.0f, .g = 1.0f, .b = 1.0f,
+        .direction = { -0.4f, -1.0f, -0.3f },
+        .color = { 1.0f, 1.0f, 1.0f },
         .intensity = 3.0f,
-        .ambient_r = 0.03f, .ambient_g = 0.03f, .ambient_b = 0.04f,
+        .ambient = { 0.03f, 0.03f, 0.04f },
     };
 
     printf("Drawing a lit cube. Close the window to exit.\n");

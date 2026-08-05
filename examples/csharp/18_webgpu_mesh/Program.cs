@@ -42,7 +42,7 @@ EcsRegistry reg;
 unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
 var transformCid = reg.RegisterComponent<TransformComponent>("transform");
-var cameraCid    = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
+var cameraCid    = reg.RegisterComponent<Camera>("camera");
 var meshCid      = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
 var lightCid     = reg.RegisterComponent<DirectionalLight>("directional_light");
 
@@ -50,8 +50,8 @@ var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
 camT = TransformComponent.Identity;
 camT.Position = new Vector3(1.5f, 1.5f, -3.0f);
-ref var camC = ref reg.AddComponent<CameraComponent>(cam, cameraCid)[0];
-camC = new CameraComponent { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f };
+ref var camC = ref reg.AddComponent<Camera>(cam, cameraCid)[0];
+camC = new Camera { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f };
 
 var ent = reg.CreateEntity();
 ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
@@ -97,4 +97,17 @@ struct DirectionalLight
     public Vector3 Color;
     public float   Intensity;
     public Vector3 Ambient;
+}
+
+/// <summary>
+/// Camera as the render layer reads it — same rationale as <see cref="DirectionalLight"/>
+/// above (raw ECS + render-core path, not the toolkit's generated node type).
+/// </summary>
+struct Camera
+{
+    public float Fov;
+    public float NearPlane;
+    public float FarPlane;
+    public float OrthographicSize;
+    public byte  Orthographic;
 }

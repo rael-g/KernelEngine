@@ -297,9 +297,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
         const d: *const c.ke_directional_light_component = @ptrCast(@alignCast(li_segs[0].columns[0]));
-        frame.light_dir = .{ d.dir_x, d.dir_y, d.dir_z, 0.0 };
-        frame.light_color = .{ d.r, d.g, d.b, d.intensity };
-        frame.ambient = .{ d.ambient_r, d.ambient_g, d.ambient_b, 0.0 };
+        frame.light_dir = .{ d.direction[0], d.direction[1], d.direction[2], 0.0 };
+        frame.light_color = .{ d.color[0], d.color[1], d.color[2], d.intensity };
+        frame.ambient = .{ d.ambient[0], d.ambient[1], d.ambient[2], 0.0 };
         frame.shadow_params[2] = 1.0;
     }
     // View 3 = [AmbientLight]; a standalone ambient overrides the directional's.
@@ -307,7 +307,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
         const al: *const c.ke_ambient_light_component = @ptrCast(@alignCast(am_segs[0].columns[0]));
-        frame.ambient = .{ al.r, al.g, al.b, 0.0 };
+        frame.ambient = .{ al.color[0], al.color[1], al.color[2], 0.0 };
     }
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 

@@ -190,6 +190,17 @@
       "usings": []
     },
     {
+      "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). MeshRenderer and Skybox stay hand-written — their fields (a char[N] buffer, a handle type) hit generator gaps not solved yet, noted in components.h. outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host CollisionShape2D/AudioPlayer the same way, hand-written since they have no header yet).",
+      "name": "render_components",
+      "headers": ["src/c/render/kernel_engine/render/components.h"],
+      "includeDirs": ["src/c/render", "src/c/spatial", "src/zig/common/include"],
+      "apiJson": "src/csharp/render/components.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Render.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",
+      "usings": []
+    },
+    {
       "name": "input_actions",
       "headers": ["src/zig/framework/include/kernel_engine/framework/input_actions.h"],
       "includeDirs": ["src/zig/framework/include", "src/c/input", "src/zig/common/include"],

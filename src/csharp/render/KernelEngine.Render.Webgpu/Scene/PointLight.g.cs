@@ -7,59 +7,25 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>Point light node — emits light in all directions from this entity's world position.</summary>
-public class PointLight : Node
+[GeneratedNodeComponent(typeof(ke_point_light_component), "point_light")]
+public partial class PointLight : Node3D
 {
-    private ke_point_light_component _state = new();
-    private uint _cid;
-
     public PointLight()
     {
-        _state.color[0] = 1f;
-        _state.color[1] = 1f;
-        _state.color[2] = 1f;
-        _state.intensity = 1f;
-        _state.radius = 10f;
+        _generatedState.color[0] = 1f;
+        _generatedState.color[1] = 1f;
+        _generatedState.color[2] = 1f;
+        _generatedState.intensity = 1f;
+        _generatedState.radius = 10f;
     }
 
     /// <summary>Linear RGB.</summary>
-    public Vector3 Color
-    {
-        get => new(_state.color[0], _state.color[1], _state.color[2]);
-        set
-        {
-            _state.color[0] = value.X;
-            _state.color[1] = value.Y;
-            _state.color[2] = value.Z;
-            WriteIfBound();
-        }
-    }
-    public float Intensity
-    {
-        get => _state.intensity;
-        set
-        {
-            _state.intensity = value;
-            WriteIfBound();
-        }
-    }
-    public float Radius
-    {
-        get => _state.radius;
-        set
-        {
-            _state.radius = value;
-            WriteIfBound();
-        }
-    }
+    [NativeField("color")]
+    public partial Vector3 Color { get; set; }
 
-    private void WriteIfBound()
-    {
-        if (IsBound) NodeWorld!.SetByCid(Entity, _cid, _state);
-    }
+    [NativeField("intensity")]
+    public partial float Intensity { get; set; }
 
-    protected internal override void OnBind(NodeWorld nodeWorld)
-    {
-        _cid = nodeWorld.CidOfName("point_light");
-        nodeWorld.SetByCid(Entity, _cid, _state);
-    }
+    [NativeField("radius")]
+    public partial float Radius { get; set; }
 }

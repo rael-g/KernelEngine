@@ -67,56 +67,45 @@ public static class CSharpBackend
         return CsType(model, p.Type);
     }
 
+    /// <summary>
+    /// Emits only the declaration a game-facing node type needs: the
+    /// <see cref="GeneratedNodeComponentAttribute"/> marker, the partial property
+    /// signatures, and the constructor seeding <c>[default:]</c> values. Accessor bodies,
+    /// the backing field, and <c>OnBind</c> are <c>KernelEngine.SourceGenerators</c>'s job —
+    /// the same generator a game-authored node type with no header uses, so this type and
+    /// a hand-written one are indistinguishable to it once both compile down to a
+    /// <c>partial</c> class with <c>partial</c> properties.
+    /// </summary>
     public static string RenderNodeType(ApiModel model, ApiStruct component, string ns, string nativeNs, Convention convention)
     {
         var nodeName = component.TagValue("node") ?? throw new InvalidOperationException($"{component.Name} has no [node:] tag");
         var baseName = component.TagValue("base") ?? "Node";
         var nativeType = component.Name;
+        var componentName = convention.ComponentNameFor(component.Name);
 
         var o = new List<string> { Header, "using System.Numerics;", $"using {nativeNs};\n", $"namespace {ns};\n" };
         o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
             : $"/// <summary>Mirrors <c>{nativeType}</c>.</summary>");
-        o.Add($"public class {nodeName} : {baseName}");
+        o.Add($"[GeneratedNodeComponent(typeof({nativeType}), \"{componentName}\")]");
+        o.Add($"public partial class {nodeName} : {baseName}");
         o.Add("{");
 
-        o.Add($"    private {nativeType} _state = new();");
-        o.Add("    private uint _cid;");
-        o.Add("");
         o.Add($"    public {nodeName}()");
         o.Add("    {");
         foreach (var f in component.Fields)
             foreach (var line in FieldInit(model, f)) o.Add($"        {line}");
         o.Add("    }");
-        o.Add("");
 
         foreach (var f in component.Fields)
         {
-            var propName = Idioms.Pascal(f.Name);
+            var propName = f.TagValue("name") ?? Idioms.Pascal(f.Name);
             var propType = NodePropertyType(model, f);
+            o.Add("");
             if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
-            o.Add($"    public {propType} {propName}");
-            o.Add("    {");
-            o.Add($"        get => {ReadField(f, "_state")};");
-            o.Add("        set");
-            o.Add("        {");
-            foreach (var line in AssignField(f, "_state", "value")) o.Add($"            {line}");
-            o.Add("            WriteIfBound();");
-            o.Add("        }");
-            o.Add("    }");
+            o.Add($"    [NativeField(\"{f.Name}\")]");
+            o.Add($"    public partial {propType} {propName} {{ get; set; }}");
         }
 
-        var componentName = convention.ComponentNameFor(component.Name);
-        o.Add("");
-        o.Add("    private void WriteIfBound()");
-        o.Add("    {");
-        o.Add("        if (IsBound) NodeWorld!.SetByCid(Entity, _cid, _state);");
-        o.Add("    }");
-        o.Add("");
-        o.Add("    protected internal override void OnBind(NodeWorld nodeWorld)");
-        o.Add("    {");
-        o.Add($"        _cid = nodeWorld.CidOfName(\"{componentName}\");");
-        o.Add("        nodeWorld.SetByCid(Entity, _cid, _state);");
-        o.Add("    }");
         o.Add("}");
         return string.Join('\n', o);
     }
@@ -128,19 +117,7 @@ public static class CSharpBackend
     }
 
     static string NodePropertyType(ApiModel model, ApiField f) =>
-        VectorArity(f.Type) is int n ? $"Vector{n}" : CsType(model, f.Type);
-
-    static string ReadField(ApiField f, string owner) =>
-        VectorArity(f.Type) is int n
-            ? $"new({string.Join(", ", Enumerable.Range(0, n).Select(i => $"{owner}.{f.Name}[{i}]"))})"
-            : $"{owner}.{f.Name}";
-
-    static readonly string[] VectorLanes = ["X", "Y", "Z", "W"];
-
-    static IEnumerable<string> AssignField(ApiField f, string owner, string value) =>
-        VectorArity(f.Type) is int n
-            ? Enumerable.Range(0, n).Select(i => $"{owner}.{f.Name}[{i}] = {value}.{VectorLanes[i]};")
-            : [$"{owner}.{f.Name} = {value};"];
+        VectorArity(f.Type) is int n ? $"Vector{n}" : f.Has("bool") ? "bool" : CsType(model, f.Type);
 
     static IEnumerable<string> FieldInit(ApiModel model, ApiField f)
     {
@@ -152,9 +129,9 @@ public static class CSharpBackend
             if (parts.Length != n)
                 throw new InvalidOperationException(
                     $"{f.Name}: [default:{d}] has {parts.Length} components but the field is float[{n}]");
-            return parts.Select((p, i) => $"_state.{f.Name}[{i}] = {p}f;");
+            return parts.Select((p, i) => $"_generatedState.{f.Name}[{i}] = {p}f;");
         }
-        return [$"_state.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
+        return [$"_generatedState.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
     }
 
     public static string RenderEnums(ApiModel model, string ns, Convention convention)

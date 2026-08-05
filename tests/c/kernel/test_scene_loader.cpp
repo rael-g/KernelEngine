@@ -2,11 +2,13 @@
 #include <kernel_engine/framework/scene_loader.h>
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/components.h>
+#include <kernel_engine/render/components.h>
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/ecs/variant.h>
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/world_create.h>
+#include <kernel_engine/render/service/render_module_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/scheduler/enki/enki_scheduler.h>
@@ -68,6 +70,13 @@ protected:
         world_h = ke_world_create(&wp, NULL);
         ASSERT_NE(world_h.ref, nullptr);
         world = world_h.ref;
+
+        // Camera/mesh/directional_light/point_light/spot_light are render's own
+        // scene-file vocabulary, not framework's — this test exercises the
+        // scene loader (framework's job) applying them, so it registers
+        // render's apply callbacks itself, exactly as a real host's render
+        // module would (ke_render_module_create does this same call).
+        ASSERT_TRUE(ke_render_register_scene_apply(ecs, world));
 
         loader_h = ke_scene_loader_create(world, nullptr, NULL);
         ASSERT_NE(loader_h.ref, nullptr);
@@ -330,26 +339,26 @@ b = 0.8
     ASSERT_NE(ev, KE_ENTITY_INVALID);
     auto *lv = (ke_directional_light_component *)ecs->component_get(ecs, ev, meta.cid);
     ASSERT_NE(lv, nullptr);
-    EXPECT_FLOAT_EQ(lv->dir_x, -0.4f);
-    EXPECT_FLOAT_EQ(lv->dir_y, -1.0f);
-    EXPECT_FLOAT_EQ(lv->dir_z, -0.3f);
-    EXPECT_FLOAT_EQ(lv->r, 1.0f);
-    EXPECT_FLOAT_EQ(lv->g, 0.9f);
-    EXPECT_FLOAT_EQ(lv->b, 0.8f);
-    EXPECT_FLOAT_EQ(lv->ambient_r, 0.03f);
-    EXPECT_FLOAT_EQ(lv->ambient_b, 0.04f);
+    EXPECT_FLOAT_EQ(lv->direction[0], -0.4f);
+    EXPECT_FLOAT_EQ(lv->direction[1], -1.0f);
+    EXPECT_FLOAT_EQ(lv->direction[2], -0.3f);
+    EXPECT_FLOAT_EQ(lv->color[0], 1.0f);
+    EXPECT_FLOAT_EQ(lv->color[1], 0.9f);
+    EXPECT_FLOAT_EQ(lv->color[2], 0.8f);
+    EXPECT_FLOAT_EQ(lv->ambient[0], 0.03f);
+    EXPECT_FLOAT_EQ(lv->ambient[2], 0.04f);
     EXPECT_FLOAT_EQ(lv->intensity, 3.0f);
 
     ke_entity es = tree->find_node(tree, "SunScalar", NULL);
     ASSERT_NE(es, KE_ENTITY_INVALID);
     auto *ls = (ke_directional_light_component *)ecs->component_get(ecs, es, meta.cid);
     ASSERT_NE(ls, nullptr);
-    EXPECT_FLOAT_EQ(ls->dir_x, lv->dir_x);
-    EXPECT_FLOAT_EQ(ls->dir_y, lv->dir_y);
-    EXPECT_FLOAT_EQ(ls->dir_z, lv->dir_z);
-    EXPECT_FLOAT_EQ(ls->r, lv->r);
-    EXPECT_FLOAT_EQ(ls->g, lv->g);
-    EXPECT_FLOAT_EQ(ls->b, lv->b);
+    EXPECT_FLOAT_EQ(ls->direction[0], lv->direction[0]);
+    EXPECT_FLOAT_EQ(ls->direction[1], lv->direction[1]);
+    EXPECT_FLOAT_EQ(ls->direction[2], lv->direction[2]);
+    EXPECT_FLOAT_EQ(ls->color[0], lv->color[0]);
+    EXPECT_FLOAT_EQ(ls->color[1], lv->color[1]);
+    EXPECT_FLOAT_EQ(ls->color[2], lv->color[2]);
 }
 
 TEST_F(SceneLoaderTest, PointLight_FieldsApplied)
@@ -398,10 +407,10 @@ intensity = 4.0
     ASSERT_TRUE(ecs->component_lookup(ecs, "spot_light", &meta, nullptr));
     auto *l = (ke_spot_light_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(l, nullptr);
-    EXPECT_FLOAT_EQ(l->dir_y, -1.0f);
-    EXPECT_FLOAT_EQ(l->r, 1.0f);
-    EXPECT_FLOAT_EQ(l->g, 0.5f);
-    EXPECT_FLOAT_EQ(l->b, 0.25f);
+    EXPECT_FLOAT_EQ(l->direction[1], -1.0f);
+    EXPECT_FLOAT_EQ(l->color[0], 1.0f);
+    EXPECT_FLOAT_EQ(l->color[1], 0.5f);
+    EXPECT_FLOAT_EQ(l->color[2], 0.25f);
     EXPECT_FLOAT_EQ(l->inner_angle, 0.3f);
     EXPECT_FLOAT_EQ(l->outer_angle, 0.6f);
     EXPECT_FLOAT_EQ(l->range, 20.0f);

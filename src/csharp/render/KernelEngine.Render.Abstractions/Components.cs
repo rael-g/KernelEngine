@@ -25,23 +25,6 @@ public struct MeshVertex
     }
 }
 
-/// <summary>
-/// ECS camera component. Memory layout matches <c>ke_camera_component</c>; a
-/// render system reads the first camera entity to build the view-projection.
-/// </summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct CameraComponent
-{
-    /// <summary>The engine-wide component name this struct is registered under.</summary>
-    public const string Name = "camera";
-
-    public float Fov;
-    public float NearPlane;
-    public float FarPlane;
-    public float OrthographicSize;
-    public byte  Orthographic;
-}
-
 // 32-byte inline storage mirroring ke_mesh_component's char primitive[32] tag.
 [InlineArray(32)]
 public struct PrimitiveTag
@@ -69,47 +52,15 @@ public struct MeshComponent
 // render/components.h one-for-one — field order is the ABI the render core
 // reads, so it must not be reordered independently of that header.
 
-/// <summary>Single directional light plus the ambient it seeds. First entity wins.</summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct DirectionalLightComponent
-{
-    /// <summary>The engine-wide component name this struct is registered under.</summary>
-    public const string Name = "directional_light";
-
-    public Vector3 Direction;
-    public Vector3 Color;
-    public float   Intensity;
-    public Vector3 Ambient;
-}
-
-/// <summary>Point light parameters. Position comes from the entity's transform.</summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct PointLightComponent
-{
-    /// <summary>The engine-wide component name this struct is registered under.</summary>
-    public const string Name = "point_light";
-
-    public Vector3 Color;
-    public float   Intensity;
-    public float   Radius;
-}
-
-/// <summary>Spot light parameters. Position comes from the entity's transform.</summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct SpotLightComponent
-{
-    /// <summary>The engine-wide component name this struct is registered under.</summary>
-    public const string Name = "spot_light";
-
-    public Vector3 Direction;
-    public Vector3 Color;
-    public float   Intensity;
-    public float   Range;
-    public float   InnerAngleDeg;
-    public float   OuterAngleDeg;
-}
-
-/// <summary>Scene-wide ambient light color. First entity wins.</summary>
+/// <summary>
+/// Scene-wide ambient light color. First entity wins. Kept as a managed mirror
+/// (unlike Camera/DirectionalLight/PointLight/SpotLight, which kabic generates
+/// straight onto <c>ke_ambient_light_component</c>) because the scene loader's
+/// <c>[entity.components.AmbientLight]</c> property-apply path needs an
+/// unmanaged struct type to key <see cref="IComponentRegistry.CidOf{T}"/> on;
+/// ambient light has no native apply function (components_apply.zig), so this
+/// is the only producer that still needs it.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct AmbientLightComponent
 {
