@@ -397,7 +397,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
     st.shader_cache_destroy = shader_ch.destroy.?;
 
     // Built-in backbuffer resource (its view is refreshed each begin_frame).
-    const bb_cid = e.component_register.?(e, "backbuffer", 0);
+    const bb_cid = e.component_register.?(e, "backbuffer", 0, null);
     st.resources[0] = .{
         .name = "backbuffer",
         .cid = bb_cid,

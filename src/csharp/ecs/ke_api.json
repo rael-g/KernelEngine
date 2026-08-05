@@ -130,8 +130,8 @@
           "name": "component_register",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Registers a component type by name, or returns the existing id if already registered.",
-          "return_doc": "The component\u0027s id.",
+          "doc": "Registers a component type by name, or returns the existing id if already registered. Registering an existing name with a different element_size is an error: the name would otherwise silently alias two unrelated layouts under one cid.",
+          "return_doc": "The component\u0027s id, or 0 on error.",
           "params": [
             {
               "name": "name",
@@ -147,6 +147,15 @@
               "type": "size_t",
               "tags": [],
               "doc": "Bytes per entity; 0 registers a tag (no storage)."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [
+                "out",
+                "optional"
+              ],
+              "doc": "Set when element_size conflicts with the name\u0027s prior registration."
             }
           ]
         },

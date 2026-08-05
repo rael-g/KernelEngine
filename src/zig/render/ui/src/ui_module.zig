@@ -561,13 +561,13 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
 
     // Same name any producer (game scripts via SystemContext.Attach) registers
     // via component_register — whoever calls first wins, everyone gets the same cid.
-    ui.quad_cid = e.component_register.?(e, "ui_quad", @sizeOf(UiQuadComponent));
+    ui.quad_cid = e.component_register.?(e, "ui_quad", @sizeOf(UiQuadComponent), null);
     ui.queries[0].terms[0] = .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ };
     ui.queries[0].term_count = 1;
 
     // "label" — draw pass (below) only reads the shaped glyphs; labelShapeSystem
     // (its own system, registered next) is the sole writer.
-    ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component));
+    ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
     ui.queries[1].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ };
     ui.queries[1].term_count = 1;
 

@@ -636,7 +636,7 @@ export fn ke_scene_loader_create(
     s.scene_properties_cid = if (e.component_lookup.?(e, c.KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta, null))
         meta.cid
     else
-        e.component_register.?(e, c.KE_SCENE_PROPERTIES_COMPONENT_NAME, @sizeOf(c.ke_scene_properties));
+        e.component_register.?(e, c.KE_SCENE_PROPERTIES_COMPONENT_NAME, @sizeOf(c.ke_scene_properties), null);
 
     s.api.handle = s;
     s.api.load = vtLoad;

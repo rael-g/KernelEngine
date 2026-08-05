@@ -50,13 +50,17 @@ extern "C"
 
         /**
          * Registers a component type by name, or returns the existing id if already registered.
+         * Registering an existing name with a different element_size is an error: the
+         * name would otherwise silently alias two unrelated layouts under one cid.
          * @param name [borrowed,utf8] Unique component name.
          * @param element_size Bytes per entity; 0 registers a tag (no storage).
-         * @return The component's id.
+         * @param out_error [out,optional] Set when element_size conflicts with the name's prior registration.
+         * @return The component's id, or 0 on error.
          */
         ke_component_id (*component_register)(struct ke_ecs *self,
                                                const char    *name,
-                                               size_t         element_size);
+                                               size_t         element_size,
+                                               ke_error     **out_error);
 
         /**
          * [try] Looks up a previously registered component by name.

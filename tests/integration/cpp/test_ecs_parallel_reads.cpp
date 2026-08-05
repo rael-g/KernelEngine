@@ -82,7 +82,7 @@ protected:
 TEST_F(EcsParallelReads, TwoReadersSameWave_NoConcurrentStorageAccess)
 {
     static ke_component_id pos;
-    pos = ecs->component_register(ecs, "pos", sizeof(Pos));
+    pos = ecs->component_register(ecs, "pos", sizeof(Pos), nullptr);
     ASSERT_NE(pos, 0u);
 
     for (int i = 0; i < 512; ++i)
@@ -147,8 +147,8 @@ void posvel_body(ke_system_ctx *ctx, void *, float)
 // so columns[0][i] and columns[1][i] belong to the same entity.
 TEST_F(EcsParallelReads, MultiTermQuery_AlignedColumns)
 {
-    ke_component_id pos = ecs->component_register(ecs, "pos2", sizeof(Pos));
-    ke_component_id vel = ecs->component_register(ecs, "vel2", sizeof(Vel));
+    ke_component_id pos = ecs->component_register(ecs, "pos2", sizeof(Pos), nullptr);
+    ke_component_id vel = ecs->component_register(ecs, "vel2", sizeof(Vel), nullptr);
     ASSERT_NE(pos, 0u);
     ASSERT_NE(vel, 0u);
 

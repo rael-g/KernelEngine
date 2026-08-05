@@ -47,7 +47,7 @@ fn getTransform(s: *State, e: c.ke_entity) ?*c.ke_transform_component {
 fn ensureComponent(ecs: *c.ke_ecs, name: [*c]const u8, size: usize) c.ke_component_id {
     var meta: c.ke_component_meta = undefined;
     if (ecs.component_lookup.?(ecs, name, &meta, null)) return meta.cid;
-    return ecs.component_register.?(ecs, name, size);
+    return ecs.component_register.?(ecs, name, size, null);
 }
 
 /// Writes `src` into a fixed-size component name field, truncating to fit.

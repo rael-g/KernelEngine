@@ -442,7 +442,7 @@ ExtractProbe g_extract_probe;
 
 TEST_F(RuntimeSpike, RenderExtract_ReflectsThisTicksSimWrite)
 {
-    ke_component_id cid = ecs->component_register(ecs, "Extract.Value", sizeof(int));
+    ke_component_id cid = ecs->component_register(ecs, "Extract.Value", sizeof(int), nullptr);
     ke_entity e = ecs->entity_create(ecs);
     int *v = static_cast<int *>(ecs->component_add(ecs, e, cid));
     ASSERT_NE(v, nullptr);
@@ -511,8 +511,8 @@ std::atomic<int> g_extract_pv_runs{0};
 // merge-copy in runtime_extract_render_state must preserve per-entity alignment.
 TEST_F(RuntimeSpike, RenderExtract_MultiTermAlignment)
 {
-    ke_component_id pos = ecs->component_register(ecs, "ExtractPos", sizeof(MultiTermExtract));
-    ke_component_id vel = ecs->component_register(ecs, "ExtractVel", sizeof(MultiTermExtract));
+    ke_component_id pos = ecs->component_register(ecs, "ExtractPos", sizeof(MultiTermExtract), nullptr);
+    ke_component_id vel = ecs->component_register(ecs, "ExtractVel", sizeof(MultiTermExtract), nullptr);
 
     double expect = 0.0;
     for (int i = 0; i < 64; i++)
@@ -820,7 +820,7 @@ TEST(FlecsTagTest, ZeroSizeComponent_RegistersAsUsableTag)
     ke_ecs_handle h{};
     h = ke_ecs_flecs_create(&p, nullptr); ASSERT_NE(h.ref, nullptr);
 
-    ke_component_id tag = h.ref->component_register(h.ref, "ZeroSizeTag", 0);
+    ke_component_id tag = h.ref->component_register(h.ref, "ZeroSizeTag", 0, nullptr);
     EXPECT_NE(tag, (ke_component_id)0) << "zero-size component should be a valid tag";
 
     // The world must stay usable: add the tag, then find its carrier through the

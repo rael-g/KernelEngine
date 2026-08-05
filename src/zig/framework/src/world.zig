@@ -146,7 +146,7 @@ fn registerBuiltin(
     const cid = if (e.component_lookup.?(e, name, &meta, null))
         meta.cid
     else
-        e.component_register.?(e, name, size);
+        e.component_register.?(e, name, size, null);
     _ = world.register_component_apply.?(world, cid, apply_fn, null);
 }
 

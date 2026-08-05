@@ -550,7 +550,7 @@ void demo_apply(void *c, const ke_variant_table_entry *entries, uint32_t count) 
 
 TEST_F(SceneLoaderTest, UserComponent_AppliedThroughCustomCallback)
 {
-    ke_component_id demo_cid = ecs->component_register(ecs, "demo", sizeof(DemoComp));
+    ke_component_id demo_cid = ecs->component_register(ecs, "demo", sizeof(DemoComp), nullptr);
     ASSERT_NE(demo_cid, KE_COMPONENT_INVALID);
     ASSERT_TRUE(world->register_component_apply(world, demo_cid, demo_apply, nullptr));
 

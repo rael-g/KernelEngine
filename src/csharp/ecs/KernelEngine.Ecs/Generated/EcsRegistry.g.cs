@@ -57,16 +57,19 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         Handle->entity_destroy(Handle, entity);
     }
 
-    /// <summary>Registers a component type by name, or returns the existing id if already registered.</summary>
+    /// <summary>Registers a component type by name, or returns the existing id if already registered. Registering an existing name with a different element_size is an error: the name would otherwise silently alias two unrelated layouts under one cid.</summary>
     /// <param name="name">Unique component name.</param>
     /// <param name="elementSize">Bytes per entity; 0 registers a tag (no storage).</param>
-    /// <returns>The component's id.</returns>
+    /// <exception cref="KernelError">The native call failed.</exception>
     public uint ComponentRegister(string name, nuint elementSize)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            return Handle->component_register(Handle, (sbyte*)namePtr, elementSize);
+            ke_error* err = null;
+            var result = Handle->component_register(Handle, (sbyte*)namePtr, elementSize, &err);
+            if (err != null) throw KernelError.FromNative(err, "component_register");
+            return result;
         }
     }
 

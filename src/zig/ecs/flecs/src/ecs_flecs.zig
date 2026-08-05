@@ -175,14 +175,34 @@ fn entityDestroy(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
     c.ecs_delete(s.world, @intCast(entity));
 }
 
-fn componentRegister(self_in: ?*c.ke_ecs, name: [*c]const u8, size: usize) callconv(.c) c.ke_component_id {
-    const self = self_in orelse return 0;
-    if (self.handle == null or name == null) return 0;
+fn componentRegister(
+    self_in: ?*c.ke_ecs,
+    name: [*c]const u8,
+    size: usize,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_component_id {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return 0;
+    };
+    if (self.handle == null or name == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return 0;
+    }
     const s = stateOf(self);
 
     // Reuse if already registered with the same name (idempotent for module reloads).
     const existing = c.ecs_lookup(s.world, name);
     if (existing != 0) {
+        // A tag (size 0) has no ecs_get_type_info entry; a data component does.
+        // Comparing here is what stops two unrelated node types that happen to
+        // generate the same name from silently aliasing one cid at two strides.
+        const ti = c.ecs_get_type_info(s.world, @intCast(existing));
+        const existing_size: usize = if (ti != null) @intCast(ti.*.size) else 0;
+        if (existing_size != size) {
+            E.fail(out_error, .invalid_argument, "component already registered with a different size", @src());
+            return 0;
+        }
         _ = findOrCreateQuery(s, @truncate(existing));
         return @truncate(existing);
     }
@@ -469,6 +489,31 @@ test "flecsLogHandler ignores a null message" {
     last_msg_len = 0;
     flecsLogHandler(-1, "flecs_internal.c", 1, null);
     try testing.expectEqual(@as(usize, 0), last_msg_len);
+}
+
+test "componentRegister rejects re-registering a name with a different size" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    const first = handle.ref.*.component_register.?(handle.ref, "dup_name", 8, &out_error);
+    try testing.expect(first != 0);
+    try testing.expect(out_error == null);
+
+    const second = handle.ref.*.component_register.?(handle.ref, "dup_name", 16, &out_error);
+    try testing.expectEqual(@as(c.ke_component_id, 0), second);
+    try testing.expect(out_error != null);
+}
+
+test "componentRegister is idempotent for a repeated identical size" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    const first = handle.ref.*.component_register.?(handle.ref, "same_name", 12, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, "same_name", 12, &out_error);
+    try testing.expectEqual(first, second);
+    try testing.expect(out_error == null);
 }
 
 // The end-to-end case — a genuine flecs internal assertion reaching the real

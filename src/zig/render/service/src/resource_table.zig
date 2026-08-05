@@ -11,7 +11,7 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
     const st = rc.coreOf(self);
     if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
 
-    const cid = st.ecs.component_register.?(st.ecs, desc.*.name, 0);
+    const cid = st.ecs.component_register.?(st.ecs, desc.*.name, 0, null);
 
     var w = desc.*.width;
     var h = desc.*.height;
@@ -76,7 +76,7 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
     _ = out_error;
     const st = rc.coreOf(self);
     if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
-    const cid = st.ecs.component_register.?(st.ecs, name, 0);
+    const cid = st.ecs.component_register.?(st.ecs, name, 0, null);
     st.resources[st.resource_count] = .{
         .name = name,
         .cid = cid,
@@ -101,7 +101,7 @@ pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [
     _ = out_error;
     const st = rc.coreOf(self);
     if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
-    const cid = st.ecs.component_register.?(st.ecs, name, 0);
+    const cid = st.ecs.component_register.?(st.ecs, name, 0, null);
     st.resources[st.resource_count] = .{
         .name = name,
         .cid = cid,
@@ -123,7 +123,7 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
     _ = out_error;
     const st = rc.coreOf(self);
     if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
-    const cid = st.ecs.component_register.?(st.ecs, name, 0);
+    const cid = st.ecs.component_register.?(st.ecs, name, 0, null);
     st.resources[st.resource_count] = .{
         .name = name,
         .cid = cid,
@@ -149,7 +149,7 @@ pub fn importBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8, bg: c.
     _ = out_error;
     const st = rc.coreOf(self);
     if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
-    const cid = st.ecs.component_register.?(st.ecs, name, 0);
+    const cid = st.ecs.component_register.?(st.ecs, name, 0, null);
     st.resources[st.resource_count] = .{
         .name = name,
         .cid = cid,
