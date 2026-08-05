@@ -28,7 +28,6 @@
     <ProjectReference Include="..\..\..\src\csharp\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler.Enki\KernelEngine.Scheduler.Enki.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
   </ItemGroup>
 
 </Project>

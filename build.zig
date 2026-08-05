@@ -189,10 +189,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
         argF(b, "kerror-src", kerror_src),
         argF(b, "tomlc99-dir", tomlc99_dir),
-        argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
-    }, &.{
-        &runtime.step,
-    });
+    }, &.{});
 
     const window_glfw = ctx.plugin("ke_window_glfw", "src/zig/window/glfw", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),

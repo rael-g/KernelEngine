@@ -42,13 +42,11 @@ Framework.umbrella.h
 ../../../../zig/framework/include/kernel_engine/framework/world.h
 ../../../../zig/framework/include/kernel_engine/framework/input_actions.h
 ../../../../zig/framework/include/kernel_engine/framework/scene_loader.h
-../../../../zig/framework/include/kernel_engine/framework/node_host.h
 ../../../../zig/framework/include/kernel_engine/framework/world_create.h
 ../../../../zig/framework/include/kernel_engine/framework/scene_tree_create.h
 ../../../../zig/framework/include/kernel_engine/framework/scene_loader_create.h
 ../../../../zig/framework/include/kernel_engine/framework/input_actions_create.h
 ../../../../zig/framework/include/kernel_engine/framework/asset_resolver_create.h
-../../../../zig/framework/include/kernel_engine/framework/node_host_create.h
 --additional
 -DKE_FRAMEWORK_STATIC
 --methodClassName
@@ -82,11 +80,6 @@ ke_font_loader=KernelEngine.Text.Native.ke_font_loader
 ke_font_data=KernelEngine.Text.Native.ke_font_data
 ke_glyph_metrics=KernelEngine.Text.Native.ke_glyph_metrics
 ke_result=ke_result
-ke_variant_type=KernelEngine.Ecs.Native.ke_variant_type
-ke_variant=KernelEngine.Ecs.Native.ke_variant
-ke_variant_table=KernelEngine.Ecs.Native.ke_variant_table
-ke_component_field=KernelEngine.Ecs.Native.ke_component_field
-ke_access=KernelEngine.Runtime.Native.ke_access
 --exclude
 ke_result
 ke_bool
@@ -110,11 +103,6 @@ ke_input_event_type
 ke_font_loader
 ke_font_data
 ke_glyph_metrics
-ke_variant_type
-ke_variant
-ke_variant_table
-ke_component_field
-ke_access
 --config
 multi-file
 latest-codegen

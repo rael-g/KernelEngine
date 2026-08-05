@@ -18,7 +18,6 @@ pub const c = @cImport({
     @cInclude("kernel_engine/framework/scene_loader_create.h");
     @cInclude("kernel_engine/framework/world_create.h");
     @cInclude("kernel_engine/framework/input_actions_create.h");
-    @cInclude("kernel_engine/framework/node_host_create.h");
     @cInclude("kernel_engine/input/key.h");
     @cInclude("toml.h");
 });

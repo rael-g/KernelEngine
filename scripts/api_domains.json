@@ -190,19 +190,6 @@
       "usings": []
     },
     {
-      "_comment": "Not a separate native plugin — node_host.zig lives inside src/zig/framework, same as world/scene_tree/scene_loader above are four manifest entries under one native 'framework' plugin. kabic already generates a complete NodeHost/NodeTypeBuilder wrapper from node_host.h with zero hand-written code (out_error->exception translation included) — no idiom file needed for this domain. abstractionsOutDir is its own subfolder, not the shared Generated/ dir: generate_csharp.cs writes a fixed 'Enums.g.cs' filename per invocation (overwrite, not merge), and the input_actions domain below already owns that filename in the shared dir — sharing it here would silently delete ActionType/ActionPhase on every node_host regen (hit once, caught before commit, while landing this domain).",
-      "name": "node_host",
-      "headers": ["src/zig/framework/include/kernel_engine/framework/node_host.h"],
-      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
-      "includeDirs": ["src/zig/framework/include", "src/c/ecs", "src/c/runtime", "src/zig/common/include"],
-      "apiJson": "src/csharp/framework/node_host.ke_api.json",
-      "namespace": "KernelEngine.Framework",
-      "nativeNamespace": "KernelEngine.Framework.Native",
-      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
-      "abstractionsOutDir": "src/csharp/framework/KernelEngine.Framework/Generated/NodeHostEnums",
-      "usings": ["KernelEngine.Ecs.Native", "KernelEngine.Runtime.Native"]
-    },
-    {
       "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). MeshRenderer and Skybox stay hand-written — their fields (a char[N] buffer, a handle type) hit generator gaps not solved yet, noted in components.h. outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host CollisionShape2D/AudioPlayer the same way, hand-written since they have no header yet).",
       "name": "render_components",
       "headers": ["src/c/render/kernel_engine/render/components.h"],
