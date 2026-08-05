@@ -18,6 +18,10 @@ public static unsafe class SystemContext
     private static extern byte ke_system_ctx_attach(void* ctx, ulong entity, uint cid,
                                                     void* data, nuint size);
 
+    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl,
+               EntryPoint = "ke_system_ctx_reserve", ExactSpelling = true)]
+    private static extern ulong ke_system_ctx_reserve(void* ctx);
+
     /// <summary>
     /// Deferred-attaches component <paramref name="cid"/> to <paramref name="entity"/>
     /// with <paramref name="value"/> as its data. The component is added at the wave
@@ -30,5 +34,16 @@ public static unsafe class SystemContext
         if (ctx == 0) return false;
         fixed (T* p = &value)
             return ke_system_ctx_attach((void*)ctx, entity, cid, p, (nuint)sizeof(T)) != 0;
+    }
+
+    /// <summary>
+    /// Reserves a real, usable entity id immediately — safe to call from a wave
+    /// thread, unlike <c>entity_create</c>. Components attach at the wave barrier
+    /// via <see cref="Attach{T}"/>. Returns 0 (KE_ENTITY_INVALID) if no context.
+    /// </summary>
+    public static ulong Reserve(nint ctx)
+    {
+        if (ctx == 0) return 0;
+        return ke_system_ctx_reserve((void*)ctx);
     }
 }

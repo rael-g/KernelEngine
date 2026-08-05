@@ -68,7 +68,7 @@ var services = new ServiceCollection()
             Offset = new Vector2(-20, -20),
         }, "BottomRight");
 
-        tree.AddNode(new BackgroundQuad(resources), "BackgroundQuad");
+        tree.AddNode(new BackgroundQuad(), "BackgroundQuad");
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -93,21 +93,23 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[14_ui_quad] Exited cleanly.");
 
-// ── Solid-color background quad, queued every frame via IRenderResources.UiQuad ──
+// ── Solid-color background quad, queued every frame by attaching a UiQuadComponent ──
 
 sealed class BackgroundQuad : Node
 {
-    private readonly IRenderResources _resources;
+    private uint _quadCid;
 
-    public BackgroundQuad(IRenderResources resources) => _resources = resources;
-
-    protected override void OnBind(NodeWorld nodeWorld) { /* nothing to materialize — this node only carries behavior */ }
+    protected override void OnBind(NodeWorld nodeWorld) => _quadCid = nodeWorld.RegisterComponent<UiQuadComponent>("ui_quad");
 
     protected override void OnUpdate(in View view)
     {
-        _resources.UiQuad(TextureHandle.None,
-            dstX: 360, dstY: 220, dstW: 240, dstH: 100,
-            u0: 0, v0: 0, u1: 1, v1: 1,
-            premultipliedColor: new Vector4(0.20f * 0.5f, 0.85f * 0.5f, 0.30f * 0.5f, 0.5f));
+        var quad = new UiQuadComponent
+        {
+            TextureBits = TextureHandle.None.Value,
+            DstX = 360, DstY = 220, DstW = 240, DstH = 100,
+            U0 = 0, V0 = 0, U1 = 1, V1 = 1,
+            R = 0.20f * 0.5f, G = 0.85f * 0.5f, B = 0.30f * 0.5f, A = 0.5f,
+        };
+        view.NodeWorld.Attach(in view, Entity, _quadCid, in quad);
     }
 }

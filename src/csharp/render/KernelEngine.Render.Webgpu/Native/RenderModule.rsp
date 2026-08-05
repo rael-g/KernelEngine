@@ -18,6 +18,8 @@ ke_render_service
 ../../../../zig/render/ui/include
 --include-directory
 ../../../../c/text
+--include-directory
+../../../../zig/framework/include
 --file
 ../../../../zig/render/service/include/kernel_engine/render/service/render_module_create.h
 --traverse
@@ -37,6 +39,7 @@ ke_runtime=KernelEngine.Runtime.Native.ke_runtime
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_gpu_device=ke_gpu_device
 ke_logger=KernelEngine.Logger.Native.ke_logger
+ke_world=KernelEngine.Framework.Native.ke_world
 ke_result=ke_result
 --exclude
 ke_result
@@ -44,6 +47,7 @@ ke_bool
 ke_runtime
 ke_ecs
 ke_logger
+ke_world
 ke_render_ui_create
 ke_font_loader
 ke_font_loader_handle

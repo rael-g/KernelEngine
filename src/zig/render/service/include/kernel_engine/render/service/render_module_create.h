@@ -4,7 +4,9 @@
 #include <kernel_engine/render/ui/ui_create.h>
 #include <kernel_engine/text/font.h>
 #include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/framework/world.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -52,47 +54,44 @@ typedef struct ke_render_feature_params
 // → forward → end) as KE_PHASE_RENDER systems, ordered by the runtime via the
 // backbuffer tag-cid; otherwise the game wires its own passes. The app drives it
 // by ticking the runtime. Inputs are borrowed (the device stays caller-owned)
-// and must outlive the handle; ref is NULL on failure. `logger` is optional
-// (NULL is valid) — when present, the module routes its own runtime
-// diagnostics (e.g. a scene exceeding a fixed resource cap) through it instead
-// of staying silent. `cluster_params` and `feature_params` are optional (NULL
+// and must outlive the handle; ref is NULL on failure. `world` registers this
+// domain's own [entity.components.X] scene-file apply callbacks (camera, mesh,
+// directional/point/spot light) against the caller's ke_world; NULL is valid
+// whenever the caller has no ke_world (populating the ECS directly rather than
+// through ke_scene_loader), since nothing will ever ask for those callbacks.
+// `logger` is optional (NULL is valid) — when present, the module routes its
+// own runtime diagnostics (e.g. a scene exceeding a fixed resource cap) through
+// it instead of staying silent. `cluster_params` and `feature_params` are optional (NULL
 // = all defaults). `shader_dir` is required — an absolute path to the
 // directory every pass's build-time-compiled shaders were installed into (see
 // ke_render_service_create); forwarded to the render core unchanged.
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
-                        ke_bool default_passes, struct ke_logger *logger,
+                        ke_world *world, ke_bool default_passes, struct ke_logger *logger,
                         const ke_render_cluster_params *cluster_params,
                         const ke_render_feature_params *feature_params,
                         const char *shader_dir, ke_error **out_error);
+
+// Registers render's own cids + [entity.components.X] scene-file apply
+// callbacks (camera/mesh/directional_light/point_light/spot_light/ambient_light/
+// skybox) against `world`, with no GPU device involved. ke_render_module_create
+// calls this itself when given a world; a caller that only needs the ECS
+// schema populated for ke_scene_loader (e.g. a headless test, or a game
+// wiring its own render passes without the default chain) can call it
+// directly. Returns false if either argument is NULL.
+KE_RENDER_CORE_API bool
+ke_render_register_scene_apply(ke_ecs *ecs, ke_world *world);
 
 // Borrows the render core the module owns — used to upload meshes and declare
 // resources. Valid for the module's lifetime; the caller must not destroy it.
 KE_RENDER_CORE_API ke_render_service *ke_render_module_core(ke_render_module *module);
 
-// Queues a screen-space UI quad for this frame, drawn after tonemap so it
-// composites over the rendered scene. Coordinates are pixels (top-left
-// origin); uv selects a region of `texture` (KE_TEXTURE_NONE = built-in white,
-// so a flat-color quad just samples white*color); color is premultiplied
-// alpha RGBA. Call from any render-phase system body, before the "render.ui"
-// pass runs (the module orders it last). Silently dropped past the per-frame
-// quad/batch limits. Owned by the module, not the render core: UI overlay is
-// a rendering feature (its own pipeline, shaders, batching state) like
-// tonemap/forward/shadow, not core machinery.
-// color is 4 floats (premultiplied r,g,b,a) passed by pointer rather than as
-// trailing scalar args: dst_x..v1 already uses all 8 SysV XMM argument
-// registers, so 4 more float args would spill onto the stack — a shape .NET's
-// P/Invoke marshaler gets wrong (confirmed: the values it delivers natively
-// for exactly those spilled args are garbage, unrelated to what C# passed).
-KE_RENDER_CORE_API void
-ke_render_module_ui_quad(ke_render_module *module, ke_texture_handle texture,
-                         float dst_x, float dst_y, float dst_w, float dst_h,
-                         float u0, float v0, float u1, float v1,
-                         const float color[4]);
-
 /**
- * Registers a font's glyph table (see ke_render_ui.load_font) for
- * ke_render_module_text_quad, deduped by @p key. KE_UI_FONT_NONE on failure.
+ * Registers a font's glyph table (see ke_render_ui.load_font), deduped by
+ * @p key. KE_UI_FONT_NONE on failure. Queuing a UI quad no longer goes
+ * through the render module — game code attaches the "ui_quad" ECS component
+ * directly, resolved by the "render.ui" pass the same way every other
+ * render-phase pass consumes sim-written data.
  * @param key [utf8]
  * @param glyphs [borrowed,array_of:glyph_count]
  */
@@ -101,16 +100,6 @@ ke_render_module_load_font(ke_render_module *module, const char *key,
                            ke_texture_handle atlas, const ke_glyph_metrics *glyphs,
                            uint32_t glyph_count, float line_height, float ascent,
                            ke_error **out_error);
-
-/**
- * Expands @p text into one queued UI quad per glyph (see ke_render_ui.text_quad).
- * Call from any render-phase system body, before the "render.ui" pass runs.
- * @param text [utf8]
- */
-KE_RENDER_CORE_API void
-ke_render_module_text_quad(ke_render_module *module, ke_ui_font_handle font,
-                           const char *text, float origin_x, float baseline_y,
-                           const float color[4]);
 
 #ifdef __cplusplus
 }

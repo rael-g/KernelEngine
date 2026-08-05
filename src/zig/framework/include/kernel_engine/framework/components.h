@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_FRAMEWORK_COMPONENTS_H_
 
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/render/components.h>
 
 #ifdef __cplusplus
 extern "C"

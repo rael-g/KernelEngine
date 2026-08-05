@@ -1,5 +1,6 @@
 const std = @import("std");
 const cimport = @import("cimport.zig");
+const component_apply = @import("component_apply.zig");
 
 // Compiled into the ke_render_service library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -127,32 +128,17 @@ export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.k
     return st.core.ref;
 }
 
-// Queues a screen-space UI quad for this frame — forwarded into the ui plugin's
-// own vtable (ke_render_ui.ui_quad), not handled by ke_render_service. Replaces
-// the old ke_render_service.ui_quad vtable slot; see ke_render_ui for why it moved.
-export fn ke_render_module_ui_quad(module: ?*c.ke_render_module, texture: c.ke_texture_handle,
-                                   dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
-                                   uv0: f32, uv1: f32, uv2: f32, uv3: f32,
-                                   color: [*c]const f32) callconv(.c) void {
-    const st: *ModuleState = @alignCast(@ptrCast(module orelse return));
-    st.ui.ref.*.ui_quad.?(st.ui.ref, texture, dst_x, dst_y, dst_w, dst_h, uv0, uv1, uv2, uv3, color);
-}
-
-// See ke_render_module_ui_quad's comment — same forwarding shape, into the ui
-// plugin's load_font/text_quad vtable slots.
+// Forwards into the ui plugin's own vtable (ke_render_ui.load_font), not
+// handled by ke_render_service. Queuing a quad no longer goes through this
+// module at all — game code attaches the "ui_quad" ECS component directly
+// (via NodeWorld/SystemContext), the same channel every other render-phase
+// pass consumes sim-written data through. See ke_render_ui for why.
 export fn ke_render_module_load_font(module: ?*c.ke_render_module, key: [*c]const u8,
                                      atlas: c.ke_texture_handle, glyphs: [*c]const c.ke_glyph_metrics,
                                      glyph_count: u32, line_height: f32, ascent: f32,
                                      out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ui_font_handle {
     const st: *ModuleState = @alignCast(@ptrCast(module orelse return c.KE_UI_FONT_NONE));
     return st.ui.ref.*.load_font.?(st.ui.ref, key, atlas, glyphs, glyph_count, line_height, ascent, out_error);
-}
-
-export fn ke_render_module_text_quad(module: ?*c.ke_render_module, font: c.ke_ui_font_handle,
-                                     text: [*c]const u8, origin_x: f32, baseline_y: f32,
-                                     color: [*c]const f32) callconv(.c) void {
-    const st: *ModuleState = @alignCast(@ptrCast(module orelse return));
-    st.ui.ref.*.text_quad.?(st.ui.ref, font, text, origin_x, baseline_y, color);
 }
 
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
@@ -171,8 +157,34 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
 
 const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
 
+// Registers this domain's own cids + [entity.components.X] scene-file apply
+// callbacks (camera/mesh/directional_light/point_light/spot_light/ambient_light/
+// skybox) against `world`, independent of any GPU device. `ke_render_module_create`
+// calls this itself when given a non-null world; a caller that only needs the
+// ECS schema populated (e.g. a headless scene-loader test) can call it directly
+// instead of standing up a full render module.
+export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) callconv(.c) bool {
+    const e = ecs orelse return false;
+    const w = world orelse return false;
+
+    const mesh_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_MESH, @sizeOf(c.ke_mesh_component));
+    const camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component));
+    const light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component));
+    const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(c.ke_point_light_component));
+    const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(c.ke_spot_light_component));
+    _ = e.component_register.?(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, @sizeOf(c.ke_ambient_light_component));
+    _ = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component));
+
+    _ = w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null);
+    _ = w.register_component_apply.?(w, mesh_cid, component_apply.ke_render_apply_mesh, null);
+    _ = w.register_component_apply.?(w, light_cid, component_apply.ke_render_apply_directional_light, null);
+    _ = w.register_component_apply.?(w, point_light_cid, component_apply.ke_render_apply_point_light, null);
+    _ = w.register_component_apply.?(w, spot_light_cid, component_apply.ke_render_apply_spot_light, null);
+    return true;
+}
+
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
-                                  default_passes: c.ke_bool, logger: ?*c.ke_logger,
+                                  world: ?*c.ke_world, default_passes: c.ke_bool, logger: ?*c.ke_logger,
                                   cluster_params: ?*const c.ke_render_cluster_params,
                                   feature_params: ?*const c.ke_render_feature_params,
                                   shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
@@ -269,6 +281,12 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(c.ke_spot_light_component));
         const ambient_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, @sizeOf(c.ke_ambient_light_component));
         const skybox_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component));
+
+        // [entity.components.X] scene-file property application for render's own
+        // vocabulary — registered against the caller's world (if any) rather
+        // than hardcoded into the framework plugin (which owns only "transform").
+        // Idempotent, so a re-registration on repeated create() is safe.
+        _ = ke_render_register_scene_apply(e, world);
 
         // begin_frame/clear are registered first, unconditionally, before any
         // pass's setup runs: gbuffer is its own physical plugin whose create()
@@ -374,7 +392,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // runtime system, matching the position its old registerSys call
         // occupied. cmd_slot 8 = after tonemap's slot 7 (loads, doesn't clear,
         // the backbuffer tonemap just wrote, so text/quads composite on top).
-        st.ui = c.ke_render_ui_create(rt, st.core.ref, dev, ndc, bb_cid, 8, out_error);
+        st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, 8, out_error);
         if (st.ui.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);

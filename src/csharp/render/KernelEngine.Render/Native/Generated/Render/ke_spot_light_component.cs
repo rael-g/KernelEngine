@@ -1,20 +1,15 @@
 using KernelEngine.Common.Native;
+using System.Runtime.CompilerServices;
 
 namespace KernelEngine.Render.Native;
 
 public partial struct ke_spot_light_component
 {
-    public float dir_x;
+    [NativeTypeName("float[3]")]
+    public _direction_e__FixedBuffer direction;
 
-    public float dir_y;
-
-    public float dir_z;
-
-    public float r;
-
-    public float g;
-
-    public float b;
+    [NativeTypeName("float[3]")]
+    public _color_e__FixedBuffer color;
 
     public float intensity;
 
@@ -23,4 +18,16 @@ public partial struct ke_spot_light_component
     public float inner_angle;
 
     public float outer_angle;
+
+    [InlineArray(3)]
+    public partial struct _direction_e__FixedBuffer
+    {
+        public float e0;
+    }
+
+    [InlineArray(3)]
+    public partial struct _color_e__FixedBuffer
+    {
+        public float e0;
+    }
 }

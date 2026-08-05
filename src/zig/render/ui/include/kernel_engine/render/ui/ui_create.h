@@ -34,29 +34,58 @@ extern "C"
 #define KE_UI_FONT_NONE ((ke_ui_font_handle){ UINT32_MAX })
 #endif
 
+// A screen-space text label. Text/anchor/offset/color/font are the caller's
+// input (a node's own properties, written on bind/update); glyph_count and
+// glyphs[] are output, written each KE_PHASE_UPDATE tick by the "render.ui.labels"
+// system this domain registers, and read by "render.ui" (KE_PHASE_RENDER) to
+// draw them — the same sim-writes/render-reads split every other render
+// component uses, so there is no per-glyph entity, no CPU-side accumulator,
+// no pool to grow or reuse.
+//
+// text/glyphs are fixed-size, like ke_name_component's char name[64] elsewhere
+// in this codebase: an ECS component is a C ABI struct, so a caller-provided
+// ceiling is unavoidable here, not a design choice. 256 covers any UI label a
+// game actually authors; text/glyphs beyond the cap are silently truncated
+// rather than overflowing.
+#define KE_LABEL_MAX_TEXT 256
+#define KE_LABEL_MAX_GLYPHS 256
+
+    typedef struct ke_label_glyph_quad
+    {
+        float dst_x, dst_y, dst_w, dst_h;
+        float u0, v0, u1, v1;
+    } ke_label_glyph_quad;
+
+    typedef struct ke_label_component
+    {
+        ke_ui_font_handle font;
+        float             anchor[2];
+        float             offset[2];
+        float             color[4];
+        char              text[KE_LABEL_MAX_TEXT];
+
+        uint32_t            glyph_count;
+        ke_label_glyph_quad glyphs[KE_LABEL_MAX_GLYPHS];
+    } ke_label_component;
+
+#define KE_COMPONENT_NAME_LABEL "label"
+
     // UI overlay pass — screen-space quad batching (sprite batching, premultiplied
-    // alpha), drawn after tonemap so it composites over the rendered scene. Unlike
-    // the fire-and-forget passes (tonemap/skybox), game code queues quads into this
-    // plugin at runtime via ui_quad — so it needs a real vtable, not just create/destroy.
+    // alpha), drawn after tonemap so it composites over the rendered scene. Game
+    // code queues a quad by attaching the "ui_quad" ECS component (declared write
+    // access from the producer's own system) to an entity — the same channel
+    // every other render-phase pass consumes sim-written data through, resolved
+    // and extracted by the runtime before this pass's wave. No CPU-side
+    // accumulator, no ui_quad/text_quad vtable call, no reset.
     typedef struct ke_render_ui
     {
         void *handle;
 
-        // Queues a screen-space quad for this frame — accumulated CPU-side and
-        // drawn (batched by texture) when the "render.ui" system runs, then reset.
-        // dst_x/y/w/h are pixel-space (top-left origin); uv0..3 = (u0,v0,u1,v1);
-        // color is 4 floats (premultiplied r,g,b,a) by pointer, not by value —
-        // see ke_render_module_ui_quad for why.
-        void (*ui_quad)(struct ke_render_ui *self, ke_texture_handle texture,
-                        float dst_x, float dst_y, float dst_w, float dst_h,
-                        float uv0, float uv1, float uv2, float uv3,
-                        const float color[4]);
-
         /**
-         * Registers a font's glyph table for text_quad, deduped by `key` (same
-         * upload-key convention as ke_render_service's upload_* — a resident key
-         * retains and returns the existing handle without copying `glyphs` again).
-         * `glyphs` is copied; the caller may free its own copy after this returns.
+         * Registers a font's glyph table, deduped by `key` (same upload-key
+         * convention as ke_render_service's upload_* — a resident key retains and
+         * returns the existing handle without copying `glyphs` again). `glyphs` is
+         * copied; the caller may free its own copy after this returns.
          * KE_UI_FONT_NONE on failure.
          * @param key [utf8]
          * @param glyphs [borrowed,array_of:glyph_count]
@@ -65,18 +94,6 @@ extern "C"
                                        ke_texture_handle atlas, const ke_glyph_metrics *glyphs,
                                        uint32_t glyph_count, float line_height, float ascent,
                                        ke_error **out_error);
-
-        /**
-         * Expands @p text into one ui_quad call per glyph (batched the same way a
-         * direct ui_quad caller's quads are), advancing the pen from @p origin_x
-         * with @p baseline_y as each glyph's baseline. An unknown codepoint
-         * advances the pen by a quarter of the font's line height and emits
-         * nothing. No line wrapping; an embedded newline is not treated specially.
-         * @param font [borrowed]
-         * @param text [utf8]
-         */
-        void (*text_quad)(struct ke_render_ui *self, ke_ui_font_handle font, const char *text,
-                          float origin_x, float baseline_y, const float color[4]);
     } ke_render_ui;
 
     typedef struct ke_render_ui_handle
@@ -86,12 +103,12 @@ extern "C"
     } ke_render_ui_handle;
 
     // Creates the UI overlay pass and registers it as a runtime system.
-    // `runtime`/`core`/`device` are borrowed. bb_cid is the "backbuffer" cid the
-    // aggregator already resolved; cmd_slot is this pass's frame command-buffer
+    // `runtime`/`ecs`/`core`/`device` are borrowed. bb_cid is the "backbuffer" cid
+    // the aggregator already resolved; cmd_slot is this pass's frame command-buffer
     // slot (must come after whatever writes "backbuffer" last, e.g. tonemap).
     // Handle's ref is NULL on failure.
     KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(
-        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
+        ke_runtime *runtime, ke_ecs *ecs, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_component_id bb_cid, uint32_t cmd_slot,
         ke_error **out_error);
 

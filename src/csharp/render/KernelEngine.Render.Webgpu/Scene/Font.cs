@@ -12,9 +12,6 @@ namespace KernelEngine.Framework;
 /// </summary>
 public sealed class Font
 {
-    // Kept only for MeasureWidth (label anchor/pivot math, computed once per
-    // label per frame — not the per-glyph expansion, which the UI overlay pass
-    // now does natively via FontHandle/TextQuad).
     private readonly Dictionary<uint, GlyphMetrics> _glyphs;
 
     public FontHandle     Handle      { get; }
@@ -70,4 +67,7 @@ public sealed class Font
             if (_glyphs.TryGetValue(text[i], out var g)) w += g.AdvanceX;
         return w;
     }
+
+    /// <summary>Looks up a glyph's metrics by codepoint, for per-glyph quad shaping.</summary>
+    public bool TryGetGlyph(uint codepoint, out GlyphMetrics glyph) => _glyphs.TryGetValue(codepoint, out glyph);
 }

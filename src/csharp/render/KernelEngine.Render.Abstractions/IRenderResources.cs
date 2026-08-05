@@ -98,31 +98,13 @@ public interface IRenderResources
     bool TryGetMaterial(string key, out MaterialHandle handle);
 
     /// <summary>
-    /// Queues a screen-space UI quad for this frame, drawn after tonemap so it
-    /// composites over the rendered scene. <paramref name="dstX"/>/<paramref name="dstY"/>
-    /// are pixel coordinates (top-left origin); <paramref name="texture"/> defaults to
-    /// a built-in white pixel, so a flat-color quad just needs a color and no texture.
-    /// UV selects a sub-region of the texture (glyph atlas lookup for text). Color is
-    /// premultiplied alpha. Call from a render-phase system, before the frame's UI
-    /// pass runs.
-    /// </summary>
-    void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
-               float u0, float v0, float u1, float v1, Vector4 premultipliedColor);
-
-    /// <summary>
-    /// Registers a font's glyph table with the UI overlay pass for <see cref="TextQuad"/>,
-    /// deduped by <paramref name="key"/> (same convention as <see cref="UploadTexture"/>).
+    /// Registers a font's glyph table with the UI overlay pass, deduped by
+    /// <paramref name="key"/> (same convention as <see cref="UploadTexture"/>).
+    /// Queuing a UI quad no longer goes through this interface — attach a
+    /// <c>UiQuadComponent</c> ("ui_quad") to an entity via
+    /// <c>NodeWorld</c>/<c>SystemContext.Attach</c> instead; the "render.ui"
+    /// pass reads it through a declared ECS query.
     /// </summary>
     FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,
                         float lineHeight, float ascent);
-
-    /// <summary>
-    /// Expands <paramref name="text"/> into one <see cref="UiQuad"/> call per glyph, batched
-    /// the same way. <paramref name="originX"/> is the pen start (pixels, top-left origin);
-    /// <paramref name="baselineY"/> is where each glyph's baseline sits. An unknown codepoint
-    /// advances the pen by a quarter of the font's line height and emits nothing. Call from a
-    /// render-phase system, before the frame's UI pass runs.
-    /// </summary>
-    void TextQuad(FontHandle font, string text, float originX, float baselineY,
-                 Vector4 premultipliedColor);
 }

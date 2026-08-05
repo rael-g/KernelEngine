@@ -478,6 +478,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
         argF(b, "ke-resource-cache-include", b.pathJoin(&.{ src_c, "resource_cache" })),
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
@@ -571,6 +572,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "framework/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_zig, "render/service/include" }),
+            b.pathJoin(&.{ src_zig, "render/ui/include" }),
             gtest_include,
         })),
         argF(b, "libs", joinPaths(b, &.{
@@ -581,6 +584,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             gtest_main_a,
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             gtest_a,
@@ -592,6 +596,7 @@ pub fn build(b: *std.Build) void {
     }) catch @panic("OOM"), &.{
         &logger_simple.step, &input_default.step, &resource_cache_default.step, &framework.step,
         &runtime.step,       &ecs_flecs.step,      &scheduler_enki.step,        &common.step,
+        &render_service.step,
     });
 
     const integration_test_sources = [_][]const u8{
@@ -841,6 +846,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
@@ -872,6 +878,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),

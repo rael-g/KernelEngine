@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 using KernelEngine.Configuration;
 using KernelEngine.Ecs;
+using KernelEngine.Framework;
 using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
@@ -73,9 +74,24 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
     public string Name => "Webgpu.Render";
 
-    /// <summary>Exposes this module as the scene's <see cref="IRenderResources"/>.</summary>
+    /// <summary>
+    /// Exposes this module as the scene's <see cref="IRenderResources"/> and
+    /// registers render's own node types (this domain's, not the framework's).
+    /// </summary>
     public void Configure(IServiceCollection services)
-        => services.AddSingleton<IRenderResources>(this);
+    {
+        services.AddSingleton<IRenderResources>(this);
+        services
+            .AddNodeType<Camera>()
+            .AddNodeType<DirectionalLight>()
+            .AddNodeType<AmbientLight>()
+            .AddNodeType<PointLight>()
+            .AddNodeType<SpotLight>()
+            .AddNodeType<Skybox>()
+            .AddNodeType<MeshRenderer>()
+            .AddNodeType<Sprite2D>()
+            .AddNodeType<Label>();
+    }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
@@ -83,12 +99,15 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var ecs       = services.GetRequiredService<IEcs>();
         var logger    = services.GetService<INativeLogger>();
         var scheduler = services.GetRequiredService<IScheduler>();
+        // Optional: absent for raw-ECS examples with no scene loader.
+        var world     = services.GetService<KernelEngine.Framework.World>();
 
         var win = ((INativeWindow)window).Native;
         var rt  = ((INativeRuntime)runtime).Native;
         var ec  = ((INativeEcs)ecs).Native;
         var lg  = logger != null ? logger.Native : null;
         var sc  = ((INativeScheduler)scheduler).Native;
+        var wd  = world != null ? ((KernelEngine.Framework.INativeWorld)world).Native : null;
 
         ke_error* err = null;
 
@@ -114,7 +133,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var fp = _featureParams;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
-            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, 1, lg, &cp, &fp, (sbyte*)sd, &err);
+            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, wd, 1, lg, &cp, &fp, (sbyte*)sd, &err);
         if (_module.@ref == null)
             throw Fail("render module create failed", err);
 
@@ -124,6 +143,70 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         _renderService = RenderService.Borrow(_core);
         var clearColor = _clearColorOverride ?? ResolveClearColor(config);
         _renderService.SetClearColor(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
+
+        // ambient_light has no native apply (components.h) — this is the only place it's applied.
+        if (world != null)
+        {
+            var components = services.GetRequiredService<IComponentRegistry>();
+            world.RegisterComponentApply<AmbientLightComponent>(
+                components.CidOf<AmbientLightComponent>(),
+                static (ref AmbientLightComponent comp, in VariantReader reader) =>
+                {
+                    if (reader.TryGetVec3("Color", out var c)) comp.Color = c;
+                });
+
+            // Stays here (not a native apply) because it needs IRenderResources for GPU uploads.
+            world.RegisterComponentApply<MeshComponent>(
+                components.CidOf<MeshComponent>(),
+                (ref MeshComponent comp, in VariantReader reader) =>
+                {
+                    if (reader.TryGetString("mesh", out var meshName) && meshName is not null)
+                    {
+                        comp.Mesh = meshName switch
+                        {
+                            "quad"   => MeshPrimitives.Quad(this),
+                            "plane"  => MeshPrimitives.Plane(this),
+                            "cube"   => MeshPrimitives.Cube(this),
+                            "sphere" => MeshPrimitives.UvSphere(this),
+                            _ => throw new InvalidOperationException(
+                                $"[entity.components.MeshRenderer] unknown primitive '{meshName}'"),
+                        };
+                    }
+
+                    if (reader.TryGetVec4("color", out var color))
+                    {
+                        float roughness = 1f;
+                        reader.TryGetFloat("roughness", out roughness);
+
+                        var alphaMode = AlphaMode.Opaque;
+                        if (reader.TryGetString("alpha_mode", out var alphaModeName))
+                        {
+                            alphaMode = alphaModeName switch
+                            {
+                                "mask"  => AlphaMode.Mask,
+                                "blend" => AlphaMode.Blend,
+                                _       => AlphaMode.Opaque,
+                            };
+                        }
+                        float alphaCutoff = 0.5f;
+                        reader.TryGetFloat("alpha_cutoff", out alphaCutoff);
+
+                        float ior = 1.5f;
+                        reader.TryGetFloat("ior", out ior);
+
+                        float distortionStrength = 0.05f;
+                        reader.TryGetFloat("distortion_strength", out distortionStrength);
+
+                        // No file backs an inline scene-authored color, so the key is
+                        // the material's own parameters — two nodes authored with the
+                        // identical inline values share one material.
+                        var key = $"inline:{color}:{roughness}:{alphaMode}:{alphaCutoff}:{ior}:{distortionStrength}";
+                        comp.Material = CreateMaterial(key, color, roughness: roughness,
+                            alphaMode: alphaMode, alphaCutoff: alphaCutoff, ior: ior,
+                            distortionStrength: distortionStrength);
+                    }
+                });
+        }
     }
 
     /// <summary>
@@ -264,18 +347,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <inheritdoc/>
-    public void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
-                       float u0, float v0, float u1, float v1, System.Numerics.Vector4 premultipliedColor)
-    {
-        if (_module.@ref == null)
-            throw new InvalidOperationException("UiQuad called before the render module was loaded");
-
-        var texH = new ke_texture_handle { bits = texture.Value };
-        var color = stackalloc float[4] { premultipliedColor.X, premultipliedColor.Y, premultipliedColor.Z, premultipliedColor.W };
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_ui_quad(_module.@ref, texH, dstX, dstY, dstW, dstH, u0, v0, u1, v1, color);
-    }
-
-    /// <inheritdoc/>
     public FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,
                                float lineHeight, float ascent)
     {
@@ -307,21 +378,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (h.bits == uint.MaxValue)
             throw Fail("load_font failed", err);
         return new FontHandle(h.bits);
-    }
-
-    /// <inheritdoc/>
-    public void TextQuad(FontHandle font, string text, float originX, float baselineY,
-                         System.Numerics.Vector4 premultipliedColor)
-    {
-        if (_module.@ref == null)
-            throw new InvalidOperationException("TextQuad called before the render module was loaded");
-
-        var fontH = new ke_ui_font_handle { bits = font.Value };
-        var textBytes = System.Text.Encoding.UTF8.GetBytes(text + '\0');
-        var color = stackalloc float[4] { premultipliedColor.X, premultipliedColor.Y, premultipliedColor.Z, premultipliedColor.W };
-        fixed (byte* t = textBytes)
-            KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_text_quad(
-                _module.@ref, fontH, (sbyte*)t, originX, baselineY, color);
     }
 
     private static InvalidOperationException Fail(string what, ke_error* err)

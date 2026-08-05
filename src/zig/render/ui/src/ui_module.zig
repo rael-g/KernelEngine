@@ -37,6 +37,28 @@ const UiBatch = struct {
     vertex_count: u32,
 };
 
+// One screen-space quad, ECS-visible so producers (LabelUiSystem, arbitrary
+// game scripts via SystemContext.Attach) and this pass share it the same way
+// every other render-phase system shares sim-written data: through a declared
+// query, resolved+extracted by the runtime before the wave, read here via
+// ke_system_ctx_view. No CPU-side accumulator, no reset, no race — the
+// runtime's existing per-tick extraction is what makes this safe across the
+// sim N+1 || render N pipelining, exactly like camera/mesh/transform above.
+// dst_w <= 0 means "not emitted this frame" (a shrunk text label's unused
+// pooled glyph slot) and is skipped rather than drawn.
+const UiQuadComponent = extern struct {
+    texture: c.ke_texture_handle,
+    dst_x: f32,
+    dst_y: f32,
+    dst_w: f32,
+    dst_h: f32,
+    uv0: f32,
+    uv1: f32,
+    uv2: f32,
+    uv3: f32,
+    color: [4]f32,
+};
+
 // A loaded font's glyph table, owned copies so the caller's own ke_font_data
 // (freed via ke_asset_resolver's free_font right after load_font returns) can
 // go away without this outliving it.
@@ -69,13 +91,11 @@ const UiState = struct {
     vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
     vertices: [MAX_UI_QUADS * 6]UiVertex = undefined,
-    vertex_count: u32 = 0,
     // Consecutive same-texture quads batch into one draw call (sprite-batching —
     // texture switches are the only thing that splits a batch). Sized generously;
     // a caller alternating textures every quad still degrades gracefully (no
     // crash, just more draw calls up to MAX_UI_BATCHES).
     batches: [MAX_UI_BATCHES]UiBatch = undefined,
-    batch_count: u32 = 0,
     bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = undefined, // lazily built, keyed by texture index; INVALID_HANDLE = unbuilt
 
     fonts: [MAX_UI_FONTS]UiFont = undefined,
@@ -83,63 +103,16 @@ const UiState = struct {
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [1]c.ke_component_access = undefined,
+    // render.ui's own query: [0] = ui_quad (read), [1] = label (write — this
+    // system both shapes each label's glyphs and draws them, so it needs
+    // write access even though most of a label's fields are its own input).
+    queries: [2]c.ke_query_decl = undefined,
+    quad_cid: c.ke_component_id = 0,
+    label_cid: c.ke_component_id = 0,
 };
 
 fn stateOf(self: [*c]c.ke_render_ui) *UiState {
     return @alignCast(@ptrCast(self));
-}
-
-// Resets the accumulator at the start of each frame — called at the end of
-// system() (draw), not at frame-begin: resetting at frame-begin would wipe
-// quads a system in an EARLIER phase queued for THIS frame's ui pass to draw,
-// since begin_frame has no ordering guarantee relative to other modules.
-fn uiReset(ui: *UiState) void {
-    ui.vertex_count = 0;
-    ui.batch_count = 0;
-}
-
-fn uiQuad(self: [*c]c.ke_render_ui, texture: c.ke_texture_handle,
-          dst_x: f32, dst_y: f32, dst_w: f32, dst_h: f32,
-          uv0: f32, uv1: f32, uv2: f32, uv3: f32,
-          color: [*c]const f32) callconv(.c) void {
-    const ui = stateOf(self);
-    if (ui.vertex_count + 6 > ui.vertices.len) return;
-
-    // The core's built-in white is the flat-color default: a quad with no
-    // texture assigned samples white*color.
-    const tex = if (texture.bits == c.KE_HANDLE_NONE) ui.core.*.white_texture.?(ui.core) else texture;
-    if (c.ke_handle_index(tex.bits) >= MAX_UI_TEXTURES) return;
-
-    // Extend the current batch if the texture matches; otherwise open a new one.
-    const need_new_batch = ui.batch_count == 0 or
-        ui.batches[ui.batch_count - 1].texture.bits != tex.bits;
-    if (need_new_batch) {
-        if (ui.batch_count >= ui.batches.len) return;
-        ui.batches[ui.batch_count] = .{
-            .texture = tex,
-            .first_vertex = ui.vertex_count,
-            .vertex_count = 0,
-        };
-        ui.batch_count += 1;
-    }
-
-    const x0 = dst_x;
-    const y0 = dst_y;
-    const x1 = dst_x + dst_w;
-    const y1 = dst_y + dst_h;
-    const col = [4]f32{ color[0], color[1], color[2], color[3] };
-
-    const verts = [6]UiVertex{
-        .{ .position = .{ x0, y0 }, .uv = .{ uv0, uv1 }, .color = col },
-        .{ .position = .{ x1, y0 }, .uv = .{ uv2, uv1 }, .color = col },
-        .{ .position = .{ x1, y1 }, .uv = .{ uv2, uv3 }, .color = col },
-        .{ .position = .{ x0, y0 }, .uv = .{ uv0, uv1 }, .color = col },
-        .{ .position = .{ x1, y1 }, .uv = .{ uv2, uv3 }, .color = col },
-        .{ .position = .{ x0, y1 }, .uv = .{ uv0, uv3 }, .color = col },
-    };
-    @memcpy(ui.vertices[ui.vertex_count .. ui.vertex_count + 6], &verts);
-    ui.vertex_count += 6;
-    ui.batches[ui.batch_count - 1].vertex_count += 6;
 }
 
 fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_handle,
@@ -190,27 +163,56 @@ fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_met
     return null;
 }
 
-fn uiTextQuad(self: [*c]c.ke_render_ui, font: c.ke_ui_font_handle, text: [*c]const u8,
-              origin_x: f32, baseline_y: f32, color: [*c]const f32) callconv(.c) void {
-    const ui = stateOf(self);
-    const idx = c.ke_handle_index(font.bits);
-    if (idx >= MAX_UI_FONTS or !ui.fonts[idx].in_use) return;
-    const f = &ui.fonts[idx];
+// Shapes one "label" entity's text into screen-space glyph quads, written back
+// into the same component's glyphs[]/glyph_count field, given the backbuffer
+// size (only known inside the render pass — see the call site in system()).
+// Runs every frame as part of "render.ui" itself rather than a separate
+// KE_PHASE_UPDATE system: anchoring depends on backbuffer size, which nothing
+// exposes outside a render pass context, so there is no earlier point in the
+// frame this could run and still see a resize the same frame it happens.
+fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u32) void {
+    const l: *c.ke_label_component = @ptrCast(l_ptr);
+    l.glyph_count = 0;
 
-    const text_slice = std.mem.span(text);
-    const view = std.unicode.Utf8View.init(text_slice) catch return;
-    var it = view.iterator();
-    var pen: f32 = origin_x;
-    while (it.nextCodepoint()) |cp| {
-        const glyph = findGlyph(f.glyphs, @as(u32, cp)) orelse {
-            pen += f.line_height * 0.25;
+    const font_idx = c.ke_handle_index(l.font.bits);
+    if (l.font.bits == c.KE_HANDLE_NONE or font_idx >= MAX_UI_FONTS or !ui.fonts[font_idx].in_use)
+        return;
+    const font = &ui.fonts[font_idx];
+
+    const text = std.mem.sliceTo(&l.text, 0);
+    if (text.len == 0) return;
+
+    var text_width: f32 = 0;
+    for (text) |ch| {
+        if (findGlyph(font.glyphs, ch)) |g| text_width += g.advance_x;
+    }
+
+    const anchor_x = l.anchor[0] * @as(f32, @floatFromInt(bb_w)) + l.offset[0];
+    const anchor_y = l.anchor[1] * @as(f32, @floatFromInt(bb_h)) + l.offset[1];
+    const pivot_x = l.anchor[0] * text_width;
+    const pivot_y = l.anchor[1] * font.ascent;
+    const origin_x = anchor_x - pivot_x;
+    const baseline_y = anchor_y - pivot_y + font.ascent;
+
+    var pen = origin_x;
+    var slot: u32 = 0;
+    for (text) |ch| {
+        if (slot >= c.KE_LABEL_MAX_GLYPHS) break;
+        const g = findGlyph(font.glyphs, ch) orelse {
+            pen += font.line_height * 0.25;
             continue;
         };
-        const x = pen + glyph.bearing_x;
-        const y = baseline_y - glyph.bearing_y;
-        uiQuad(self, f.atlas, x, y, glyph.width, glyph.height, glyph.u0, glyph.v0, glyph.u1, glyph.v1, color);
-        pen += glyph.advance_x;
+        l.glyphs[slot] = .{
+            .dst_x = pen + g.bearing_x,
+            .dst_y = baseline_y - g.bearing_y,
+            .dst_w = g.width,
+            .dst_h = g.height,
+            .u0 = g.u0, .v0 = g.v0, .u1 = g.u1, .v1 = g.v1,
+        };
+        pen += g.advance_x;
+        slot += 1;
     }
+    l.glyph_count = slot;
 }
 
 // The set-1 (texture+sampler) bind group for a texture index, built once and
@@ -226,10 +228,10 @@ fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
     };
-    // No out_error slot on this lazy-cache path (uiQuad, its only caller, is a
-    // void draw-call helper) — pass null. The push/pop error scope inside
-    // create_bind_group still prevents the uncaptured-error abort either way;
-    // only the descriptive ke_error is lost here.
+    // No out_error slot on this lazy-cache path (system(), its only caller, has
+    // no error return to surface it through) — pass null. The push/pop error
+    // scope inside create_bind_group still prevents the uncaptured-error abort
+    // either way; only the descriptive ke_error is lost here.
     const bg = ui.device.create_bind_group.?(ui.device, &c.ke_gpu_bind_group_params{
         .layout = ui.bgl_tex,
         .entry_count = 2,
@@ -243,27 +245,115 @@ inline fn moduleOf(user: ?*anyopaque) *UiState {
     return @alignCast(@ptrCast(user.?));
 }
 
-// Uploads this frame's accumulated quads and draws each texture batch — the
-// "render.ui" runtime system.
+// Appends one screen-space quad (already in pixel space) to the shared
+// vertex/batch buffers, splitting into a new batch on a texture change.
+// Shared by ui_quad entries and label glyphs — both draw the same way once
+// reduced to (texture, dst rect, uv rect, premultiplied color).
+fn emitQuad(ui: *UiState, vertex_count: *u32, batch_count: *u32, tex_in: c.ke_texture_handle,
+            x0: f32, y0: f32, x1: f32, y1: f32, tu0: f32, tv0: f32, tu1: f32, tv1: f32, color: [4]f32) void {
+    if (vertex_count.* + 6 > ui.vertices.len) return;
+    const tex = if (tex_in.bits == c.KE_HANDLE_NONE) ui.core.*.white_texture.?(ui.core) else tex_in;
+    if (c.ke_handle_index(tex.bits) >= MAX_UI_TEXTURES) return;
+
+    const need_new_batch = batch_count.* == 0 or ui.batches[batch_count.* - 1].texture.bits != tex.bits;
+    if (need_new_batch) {
+        if (batch_count.* >= ui.batches.len) return;
+        ui.batches[batch_count.*] = .{ .texture = tex, .first_vertex = vertex_count.*, .vertex_count = 0 };
+        batch_count.* += 1;
+    }
+
+    const verts = [6]UiVertex{
+        .{ .position = .{ x0, y0 }, .uv = .{ tu0, tv0 }, .color = color },
+        .{ .position = .{ x1, y0 }, .uv = .{ tu1, tv0 }, .color = color },
+        .{ .position = .{ x1, y1 }, .uv = .{ tu1, tv1 }, .color = color },
+        .{ .position = .{ x0, y0 }, .uv = .{ tu0, tv0 }, .color = color },
+        .{ .position = .{ x1, y1 }, .uv = .{ tu1, tv1 }, .color = color },
+        .{ .position = .{ x0, y1 }, .uv = .{ tu0, tv1 }, .color = color },
+    };
+    @memcpy(ui.vertices[vertex_count.* .. vertex_count.* + 6], &verts);
+    vertex_count.* += 6;
+    ui.batches[batch_count.* - 1].vertex_count += 6;
+}
+
+// Builds this frame's vertices/batches from the ui_quad query view (resolved
+// and extracted by the runtime before this wave, exactly like camera/mesh/
+// transform in every other render-phase pass — see UiQuadComponent), shapes
+// and draws every "label" entity's glyphs the same way, and draws each
+// texture batch. "render.ui" runtime system.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const ui = moduleOf(user);
     const core = ui.core;
-    if (ui.vertex_count == 0) return;
 
+    var quad_segc: usize = 0;
+    const quad_segs = c.ke_system_ctx_view(ctx, 0, &quad_segc);
+    var label_segc: usize = 0;
+    const label_segs = c.ke_system_ctx_view(ctx, 1, &label_segc);
+    if (quad_segc == 0 and label_segc == 0) return;
+
+    // Label anchoring needs the backbuffer size, which nothing exposes outside
+    // a render pass context — begin_pass runs first, unconditionally, so
+    // shaping (below) and the ui_quad loop can both run before the vertex
+    // buffer upload either way needs.
     const pc = core.*.begin_pass.?(core, ctx, &ui.io);
     if (pc == null) return;
-
-    // Pixel-space (top-left origin) → clip space, honoring the backend's NDC.
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
+
+    var vertex_count: u32 = 0;
+    var batch_count: u32 = 0;
+
+    var s: usize = 0;
+    quad_loop: while (s < quad_segc) : (s += 1) {
+        const quads: [*c]const UiQuadComponent = @ptrCast(@alignCast(quad_segs[s].columns[0]));
+        var i: usize = 0;
+        while (i < quad_segs[s].count) : (i += 1) {
+            const q = quads[i];
+            if (q.dst_w <= 0 or q.dst_h <= 0) continue; // unused pooled slot this frame
+            if (vertex_count + 6 > ui.vertices.len) break :quad_loop;
+            emitQuad(ui, &vertex_count, &batch_count, q.texture,
+                q.dst_x, q.dst_y, q.dst_x + q.dst_w, q.dst_y + q.dst_h,
+                q.uv0, q.uv1, q.uv2, q.uv3, q.color);
+        }
+    }
+
+    s = 0;
+    label_loop: while (s < label_segc) : (s += 1) {
+        const labels: [*c]c.ke_label_component = @ptrCast(@alignCast(label_segs[s].columns[0]));
+        var i: usize = 0;
+        while (i < label_segs[s].count) : (i += 1) {
+            const l = &labels[i];
+            shapeLabel(ui, labels + i, bw, bh);
+            if (l.glyph_count == 0) continue;
+
+            const font_idx = c.ke_handle_index(l.font.bits);
+            const tex = ui.fonts[font_idx].atlas;
+            const premul = [4]f32{ l.color[0] * l.color[3], l.color[1] * l.color[3], l.color[2] * l.color[3], l.color[3] };
+
+            var gi: u32 = 0;
+            while (gi < l.glyph_count) : (gi += 1) {
+                if (vertex_count + 6 > ui.vertices.len) break :label_loop;
+                const g = l.glyphs[gi];
+                emitQuad(ui, &vertex_count, &batch_count, tex,
+                    g.dst_x, g.dst_y, g.dst_x + g.dst_w, g.dst_y + g.dst_h,
+                    g.u0, g.v0, g.u1, g.v1, premul);
+            }
+        }
+    }
+
+    if (vertex_count == 0) {
+        core.*.end_pass.?(core, pc);
+        return;
+    }
+
+    // Pixel-space (top-left origin) → clip space, honoring the backend's NDC.
     var proj = zm.orthographicOffCenterLh(0.0, @floatFromInt(bw), 0.0, @floatFromInt(bh), 0.0, 1.0);
     if (ui.ndc.y_flip != 0) proj[1][1] = -proj[1][1];
     var proj_arr: [16]f32 = undefined;
     zm.storeMat(proj_arr[0..], proj);
     core.*.upload.?(core, ui.frame_uniform, 0, &proj_arr, 64);
 
-    const bytes = std.mem.sliceAsBytes(ui.vertices[0..ui.vertex_count]);
+    const bytes = std.mem.sliceAsBytes(ui.vertices[0..vertex_count]);
     core.*.upload.?(core, ui.vbo, 0, bytes.ptr, bytes.len);
 
     const rp = pc.*.begin_render.?(pc);
@@ -272,18 +362,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     rp.*.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
 
     var i: u32 = 0;
-    while (i < ui.batch_count) : (i += 1) {
+    while (i < batch_count) : (i += 1) {
         const batch = ui.batches[i];
         rp.*.set_bind_group.?(rp, 1, uiBindGroupFor(ui, batch.texture), null, 0);
         rp.*.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
-
-    // Vertex/batch data is already copied into the upload arena (upload() memcpy's
-    // synchronously) and the draw commands reference GPU buffer handles, not this
-    // CPU array — safe to reset now, ready for the next frame's queuing.
-    uiReset(ui);
 }
 
 // Pipeline + buffers for the UI overlay pass. Premultiplied-alpha blend so
@@ -396,8 +481,6 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (ui.vbo == c.KE_GPU_INVALID_HANDLE) return false;
 
-    ui.vertex_count = 0;
-    ui.batch_count = 0;
     for (&ui.bind_group_cache) |*e| e.* = c.KE_GPU_INVALID_HANDLE;
     for (&ui.fonts) |*f| f.* = .{};
 
@@ -436,26 +519,41 @@ fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
     gpa.destroy(ui);
 }
 
-export fn ke_render_ui_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
+export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*c.ke_render_service,
                                device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                bb_cid: c.ke_component_id, cmd_slot: u32,
                                out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_ui_handle {
     const empty = c.ke_render_ui_handle{ .ref = null, .destroy = null };
     const rt = runtime orelse return empty;
+    const e = ecs orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
 
     const ui = gpa.create(UiState) catch return empty;
     ui.* = .{};
-    ui.api = .{ .handle = ui, .ui_quad = uiQuad, .load_font = uiLoadFont, .text_quad = uiTextQuad };
+    ui.api = .{ .handle = ui, .load_font = uiLoadFont };
     if (!setup(ui, dev, core_ref, ndc, bb_cid, cmd_slot, out_error)) {
         gpa.destroy(ui);
         return empty;
     }
 
+    // Same name any producer (game scripts via SystemContext.Attach) registers
+    // via component_register — whoever calls first wins, everyone gets the same cid.
+    ui.quad_cid = e.component_register.?(e, "ui_quad", @sizeOf(UiQuadComponent));
+    ui.queries[0].terms[0] = .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ };
+    ui.queries[0].term_count = 1;
+
+    // "label" — this system both reads a label's text/anchor/offset/color/font
+    // and writes its shaped glyphs back, so it needs write access (see shapeLabel).
+    ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component));
+    ui.queries[1].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE };
+    ui.queries[1].term_count = 1;
+
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.ui";
     params.phase = c.KE_PHASE_RENDER;
+    params.queries = &ui.queries;
+    params.query_count = ui.queries.len;
     params.access_list = &ui.access;
     params.access_count = ui.access.len;
     params.pinned_thread = 0;

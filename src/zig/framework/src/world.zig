@@ -188,17 +188,14 @@ export fn ke_world_create(
     world.register_component_apply = worldRegisterComponentApply;
     world.get_component_apply = worldGetComponentApply;
 
-    // Register the framework's built-in component vocabulary and wire each
-    // component's apply callback, so the scene loader works out of the box.
-    // scene_tree already registers transform/hierarchy/name; the rest are
-    // first-touch here. The host pays this schema setup once per world.
+    // Register the framework's own component vocabulary — just "transform"
+    // (spatial's, framework's to own since scene_tree owns transform
+    // propagation). Every other domain (render's camera/mesh/lights, physics's
+    // bodies, ...) registers its own cid + apply callback against this world
+    // from its own plugin, via register_component_apply below — the framework
+    // plugin has no compile-time knowledge of any other domain's components.
     const e = params.ecs.?;
     registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), apply.ke_framework_apply_transform);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component), apply.ke_framework_apply_camera);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_MESH, @sizeOf(c.ke_mesh_component), apply.ke_framework_apply_mesh);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component), apply.ke_framework_apply_directional_light);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(c.ke_point_light_component), apply.ke_framework_apply_point_light);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(c.ke_spot_light_component), apply.ke_framework_apply_spot_light);
 
     return .{ .ref = world, .destroy = worldDestroy };
 }
