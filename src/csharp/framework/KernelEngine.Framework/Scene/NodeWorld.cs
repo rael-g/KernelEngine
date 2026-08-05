@@ -17,7 +17,6 @@ public sealed class NodeWorld
 
     private readonly List<Node>                  _behaviors = new();
     private readonly List<Node>                  _allNodes  = new();
-    private readonly Dictionary<string, Node>    _byName    = new(StringComparer.Ordinal);
     private readonly Dictionary<ulong, Node>     _byEntity  = new();
 
     internal IReadOnlyList<Node>  Behaviors => _behaviors;
@@ -78,10 +77,7 @@ public sealed class NodeWorld
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
         var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
-        node.Name  = name;
         node.BindToNodeWorld(this, entity);
-        parent?.AttachChild(node);
-        if (!string.IsNullOrEmpty(name)) _byName[name] = node;
         _allNodes.Add(node);
         _byEntity[entity] = node;
         return node;
@@ -101,18 +97,19 @@ public sealed class NodeWorld
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
         var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
-        node.Name  = name;
         node.PreBind(this, entity);
-        parent?.AttachChild(node);
-        if (!string.IsNullOrEmpty(name)) _byName[name] = node;
         _allNodes.Add(node);
         _byEntity[entity] = node;
     }
 
     internal void CompleteAddNode(Node node) => node.CompleteBind();
 
-    /// <summary>Finds a node by its exact name.</summary>
-    public Node? Find(string name) => _byName.TryGetValue(name, out var n) ? n : null;
+    /// <summary>Finds a node by its exact name or path, resolved through the native scene tree.</summary>
+    public Node? Find(string name)
+    {
+        var entity = _world.SceneTree.FindNode(name);
+        return entity != 0 && _byEntity.TryGetValue(entity, out var n) ? n : null;
+    }
 
     /// <summary>Finds a node by name and casts it to <typeparamref name="T"/>.</summary>
     public T? Find<T>(string name) where T : Node
@@ -132,11 +129,9 @@ public sealed class NodeWorld
     public void DestroyNode(Node node)
     {
         if (!node.IsBound || node.NodeWorld != this) return;
-        if (!string.IsNullOrEmpty(node.Name)) _byName.Remove(node.Name);
         var kids = node.Children.ToArray();
         for (int i = 0; i < kids.Length; i++) DestroyNode(kids[i]);
 
-        node.Parent?.DetachChild(node);
         node.OnUnbind();
 
         if (node.HasBehavior) _behaviors.Remove(node);
@@ -152,26 +147,17 @@ public sealed class NodeWorld
     /// </summary>
     public void Clear()
     {
-        var roots = _byName.Values.Where(n => n.Parent is null).ToArray();
+        var roots = _allNodes.Where(n => n.Parent is null).ToArray();
         for (int i = 0; i < roots.Length; i++) DestroyNode(roots[i]);
     }
 
     /// <summary>
     /// Binds a managed Node to an entity that was already created by the native
-    /// scene loader. Reads the name from the entity's <c>ke_name_component</c>,
-    /// skips native entity creation, and calls OnBind normally.
+    /// scene loader (name/hierarchy already live in the ECS), skips native entity
+    /// creation, and calls OnBind normally.
     /// </summary>
     internal void BindNativeEntity(Node node, ulong entity)
     {
-        var name = "";
-        var nsp = _ecs.GetComponent<NameComponent>(entity, _nameCid);
-        if (!nsp.IsEmpty)
-        {
-            ReadOnlySpan<byte> bytes = nsp[0].Name;
-            var end = bytes.IndexOf((byte)0);
-            name = Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
-        }
-
         if (node is Node3D node3D)
         {
             var tsp = _ecs.GetComponent<TransformComponent>(entity, _nativeTransformCid);
@@ -187,17 +173,60 @@ public sealed class NodeWorld
             }
         }
 
-        var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
-        Node? parent = null;
-        if (!hsp.IsEmpty && hsp[0].Parent != 0 && hsp[0].Parent != ulong.MaxValue)
-            _byEntity.TryGetValue(hsp[0].Parent, out parent);
-
-        node.Name = name;
         node.BindToNodeWorld(this, entity);
-        parent?.AttachChild(node);
-        if (!string.IsNullOrEmpty(name)) _byName[name] = node;
         _allNodes.Add(node);
         _byEntity[entity] = node;
+    }
+
+    /// <summary>
+    /// Reads <paramref name="entity"/>'s display name straight from <c>ke_name_component</c>
+    /// — never cached, so a native rename is visible on the next read without any
+    /// sync step. "" for an entity with no name (or none at all).
+    /// </summary>
+    internal string GetName(ulong entity)
+    {
+        var nsp = _ecs.GetComponent<NameComponent>(entity, _nameCid);
+        if (nsp.IsEmpty) return "";
+        ReadOnlySpan<byte> bytes = nsp[0].Name;
+        var end = bytes.IndexOf((byte)0);
+        return Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="entity"/>'s parent node straight from
+    /// <c>ke_hierarchy_component</c>. Null when the entity has no parent, or when
+    /// the parent entity has no managed <see cref="Node"/> bound to it.
+    /// </summary>
+    internal Node? GetParent(ulong entity)
+    {
+        var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
+        if (hsp.IsEmpty) return null;
+        var parent = hsp[0].Parent;
+        if (parent == 0) return null;
+        return _byEntity.TryGetValue(parent, out var p) ? p : null;
+    }
+
+    /// <summary>
+    /// Walks <paramref name="entity"/>'s child chain straight from
+    /// <c>ke_hierarchy_component</c> (insertion order — see the scene tree's
+    /// append-based linking). Skips any child with no managed <see cref="Node"/>
+    /// bound to it, same as the old AttachChild-built list only ever held nodes.
+    /// </summary>
+    internal IReadOnlyList<Node> GetChildren(ulong entity)
+    {
+        var result = new List<Node>();
+        var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
+        if (hsp.IsEmpty) return result;
+
+        var child = hsp[0].FirstChild;
+        while (child != 0)
+        {
+            if (_byEntity.TryGetValue(child, out var node)) result.Add(node);
+            var chsp = _ecs.GetComponent<HierarchyComponent>(child, _hierarchyCid);
+            if (chsp.IsEmpty) break;
+            child = chsp[0].NextSibling;
+        }
+        return result;
     }
 
     /// <summary>

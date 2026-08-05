@@ -524,16 +524,18 @@ Everything above (§7.1–§7.13) treats one node at a time: can `kabic` generat
 
 `Node` today is a hybrid: some of its state is genuinely its own (nothing — checked, see below), and some is a **managed copy of native truth**, kept in sync by hand:
 
-| Field | Duplicates |
-|---|---|
-| `Node.Name` | `ke_name_component` |
-| `Node.Parent` / `_children` | `ke_hierarchy_component` |
-| `Node.HasBehavior` | computed via reflection over `OnUpdate` |
-| `NodeWorld._byName` | `ke_scene_tree.find_node` |
-| `NodeWorld._allNodes` | a query over every bound node |
-| `NodeWorld._behaviors` | what `ke_node_host` (§7.14.4) should own |
+| Field | Duplicates | Status |
+|---|---|---|
+| `Node.Name` | `ke_name_component` | **emptied 2026-08-05** — `Name` reads `NodeWorld.GetName(Entity)` live, no cached field |
+| `Node.Parent` / `_children` | `ke_hierarchy_component` | **emptied 2026-08-05** — `Parent`/`Children` walk `ke_hierarchy_component` live via `NodeWorld.GetParent`/`GetChildren`; `AttachChild`/`DetachChild` deleted outright, nothing left to sync |
+| `Node.HasBehavior` | computed via reflection over `OnUpdate` | not started — waits on `ke_node_host` (item 3) |
+| `NodeWorld._byName` | `ke_scene_tree.find_node` | **emptied 2026-08-05** — `Find` calls `SceneTree.FindNode` and resolves the returned entity through `_byEntity` |
+| `NodeWorld._allNodes` | a query over every bound node | not started — no native "is a managed node" marker exists yet to query on, and `TriggerReady`'s reverse-DFS-order contract needs a real ordered list; `Dictionary.Values` iteration order is an implementation detail, not something to build a documented contract on |
+| `NodeWorld._behaviors` | what `ke_node_host` (§7.14.4) should own | not started — same as `HasBehavior` |
 
 Every one of these is the same shape of leak §6.5/world.zig/§8.4's toolkit-dispersal work already found and fixed at the native and C# layers, just one level up: a managed mirror of state the ECS already owns. As long as any of it exists, a node type is not just a schema — it is a schema *plus* synchronization code, and synchronization code cannot be generated from a header. Emptying it is the precondition for everything else in this section, including for §7.6's still-open questions 1–3.
+
+**Three of six rows done.** `Name`/`Parent`/`Children`/`Find` no longer duplicate anything — every read goes straight to the ECS, so a native rename, reparent, or destroy is visible on the next access with no sync call anywhere. Verified: full `dotnet build` (no warnings introduced), the native `SceneTreeTest` suite (unaffected — this was a pure C# read-through change, no ABI touched), and a 6-second live run of `examples/csharp/games/pong` (which builds a real parent/child hierarchy and calls `Find<T>()` from game code) with no exceptions. `_allNodes`/`_behaviors` stay exactly because §7.14.9 already flagged them as blocked on `ke_node_host` — this is not a new finding, just confirmation the dependency is real once the easy two-thirds were actually attempted.
 
 #### 7.14.2 Decomposition — what a rich node system needs, and what actually requires new native machinery
 
@@ -603,7 +605,7 @@ Emptying `Node._children` to read live from `ke_hierarchy_component` changes obs
 Ranked by what unlocks the most next, per discussion:
 
 1. ~~**`component_register` size-validation**~~ (§7.14.5) — **done 2026-08-05.**
-2. **Empty `Node`/`NodeWorld`** (§7.14.1, §7.14.8) — the precondition for the rest; nothing else here is generatable while it duplicates native state. The child-order prerequisite (§7.14.8) is **done 2026-08-05**; the managed-layer emptying itself (`Node.Name`/`_children`/`NodeWorld._byName`/`_allNodes` reading live instead of mirroring) has not started, and `_behaviors` specifically waits on item 3 (`ke_node_host`) to have anywhere else to live.
+2. **Empty `Node`/`NodeWorld`** (§7.14.1, §7.14.8) — the precondition for the rest; nothing else here is generatable while it duplicates native state. **Partially done 2026-08-05**: the child-order prerequisite (§7.14.8), and `Name`/`Parent`/`Children`/`Find`/`_byName` (§7.14.1) are emptied — all four now read live from `ke_name_component`/`ke_hierarchy_component`/`ke_scene_tree.find_node`. `_allNodes`/`_behaviors` remain, correctly blocked on item 3.
 3. **`ke_node_host`** (§7.14.4) — closes §7.6 question 3, removes the last reflection dependency blocking generated nodes from having behavior.
 4. **Groups** (§7.14.2) — cheap, and proves the "everything is a component" thesis end-to-end before the harder case.
 5. **Signals** (§7.14.3) — the largest, and the one that most benefits from 2–4 already landing (connections are components; components are cheap once nodes are pure facades).

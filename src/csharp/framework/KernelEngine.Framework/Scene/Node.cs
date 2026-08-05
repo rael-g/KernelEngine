@@ -17,32 +17,28 @@ public abstract class Node
     /// <summary>The world that owns this node. Null before AddNode.</summary>
     public NodeWorld? NodeWorld { get; private set; }
 
-    /// <summary>Display name (debug / lookups). Set by AddNode from its name parameter.</summary>
-    public string Name { get; internal set; } = "";
+    /// <summary>
+    /// Display name (debug / lookups). Read live from <c>ke_name_component</c> —
+    /// not a managed copy, so it can never drift from the entity's actual name.
+    /// "" before AddNode binds this node.
+    /// </summary>
+    public string Name => NodeWorld?.GetName(Entity) ?? "";
 
     /// <summary>True after AddNode binds this node to an entity.</summary>
     public bool IsBound => NodeWorld != null;
 
     /// <summary>
-    /// Optional parent node. Set when this node was added via
-    /// <see cref="Framework.NodeWorld.AddNode{T}(T, string, Node?)"/> with a non-null parent.
+    /// Parent node, resolved live from <c>ke_hierarchy_component</c>. Null before
+    /// binding, when this node has no parent, or when the parent entity has no
+    /// managed <see cref="Framework.Node"/> bound to it.
     /// </summary>
-    public Node? Parent { get; private set; }
+    public Node? Parent => NodeWorld?.GetParent(Entity);
 
-    private readonly List<Node> _children = new();
-    public IReadOnlyList<Node> Children => _children;
-
-    internal void AttachChild(Node child)
-    {
-        child.Parent = this;
-        _children.Add(child);
-    }
-
-    internal void DetachChild(Node child)
-    {
-        child.Parent = null;
-        _children.Remove(child);
-    }
+    /// <summary>
+    /// Child nodes, walked live from <c>ke_hierarchy_component</c> in insertion
+    /// order. Empty before binding.
+    /// </summary>
+    public IReadOnlyList<Node> Children => NodeWorld?.GetChildren(Entity) ?? Array.Empty<Node>();
 
     /// <summary>
     /// Called once by <see cref="NodeWorld.AddNode"/> after the entity has been
