@@ -9,7 +9,7 @@ namespace Pong;
 /// declared in Ball.scene; fixture comes from CollisionShape2D child;
 /// sounds come from AudioPlayer children (HitSound, ScoreSound).
 /// </summary>
-public sealed class Ball : Node, IPhysicsBody2D
+public sealed class Ball : Node2D, IPhysicsBody2D
 {
     const float InitialSpeed   = 6f;
     const float GoalLineMargin = 0.5f;
@@ -36,8 +36,7 @@ public sealed class Ball : Node, IPhysicsBody2D
 
     protected override void OnBind(NodeWorld nodeWorld)
     {
-        var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
-        _body = _physics.CreateBody(BodyType2D.Dynamic, pos);
+        _body = _physics.CreateBody(BodyType2D.Dynamic, Position);
         // A square ball that tumbles reads as a bug. Its box collider picks up
         // spin from the two-point contact manifold even at zero friction, so the
         // rotation is locked rather than left to the solver.
@@ -62,11 +61,8 @@ public sealed class Ball : Node, IPhysicsBody2D
         }
 
         var state = _physics.GetBodyState(_body);
-        LocalTransform = LocalTransform with
-        {
-            Position = new Vector3(state.Position.X, state.Position.Y, 0f),
-            Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, state.Angle),
-        };
+        Position = state.Position;
+        Rotation = state.Angle;
 
         if (_actions.IsJustPressed(PongAction.Quit,   in view)) _router.LoadScene("Menu");
         if (_actions.IsJustPressed(PongAction.Launch, in view) && _awaitingLaunch) Launch();

@@ -9,7 +9,7 @@ namespace Pong;
 /// Sprite2D child declared in Paddle.scene; fixture comes from CollisionShape2D
 /// child; MoveAction comes from the ECS PaddleComponent applied by the scene loader.
 /// </summary>
-public sealed class Paddle : Node, IPhysicsBody2D
+public sealed class Paddle : Node2D, IPhysicsBody2D
 {
     const float HalfH = 0.9f;
     const float Speed = 7f;
@@ -31,8 +31,7 @@ public sealed class Paddle : Node, IPhysicsBody2D
 
     protected override void OnBind(NodeWorld nodeWorld)
     {
-        var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
-        _body = _physics.CreateBody(BodyType2D.Kinematic, pos);
+        _body = _physics.CreateBody(BodyType2D.Kinematic, Position);
     }
 
     protected override void OnUnbind() => _physics.DestroyBody(_body);
@@ -47,10 +46,7 @@ public sealed class Paddle : Node, IPhysicsBody2D
         }
 
         var state = _physics.GetBodyState(_body);
-        LocalTransform = LocalTransform with
-        {
-            Position = new Vector3(state.Position.X, state.Position.Y, 0f),
-        };
+        Position = state.Position;
 
         float vy = _actions.GetAxis1D(_moveAction, in view) * Speed;
 

@@ -8,7 +8,7 @@ namespace Pong;
 /// Top / bottom static wall — Box2D static body. The visual is a Sprite2D
 /// child declared in Wall.scene; this script owns only the physics fixture.
 /// </summary>
-public sealed class Wall : Node
+public sealed class Wall : Node2D
 {
     private readonly IPhysics2D _physics;
 
@@ -18,8 +18,7 @@ public sealed class Wall : Node
 
     protected override void OnBind(NodeWorld nodeWorld)
     {
-        var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
-        _body = _physics.CreateBody(BodyType2D.Static, pos);
+        _body = _physics.CreateBody(BodyType2D.Static, Position);
         _physics.AddBoxFixture(_body, new Vector2(8.0f, 0.25f), restitution: 1f);
     }
 
