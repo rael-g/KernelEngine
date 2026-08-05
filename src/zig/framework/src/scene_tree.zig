@@ -106,6 +106,7 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
     if (getHierarchy(s, entity)) |h| {
         h.parent = parent;
         h.first_child = c.KE_ENTITY_INVALID;
+        h.last_child = c.KE_ENTITY_INVALID;
         h.next_sibling = c.KE_ENTITY_INVALID;
         h.prev_sibling = c.KE_ENTITY_INVALID;
     }
@@ -116,16 +117,22 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
         writeName(&n.name, name);
     }
 
-    // Prepend into the parent's child list (doubly linked, O(1)). Re-fetch the
-    // hierarchy pointers: the writes above may have moved archetypes.
+    // Append into the parent's child list (doubly linked, O(1) via last_child) —
+    // matches insertion order, which is what every managed-layer child list
+    // (C#'s List<Node>.Add) already assumes; a prepend-based link here would
+    // silently reverse iteration order the moment a caller reads the native
+    // list directly instead of a synced copy. Re-fetch the hierarchy pointers:
+    // the writes above may have moved archetypes.
     const h = getHierarchy(s, entity);
     const ph = getHierarchy(s, parent);
     if (ph != null and h != null) {
-        h.?.next_sibling = ph.?.first_child;
-        if (ph.?.first_child != c.KE_ENTITY_INVALID) {
-            if (getHierarchy(s, ph.?.first_child)) |sib| sib.prev_sibling = entity;
+        h.?.prev_sibling = ph.?.last_child;
+        if (ph.?.last_child != c.KE_ENTITY_INVALID) {
+            if (getHierarchy(s, ph.?.last_child)) |sib| sib.next_sibling = entity;
+        } else {
+            ph.?.first_child = entity;
         }
-        ph.?.first_child = entity;
+        ph.?.last_child = entity;
     }
     return true;
 }
@@ -272,6 +279,7 @@ fn destroySubtree(s: *State, entity: c.ke_entity) void {
     if (h_parent != c.KE_ENTITY_INVALID) {
         if (getHierarchy(s, h_parent)) |ph| {
             if (ph.first_child == entity) ph.first_child = h_next;
+            if (ph.last_child == entity) ph.last_child = h_prev;
         }
         if (h_prev != c.KE_ENTITY_INVALID) {
             if (getHierarchy(s, h_prev)) |prev| prev.next_sibling = h_next;
@@ -345,7 +353,10 @@ fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
         child = next;
     }
     // Re-fetch: the destroys above may have moved the root's archetype.
-    if (getHierarchy(s, s.root)) |h| h.first_child = c.KE_ENTITY_INVALID;
+    if (getHierarchy(s, s.root)) |h| {
+        h.first_child = c.KE_ENTITY_INVALID;
+        h.last_child = c.KE_ENTITY_INVALID;
+    }
 }
 
 // -- vtable: propagate_transforms --------------------------------------------
@@ -441,6 +452,7 @@ export fn ke_scene_tree_create(
     if (getHierarchy(s, s.root)) |h| {
         h.parent = c.KE_ENTITY_INVALID;
         h.first_child = c.KE_ENTITY_INVALID;
+        h.last_child = c.KE_ENTITY_INVALID;
         h.next_sibling = c.KE_ENTITY_INVALID;
         h.prev_sibling = c.KE_ENTITY_INVALID;
     }

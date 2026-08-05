@@ -12,6 +12,7 @@ extern "C"
     {
         ke_entity parent;
         ke_entity first_child;
+        ke_entity last_child;
         ke_entity next_sibling;
         ke_entity prev_sibling;
     } ke_hierarchy_component;

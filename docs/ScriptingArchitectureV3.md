@@ -596,12 +596,14 @@ The consequence that makes the whole design close: because every node is either 
 
 Emptying `Node._children` to read live from `ke_hierarchy_component` changes observable order, not just internal wiring. `scene_tree.zig`'s `populateNode` **prepends** each new child (`h.next_sibling = ph.first_child; ph.first_child = entity`) — a native child list iterates in reverse insertion order. `Node._children`, today, is a C# `List<Node>` built with `Add` — insertion order. Any game code iterating a node's children (UI layout, turn order, anything positional) observes different behavior the moment `_children` stops being its own list and starts reading the native list directly. This needs a conscious decision before §7.14.1 removes it — most likely reversing `scene_tree.zig`'s link direction to append (an O(1) prepend-to-tail-pointer change, not an O(n) walk), matching Godot's own stable indexed child order, rather than teaching every consumer to expect reverse order.
 
+**Done (2026-08-05).** `ke_hierarchy_component` gained a `last_child` field (`components.h`); `populateNode` now appends (`ph.last_child`'s old occupant gets `next_sibling = entity`, or `first_child = entity` when the parent had none yet), and `destroySubtree`'s unlink path keeps `last_child` consistent when the removed node was the tail. Audited every producer: the C# `HierarchyComponent` mirror (`KernelEngine.Ecs.Abstractions`) gained the matching `LastChild` field in the same struct position; no other native or managed code reads `ke_hierarchy_component` directly. Covered by a new GTest, `SceneTreeTest.CreateNode_SiblingsLinkInInsertionOrder`, asserting the walk order and `last_child` explicitly. This was exercised as a live test of the same-day `component_register` size-validation fix (§7.14.5): the size change is exactly the kind of edit that fix now catches if any stale registration path forgets to update.
+
 #### 7.14.9 Proposed order
 
 Ranked by what unlocks the most next, per discussion:
 
 1. ~~**`component_register` size-validation**~~ (§7.14.5) — **done 2026-08-05.**
-2. **Empty `Node`/`NodeWorld`** (§7.14.1, §7.14.8) — the precondition for the rest; nothing else here is generatable while it duplicates native state.
+2. **Empty `Node`/`NodeWorld`** (§7.14.1, §7.14.8) — the precondition for the rest; nothing else here is generatable while it duplicates native state. The child-order prerequisite (§7.14.8) is **done 2026-08-05**; the managed-layer emptying itself (`Node.Name`/`_children`/`NodeWorld._byName`/`_allNodes` reading live instead of mirroring) has not started, and `_behaviors` specifically waits on item 3 (`ke_node_host`) to have anywhere else to live.
 3. **`ke_node_host`** (§7.14.4) — closes §7.6 question 3, removes the last reflection dependency blocking generated nodes from having behavior.
 4. **Groups** (§7.14.2) — cheap, and proves the "everything is a component" thesis end-to-end before the harder case.
 5. **Signals** (§7.14.3) — the largest, and the one that most benefits from 2–4 already landing (connections are components; components are cheap once nodes are pure facades).

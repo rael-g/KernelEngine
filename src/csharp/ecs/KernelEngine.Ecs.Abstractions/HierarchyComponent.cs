@@ -11,6 +11,7 @@ public struct HierarchyComponent
 {
     public ulong Parent;
     public ulong FirstChild;
+    public ulong LastChild;
     public ulong NextSibling;
     public ulong PrevSibling;
 }

@@ -88,6 +88,34 @@ TEST_F(SceneTreeTest, CreateNode_SiblingsUnderOneParentAreAllReachable)
     EXPECT_EQ(walked, 3);
 }
 
+TEST_F(SceneTreeTest, CreateNode_SiblingsLinkInInsertionOrder)
+{
+    // The native list appends (last_child tracks the tail in O(1)); any consumer
+    // walking first_child -> next_sibling must see creation order, matching what
+    // a managed List<Node>.Add-built mirror already assumes.
+    ke_entity parent = tree->create_node(tree, "P", KE_ENTITY_INVALID, NULL, NULL);
+    ke_entity a = tree->create_node(tree, "A", parent, NULL, NULL);
+    ke_entity b = tree->create_node(tree, "B", parent, NULL, NULL);
+    ke_entity c = tree->create_node(tree, "C", parent, NULL, NULL);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_HIERARCHY, &meta, nullptr));
+    auto *ph = (ke_hierarchy_component *)ecs->component_get(ecs, parent, meta.cid);
+    ASSERT_NE(ph, nullptr);
+
+    ke_entity order[3] = {};
+    int walked = 0;
+    for (ke_entity cur = ph->first_child; cur != KE_ENTITY_INVALID && walked < 3; ++walked) {
+        order[walked] = cur;
+        auto *ch = (ke_hierarchy_component *)ecs->component_get(ecs, cur, meta.cid);
+        cur = ch->next_sibling;
+    }
+    EXPECT_EQ(order[0], a);
+    EXPECT_EQ(order[1], b);
+    EXPECT_EQ(order[2], c);
+    EXPECT_EQ(ph->last_child, c);
+}
+
 // ── find_node ───────────────────────────────────────────────────────────────
 
 TEST_F(SceneTreeTest, FindNode_EmptyOrNullReturnsInvalid)
