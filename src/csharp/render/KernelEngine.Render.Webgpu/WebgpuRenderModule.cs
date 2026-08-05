@@ -155,57 +155,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                     if (reader.TryGetVec3("Color", out var c)) comp.Color = c;
                 });
 
-            // Stays here (not a native apply) because it needs IRenderResources for GPU uploads.
-            world.RegisterComponentApply<MeshComponent>(
-                components.CidOf<MeshComponent>(),
-                (ref MeshComponent comp, in VariantReader reader) =>
-                {
-                    if (reader.TryGetString("mesh", out var meshName) && meshName is not null)
-                    {
-                        comp.Mesh = meshName switch
-                        {
-                            "quad"   => MeshPrimitives.Quad(this),
-                            "plane"  => MeshPrimitives.Plane(this),
-                            "cube"   => MeshPrimitives.Cube(this),
-                            "sphere" => MeshPrimitives.UvSphere(this),
-                            _ => throw new InvalidOperationException(
-                                $"[entity.components.MeshRenderer] unknown primitive '{meshName}'"),
-                        };
-                    }
-
-                    if (reader.TryGetVec4("color", out var color))
-                    {
-                        float roughness = 1f;
-                        reader.TryGetFloat("roughness", out roughness);
-
-                        var alphaMode = AlphaMode.Opaque;
-                        if (reader.TryGetString("alpha_mode", out var alphaModeName))
-                        {
-                            alphaMode = alphaModeName switch
-                            {
-                                "mask"  => AlphaMode.Mask,
-                                "blend" => AlphaMode.Blend,
-                                _       => AlphaMode.Opaque,
-                            };
-                        }
-                        float alphaCutoff = 0.5f;
-                        reader.TryGetFloat("alpha_cutoff", out alphaCutoff);
-
-                        float ior = 1.5f;
-                        reader.TryGetFloat("ior", out ior);
-
-                        float distortionStrength = 0.05f;
-                        reader.TryGetFloat("distortion_strength", out distortionStrength);
-
-                        // No file backs an inline scene-authored color, so the key is
-                        // the material's own parameters — two nodes authored with the
-                        // identical inline values share one material.
-                        var key = $"inline:{color}:{roughness}:{alphaMode}:{alphaCutoff}:{ior}:{distortionStrength}";
-                        comp.Material = CreateMaterial(key, color, roughness: roughness,
-                            alphaMode: alphaMode, alphaCutoff: alphaCutoff, ior: ior,
-                            distortionStrength: distortionStrength);
-                    }
-                });
+            // MeshComponent's own [entity.components.mesh] apply — primitive name +
+            // material fields — is native (component_apply.zig's ke_render_apply_mesh
+            // parses the TOML; render.mesh.resolve, a KE_PHASE_UPDATE system, turns
+            // those into real handles). Nothing left for C# to register here.
         }
     }
 

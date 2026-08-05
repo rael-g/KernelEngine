@@ -1,6 +1,7 @@
 const std = @import("std");
 const cimport = @import("cimport.zig");
 const component_apply = @import("component_apply.zig");
+const mesh_resolve = @import("mesh_resolve.zig");
 
 // Compiled into the ke_render_service library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -44,6 +45,7 @@ const ModuleState = struct {
     begin_access: [2]c.ke_component_access, // WRITE backbuffer, WRITE frame
     clear_access: [2]c.ke_component_access, // WRITE backbuffer, READ frame
     end_access: [2]c.ke_component_access, // READ backbuffer, WRITE frame
+    mesh_resolve_queries: [1]c.ke_query_decl, // "render.mesh.resolve": WRITE mesh
 
     // Feature pass modules — each owns its own GPU resources, runtime system(s),
     // and shaders, in its own file. Set up in dependency order: shadow + cluster
@@ -287,6 +289,22 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // than hardcoded into the framework plugin (which owns only "transform").
         // Idempotent, so a re-registration on repeated create() is safe.
         _ = ke_render_register_scene_apply(e, world);
+
+        // "render.mesh.resolve" — the system that turns a scene-authored
+        // primitive name + material fields into real mesh/material handles
+        // (mesh_resolve.zig). MeshRenderer.cs never held this logic; this is
+        // the system that gives its plain data meaning.
+        st.mesh_resolve_queries[0].terms[0] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };
+        st.mesh_resolve_queries[0].term_count = 1;
+        var mesh_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
+        mesh_resolve_params.name = "render.mesh.resolve";
+        mesh_resolve_params.phase = c.KE_PHASE_UPDATE;
+        mesh_resolve_params.queries = &st.mesh_resolve_queries;
+        mesh_resolve_params.query_count = st.mesh_resolve_queries.len;
+        mesh_resolve_params.pinned_thread = 0;
+        mesh_resolve_params.user_data = st.core.ref;
+        mesh_resolve_params.execute = mesh_resolve.system;
+        _ = rt.register_system.?(rt, &mesh_resolve_params, null);
 
         // begin_frame/clear are registered first, unconditionally, before any
         // pass's setup runs: gbuffer is its own physical plugin whose create()

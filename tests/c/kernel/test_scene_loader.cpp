@@ -163,7 +163,7 @@ TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)
 [[entity]]
 name = "Crate"
 [entity.components.mesh]
-primitive = "cube"
+mesh = "cube"
 )");
     ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
     ke_entity e = tree->find_node(tree, "Crate", NULL);

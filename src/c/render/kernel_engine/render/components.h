@@ -63,16 +63,30 @@ extern "C"
         ke_texture_handle cubemap;
     } ke_skybox_component;
 
+    /// `mesh`/`material` are output — resolved by the native "render.mesh.resolve"
+    /// system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig)
+    /// whenever `primitive` names a known shape and/or the material fields
+    /// below don't already resolve to a valid handle. A caller that already
+    /// has real handles (MeshRenderer's own C# properties, set directly) just
+    /// writes them and leaves `primitive` empty — the resolve system only
+    /// acts where a handle is still invalid, so the two paths never conflict.
+    ///
     /// Not [node:]-tagged: kabic's node generator only supports scalar/[bool]/
-    /// float[N] fields; `primitive` is a fixed char buffer written by the
-    /// scene-loader property-apply path, not by the MeshRenderer node type, so
-    /// generating a property for it would be both wrong (no char[N] mapping)
-    /// and unwanted (the node never sets it). MeshRenderer stays hand-written.
+    /// float[N] fields; `primitive` is a fixed char buffer with no mapping,
+    /// and it's the scene-loader property-apply path that writes it, never
+    /// the MeshRenderer node type itself. MeshRenderer stays hand-written.
     typedef struct ke_mesh_component
     {
         ke_mesh_handle     mesh;
         ke_material_handle material;
         char               primitive[32];
+
+        float    base_color[4]; ///< [default:1 1 1 1]
+        float    roughness; ///< [default:1]
+        uint32_t alpha_mode; ///< ke_alpha_mode. [default:0]
+        float    alpha_cutoff; ///< [default:0.5]
+        float    ior; ///< [default:1.5]
+        float    distortion_strength; ///< [default:0.05]
     } ke_mesh_component;
 
 #define KE_COMPONENT_NAME_CAMERA            "camera"

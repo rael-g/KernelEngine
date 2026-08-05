@@ -68,16 +68,54 @@ pub export fn ke_render_apply_camera(ptr: ?*anyopaque, e: [*c]const c.ke_variant
 
 pub export fn ke_render_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const m: *c.ke_mesh_component = @ptrCast(@alignCast(ptr));
+    // component_add zero-initializes new memory, which happens to make a
+    // fresh ke_mesh_handle/ke_material_handle look like a *valid* handle
+    // (bits 0), not KE_HANDLE_NONE (UINT32_MAX) — the resolve system
+    // (mesh_resolve.zig) tells "not resolved yet" apart from "already has a
+    // real handle" by that sentinel, so this apply must set it explicitly,
+    // the same way scene_tree explicitly defaults a fresh transform instead
+    // of trusting zeroed memory.
+    m.mesh = c.KE_MESH_NONE;
+    m.material = c.KE_MATERIAL_NONE;
+    m.base_color = .{ 1, 1, 1, 1 };
+    m.roughness = 1;
+    m.alpha_mode = c.KE_ALPHA_MODE_OPAQUE;
+    m.alpha_cutoff = 0.5;
+    m.ior = 1.5;
+    m.distortion_strength = 0.05;
+
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
-        if (keyIs(entry, "primitive") and v.type == c.KE_VARIANT_STRING and v.unnamed_0.s != null) {
+        if (keyIs(entry, "mesh") and v.type == c.KE_VARIANT_STRING and v.unnamed_0.s != null) {
             const src = std.mem.span(v.unnamed_0.s);
             const len = @min(src.len, m.primitive.len - 1);
             @memcpy(m.primitive[0..len], src[0..len]);
             m.primitive[len] = 0;
+        } else if (keyIs(entry, "color")) {
+            if (v.type == c.KE_VARIANT_VEC4) {
+                m.base_color = .{ v.unnamed_0.v4.x, v.unnamed_0.v4.y, v.unnamed_0.v4.z, v.unnamed_0.v4.w };
+            } else if (v.type == c.KE_VARIANT_VEC3) {
+                m.base_color = .{ v.unnamed_0.v3.x, v.unnamed_0.v3.y, v.unnamed_0.v3.z, 1 };
+            }
+        } else if (keyIs(entry, "roughness")) {
+            if (asFloat(v)) |f| m.roughness = f;
+        } else if (keyIs(entry, "alpha_mode")) {
+            if (v.type == c.KE_VARIANT_STRING and v.unnamed_0.s != null) {
+                const mode = std.mem.span(v.unnamed_0.s);
+                m.alpha_mode = if (std.mem.eql(u8, mode, "mask"))
+                    c.KE_ALPHA_MODE_MASK
+                else if (std.mem.eql(u8, mode, "blend"))
+                    c.KE_ALPHA_MODE_BLEND
+                else
+                    c.KE_ALPHA_MODE_OPAQUE;
+            }
+        } else if (keyIs(entry, "alpha_cutoff")) {
+            if (asFloat(v)) |f| m.alpha_cutoff = f;
+        } else if (keyIs(entry, "ior")) {
+            if (asFloat(v)) |f| m.ior = f;
+        } else if (keyIs(entry, "distortion_strength")) {
+            if (asFloat(v)) |f| m.distortion_strength = f;
         }
-        // Color is a material property (base-color factor), not a mesh-component
-        // field — scene-file material specification is a future loader feature.
     }
 }
 
