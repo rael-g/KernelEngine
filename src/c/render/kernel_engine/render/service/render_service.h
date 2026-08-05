@@ -252,6 +252,14 @@ struct ke_render_service
     // pipeline creation). KE_GPU_INVALID_HANDLE if unknown.
     ke_gpu_bind_group_layout (*resource_bind_group_layout)(struct ke_render_service *self, const char *name);
 
+    // The backbuffer's current pixel size — the same value a KE_PHASE_RENDER
+    // pass reads via ke_render_pass_ctx.backbuffer_size, but callable from any
+    // system in any phase (refreshed once per frame at ke_render_module's
+    // begin_frame, so a system earlier in the same tick sees the previous
+    // frame's size — a one-frame lag on resize, not a correctness issue for
+    // anything anchored to screen space).
+    void (*backbuffer_size)(struct ke_render_service *self, uint32_t *out_w, uint32_t *out_h);
+
     // Records a buffer upload to be flushed single-threaded at end_frame (before
     // submit). Render passes call this instead of the device's write_buffer so
     // parallel passes never touch the non-thread-safe GPU queue concurrently. The

@@ -194,6 +194,14 @@ pub fn resourceBufferSize(self: [*c]c.ke_render_service, name: [*c]const u8) cal
     return r.buffer_size;
 }
 
+// Callable from any system in any phase, unlike ke_render_pass_ctx.backbuffer_size
+// (only available inside a render pass) — see the doc comment in render_service.h.
+pub fn backbufferSize(self: [*c]c.ke_render_service, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+    const st = rc.coreOf(self);
+    if (out_w != null) out_w.* = st.backbuffer_w;
+    if (out_h != null) out_h.* = st.backbuffer_h;
+}
+
 // KE_GPU_INVALID_HANDLE if no bind group with that name was published (importBindGroup).
 pub fn resourceBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;

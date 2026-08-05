@@ -103,12 +103,13 @@ const UiState = struct {
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [1]c.ke_component_access = undefined,
-    // render.ui's own query: [0] = ui_quad (read), [1] = label (write — this
-    // system both shapes each label's glyphs and draws them, so it needs
-    // write access even though most of a label's fields are its own input).
+    // "render.ui" (draw, KE_PHASE_RENDER): [0] = ui_quad (read), [1] = label (read).
     queries: [2]c.ke_query_decl = undefined,
     quad_cid: c.ke_component_id = 0,
     label_cid: c.ke_component_id = 0,
+    // "render.ui.labels" (shape, KE_PHASE_UPDATE): label (write) — its own
+    // system, its own query, registered separately below.
+    label_shape_queries: [1]c.ke_query_decl = undefined,
 };
 
 fn stateOf(self: [*c]c.ke_render_ui) *UiState {
@@ -165,11 +166,8 @@ fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_met
 
 // Shapes one "label" entity's text into screen-space glyph quads, written back
 // into the same component's glyphs[]/glyph_count field, given the backbuffer
-// size (only known inside the render pass — see the call site in system()).
-// Runs every frame as part of "render.ui" itself rather than a separate
-// KE_PHASE_UPDATE system: anchoring depends on backbuffer size, which nothing
-// exposes outside a render pass context, so there is no earlier point in the
-// frame this could run and still see a resize the same frame it happens.
+// size. Called from labelShapeSystem (KE_PHASE_UPDATE), a system of its own —
+// not part of the "render.ui" draw pass.
 fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u32) void {
     const l: *c.ke_label_component = @ptrCast(l_ptr);
     l.glyph_count = 0;
@@ -275,11 +273,40 @@ fn emitQuad(ui: *UiState, vertex_count: *u32, batch_count: *u32, tex_in: c.ke_te
     ui.batches[batch_count.* - 1].vertex_count += 6;
 }
 
+// Shapes every "label" entity's text into glyphs, written back into the same
+// component for "render.ui" to draw. A genuinely separate system from the
+// draw pass below — sim-writes/render-reads, the same split every other
+// render component uses (transform, mesh, camera, ...) — made possible by
+// ke_render_service.backbuffer_size, which (unlike ke_render_pass_ctx's) is
+// callable outside a render pass. "render.ui.labels" runtime system,
+// KE_PHASE_UPDATE (registered ahead of "render.ui", KE_PHASE_RENDER).
+fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+    const ui = moduleOf(user);
+
+    var segc: usize = 0;
+    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    if (segc == 0) return;
+
+    var bw: u32 = 0;
+    var bh: u32 = 0;
+    ui.core.*.backbuffer_size.?(ui.core, &bw, &bh);
+
+    var s: usize = 0;
+    while (s < segc) : (s += 1) {
+        const labels: [*c]c.ke_label_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        var i: usize = 0;
+        while (i < segs[s].count) : (i += 1) {
+            shapeLabel(ui, labels + i, bw, bh);
+        }
+    }
+}
+
 // Builds this frame's vertices/batches from the ui_quad query view (resolved
 // and extracted by the runtime before this wave, exactly like camera/mesh/
-// transform in every other render-phase pass — see UiQuadComponent), shapes
-// and draws every "label" entity's glyphs the same way, and draws each
-// texture batch. "render.ui" runtime system.
+// transform in every other render-phase pass — see UiQuadComponent), draws
+// every "label" entity's already-shaped glyphs the same way (shaped by
+// labelShapeSystem, a separate KE_PHASE_UPDATE system — this pass only reads),
+// and draws each texture batch. "render.ui" runtime system.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const ui = moduleOf(user);
     const core = ui.core;
@@ -290,15 +317,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const label_segs = c.ke_system_ctx_view(ctx, 1, &label_segc);
     if (quad_segc == 0 and label_segc == 0) return;
 
-    // Label anchoring needs the backbuffer size, which nothing exposes outside
-    // a render pass context — begin_pass runs first, unconditionally, so
-    // shaping (below) and the ui_quad loop can both run before the vertex
-    // buffer upload either way needs.
     const pc = core.*.begin_pass.?(core, ctx, &ui.io);
     if (pc == null) return;
-    var bw: u32 = 0;
-    var bh: u32 = 0;
-    pc.*.backbuffer_size.?(pc, &bw, &bh);
 
     var vertex_count: u32 = 0;
     var batch_count: u32 = 0;
@@ -319,11 +339,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     s = 0;
     label_loop: while (s < label_segc) : (s += 1) {
-        const labels: [*c]c.ke_label_component = @ptrCast(@alignCast(label_segs[s].columns[0]));
+        const labels: [*c]const c.ke_label_component = @ptrCast(@alignCast(label_segs[s].columns[0]));
         var i: usize = 0;
         while (i < label_segs[s].count) : (i += 1) {
-            const l = &labels[i];
-            shapeLabel(ui, labels + i, bw, bh);
+            const l = labels[i];
             if (l.glyph_count == 0) continue;
 
             const font_idx = c.ke_handle_index(l.font.bits);
@@ -347,6 +366,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
 
     // Pixel-space (top-left origin) → clip space, honoring the backend's NDC.
+    var bw: u32 = 0;
+    var bh: u32 = 0;
+    pc.*.backbuffer_size.?(pc, &bw, &bh);
     var proj = zm.orthographicOffCenterLh(0.0, @floatFromInt(bw), 0.0, @floatFromInt(bh), 0.0, 1.0);
     if (ui.ndc.y_flip != 0) proj[1][1] = -proj[1][1];
     var proj_arr: [16]f32 = undefined;
@@ -543,10 +565,10 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     ui.queries[0].terms[0] = .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ };
     ui.queries[0].term_count = 1;
 
-    // "label" — this system both reads a label's text/anchor/offset/color/font
-    // and writes its shaped glyphs back, so it needs write access (see shapeLabel).
+    // "label" — draw pass (below) only reads the shaped glyphs; labelShapeSystem
+    // (its own system, registered next) is the sole writer.
     ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component));
-    ui.queries[1].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE };
+    ui.queries[1].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ };
     ui.queries[1].term_count = 1;
 
     var params = std.mem.zeroes(c.ke_runtime_system_params);
@@ -560,6 +582,23 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     params.user_data = ui;
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
+
+    // "render.ui.labels" — shapes text into glyphs. A separate system, in
+    // KE_PHASE_UPDATE (sim side), writing the same "label" component
+    // "render.ui" above only reads — the ordinary sim-writes/render-reads
+    // split every other render component in this engine already uses.
+    ui.label_shape_queries[0].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE };
+    ui.label_shape_queries[0].term_count = 1;
+
+    var shape_params = std.mem.zeroes(c.ke_runtime_system_params);
+    shape_params.name = "render.ui.labels";
+    shape_params.phase = c.KE_PHASE_UPDATE;
+    shape_params.queries = &ui.label_shape_queries;
+    shape_params.query_count = ui.label_shape_queries.len;
+    shape_params.pinned_thread = 0;
+    shape_params.user_data = ui;
+    shape_params.execute = labelShapeSystem;
+    _ = rt.register_system.?(rt, &shape_params, null);
 
     return .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
 }

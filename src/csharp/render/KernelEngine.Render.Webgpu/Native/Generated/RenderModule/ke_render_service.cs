@@ -90,6 +90,9 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_render_service *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_bind_group_layout;
 
+    [NativeTypeName("void (*)(struct ke_render_service *, uint32_t *, uint32_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, uint*, uint*, void> backbuffer_size;
+
     [NativeTypeName("void (*)(struct ke_render_service *, ke_gpu_buffer, uint64_t, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ulong, ulong, void*, nuint, void> upload;
 

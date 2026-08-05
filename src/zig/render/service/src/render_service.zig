@@ -445,6 +445,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         .resource_buffer_size = resource_table.resourceBufferSize,
         .resource_bind_group = resource_table.resourceBindGroup,
         .resource_bind_group_layout = resource_table.resourceBindGroupLayout,
+        .backbuffer_size = resource_table.backbufferSize,
         .get_or_create_pipeline = pipeline_cache.getOrCreatePipeline,
         .material_shader = asset_upload.materialShader,
         .retain_mesh = asset_upload.retainMesh,
