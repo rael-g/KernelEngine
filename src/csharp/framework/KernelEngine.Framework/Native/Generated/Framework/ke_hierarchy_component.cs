@@ -11,6 +11,9 @@ public partial struct ke_hierarchy_component
     public ulong first_child;
 
     [NativeTypeName("ke_entity")]
+    public ulong last_child;
+
+    [NativeTypeName("ke_entity")]
     public ulong next_sibling;
 
     [NativeTypeName("ke_entity")]

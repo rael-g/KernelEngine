@@ -8,8 +8,10 @@
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/scene_loader.h>
+#include <kernel_engine/framework/node_host.h>
 #include <kernel_engine/framework/world_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/framework/input_actions_create.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
+#include <kernel_engine/framework/node_host_create.h>
