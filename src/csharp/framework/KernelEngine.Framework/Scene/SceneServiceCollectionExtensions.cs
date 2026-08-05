@@ -31,17 +31,12 @@ public static class SceneServiceCollectionExtensions
                 sp.GetRequiredService<World>(),
                 AppContext.BaseDirectory));
 
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Camera>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<DirectionalLight>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<AmbientLight>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<PointLight>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<SpotLight>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Skybox>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<MeshRenderer>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Sprite2D>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<Label>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<AudioPlayer>());
-        services.AddSingleton<INodeTypeRegistrar>(_ => new NodeTypeRegistrar<CollisionShape2D>());
+        // No builtin node types registered here — Framework has no concept of
+        // any other domain's node types (the same "no universe knowledge" rule
+        // that keeps ke_world from hardcoding render's components). Each
+        // domain's own composition extension (WebgpuRenderModule.Configure,
+        // AddPhysics2DBox2D, AddAudioMiniAudio, ...) calls AddNodeType<T>()
+        // for its own types.
     }
 }
 

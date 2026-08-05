@@ -9,7 +9,7 @@ namespace KernelEngine.Framework;
 /// Scene-file properties: <c>Path</c> (string, relative to BaseDirectory),
 /// <c>Volume</c> (float, 0..1, default 1.0).
 /// </summary>
-public class AudioPlayer : Node
+public class AudioPlayer : Node3D
 {
     private readonly IAudio _audio;
 
@@ -18,9 +18,9 @@ public class AudioPlayer : Node
 
     public AudioPlayer(IAudio audio) => _audio = audio;
 
-    protected internal override void OnBind(NodeWorld nodeWorld) { }
+    protected override void OnBind(NodeWorld nodeWorld) { }
 
-    protected internal override void OnReady()
+    protected override void OnReady()
     {
         if (!TryGetProperties(out var props)) return;
 
@@ -34,7 +34,7 @@ public class AudioPlayer : Node
         if (_volume == 0f) _volume = 1f;
     }
 
-    protected internal override void OnUnbind()
+    protected override void OnUnbind()
     {
         if (_handle != SoundHandle.None)
         {

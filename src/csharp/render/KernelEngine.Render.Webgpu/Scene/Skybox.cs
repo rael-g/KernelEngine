@@ -7,15 +7,8 @@ namespace KernelEngine.Framework;
 /// Skybox node — provides the cubemap rendered behind the scene and used as the
 /// IBL environment by PBR materials. Only the first Skybox node wins per frame.
 /// </summary>
-public class Skybox : Node
+[GeneratedNodeComponent(typeof(SkyboxComponent), SkyboxComponent.Name)]
+public partial class Skybox : Node3D
 {
-    private SkyboxComponent _state;
-
-    public TextureHandle CubemapHandle
-    {
-        get => _state.CubemapHandle;
-        set { _state.CubemapHandle = value; if (IsBound) NodeWorld!.Set(Entity, _state); }
-    }
-
-    protected internal override void OnBind(NodeWorld nodeWorld) => nodeWorld.Set(Entity, _state);
+    public partial TextureHandle CubemapHandle { get; set; }
 }

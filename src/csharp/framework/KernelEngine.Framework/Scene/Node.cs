@@ -44,26 +44,6 @@ public abstract class Node
         _children.Remove(child);
     }
 
-    // ── Transform ────────────────────────────────────────────────────────────
-
-    private TransformComponent _transform = TransformComponent.Identity;
-
-    public TransformComponent LocalTransform
-    {
-        get
-        {
-            if (!IsBound) return _transform;
-            return NodeWorld!.TryGet<TransformComponent>(Entity, out var v) ? v : TransformComponent.Identity;
-        }
-        set
-        {
-            _transform = value;
-            if (IsBound) NodeWorld!.Set(Entity, value);
-        }
-    }
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-
     /// <summary>
     /// Called once by <see cref="NodeWorld.AddNode"/> after the entity has been
     /// created. Subclasses materialize their ECS components here from the
@@ -109,13 +89,6 @@ public abstract class Node
     /// </summary>
     internal bool HasBehavior { get; private set; }
 
-    /// <summary>
-    /// Called by <see cref="NodeWorld.BindNativeEntity"/> before the entity is bound
-    /// so that the native scene loader's pre-applied transform is reflected in
-    /// <see cref="LocalTransform"/> when <see cref="OnBind"/> runs.
-    /// </summary>
-    internal void SetInitialTransform(TransformComponent tc) => _transform = tc;
-
     internal void UnbindFromNodeWorld()
     {
         NodeWorld = null;
@@ -132,13 +105,11 @@ public abstract class Node
     {
         NodeWorld = nodeWorld;
         Entity    = entity;
-        nodeWorld.Set(entity, _transform);
     }
 
     internal void CompleteBind()
     {
-        NodeWorld!.Set(Entity, _transform);
-        OnBind(NodeWorld);
+        OnBind(NodeWorld!);
 
         var m = GetType().GetMethod(nameof(OnUpdate),
             System.Reflection.BindingFlags.Instance |

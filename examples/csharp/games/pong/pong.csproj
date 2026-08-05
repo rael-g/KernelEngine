@@ -32,7 +32,6 @@
     <ProjectReference Include="..\..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\toolkit\KernelEngine.Toolkit\KernelEngine.Toolkit.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />

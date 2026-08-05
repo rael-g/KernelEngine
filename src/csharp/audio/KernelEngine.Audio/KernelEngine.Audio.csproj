@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Audio.Abstractions\KernelEngine.Audio.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- AudioPlayer : Node3D -->
   </ItemGroup>
 
 </Project>

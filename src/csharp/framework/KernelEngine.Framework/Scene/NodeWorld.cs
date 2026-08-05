@@ -4,11 +4,9 @@ using KernelEngine.Ecs;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Node-aware facade over <see cref="World"/>. Lives in Toolkit (not Framework)
-/// because Framework only knows ECS + Scene — it has no concept of <see cref="Node"/>.
-/// Game code calls <see cref="AddNode{T}"/> to spawn entities and attach components;
-/// every entity is created through the native <see cref="SceneTree"/> so hierarchy
-/// and name are wired at the C level.
+/// Node-aware facade over <see cref="World"/>. Game code calls <see cref="AddNode{T}"/>
+/// to spawn entities and attach components; every entity is created through the
+/// native <see cref="SceneTree"/> so hierarchy and name are wired at the C level.
 /// </summary>
 public sealed class NodeWorld
 {
@@ -18,13 +16,17 @@ public sealed class NodeWorld
     private readonly uint               _nameCid;
 
     private readonly List<Node>                  _behaviors = new();
-    private readonly List<Label>                 _labels    = new();
     private readonly List<Node>                  _allNodes  = new();
     private readonly Dictionary<string, Node>    _byName    = new(StringComparer.Ordinal);
     private readonly Dictionary<ulong, Node>     _byEntity  = new();
 
     internal IReadOnlyList<Node>  Behaviors => _behaviors;
-    internal IReadOnlyList<Label> Labels    => _labels;
+
+    /// <summary>
+    /// Every currently-bound node. A caller needing its own node type filters
+    /// this with <c>OfType&lt;T&gt;()</c> — NodeWorld has no per-domain knowledge.
+    /// </summary>
+    public IReadOnlyList<Node> AllNodes => _allNodes;
 
     private nint _systemCtx;
 
@@ -49,7 +51,6 @@ public sealed class NodeWorld
     }
 
     internal void RegisterBehavior(Node node) => _behaviors.Add(node);
-    internal void RegisterLabel(Label label)  => _labels.Add(label);
 
     private readonly uint _nativeTransformCid;
     private readonly uint _hierarchyCid;
@@ -138,8 +139,7 @@ public sealed class NodeWorld
         node.Parent?.DetachChild(node);
         node.OnUnbind();
 
-        if (node.HasBehavior)   _behaviors.Remove(node);
-        if (node is Label l)    _labels.Remove(l);
+        if (node.HasBehavior) _behaviors.Remove(node);
         _allNodes.Remove(node);
         _byEntity.Remove(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
@@ -172,16 +172,19 @@ public sealed class NodeWorld
             name = Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
         }
 
-        var tsp = _ecs.GetComponent<TransformComponent>(entity, _nativeTransformCid);
-        if (!tsp.IsEmpty)
+        if (node is Node3D node3D)
         {
-            ref readonly var kt = ref tsp[0];
-            node.SetInitialTransform(new TransformComponent
+            var tsp = _ecs.GetComponent<TransformComponent>(entity, _nativeTransformCid);
+            if (!tsp.IsEmpty)
             {
-                Position = kt.Position,
-                Rotation = kt.Rotation,
-                Scale    = kt.Scale,
-            });
+                ref readonly var kt = ref tsp[0];
+                node3D.SetInitialTransform(new TransformComponent
+                {
+                    Position = kt.Position,
+                    Rotation = kt.Rotation,
+                    Scale    = kt.Scale,
+                });
+            }
         }
 
         var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
@@ -215,7 +218,13 @@ public sealed class NodeWorld
         return true;
     }
 
-    internal void Set<T>(ulong entity, in T value) where T : unmanaged
+    /// <summary>
+    /// Writes <paramref name="value"/> into the component the framework's
+    /// <see cref="IComponentRegistry"/> has registered for <typeparamref name="T"/>,
+    /// attaching it when the entity does not carry it yet. Any domain's node type
+    /// (not just Framework's own) calls this from its own assembly's <c>OnBind</c>.
+    /// </summary>
+    public void Set<T>(ulong entity, in T value) where T : unmanaged
         => SetByCid(entity, _components.CidOf<T>(), in value);
 
     /// <summary>
@@ -236,11 +245,43 @@ public sealed class NodeWorld
         if (!sp.IsEmpty) sp[0] = value;
     }
 
+    /// <summary>
+    /// Registers <typeparamref name="T"/> under <paramref name="name"/>, or returns the
+    /// existing cid if that name is already registered. For component types with no C
+    /// header — a game-authored node's generated backing struct — this is the only
+    /// registration path; engine node types resolve an already-registered name instead
+    /// via <see cref="CidOfName"/>.
+    /// </summary>
+    public uint RegisterComponent<T>(string name) where T : unmanaged => _ecs.RegisterComponent<T>(name);
+
+    /// <summary>
+    /// Deferred-attaches component <paramref name="cid"/> to <paramref name="entity"/>
+    /// with <paramref name="value"/>, using <paramref name="view"/>'s system context.
+    /// The sanctioned channel for a script to write ECS data its own <c>OnUpdate</c>
+    /// call doesn't already own by binding (e.g. queuing a UI quad) — <see cref="View"/>
+    /// keeps its context internal, so this is the only path to it.
+    /// </summary>
+    public bool Attach<T>(in View view, ulong entity, uint cid, in T value) where T : unmanaged =>
+        KernelEngine.Runtime.SystemContext.Attach(view.SystemContext, entity, cid, in value);
+
     /// <summary>Resolves the cid a component is registered under, or throws when the name is unknown.</summary>
     public uint CidOfName(string name) =>
         _ecs.TryLookupComponent(name, out var cid)
             ? cid
             : throw new InvalidOperationException($"Component '{name}' is not registered.");
+
+    /// <summary>
+    /// Reads the component registered under <paramref name="cid"/> straight from the ECS.
+    /// Mirrors <see cref="SetByCid{T}"/> — a caller whose component identity is a registered
+    /// name reads the live value the same way it writes it, never through a managed cache.
+    /// </summary>
+    public bool TryGetByCid<T>(ulong entity, uint cid, out T value) where T : unmanaged
+    {
+        var sp = _ecs.GetComponent<T>(entity, cid);
+        if (sp.IsEmpty) { value = default; return false; }
+        value = sp[0];
+        return true;
+    }
 
     internal bool TryGet<T>(ulong entity, out T value) where T : unmanaged
     {

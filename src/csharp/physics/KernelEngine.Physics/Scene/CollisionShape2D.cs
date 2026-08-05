@@ -11,15 +11,15 @@ namespace KernelEngine.Framework;
 /// <c>Density</c> (float, default 1), <c>Friction</c> (float, default 0.3),
 /// <c>Restitution</c> (float, default 0).
 /// </summary>
-public class CollisionShape2D : Node
+public class CollisionShape2D : Node2D
 {
     private readonly IPhysics2D _physics;
 
     public CollisionShape2D(IPhysics2D physics) => _physics = physics;
 
-    protected internal override void OnBind(NodeWorld nodeWorld) { }
+    protected override void OnBind(NodeWorld nodeWorld) { }
 
-    protected internal override void OnReady()
+    protected override void OnReady()
     {
         var body = FindBodyAncestor();
         if (body is null) return;

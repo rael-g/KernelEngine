@@ -1,29 +1,28 @@
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Ecs;
 using KernelEngine.Input;
-using KernelEngine.Render;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler;
-using KernelEngine.Window;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Scene infrastructure for the v2 (component-driven) render path. Registers the
+/// Scene infrastructure independent of any other domain: registers the
 /// <see cref="NodeWorld"/>, installs the BehaviorSystem that propagates transforms
 /// and drives per-node <see cref="Node.OnUpdate"/>, and runs a one-shot scene
-/// setup callback on the render worker. The render module's passes read the ECS
-/// components directly, so no per-node render contributor is registered.
+/// setup callback on a dedicated worker thread. Framework has no concept of any
+/// other domain's components or node types (the same rule <c>ke_world</c> follows
+/// natively) — render's [entity.components.X] applies and node-type registrations
+/// live in <c>WebgpuRenderModule</c>, physics's in its own module, and so on.
 /// </summary>
 /// <remarks>
-/// Add <c>FrameworkModule</c> and the render module before this one: the render
-/// module's OnLoad must create the render core (so mesh upload works) before the
-/// setup callback runs. Topo-sort preserves registration order for independent
-/// modules, so register the render module earlier in the list.
+/// Add <c>FrameworkModule</c> and every domain module (render, physics, audio, ...)
+/// before this one, so their OnLoad has already registered its own component
+/// applies and node types by the time the scene setup callback runs.
 /// </remarks>
 public sealed class SceneNodesModule : IRuntimeModule
 {
-    private const uint RenderWorker = 1;
+    private const uint SetupWorker = 1;
 
     private readonly Action<NodeWorld, IServiceProvider> _setup;
 
@@ -55,16 +54,6 @@ public sealed class SceneNodesModule : IRuntimeModule
         var scheduler = services.GetRequiredService<IScheduler>();
         var evaluator = services.GetService<IActionEvaluator>();
 
-        // [entity.components.AmbientLight] — backend-agnostic data mapping, no GPU
-        // resources touched, so it's safe to register unconditionally.
-        var components = services.GetRequiredService<IComponentRegistry>();
-        world.RegisterComponentApply<AmbientLightComponent>(
-            components.CidOf<AmbientLightComponent>(),
-            static (ref AmbientLightComponent comp, in VariantReader reader) =>
-            {
-                if (reader.TryGetVec3("Color", out var c)) comp.Color = c;
-            });
-
         // The ctx-aware overload hands each tick its system context. Node create/
         // destroy issued from a behavior routes through it and defers the structural
         // change to the wave barrier — so this runs as an ordinary parallel-wave
@@ -84,76 +73,12 @@ public sealed class SceneNodesModule : IRuntimeModule
             }
         }, pinnedThread: 1);
 
-        // Optional: only registered when the active render module implements
-        // IRenderResources.
-        var resources = services.GetService<IRenderResources>();
-        var window    = services.GetService<IWindow>();
-        if (resources != null && window != null)
-        {
-            LabelUiSystem.Register(runtime, nodeWorld, resources, window);
-
-            // [entity.components.MeshRenderer] — resolves a named primitive mesh + a
-            // flat-color material through IRenderResources. Named primitives dedup
-            // through the render core's own key-based cache (MeshPrimitives keys each
-            // shape as "primitive:*"), so scene files reusing the same few shapes
-            // across many entities — e.g. every Pong sprite is "quad" — upload once.
-            world.RegisterComponentApply<MeshComponent>(
-                components.CidOf<MeshComponent>(),
-                (ref MeshComponent comp, in VariantReader reader) =>
-                {
-                    if (reader.TryGetString("mesh", out var meshName) && meshName is not null)
-                    {
-                        comp.Mesh = meshName switch
-                        {
-                            "quad"   => KernelEngine.Render.MeshPrimitives.Quad(resources),
-                            "plane"  => KernelEngine.Render.MeshPrimitives.Plane(resources),
-                            "cube"   => KernelEngine.Render.MeshPrimitives.Cube(resources),
-                            "sphere" => KernelEngine.Render.MeshPrimitives.UvSphere(resources),
-                            _ => throw new InvalidOperationException(
-                                $"[entity.components.MeshRenderer] unknown primitive '{meshName}'"),
-                        };
-                    }
-
-                    if (reader.TryGetVec4("color", out var color))
-                    {
-                        float roughness = 1f;
-                        reader.TryGetFloat("roughness", out roughness);
-
-                        var alphaMode = AlphaMode.Opaque;
-                        if (reader.TryGetString("alpha_mode", out var alphaModeName))
-                        {
-                            alphaMode = alphaModeName switch
-                            {
-                                "mask"  => AlphaMode.Mask,
-                                "blend" => AlphaMode.Blend,
-                                _       => AlphaMode.Opaque,
-                            };
-                        }
-                        float alphaCutoff = 0.5f;
-                        reader.TryGetFloat("alpha_cutoff", out alphaCutoff);
-
-                        float ior = 1.5f;
-                        reader.TryGetFloat("ior", out ior);
-
-                        float distortionStrength = 0.05f;
-                        reader.TryGetFloat("distortion_strength", out distortionStrength);
-
-                        // No file backs an inline scene-authored color, so the key is
-                        // the material's own parameters — two nodes authored with the
-                        // identical inline values share one material.
-                        var key = $"inline:{color}:{roughness}:{alphaMode}:{alphaCutoff}:{ior}:{distortionStrength}";
-                        comp.Material = resources.CreateMaterial(key, color, roughness: roughness,
-                            alphaMode: alphaMode, alphaCutoff: alphaCutoff, ior: ior,
-                            distortionStrength: distortionStrength);
-                    }
-                });
-        }
-
-        // Scene setup runs on the render worker (GPU upload has thread affinity),
-        // after the render module's OnLoad created the core + registered components.
+        // Scene setup runs pinned to a worker thread (GPU upload has thread
+        // affinity when a render module is present), after every domain
+        // module's OnLoad has registered its own components/applies/node types.
         var done = new System.Threading.ManualResetEventSlim(false);
         Exception? err = null;
-        scheduler.DispatchPinned(RenderWorker, () =>
+        scheduler.DispatchPinned(SetupWorker, () =>
         {
             try   { _setup(nodeWorld, services); }
             catch (Exception ex) { err = ex; }
