@@ -1,0 +1,283 @@
+{
+  "enums": [
+    {
+      "name": "ke_node_hook_kind",
+      "doc": "v0 carries only the proven case (per-tick update, mapped to KE_PHASE_UPDATE). OnBind/OnReady/OnUnbind are additive, not designed yet \u2014 see ScriptingArchitectureV2.md \u00A77.",
+      "values": [
+        {
+          "name": "KE_NODE_HOOK_UPDATE",
+          "value": 0,
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_node_type_builder",
+      "doc": "Declares one node type: its own backing component\u0027s fields, plus one runtime-dispatched hook per lifecycle callback the type needs. Obtained via ke_node_host.begin_type; consumed and destroyed by ke_node_host.commit, which is the only place any of this is actually registered.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "field",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Declares a field on the type\u0027s own backing component. Declaration order is layout order. KE_VARIANT_STRING/KE_VARIANT_TABLE are not blittable into component memory and fail at commit(), not here \u2014 field() itself cannot fail.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "type",
+              "type": "ke_variant_type",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "hook",
+          "returns": "ke_node_hook_id",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Declares a lifecycle hook and the callback it dispatches to. ke_node_hook_fn is a raw C function pointer typedef with no managed shape kabic can render generically \u2014 the C# SDK hand-writes this one method, marshaling a managed delegate through [UnmanagedCallersOnly] itself.",
+          "return_doc": "KE_NODE_HOOK_INVALID if self is invalid.",
+          "params": [
+            {
+              "name": "kind",
+              "type": "ke_node_hook_kind",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "fn",
+              "type": "ke_node_hook_fn",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "access",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Declares a component \u0060hook\u0060 reads/writes, resolved at commit(). component_name either equals the type\u0027s own name (self-reference, resolved to the just-registered own component) or must already be registered on the ke_ecs this host was created with.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "hook",
+              "type": "ke_node_hook_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component_name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "access",
+              "type": "ke_access",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ke_node_host",
+      "doc": "The node-registration middle-end: one native implementation of \u0022a declared type\u0027s fields become an ECS component, its hooks become ke_runtime systems\u0022, shared by every language binding. See ScriptingArchitectureV2.md for the full design and rationale.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "begin_type",
+          "returns": "ke_node_type_builder *",
+          "tags": [],
+          "doc": "Begins declaring a new node type. Fails if type_name is already committed on this host \u2014 no hot-reload semantics in v0.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type_name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "commit",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Verifies every field/hook/access declared on builder, then registers the type\u0027s own component and one ke_runtime system per hook, atomically: on any verification failure nothing is registered. Destroys builder either way.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "builder",
+              "type": "ke_node_type_builder *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "spawn",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "Creates an entity carrying the registered type\u0027s own component, zero-initialized. The caller sets field values after spawn.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type_name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "attach",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Attaches the registered type\u0027s own component onto an entity that already exists (e.g. one ke_scene_loader created from a scene file), zero-initialized.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "type_name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "describe",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Introspection as an output: describes a registered type\u0027s own fields (name \u002B ke_variant_type) as a variant table, keyed \u0022\u003Cfield\u003E.type\u0022. For tooling and diagnostics \u2014 never consumed by this host to decide semantics.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type_name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "const ke_variant_table **",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ke_node_host_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_node_host *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": []
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_node_hook_id": "uint32_t"
+  }
+}

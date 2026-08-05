@@ -54,7 +54,10 @@ extern "C"
         bool (*field)(struct ke_node_type_builder *self, const char *name, ke_variant_type type);
 
         /**
-         * Declares a lifecycle hook and the callback it dispatches to.
+         * [idiom] Declares a lifecycle hook and the callback it dispatches to.
+         * ke_node_hook_fn is a raw C function pointer typedef with no managed shape
+         * kabic can render generically — the C# SDK hand-writes this one method,
+         * marshaling a managed delegate through [UnmanagedCallersOnly] itself.
          * @return KE_NODE_HOOK_INVALID if self is invalid.
          */
         ke_node_hook_id (*hook)(struct ke_node_type_builder *self, ke_node_hook_kind kind,
