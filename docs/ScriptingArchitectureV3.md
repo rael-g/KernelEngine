@@ -312,7 +312,7 @@ ClangSharp is retained for the raw P/Invoke layer while `kabic` is built on top 
 
 ---
 
-## 7. Track 4 — Node ergonomics (`ke_node_host`)
+## 7. Track 4 — Node ergonomics (node base types as headers)
 
 Separate, smaller, and lowest priority of the four: a native middle-end that collapses node-registration mechanics ("a struct's fields become a component, a lifecycle method becomes a system with an access list") so no language reimplements them. Design and rationale — including why its input is a **transactional builder API** and not a serialized IR — are in [`ScriptingArchitectureV2.md`](ScriptingArchitectureV2.md) §4/§5/§9.2, which remain valid.
 
@@ -383,7 +383,7 @@ Unresolved, and each can invalidate part of §7.4:
 
 1. **Imperative node behaviour — design closed by §7.14.2/§7.13's correction, implementation still open.** `render.mesh.resolve` (§7.13's correction) proved the pattern on `MeshRenderer`'s scene-apply logic; `CollisionShape2D` (physics: ancestor search + fixture attach) and `AudioPlayer` (audio: scene-property load + `Play()`) are still hand-written, still imperative, as of the 2026-08-05 dispersal (§8.4) — the same conversion, not yet done for either.
 2. **Node methods — design closed, see §7.14.2.** Not a missing vtable-binding rule; inside a wave-parallel ECS a system body cannot call arbitrary domain code regardless of any declared rule. `Play()` is a command component (`play_requested`) a domain system consumes, the identical shape as §7.13's mesh resolution.
-3. **Behaviour detection without reflection — design closed, see §7.14.4.** `Node.CompleteBind` (now in `KernelEngine.Framework/Scene/Node.cs`) still uses `GetType().GetMethod(nameof(OnUpdate), ...)` reflection, unchanged. `ke_node_host` (§7.14.4) replaces the discovery with a lookup against its own registration table — implementation not started.
+3. **Behaviour detection without reflection — design closed, see §7.14.4.** `Node.CompleteBind` (now in `KernelEngine.Framework/Scene/Node.cs`) still uses `GetType().GetMethod(nameof(OnUpdate), ...)` reflection, unchanged. `node.h`'s declared lifecycle vocabulary (§7.14.4) replaces the discovery: a node type declares its hooks, so "does this entity have behavior" is a property of the declaration, not something to probe for at bind time. Implementation not started.
 4. **Base hierarchy prerequisite — partially resolved, differently than planned.** `Node2D` shipped 2026-08-05, but as a C# facade over the *same* `ke_transform_component`/`Node3D` every 3D node uses (`Position`/`Scale` as `Vector2`, `Rotation` as one angle, `Depth` for Z) — not the locked `FrameworkArchitectureV2.md` §7 design (a distinct `ke_transform2d_component`, a parent-chain restricted to Node2D-under-Node2D). The facade was the right call for the immediate need (Pong-style 2D games mixing freely with 3D nodes) and required zero native change, but it does not close this prerequisite for `Canvas`/`Control`, which still don't exist. `base:Node3D` node types (the 5 in §7.13) sidestep this question entirely — they don't need Node2D at all.
 
 ### 7.7 Alternatives rejected
@@ -443,18 +443,12 @@ This is what keeps the per-language floor flat. Engine node types grow with the 
 
 Read against that, `NodeWorld`'s `_byName`, `_allNodes`, `_byEntity` are a fifth leak of the same shape as the three closed this session: a managed mirror of state the native side already owns, kept in sync by hand instead of queried. `Node.Parent`/`_children` is the same leak inside the node object itself.
 
-What is genuinely irreducible is narrower than "the whole base class": dispatching a call from native code into a script object's overridden method. That needs a small native primitive, `ke_node_host`, mirroring the existing callback-vtable pattern already proven for e.g. `ke_logger_sink`:
+What is genuinely irreducible is narrower than "the whole base class": dispatching a call from native code into a script object's overridden method. This section originally sketched that as a standalone `ke_node_host` vtable with `register_behavior(entity, on_update, user_data)` / `unregister_behavior(entity)`, mirroring `ke_logger_sink`. **Superseded by §7.14.4** on two counts, though the sketch was closer to right than `ScriptingArchitectureV2.md`'s much larger builder:
 
-```c
-typedef struct ke_node_host {
-    void (*register_behavior)(struct ke_node_host *self, ke_entity entity,
-                               void (*on_update)(void *user_data, float dt),
-                               void *user_data);
-    void (*unregister_behavior)(struct ke_node_host *self, ke_entity entity);
-} ke_node_host;
-```
+- **It is a contract, not a service.** Once `node.h` declares what a node is, the lifecycle vocabulary belongs to that declaration — not to a separate object a host must construct, own, and thread through composition.
+- **Per-entity is the wrong granularity.** `register_behavior(entity, ...)` implies one registration and one native→managed transition per entity. Dispatch is per *archetype segment* — one transition for potentially hundreds of entities — which is the same reason the segment view exists at all.
 
-With `ke_scene_tree` for lifetime/hierarchy/lookup and `ke_node_host` for behavior dispatch, nothing is left that needs per-language hand state. `Node` becomes a **generated** wrapper — same mechanism as `[node:]` on a component, but its "component" is the pair `(ke_name_component, ke_hierarchy_component)` plus a callback registration, not a single data struct. `Node3D`/`Node2D`/`Control`/`Canvas` then generate as `base:Node` types the same way `PointLight` generates as `base:Node3D` — no hand-written class at any level of the chain.
+The conclusion the sketch reached still holds and is the point of §7.14.4: with `ke_scene_tree` for lifetime/hierarchy/lookup and a declared lifecycle surface for behavior dispatch, nothing is left that needs per-language hand state. `Node` becomes a **generated** wrapper — same mechanism as `[node:]` on a component, but its "component" is the pair `(ke_name_component, ke_hierarchy_component)` plus the declared hooks, not a single data struct. `Node3D`/`Node2D`/`Control`/`Canvas` then generate as `base:Node` types the same way `PointLight` generates as `base:Node3D` — no hand-written class at any level of the chain.
 
 The only thing that stays genuinely per-language, because it cannot be anything else, is the adapter inside `kabic`'s own backend translating "this language's virtual-dispatch idiom" into a call to `register_behavior` — a C# `delegate`, a Lua closure over a table, a Zig function pointer stored on a struct. That code lives once, in the backend, not once per domain and not once per game.
 
@@ -516,6 +510,17 @@ Both gaps are noted in `components.h` itself (next to the un-tagged structs) so 
 
 **Where the generated node types physically live changed too — see §8.4.** `Camera.g.cs`/etc. are no longer under a `toolkit` project; the manifest entry that drives their generation (`scripts/api_domains.json`, entry `render_components`) is explicit that it is *not* a separate native plugin — `components.h` is part of `src/c/render`, same as `world`/`scene_tree`/`scene_loader`/`input_actions` are four manifest entries under one native `framework` plugin, not four plugins.
 
+**Two spellings for a vector — debt introduced by this very pass, found 2026-08-05.** Making `Color`/`Direction`/`Ambient` into `Vector3` required the native field to be contiguous, and the conversion above chose `float[3]`, because `kabic`'s `VectorArity` matches exactly `^float\s*\[(\d+)\]$`. But `src/zig/common/include/kernel_engine/common/math.h` had *already* defined `ke_vec2`/`ke_vec3`/`ke_vec4`/`ke_quat`/`ke_mat4`, and `ke_transform_component` was already using them. So the engine now spells "three contiguous floats in a component" two ways, and the generator understands only the newer, weaker one:
+
+```c
+transform.h:          ke_vec3 position;   // pre-existing spelling
+render/components.h:  float   color[3];   // introduced by this pass
+```
+
+The right fix is the inverse of what was done: teach `kabic` the `ke_vec*` types (one new entry in the same per-field projection table) and convert `components.h` back. `ke_vec*` is strictly better than `float[N]` — layout-identical to `System.Numerics` (`ke_vec3`≡`Vector3` at 12 bytes, `ke_quat`≡`Quaternion` at 16, blittable, no marshaling) *and* type-carrying, so a quaternion can project to `Quaternion` rather than to an indistinguishable `Vector4`. Cost is a source sweep of the Zig producers converted in the same pass (`shadow_module`, `forward_module`, `deferred_lighting_module`, `component_apply`): `l.color[0]` becomes `l.color.x`. Layout is unchanged, so this is not an ABI break in bytes — but per the audit-all-producers rule it is still a full sweep, and it is the direct prerequisite for `node3d.h` (§7.14.4).
+
+**Dead code found alongside it**: `ke_transform` in `math.h` (position + rotation + scale, a near-duplicate of `ke_transform_component` minus `world_matrix`) has no reference anywhere in `src/`, `tests/`, or `examples/`.
+
 ### 7.14 The node facade architecture — designed 2026-08-05, not started
 
 Everything above (§7.1–§7.13) treats one node at a time: can `kabic` generate *this* node's properties. That question kept surfacing the same deeper one — `MeshRenderer` "looked" hard to generate for the same reason `Skybox` didn't (§7.13's correction) and the same reason the original `LabelUiSystem` sat inside the `render.ui` draw pass instead of its own system (§8.4's UI-ownership work): **logic was hardcoded beside or inside a node, instead of living in a system.** A node with logic can't be generated, because generating it means generating the logic too, and logic is exactly the part that has no mechanical shape. A node that is pure data can always be generated, because "pure data" is by definition just a schema. So the node-generation question was never really about `kabic` — it is about whether the *architecture* keeps nodes as data. This section designs that architecture, prompted by asking what a Godot-rich node system (signals, groups, coexisting builtin and user node types) would need on top of what §7.1–§7.13 already built, and finding that the current `Node`/`NodeWorld` (even after §8.4's toolkit split) still carry state that should not exist.
@@ -528,14 +533,14 @@ Everything above (§7.1–§7.13) treats one node at a time: can `kabic` generat
 |---|---|---|
 | `Node.Name` | `ke_name_component` | **emptied 2026-08-05** — `Name` reads `NodeWorld.GetName(Entity)` live, no cached field |
 | `Node.Parent` / `_children` | `ke_hierarchy_component` | **emptied 2026-08-05** — `Parent`/`Children` walk `ke_hierarchy_component` live via `NodeWorld.GetParent`/`GetChildren`; `AttachChild`/`DetachChild` deleted outright, nothing left to sync |
-| `Node.HasBehavior` | computed via reflection over `OnUpdate` | not started — waits on `ke_node_host` (item 3) |
+| `Node.HasBehavior` | computed via reflection over `OnUpdate` | not started — waits on `node.h`'s lifecycle vocabulary (item 3) |
 | `NodeWorld._byName` | `ke_scene_tree.find_node` | **emptied 2026-08-05** — `Find` calls `SceneTree.FindNode` and resolves the returned entity through `_byEntity` |
 | `NodeWorld._allNodes` | a query over every bound node | not started — no native "is a managed node" marker exists yet to query on, and `TriggerReady`'s reverse-DFS-order contract needs a real ordered list; `Dictionary.Values` iteration order is an implementation detail, not something to build a documented contract on |
-| `NodeWorld._behaviors` | what `ke_node_host` (§7.14.4) should own | not started — same as `HasBehavior` |
+| `NodeWorld._behaviors` | what a declared lifecycle surface (§7.14.4) should make unnecessary | not started — same as `HasBehavior` |
 
 Every one of these is the same shape of leak §6.5/world.zig/§8.4's toolkit-dispersal work already found and fixed at the native and C# layers, just one level up: a managed mirror of state the ECS already owns. As long as any of it exists, a node type is not just a schema — it is a schema *plus* synchronization code, and synchronization code cannot be generated from a header. Emptying it is the precondition for everything else in this section, including for §7.6's still-open questions 1–3.
 
-**Three of six rows done.** `Name`/`Parent`/`Children`/`Find` no longer duplicate anything — every read goes straight to the ECS, so a native rename, reparent, or destroy is visible on the next access with no sync call anywhere. Verified: full `dotnet build` (no warnings introduced), the native `SceneTreeTest` suite (unaffected — this was a pure C# read-through change, no ABI touched), and a 6-second live run of `examples/csharp/games/pong` (which builds a real parent/child hierarchy and calls `Find<T>()` from game code) with no exceptions. `_allNodes`/`_behaviors` stay exactly because §7.14.9 already flagged them as blocked on `ke_node_host` — this is not a new finding, just confirmation the dependency is real once the easy two-thirds were actually attempted.
+**Three of six rows done.** `Name`/`Parent`/`Children`/`Find` no longer duplicate anything — every read goes straight to the ECS, so a native rename, reparent, or destroy is visible on the next access with no sync call anywhere. Verified: full `dotnet build` (no warnings introduced), the native `SceneTreeTest` suite (unaffected — this was a pure C# read-through change, no ABI touched), and a 6-second live run of `examples/csharp/games/pong` (which builds a real parent/child hierarchy and calls `Find<T>()` from game code) with no exceptions. `_allNodes`/`_behaviors` stay exactly because §7.14.9 already flagged them as blocked on item 3 — this is not a new finding, just confirmation the dependency is real once the easy two-thirds were actually attempted.
 
 #### 7.14.2 Decomposition — what a rich node system needs, and what actually requires new native machinery
 
@@ -549,7 +554,7 @@ Every one of these is the same shape of leak §6.5/world.zig/§8.4's toolkit-dis
 | **Node methods** (`AudioPlayer.Play()`) | a command component the owning domain's system consumes | **no — same shape as `render.mesh.resolve`** |
 | Imperative behavior | domain systems (native, KE_PHASE_UPDATE/RENDER) | no |
 | **Signals** | a native bus; connections are components (durable), emission is transient | **yes** |
-| **Callback dispatch** (`OnUpdate`, etc.) | `ke_node_host` | **yes** |
+| **Callback dispatch** (`OnUpdate`, etc.) | `node.h`'s declared lifecycle surface (§7.14.4) | **yes** |
 
 Two capabilities collapse into the existing component/query machinery with no new design at all:
 
@@ -563,9 +568,35 @@ Godot's signal system splits into two lifetimes that must not be conflated:
 - **Emission** is a single frame's event — transient, drained at a phase boundary (a ring buffer, same shape as any other per-frame producer/consumer split in this engine).
 - **Connection** (node A's signal wired to node B's handler) is **durable** — it must survive scene serialization (Godot saves connections in the `.tscn`) and, in this engine's actual current use case, must be visible cross-language: if a Lua-authored node connects to a signal a C# builtin node exposes, the connection cannot live only in Lua's runtime, because nothing about a *component* is language-scoped (§7.14.5) and a signal connection is exactly that kind of fact. **A connection is a component** (`ke_signal_connection_component` — source entity/signal id, target entity, handler command shape), not a callback closure kept in one language's heap. This is the one piece of §7.14.2 that is not already free: a signal bus (registration + emission + drain) is new native surface, `src/c/framework/` or a sibling to `ke_scene_loader`.
 
-#### 7.14.4 `ke_node_host` — the callback trampoline, and what it fixes
+#### 7.14.4 The node base types get headers — `node.h`, `node3d.h`, `node2d.h`
 
-The dispatch primitive `ScriptingArchitectureV2.md` §4/§5 already specified and §7.11 already named as the honest floor. Two jobs: register a behavior callback for an entity, and call it. Landing it fixes §7.6 question 3 outright — `Node.CompleteBind`'s `GetType().GetMethod(nameof(OnUpdate), ...)` reflection (still present, unchanged, as of this section) exists only because nothing native currently tracks "does this entity have behavior registered"; once `ke_node_host` owns that table, discovery is a lookup, not a reflection probe, and the result is no longer C#-specific (it stops being a `Node.CompleteBind` mechanism and becomes a runtime one, satisfying the script-safety model's reflection ban for the same reason `ke_render_ui`'s font table replaced C#'s per-`Font` `Dictionary` in §8.4's label work).
+The problem this solves is §7.6 question 3: `Node.CompleteBind`'s `GetType().GetMethod(nameof(OnUpdate), ...)` reflection, which exists only because nothing native tracks "does this entity have behavior". Behind it sits the larger §7.11 aspiration — `Node` itself becoming a *generated* type rather than the one hand-written class every generated node type inherits from.
+
+**A rejected first attempt: `ke_node_host` (built and reverted 2026-08-05).** `ScriptingArchitectureV2.md` §4/§5 specifies a native middle-end with a transactional type builder — `begin_type`/`field`/`commit`/`spawn`/`attach`/`describe` — that owns "a declared type's fields become a component, its hooks become systems". It was implemented in full (native Zig, `kabic`-generated C# wrapper, end-to-end test against real flecs + enkiTS) and then reverted, because **V2 predates `kabic` and assumed an SDK model this architecture no longer has**:
+
+| V2 assumed `ke_node_host` owns | Who actually owns it under V3 |
+|---|---|
+| declaring a type's fields | `components.h` + `kabic` (engine types); the Roslyn `NodePropertyGenerator` (game-authored types) |
+| computing component layout | the C struct itself, or C#'s `sizeof(T)` — never recomputed |
+| registering the component | `NodePropertyGenerator`'s `OnBind` → `CidOfName` / `RegisterComponent<T>` |
+| creating entities (`spawn`) | `ke_scene_tree` (the Tree == World doctrine) |
+| describing a type (`describe`) | `ke_api.json`, `kabic`'s own IR |
+
+Two findings sealed it. First, the layout math in `node_host.zig` was a **second source of truth** for something the header and the Roslyn generator already fix — exactly the cross-language drift V2 existed to prevent, reintroduced by the mechanism meant to prevent it. Second, it was an **island**: it registered a component under the bare type name (`"Ball"`), while the generator registers `"Pong.Ball_Data"`, so no node in the real system ever passed through it — its own passing test proved only that the island worked in isolation.
+
+The name was a symptom, not the disease. V2 made a *service* out of what should be a *contract*: once a header declares what a node is, the lifecycle vocabulary is part of that node's declared surface, not a separate host object to construct and pass around.
+
+**The replacement.** Give the base node types headers, in `src/zig/framework/include/kernel_engine/framework/`, and generate them the same way `[node:]`-tagged structs in `components.h` already generate `PointLight`/`Camera`:
+
+- **`node.h`** — the lifecycle vocabulary (`bind`/`ready`/`update`/`unbind`) as declared ABI, plus the components constituting node identity (`ke_name_component`, `ke_hierarchy_component`). This is what removes the reflection and makes `Node` describable to any language rather than C#-only.
+- **`node3d.h`** — `ke_transform_component`, tagged `[node:Node3D,base:Node]`.
+- **`node2d.h`** — the same transform projected as `Vector2` + a single rotation angle + `Depth` (§7.6 question 4's facade, already implemented by hand).
+
+**What survives from the rejected attempt.** One piece is genuinely needed and genuinely *not* data projection: the **dispatch trampoline** — walking `ke_system_ctx_view`'s segments and turning a segment row into a managed instance to call `OnUpdate` on. That was built and proven end-to-end (per-segment dispatch, `[UnmanagedCallersOnly]` + `GCHandle`-pinned callback), and is reused inside `node.h`'s lifecycle surface instead of inside a standalone host.
+
+**Sizing this honestly.** An earlier read of this work counted "seven distinct generator capabilities" and was wrong — inflated. They are mostly new entries in the *one* per-field projection table `kabic` already has (today: scalar, `float[N]`→`VectorN`, `bool`←`byte`), and two of them — `parent` → `Node?`, and the child-list traversal → `IReadOnlyList<Node>` — already exist as hand-written runtime helpers (`NodeWorld.GetParent`/`GetChildren`, §7.14.1), so generating them is templating against code that already works, not new design. The ECS shell underneath (entity + cid + `SetByCid`/`TryGetByCid`) needs nothing at all. The genuinely new work is the lifecycle vocabulary and the dispatch seam; everything else is projection.
+
+**Prerequisite: one spelling for vectors** — `node3d.h` is blocked on `kabic` understanding `ke_vec3`/`ke_quat`. See §7.13's "two spellings" entry.
 
 #### 7.14.5 The name-collision hazard `component_register` doesn't guard against
 
@@ -590,7 +621,7 @@ First pass at this question conflated "which language created the node" with "wh
 
 Within one language, sharing a node type across two projects needs nothing new — it is that language's own module system (an assembly reference, an `import`, a `@import`), the same way any two C# projects already share a type today. Component **identity**, in the ECS, is always the registered name regardless of which axis is in play; that part of §7.10 was already correct and needs no revision.
 
-The consequence that makes the whole design close: because every node is either **data** (a component, always projectable into any language that has the schema), a **command** (§7.14.2, likewise), or a **dispatched callback** (`ke_node_host`, §7.14.4, which does not care which language registered it), there is no remaining category of "thing a node does" that only one language's runtime can reach. The earlier draft of this design flagged a cross-language `Find<T>()` gap as an inherent limitation; it was not — it was two capabilities (dynamic-language export, size-checked registration) not yet built, not a ceiling on the design.
+The consequence that makes the whole design close: because every node is either **data** (a component, always projectable into any language that has the schema), a **command** (§7.14.2, likewise), or a **dispatched callback** (§7.14.4's declared lifecycle surface, which does not care which language registered it), there is no remaining category of "thing a node does" that only one language's runtime can reach. The earlier draft of this design flagged a cross-language `Find<T>()` gap as an inherent limitation; it was not — it was two capabilities (dynamic-language export, size-checked registration) not yet built, not a ceiling on the design.
 
 **One consequence for dynamic-language export specifically.** A Lua- or Python-authored node exporting its schema needs more than today's `component_register(name, size)` runtime call — that is enough for the ECS to store the data, but not enough for `kabic` to *generate* `T` in another language, which needs the field list, same as any `[node:]`-tagged C struct does. Exporting a dynamic-language node type is therefore a reverse-codegen path (source → `kabic`'s IR), not just a registration call; not designed yet.
 
@@ -606,7 +637,12 @@ Ranked by what unlocks the most next, per discussion:
 
 1. ~~**`component_register` size-validation**~~ (§7.14.5) — **done 2026-08-05.**
 2. **Empty `Node`/`NodeWorld`** (§7.14.1, §7.14.8) — the precondition for the rest; nothing else here is generatable while it duplicates native state. **Partially done 2026-08-05**: the child-order prerequisite (§7.14.8), and `Name`/`Parent`/`Children`/`Find`/`_byName` (§7.14.1) are emptied — all four now read live from `ke_name_component`/`ke_hierarchy_component`/`ke_scene_tree.find_node`. `_allNodes`/`_behaviors` remain, correctly blocked on item 3.
-3. **`ke_node_host`** (§7.14.4) — closes §7.6 question 3, removes the last reflection dependency blocking generated nodes from having behavior.
+3. **Node base types as headers** (§7.14.4) — closes §7.6 question 3 and unblocks §7.11 (`Node` itself generated). Supersedes this slot's earlier occupant, `ke_node_host`, which was built and reverted the same day; see §7.14.4 for the audit. Ordered internally by what unblocks what:
+   1. **`ke_vec*` unification** (§7.13) — teach `kabic` the existing math types, convert `components.h` back off `float[N]`, sweep the Zig producers. Pure prerequisite: `node3d.h` cannot generate without it, and it retires debt introduced hours earlier rather than adding new surface.
+   2. **`node.h`'s lifecycle vocabulary** — the hook ABI (`bind`/`ready`/`update`/`unbind`) plus the reused dispatch trampoline. This is the piece that actually deletes `Node.CompleteBind`'s reflection and lets `NodeWorld._behaviors`/`Node.HasBehavior` (the last two rows of §7.14.1's table) go away.
+   3. **`node3d.h`** — `ke_transform_component` as `[node:Node3D,base:Node]`; needs (i), plus a read-only/omitted treatment for `world_matrix`, which is derived output written by `propagate_transforms`, never authored input.
+   4. **`node.h`'s data surface** — `ke_name_component` + `ke_hierarchy_component` projected as `Name`/`Parent`/`Children`. Needs multi-component node types and the `char[N]`→`string` projection (the same gap `MeshRenderer`'s `primitive` field hits); the parent/children projections themselves template against `NodeWorld.GetParent`/`GetChildren`, which already exist.
+   5. **`node2d.h`** — one component, a second projection with different property types. Depends on (iii) and (iv).
 4. **Groups** (§7.14.2) — cheap, and proves the "everything is a component" thesis end-to-end before the harder case.
 5. **Signals** (§7.14.3) — the largest, and the one that most benefits from 2–4 already landing (connections are components; components are cheap once nodes are pure facades).
 
