@@ -30,4 +30,5 @@ comptime {
     _ = @import("scene_tree.zig");
     _ = @import("input_actions.zig");
     _ = @import("scene_loader.zig");
+    _ = @import("node_host.zig");
 }
