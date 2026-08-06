@@ -543,11 +543,19 @@ const TaskPkg = struct {
     user_data: ?*anyopaque,
     dt: f32,
     defer_q: DeferQueue,
+    allow_defer: bool,
 };
 
 fn taskPkgRun(data: ?*anyopaque) callconv(.c) void {
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
-    pkg.state.defer_q = &pkg.defer_q;
+    // The render phase dispatches asynchronously and can still be in flight
+    // when the next tick's sim phases start mutating the same ke_ecs (see
+    // runtimeTick). A render-phase system deferring a structural op would
+    // apply it via deferFlush from the render task, racing sim's writes.
+    // No render system does this today, but the guard makes it impossible
+    // rather than merely unexercised: leaving defer_q null here makes every
+    // ke_system_ctx_defer/spawn/attach/detach/despawn call return false.
+    if (pkg.allow_defer) pkg.state.defer_q = &pkg.defer_q;
     pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt);
 }
 
@@ -636,6 +644,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
             pkg.user_data = rs.params.user_data;
             pkg.dt = dt;
             pkg.defer_q = .{};
+            pkg.allow_defer = phase != c.KE_PHASE_RENDER;
             pinned[wave_size] = rs.params.pinned_thread;
             wave_size += 1;
         }

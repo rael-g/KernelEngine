@@ -149,9 +149,9 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 
 `ke.main` from the older Application.cs model is folded into `ke.sim`. There is no separate input thread; GLFW poll runs at the top of each tick before the scheduler dispatches.
 
-**Sim ↔ render boundary**: per-component snapshot via double-buffered ECS storage (locked design — `docs/RuntimeArchitectureV2.md` §16). Components touched by render-phase systems get `KE_COMPONENT_DOUBLE_BUFFERED` set automatically (inferred from system access lists). Phase boundaries rotate the snapshot index; sim N+1 writes the live side while render N reads the snapshot side. No lock, no per-frame copy, no frame-packet object — the old `ke_frame_packet` extract path was deleted in C-phase 4 of the runtime arc.
+**Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not `docs/`'. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Pre-R6 transitional state**: snapshot mechanism is not yet wired (R6-R7). Sim and render run serially on the same world; render-phase systems just read live storage. Performance equivalent to the historical "1 thread for everything" model; correctness preserved. R6+ flips on pipelining transparently to render-side code.
+`docs/RuntimeArchitectureV2.md` §16 describes a per-component double-buffered snapshot. Treat it as a design under consideration, not as a description of the code.
 
 **Worker pool**: a single shared `ke_task_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly. Every parallel subsystem (asset loading, PSO compile, audio mixing, render dispatch) routes through the same pool. flecs is built without its pipeline addon, so flecs itself never spawns a thread.
 
