@@ -109,7 +109,7 @@ if (classified.FreeFunctionGroups.Count > 0)
             return 1;
         }
         File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(owner, convention)}Functions.g.cs"),
-            CSharpBackend.RenderFreeFunctions(owner, fns, ns, nativeNs, library, convention));
+            CSharpBackend.RenderFreeFunctions(model, owner, fns, ns, nativeNs, extraUsings, library, convention));
     }
 
 Console.WriteLine($"wrote {classified.Providers.Count} provider(s), {classified.Callbacks.Count} callback(s), "

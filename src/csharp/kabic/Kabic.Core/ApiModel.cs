@@ -28,6 +28,12 @@ public record ApiField(string Name, string Type, IReadOnlyList<string> Tags, str
 
 public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IReadOnlyList<ApiField> Fields, IReadOnlyList<ApiSlot> Slots)
 {
+    /// <summary>
+    /// Whether the struct holds any function-pointer slot. This is a shape
+    /// question, not a role one: a parameter bag also carries the callback it
+    /// registers, so a caller deciding whether to emit an interface must
+    /// additionally consult the naming convention (see <c>Convention.IsParamsType</c>).
+    /// </summary>
     public bool IsVtable => Slots.Count > 0;
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];

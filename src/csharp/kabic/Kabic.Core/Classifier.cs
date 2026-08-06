@@ -65,7 +65,12 @@ public static class Classifier
         // An owner-wrapper struct ({ref, destroy}) is a plain lifetime holder, not
         // something a caller registers a provider/callback for in its own right —
         // its `destroy` slot is consumed inline by the owning provider's Dispose.
-        var vtables = model.Structs.Where(s => s.IsVtable && !convention.IsHandleType(s.Name)).ToList();
+        // A parameter bag is excluded for a related reason: it carries the callback
+        // it registers, so it holds slots without being an interface, and emitting
+        // a Borrow/Dispose wrapper for one describes an object that does not exist.
+        var vtables = model.Structs
+            .Where(s => s.IsVtable && !convention.IsHandleType(s.Name) && !convention.IsParamsType(s.Name))
+            .ToList();
 
         // A vtable is a callback type if some slot anywhere takes it BY VALUE
         // (not by pointer) with the [callback] tag — the caller implements it,
@@ -79,9 +84,18 @@ public static class Classifier
 
         foreach (var v in vtables)
         {
+            // A vtable with neither an owner-wrapper nor a factory is never
+            // constructed or owned by the caller — it is handed in, borrowed for
+            // the duration of a call (a per-tick system context). Wrapping one in
+            // a provider would emit Borrow/Dispose lifetime management for a
+            // lifetime the caller does not hold; its free functions are the whole
+            // managed surface.
+            var isOwnable = model.Structs.Any(s => s.Name == convention.HandleTypeFor(v.Name))
+                || model.Functions.Any(f => f.Name == convention.FactoryNameFor(v.Name));
+
             if (callbackTypeNames.Contains(v.Name) && !explicitProviders.Contains(v.Name))
                 result.Callbacks.Add(v);
-            else
+            else if (isOwnable || explicitProviders.Contains(v.Name))
                 result.Providers.Add(v);
 
             result.SlotsByVtable[v.Name] = v.Slots.Select(s => ClassifySlot(s, convention)).ToList();

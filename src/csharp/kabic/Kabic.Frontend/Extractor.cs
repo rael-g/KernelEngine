@@ -77,11 +77,14 @@ public static class Extractor
                 // A typedef naming a plain primitive (ke_entity -> uint64_t) is an
                 // alias every backend must see through; one naming a struct or enum
                 // is a real type the description already carries under its own key.
+                // A function-pointer typedef (ke_defer_fn -> void (*)(ke_ecs *, void *))
+                // is recorded too: it names no type of its own, so a backend that
+                // never sees the target has nothing to emit and leaves the bare alias
+                // in its output, which then does not compile.
                 case "TypedefDecl" when name is not null:
                 {
                     var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
-                    if (!target.StartsWith("struct ") && !target.StartsWith("enum ")
-                        && !target.Contains('(') && target != name)
+                    if (!target.StartsWith("struct ") && !target.StartsWith("enum ") && target != name)
                         api.TypeAliases[name] = target;
                     break;
                 }
@@ -100,15 +103,36 @@ public static class Extractor
             var e = c!.AsObject();
             if (e["kind"]?.GetValue<string>() != "EnumConstantDecl") continue;
             var doc = DocParser.Parse(e).Summary;
-            var literalText = SliceRange(bytes, e);
-            var m = Regex.Match(literalText, @"=\s*(-?\w+)");
             string rawValue = next.ToString();
             var isInt = true;
-            if (m.Success)
+
+            // An initializer naming exactly one other enumerator is an alias
+            // (KE_MOUSE_BUTTON_LEFT = KE_MOUSE_BUTTON_1), and emitting the name
+            // keeps that relationship visible in the generated code. Anything
+            // else is an expression, and only clang's folded ConstantExpr value
+            // is trustworthy there: reading the source tokens yields the first
+            // one and drops the rest, so `1 << 0` and `1 << 1` both come out as
+            // 1 and distinct bitmask flags silently collapse onto each other.
+            var initializer = Regex.Match(SliceRange(bytes, e), @"=\s*(.+?)\s*(?:,|\}|$)");
+            var aliasOnly = initializer.Success
+                && Regex.IsMatch(initializer.Groups[1].Value.Trim(), @"^[A-Za-z_]\w*$");
+
+            if (aliasOnly)
             {
-                var tok = m.Groups[1].Value;
-                isInt = Regex.IsMatch(tok, @"^-?\d+$");
-                rawValue = isInt ? long.Parse(tok).ToString() : tok;
+                isInt = false;
+                rawValue = initializer.Groups[1].Value.Trim();
+            }
+            else
+            {
+                var folded = ((e["inner"] as JsonArray) ?? [])
+                    .OfType<JsonObject>()
+                    .FirstOrDefault(i => i["kind"]?.GetValue<string>() == "ConstantExpr")
+                    ?["value"]?.GetValue<string>();
+
+                if (folded is not null && long.TryParse(folded, out var foldedValue))
+                    rawValue = foldedValue.ToString();
+                else if (initializer.Success && long.TryParse(initializer.Groups[1].Value.Trim(), out var literal))
+                    rawValue = literal.ToString();
             }
             if (isInt) next = long.Parse(rawValue) + 1;
             values.Add(new ApiEnumValue(e["name"]!.GetValue<string>(), rawValue, isInt, doc.Length > 0 ? doc : null));

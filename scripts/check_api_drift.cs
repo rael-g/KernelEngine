@@ -61,7 +61,10 @@ try
         // enums land in the same dir as everything else, so compare against that.
         var tmpEnumsDir = d["abstractionsOutDir"] is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
 
-        var extractArgs = new List<string> { "run", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
+        // --no-cache: `dotnet run <file>.cs` reuses a cached build of the script's
+        // referenced #:project, so an edit to kabic itself is silently ignored and
+        // this gate reports drift computed by the previous generator build.
+        var extractArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
             "--out", tmpApiJson };
         if (zigOverride is not null) extractArgs.AddRange(["--zig", zigOverride]);
         foreach (var inc in includeDirs) extractArgs.AddRange(["-I", inc]);
@@ -82,7 +85,7 @@ try
             driftDetected = true;
         }
 
-        var genArgs = new List<string> { "run", Path.Combine(rootDir, "scripts", "generate_csharp.cs"), "--",
+        var genArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "generate_csharp.cs"), "--",
             "--api", tmpApiJson, "--namespace", ns, "--native-namespace", nativeNs,
             "--out", tmpOutDir, "--enums-out", tmpEnumsDir };
         foreach (var u in usings) genArgs.AddRange(["--using", u]);

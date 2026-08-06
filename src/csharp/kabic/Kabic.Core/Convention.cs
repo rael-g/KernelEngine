@@ -39,6 +39,20 @@ public sealed class Convention
     public required string FactorySuffix { get; init; }
 
     /// <summary>
+    /// Suffix marking a parameter bag (<c>ke_runtime_system_params</c>) — a value the caller
+    /// fills in and passes by pointer to one call, never an interface. Holding a function
+    /// pointer does not make it one: a registration bag carries the callback being registered
+    /// (<c>execute</c>, <c>on_load</c>) right next to its plain data fields, so slot count
+    /// alone cannot tell the two apart, and mistaking a bag for a vtable emits a wrapper class
+    /// with <c>Borrow</c>/<c>Dispose</c> around what is not an object. The ABI guarantees this
+    /// suffix for every parameter bag, which is what makes it a sound discriminator.
+    /// </summary>
+    public required string ParamsSuffix { get; init; }
+
+    /// <summary>Whether a struct name marks a parameter bag rather than an interface.</summary>
+    public bool IsParamsType(string structName) => structName.EndsWith(ParamsSuffix);
+
+    /// <summary>
     /// Suffix marking an ECS component struct (<c>ke_point_light_component</c>). Stripped
     /// along with <see cref="SymbolPrefix"/> to recover the name the component is registered
     /// under at runtime (<c>point_light</c>), which is its only cross-language identity.
@@ -112,6 +126,7 @@ public sealed class Convention
         HandleSuffix = "_handle",
         FactorySuffix = "_create",
         ComponentSuffix = "_component",
+        ParamsSuffix = "_params",
         ErrorOutParamType = "ke_error**",
         // C spells `bool` as `_Bool` after preprocessing; both reach the description.
         // `ke_bool` is this ABI's own boolean typedef, used interchangeably with
@@ -132,6 +147,11 @@ public sealed class Convention
             // surface has always spelled the dimension suffix with a capital D.
             ["ke_physics_2d"] = "Physics2D",
             ["ke_body_type_2d"] = "BodyType2D",
+            // Bare `Phase`/`Access` are too generic for types every module sees
+            // when registering a system, and both would read as unqualified
+            // nouns at call sites that already spell the domain out.
+            ["ke_phase"] = "RuntimePhase",
+            ["ke_access"] = "RuntimeAccess",
         },
     };
 }
