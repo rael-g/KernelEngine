@@ -58,6 +58,24 @@
       "usings": []
     },
     {
+      "_comment": "The scheduler contract. register_system's params carry queries + access_list, which the wave builder orders on; a hand-written IRuntime had omitted them, so every C#-registered system declared zero access and the wave builder saw zero conflicts. Generating the surface from the header is what keeps that from drifting again. system_ctx.h rides along because the execute callback's first parameter is a ke_system_ctx*.",
+      "name": "runtime",
+      "headers": [
+        "src/c/runtime/kernel_engine/runtime/runtime.h",
+        "src/c/runtime/kernel_engine/runtime/system_ctx.h",
+        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+      ],
+      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
+      "includeDirs": ["src/c/runtime", "src/c/ecs", "src/c/scheduler", "src/zig/common/include"],
+      "apiJson": "src/csharp/runtime/ke_api.json",
+      "namespace": "KernelEngine.Runtime",
+      "nativeNamespace": "KernelEngine.Runtime.Native",
+      "outDir": "src/csharp/runtime/KernelEngine.Runtime/Generated",
+      "abstractionsOutDir": "src/csharp/runtime/KernelEngine.Runtime.Abstractions/Generated",
+      "usings": ["KernelEngine.Ecs.Native", "KernelEngine.Scheduler.Native"],
+      "library": "ke_runtime"
+    },
+    {
       "name": "ecs",
       "headers": [
         "src/c/ecs/kernel_engine/ecs/ke_ecs.h",
@@ -155,6 +173,17 @@
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
       "usings": ["KernelEngine.Asset.Native", "KernelEngine.Text.Native", "KernelEngine.Render.Native"]
+    },
+    {
+      "_comment": "node3d.h in the ScriptingArchitectureV3 §7.14.4 sense: transform.h is [node:]-tagged (whole-struct mode — see CSharpBackend's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
+      "name": "spatial",
+      "headers": ["src/c/spatial/kernel_engine/spatial/transform.h"],
+      "includeDirs": ["src/c/spatial", "src/zig/common/include"],
+      "apiJson": "src/csharp/framework/spatial.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Common.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Scene",
+      "usings": ["KernelEngine.Ecs"]
     },
     {
       "name": "world",

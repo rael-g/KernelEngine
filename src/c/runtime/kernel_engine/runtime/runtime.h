@@ -23,8 +23,9 @@ typedef enum ke_phase {
     KE_PHASE_FIXED_UPDATE = 2,
     KE_PHASE_UPDATE       = 3,
     KE_PHASE_POST_UPDATE  = 4,
-    // Render systems run here, after the sim→render snapshot swap. Reads of
-    // double-buffered components route to the snapshot side (§16).
+    // Dispatched asynchronously by tick(), so it overlaps the next tick's sim
+    // phases. Its systems read query results the runtime extracted before
+    // dispatch, never live storage, and structural mutation is refused here.
     KE_PHASE_RENDER       = 5,
     KE_PHASE_SHUTDOWN     = 6,
 } ke_phase;
@@ -81,14 +82,18 @@ typedef struct ke_runtime {
 
     ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
     ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
+
+    /// [name:TickNative] A system body written in a managed language cannot let an
+    /// exception cross this boundary, so its binding parks the failure and rethrows
+    /// it after the call returns. That wrapper has to be what callers reach for, or
+    /// the error is silently dropped by whoever calls the raw entry point instead.
     bool         (*tick)(ke_runtime *self, float dt, ke_error **out_error);
 
     /// Blocks until any render phase dispatched by a previous tick() has
     /// finished. tick() dispatches render asynchronously and returns before it
-    /// completes (§16); callers that need to tear down render-owned native
-    /// resources (GPU device, swapchain surface) must call this first, or the
-    /// still-running render phase races the teardown. A no-op if nothing is
-    /// pending.
+    /// completes; callers that need to tear down render-owned native resources
+    /// (GPU device, swapchain surface) must call this first, or the still-running
+    /// render phase races the teardown. A no-op if nothing is pending.
     void (*flush_render)(ke_runtime *self);
 } ke_runtime;
 
