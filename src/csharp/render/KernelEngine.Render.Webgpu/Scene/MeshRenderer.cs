@@ -15,5 +15,13 @@ public class MeshRenderer : Node3D
     public MaterialHandle MaterialHandle { get; set; }
 
     protected override void OnBind(NodeWorld nodeWorld)
-        => nodeWorld.Set(Entity, new MeshComponent { Mesh = MeshHandle, Material = MaterialHandle });
+        // Built from Default, not a fresh struct: the surface parameters this node
+        // does not expose still have to carry ke_mesh_component's documented
+        // values, and zeroed they describe a black, fully rough, fully cut-out
+        // surface rather than an unset one.
+        => nodeWorld.Set(Entity, MeshComponent.Default with
+        {
+            Mesh     = MeshHandle,
+            Material = MaterialHandle,
+        });
 }

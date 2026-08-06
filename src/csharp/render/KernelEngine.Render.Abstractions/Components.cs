@@ -46,6 +46,33 @@ public struct MeshComponent
     public MeshHandle     Mesh;
     public MaterialHandle Material;
     public PrimitiveTag   Primitive;
+
+    // Surface parameters the forward pass reads straight off this component
+    // rather than through the material. Field order and types are the ABI:
+    // ke_mesh_component grew these after this mirror was written, and since
+    // nothing compared the two sizes the mismatch stayed invisible until
+    // component_register began validating them.
+    public Vector4 BaseColor;
+    public float   Roughness;
+    public uint    AlphaMode;
+    public float   AlphaCutoff;
+    public float   Ior;
+    public float   DistortionStrength;
+
+    /// <summary>
+    /// The defaults <c>ke_mesh_component</c> documents per field. A
+    /// zero-initialized instance is not neutral — it is a black, fully rough,
+    /// fully cut-out surface, which is valid memory that renders as nothing.
+    /// </summary>
+    public static MeshComponent Default => new()
+    {
+        BaseColor          = Vector4.One,
+        Roughness          = 1.0f,
+        AlphaMode          = 0,
+        AlphaCutoff        = 0.5f,
+        Ior                = 1.5f,
+        DistortionStrength = 0.05f,
+    };
 }
 
 // Light and environment vocabulary. These mirror the kernel's

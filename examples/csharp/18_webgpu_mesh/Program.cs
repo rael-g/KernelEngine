@@ -58,7 +58,7 @@ ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
 entT = TransformComponent.Identity;
 entT.WorldMatrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
-entM = new MeshComponent { Mesh = cube, Material = orange };
+entM = MeshComponent.Default with { Mesh = cube, Material = orange };
 
 // Shading keeps the directional term switched off until a light entity
 // exists, so without this the cube resolves to black.
