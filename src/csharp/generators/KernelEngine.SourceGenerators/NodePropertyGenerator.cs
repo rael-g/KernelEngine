@@ -218,10 +218,25 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         ["Vector2"] = "ke_vec2", ["Vector3"] = "ke_vec3", ["Vector4"] = "ke_vec4", ["Quaternion"] = "ke_quat",
     };
 
+    // ke_mesh_handle / ke_material_handle are { uint32_t bits; }; their managed
+    // counterparts are readonly record struct H(uint Value). Same size, same single
+    // field, so the coercion is a bit-cast like the vector one above.
+    static readonly Dictionary<string, string> NativeHandleNames = new()
+    {
+        ["MeshHandle"] = "ke_mesh_handle", ["MaterialHandle"] = "ke_material_handle",
+    };
+
     static (Func<string, string> read, Func<string, string> write)? CoercionFor(ITypeSymbol propertyType, ITypeSymbol fieldType)
     {
         if (propertyType.SpecialType == SpecialType.System_Boolean && fieldType.SpecialType == SpecialType.System_Byte)
             return (expr => $"{expr} != 0", expr => $"(byte)({expr} ? 1 : 0)");
+        if (NativeHandleNames.TryGetValue(propertyType.Name, out var nativeHandle) && fieldType.Name == nativeHandle)
+        {
+            var pn = propertyType.ToDisplayString();
+            var fn = fieldType.ToDisplayString();
+            return (expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{fn}, {pn}>({expr})",
+                    expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{pn}, {fn}>({expr})");
+        }
         if (propertyType.ContainingNamespace?.ToDisplayString() == "System.Numerics"
             && NativeVectorNames.TryGetValue(propertyType.Name, out var nativeName)
             && fieldType.Name == nativeName)

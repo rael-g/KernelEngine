@@ -144,6 +144,13 @@ public static class CSharpBackend
 
         foreach (var f in component.Fields)
         {
+            // [idiom] — the field is part of the component's ABI but not part of
+            // the node's authoring surface, because something other than the node
+            // owns writing it (the scene loader's property-apply path). Emitting a
+            // settable property for one would invite callers to author a value that
+            // gets overwritten.
+            if (f.Has("idiom")) continue;
+
             var propName = f.TagValue("name") ?? Idioms.Pascal(f.Name);
             var propType = NodePropertyType(model, f);
             o.Add("");
@@ -183,7 +190,18 @@ public static class CSharpBackend
         ["ke_quat"] = ("Quaternion", ["x", "y", "z", "w"]),
     };
 
+    // Resource handles are single-uint32 structs on both sides, so a node property
+    // can carry the managed one the rest of the C# surface already speaks
+    // (IRenderResources hands back a MeshHandle, not a ke_mesh_handle) and the
+    // Roslyn generator bit-casts at the boundary, exactly as it does for ke_vecN.
+    static readonly Dictionary<string, string> NamedHandleTypes = new()
+    {
+        ["ke_mesh_handle"] = "KernelEngine.Render.MeshHandle",
+        ["ke_material_handle"] = "KernelEngine.Render.MaterialHandle",
+    };
+
     static string NodePropertyType(ApiModel model, ApiField f) =>
+        NamedHandleTypes.TryGetValue(f.Type.Trim(), out var h) ? h :
         VectorArity(f.Type) is int n ? $"Vector{n}"
         : NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.CsType
         : f.Has("bool") ? "bool" : CsType(model, f.Type);

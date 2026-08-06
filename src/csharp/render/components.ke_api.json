@@ -222,26 +222,35 @@
     },
     {
       "name": "ke_mesh_component",
-      "doc": "\u0060mesh\u0060/\u0060material\u0060 are output \u2014 resolved by the native \u0022render.mesh.resolve\u0022 system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) whenever \u0060primitive\u0060 names a known shape and/or the material fields below don\u0027t already resolve to a valid handle. A caller that already has real handles (MeshRenderer\u0027s own C# properties, set directly) just writes them and leaves \u0060primitive\u0060 empty \u2014 the resolve system only acts where a handle is still invalid, so the two paths never conflict. Not [node:]-tagged: kabic\u0027s node generator only supports scalar/[bool]/ float[N] fields; \u0060primitive\u0060 is a fixed char buffer with no mapping, and it\u0027s the scene-loader property-apply path that writes it, never the MeshRenderer node type itself. MeshRenderer stays hand-written.",
-      "tags": [],
+      "doc": "Renders a mesh with a material. \u0060mesh\u0060/\u0060material\u0060 double as output: the native \u0022render.mesh.resolve\u0022 system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) fills them whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles just writes them and leaves \u0060primitive\u0060 empty \u2014 the resolve system only acts where a handle is still invalid, so the two paths never conflict.",
+      "tags": [
+        "node:MeshRenderer",
+        "base:Node3D"
+      ],
       "fields": [
         {
           "name": "mesh",
           "type": "ke_mesh_handle",
-          "tags": [],
+          "tags": [
+            "name:MeshHandle"
+          ],
           "doc": null
         },
         {
           "name": "material",
           "type": "ke_material_handle",
-          "tags": [],
+          "tags": [
+            "name:MaterialHandle"
+          ],
           "doc": null
         },
         {
           "name": "primitive",
           "type": "char[32]",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Resolved by the scene loader\u0027s property-apply path into \u0060mesh\u0060; a node authoring it directly would have the value overwritten."
         },
         {
           "name": "base_color",

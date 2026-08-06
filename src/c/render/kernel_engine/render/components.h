@@ -64,22 +64,22 @@ extern "C"
         ke_texture_handle cubemap;
     } ke_skybox_component;
 
-    /// `mesh`/`material` are output — resolved by the native "render.mesh.resolve"
-    /// system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig)
-    /// whenever `primitive` names a known shape and/or the material fields
-    /// below don't already resolve to a valid handle. A caller that already
-    /// has real handles (MeshRenderer's own C# properties, set directly) just
-    /// writes them and leaves `primitive` empty — the resolve system only
-    /// acts where a handle is still invalid, so the two paths never conflict.
-    ///
-    /// Not [node:]-tagged: kabic's node generator only supports scalar/[bool]/
-    /// float[N] fields; `primitive` is a fixed char buffer with no mapping,
-    /// and it's the scene-loader property-apply path that writes it, never
-    /// the MeshRenderer node type itself. MeshRenderer stays hand-written.
+    /// [node:MeshRenderer,base:Node3D]
+    /// Renders a mesh with a material. `mesh`/`material` double as output:
+    /// the native "render.mesh.resolve" system (KE_PHASE_UPDATE,
+    /// src/zig/render/service/src/mesh_resolve.zig) fills them whenever
+    /// `primitive` names a known shape and/or the surface fields below have not
+    /// already resolved to a valid handle. A caller holding real handles just
+    /// writes them and leaves `primitive` empty — the resolve system only acts
+    /// where a handle is still invalid, so the two paths never conflict.
     typedef struct ke_mesh_component
     {
+        /// [name:MeshHandle]
         ke_mesh_handle     mesh;
+        /// [name:MaterialHandle]
         ke_material_handle material;
+        /// [idiom] Resolved by the scene loader's property-apply path into `mesh`;
+        /// a node authoring it directly would have the value overwritten.
         char               primitive[32];
 
         ke_vec4  base_color; ///< [default:1 1 1 1]
