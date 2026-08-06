@@ -78,8 +78,16 @@ public sealed class SceneRouterModule : IRuntimeModule
         if (err is not null)
             throw new InvalidOperationException("Initial scene load failed", err);
 
-        runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (_, _) => router.Flush(),
-            pinnedThread: RenderWorker);
+        // Flushing tears down every node of the outgoing scene and builds the
+        // incoming one — entity creation and destruction, which is illegal
+        // partway through a wave. The ctx-aware overload is what routes those
+        // through the defer queue so they land at the wave barrier instead;
+        // without it NodeWorld finds no context and destroys entities inline.
+        runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (_, ctx, _) =>
+        {
+            using (nodeWorld.EnterSystem(ctx))
+                router.Flush();
+        }, pinnedThread: RenderWorker);
     }
 
     private string ResolveInitialScene(IServiceProvider services)

@@ -58,6 +58,18 @@ public sealed class SceneNodesModule : IRuntimeModule
         // destroy issued from a behavior routes through it and defers the structural
         // change to the wave barrier — so this runs as an ordinary parallel-wave
         // system with no exclusive bypass.
+        // What the framework itself touches here: transforms are rewritten by the
+        // propagation pass, and the hierarchy and names are read to walk the tree.
+        // A node's own OnUpdate can reach further, and the scheduler cannot see
+        // that from here — a behavior touching another domain's components is
+        // ordered only by this system being alone in its phase.
+        var sceneAccess = new[]
+        {
+            ComponentAccess.Write(nodeWorld.CidOfName("transform")),
+            ComponentAccess.Read(nodeWorld.CidOfName("hierarchy")),
+            ComponentAccess.Read(nodeWorld.CidOfName("name")),
+        };
+
         runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, ctx, dt) =>
         {
             input?.Update();
@@ -71,7 +83,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                 for (int i = 0; i < behaviors.Count; i++)
                     behaviors[i].OnUpdate(in view);
             }
-        }, pinnedThread: 1);
+        }, accessList: sceneAccess, pinnedThread: 1);
 
         // Scene setup runs pinned to a worker thread (GPU upload has thread
         // affinity when a render module is present), after every domain
