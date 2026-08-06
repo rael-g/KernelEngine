@@ -163,13 +163,17 @@ public sealed class NodeWorld
             var tsp = _ecs.GetComponent<TransformComponent>(entity, _nativeTransformCid);
             if (!tsp.IsEmpty)
             {
+                // Not yet bound (NodeWorld == null below), so LocalTransform's generated
+                // setter takes its pre-bind branch (_generatedState = value) rather than
+                // writing through the ECS — exactly what seeding the pre-applied native
+                // scene-loader transform needs, with no dedicated method required.
                 ref readonly var kt = ref tsp[0];
-                node3D.SetInitialTransform(new TransformComponent
+                node3D.LocalTransform = new TransformComponent
                 {
                     Position = kt.Position,
                     Rotation = kt.Rotation,
                     Scale    = kt.Scale,
-                });
+                };
             }
         }
 

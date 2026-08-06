@@ -32,6 +32,8 @@
     <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
+    <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

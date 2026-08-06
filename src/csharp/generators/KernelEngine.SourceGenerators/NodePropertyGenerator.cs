@@ -52,6 +52,18 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? null : classSymbol.ContainingNamespace.ToDisplayString();
         var className = classSymbol.Name;
 
+        // protected internal members (OnBind, HasBehavior) keep protected internal
+        // when overridden from Node's own assembly (Framework) — only a CROSS-assembly
+        // override is required to narrow to plain protected. Node3D is the first
+        // generated type to live in the same assembly as Node itself; every other
+        // generated/hand-written node type lives in a domain assembly (Render.Webgpu,
+        // Physics, ...), where narrowing is mandatory, not optional.
+        INamedTypeSymbol? nodeType = classSymbol.BaseType;
+        while (nodeType is not null && nodeType.Name != "Node") nodeType = nodeType.BaseType;
+        var overrideModifier = nodeType is not null && SymbolEqualityComparer.Default.Equals(nodeType.ContainingAssembly, classSymbol.ContainingAssembly)
+            ? "protected internal"
+            : "protected";
+
         var backingTypeSymbol = marker is not null ? (INamedTypeSymbol)marker.ConstructorArguments[0].Value! : null;
         var backingType = backingTypeSymbol?.ToDisplayString() ?? $"{className}_Data";
         var componentName = marker is not null
@@ -88,12 +100,32 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
         if (hasOnUpdate)
         {
-            sb.AppendLine("    protected override bool HasBehavior => true;");
+            sb.AppendLine($"    {overrideModifier} override bool HasBehavior => true;");
             sb.AppendLine();
         }
 
         foreach (var p in properties)
         {
+            var isWhole = p.GetAttributes().Any(a => a.AttributeClass?.Name == "NativeWholeAttribute");
+            if (isWhole)
+            {
+                // The whole backing struct, bit-cast — not a per-field read/write.
+                // Same shape as a hand-written whole-struct property (Node3D's
+                // LocalTransform before this became generatable), except the cast
+                // replaces field-by-field assignment so the write stays atomic.
+                var propType = p.Type.ToDisplayString();
+                sb.AppendLine($"    public partial {propType} {p.Name}");
+                sb.AppendLine("    {");
+                sb.AppendLine("        get => global::System.Runtime.CompilerServices.Unsafe.BitCast<" + backingType + ", " + propType + ">(GeneratedCurrent());");
+                sb.AppendLine("        set");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            var s = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {backingType}>(value);");
+                sb.AppendLine("            if (IsBound) NodeWorld!.SetByCid(Entity, _generatedCid, s); else _generatedState = s;");
+                sb.AppendLine("        }");
+                sb.AppendLine("    }");
+                continue;
+            }
+
             var fieldName = marker is not null ? NativeFieldNameOf(p) : p.Name;
             var fieldSymbol = backingTypeSymbol?.GetMembers(fieldName).OfType<IFieldSymbol>().FirstOrDefault();
             // ClangSharp backs a C `float x[N]` with a generated `_x_e__FixedBuffer` type —
@@ -146,11 +178,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             ? $"nodeWorld.CidOfName(\"{componentName}\")"
             : $"nodeWorld.RegisterComponent<{backingType}>(\"{componentName}\")";
 
-        // `protected` only, not `protected internal`: a generated node type's
-        // assembly (e.g. Render.Webgpu) is never the same assembly as Node's
-        // (Framework), so `internal` would fail to satisfy the base member's
-        // accessibility — same fix applied by hand to every other builtin node.
-        sb.AppendLine("    protected override void OnBind(global::KernelEngine.Framework.NodeWorld nodeWorld)");
+        sb.AppendLine($"    {overrideModifier} override void OnBind(global::KernelEngine.Framework.NodeWorld nodeWorld)");
         sb.AppendLine("    {");
         sb.AppendLine($"        _generatedCid = {resolveCid};");
         sb.AppendLine("        nodeWorld.SetByCid(Entity, _generatedCid, _generatedState);");
