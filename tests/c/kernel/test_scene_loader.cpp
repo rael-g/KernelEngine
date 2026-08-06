@@ -339,26 +339,26 @@ b = 0.8
     ASSERT_NE(ev, KE_ENTITY_INVALID);
     auto *lv = (ke_directional_light_component *)ecs->component_get(ecs, ev, meta.cid);
     ASSERT_NE(lv, nullptr);
-    EXPECT_FLOAT_EQ(lv->direction[0], -0.4f);
-    EXPECT_FLOAT_EQ(lv->direction[1], -1.0f);
-    EXPECT_FLOAT_EQ(lv->direction[2], -0.3f);
-    EXPECT_FLOAT_EQ(lv->color[0], 1.0f);
-    EXPECT_FLOAT_EQ(lv->color[1], 0.9f);
-    EXPECT_FLOAT_EQ(lv->color[2], 0.8f);
-    EXPECT_FLOAT_EQ(lv->ambient[0], 0.03f);
-    EXPECT_FLOAT_EQ(lv->ambient[2], 0.04f);
+    EXPECT_FLOAT_EQ(lv->direction.x, -0.4f);
+    EXPECT_FLOAT_EQ(lv->direction.y, -1.0f);
+    EXPECT_FLOAT_EQ(lv->direction.z, -0.3f);
+    EXPECT_FLOAT_EQ(lv->color.x, 1.0f);
+    EXPECT_FLOAT_EQ(lv->color.y, 0.9f);
+    EXPECT_FLOAT_EQ(lv->color.z, 0.8f);
+    EXPECT_FLOAT_EQ(lv->ambient.x, 0.03f);
+    EXPECT_FLOAT_EQ(lv->ambient.z, 0.04f);
     EXPECT_FLOAT_EQ(lv->intensity, 3.0f);
 
     ke_entity es = tree->find_node(tree, "SunScalar", NULL);
     ASSERT_NE(es, KE_ENTITY_INVALID);
     auto *ls = (ke_directional_light_component *)ecs->component_get(ecs, es, meta.cid);
     ASSERT_NE(ls, nullptr);
-    EXPECT_FLOAT_EQ(ls->direction[0], lv->direction[0]);
-    EXPECT_FLOAT_EQ(ls->direction[1], lv->direction[1]);
-    EXPECT_FLOAT_EQ(ls->direction[2], lv->direction[2]);
-    EXPECT_FLOAT_EQ(ls->color[0], lv->color[0]);
-    EXPECT_FLOAT_EQ(ls->color[1], lv->color[1]);
-    EXPECT_FLOAT_EQ(ls->color[2], lv->color[2]);
+    EXPECT_FLOAT_EQ(ls->direction.x, lv->direction.x);
+    EXPECT_FLOAT_EQ(ls->direction.y, lv->direction.y);
+    EXPECT_FLOAT_EQ(ls->direction.z, lv->direction.z);
+    EXPECT_FLOAT_EQ(ls->color.x, lv->color.x);
+    EXPECT_FLOAT_EQ(ls->color.y, lv->color.y);
+    EXPECT_FLOAT_EQ(ls->color.z, lv->color.z);
 }
 
 TEST_F(SceneLoaderTest, PointLight_FieldsApplied)
@@ -379,9 +379,9 @@ intensity = 2.0
     ASSERT_TRUE(ecs->component_lookup(ecs, "point_light", &meta, nullptr));
     auto *l = (ke_point_light_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(l, nullptr);
-    EXPECT_FLOAT_EQ(l->color[0], 0.2f);
-    EXPECT_FLOAT_EQ(l->color[1], 0.4f);
-    EXPECT_FLOAT_EQ(l->color[2], 0.6f);
+    EXPECT_FLOAT_EQ(l->color.x, 0.2f);
+    EXPECT_FLOAT_EQ(l->color.y, 0.4f);
+    EXPECT_FLOAT_EQ(l->color.z, 0.6f);
     EXPECT_FLOAT_EQ(l->radius, 12.5f);
     EXPECT_FLOAT_EQ(l->intensity, 2.0f);
 }
@@ -407,10 +407,10 @@ intensity = 4.0
     ASSERT_TRUE(ecs->component_lookup(ecs, "spot_light", &meta, nullptr));
     auto *l = (ke_spot_light_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(l, nullptr);
-    EXPECT_FLOAT_EQ(l->direction[1], -1.0f);
-    EXPECT_FLOAT_EQ(l->color[0], 1.0f);
-    EXPECT_FLOAT_EQ(l->color[1], 0.5f);
-    EXPECT_FLOAT_EQ(l->color[2], 0.25f);
+    EXPECT_FLOAT_EQ(l->direction.y, -1.0f);
+    EXPECT_FLOAT_EQ(l->color.x, 1.0f);
+    EXPECT_FLOAT_EQ(l->color.y, 0.5f);
+    EXPECT_FLOAT_EQ(l->color.z, 0.25f);
     EXPECT_FLOAT_EQ(l->inner_angle, 0.3f);
     EXPECT_FLOAT_EQ(l->outer_angle, 0.6f);
     EXPECT_FLOAT_EQ(l->range, 20.0f);

@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_COMPONENTS_H_
 #define KERNEL_ENGINE_RENDER_COMPONENTS_H_
 
+#include <kernel_engine/common/math.h>
 #include <kernel_engine/render/handles.h>
 #include <kernel_engine/spatial/transform.h>
 #include <stdint.h>
@@ -23,35 +24,35 @@ extern "C"
     /** [node:DirectionalLight,base:Node3D] Directional light node. Init properties feed the per-frame light state the renderer consumes. */
     typedef struct ke_directional_light_component
     {
-        float direction[3]; ///< [default:0.2 1 0.5]
-        float color[3]; ///< [default:1 1 1] Linear RGB.
-        float intensity; ///< [default:1]
-        float ambient[3]; ///< [default:0.2 0.2 0.2]
+        ke_vec3 direction; ///< [default:0.2 1 0.5]
+        ke_vec3 color; ///< [default:1 1 1] Linear RGB.
+        float   intensity; ///< [default:1]
+        ke_vec3 ambient; ///< [default:0.2 0.2 0.2]
     } ke_directional_light_component;
 
     /** [node:PointLight,base:Node3D] Point light node — emits light in all directions from this entity's world position. */
     typedef struct ke_point_light_component
     {
-        float color[3]; ///< [default:1 1 1] Linear RGB.
-        float intensity; ///< [default:1]
-        float radius; ///< [default:10]
+        ke_vec3 color; ///< [default:1 1 1] Linear RGB.
+        float   intensity; ///< [default:1]
+        float   radius; ///< [default:10]
     } ke_point_light_component;
 
     /** [node:SpotLight,base:Node3D] Spot light node — emits a cone of light from this entity's world position. */
     typedef struct ke_spot_light_component
     {
-        float direction[3]; ///< [default:0 -1 0]
-        float color[3]; ///< [default:1 1 1] Linear RGB.
-        float intensity; ///< [default:1]
-        float range; ///< [default:20]
-        float inner_angle; ///< [default:25,name:InnerAngleDeg]
-        float outer_angle; ///< [default:35,name:OuterAngleDeg]
+        ke_vec3 direction; ///< [default:0 -1 0]
+        ke_vec3 color; ///< [default:1 1 1] Linear RGB.
+        float   intensity; ///< [default:1]
+        float   range; ///< [default:20]
+        float   inner_angle; ///< [default:25,name:InnerAngleDeg]
+        float   outer_angle; ///< [default:35,name:OuterAngleDeg]
     } ke_spot_light_component;
 
     /** [node:AmbientLight,base:Node3D] Scene-wide ambient light node. First entity with this component wins. */
     typedef struct ke_ambient_light_component
     {
-        float color[3]; ///< [default:0.05 0.05 0.05]
+        ke_vec3 color; ///< [default:0.05 0.05 0.05]
     } ke_ambient_light_component;
 
     /// Environment cubemap driving both the skybox and image-based lighting. Not
@@ -81,7 +82,7 @@ extern "C"
         ke_material_handle material;
         char               primitive[32];
 
-        float    base_color[4]; ///< [default:1 1 1 1]
+        ke_vec4  base_color; ///< [default:1 1 1 1]
         float    roughness; ///< [default:1]
         uint32_t alpha_mode; ///< ke_alpha_mode. [default:0]
         float    alpha_cutoff; ///< [default:0.5]

@@ -77,7 +77,7 @@ pub export fn ke_render_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_t
     // of trusting zeroed memory.
     m.mesh = c.KE_MESH_NONE;
     m.material = c.KE_MATERIAL_NONE;
-    m.base_color = .{ 1, 1, 1, 1 };
+    m.base_color = .{ .x = 1, .y = 1, .z = 1, .w = 1 };
     m.roughness = 1;
     m.alpha_mode = c.KE_ALPHA_MODE_OPAQUE;
     m.alpha_cutoff = 0.5;
@@ -93,9 +93,9 @@ pub export fn ke_render_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_t
             m.primitive[len] = 0;
         } else if (keyIs(entry, "color")) {
             if (v.type == c.KE_VARIANT_VEC4) {
-                m.base_color = .{ v.unnamed_0.v4.x, v.unnamed_0.v4.y, v.unnamed_0.v4.z, v.unnamed_0.v4.w };
+                m.base_color = .{ .x = v.unnamed_0.v4.x, .y = v.unnamed_0.v4.y, .z = v.unnamed_0.v4.z, .w = v.unnamed_0.v4.w };
             } else if (v.type == c.KE_VARIANT_VEC3) {
-                m.base_color = .{ v.unnamed_0.v3.x, v.unnamed_0.v3.y, v.unnamed_0.v3.z, 1 };
+                m.base_color = .{ .x = v.unnamed_0.v3.x, .y = v.unnamed_0.v3.y, .z = v.unnamed_0.v3.z, .w = 1 };
             }
         } else if (keyIs(entry, "roughness")) {
             if (asFloat(v)) |f| m.roughness = f;
@@ -127,36 +127,36 @@ pub export fn ke_render_apply_directional_light(ptr: ?*anyopaque, e: [*c]const c
         const v = &entry.value;
         if (keyIs(entry, "direction")) {
             if (v.type == c.KE_VARIANT_VEC3) {
-                l.direction[0] = v.unnamed_0.v3.x;
-                l.direction[1] = v.unnamed_0.v3.y;
-                l.direction[2] = v.unnamed_0.v3.z;
+                l.direction.x = v.unnamed_0.v3.x;
+                l.direction.y = v.unnamed_0.v3.y;
+                l.direction.z = v.unnamed_0.v3.z;
             }
         } else if (keyIs(entry, "color")) {
             if (v.type == c.KE_VARIANT_VEC3) {
-                l.color[0] = v.unnamed_0.v3.x;
-                l.color[1] = v.unnamed_0.v3.y;
-                l.color[2] = v.unnamed_0.v3.z;
+                l.color.x = v.unnamed_0.v3.x;
+                l.color.y = v.unnamed_0.v3.y;
+                l.color.z = v.unnamed_0.v3.z;
             }
         } else if (keyIs(entry, "ambient")) {
             if (v.type == c.KE_VARIANT_VEC3) {
-                l.ambient[0] = v.unnamed_0.v3.x;
-                l.ambient[1] = v.unnamed_0.v3.y;
-                l.ambient[2] = v.unnamed_0.v3.z;
+                l.ambient.x = v.unnamed_0.v3.x;
+                l.ambient.y = v.unnamed_0.v3.y;
+                l.ambient.z = v.unnamed_0.v3.z;
             }
         } else if (keyIs(entry, "intensity")) {
             if (asFloat(v)) |f| l.intensity = f;
         } else if (keyIs(entry, "dir_x")) {
-            if (asFloat(v)) |f| l.direction[0] = f;
+            if (asFloat(v)) |f| l.direction.x = f;
         } else if (keyIs(entry, "dir_y")) {
-            if (asFloat(v)) |f| l.direction[1] = f;
+            if (asFloat(v)) |f| l.direction.y = f;
         } else if (keyIs(entry, "dir_z")) {
-            if (asFloat(v)) |f| l.direction[2] = f;
+            if (asFloat(v)) |f| l.direction.z = f;
         } else if (keyIs(entry, "r")) {
-            if (asFloat(v)) |f| l.color[0] = f;
+            if (asFloat(v)) |f| l.color.x = f;
         } else if (keyIs(entry, "g")) {
-            if (asFloat(v)) |f| l.color[1] = f;
+            if (asFloat(v)) |f| l.color.y = f;
         } else if (keyIs(entry, "b")) {
-            if (asFloat(v)) |f| l.color[2] = f;
+            if (asFloat(v)) |f| l.color.z = f;
         }
     }
 }
@@ -169,20 +169,20 @@ pub export fn ke_render_apply_point_light(ptr: ?*anyopaque, e: [*c]const c.ke_va
         const v = &entry.value;
         if (keyIs(entry, "color")) {
             if (v.type == c.KE_VARIANT_VEC3) {
-                l.color[0] = v.unnamed_0.v3.x;
-                l.color[1] = v.unnamed_0.v3.y;
-                l.color[2] = v.unnamed_0.v3.z;
+                l.color.x = v.unnamed_0.v3.x;
+                l.color.y = v.unnamed_0.v3.y;
+                l.color.z = v.unnamed_0.v3.z;
             }
         } else if (keyIs(entry, "radius")) {
             if (asFloat(v)) |f| l.radius = f;
         } else if (keyIs(entry, "intensity")) {
             if (asFloat(v)) |f| l.intensity = f;
         } else if (keyIs(entry, "r")) {
-            if (asFloat(v)) |f| l.color[0] = f;
+            if (asFloat(v)) |f| l.color.x = f;
         } else if (keyIs(entry, "g")) {
-            if (asFloat(v)) |f| l.color[1] = f;
+            if (asFloat(v)) |f| l.color.y = f;
         } else if (keyIs(entry, "b")) {
-            if (asFloat(v)) |f| l.color[2] = f;
+            if (asFloat(v)) |f| l.color.z = f;
         }
     }
 }
@@ -195,15 +195,15 @@ pub export fn ke_render_apply_spot_light(ptr: ?*anyopaque, e: [*c]const c.ke_var
         const v = &entry.value;
         if (keyIs(entry, "direction")) {
             if (v.type == c.KE_VARIANT_VEC3) {
-                l.direction[0] = v.unnamed_0.v3.x;
-                l.direction[1] = v.unnamed_0.v3.y;
-                l.direction[2] = v.unnamed_0.v3.z;
+                l.direction.x = v.unnamed_0.v3.x;
+                l.direction.y = v.unnamed_0.v3.y;
+                l.direction.z = v.unnamed_0.v3.z;
             }
         } else if (keyIs(entry, "color")) {
             if (v.type == c.KE_VARIANT_VEC3) {
-                l.color[0] = v.unnamed_0.v3.x;
-                l.color[1] = v.unnamed_0.v3.y;
-                l.color[2] = v.unnamed_0.v3.z;
+                l.color.x = v.unnamed_0.v3.x;
+                l.color.y = v.unnamed_0.v3.y;
+                l.color.z = v.unnamed_0.v3.z;
             }
         } else if (keyIs(entry, "inner_angle")) {
             if (asFloat(v)) |f| l.inner_angle = f;
@@ -214,17 +214,17 @@ pub export fn ke_render_apply_spot_light(ptr: ?*anyopaque, e: [*c]const c.ke_var
         } else if (keyIs(entry, "intensity")) {
             if (asFloat(v)) |f| l.intensity = f;
         } else if (keyIs(entry, "dir_x")) {
-            if (asFloat(v)) |f| l.direction[0] = f;
+            if (asFloat(v)) |f| l.direction.x = f;
         } else if (keyIs(entry, "dir_y")) {
-            if (asFloat(v)) |f| l.direction[1] = f;
+            if (asFloat(v)) |f| l.direction.y = f;
         } else if (keyIs(entry, "dir_z")) {
-            if (asFloat(v)) |f| l.direction[2] = f;
+            if (asFloat(v)) |f| l.direction.z = f;
         } else if (keyIs(entry, "r")) {
-            if (asFloat(v)) |f| l.color[0] = f;
+            if (asFloat(v)) |f| l.color.x = f;
         } else if (keyIs(entry, "g")) {
-            if (asFloat(v)) |f| l.color[1] = f;
+            if (asFloat(v)) |f| l.color.y = f;
         } else if (keyIs(entry, "b")) {
-            if (asFloat(v)) |f| l.color[2] = f;
+            if (asFloat(v)) |f| l.color.z = f;
         }
     }
 }

@@ -94,7 +94,7 @@ fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
     if (segc == 0 or segs[0].count == 0) return null;
     const dl: *const c.ke_directional_light_component = @ptrCast(@alignCast(segs[0].columns[0]));
-    return zm.f32x4(dl.direction[0], dl.direction[1], dl.direction[2], 0.0);
+    return zm.f32x4(dl.direction.x, dl.direction.y, dl.direction.z, 0.0);
 }
 
 inline fn moduleOf(user: ?*anyopaque) *ShadowModule {

@@ -2,6 +2,7 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
+using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
@@ -12,16 +13,10 @@ public partial class DirectionalLight : Node3D
 {
     public DirectionalLight()
     {
-        _generatedState.direction[0] = 0.2f;
-        _generatedState.direction[1] = 1f;
-        _generatedState.direction[2] = 0.5f;
-        _generatedState.color[0] = 1f;
-        _generatedState.color[1] = 1f;
-        _generatedState.color[2] = 1f;
+        _generatedState.direction = new ke_vec3 { x = 0.2f, y = 1f, z = 0.5f };
+        _generatedState.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
         _generatedState.intensity = 1f;
-        _generatedState.ambient[0] = 0.2f;
-        _generatedState.ambient[1] = 0.2f;
-        _generatedState.ambient[2] = 0.2f;
+        _generatedState.ambient = new ke_vec3 { x = 0.2f, y = 0.2f, z = 0.2f };
     }
 
     [NativeField("direction")]

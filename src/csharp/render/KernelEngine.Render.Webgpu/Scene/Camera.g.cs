@@ -2,6 +2,7 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
+using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;

@@ -82,8 +82,12 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         foreach (var p in properties)
         {
             var fieldName = marker is not null ? NativeFieldNameOf(p) : p.Name;
-            var arity = marker is not null ? VectorArity(p.Type) : null;
             var fieldSymbol = backingTypeSymbol?.GetMembers(fieldName).OfType<IFieldSymbol>().FirstOrDefault();
+            // ClangSharp backs a C `float x[N]` with a generated `_x_e__FixedBuffer` type —
+            // only THAT shape indexes by [i]; a named ke_vecN/ke_quat field (below) is a
+            // bit-cast coercion instead, even though its C# property is also Vector2/3/4.
+            var isFixedBuffer = fieldSymbol is not null && fieldSymbol.Type.Name.EndsWith("_e__FixedBuffer");
+            var arity = marker is not null && isFixedBuffer ? VectorArity(p.Type) : null;
             var coercion = arity is null && fieldSymbol is not null ? CoercionFor(p.Type, fieldSymbol.Type) : null;
 
             if (arity is null && fieldSymbol is not null && coercion is null
@@ -165,10 +169,27 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         return type.Name switch { "Vector2" => 2, "Vector3" => 3, "Vector4" => 4, _ => null };
     }
 
+    // ke_vec2/ke_vec3/ke_vec4/ke_quat (KernelEngine.Common.Native) are layout-identical
+    // to their System.Numerics counterparts by construction (see kabic's NamedVectorTypes),
+    // so the coercion is a bit-cast, not a field-by-field copy.
+    static readonly Dictionary<string, string> NativeVectorNames = new()
+    {
+        ["Vector2"] = "ke_vec2", ["Vector3"] = "ke_vec3", ["Vector4"] = "ke_vec4", ["Quaternion"] = "ke_quat",
+    };
+
     static (Func<string, string> read, Func<string, string> write)? CoercionFor(ITypeSymbol propertyType, ITypeSymbol fieldType)
     {
         if (propertyType.SpecialType == SpecialType.System_Boolean && fieldType.SpecialType == SpecialType.System_Byte)
             return (expr => $"{expr} != 0", expr => $"(byte)({expr} ? 1 : 0)");
+        if (propertyType.ContainingNamespace?.ToDisplayString() == "System.Numerics"
+            && NativeVectorNames.TryGetValue(propertyType.Name, out var nativeName)
+            && fieldType.Name == nativeName)
+        {
+            var propName = propertyType.ToDisplayString();
+            var fieldName = fieldType.ToDisplayString();
+            return (expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{fieldName}, {propName}>({expr})",
+                    expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{propName}, {fieldName}>({expr})");
+        }
         return null;
     }
 

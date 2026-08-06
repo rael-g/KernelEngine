@@ -183,7 +183,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
                 const m = tcs[i].world_matrix.m;
                 chunk[fill] = PointLightGpu{
                     .pos_radius = .{ m[12], m[13], m[14], pls[i].radius },
-                    .color_intensity = .{ pls[i].color[0], pls[i].color[1], pls[i].color[2], pls[i].intensity },
+                    .color_intensity = .{ pls[i].color.x, pls[i].color.y, pls[i].color.z, pls[i].intensity },
                 };
                 fill += 1;
                 pn += 1;

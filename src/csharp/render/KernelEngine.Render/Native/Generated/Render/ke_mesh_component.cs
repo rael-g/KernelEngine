@@ -12,8 +12,8 @@ public partial struct ke_mesh_component
     [NativeTypeName("char[32]")]
     public _primitive_e__FixedBuffer primitive;
 
-    [NativeTypeName("float[4]")]
-    public _base_color_e__FixedBuffer base_color;
+    [NativeTypeName("ke_vec4")]
+    public KernelEngine.Common.Native.ke_vec4 base_color;
 
     public float roughness;
 
@@ -30,11 +30,5 @@ public partial struct ke_mesh_component
     public partial struct _primitive_e__FixedBuffer
     {
         public sbyte e0;
-    }
-
-    [InlineArray(4)]
-    public partial struct _base_color_e__FixedBuffer
-    {
-        public float e0;
     }
 }

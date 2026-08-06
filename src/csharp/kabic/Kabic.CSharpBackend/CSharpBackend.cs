@@ -83,7 +83,7 @@ public static class CSharpBackend
         var nativeType = component.Name;
         var componentName = convention.ComponentNameFor(component.Name);
 
-        var o = new List<string> { Header, "using System.Numerics;", $"using {nativeNs};\n", $"namespace {ns};\n" };
+        var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;", $"using {nativeNs};\n", $"namespace {ns};\n" };
         o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
             : $"/// <summary>Mirrors <c>{nativeType}</c>.</summary>");
         o.Add($"[GeneratedNodeComponent(typeof({nativeType}), \"{componentName}\")]");
@@ -116,8 +116,24 @@ public static class CSharpBackend
         return m.Success && int.Parse(m.Groups[1].Value) is >= 2 and <= 4 ? int.Parse(m.Groups[1].Value) : null;
     }
 
+    // ke_vec2/ke_vec3/ke_vec4/ke_quat are the engine's own math types (common/math.h,
+    // remapped so every domain's ClangSharp binding reuses the one Common.Native
+    // definition) — layout-identical to their System.Numerics counterparts, so the
+    // Roslyn NodePropertyGenerator's coercion is a bit-cast, not field-by-field copy.
+    // Field names here (x/y/z/w) are ke_vecN's own — required to build a native-type
+    // object initializer for [default:] values.
+    static readonly Dictionary<string, (string CsType, string[] Lanes)> NamedVectorTypes = new()
+    {
+        ["ke_vec2"] = ("Vector2", ["x", "y"]),
+        ["ke_vec3"] = ("Vector3", ["x", "y", "z"]),
+        ["ke_vec4"] = ("Vector4", ["x", "y", "z", "w"]),
+        ["ke_quat"] = ("Quaternion", ["x", "y", "z", "w"]),
+    };
+
     static string NodePropertyType(ApiModel model, ApiField f) =>
-        VectorArity(f.Type) is int n ? $"Vector{n}" : f.Has("bool") ? "bool" : CsType(model, f.Type);
+        VectorArity(f.Type) is int n ? $"Vector{n}"
+        : NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.CsType
+        : f.Has("bool") ? "bool" : CsType(model, f.Type);
 
     static IEnumerable<string> FieldInit(ApiModel model, ApiField f)
     {
@@ -130,6 +146,15 @@ public static class CSharpBackend
                 throw new InvalidOperationException(
                     $"{f.Name}: [default:{d}] has {parts.Length} components but the field is float[{n}]");
             return parts.Select((p, i) => $"_generatedState.{f.Name}[{i}] = {p}f;");
+        }
+        if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v))
+        {
+            var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length != v.Lanes.Length)
+                throw new InvalidOperationException(
+                    $"{f.Name}: [default:{d}] has {parts.Length} components but the field is {f.Type.Trim()}");
+            var inits = string.Join(", ", v.Lanes.Zip(parts, (lane, p) => $"{lane} = {p}f"));
+            return [$"_generatedState.{f.Name} = new {f.Type.Trim()} {{ {inits} }};"];
         }
         return [$"_generatedState.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
     }

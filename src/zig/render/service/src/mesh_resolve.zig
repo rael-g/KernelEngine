@@ -177,13 +177,13 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
     const key = std.fmt.bufPrintZ(
         &key_buf,
         "inline:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}",
-        .{ bc[0], bc[1], bc[2], bc[3], mc.roughness, mc.alpha_mode, mc.alpha_cutoff, mc.ior },
+        .{ bc.x, bc.y, bc.z, bc.w, mc.roughness, mc.alpha_mode, mc.alpha_cutoff, mc.ior },
     ) catch return;
 
     mc.material = core.create_material.?(
         core,
         key.ptr,
-        &mc.base_color,
+        @ptrCast(&mc.base_color),
         0, // metallic
         mc.roughness,
         c.KE_TEXTURE_NONE,

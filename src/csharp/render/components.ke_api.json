@@ -63,7 +63,7 @@
       "fields": [
         {
           "name": "direction",
-          "type": "float[3]",
+          "type": "ke_vec3",
           "tags": [
             "default:0.2 1 0.5"
           ],
@@ -71,7 +71,7 @@
         },
         {
           "name": "color",
-          "type": "float[3]",
+          "type": "ke_vec3",
           "tags": [
             "default:1 1 1"
           ],
@@ -87,7 +87,7 @@
         },
         {
           "name": "ambient",
-          "type": "float[3]",
+          "type": "ke_vec3",
           "tags": [
             "default:0.2 0.2 0.2"
           ],
@@ -105,7 +105,7 @@
       "fields": [
         {
           "name": "color",
-          "type": "float[3]",
+          "type": "ke_vec3",
           "tags": [
             "default:1 1 1"
           ],
@@ -139,7 +139,7 @@
       "fields": [
         {
           "name": "direction",
-          "type": "float[3]",
+          "type": "ke_vec3",
           "tags": [
             "default:0 -1 0"
           ],
@@ -147,7 +147,7 @@
         },
         {
           "name": "color",
-          "type": "float[3]",
+          "type": "ke_vec3",
           "tags": [
             "default:1 1 1"
           ],
@@ -199,7 +199,7 @@
       "fields": [
         {
           "name": "color",
-          "type": "float[3]",
+          "type": "ke_vec3",
           "tags": [
             "default:0.05 0.05 0.05"
           ],
@@ -222,7 +222,7 @@
     },
     {
       "name": "ke_mesh_component",
-      "doc": "Not [node:]-tagged: kabic\u0027s node generator only supports scalar/[bool]/ float[N] fields; \u0060primitive\u0060 is a fixed char buffer written by the scene-loader property-apply path, not by the MeshRenderer node type, so generating a property for it would be both wrong (no char[N] mapping) and unwanted (the node never sets it). MeshRenderer stays hand-written.",
+      "doc": "\u0060mesh\u0060/\u0060material\u0060 are output \u2014 resolved by the native \u0022render.mesh.resolve\u0022 system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) whenever \u0060primitive\u0060 names a known shape and/or the material fields below don\u0027t already resolve to a valid handle. A caller that already has real handles (MeshRenderer\u0027s own C# properties, set directly) just writes them and leaves \u0060primitive\u0060 empty \u2014 the resolve system only acts where a handle is still invalid, so the two paths never conflict. Not [node:]-tagged: kabic\u0027s node generator only supports scalar/[bool]/ float[N] fields; \u0060primitive\u0060 is a fixed char buffer with no mapping, and it\u0027s the scene-loader property-apply path that writes it, never the MeshRenderer node type itself. MeshRenderer stays hand-written.",
       "tags": [],
       "fields": [
         {
@@ -241,6 +241,52 @@
           "name": "primitive",
           "type": "char[32]",
           "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "ke_alpha_mode. [default:0]"
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [
+            "default:1.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [
+            "default:0.05"
+          ],
           "doc": null
         }
       ]

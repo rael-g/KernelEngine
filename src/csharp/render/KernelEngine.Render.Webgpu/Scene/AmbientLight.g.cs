@@ -2,6 +2,7 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
+using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
@@ -12,9 +13,7 @@ public partial class AmbientLight : Node3D
 {
     public AmbientLight()
     {
-        _generatedState.color[0] = 0.05f;
-        _generatedState.color[1] = 0.05f;
-        _generatedState.color[2] = 0.05f;
+        _generatedState.color = new ke_vec3 { x = 0.05f, y = 0.05f, z = 0.05f };
     }
 
     [NativeField("color")]
