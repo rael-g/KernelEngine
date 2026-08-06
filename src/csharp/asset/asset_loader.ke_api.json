@@ -117,5 +117,7 @@
     }
   ],
   "functions": [],
-  "type_aliases": {}
+  "type_aliases": {
+    "ke_load_model_complete_func": "void (*)(const ke_error *, struct ke_model_data *, void *)"
+  }
 }

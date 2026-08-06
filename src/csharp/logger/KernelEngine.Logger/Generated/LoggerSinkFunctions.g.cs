@@ -2,11 +2,13 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Runtime.InteropServices;
+using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Logger;
 
 /// <summary>Free-function operations on <see cref="ke_logger_sink"/>.</summary>
-public static unsafe class LoggerSink
+public unsafe partial class LoggerSink
 {
     /// <summary>Builds a stateless sink that formats entries as `[LEVEL] tag: message` and writes them to the process's standard error stream, flushing after every entry. Every language wants this as a default; native so none of them re-derive the format (or the level-name mapping `ke_log_level_to_string` already owns).</summary>
     public static ke_logger_sink ConsoleSinkCreate()

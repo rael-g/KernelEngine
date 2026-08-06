@@ -177,5 +177,8 @@
     }
   ],
   "functions": [],
-  "type_aliases": {}
+  "type_aliases": {
+    "ke_task_func": "void (*)(void *)",
+    "ke_task_on_complete_func": "void (*)(ke_task *, void *)"
+  }
 }

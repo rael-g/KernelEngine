@@ -494,5 +494,7 @@
     }
   ],
   "functions": [],
-  "type_aliases": {}
+  "type_aliases": {
+    "ke_input_action_event_func": "void (*)(void *, ke_input_action_event)"
+  }
 }

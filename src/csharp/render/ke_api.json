@@ -811,6 +811,27 @@
           ]
         },
         {
+          "name": "backbuffer_size",
+          "returns": "void",
+          "tags": [],
+          "doc": "The backbuffer\u0027s current pixel size \u2014 the same value a KE_PHASE_RENDER pass reads via ke_render_pass_ctx.backbuffer_size, but callable from any system in any phase (refreshed once per frame at ke_render_module\u0027s begin_frame, so a system earlier in the same tick sees the previous frame\u0027s size \u2014 a one-frame lag on resize, not a correctness issue for anything anchored to screen space).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_w",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_h",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
           "name": "upload",
           "returns": "void",
           "tags": [],

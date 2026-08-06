@@ -277,6 +277,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->resource_bind_group_layout(Handle, name);
     }
 
+    /// <summary>The backbuffer's current pixel size — the same value a KE_PHASE_RENDER pass reads via ke_render_pass_ctx.backbuffer_size, but callable from any system in any phase (refreshed once per frame at ke_render_module's begin_frame, so a system earlier in the same tick sees the previous frame's size — a one-frame lag on resize, not a correctness issue for anything anchored to screen space).</summary>
+    public void BackbufferSize(uint* outW, uint* outH)
+    {
+        Handle->backbuffer_size(Handle, outW, outH);
+    }
+
     /// <summary>Records a buffer upload to be flushed single-threaded at end_frame (before submit). Render passes call this instead of the device's write_buffer so parallel passes never touch the non-thread-safe GPU queue concurrently. The data is copied, so the caller's buffer need not outlive the call. Queue writes are ordered before the frame's submit, so deferring is correct.</summary>
     public void Upload(ulong buffer, ulong offset, void* data, nuint size)
     {

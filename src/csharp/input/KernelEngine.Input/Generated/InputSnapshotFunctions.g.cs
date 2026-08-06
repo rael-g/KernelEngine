@@ -2,11 +2,14 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Runtime.InteropServices;
+using KernelEngine.Common.Native;
+using KernelEngine.Input.Native;
+using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Input;
 
 /// <summary>Free-function operations on <see cref="ke_input_snapshot"/>.</summary>
-public static unsafe class InputSnapshot
+public unsafe partial class InputSnapshot
 {
     /// <summary>Returns true while the key is held down.</summary>
     /// <param name="key">Key to query. Out-of-range codes read as false.</param>
