@@ -28,6 +28,7 @@ comptime {
     _ = @import("asset_resolver.zig");
     _ = @import("world.zig");
     _ = @import("scene_tree.zig");
+    _ = @import("scene_hierarchy.zig");
     _ = @import("input_actions.zig");
     _ = @import("scene_loader.zig");
 }

@@ -9,7 +9,7 @@ public static unsafe partial class NativeMethods
     public static extern ke_world_handle world_create([NativeTypeName("const ke_world_params *")] ke_world_params* @params, ke_error** out_error);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_tree_create", ExactSpelling = true)]
-    public static extern ke_scene_tree_handle scene_tree_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_error** out_error);
+    public static extern ke_scene_tree_handle scene_tree_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_runtime *")] KernelEngine.Runtime.Native.ke_runtime* runtime, ke_error** out_error);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_loader_create", ExactSpelling = true)]
     public static extern ke_scene_loader_handle scene_loader_create([NativeTypeName("struct ke_world *")] ke_world* world, [NativeTypeName("const char *")] sbyte* project_root, ke_error** out_error);

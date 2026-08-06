@@ -15,6 +15,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/framework/components.h");
     @cInclude("kernel_engine/framework/asset_resolver_create.h");
     @cInclude("kernel_engine/framework/scene_tree_create.h");
+    @cInclude("kernel_engine/framework/scene_hierarchy_create.h");
     @cInclude("kernel_engine/framework/scene_loader_create.h");
     @cInclude("kernel_engine/framework/world_create.h");
     @cInclude("kernel_engine/framework/input_actions_create.h");

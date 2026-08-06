@@ -1,5 +1,5 @@
 {
-  "_comment": "Hand-authored manifest of domains migrated to the ke_api.json pipeline (ScriptingArchitectureV3 §8). Each entry drives extract_api.cs + generate_csharp.cs. Adding a domain here is what 'migrating it to Track 2/3' means mechanically. Analogous to a ClangSharp .rsp: an input config, never a derived artifact.",
+  "_comment": "Hand-authored manifest of domains migrated to the ke_api.json pipeline (ScriptingArchitectureV3 \u00a78). Each entry drives extract_api.cs + generate_csharp.cs. Adding a domain here is what 'migrating it to Track 2/3' means mechanically. Analogous to a ClangSharp .rsp: an input config, never a derived artifact.",
   "domains": [
     {
       "name": "input",
@@ -9,13 +9,19 @@
         "src/c/input/kernel_engine/input/event.h",
         "src/c/input/kernel_engine/input/key.h"
       ],
-      "includeDirs": ["src/c/input", "src/zig/common/include", "src/c/ecs"],
+      "includeDirs": [
+        "src/c/input",
+        "src/zig/common/include",
+        "src/c/ecs"
+      ],
       "apiJson": "src/csharp/input/ke_api.json",
       "namespace": "KernelEngine.Input",
       "nativeNamespace": "KernelEngine.Input.Native",
       "outDir": "src/csharp/input/KernelEngine.Input/Generated",
       "abstractionsOutDir": "src/csharp/input/KernelEngine.Input.Abstractions/Generated",
-      "usings": ["KernelEngine.Logger.Native"],
+      "usings": [
+        "KernelEngine.Logger.Native"
+      ],
       "library": "ke_input_default"
     },
     {
@@ -23,7 +29,10 @@
       "headers": [
         "src/c/window/kernel_engine/window/window.h"
       ],
-      "includeDirs": ["src/c/window", "src/zig/common/include"],
+      "includeDirs": [
+        "src/c/window",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/window/ke_api.json",
       "namespace": "KernelEngine.Window",
       "nativeNamespace": "KernelEngine.Window.Native",
@@ -36,7 +45,10 @@
         "src/c/logger/kernel_engine/logger/logger.h",
         "src/c/logger/kernel_engine/logger/log_level.h"
       ],
-      "includeDirs": ["src/c/logger", "src/zig/common/include"],
+      "includeDirs": [
+        "src/c/logger",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/logger/ke_api.json",
       "namespace": "KernelEngine.Logger",
       "nativeNamespace": "KernelEngine.Logger.Native",
@@ -50,7 +62,10 @@
       "headers": [
         "src/c/scheduler/kernel_engine/scheduler/scheduler.h"
       ],
-      "includeDirs": ["src/c/scheduler", "src/zig/common/include"],
+      "includeDirs": [
+        "src/c/scheduler",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/scheduler/ke_api.json",
       "namespace": "KernelEngine.Scheduler",
       "nativeNamespace": "KernelEngine.Scheduler.Native",
@@ -65,14 +80,24 @@
         "src/c/runtime/kernel_engine/runtime/system_ctx.h",
         "src/c/runtime/kernel_engine/runtime/runtime_create.h"
       ],
-      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
-      "includeDirs": ["src/c/runtime", "src/c/ecs", "src/c/scheduler", "src/zig/common/include"],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/c/runtime",
+        "src/c/ecs",
+        "src/c/scheduler",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/runtime/ke_api.json",
       "namespace": "KernelEngine.Runtime",
       "nativeNamespace": "KernelEngine.Runtime.Native",
       "outDir": "src/csharp/runtime/KernelEngine.Runtime/Generated",
       "abstractionsOutDir": "src/csharp/runtime/KernelEngine.Runtime.Abstractions/Generated",
-      "usings": ["KernelEngine.Ecs.Native", "KernelEngine.Scheduler.Native"],
+      "usings": [
+        "KernelEngine.Ecs.Native",
+        "KernelEngine.Scheduler.Native"
+      ],
       "library": "ke_runtime"
     },
     {
@@ -82,7 +107,10 @@
         "src/c/ecs/kernel_engine/ecs/ecs.h",
         "src/c/ecs/kernel_engine/ecs/component_field.h"
       ],
-      "includeDirs": ["src/c/ecs", "src/zig/common/include"],
+      "includeDirs": [
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/ecs/ke_api.json",
       "namespace": "KernelEngine.Ecs",
       "nativeNamespace": "KernelEngine.Ecs.Native",
@@ -91,8 +119,13 @@
     },
     {
       "name": "audio",
-      "headers": ["src/c/audio/kernel_engine/audio/audio.h"],
-      "includeDirs": ["src/c/audio", "src/zig/common/include"],
+      "headers": [
+        "src/c/audio/kernel_engine/audio/audio.h"
+      ],
+      "includeDirs": [
+        "src/c/audio",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/audio/ke_api.json",
       "namespace": "KernelEngine.Audio",
       "nativeNamespace": "KernelEngine.Audio.Native",
@@ -101,8 +134,13 @@
     },
     {
       "name": "physics",
-      "headers": ["src/c/physics/kernel_engine/physics/physics_2d.h"],
-      "includeDirs": ["src/c/physics", "src/zig/common/include"],
+      "headers": [
+        "src/c/physics/kernel_engine/physics/physics_2d.h"
+      ],
+      "includeDirs": [
+        "src/c/physics",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/physics/ke_api.json",
       "namespace": "KernelEngine.Physics",
       "nativeNamespace": "KernelEngine.Physics.Native",
@@ -112,8 +150,13 @@
     },
     {
       "name": "text",
-      "headers": ["src/c/text/kernel_engine/text/font.h"],
-      "includeDirs": ["src/c/text", "src/zig/common/include"],
+      "headers": [
+        "src/c/text/kernel_engine/text/font.h"
+      ],
+      "includeDirs": [
+        "src/c/text",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/text/ke_api.json",
       "namespace": "KernelEngine.Text",
       "nativeNamespace": "KernelEngine.Text.Native",
@@ -131,7 +174,11 @@
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
-      "includeDirs": ["src/c/render", "src/c/ecs", "src/zig/common/include"],
+      "includeDirs": [
+        "src/c/render",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/render/ke_api.json",
       "namespace": "KernelEngine.Render.Webgpu",
       "nativeNamespace": "KernelEngine.Render.Webgpu.Native",
@@ -140,8 +187,15 @@
     },
     {
       "name": "asset_loader",
-      "headers": ["src/c/asset/kernel_engine/asset/asset_loader.h"],
-      "includeDirs": ["src/c/asset", "src/c/scheduler", "src/c/render", "src/zig/common/include"],
+      "headers": [
+        "src/c/asset/kernel_engine/asset/asset_loader.h"
+      ],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/scheduler",
+        "src/c/render",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/asset/asset_loader.ke_api.json",
       "namespace": "KernelEngine.Asset.Assimp",
       "nativeNamespace": "KernelEngine.Asset.Native",
@@ -150,8 +204,14 @@
     },
     {
       "name": "image_loader",
-      "headers": ["src/c/asset/kernel_engine/asset/image_loader.h"],
-      "includeDirs": ["src/c/asset", "src/c/render", "src/zig/common/include"],
+      "headers": [
+        "src/c/asset/kernel_engine/asset/image_loader.h"
+      ],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/render",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/asset/image_loader.ke_api.json",
       "namespace": "KernelEngine.Asset.StbImage",
       "nativeNamespace": "KernelEngine.Asset.Native",
@@ -161,46 +221,89 @@
     {
       "_comment": "auxHeaders (same reason as render's) resolve ke_render_service's own cross-domain typedefs; the resolve_*_into slots' `core` param is tagged [opaque] so the generated method takes void* (matching the ClangSharp-generated ke_asset_resolver delegate field, which itself collapses ke_render_service* to void* since Framework never sees a concrete render backend's own struct).",
       "name": "asset_resolver",
-      "headers": ["src/c/asset/kernel_engine/asset/asset_resolver.h"],
+      "headers": [
+        "src/c/asset/kernel_engine/asset/asset_resolver.h"
+      ],
       "auxHeaders": [
         "src/c/render/kernel_engine/render/gpu/gpu_device.h",
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
-      "includeDirs": ["src/c/asset", "src/c/render", "src/c/text", "src/c/ecs", "src/zig/common/include"],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/render",
+        "src/c/text",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/framework/asset_resolver.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
-      "usings": ["KernelEngine.Asset.Native", "KernelEngine.Text.Native", "KernelEngine.Render.Native"]
+      "usings": [
+        "KernelEngine.Asset.Native",
+        "KernelEngine.Text.Native",
+        "KernelEngine.Render.Native"
+      ]
     },
     {
-      "_comment": "node3d.h in the ScriptingArchitectureV3 §7.14.4 sense: transform.h is [node:]-tagged (whole-struct mode — see CSharpBackend's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
+      "_comment": "node3d.h in the ScriptingArchitectureV3 \u00a77.14.4 sense: transform.h is [node:]-tagged (whole-struct mode \u2014 see CSharpBackend's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
       "name": "spatial",
-      "headers": ["src/c/spatial/kernel_engine/spatial/transform.h"],
-      "includeDirs": ["src/c/spatial", "src/zig/common/include"],
+      "headers": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "includeDirs": [
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/framework/spatial.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Common.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Scene",
-      "usings": ["KernelEngine.Ecs"]
+      "usings": [
+        "KernelEngine.Ecs"
+      ]
     },
     {
       "name": "world",
-      "headers": ["src/zig/framework/include/kernel_engine/framework/world.h"],
-      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
-      "includeDirs": ["src/zig/framework/include", "src/c/ecs", "src/c/runtime", "src/c/scheduler", "src/c/logger", "src/zig/common/include"],
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/world.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/c/runtime",
+        "src/c/scheduler",
+        "src/c/logger",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/framework/world.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
-      "usings": ["KernelEngine.Ecs.Native", "KernelEngine.Runtime.Native"]
+      "usings": [
+        "KernelEngine.Ecs.Native",
+        "KernelEngine.Runtime.Native"
+      ]
     },
     {
       "name": "scene_tree",
-      "headers": ["src/zig/framework/include/kernel_engine/framework/scene_tree.h"],
-      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
-      "includeDirs": ["src/zig/framework/include", "src/c/ecs", "src/c/render", "src/c/spatial", "src/zig/common/include"],
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/scene_tree.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/c/render",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/framework/scene_tree.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Framework.Native",
@@ -209,9 +312,17 @@
     },
     {
       "name": "scene_loader",
-      "headers": ["src/zig/framework/include/kernel_engine/framework/scene_loader.h"],
-      "auxHeaders": ["src/c/ecs/kernel_engine/ecs/ecs.h"],
-      "includeDirs": ["src/zig/framework/include", "src/c/ecs", "src/zig/common/include"],
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/scene_loader.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/framework/scene_loader.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Framework.Native",
@@ -219,10 +330,16 @@
       "usings": []
     },
     {
-      "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). MeshRenderer and Skybox stay hand-written — their fields (a char[N] buffer, a handle type) hit generator gaps not solved yet, noted in components.h. outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host CollisionShape2D/AudioPlayer the same way, hand-written since they have no header yet).",
+      "_comment": "Not a separate native plugin \u2014 components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 \u00a77): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). MeshRenderer and Skybox stay hand-written \u2014 their fields (a char[N] buffer, a handle type) hit generator gaps not solved yet, noted in components.h. outDir points into render's own C# project: there is no 'toolkit' project \u2014 every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host CollisionShape2D/AudioPlayer the same way, hand-written since they have no header yet).",
       "name": "render_components",
-      "headers": ["src/c/render/kernel_engine/render/components.h"],
-      "includeDirs": ["src/c/render", "src/c/spatial", "src/zig/common/include"],
+      "headers": [
+        "src/c/render/kernel_engine/render/components.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/render/components.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
@@ -231,13 +348,21 @@
     },
     {
       "name": "input_actions",
-      "headers": ["src/zig/framework/include/kernel_engine/framework/input_actions.h"],
-      "includeDirs": ["src/zig/framework/include", "src/c/input", "src/zig/common/include"],
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/input_actions.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/input",
+        "src/zig/common/include"
+      ],
       "apiJson": "src/csharp/framework/input_actions.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
-      "usings": ["KernelEngine.Input.Native"]
+      "usings": [
+        "KernelEngine.Input.Native"
+      ]
     }
   ]
 }

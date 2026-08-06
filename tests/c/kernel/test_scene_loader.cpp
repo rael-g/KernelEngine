@@ -58,7 +58,7 @@ protected:
         runtime_h = ke_runtime_create(ecs, scheduler, &rp, NULL);
         ASSERT_NE(runtime_h.ref, nullptr);
         runtime = runtime_h.ref;
-        tree_h = ke_scene_tree_create(ecs, NULL);
+        tree_h = ke_scene_tree_create(ecs, NULL, NULL);
         ASSERT_NE(tree_h.ref, nullptr);
         tree = tree_h.ref;
 

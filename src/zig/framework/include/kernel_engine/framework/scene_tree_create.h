@@ -3,6 +3,7 @@
 
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/runtime/runtime.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -30,9 +31,14 @@ extern "C"
     /// scene_tree on the same ecs already registered them, the existing cids
     /// are picked up via component_lookup). Returns the tree via out_tree;
     /// caller invokes tree->destroy(tree) when done.
+    /// `runtime` may be NULL, in which case no systems are registered and the
+    /// caller is responsible for calling propagate_transforms itself. Passing one
+    /// registers the hierarchy maintenance that keeps world matrices current, so
+    /// a host driving a runtime never has to remember to ask.
     KE_FRAMEWORK_API ke_scene_tree_handle ke_scene_tree_create(
-        ke_ecs    *ecs,
-        ke_error **out_error);
+        ke_ecs     *ecs,
+        ke_runtime *runtime,
+        ke_error  **out_error);
 
 #ifdef __cplusplus
 }

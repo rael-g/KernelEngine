@@ -21,7 +21,7 @@ protected:
         ecs_h = ke_ecs_flecs_create(&ep, NULL);
         ASSERT_NE(ecs_h.ref, nullptr);
         ecs = ecs_h.ref;
-        tree_h = ke_scene_tree_create(ecs, NULL);
+        tree_h = ke_scene_tree_create(ecs, NULL, NULL);
         ASSERT_NE(tree_h.ref, nullptr);
         tree = tree_h.ref;
     }
@@ -336,7 +336,7 @@ TEST_F(SceneTreeTest, PropagateTransforms_GrandchildAccumulatesWholeChain)
 
 TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 {
-    EXPECT_EQ(ke_scene_tree_create(nullptr, NULL).ref, nullptr);
+    EXPECT_EQ(ke_scene_tree_create(nullptr, NULL, NULL).ref, nullptr);
 }
 
 TEST_F(SceneTreeTest, Create_NullArgs_ErrorTypeNameMatchesTheSharedVocabulary)
@@ -347,7 +347,7 @@ TEST_F(SceneTreeTest, Create_NullArgs_ErrorTypeNameMatchesTheSharedVocabulary)
     // side alone would silently stop every `Is("ke.error.invalid_argument")`
     // check from matching.
     ke_error *err = nullptr;
-    EXPECT_EQ(ke_scene_tree_create(nullptr, &err).ref, nullptr);
+    EXPECT_EQ(ke_scene_tree_create(nullptr, NULL, &err).ref, nullptr);
     ASSERT_NE(err, nullptr);
     ASSERT_NE(err->type, nullptr);
     ASSERT_NE(err->type->name, nullptr);

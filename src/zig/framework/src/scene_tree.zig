@@ -23,6 +23,9 @@ const State = struct {
     transform_cid: c.ke_component_id,
     hierarchy_cid: c.ke_component_id,
     name_cid: c.ke_component_id,
+    // Owned when a runtime was supplied: the systems keeping world matrices in
+    // step with these components. Destroyed with the tree.
+    hierarchy: c.ke_scene_hierarchy_handle,
 };
 
 fn stateOf(self: *c.ke_scene_tree) *State {
@@ -399,6 +402,7 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
+    if (s.hierarchy.destroy) |d| d(s.hierarchy.ref);
     destroyEntitiesRecursive(s, s.root);
     heap.gpa.destroy(s);
 }
@@ -407,6 +411,7 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
 
 export fn ke_scene_tree_create(
     ecs_in: ?*c.ke_ecs,
+    runtime: ?*c.ke_runtime,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_scene_tree_handle {
     const null_handle = std.mem.zeroes(c.ke_scene_tree_handle);
@@ -426,6 +431,7 @@ export fn ke_scene_tree_create(
         .transform_cid = 0,
         .hierarchy_cid = 0,
         .name_cid = 0,
+        .hierarchy = std.mem.zeroes(c.ke_scene_hierarchy_handle),
     };
 
     s.transform_cid = ensureComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
@@ -469,6 +475,17 @@ export fn ke_scene_tree_create(
     s.api.destroy_all = vtDestroyAll;
     s.api.find_node = vtFindNode;
     s.api.propagate_transforms = vtPropagateTransforms;
+
+    // Registered only once the components above exist, since the hierarchy
+    // resolves them by name and refuses to run against an ecs that has none.
+    if (runtime) |rt| {
+        s.hierarchy = c.ke_scene_hierarchy_create(rt, ecs, out_error);
+        if (s.hierarchy.ref == null) {
+            ecs.entity_destroy.?(ecs, s.root);
+            heap.gpa.destroy(s);
+            return null_handle;
+        }
+    }
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }

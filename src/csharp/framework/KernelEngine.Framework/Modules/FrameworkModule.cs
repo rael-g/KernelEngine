@@ -36,7 +36,10 @@ public sealed class FrameworkModule : IRuntimeModule
             var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
             {
-                var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(((INativeEcs)flecsEcs).Native, null);
+                // Handing the tree a runtime is what registers transform propagation
+                // as a system; without it the host has to drive propagation itself.
+                var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
+                    ((INativeEcs)flecsEcs).Native, ((INativeRuntime)rtRuntime).Native, null);
                 if (tree.@ref == null) throw new InvalidOperationException("scene_tree_create failed");
 
                 ke_world_params p = default;

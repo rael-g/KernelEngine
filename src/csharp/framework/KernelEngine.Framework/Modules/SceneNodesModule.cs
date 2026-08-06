@@ -58,11 +58,11 @@ public sealed class SceneNodesModule : IRuntimeModule
         // destroy issued from a behavior routes through it and defers the structural
         // change to the wave barrier — so this runs as an ordinary parallel-wave
         // system with no exclusive bypass.
-        // What the framework itself touches here: transforms are rewritten by the
-        // propagation pass, and the hierarchy and names are read to walk the tree.
-        // A node's own OnUpdate can reach further, and the scheduler cannot see
-        // that from here — a behavior touching another domain's components is
-        // ordered only by this system being alone in its phase.
+        // Behaviors author local transforms; the scene tree's own system turns those
+        // into world matrices later in the frame. A node's OnUpdate can reach past
+        // this list, and the scheduler cannot see that from here — a behavior
+        // touching another domain's components is ordered only by this system
+        // being alone in its phase.
         var sceneAccess = new[]
         {
             ComponentAccess.Write(nodeWorld.CidOfName("transform")),
@@ -73,7 +73,6 @@ public sealed class SceneNodesModule : IRuntimeModule
         runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, ctx, dt) =>
         {
             input?.Update();
-            sceneTree.PropagateTransforms();
             var snapshot  = input?.CaptureSnapshot();
             evaluator?.Evaluate(snapshot);
             var view      = new View(nodeWorld, dt, snapshot, ctx);
