@@ -164,6 +164,8 @@ sealed class CorridorLight : PointLight
             (float)rand.NextDouble() * 100f);
     }
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _time += view.DeltaTime * Speed;

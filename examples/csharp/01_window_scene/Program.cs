@@ -89,6 +89,8 @@ sealed class SpinningQuad : MeshRenderer
 {
     private float _angle;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _angle += 90f * view.DeltaTime;

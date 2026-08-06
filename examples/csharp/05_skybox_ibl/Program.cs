@@ -108,6 +108,8 @@ sealed class FreeLook : Camera
     private float _pitch;
     private float _yaw;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         float dt = view.DeltaTime;

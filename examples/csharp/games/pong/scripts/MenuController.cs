@@ -54,6 +54,8 @@ public sealed class MenuController : Node
         }, "Hint", parent: this);
     }
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         bool launch = _actions.IsPressed(PongAction.Launch, in view);

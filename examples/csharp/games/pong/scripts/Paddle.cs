@@ -36,6 +36,8 @@ public sealed class Paddle : Node2D, IPhysicsBody2D
 
     protected override void OnUnbind() => _physics.DestroyBody(_body);
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         if (!_moveActionResolved)

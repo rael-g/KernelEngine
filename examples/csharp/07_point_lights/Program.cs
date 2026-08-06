@@ -91,6 +91,8 @@ sealed class MovingPointLight : PointLight
 
     private float _time;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _time += view.DeltaTime;

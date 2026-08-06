@@ -80,6 +80,8 @@ sealed class KeyEdgeListener : Node
 
     protected override void OnBind(NodeWorld nodeWorld) { }
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         for (int i = 0; i < s_keys.Length; i++)

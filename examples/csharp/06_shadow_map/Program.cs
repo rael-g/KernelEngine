@@ -88,6 +88,8 @@ sealed class AnimatedSun : DirectionalLight
 {
     private float _t;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _t += view.DeltaTime;

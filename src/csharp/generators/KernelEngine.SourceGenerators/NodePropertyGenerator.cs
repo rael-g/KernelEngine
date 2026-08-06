@@ -79,6 +79,19 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    private uint _generatedCid;");
         sb.AppendLine();
 
+        // Node.HasBehavior used to be discovered by reflecting on the instance at
+        // bind time; it is now a compile-time decision. The user's own partial
+        // declares OnUpdate (or doesn't) — that's a fact this generator can see
+        // in the same syntax pass, so it emits the override here instead of the
+        // runtime ever asking "does this type have OnUpdate" again.
+        var hasOnUpdate = classSymbol.GetMembers("OnUpdate").OfType<IMethodSymbol>()
+            .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
+        if (hasOnUpdate)
+        {
+            sb.AppendLine("    protected override bool HasBehavior => true;");
+            sb.AppendLine();
+        }
+
         foreach (var p in properties)
         {
             var fieldName = marker is not null ? NativeFieldNameOf(p) : p.Name;

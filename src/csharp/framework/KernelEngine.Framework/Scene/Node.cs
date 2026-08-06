@@ -80,10 +80,15 @@ public abstract class Node
     protected internal virtual void OnUnbind() { }
 
     /// <summary>
-    /// True if the subclass overrode <see cref="OnUpdate"/>. Computed once at
-    /// bind so BehaviorSystem iterates only the nodes that have per-frame logic.
+    /// True when the subclass has per-frame logic — <see cref="OnUpdate"/> is
+    /// overridden. Decided at compile time, not by reflecting on the instance:
+    /// a hand-written subclass overrides this the same way it overrides
+    /// <see cref="OnUpdate"/> itself; a generated subclass gets the override
+    /// emitted by <c>NodePropertyGenerator</c> when it detects the user's own
+    /// partial declares <c>OnUpdate</c>. Base is false so a node with no
+    /// override never enters <see cref="Framework.NodeWorld.Behaviors"/>.
     /// </summary>
-    internal bool HasBehavior { get; private set; }
+    protected internal virtual bool HasBehavior => false;
 
     internal void UnbindFromNodeWorld()
     {
@@ -106,13 +111,6 @@ public abstract class Node
     internal void CompleteBind()
     {
         OnBind(NodeWorld!);
-
-        var m = GetType().GetMethod(nameof(OnUpdate),
-            System.Reflection.BindingFlags.Instance |
-            System.Reflection.BindingFlags.NonPublic |
-            System.Reflection.BindingFlags.Public);
-        HasBehavior = m != null && m.DeclaringType != typeof(Node);
-
         if (HasBehavior) NodeWorld!.RegisterBehavior(this);
     }
 }

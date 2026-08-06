@@ -133,6 +133,8 @@ sealed class AudioController : Node
 
     protected override void OnBind(NodeWorld nodeWorld) { /* nothing to materialize — this node only carries behavior */ }
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         bool space = view.IsKeyDown(KeySpace);

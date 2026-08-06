@@ -120,6 +120,8 @@ sealed class PhysicsScene : Node
 
     protected override void OnBind(NodeWorld nodeWorld) { }
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         if (!_initialDropped)

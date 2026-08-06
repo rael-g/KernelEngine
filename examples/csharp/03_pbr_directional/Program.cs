@@ -102,6 +102,8 @@ sealed class OrbitingLight : DirectionalLight
 {
     private float _angle;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _angle += 60f * view.DeltaTime * MathF.PI / 180f;

@@ -101,6 +101,8 @@ sealed class BackgroundQuad : Node
 
     protected override void OnBind(NodeWorld nodeWorld) => _quadCid = nodeWorld.RegisterComponent<UiQuadComponent>("ui_quad");
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         var quad = new UiQuadComponent
