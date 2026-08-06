@@ -1,0 +1,44 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_transform_component",
+      "doc": "Per-entity 3D transform component. Read/written as one atomic unit (position, rotation, and scale are meaningless set independently mid-write) \u2014 kabic\u0027s [whole:] tag maps the whole struct to a single bit-cast property instead of one property per field. world_matrix is derived output written by propagate_transforms(); it rides along in the same atomic struct rather than being a separate field a caller could plausibly author.",
+      "tags": [
+        "node:Node3D",
+        "base:Node",
+        "whole:LocalTransform=KernelEngine.Ecs.TransformComponent",
+        "default:KernelEngine.Ecs.TransformComponent.Identity"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "world_matrix",
+          "type": "ke_mat4",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [],
+  "functions": [],
+  "type_aliases": {}
+}
