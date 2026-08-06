@@ -1,6 +1,7 @@
 
 namespace Kabic.CSharp;
 
+using System.Text.RegularExpressions;
 using Kabic;
 
 public static class CSharpBackend
@@ -53,7 +54,25 @@ public static class CSharpBackend
             if (inner.StartsWith("struct ")) inner = inner["struct ".Length..];
             return CsType(model, inner) + "*";
         }
-        return Idioms.CsPrimitive(model.ResolveAlias(t));
+        var resolved = model.ResolveAlias(t);
+        return FunctionPointerType(model, resolved) ?? Idioms.CsPrimitive(resolved);
+    }
+
+    /// A C function-pointer type (`void (*)(ke_ecs *, void *)`) as a C# function
+    /// pointer. The C name is only ever an alias, so leaving it verbatim emits an
+    /// identifier that resolves to nothing; the callable type has to be spelled out.
+    static string? FunctionPointerType(ApiModel model, string cType)
+    {
+        var m = Regex.Match(cType.Trim(), @"^(.+?)\s*\(\s*\*\s*\)\s*\((.*)\)$");
+        if (!m.Success) return null;
+
+        var returns = CsType(model, m.Groups[1].Value);
+        var paramList = m.Groups[2].Value.Trim();
+        var parameters = paramList is "" or "void"
+            ? []
+            : paramList.Split(',').Select(p => CsType(model, p)).ToList();
+
+        return $"delegate* unmanaged[Cdecl]<{string.Join(", ", parameters.Append(returns))}>";
     }
 
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
@@ -83,12 +102,39 @@ public static class CSharpBackend
         var nativeType = component.Name;
         var componentName = convention.ComponentNameFor(component.Name);
 
-        var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;", $"using {nativeNs};\n", $"namespace {ns};\n" };
+        var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;" };
+        if (nativeNs != "KernelEngine.Common.Native") o.Add($"using {nativeNs};");
+        o.Add("");
+        o.Add($"namespace {ns};\n");
         o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
             : $"/// <summary>Mirrors <c>{nativeType}</c>.</summary>");
         o.Add($"[GeneratedNodeComponent(typeof({nativeType}), \"{componentName}\")]");
         o.Add($"public partial class {nodeName} : {baseName}");
         o.Add("{");
+
+        // [whole:Name=Type] — the struct maps to ONE property, the entire backing
+        // struct bit-cast to an existing layout-identical managed mirror (e.g.
+        // ke_transform_component -> TransformComponent), instead of one property
+        // per field. Needed wherever the fields are read/written together as one
+        // atomic unit (setting position and rotation separately is meaningless
+        // mid-write) — kabic's normal per-field mode has no way to express that.
+        var whole = component.TagValue("whole");
+        if (whole is not null)
+        {
+            var (propName, propType) = SplitWhole(whole);
+            var defaultExpr = component.TagValue("default");
+
+            o.Add($"    public {nodeName}()");
+            o.Add("    {");
+            if (defaultExpr is not null)
+                o.Add($"        _generatedState = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {nativeType}>({defaultExpr});");
+            o.Add("    }");
+            o.Add("");
+            o.Add($"    [NativeWhole]");
+            o.Add($"    public partial {propType} {propName} {{ get; set; }}");
+            o.Add("}");
+            return string.Join('\n', o);
+        }
 
         o.Add($"    public {nodeName}()");
         o.Add("    {");
@@ -108,6 +154,13 @@ public static class CSharpBackend
 
         o.Add("}");
         return string.Join('\n', o);
+    }
+
+    static (string Name, string Type) SplitWhole(string whole)
+    {
+        var i = whole.IndexOf('=');
+        if (i < 0) throw new InvalidOperationException($"[whole:{whole}] must be [whole:PropertyName=FullyQualifiedType]");
+        return (whole[..i], whole[(i + 1)..]);
     }
 
     static int? VectorArity(string cType)
@@ -309,7 +362,12 @@ public static class CSharpBackend
     static void RenderSlotMethod(ApiModel model, List<string> o, ClassifiedSlot cs, Convention convention)
     {
         var slot = cs.Slot;
-        var name = Idioms.Pascal(slot.Name);
+        // [name:] lets the header pick the emitted name. Needed when the plain
+        // derived name has to stay free for a hand-written counterpart that wraps
+        // this one — a raw slot call cannot marshal a managed exception parked by
+        // a callback, so the wrapper, not the generated method, must own the name
+        // callers reach for.
+        var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
 
         switch (cs.Shape)
         {
@@ -635,8 +693,8 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
-    public static string RenderFreeFunctions(string owner, List<GroupedFunction> fns, string ns, string nativeNs,
-        string libraryName, Convention convention)
+    public static string RenderFreeFunctions(ApiModel model, string owner, List<GroupedFunction> fns, string ns, string nativeNs,
+        IReadOnlyList<string> extraUsings, string libraryName, Convention convention)
     {
         var ownerCs = Idioms.TypeName(owner, convention);
         var prefix = owner + "_";
@@ -645,13 +703,23 @@ public static class CSharpBackend
         {
             Header,
             "using System.Runtime.InteropServices;",
+            "using KernelEngine.Common.Native;",
+            $"using {nativeNs};",
+        };
+        foreach (var u in extraUsings) o.Add($"using {u};");
+        o.AddRange([
             "",
             $"namespace {ns};",
             "",
             $"/// <summary>Free-function operations on <see cref=\"{owner}\"/>.</summary>",
-            $"public static unsafe class {ownerCs}",
+            // Not a `static class`: the same owner may also have a vtable, whose
+            // provider is emitted as a partial class of this very name. Declaring
+            // both as one partial type merges them into a single managed surface
+            // instead of colliding, and a partial holding only statics is still
+            // valid when no provider exists.
+            $"public unsafe partial class {ownerCs}",
             "{",
-        };
+        ]);
 
         foreach (var g in fns)
         {
@@ -662,26 +730,26 @@ public static class CSharpBackend
                 : convention.StripPrefix(f.Name);
             var methodName = Idioms.Pascal(strippedName);
             var sig = string.Join(", ", rest.Select(p =>
-                (p.Has("enum") ? Idioms.TypeName(p.TagValue("enum")!, convention) : Idioms.CsPrimitive(p.Type)) + " " + Idioms.Ident(p.Name!)));
+                CsParamType(model, p, convention) + " " + Idioms.Ident(p.Name!)));
             var call = string.Concat(rest.Select(p => ", " + (p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!))));
-            var retType = f.Returns == "ke_bool" ? "bool" : Idioms.CsPrimitive(f.Returns);
-            var selfSig = self is not null ? $"in {CTypes.Deref(self.Type)} {Idioms.Ident(self.Name!)}" : null;
+            var retType = f.Returns == "ke_bool" ? "bool" : CsType(model, f.Returns);
+            var selfSig = self is not null ? $"in {CsType(model, CTypes.Deref(self.Type))} {Idioms.Ident(self.Name!)}" : null;
             var fullSig = string.Join(", ", new[] { selfSig }.Where(s => s is not null).Append(sig).Where(s => s!.Length > 0));
 
             o.Add(XmlDoc("    ", f.Doc, rest.Select(p => (Idioms.Ident(p.Name!), p.Doc))).TrimEnd());
             o.Add($"    public static {retType} {methodName}({fullSig})");
             o.Add("    {");
+            var ret = retType == "void" ? "" : "return ";
+            var coerce = f.Returns == "ke_bool" ? " != 0" : "";
             if (self is not null)
             {
-                o.Add($"        fixed ({CTypes.Deref(self.Type)}* p = &{Idioms.Ident(self.Name!)})");
-                o.Add((f.Returns == "ke_bool" ? $"            return Native.{f.Name}(p{call}) != 0;"
-                                               : $"            return Native.{f.Name}(p{call});"));
+                o.Add($"        fixed ({CsType(model, CTypes.Deref(self.Type))}* p = &{Idioms.Ident(self.Name!)})");
+                o.Add($"            {ret}Native.{f.Name}(p{call}){coerce};");
             }
             else
             {
                 var call2 = string.Join(", ", rest.Select(p => p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!)));
-                o.Add((f.Returns == "ke_bool" ? $"        return Native.{f.Name}({call2}) != 0;"
-                                               : $"        return Native.{f.Name}({call2});"));
+                o.Add($"        {ret}Native.{f.Name}({call2}){coerce};");
             }
             o.Add("    }");
             o.Add("");
@@ -693,12 +761,12 @@ public static class CSharpBackend
         {
             var f = g.Fn;
             var rest = (g.SelfParam is not null ? f.Params.Skip(1) : f.Params)
-                .Select(p => $"{(p.Has("enum") ? "int" : Idioms.CsPrimitive(p.Type))} {Idioms.Ident(p.Name!)}").ToList();
-            var selfParamSig = g.SelfParam is not null ? $"{CTypes.Deref(f.Params[0].Type)}* {Idioms.Ident(f.Params[0].Name!)}" : null;
+                .Select(p => $"{(p.Has("enum") ? "int" : CsType(model, p.Type))} {Idioms.Ident(p.Name!)}").ToList();
+            var selfParamSig = g.SelfParam is not null ? $"{CsType(model, CTypes.Deref(f.Params[0].Type))}* {Idioms.Ident(f.Params[0].Name!)}" : null;
             var nativeSig = string.Join(", ", (selfParamSig is not null ? [selfParamSig] : Array.Empty<string>()).Concat(rest));
             o.Add($"        [DllImport(\"{libraryName}\", CallingConvention = CallingConvention.Cdecl,");
             o.Add($"                   EntryPoint = \"{f.Name}\", ExactSpelling = true)]");
-            o.Add($"        public static extern {(f.Returns == "ke_bool" ? "byte" : Idioms.CsPrimitive(f.Returns))} {f.Name}({nativeSig});");
+            o.Add($"        public static extern {(f.Returns == "ke_bool" ? "byte" : CsType(model, f.Returns))} {f.Name}({nativeSig});");
             o.Add("");
         }
         o.Add("    }");
