@@ -180,6 +180,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         sb.AppendLine($"    {overrideModifier} override void OnBind(global::KernelEngine.Framework.NodeWorld nodeWorld)");
         sb.AppendLine("    {");
+        // A node type deriving from another generated node (MeshRenderer : Node3D)
+        // binds TWO components, one per class in the chain, each with its own
+        // _generatedCid. Overriding without chaining would leave every base
+        // class's component unbound — its cid stays 0 and every write to its
+        // properties is silently dropped. Node's own OnBind is abstract, so the
+        // chain stops one level above it.
+        if (nodeType is not null && !SymbolEqualityComparer.Default.Equals(classSymbol.BaseType, nodeType))
+            sb.AppendLine("        base.OnBind(nodeWorld);");
         sb.AppendLine($"        _generatedCid = {resolveCid};");
         sb.AppendLine("        nodeWorld.SetByCid(Entity, _generatedCid, _generatedState);");
         sb.AppendLine("    }");
