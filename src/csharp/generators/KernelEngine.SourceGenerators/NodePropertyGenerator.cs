@@ -232,6 +232,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     static readonly Dictionary<string, string> NativeHandleNames = new()
     {
         ["MeshHandle"] = "ke_mesh_handle", ["MaterialHandle"] = "ke_material_handle",
+        ["TextureHandle"] = "ke_texture_handle",
     };
 
     static (Func<string, string> read, Func<string, string> write)? CoercionFor(ITypeSymbol propertyType, ITypeSymbol fieldType)

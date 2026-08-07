@@ -209,13 +209,18 @@
     },
     {
       "name": "ke_skybox_component",
-      "doc": "Environment cubemap driving both the skybox and image-based lighting. Not [node:]-tagged: kabic\u0027s node generator has no rule yet for a handle-typed field (it would emit the raw ke_texture_handle instead of the idiomatic TextureHandle wrapper) \u2014 Skybox stays hand-written until that lands.",
-      "tags": [],
+      "doc": "Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.",
+      "tags": [
+        "node:Skybox",
+        "base:Node3D"
+      ],
       "fields": [
         {
           "name": "cubemap",
           "type": "ke_texture_handle",
-          "tags": [],
+          "tags": [
+            "name:CubemapHandle"
+          ],
           "doc": null
         }
       ]

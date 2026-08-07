@@ -55,12 +55,12 @@ extern "C"
         ke_vec3 color; ///< [default:0.05 0.05 0.05]
     } ke_ambient_light_component;
 
-    /// Environment cubemap driving both the skybox and image-based lighting. Not
-    /// [node:]-tagged: kabic's node generator has no rule yet for a handle-typed
-    /// field (it would emit the raw ke_texture_handle instead of the idiomatic
-    /// TextureHandle wrapper) — Skybox stays hand-written until that lands.
+    /// [node:Skybox,base:Node3D]
+    /// Environment cubemap driving both the skybox and image-based lighting. Only
+    /// the first entity carrying one wins per frame.
     typedef struct ke_skybox_component
     {
+        /// [name:CubemapHandle]
         ke_texture_handle cubemap;
     } ke_skybox_component;
 

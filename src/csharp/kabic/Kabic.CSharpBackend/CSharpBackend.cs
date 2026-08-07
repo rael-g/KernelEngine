@@ -198,6 +198,7 @@ public static class CSharpBackend
     {
         ["ke_mesh_handle"] = "KernelEngine.Render.MeshHandle",
         ["ke_material_handle"] = "KernelEngine.Render.MaterialHandle",
+        ["ke_texture_handle"] = "KernelEngine.Render.TextureHandle",
     };
 
     static string NodePropertyType(ApiModel model, ApiField f) =>
