@@ -16,5 +16,6 @@ public static unsafe partial class NativeMethods
     public static extern ke_render_service* render_module_core(ke_render_module* module);
 
     [DllImport("ke_render_service", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_module_load_font", ExactSpelling = true)]
-    public static extern ke_ui_font_handle render_module_load_font(ke_render_module* module, [NativeTypeName("const char *")] sbyte* key, ke_texture_handle atlas, [NativeTypeName("const ke_glyph_metrics *")] ke_glyph_metrics* glyphs, [NativeTypeName("uint32_t")] uint glyph_count, float line_height, float ascent, ke_error** out_error);
+    [return: NativeTypeName("ke_ui_font_handle")]
+    public static extern KernelEngine.Render.Native.ke_ui_font_handle render_module_load_font(ke_render_module* module, [NativeTypeName("const char *")] sbyte* key, ke_texture_handle atlas, [NativeTypeName("const ke_glyph_metrics *")] ke_glyph_metrics* glyphs, [NativeTypeName("uint32_t")] uint glyph_count, float line_height, float ascent, ke_error** out_error);
 }

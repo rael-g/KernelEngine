@@ -38,7 +38,7 @@ public sealed class MenuController : Node
         nodeWorld.AddNode(new Label
         {
             Text   = "Pong",
-            Font   = _font,
+            Font   = _font.Handle,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.5f, 0.0f),
             Offset = new Vector2(0f, 140f),
@@ -47,7 +47,7 @@ public sealed class MenuController : Node
         nodeWorld.AddNode(new Label
         {
             Text   = "Press Space to start",
-            Font   = _font,
+            Font   = _font.Handle,
             Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1.0f),
             Offset = new Vector2(0f, -120f),

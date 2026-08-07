@@ -1,7 +1,7 @@
 using KernelEngine.Common.Native;
 using System.Runtime.CompilerServices;
 
-namespace KernelEngine.Render.Webgpu.Native;
+namespace KernelEngine.Render.Native;
 
 public partial struct ke_label_component
 {

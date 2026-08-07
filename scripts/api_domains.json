@@ -1,5 +1,5 @@
 {
-  "_comment": "Hand-authored manifest of domains migrated to the ke_api.json pipeline (ScriptingArchitectureV3 \u00a78). Each entry drives extract_api.cs + generate_csharp.cs. Adding a domain here is what 'migrating it to Track 2/3' means mechanically. Analogous to a ClangSharp .rsp: an input config, never a derived artifact.",
+  "_comment": "Hand-authored manifest of domains migrated to the ke_api.json pipeline (ScriptingArchitectureV3 §8). Each entry drives extract_api.cs + generate_csharp.cs. Adding a domain here is what 'migrating it to Track 2/3' means mechanically. Analogous to a ClangSharp .rsp: an input config, never a derived artifact.",
   "domains": [
     {
       "name": "input",
@@ -247,7 +247,7 @@
       ]
     },
     {
-      "_comment": "node3d.h in the ScriptingArchitectureV3 \u00a77.14.4 sense: transform.h is [node:]-tagged (whole-struct mode \u2014 see CSharpBackend's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
+      "_comment": "node3d.h in the ScriptingArchitectureV3 §7.14.4 sense: transform.h is [node:]-tagged (whole-struct mode — see CSharpBackend's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
       "name": "spatial",
       "headers": [
         "src/c/spatial/kernel_engine/spatial/transform.h"
@@ -330,7 +330,7 @@
       "usings": []
     },
     {
-      "_comment": "Not a separate native plugin \u2014 components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 \u00a77): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). MeshRenderer and Skybox stay hand-written \u2014 their fields (a char[N] buffer, a handle type) hit generator gaps not solved yet, noted in components.h. outDir points into render's own C# project: there is no 'toolkit' project \u2014 every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host CollisionShape2D/AudioPlayer the same way, hand-written since they have no header yet).",
+      "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host CollisionShape2D/AudioPlayer the same way, hand-written since they have no header yet).",
       "name": "render_components",
       "headers": [
         "src/c/render/kernel_engine/render/components.h"
@@ -341,6 +341,22 @@
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/render/components.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Render.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",
+      "usings": []
+    },
+    {
+      "_comment": "render/ui/components.h is the UI overlay pass's component vocabulary, split out of the plugin's own ui_create.h so the node surface (Label) generates from a contract header the same way render_components does — the factory header keeps only the vtable it creates.",
+      "name": "ui_components",
+      "headers": [
+        "src/c/render/kernel_engine/render/ui/components.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/render/ui_components.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
       "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",

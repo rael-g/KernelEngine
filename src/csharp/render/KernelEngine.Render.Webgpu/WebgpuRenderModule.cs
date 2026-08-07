@@ -324,7 +324,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         var texH = new ke_texture_handle { bits = atlas.Value };
         ke_error* err = null;
-        ke_ui_font_handle h;
+        KernelEngine.Render.Native.ke_ui_font_handle h;
         fixed (byte* k = keyBytes)
             h = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_load_font(
                 _module.@ref, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &err);

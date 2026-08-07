@@ -44,7 +44,7 @@ var services = new ServiceCollection()
         tree.AddNode(new Label
         {
             Text   = "Top-left, anchor (0,0)",
-            Font   = font,
+            Font   = font.Handle,
             Color  = new Vector4(1f, 0.6f, 0.3f, 1f),
             Anchor = new Vector2(0f, 0f),
             Offset = new Vector2(20, 20),
@@ -53,7 +53,7 @@ var services = new ServiceCollection()
         tree.AddNode(new Label
         {
             Text   = "Top center, anchor (0.5, 0)",
-            Font   = font,
+            Font   = font.Handle,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.5f, 0f),
             Offset = new Vector2(0, 80),
@@ -62,7 +62,7 @@ var services = new ServiceCollection()
         tree.AddNode(new Label
         {
             Text   = "Bottom-right (1,1)",
-            Font   = font,
+            Font   = font.Handle,
             Color  = new Vector4(0.3f, 0.7f, 1f, 1f),
             Anchor = new Vector2(1f, 1f),
             Offset = new Vector2(-20, -20),

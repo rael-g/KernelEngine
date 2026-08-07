@@ -41,7 +41,13 @@ ke_gpu_device=ke_gpu_device
 ke_logger=KernelEngine.Logger.Native.ke_logger
 ke_world=KernelEngine.Framework.Native.ke_world
 ke_result=ke_result
+ke_ui_font_handle=KernelEngine.Render.Native.ke_ui_font_handle
+ke_label_glyph_quad=KernelEngine.Render.Native.ke_label_glyph_quad
+ke_label_component=KernelEngine.Render.Native.ke_label_component
 --exclude
+ke_ui_font_handle
+ke_label_glyph_quad
+ke_label_component
 ke_result
 ke_bool
 ke_runtime

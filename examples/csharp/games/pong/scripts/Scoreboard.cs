@@ -44,7 +44,7 @@ public sealed class Scoreboard : Node
         _left  = nodeWorld.AddNode(new Label
         {
             Text   = "0",
-            Font   = _font,
+            Font   = _font.Handle,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.30f, 0f),
             Offset = new Vector2(0f, 60f),
@@ -53,7 +53,7 @@ public sealed class Scoreboard : Node
         _right = nodeWorld.AddNode(new Label
         {
             Text   = "0",
-            Font   = _font,
+            Font   = _font.Handle,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.70f, 0f),
             Offset = new Vector2(0f, 60f),
@@ -62,7 +62,7 @@ public sealed class Scoreboard : Node
         _hint  = nodeWorld.AddNode(new Label
         {
             Text   = "",
-            Font   = _font,
+            Font   = _font.Handle,
             Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1f),
             Offset = new Vector2(0f, -80f),

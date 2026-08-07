@@ -5,6 +5,7 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/handles.h>
+#include <kernel_engine/render/ui/components.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/text/font.h>
 
@@ -25,50 +26,6 @@ extern "C"
 {
 #endif
 
-    typedef struct ke_ui_font_handle
-    {
-        uint32_t bits;
-    } ke_ui_font_handle;
-
-#ifndef CLANGSHARP
-#define KE_UI_FONT_NONE ((ke_ui_font_handle){ UINT32_MAX })
-#endif
-
-// A screen-space text label. Text/anchor/offset/color/font are the caller's
-// input (a node's own properties, written on bind/update); glyph_count and
-// glyphs[] are output, written each KE_PHASE_UPDATE tick by the "render.ui.labels"
-// system this domain registers, and read by "render.ui" (KE_PHASE_RENDER) to
-// draw them — the same sim-writes/render-reads split every other render
-// component uses, so there is no per-glyph entity, no CPU-side accumulator,
-// no pool to grow or reuse.
-//
-// text/glyphs are fixed-size, like ke_name_component's char name[64] elsewhere
-// in this codebase: an ECS component is a C ABI struct, so a caller-provided
-// ceiling is unavoidable here, not a design choice. 256 covers any UI label a
-// game actually authors; text/glyphs beyond the cap are silently truncated
-// rather than overflowing.
-#define KE_LABEL_MAX_TEXT 256
-#define KE_LABEL_MAX_GLYPHS 256
-
-    typedef struct ke_label_glyph_quad
-    {
-        float dst_x, dst_y, dst_w, dst_h;
-        float u0, v0, u1, v1;
-    } ke_label_glyph_quad;
-
-    typedef struct ke_label_component
-    {
-        ke_ui_font_handle font;
-        float             anchor[2];
-        float             offset[2];
-        float             color[4];
-        char              text[KE_LABEL_MAX_TEXT];
-
-        uint32_t            glyph_count;
-        ke_label_glyph_quad glyphs[KE_LABEL_MAX_GLYPHS];
-    } ke_label_component;
-
-#define KE_COMPONENT_NAME_LABEL "label"
 
     // UI overlay pass — screen-space quad batching (sprite batching, premultiplied
     // alpha), drawn after tonemap so it composites over the rendered scene. Game
