@@ -104,6 +104,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
+        var needsUtf8Helpers = false;
+
         foreach (var p in properties)
         {
             var isWhole = p.GetAttributes().Any(a => a.AttributeClass?.Name == "NativeWholeAttribute");
@@ -132,6 +134,30 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             // only THAT shape indexes by [i]; a named ke_vecN/ke_quat field (below) is a
             // bit-cast coercion instead, even though its C# property is also Vector2/3/4.
             var isFixedBuffer = fieldSymbol is not null && fieldSymbol.Type.Name.EndsWith("_e__FixedBuffer");
+
+            // A `char[N]` component field projected as a string. The buffer's own
+            // capacity is the truncation point — it is the component's ABI, so the
+            // property cannot widen it, only refuse to overflow it.
+            if (p.Type.SpecialType == SpecialType.System_String && isFixedBuffer)
+            {
+                needsUtf8Helpers = true;
+                sb.AppendLine($"    public partial string {p.Name}");
+                sb.AppendLine("    {");
+                sb.AppendLine("        get");
+                sb.AppendLine("        {");
+                sb.AppendLine("            var s = GeneratedCurrent();");
+                sb.AppendLine($"            return GeneratedUtf8Get(ref s.{fieldName});");
+                sb.AppendLine("        }");
+                sb.AppendLine("        set");
+                sb.AppendLine("        {");
+                sb.AppendLine("            var s = GeneratedCurrent();");
+                sb.AppendLine($"            GeneratedUtf8Set(ref s.{fieldName}, value);");
+                sb.AppendLine("            if (IsBound) NodeWorld!.SetByCid(Entity, _generatedCid, s); else _generatedState = s;");
+                sb.AppendLine("        }");
+                sb.AppendLine("    }");
+                continue;
+            }
+
             var arity = marker is not null && isFixedBuffer ? VectorArity(p.Type) : null;
             var coercion = arity is null && fieldSymbol is not null ? CoercionFor(p.Type, fieldSymbol.Type) : null;
 
@@ -166,6 +192,32 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"            s.{fieldName} = value;");
             sb.AppendLine("            if (IsBound) NodeWorld!.SetByCid(Entity, _generatedCid, s); else _generatedState = s;");
             sb.AppendLine("        }");
+            sb.AppendLine("    }");
+        }
+
+        if (needsUtf8Helpers)
+        {
+            // Generic over the inline-array type so one pair serves every char[N]
+            // field regardless of its capacity: CreateSpan(ref buf, 1) + AsBytes
+            // yields exactly sizeof(TBuf) bytes, which IS N for a char buffer.
+            sb.AppendLine();
+            sb.AppendLine("    private static string GeneratedUtf8Get<TBuf>(ref TBuf buffer) where TBuf : struct");
+            sb.AppendLine("    {");
+            sb.AppendLine("        var bytes = global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(");
+            sb.AppendLine("            global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref buffer, 1));");
+            sb.AppendLine("        var nul = bytes.IndexOf((byte)0);");
+            sb.AppendLine("        return global::System.Text.Encoding.UTF8.GetString(nul < 0 ? bytes : bytes.Slice(0, nul));");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            sb.AppendLine("    private static void GeneratedUtf8Set<TBuf>(ref TBuf buffer, string value) where TBuf : struct");
+            sb.AppendLine("    {");
+            sb.AppendLine("        var bytes = global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(");
+            sb.AppendLine("            global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref buffer, 1));");
+            sb.AppendLine("        bytes.Clear();");
+            // Encoder.Convert truncates at a character boundary instead of throwing
+            // or splitting a multi-byte sequence; the cleared tail leaves the NUL.
+            sb.AppendLine("        global::System.Text.Encoding.UTF8.GetEncoder().Convert(");
+            sb.AppendLine("            (value ?? string.Empty).AsSpan(), bytes.Slice(0, bytes.Length - 1), true, out _, out _, out _);");
             sb.AppendLine("    }");
         }
 
@@ -232,7 +284,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     static readonly Dictionary<string, string> NativeHandleNames = new()
     {
         ["MeshHandle"] = "ke_mesh_handle", ["MaterialHandle"] = "ke_material_handle",
-        ["TextureHandle"] = "ke_texture_handle",
+        ["TextureHandle"] = "ke_texture_handle", ["FontHandle"] = "ke_ui_font_handle",
     };
 
     static (Func<string, string> read, Func<string, string> write)? CoercionFor(ITypeSymbol propertyType, ITypeSymbol fieldType)

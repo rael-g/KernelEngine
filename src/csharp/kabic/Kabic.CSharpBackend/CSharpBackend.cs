@@ -199,9 +199,19 @@ public static class CSharpBackend
         ["ke_mesh_handle"] = "KernelEngine.Render.MeshHandle",
         ["ke_material_handle"] = "KernelEngine.Render.MaterialHandle",
         ["ke_texture_handle"] = "KernelEngine.Render.TextureHandle",
+        ["ke_ui_font_handle"] = "KernelEngine.Render.FontHandle",
     };
 
+    // A fixed-size `char[N]` inside a component is the C ABI's only way to carry
+    // text: an ECS component is a plain struct, so it cannot own a pointer to
+    // memory with a different lifetime. The node surface projects it as a plain
+    // string and the Roslyn generator encodes/decodes UTF-8 at the boundary,
+    // truncating at the buffer's capacity the same way the native writers do.
+    static bool IsCharArray(string cType) =>
+        System.Text.RegularExpressions.Regex.IsMatch(cType.Trim(), @"^(const\s+)?char\s*\[\d+\]$");
+
     static string NodePropertyType(ApiModel model, ApiField f) =>
+        IsCharArray(f.Type) ? "string" :
         NamedHandleTypes.TryGetValue(f.Type.Trim(), out var h) ? h :
         VectorArity(f.Type) is int n ? $"Vector{n}"
         : NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.CsType
