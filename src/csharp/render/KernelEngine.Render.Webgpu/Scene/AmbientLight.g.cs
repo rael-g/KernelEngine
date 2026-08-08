@@ -13,7 +13,7 @@ public partial class AmbientLight : Node3D
 {
     public AmbientLight()
     {
-        _generatedState.color = new ke_vec3 { x = 0.05f, y = 0.05f, z = 0.05f };
+        _generatedState0.color = new ke_vec3 { x = 0.05f, y = 0.05f, z = 0.05f };
     }
 
     [NativeField("color")]

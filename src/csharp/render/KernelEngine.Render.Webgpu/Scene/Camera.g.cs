@@ -13,10 +13,10 @@ public partial class Camera : Node3D
 {
     public Camera()
     {
-        _generatedState.fov = 60f;
-        _generatedState.near_plane = 0.1f;
-        _generatedState.far_plane = 1000f;
-        _generatedState.orthographic_size = 5f;
+        _generatedState0.fov = 60f;
+        _generatedState0.near_plane = 0.1f;
+        _generatedState0.far_plane = 1000f;
+        _generatedState0.orthographic_size = 5f;
     }
 
     [NativeField("fov")]

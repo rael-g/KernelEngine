@@ -13,10 +13,10 @@ public partial class DirectionalLight : Node3D
 {
     public DirectionalLight()
     {
-        _generatedState.direction = new ke_vec3 { x = 0.2f, y = 1f, z = 0.5f };
-        _generatedState.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState.intensity = 1f;
-        _generatedState.ambient = new ke_vec3 { x = 0.2f, y = 0.2f, z = 0.2f };
+        _generatedState0.direction = new ke_vec3 { x = 0.2f, y = 1f, z = 0.5f };
+        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
+        _generatedState0.intensity = 1f;
+        _generatedState0.ambient = new ke_vec3 { x = 0.2f, y = 0.2f, z = 0.2f };
     }
 
     [NativeField("direction")]

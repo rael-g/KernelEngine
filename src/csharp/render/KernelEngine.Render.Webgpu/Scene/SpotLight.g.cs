@@ -13,12 +13,12 @@ public partial class SpotLight : Node3D
 {
     public SpotLight()
     {
-        _generatedState.direction = new ke_vec3 { x = 0f, y = -1f, z = 0f };
-        _generatedState.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState.intensity = 1f;
-        _generatedState.range = 20f;
-        _generatedState.inner_angle = 25f;
-        _generatedState.outer_angle = 35f;
+        _generatedState0.direction = new ke_vec3 { x = 0f, y = -1f, z = 0f };
+        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
+        _generatedState0.intensity = 1f;
+        _generatedState0.range = 20f;
+        _generatedState0.inner_angle = 25f;
+        _generatedState0.outer_angle = 35f;
     }
 
     [NativeField("direction")]

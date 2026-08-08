@@ -13,11 +13,11 @@ public partial class MeshRenderer : Node3D
 {
     public MeshRenderer()
     {
-        _generatedState.base_color = new ke_vec4 { x = 1f, y = 1f, z = 1f, w = 1f };
-        _generatedState.roughness = 1f;
-        _generatedState.alpha_cutoff = 0.5f;
-        _generatedState.ior = 1.5f;
-        _generatedState.distortion_strength = 0.05f;
+        _generatedState0.base_color = new ke_vec4 { x = 1f, y = 1f, z = 1f, w = 1f };
+        _generatedState0.roughness = 1f;
+        _generatedState0.alpha_cutoff = 0.5f;
+        _generatedState0.ior = 1.5f;
+        _generatedState0.distortion_strength = 0.05f;
     }
 
     [NativeField("mesh")]

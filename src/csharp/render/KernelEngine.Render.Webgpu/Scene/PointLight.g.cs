@@ -13,9 +13,9 @@ public partial class PointLight : Node3D
 {
     public PointLight()
     {
-        _generatedState.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState.intensity = 1f;
-        _generatedState.radius = 10f;
+        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
+        _generatedState0.intensity = 1f;
+        _generatedState0.radius = 10f;
     }
 
     /// <summary>Linear RGB.</summary>

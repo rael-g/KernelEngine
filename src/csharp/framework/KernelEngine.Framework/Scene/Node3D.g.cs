@@ -12,7 +12,7 @@ public partial class Node3D : Node
 {
     public Node3D()
     {
-        _generatedState = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
+        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
     }
 
     [NativeWhole]

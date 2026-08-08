@@ -127,7 +127,7 @@ public static class CSharpBackend
             o.Add($"    public {nodeName}()");
             o.Add("    {");
             if (defaultExpr is not null)
-                o.Add($"        _generatedState = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {nativeType}>({defaultExpr});");
+                o.Add($"        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {nativeType}>({defaultExpr});");
             o.Add("    }");
             o.Add("");
             o.Add($"    [NativeWhole]");
@@ -227,7 +227,7 @@ public static class CSharpBackend
             if (parts.Length != n)
                 throw new InvalidOperationException(
                     $"{f.Name}: [default:{d}] has {parts.Length} components but the field is float[{n}]");
-            return parts.Select((p, i) => $"_generatedState.{f.Name}[{i}] = {p}f;");
+            return parts.Select((p, i) => $"_generatedState0.{f.Name}[{i}] = {p}f;");
         }
         if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v))
         {
@@ -236,9 +236,9 @@ public static class CSharpBackend
                 throw new InvalidOperationException(
                     $"{f.Name}: [default:{d}] has {parts.Length} components but the field is {f.Type.Trim()}");
             var inits = string.Join(", ", v.Lanes.Zip(parts, (lane, p) => $"{lane} = {p}f"));
-            return [$"_generatedState.{f.Name} = new {f.Type.Trim()} {{ {inits} }};"];
+            return [$"_generatedState0.{f.Name} = new {f.Type.Trim()} {{ {inits} }};"];
         }
-        return [$"_generatedState.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
+        return [$"_generatedState0.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
     }
 
     public static string RenderEnums(ApiModel model, string ns, Convention convention)

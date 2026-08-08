@@ -13,10 +13,10 @@ public partial class Label : Node3D
 {
     public Label()
     {
-        _generatedState.color[0] = 1f;
-        _generatedState.color[1] = 1f;
-        _generatedState.color[2] = 1f;
-        _generatedState.color[3] = 1f;
+        _generatedState0.color[0] = 1f;
+        _generatedState0.color[1] = 1f;
+        _generatedState0.color[2] = 1f;
+        _generatedState0.color[3] = 1f;
     }
 
     [NativeField("font")]
