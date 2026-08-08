@@ -266,7 +266,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 ? $"nodeWorld.CidOfName(\"{slot.ComponentName}\")"
                 : $"nodeWorld.RegisterComponent<{slot.TypeName}>(\"{slot.ComponentName}\")";
             sb.AppendLine($"        {slot.Cid} = {resolveCid};");
-            sb.AppendLine($"        nodeWorld.SetByCid(Entity, {slot.Cid}, {slot.State});");
+            sb.AppendLine($"        GeneratedSeed({slot.Cid}, in {slot.State});");
         }
         sb.AppendLine("    }");
 

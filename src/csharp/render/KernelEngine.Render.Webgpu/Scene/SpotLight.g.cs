@@ -8,35 +8,40 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>Spot light node — emits a cone of light from this entity's world position.</summary>
+[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_spot_light_component), "spot_light")]
-public partial class SpotLight : Node3D
+public partial class SpotLight : Node
 {
     public SpotLight()
     {
-        _generatedState0.direction = new ke_vec3 { x = 0f, y = -1f, z = 0f };
-        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState0.intensity = 1f;
-        _generatedState0.range = 20f;
-        _generatedState0.inner_angle = 25f;
-        _generatedState0.outer_angle = 35f;
+        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
+        _generatedState1.direction = new ke_vec3 { x = 0f, y = -1f, z = 0f };
+        _generatedState1.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
+        _generatedState1.intensity = 1f;
+        _generatedState1.range = 20f;
+        _generatedState1.inner_angle = 25f;
+        _generatedState1.outer_angle = 35f;
     }
 
-    [NativeField("direction")]
+    [NativeWhole(Component = typeof(ke_transform_component))]
+    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
+
+    [NativeField("direction", Component = typeof(ke_spot_light_component))]
     public partial Vector3 Direction { get; set; }
 
     /// <summary>Linear RGB.</summary>
-    [NativeField("color")]
+    [NativeField("color", Component = typeof(ke_spot_light_component))]
     public partial Vector3 Color { get; set; }
 
-    [NativeField("intensity")]
+    [NativeField("intensity", Component = typeof(ke_spot_light_component))]
     public partial float Intensity { get; set; }
 
-    [NativeField("range")]
+    [NativeField("range", Component = typeof(ke_spot_light_component))]
     public partial float Range { get; set; }
 
-    [NativeField("inner_angle")]
+    [NativeField("inner_angle", Component = typeof(ke_spot_light_component))]
     public partial float InnerAngleDeg { get; set; }
 
-    [NativeField("outer_angle")]
+    [NativeField("outer_angle", Component = typeof(ke_spot_light_component))]
     public partial float OuterAngleDeg { get; set; }
 }

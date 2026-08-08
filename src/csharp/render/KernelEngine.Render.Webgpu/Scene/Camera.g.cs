@@ -8,29 +8,34 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.</summary>
+[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_camera_component), "camera")]
-public partial class Camera : Node3D
+public partial class Camera : Node
 {
     public Camera()
     {
-        _generatedState0.fov = 60f;
-        _generatedState0.near_plane = 0.1f;
-        _generatedState0.far_plane = 1000f;
-        _generatedState0.orthographic_size = 5f;
+        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
+        _generatedState1.fov = 60f;
+        _generatedState1.near_plane = 0.1f;
+        _generatedState1.far_plane = 1000f;
+        _generatedState1.orthographic_size = 5f;
     }
 
-    [NativeField("fov")]
+    [NativeWhole(Component = typeof(ke_transform_component))]
+    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
+
+    [NativeField("fov", Component = typeof(ke_camera_component))]
     public partial float Fov { get; set; }
 
-    [NativeField("near_plane")]
+    [NativeField("near_plane", Component = typeof(ke_camera_component))]
     public partial float Near { get; set; }
 
-    [NativeField("far_plane")]
+    [NativeField("far_plane", Component = typeof(ke_camera_component))]
     public partial float Far { get; set; }
 
-    [NativeField("orthographic_size")]
+    [NativeField("orthographic_size", Component = typeof(ke_camera_component))]
     public partial float OrthographicSize { get; set; }
 
-    [NativeField("orthographic")]
+    [NativeField("orthographic", Component = typeof(ke_camera_component))]
     public partial bool Orthographic { get; set; }
 }

@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
 
-    /// [node:Node3D,base:Node,whole:LocalTransform=KernelEngine.Ecs.TransformComponent,default:KernelEngine.Ecs.TransformComponent.Identity]
+    /// [node:Node3D,whole:LocalTransform=KernelEngine.Ecs.TransformComponent,default:KernelEngine.Ecs.TransformComponent.Identity]
     /// Per-entity 3D transform component. Read/written as one atomic unit (position,
     /// rotation, and scale are meaningless set independently mid-write) — kabic's
     /// [whole:] tag maps the whole struct to a single bit-cast property instead of

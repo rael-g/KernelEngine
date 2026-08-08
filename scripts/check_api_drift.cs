@@ -53,6 +53,7 @@ try
         var usings = d["usings"]?.AsArray().Select(u => u!.GetValue<string>()).ToList() ?? [];
         var library = d["library"]?.GetValue<string>();
         var auxHeaders = d["auxHeaders"]?.AsArray().Select(h => Path.Combine(rootDir, h!.GetValue<string>())).ToList() ?? [];
+        var composeHeaders = d["composeHeaders"]?.AsArray().Select(h => Path.Combine(rootDir, h!.GetValue<string>())).ToList() ?? [];
 
         var tmpApiJson = Path.Combine(tmpRoot, $"{name}.ke_api.json");
         var tmpOutDir = Path.Combine(tmpRoot, name, "out");
@@ -69,6 +70,7 @@ try
         if (zigOverride is not null) extractArgs.AddRange(["--zig", zigOverride]);
         foreach (var inc in includeDirs) extractArgs.AddRange(["-I", inc]);
         foreach (var aux in auxHeaders) extractArgs.AddRange(["--aux", aux]);
+        foreach (var compose in composeHeaders) extractArgs.AddRange(["--compose", compose]);
         extractArgs.AddRange(headers);
 
         if (!RunDotnet(extractArgs, out var extractErr))

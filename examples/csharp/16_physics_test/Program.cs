@@ -104,7 +104,7 @@ sealed class PhysicsScene : Node
     private readonly IPhysics2D     _physics;
     private readonly MeshHandle     _ballMesh;
     private readonly MaterialHandle _ballMat;
-    private readonly List<(Node3D Node, BodyHandle2D Body)> _balls = new();
+    private readonly List<(MeshRenderer Node, BodyHandle2D Body)> _balls = new();
 
     private bool _prevSpace;
     private bool _prevR;

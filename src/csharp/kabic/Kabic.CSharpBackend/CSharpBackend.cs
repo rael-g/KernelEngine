@@ -98,9 +98,14 @@ public static class CSharpBackend
     public static string RenderNodeType(ApiModel model, ApiStruct component, string ns, string nativeNs, Convention convention)
     {
         var nodeName = component.TagValue("node") ?? throw new InvalidOperationException($"{component.Name} has no [node:] tag");
-        var baseName = component.TagValue("base") ?? "Node";
         var nativeType = component.Name;
         var componentName = convention.ComponentNameFor(component.Name);
+
+        // [components:A+B] — the node's set is its own component plus the transitive set of
+        // every bundle it names. A bundle is referenced by node name and contributes its
+        // components; it never becomes a base class, so composing one adds storage and a
+        // property surface without making this type a subtype of anything but Node.
+        var composed = ComposedSet(model, component);
 
         var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;" };
         if (nativeNs != "KernelEngine.Common.Native") o.Add($"using {nativeNs};");
@@ -108,41 +113,96 @@ public static class CSharpBackend
         o.Add($"namespace {ns};\n");
         o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
             : $"/// <summary>Mirrors <c>{nativeType}</c>.</summary>");
+        foreach (var c in composed)
+            o.Add($"[GeneratedNodeComponent(typeof({c.Name}), \"{convention.ComponentNameFor(c.Name)}\")]");
         o.Add($"[GeneratedNodeComponent(typeof({nativeType}), \"{componentName}\")]");
-        o.Add($"public partial class {nodeName} : {baseName}");
+        o.Add($"public partial class {nodeName} : Node");
         o.Add("{");
 
-        // [whole:Name=Type] — the struct maps to ONE property, the entire backing
-        // struct bit-cast to an existing layout-identical managed mirror (e.g.
-        // ke_transform_component -> TransformComponent), instead of one property
-        // per field. Needed wherever the fields are read/written together as one
-        // atomic unit (setting position and rotation separately is meaningless
-        // mid-write) — kabic's normal per-field mode has no way to express that.
-        var whole = component.TagValue("whole");
-        if (whole is not null)
-        {
-            var (propName, propType) = SplitWhole(whole);
-            var defaultExpr = component.TagValue("default");
-
-            o.Add($"    public {nodeName}()");
-            o.Add("    {");
-            if (defaultExpr is not null)
-                o.Add($"        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {nativeType}>({defaultExpr});");
-            o.Add("    }");
-            o.Add("");
-            o.Add($"    [NativeWhole]");
-            o.Add($"    public partial {propType} {propName} {{ get; set; }}");
-            o.Add("}");
-            return string.Join('\n', o);
-        }
+        // The slot order here IS the attribute order above, which is what the Roslyn
+        // generator numbers its backing state by — composed bundles first, own component
+        // last. A default seeded into the wrong index would silently initialize a
+        // different component.
+        var slots = composed.Append(component).ToList();
 
         o.Add($"    public {nodeName}()");
         o.Add("    {");
-        foreach (var f in component.Fields)
-            foreach (var line in FieldInit(model, f)) o.Add($"        {line}");
+        for (var i = 0; i < slots.Count; i++)
+            foreach (var line in ComponentInit(model, slots[i], i)) o.Add($"        {line}");
         o.Add("    }");
 
-        foreach (var f in component.Fields)
+        foreach (var c in slots)
+            foreach (var line in ComponentSurface(model, c)) o.Add(line);
+
+        o.Add("}");
+        return string.Join('\n', o);
+    }
+
+    /// <summary>
+    /// The components a node type composes beyond its own, resolved transitively and
+    /// de-duplicated. A name that resolves to no <c>[node:]</c>-tagged struct in this
+    /// domain's model is an error rather than a silent omission: the resulting node would
+    /// compile with a component missing and fail only at runtime, when the property it
+    /// backs reads a default the entity never had.
+    /// </summary>
+    static List<ApiStruct> ComposedSet(ApiModel model, ApiStruct component)
+    {
+        var result = new List<ApiStruct>();
+        Walk(component);
+        return result;
+
+        void Walk(ApiStruct s)
+        {
+            var spec = s.TagValue("components");
+            if (spec is null) return;
+            foreach (var name in spec.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var bundle = model.Structs.FirstOrDefault(x => x.TagValue("node") == name)
+                    ?? throw new InvalidOperationException(
+                        $"{s.Name} composes '{name}', which no [node:] struct in this domain declares; "
+                        + "add its header to the domain's composeHeaders");
+                Walk(bundle);
+                if (!result.Any(x => x.Name == bundle.Name)) result.Add(bundle);
+            }
+        }
+    }
+
+    /// <summary>The <c>[default:]</c> seeding for one component, targeting its own backing slot.</summary>
+    static IEnumerable<string> ComponentInit(ApiModel model, ApiStruct c, int index)
+    {
+        var whole = c.TagValue("whole");
+        if (whole is not null)
+        {
+            var defaultExpr = c.TagValue("default");
+            if (defaultExpr is null) yield break;
+            var (_, propType) = SplitWhole(whole);
+            yield return $"_generatedState{index} = global::System.Runtime.CompilerServices.Unsafe."
+                + $"BitCast<{propType}, {c.Name}>({defaultExpr});";
+            yield break;
+        }
+
+        foreach (var f in c.Fields)
+            foreach (var line in FieldInit(model, f, index)) yield return line;
+    }
+
+    /// <summary>
+    /// One component's contribution to the node's flat property surface. Every property
+    /// names the component it belongs to, so the Roslyn generator routes it without having
+    /// to resolve a field name that two composed components could both declare.
+    /// </summary>
+    static IEnumerable<string> ComponentSurface(ApiModel model, ApiStruct c)
+    {
+        var whole = c.TagValue("whole");
+        if (whole is not null)
+        {
+            var (propName, propType) = SplitWhole(whole);
+            yield return "";
+            yield return $"    [NativeWhole(Component = typeof({c.Name}))]";
+            yield return $"    public partial {propType} {propName} {{ get; set; }}";
+            yield break;
+        }
+
+        foreach (var f in c.Fields)
         {
             // [idiom] — the field is part of the component's ABI but not part of
             // the node's authoring surface, because something other than the node
@@ -153,14 +213,11 @@ public static class CSharpBackend
 
             var propName = f.TagValue("name") ?? Idioms.Pascal(f.Name);
             var propType = NodePropertyType(model, f);
-            o.Add("");
-            if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
-            o.Add($"    [NativeField(\"{f.Name}\")]");
-            o.Add($"    public partial {propType} {propName} {{ get; set; }}");
+            yield return "";
+            if (!string.IsNullOrEmpty(f.Doc)) yield return $"    /// <summary>{Escape(f.Doc)}</summary>";
+            yield return $"    [NativeField(\"{f.Name}\", Component = typeof({c.Name}))]";
+            yield return $"    public partial {propType} {propName} {{ get; set; }}";
         }
-
-        o.Add("}");
-        return string.Join('\n', o);
     }
 
     static (string Name, string Type) SplitWhole(string whole)
@@ -217,7 +274,7 @@ public static class CSharpBackend
         : NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.CsType
         : f.Has("bool") ? "bool" : CsType(model, f.Type);
 
-    static IEnumerable<string> FieldInit(ApiModel model, ApiField f)
+    static IEnumerable<string> FieldInit(ApiModel model, ApiField f, int index)
     {
         var d = f.TagValue("default");
         if (d is null) return [];
@@ -227,7 +284,7 @@ public static class CSharpBackend
             if (parts.Length != n)
                 throw new InvalidOperationException(
                     $"{f.Name}: [default:{d}] has {parts.Length} components but the field is float[{n}]");
-            return parts.Select((p, i) => $"_generatedState0.{f.Name}[{i}] = {p}f;");
+            return parts.Select((p, i) => $"_generatedState{index}.{f.Name}[{i}] = {p}f;");
         }
         if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v))
         {
@@ -236,9 +293,9 @@ public static class CSharpBackend
                 throw new InvalidOperationException(
                     $"{f.Name}: [default:{d}] has {parts.Length} components but the field is {f.Type.Trim()}");
             var inits = string.Join(", ", v.Lanes.Zip(parts, (lane, p) => $"{lane} = {p}f"));
-            return [$"_generatedState0.{f.Name} = new {f.Type.Trim()} {{ {inits} }};"];
+            return [$"_generatedState{index}.{f.Name} = new {f.Type.Trim()} {{ {inits} }};"];
         }
-        return [$"_generatedState0.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
+        return [$"_generatedState{index}.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
     }
 
     public static string RenderEnums(ApiModel model, string ns, Convention convention)

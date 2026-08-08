@@ -2,11 +2,47 @@
   "enums": [],
   "structs": [
     {
+      "name": "ke_transform_component",
+      "doc": "Per-entity 3D transform component. Read/written as one atomic unit (position, rotation, and scale are meaningless set independently mid-write) \u2014 kabic\u0027s [whole:] tag maps the whole struct to a single bit-cast property instead of one property per field. world_matrix is derived output, recomputed from the hierarchy each frame; it rides along in the same atomic struct rather than being a separate field a caller could plausibly author.",
+      "tags": [
+        "node:Node3D",
+        "whole:LocalTransform=KernelEngine.Ecs.TransformComponent",
+        "default:KernelEngine.Ecs.TransformComponent.Identity"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "world_matrix",
+          "type": "ke_mat4",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_camera_component",
       "doc": "Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.",
       "tags": [
         "node:Camera",
-        "base:Node3D"
+        "components:Node3D"
       ],
       "fields": [
         {
@@ -58,7 +94,7 @@
       "doc": "Directional light node. Init properties feed the per-frame light state the renderer consumes.",
       "tags": [
         "node:DirectionalLight",
-        "base:Node3D"
+        "components:Node3D"
       ],
       "fields": [
         {
@@ -100,7 +136,7 @@
       "doc": "Point light node \u2014 emits light in all directions from this entity\u0027s world position.",
       "tags": [
         "node:PointLight",
-        "base:Node3D"
+        "components:Node3D"
       ],
       "fields": [
         {
@@ -134,7 +170,7 @@
       "doc": "Spot light node \u2014 emits a cone of light from this entity\u0027s world position.",
       "tags": [
         "node:SpotLight",
-        "base:Node3D"
+        "components:Node3D"
       ],
       "fields": [
         {
@@ -194,7 +230,7 @@
       "doc": "Scene-wide ambient light node. First entity with this component wins.",
       "tags": [
         "node:AmbientLight",
-        "base:Node3D"
+        "components:Node3D"
       ],
       "fields": [
         {
@@ -212,7 +248,7 @@
       "doc": "Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.",
       "tags": [
         "node:Skybox",
-        "base:Node3D"
+        "components:Node3D"
       ],
       "fields": [
         {
@@ -230,7 +266,7 @@
       "doc": "Renders a mesh with a material. \u0060mesh\u0060/\u0060material\u0060 double as output: the native \u0022render.mesh.resolve\u0022 system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) fills them whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles just writes them and leaves \u0060primitive\u0060 empty \u2014 the resolve system only acts where a handle is still invalid, so the two paths never conflict.",
       "tags": [
         "node:MeshRenderer",
-        "base:Node3D"
+        "components:Node3D"
       ],
       "fields": [
         {

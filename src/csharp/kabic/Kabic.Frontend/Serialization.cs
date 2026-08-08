@@ -75,6 +75,7 @@ public static class Serialization
         };
         if (s.Slots.Count > 0)
             o["slots"] = new JsonArray(s.Slots.Select(slot => (JsonNode)slot.ToJson()).ToArray());
+        if (s.External) o["external"] = true;
         return o;
     }
 

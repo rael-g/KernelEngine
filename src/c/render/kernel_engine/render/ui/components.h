@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_UI_COMPONENTS_H_
 
 #include <kernel_engine/render/handles.h>
+#include <kernel_engine/spatial/transform.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -32,7 +33,7 @@ extern "C"
 #define KE_LABEL_MAX_TEXT 256
 #define KE_LABEL_MAX_GLYPHS 256
 
-    /// [node:Label,base:Node3D]
+    /// [node:Label,components:Node3D]
     /// A screen-space text label. Text/anchor/offset/color/font are the caller's
     /// input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE
     /// tick by the "render.ui.labels" system and read by "render.ui"

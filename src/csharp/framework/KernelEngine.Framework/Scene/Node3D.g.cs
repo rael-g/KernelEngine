@@ -15,6 +15,6 @@ public partial class Node3D : Node
         _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
     }
 
-    [NativeWhole]
+    [NativeWhole(Component = typeof(ke_transform_component))]
     public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 }

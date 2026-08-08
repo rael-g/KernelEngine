@@ -12,19 +12,21 @@ namespace Kabic.Frontend;
 public static class Extractor
 {
     public static (ApiModel Model, List<string> Errors) Extract(JsonObject ast, HashSet<string> headerNames,
-        Dictionary<string, byte[]> sourceBytes, HashSet<string>? auxHeaderNames = null)
+        Dictionary<string, byte[]> sourceBytes, HashSet<string>? auxHeaderNames = null,
+        HashSet<string>? composeHeaderNames = null)
     {
         var api = new ApiModel();
         var errors = new List<string>();
         string? currentFile = null;
         auxHeaderNames ??= [];
+        composeHeaderNames ??= [];
 
         // clang's JSON AST is delta-encoded: loc.file (NOT includedFrom.file,
         // which names the *including* file and would misattribute every
         // declaration to the synthesized translation unit) appears only when
         // it changes from the previous node, so the current file has to be
         // carried forward across siblings.
-        (bool Owned, bool AuxOnly, string? File) Owns(JsonObject node)
+        (bool Owned, bool AuxOnly, bool Compose, string? File) Owns(JsonObject node)
         {
             var f = node["loc"]?.AsObject()["file"]?.GetValue<string>();
             // Normalized once here so every downstream sourceBytes[file] lookup
@@ -35,18 +37,19 @@ public static class Extractor
             // throw; it silently falls back to the WRONG file's bytes, corrupting
             // every byte-offset slice (param names, enum literals) taken from it.
             if (f is not null) currentFile = Path.GetFullPath(f);
-            if (currentFile is null) return (false, false, null);
+            if (currentFile is null) return (false, false, false, null);
             var fileName = Path.GetFileName(currentFile);
             var full = headerNames.Contains(fileName);
-            var aux = !full && auxHeaderNames.Contains(fileName);
-            return (full || aux, aux, currentFile);
+            var compose = !full && composeHeaderNames.Contains(fileName);
+            var aux = !full && !compose && auxHeaderNames.Contains(fileName);
+            return (full || aux || compose, aux, compose, currentFile);
         }
 
         var top = ast["inner"]!.AsArray();
         foreach (var nodeRaw in top)
         {
             var node = nodeRaw!.AsObject();
-            var (owned, auxOnly, file) = Owns(node);
+            var (owned, auxOnly, compose, file) = Owns(node);
             if (!owned) continue;
 
             var kind = node["kind"]?.GetValue<string>();
@@ -60,6 +63,12 @@ public static class Extractor
             // flakier param-name extraction on declarations nothing here consumes).
             if (auxOnly && kind != "TypedefDecl") continue;
 
+            // A header this domain composes against (--compose) contributes its structs
+            // too, so a node here can reference a bundle another domain owns and have the
+            // component set resolved. Only structs: the functions and vtables next to them
+            // are still somebody else's domain to describe, exactly as with --aux.
+            if (compose && kind is not ("TypedefDecl" or "RecordDecl")) continue;
+
             switch (kind)
             {
                 case "EnumDecl" when name is not null:
@@ -67,7 +76,7 @@ public static class Extractor
                     break;
 
                 case "RecordDecl" when name is not null && node["completeDefinition"]?.GetValue<bool>() == true:
-                    api.Structs.Add(ExtractStruct(node, name, bytes, errors));
+                    api.Structs.Add(ExtractStruct(node, name, bytes, errors) with { External = compose });
                     break;
 
                 case "FunctionDecl" when name is not null && name.StartsWith("ke_"):

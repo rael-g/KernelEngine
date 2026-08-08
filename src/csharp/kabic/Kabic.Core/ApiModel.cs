@@ -35,6 +35,15 @@ public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IR
     /// additionally consult the naming convention (see <c>Convention.IsParamsType</c>).
     /// </summary>
     public bool IsVtable => Slots.Count > 0;
+
+    /// <summary>
+    /// Whether this struct came from a header this domain composes against rather than
+    /// describes (<c>--compose</c>). It is present so a node in this domain can reference
+    /// a bundle another domain owns and have its component set resolved; the domain still
+    /// emits nothing for it, because the owning domain already does.
+    /// </summary>
+    public bool External { get; init; }
+
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
@@ -97,7 +106,10 @@ public static class ApiReader
                 })
                 .ToList();
             var tags = o["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [];
-            m.Structs.Add(new ApiStruct(Str(o, "name")!, Str(o, "doc"), tags, fields, slots));
+            m.Structs.Add(new ApiStruct(Str(o, "name")!, Str(o, "doc"), tags, fields, slots)
+            {
+                External = o["external"]?.GetValue<bool>() == true,
+            });
         }
 
         foreach (var s in root["structs"]!.AsArray()) ReadStructLike(s!.AsObject(), vtable: false);

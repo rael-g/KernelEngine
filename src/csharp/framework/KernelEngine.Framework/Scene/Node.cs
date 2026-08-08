@@ -108,6 +108,19 @@ public abstract class Node
         Entity    = entity;
     }
 
+    /// <summary>
+    /// Seeds one of this node's components at bind time: writes the value authored before
+    /// binding, unless the entity already carries that component, in which case the
+    /// existing value wins. That is what lets a node bind to an entity the native scene
+    /// loader already populated without the managed defaults erasing what the scene
+    /// authored — for every component alike, with no node type singled out.
+    /// </summary>
+    protected internal void GeneratedSeed<T>(uint cid, in T state) where T : unmanaged
+    {
+        if (NodeWorld!.TryGetByCid<T>(Entity, cid, out _)) return;
+        NodeWorld.SetByCid(Entity, cid, in state);
+    }
+
     internal void CompleteBind()
     {
         OnBind(NodeWorld!);

@@ -8,31 +8,36 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>A screen-space text label. Text/anchor/offset/color/font are the caller's input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick by the "render.ui.labels" system and read by "render.ui" (KE_PHASE_RENDER) to draw them — the same sim-writes/render-reads split every other render component uses, so there is no per-glyph entity, no CPU-side accumulator, no pool to grow or reuse.</summary>
+[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_label_component), "label")]
-public partial class Label : Node3D
+public partial class Label : Node
 {
     public Label()
     {
-        _generatedState0.color[0] = 1f;
-        _generatedState0.color[1] = 1f;
-        _generatedState0.color[2] = 1f;
-        _generatedState0.color[3] = 1f;
+        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
+        _generatedState1.color[0] = 1f;
+        _generatedState1.color[1] = 1f;
+        _generatedState1.color[2] = 1f;
+        _generatedState1.color[3] = 1f;
     }
 
-    [NativeField("font")]
+    [NativeWhole(Component = typeof(ke_transform_component))]
+    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
+
+    [NativeField("font", Component = typeof(ke_label_component))]
     public partial KernelEngine.Render.FontHandle Font { get; set; }
 
     /// <summary>Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right.</summary>
-    [NativeField("anchor")]
+    [NativeField("anchor", Component = typeof(ke_label_component))]
     public partial Vector2 Anchor { get; set; }
 
     /// <summary>Pixel offset applied AFTER anchor positioning.</summary>
-    [NativeField("offset")]
+    [NativeField("offset", Component = typeof(ke_label_component))]
     public partial Vector2 Offset { get; set; }
 
-    [NativeField("color")]
+    [NativeField("color", Component = typeof(ke_label_component))]
     public partial Vector4 Color { get; set; }
 
-    [NativeField("text")]
+    [NativeField("text", Component = typeof(ke_label_component))]
     public partial string Text { get; set; }
 }

@@ -90,10 +90,12 @@ foreach (var callback in classified.Callbacks)
     File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(callback.Name, convention)}Native.g.cs"),
         CSharpBackend.RenderCallbackInterface(callback, ns, nativeNs, convention));
 
-// Spike (ScriptingArchitectureV3 §7.8): a plain struct tagged [node:Name,base:Base]
-// emits a toolkit-shaped node class. Not yet wired per-domain like providers/
-// enums are — every [node:]-tagged struct in this one ke_api.json is rendered.
-foreach (var component in model.Structs.Where(s => !s.IsVtable && s.Has("node")))
+// A plain struct tagged [node:Name] emits a toolkit-shaped node class. Not yet wired
+// per-domain like providers/enums are — every [node:]-tagged struct in this one
+// ke_api.json is rendered, except the ones this domain only composes against
+// (--compose): the domain that owns them already emits them, and rendering them here
+// too would put a second, divergent copy of the same node type in another assembly.
+foreach (var component in model.Structs.Where(s => !s.IsVtable && !s.External && s.Has("node")))
 {
     var nodeName = component.TagValue("node")!;
     File.WriteAllText(Path.Combine(outDir, $"{nodeName}.g.cs"),

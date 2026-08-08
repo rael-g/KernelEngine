@@ -344,7 +344,10 @@
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
       "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",
-      "usings": []
+      "usings": [],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ]
     },
     {
       "_comment": "render/ui/components.h is the UI overlay pass's component vocabulary, split out of the plugin's own ui_create.h so the node surface (Label) generates from a contract header the same way render_components does — the factory header keeps only the vtable it creates.",
@@ -354,13 +357,17 @@
       ],
       "includeDirs": [
         "src/c/render",
-        "src/zig/common/include"
+        "src/zig/common/include",
+        "src/c/spatial"
       ],
       "apiJson": "src/csharp/render/ui_components.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
       "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",
-      "usings": []
+      "usings": [],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ]
     },
     {
       "name": "input_actions",
