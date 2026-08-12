@@ -59,7 +59,3 @@ type = "Pong.Scoreboard"
 [entity.properties]
 FontPath = ""
 FontSize = 56.0
-
-[[entity]]
-name = "PhysicsDriver"
-type = "Pong.PhysicsDriver"

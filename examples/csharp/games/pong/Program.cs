@@ -38,6 +38,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule(_ => { })) // scene entities come entirely from Main.scene
+    .Add<IRuntimeModule>(new KernelEngine.Physics.Body2DModule())
     .Add<IRuntimeModule>(new PongModule())
     .Add<IRuntimeModule>(new SceneRouterModule(sceneModuleDependency: typeof(SceneNodesModule)));  // initial scene comes from Project's default_scene
 
