@@ -362,6 +362,16 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     {
         if (propertyType.SpecialType == SpecialType.System_Boolean && fieldType.SpecialType == SpecialType.System_Byte)
             return (expr => $"{expr} != 0", expr => $"(byte)({expr} ? 1 : 0)");
+        // A domain's managed enum and the ClangSharp binding of the same C enum are two
+        // declarations of one set of named integers, generated from one header. Their
+        // underlying types need not match — kabic picks int, ClangSharp mirrors C's
+        // unsigned — but the members and their values do, so the conversion is a cast.
+        if (propertyType.TypeKind == TypeKind.Enum && fieldType.TypeKind == TypeKind.Enum)
+        {
+            var pn = propertyType.ToDisplayString();
+            var fn = fieldType.ToDisplayString();
+            return (expr => $"({pn}){expr}", expr => $"({fn}){expr}");
+        }
         if (NativeHandleNames.TryGetValue(propertyType.Name, out var nativeHandle) && fieldType.Name == nativeHandle)
         {
             var pn = propertyType.ToDisplayString();

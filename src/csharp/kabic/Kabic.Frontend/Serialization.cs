@@ -39,12 +39,17 @@ public static class Serialization
         ["doc"] = v.Doc,
     };
 
-    public static JsonObject ToJson(this ApiEnum e) => new()
+    public static JsonObject ToJson(this ApiEnum e)
     {
-        ["name"] = e.Name,
-        ["doc"] = e.Doc,
-        ["values"] = new JsonArray(e.Values.Select(v => (JsonNode)v.ToJson()).ToArray()),
-    };
+        var o = new JsonObject
+        {
+            ["name"] = e.Name,
+            ["doc"] = e.Doc,
+            ["values"] = new JsonArray(e.Values.Select(v => (JsonNode)v.ToJson()).ToArray()),
+        };
+        if (e.External) o["external"] = true;
+        return o;
+    }
 
     public static JsonObject ToJson(this ApiField f) => new()
     {

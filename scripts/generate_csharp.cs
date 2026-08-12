@@ -75,7 +75,7 @@ var classified = Classifier.Classify(model, explicitProviders, explicitCallbacks
 
 Directory.CreateDirectory(outDir);
 
-if (model.Enums.Count > 0)
+if (model.Enums.Any(e => !e.External))
 {
     var enumsDir = enumsOutDir ?? outDir;
     Directory.CreateDirectory(enumsDir);
@@ -99,7 +99,7 @@ foreach (var component in model.Structs.Where(s => !s.IsVtable && !s.External &&
 {
     var nodeName = component.TagValue("node")!;
     File.WriteAllText(Path.Combine(outDir, $"{nodeName}.g.cs"),
-        CSharpBackend.RenderNodeType(model, component, ns, nativeNs, convention));
+        CSharpBackend.RenderNodeType(model, component, ns, nativeNs, extraUsings, convention));
 }
 
 if (classified.FreeFunctionGroups.Count > 0)

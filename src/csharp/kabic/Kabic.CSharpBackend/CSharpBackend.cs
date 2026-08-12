@@ -95,7 +95,8 @@ public static class CSharpBackend
     /// a hand-written one are indistinguishable to it once both compile down to a
     /// <c>partial</c> class with <c>partial</c> properties.
     /// </summary>
-    public static string RenderNodeType(ApiModel model, ApiStruct component, string ns, string nativeNs, Convention convention)
+    public static string RenderNodeType(ApiModel model, ApiStruct component, string ns, string nativeNs,
+        IEnumerable<string> extraUsings, Convention convention)
     {
         var nodeName = component.TagValue("node") ?? throw new InvalidOperationException($"{component.Name} has no [node:] tag");
         var nativeType = component.Name;
@@ -109,6 +110,9 @@ public static class CSharpBackend
 
         var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;" };
         if (nativeNs != "KernelEngine.Common.Native") o.Add($"using {nativeNs};");
+        // A composed component's field can be typed by a name the owning domain emits
+        // (an enum, a handle); the domain's configured usings are what resolve it.
+        foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};\n");
         o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
@@ -132,7 +136,7 @@ public static class CSharpBackend
         o.Add("    }");
 
         foreach (var c in slots)
-            foreach (var line in ComponentSurface(model, c)) o.Add(line);
+            foreach (var line in ComponentSurface(model, c, convention)) o.Add(line);
 
         o.Add("}");
         return string.Join('\n', o);
@@ -190,7 +194,7 @@ public static class CSharpBackend
     /// names the component it belongs to, so the Roslyn generator routes it without having
     /// to resolve a field name that two composed components could both declare.
     /// </summary>
-    static IEnumerable<string> ComponentSurface(ApiModel model, ApiStruct c)
+    static IEnumerable<string> ComponentSurface(ApiModel model, ApiStruct c, Convention convention)
     {
         var whole = c.TagValue("whole");
         if (whole is not null)
@@ -212,7 +216,7 @@ public static class CSharpBackend
             if (f.Has("idiom")) continue;
 
             var propName = f.TagValue("name") ?? Idioms.Pascal(f.Name);
-            var propType = NodePropertyType(model, f);
+            var propType = NodePropertyType(model, f, convention);
             yield return "";
             if (!string.IsNullOrEmpty(f.Doc)) yield return $"    /// <summary>{Escape(f.Doc)}</summary>";
             yield return $"    [NativeField(\"{f.Name}\", Component = typeof({c.Name}))]";
@@ -267,11 +271,14 @@ public static class CSharpBackend
     static bool IsCharArray(string cType) =>
         System.Text.RegularExpressions.Regex.IsMatch(cType.Trim(), @"^(const\s+)?char\s*\[\d+\]$");
 
-    static string NodePropertyType(ApiModel model, ApiField f) =>
+    static string NodePropertyType(ApiModel model, ApiField f, Convention convention) =>
         IsCharArray(f.Type) ? "string" :
         NamedHandleTypes.TryGetValue(f.Type.Trim(), out var h) ? h :
         VectorArity(f.Type) is int n ? $"Vector{n}"
         : NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.CsType
+        // An enum-typed field names a real type, whether this domain describes the enum
+        // or only composes against it; CsType would otherwise leave the bare C spelling.
+        : model.Enums.Any(e => e.Name == f.Type.Trim()) ? Idioms.TypeName(f.Type.Trim(), convention)
         : f.Has("bool") ? "bool" : CsType(model, f.Type);
 
     static IEnumerable<string> FieldInit(ApiModel model, ApiField f, int index)
@@ -301,7 +308,7 @@ public static class CSharpBackend
     public static string RenderEnums(ApiModel model, string ns, Convention convention)
     {
         var o = new List<string> { Header, $"namespace {ns};\n" };
-        foreach (var e in model.Enums)
+        foreach (var e in model.Enums.Where(e => !e.External))
         {
             o.Add(e.Doc is not null
                 ? XmlDoc("", e.Doc).TrimEnd()

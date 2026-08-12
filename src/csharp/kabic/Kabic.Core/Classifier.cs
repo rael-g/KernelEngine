@@ -68,8 +68,11 @@ public static class Classifier
         // A parameter bag is excluded for a related reason: it carries the callback
         // it registers, so it holds slots without being an interface, and emitting
         // a Borrow/Dispose wrapper for one describes an object that does not exist.
+        // A composed header's vtables are excluded for the same reason its structs are not
+        // re-emitted: the domain that owns them already describes them, and a second
+        // provider generated here would be a divergent duplicate in another assembly.
         var vtables = model.Structs
-            .Where(s => s.IsVtable && !convention.IsHandleType(s.Name) && !convention.IsParamsType(s.Name))
+            .Where(s => s.IsVtable && !s.External && !convention.IsHandleType(s.Name) && !convention.IsParamsType(s.Name))
             .ToList();
 
         // A vtable is a callback type if some slot anywhere takes it BY VALUE

@@ -3,6 +3,7 @@
 
 using System.Numerics;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 

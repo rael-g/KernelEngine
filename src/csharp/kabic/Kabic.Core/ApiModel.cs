@@ -18,7 +18,15 @@ public record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, s
 
 public record ApiEnumValue(string Name, string RawValue, bool IsInt, string? Doc);
 
-public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Values);
+public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Values)
+{
+    /// <summary>
+    /// Whether this enum came from a header this domain composes against rather than
+    /// describes (<c>--compose</c>). Present because a composed struct's field can be
+    /// typed by it and a backend must name that type; the owning domain still emits it.
+    /// </summary>
+    public bool External { get; init; }
+}
 
 public record ApiField(string Name, string Type, IReadOnlyList<string> Tags, string? Doc)
 {
@@ -89,7 +97,10 @@ public static class ApiReader
                     return new ApiEnumValue(Str(v, "name")!,
                         isInt ? v["value"]!.GetValue<long>().ToString() : Str(v, "value")!,
                         isInt, Str(v, "doc"));
-                }).ToList()));
+                }).ToList())
+            {
+                External = e["external"]?.GetValue<bool>() == true,
+            });
         }
 
         void ReadStructLike(System.Text.Json.Nodes.JsonObject o, bool vtable)

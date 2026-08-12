@@ -64,15 +64,18 @@ public static class Extractor
             if (auxOnly && kind != "TypedefDecl") continue;
 
             // A header this domain composes against (--compose) contributes its structs
-            // too, so a node here can reference a bundle another domain owns and have the
-            // component set resolved. Only structs: the functions and vtables next to them
-            // are still somebody else's domain to describe, exactly as with --aux.
-            if (compose && kind is not ("TypedefDecl" or "RecordDecl")) continue;
+            // and the enums their fields are typed by, so a node here can reference a
+            // bundle another domain owns and have both the component set and the names of
+            // its field types resolve. Its functions and vtables stay somebody else's
+            // domain to describe, exactly as with --aux. Everything admitted this way is
+            // marked External: the owning domain emits it, and a second copy in another
+            // assembly would be a distinct type that no longer converts.
+            if (compose && kind is not ("TypedefDecl" or "RecordDecl" or "EnumDecl")) continue;
 
             switch (kind)
             {
                 case "EnumDecl" when name is not null:
-                    api.Enums.Add(ExtractEnum(node, name, bytes));
+                    api.Enums.Add(ExtractEnum(node, name, bytes) with { External = compose });
                     break;
 
                 case "RecordDecl" when name is not null && node["completeDefinition"]?.GetValue<bool>() == true:
