@@ -24,6 +24,13 @@ typedef struct ke_runtime_params {
     // exceeds catch-up budget. Default (when 0) = 0.25s — 15 fixed steps at 1/60.
     // Excess dt above this cap is discarded silently.
     float fixed_dt_max_accum;
+
+    // Most systems a single phase may hold. Sizes the per-phase scratch the wave
+    // planner walks, so it is a workload-shape value rather than an algorithmic one:
+    // a host registering a system per node type scales this with the size of its
+    // game. Registering past it fails the registration instead of dropping the
+    // system silently. Default (when 0) = 256.
+    uint32_t max_systems_per_phase;
 } ke_runtime_params;
 
 KE_RUNTIME_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,

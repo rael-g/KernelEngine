@@ -408,6 +408,13 @@ const RuntimeState = struct {
     fixed_dt: f32,
     fixed_dt_max_accum: f32,
     fixed_accumulator: f32,
+    max_systems_per_phase: u32,
+    phase_indices: ?[*]u32,
+    phase_params: ?[*]c.ke_runtime_system_params,
+    wave_assignments: ?[*]u32,
+    phase_pkgs: ?[*]TaskPkg,
+    phase_tasks: ?[*]?*c.ke_task,
+    phase_pinned: ?[*]u32,
     systems_prepared: usize,
     pending_render_task: ?*c.ke_task,
     render_job: ?*RenderJob,
@@ -442,6 +449,15 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         return 0;
     }
     const h = handleOf(self.?);
+
+    var in_phase: u32 = 0;
+    for (0..h.state.system_count) |si| {
+        if (h.state.systems.?[si].?.params.phase == p.*.phase) in_phase += 1;
+    }
+    if (in_phase >= h.state.max_systems_per_phase) {
+        E.fail(out_error, .out_of_memory, "phase is at its max_systems_per_phase limit", @src());
+        return 0;
+    }
 
     if (h.state.system_count == h.state.system_capacity) {
         const new_cap: usize = if (h.state.system_capacity != 0) h.state.system_capacity * 2 else 4;
@@ -582,30 +598,46 @@ fn runWaveBody(wc: *WaveRunCtx) void {
     }
 }
 
+fn freePhaseScratch(h: *RuntimeHandle) void {
+    const n: usize = h.state.max_systems_per_phase;
+    cFree(u32, h.state.phase_indices, n);
+    cFree(c.ke_runtime_system_params, h.state.phase_params, n);
+    cFree(u32, h.state.wave_assignments, n);
+    cFree(TaskPkg, h.state.phase_pkgs, n);
+    cFree(?*c.ke_task, h.state.phase_tasks, n);
+    cFree(u32, h.state.phase_pinned, n);
+    h.state.phase_indices = null;
+    h.state.phase_params = null;
+    h.state.wave_assignments = null;
+    h.state.phase_pkgs = null;
+    h.state.phase_tasks = null;
+    h.state.phase_pinned = null;
+}
+
 fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
     if (h.state.system_count == 0) return;
 
-    var phase_indices: [KE_RUNTIME_MAX_SYSTEMS_PER_PHASE]u32 = undefined;
-    var phase_params: [KE_RUNTIME_MAX_SYSTEMS_PER_PHASE]c.ke_runtime_system_params = undefined;
+    const phase_indices = h.state.phase_indices orelse return;
+    const phase_params = h.state.phase_params orelse return;
     var phase_count: u32 = 0;
     for (0..h.state.system_count) |si| {
         const rs = h.state.systems.?[si].?;
         if (rs.params.phase != phase) continue;
         if (rs.params.execute == null) continue;
-        if (phase_count >= KE_RUNTIME_MAX_SYSTEMS_PER_PHASE) break;
+        if (phase_count >= h.state.max_systems_per_phase) break;
         phase_indices[phase_count] = @intCast(si);
         phase_params[phase_count] = rs.params;
         phase_count += 1;
     }
     if (phase_count == 0) return;
 
-    var wave_assignments: [KE_RUNTIME_MAX_SYSTEMS_PER_PHASE]u32 = undefined;
+    const wave_assignments = h.state.wave_assignments orelse return;
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&phase_params, phase_count, &wave_assignments, &wave_count);
+    ke_runtime_debug_compute_waves(phase_params, phase_count, wave_assignments, &wave_count);
 
-    var pkgs: [KE_RUNTIME_MAX_SYSTEMS_PER_PHASE]TaskPkg = undefined;
-    var tasks: [KE_RUNTIME_MAX_SYSTEMS_PER_PHASE]?*c.ke_task = undefined;
-    var pinned: [KE_RUNTIME_MAX_SYSTEMS_PER_PHASE]u32 = undefined;
+    const pkgs = h.state.phase_pkgs orelse return;
+    const tasks = h.state.phase_tasks orelse return;
+    const pinned = h.state.phase_pinned orelse return;
 
     var w: u32 = 0;
     while (w < wave_count) : (w += 1) {
@@ -649,7 +681,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
             wave_size += 1;
         }
 
-        var wc = WaveRunCtx{ .h = h, .pkgs = &pkgs, .tasks = &tasks, .pinned = &pinned, .wave_size = wave_size };
+        var wc = WaveRunCtx{ .h = h, .pkgs = pkgs, .tasks = tasks, .pinned = pinned, .wave_size = wave_size };
         runWaveBody(&wc);
 
         // Wave barrier: flush each system's deferred changes in registration order.
@@ -841,6 +873,7 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
             cFree(RegisteredSystem, @ptrCast(rs), 1);
         }
         cFree(?*RegisteredSystem, systems, h.state.system_capacity);
+        freePhaseScratch(h);
     }
     cFree(RuntimeHandle, @ptrCast(h), 1);
 }
@@ -866,6 +899,24 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 
     h.state.fixed_dt = if (params != null and params.*.fixed_dt > 0.0) params.*.fixed_dt else (1.0 / 60.0);
     h.state.fixed_dt_max_accum = if (params != null and params.*.fixed_dt_max_accum > 0.0) params.*.fixed_dt_max_accum else 0.25;
+
+    const max_per_phase: u32 = if (params != null and params.*.max_systems_per_phase > 0) params.*.max_systems_per_phase else 256;
+    h.state.max_systems_per_phase = max_per_phase;
+    const n: usize = max_per_phase;
+    h.state.phase_indices = cAlloc(u32, n);
+    h.state.phase_params = cAlloc(c.ke_runtime_system_params, n);
+    h.state.wave_assignments = cAlloc(u32, n);
+    h.state.phase_pkgs = cAlloc(TaskPkg, n);
+    h.state.phase_tasks = cAlloc(?*c.ke_task, n);
+    h.state.phase_pinned = cAlloc(u32, n);
+    if (h.state.phase_indices == null or h.state.phase_params == null or h.state.wave_assignments == null or
+        h.state.phase_pkgs == null or h.state.phase_tasks == null or h.state.phase_pinned == null)
+    {
+        freePhaseScratch(h);
+        cFree(RuntimeHandle, @ptrCast(h), 1);
+        E.fail(out_error, .out_of_memory, "phase scratch allocation failed", @src());
+        return empty;
+    }
 
     h.api.handle = h;
     h.api.register_module = &runtimeRegisterModule;
