@@ -160,6 +160,9 @@ fn addBoxFixture(
     id: c.ke_body_2d,
     half_w: f32,
     half_h: f32,
+    offset_x: f32,
+    offset_y: f32,
+    offset_angle: f32,
     density: f32,
     friction: f32,
     restitution: f32,
@@ -179,7 +182,7 @@ fn addBoxFixture(
     };
 
     const def = makeShapeDef(density, friction, restitution);
-    const box = c.b2MakeBox(half_w, half_h);
+    const box = c.b2MakeOffsetBox(half_w, half_h, .{ .x = offset_x, .y = offset_y }, makeRot(offset_angle));
     _ = c.b2CreatePolygonShape(body, &def, &box);
     return true;
 }
@@ -188,6 +191,8 @@ fn addCircleFixture(
     self_in: ?*c.ke_physics_2d,
     id: c.ke_body_2d,
     radius: f32,
+    offset_x: f32,
+    offset_y: f32,
     density: f32,
     friction: f32,
     restitution: f32,
@@ -207,8 +212,7 @@ fn addCircleFixture(
     };
 
     const def = makeShapeDef(density, friction, restitution);
-    // Centered on the body origin, matching the contract.
-    const circle = c.b2Circle{ .center = .{ .x = 0, .y = 0 }, .radius = radius };
+    const circle = c.b2Circle{ .center = .{ .x = offset_x, .y = offset_y }, .radius = radius };
     _ = c.b2CreateCircleShape(body, &def, &circle);
     return true;
 }

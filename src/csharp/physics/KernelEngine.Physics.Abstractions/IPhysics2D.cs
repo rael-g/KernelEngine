@@ -35,11 +35,15 @@ public interface IPhysics2D : IDisposable
     /// <summary>Destroys the body and all its fixtures. Safe on <see cref="BodyHandle2D.None"/>.</summary>
     void DestroyBody(BodyHandle2D body);
 
-    /// <summary>Attaches an axis-aligned box fixture (half-extents from body origin).</summary>
-    void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents, float density = 1f, float friction = 0.3f, float restitution = 0f);
+    /// <summary>
+    /// Attaches a box fixture, sized by its half-extents and placed at the given offset
+    /// from the body origin. The offset is what lets one body carry several shapes in
+    /// different places.
+    /// </summary>
+    void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents, Vector2 offset = default, float offsetAngle = 0f, float density = 1f, float friction = 0.3f, float restitution = 0f);
 
-    /// <summary>Attaches a circle fixture centered at the body origin.</summary>
-    void AddCircleFixture(BodyHandle2D body, float radius, float density = 1f, float friction = 0.3f, float restitution = 0f);
+    /// <summary>Attaches a circle fixture at the given offset from the body origin.</summary>
+    void AddCircleFixture(BodyHandle2D body, float radius, Vector2 offset = default, float density = 1f, float friction = 0.3f, float restitution = 0f);
 
     /// <summary>Reads the body's current pose and motion.</summary>
     BodyState2D GetBodyState(BodyHandle2D body);

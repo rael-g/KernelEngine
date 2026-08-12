@@ -61,14 +61,21 @@ extern "C"
         /** Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID. */
         void (*destroy_body)(struct ke_physics_2d *self, ke_body_2d body);
 
-        /** Attaches an axis-aligned box fixture (half-extents from body origin). */
+        /**
+         * Attaches a box fixture, sized by its half-extents and placed at the given offset
+         * from the body origin. The offset is what lets one body carry several shapes in
+         * different places — a character's feet and torso, a paddle's rounded ends.
+         * @param offset_angle Radians, CCW positive, about the offset center.
+         */
         bool (*add_box_fixture)(struct ke_physics_2d *self, ke_body_2d body,
                                 float half_w, float half_h,
+                                float offset_x, float offset_y, float offset_angle,
                                 float density, float friction, float restitution, ke_error **out_error);
 
-        /** Attaches a circle fixture centered at the body origin. */
+        /** Attaches a circle fixture at the given offset from the body origin. */
         bool (*add_circle_fixture)(struct ke_physics_2d *self, ke_body_2d body,
                                    float radius,
+                                   float offset_x, float offset_y,
                                    float density, float friction, float restitution, ke_error **out_error);
 
         /**

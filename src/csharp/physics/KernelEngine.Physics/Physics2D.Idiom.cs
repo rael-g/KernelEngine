@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace KernelEngine.Physics;
 
@@ -30,17 +30,17 @@ public unsafe partial class Physics2D : IPhysics2D
     }
 
     /// <inheritdoc/>
-    public void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents,
+    public void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents, Vector2 offset = default, float offsetAngle = 0f,
         float density = 1f, float friction = 0.3f, float restitution = 0f)
     {
-        if (body.IsValid) AddBoxFixture(body.Value, halfExtents.X, halfExtents.Y, density, friction, restitution);
+        if (body.IsValid) AddBoxFixture(body.Value, halfExtents.X, halfExtents.Y, offset.X, offset.Y, offsetAngle, density, friction, restitution);
     }
 
     /// <inheritdoc/>
-    public void AddCircleFixture(BodyHandle2D body, float radius,
+    public void AddCircleFixture(BodyHandle2D body, float radius, Vector2 offset = default,
         float density = 1f, float friction = 0.3f, float restitution = 0f)
     {
-        if (body.IsValid) AddCircleFixture(body.Value, radius, density, friction, restitution);
+        if (body.IsValid) AddCircleFixture(body.Value, radius, offset.X, offset.Y, density, friction, restitution);
     }
 
     /// <inheritdoc/>

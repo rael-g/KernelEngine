@@ -46,14 +46,14 @@ TEST_F(Box2DPhysicsTest, CreateBody_Works) {
 TEST_F(Box2DPhysicsTest, AddBoxFixture_Works) {
     uint32_t id = 0;
     id = physics->create_body(physics, KE_BODY_TYPE_DYNAMIC, 0, 0, nullptr);
-    bool res = physics->add_box_fixture(physics, id, 1.0f, 1.0f, 1.0f, 0.3f, 0.1f, nullptr);
+    bool res = physics->add_box_fixture(physics, id, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.3f, 0.1f, nullptr);
     ASSERT_TRUE(res);
 }
 
 TEST_F(Box2DPhysicsTest, AddCircleFixture_Works) {
     uint32_t id = 0;
     id = physics->create_body(physics, KE_BODY_TYPE_DYNAMIC, 0, 0, nullptr);
-    bool res = physics->add_circle_fixture(physics, id, 1.0f, 1.0f, 0.3f, 0.1f, nullptr);
+    bool res = physics->add_circle_fixture(physics, id, 1.0f, 0.0f, 0.0f, 1.0f, 0.3f, 0.1f, nullptr);
     ASSERT_TRUE(res);
 }
 
@@ -94,7 +94,7 @@ TEST_F(Box2DPhysicsTest, SetBodyVelocity_Works) {
 TEST_F(Box2DPhysicsTest, ApplyImpulse_Works) {
     uint32_t id = 0;
     id = physics->create_body(physics, KE_BODY_TYPE_DYNAMIC, 0, 0, nullptr);
-    physics->add_box_fixture(physics, id, 1.0f, 1.0f, 1.0f, 0.3f, 0.1f, nullptr);
+    physics->add_box_fixture(physics, id, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.3f, 0.1f, nullptr);
     physics->apply_impulse(physics, id, 10.0f, 10.0f);
     
     physics->step(physics, 0.016f);
@@ -121,11 +121,11 @@ TEST_F(Box2DPhysicsTest, FixedRotation_KeepsABouncingBoxFromSpinning) {
 
     ke_body_2d wall = physics->create_body(physics, KE_BODY_TYPE_STATIC, 2.0f, 0.0f, nullptr);
     ASSERT_NE(wall, KE_BODY_2D_INVALID);
-    ASSERT_TRUE(physics->add_box_fixture(physics, wall, 0.25f, 4.0f, 1.0f, 0.0f, 1.0f, nullptr));
+    ASSERT_TRUE(physics->add_box_fixture(physics, wall, 0.25f, 4.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, nullptr));
 
     ke_body_2d ball = physics->create_body(physics, KE_BODY_TYPE_DYNAMIC, 0.0f, 0.0f, nullptr);
     ASSERT_NE(ball, KE_BODY_2D_INVALID);
-    ASSERT_TRUE(physics->add_box_fixture(physics, ball, 0.18f, 0.18f, 1.0f, 0.0f, 1.0f, nullptr));
+    ASSERT_TRUE(physics->add_box_fixture(physics, ball, 0.18f, 0.18f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, nullptr));
     physics->set_body_fixed_rotation(physics, ball, true);
     physics->set_body_velocity(physics, ball, 6.0f, 0.0f);
 
@@ -148,10 +148,10 @@ TEST_F(Box2DPhysicsTest, FrictionlessCircle_HeadOnBounce_DoesNotSpin) {
     physics->set_gravity(physics, 0.0f, 0.0f);
 
     ke_body_2d wall = physics->create_body(physics, KE_BODY_TYPE_STATIC, 2.0f, 0.0f, nullptr);
-    ASSERT_TRUE(physics->add_box_fixture(physics, wall, 0.25f, 4.0f, 1.0f, 0.0f, 1.0f, nullptr));
+    ASSERT_TRUE(physics->add_box_fixture(physics, wall, 0.25f, 4.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, nullptr));
 
     ke_body_2d ball = physics->create_body(physics, KE_BODY_TYPE_DYNAMIC, 0.0f, 0.0f, nullptr);
-    ASSERT_TRUE(physics->add_circle_fixture(physics, ball, 0.18f, 1.0f, 0.0f, 1.0f, nullptr));
+    ASSERT_TRUE(physics->add_circle_fixture(physics, ball, 0.18f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, nullptr));
     physics->set_body_velocity(physics, ball, 6.0f, 0.0f);
 
     ke_body_state_2d st{};

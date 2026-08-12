@@ -23,6 +23,12 @@ fn zRotation(angle: f32) c.ke_quat {
     return .{ .x = 0, .y = 0, .z = @sin(half), .w = @cos(half) };
 }
 
+/// The Z-axis rotation carried by a quaternion, which is the only component of
+/// it a 2D shape's placement can express.
+fn zAngle(q: c.ke_quat) f32 {
+    return 2.0 * std.math.atan2(q.z, q.w);
+}
+
 fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) void {
     const m = moduleOf(user);
     const p = m.physics;
@@ -122,6 +128,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
     s = 0;
     while (s < segc) : (s += 1) {
         const cols: [*c]c.ke_collider2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const tcs: [*c]c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             const col = &cols[i];
@@ -129,9 +136,10 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
 
             const body = findBody(&parents, &bodies, segs[s].entities[i]) orelse continue;
 
+            const off = tcs[i].position;
             const ok = switch (col.kind) {
-                c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, col.density, col.friction, col.restitution, null),
-                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, col.density, col.friction, col.restitution, null),
+                c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, off.x, off.y, col.density, col.friction, col.restitution, null),
+                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, zAngle(tcs[i].rotation), col.density, col.friction, col.restitution, null),
             };
             col.attached = ok;
         }
@@ -200,7 +208,8 @@ export fn ke_physics_body2d_module_create(
 
     m.collider_queries = std.mem.zeroes([3]c.ke_query_decl);
     m.collider_queries[0].terms[0] = .{ .cid = collider_cid, .access = wr };
-    m.collider_queries[0].term_count = 1;
+    m.collider_queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    m.collider_queries[0].term_count = 2;
     m.collider_queries[1].terms[0] = .{ .cid = body_cid, .access = rd };
     m.collider_queries[1].term_count = 1;
     m.collider_queries[2].terms[0] = .{ .cid = hierarchy_cid, .access = rd };

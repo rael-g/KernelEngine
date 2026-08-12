@@ -347,7 +347,7 @@
           "name": "add_box_fixture",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Attaches an axis-aligned box fixture (half-extents from body origin).",
+          "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin. The offset is what lets one body carry several shapes in different places \u2014 a character\u0027s feet and torso, a paddle\u0027s rounded ends.",
           "return_doc": null,
           "params": [
             {
@@ -367,6 +367,24 @@
               "type": "float",
               "tags": [],
               "doc": null
+            },
+            {
+              "name": "offset_x",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_angle",
+              "type": "float",
+              "tags": [],
+              "doc": "Radians, CCW positive, about the offset center."
             },
             {
               "name": "density",
@@ -398,7 +416,7 @@
           "name": "add_circle_fixture",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Attaches a circle fixture centered at the body origin.",
+          "doc": "Attaches a circle fixture at the given offset from the body origin.",
           "return_doc": null,
           "params": [
             {
@@ -409,6 +427,18 @@
             },
             {
               "name": "radius",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_x",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_y",
               "type": "float",
               "tags": [],
               "doc": null
