@@ -365,6 +365,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
         argF(b, "ke-lib-dir", lib_dir),
@@ -834,6 +835,7 @@ pub fn build(b: *std.Build) void {
 
     const demo13 = ctx.example("c_demo_13", "examples/c/13_runtime_clear", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "scheduler" }),
