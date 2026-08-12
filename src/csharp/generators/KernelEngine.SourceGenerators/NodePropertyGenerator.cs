@@ -115,6 +115,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
+        sb.AppendLine($"    {overrideModifier} override void CollectBehaviorComponents(global::System.Collections.Generic.List<string> into)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        base.CollectBehaviorComponents(into);");
+        foreach (var slot in slots)
+            sb.AppendLine($"        into.Add(\"{slot.ComponentName}\");");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
         var needsUtf8Helpers = false;
 
         foreach (var p in properties)

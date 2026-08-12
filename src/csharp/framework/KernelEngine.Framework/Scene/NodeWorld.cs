@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
@@ -15,11 +15,20 @@ public sealed class NodeWorld
     private readonly IComponentRegistry _components;
     private readonly uint               _nameCid;
 
-    private readonly List<Node>                  _behaviors = new();
+    private readonly Dictionary<Type, List<Node>> _behaviorsByType = new();
     private readonly List<Node>                  _allNodes  = new();
     private readonly Dictionary<ulong, Node>     _byEntity  = new();
 
-    internal IReadOnlyList<Node>  Behaviors => _behaviors;
+    /// <summary>
+    /// Raised the first time a node of a given type registers behavior. The host
+    /// listens so it can give that type its own runtime system: behavior access is a
+    /// property of the node type, so one system per type is what lets the scheduler
+    /// see the reach instead of lumping every script into one opaque system.
+    /// </summary>
+    internal event Action<Type>? BehaviorTypeAdded;
+
+    internal IReadOnlyList<Node> BehaviorsOf(Type type) =>
+        _behaviorsByType.TryGetValue(type, out var list) ? list : Array.Empty<Node>();
 
     /// <summary>
     /// Every currently-bound node. A caller needing its own node type filters
@@ -49,7 +58,19 @@ public sealed class NodeWorld
         public void Dispose() => _world._systemCtx = _previous;
     }
 
-    internal void RegisterBehavior(Node node) => _behaviors.Add(node);
+    internal void RegisterBehavior(Node node)
+    {
+        var type = node.GetType();
+        if (!_behaviorsByType.TryGetValue(type, out var list))
+        {
+            list = new List<Node>();
+            _behaviorsByType[type] = list;
+            list.Add(node);
+            BehaviorTypeAdded?.Invoke(type);
+            return;
+        }
+        list.Add(node);
+    }
 
     private readonly uint _nativeTransformCid;
     private readonly uint _hierarchyCid;
@@ -134,7 +155,7 @@ public sealed class NodeWorld
 
         node.OnUnbind();
 
-        if (node.HasBehavior) _behaviors.Remove(node);
+        if (node.HasBehavior && _behaviorsByType.TryGetValue(node.GetType(), out var behaviors)) behaviors.Remove(node);
         _allNodes.Remove(node);
         _byEntity.Remove(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity, _systemCtx);

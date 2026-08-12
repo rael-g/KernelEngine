@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Ecs;
 using KernelEngine.Input;
 using KernelEngine.Runtime;
@@ -25,6 +25,8 @@ public sealed class SceneNodesModule : IRuntimeModule
     private const uint SetupWorker = 1;
 
     private readonly Action<NodeWorld, IServiceProvider> _setup;
+
+    private KernelEngine.Input.IInputReader? _inputSnapshot;
 
     public string Name => "SceneNodes";
 
@@ -58,31 +60,52 @@ public sealed class SceneNodesModule : IRuntimeModule
         // destroy issued from a behavior routes through it and defers the structural
         // change to the wave barrier — so this runs as an ordinary parallel-wave
         // system with no exclusive bypass.
-        // Behaviors author local transforms; the scene tree's own system turns those
-        // into world matrices later in the frame. A node's OnUpdate can reach past
-        // this list, and the scheduler cannot see that from here — a behavior
-        // touching another domain's components is ordered only by this system
-        // being alone in its phase.
-        var sceneAccess = new[]
-        {
-            ComponentAccess.Write(nodeWorld.CidOfName("transform")),
-            ComponentAccess.Read(nodeWorld.CidOfName("hierarchy")),
-            ComponentAccess.Read(nodeWorld.CidOfName("name")),
-        };
+        var transformCid = nodeWorld.CidOfName("transform");
+        var hierarchyCid = nodeWorld.CidOfName("hierarchy");
+        var nameCid      = nodeWorld.CidOfName("name");
 
-        runtime.RegisterSystem("Scene.Behaviors", RuntimePhase.Update, (_, ctx, dt) =>
+        // Sampling runs once per tick in an earlier phase, not inside each node-type
+        // system: a rising edge read by two systems in the same tick would be seen
+        // twice, and the phase boundary is the runtime's only ordering guarantee —
+        // waves inside a phase are grouped by component conflict, which input is not
+        // expressed in.
+        runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _, _) =>
         {
             input?.Update();
-            var snapshot  = input?.CaptureSnapshot();
-            evaluator?.Evaluate(snapshot);
-            var view      = new View(nodeWorld, dt, snapshot, ctx);
-            var behaviors = nodeWorld.Behaviors;
-            using (nodeWorld.EnterSystem(ctx))
+            _inputSnapshot = input?.CaptureSnapshot();
+            evaluator?.Evaluate(_inputSnapshot);
+        }, accessList: Array.Empty<ComponentAccess>(), pinnedThread: 1);
+
+        nodeWorld.BehaviorTypeAdded += type =>
+        {
+            var probe = (Node)nodeWorld.BehaviorsOf(type)[0];
+            var names = new List<string>();
+            probe.CollectBehaviorComponents(names);
+
+            var access = new List<ComponentAccess>
             {
-                for (int i = 0; i < behaviors.Count; i++)
-                    behaviors[i].OnUpdate(in view);
+                ComponentAccess.Write(transformCid),
+                ComponentAccess.Read(hierarchyCid),
+                ComponentAccess.Read(nameCid),
+            };
+            foreach (var n in names)
+            {
+                var cid = nodeWorld.CidOfName(n);
+                if (cid == transformCid || cid == hierarchyCid || cid == nameCid) continue;
+                access.Add(ComponentAccess.Write(cid));
             }
-        }, accessList: sceneAccess, pinnedThread: 1);
+
+            runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (_, ctx, dt) =>
+            {
+                var view      = new View(nodeWorld, dt, _inputSnapshot, ctx);
+                var behaviors = nodeWorld.BehaviorsOf(type);
+                using (nodeWorld.EnterSystem(ctx))
+                {
+                    for (int i = 0; i < behaviors.Count; i++)
+                        behaviors[i].OnUpdate(in view);
+                }
+            }, accessList: access.ToArray(), pinnedThread: 1);
+        };
 
         // Scene setup runs pinned to a worker thread (GPU upload has thread
         // affinity when a render module is present), after every domain

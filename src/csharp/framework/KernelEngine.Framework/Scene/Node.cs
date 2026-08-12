@@ -90,6 +90,14 @@ public abstract class Node
     /// </summary>
     protected internal virtual bool HasBehavior => false;
 
+    /// <summary>
+    /// Appends the ECS component names this node type reaches, so the scheduler can
+    /// order its behavior against every other writer of those components instead of
+    /// trusting phase placement. An override calls the base first and then adds its
+    /// own, which is what makes an inherited component set accumulate down the chain.
+    /// </summary>
+    protected internal virtual void CollectBehaviorComponents(List<string> into) { }
+
     internal void UnbindFromNodeWorld()
     {
         NodeWorld = null;

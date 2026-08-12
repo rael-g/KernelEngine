@@ -113,6 +113,12 @@
           "type": "float",
           "tags": [],
           "doc": "Maximum accumulator value to prevent \u0022spiral of death\u0022 when frame time exceeds catch-up budget. Default (when 0) = 0.25s \u2014 15 fixed steps at 1/60. Excess dt above this cap is discarded silently."
+        },
+        {
+          "name": "max_systems_per_phase",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Most systems a single phase may hold. Sizes the per-phase scratch the wave planner walks, so it is a workload-shape value rather than an algorithmic one: a host registering a system per node type scales this with the size of its game. Registering past it fails the registration instead of dropping the system silently. Default (when 0) = 256."
         }
       ]
     }
