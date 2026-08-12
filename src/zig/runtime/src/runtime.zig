@@ -21,7 +21,10 @@ const E = @import("kerror").Errors(c);
 
 const KE_MAX_QUERIES_PER_SYSTEM = 8;
 const KE_MAX_SEGMENTS_PER_QUERY = 32;
-const KE_RUNTIME_MAX_SYSTEMS_PER_PHASE = 256;
+/// One scratch set per phase. runtimeRunPhase is re-entrant across threads —
+/// the render phase is pipelined against the next tick's sim phases — so a
+/// single shared set would let two threads write the same buffers.
+const KE_RUNTIME_PHASE_COUNT = 7;
 const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
@@ -599,7 +602,7 @@ fn runWaveBody(wc: *WaveRunCtx) void {
 }
 
 fn freePhaseScratch(h: *RuntimeHandle) void {
-    const n: usize = h.state.max_systems_per_phase;
+    const n: usize = @as(usize, h.state.max_systems_per_phase) * KE_RUNTIME_PHASE_COUNT;
     cFree(u32, h.state.phase_indices, n);
     cFree(c.ke_runtime_system_params, h.state.phase_params, n);
     cFree(u32, h.state.wave_assignments, n);
@@ -617,8 +620,10 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
 fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
     if (h.state.system_count == 0) return;
 
-    const phase_indices = h.state.phase_indices orelse return;
-    const phase_params = h.state.phase_params orelse return;
+    const cap: usize = h.state.max_systems_per_phase;
+    const base: usize = @as(usize, @intCast(phase)) * cap;
+    const phase_indices = (h.state.phase_indices orelse return) + base;
+    const phase_params = (h.state.phase_params orelse return) + base;
     var phase_count: u32 = 0;
     for (0..h.state.system_count) |si| {
         const rs = h.state.systems.?[si].?;
@@ -631,13 +636,13 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
     }
     if (phase_count == 0) return;
 
-    const wave_assignments = h.state.wave_assignments orelse return;
+    const wave_assignments = (h.state.wave_assignments orelse return) + base;
     var wave_count: u32 = 0;
     ke_runtime_debug_compute_waves(phase_params, phase_count, wave_assignments, &wave_count);
 
-    const pkgs = h.state.phase_pkgs orelse return;
-    const tasks = h.state.phase_tasks orelse return;
-    const pinned = h.state.phase_pinned orelse return;
+    const pkgs = (h.state.phase_pkgs orelse return) + base;
+    const tasks = (h.state.phase_tasks orelse return) + base;
+    const pinned = (h.state.phase_pinned orelse return) + base;
 
     var w: u32 = 0;
     while (w < wave_count) : (w += 1) {
@@ -902,7 +907,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 
     const max_per_phase: u32 = if (params != null and params.*.max_systems_per_phase > 0) params.*.max_systems_per_phase else 256;
     h.state.max_systems_per_phase = max_per_phase;
-    const n: usize = max_per_phase;
+    const n: usize = @as(usize, max_per_phase) * KE_RUNTIME_PHASE_COUNT;
     h.state.phase_indices = cAlloc(u32, n);
     h.state.phase_params = cAlloc(c.ke_runtime_system_params, n);
     h.state.wave_assignments = cAlloc(u32, n);
