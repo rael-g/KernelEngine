@@ -240,8 +240,16 @@ fn deferReserve(q: *DeferQueue, needed: usize) bool {
 }
 
 // Returns the byte offset where the bytes landed (maxUsize on OOM).
+/// Payloads are copied into one byte arena and later handed back to a callback
+/// that casts them to its own struct, so each has to start on an address that
+/// struct could legally live at. Without this an odd-sized payload leaves the
+/// next one misaligned, and the cast is undefined behaviour rather than a
+/// visible failure.
+const defer_arena_align: usize = 16;
+
 fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
     if (size == 0) return 0;
+    q.arena_used = std.mem.alignForward(usize, q.arena_used, defer_arena_align);
     if (q.arena_used + size > q.arena_capacity) {
         var new_cap: usize = if (q.arena_capacity != 0) q.arena_capacity * 2 else 256;
         while (new_cap < q.arena_used + size) new_cap *= 2;
