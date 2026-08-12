@@ -346,6 +346,16 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step });
 
+    const physics_body2d = ctx.plugin("ke_physics_body2d", "src/zig/physics/body2d", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
+        argF(b, "ke-physics-include", b.pathJoin(&.{ src_c, "physics" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "physics/body2d/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &runtime.step });
+
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox = ctx.plugin("ke_render_skybox", "src/zig/render/skybox", &.{
@@ -512,7 +522,8 @@ pub fn build(b: *std.Build) void {
         common,          logger_simple,     ecs_flecs,           input_default,
         resource_cache_default, scheduler_enki, runtime,         framework,
         window_glfw,     asset_stb_image,   audio_miniaudio,     text_stb_truetype,
-        physics_box2d,   asset_assimp,      configuration,       configuration_toml,
+        physics_box2d,   physics_body2d,    asset_assimp,        configuration,
+        configuration_toml,
         tonemap,         skybox,            ui,                  shadow,
         cluster,         deferred_lighting, gpu_device_webgpu,   gbuffer,
         forward,         render_service,

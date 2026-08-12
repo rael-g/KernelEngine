@@ -149,6 +149,29 @@
       "usings": []
     },
     {
+      "_comment": "The physics domain's node surface. Node3D (spatial) and the body enums/handles physics_2d.h owns arrive via composeHeaders: this domain describes only the components, while the domains owning those types keep emitting them.",
+      "name": "physics_components",
+      "headers": [
+        "src/c/physics/kernel_engine/physics/components.h"
+      ],
+      "includeDirs": [
+        "src/c/physics",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h",
+        "src/c/physics/kernel_engine/physics/physics_2d.h"
+      ],
+      "apiJson": "src/csharp/physics/components.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Physics.Native",
+      "outDir": "src/csharp/physics/KernelEngine.Physics/Scene",
+      "usings": [
+        "KernelEngine.Physics"
+      ]
+    },
+    {
       "name": "text",
       "headers": [
         "src/c/text/kernel_engine/text/font.h"

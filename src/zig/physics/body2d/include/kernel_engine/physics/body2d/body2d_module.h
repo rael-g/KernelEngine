@@ -1,0 +1,56 @@
+// ke_physics_body2d_module_create — factory for the system that reconciles
+// ke_body2d_component against a physics world (the only export this plugin has).
+//
+// Backend-agnostic on purpose: it drives whatever ke_physics_2d it is handed, so
+// it lives beside the Box2D plugin rather than inside it. Swapping the physics
+// backend must not mean rewriting the component-to-body reconciliation.
+
+#pragma once
+
+#include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/physics/physics_2d.h>
+#include <kernel_engine/runtime/runtime.h>
+
+#ifndef KE_PHYSICS_BODY2D_API
+#  if defined(_WIN32) || defined(__CYGWIN__)
+#    if defined(KE_PHYSICS_BODY2D_STATIC)
+#      define KE_PHYSICS_BODY2D_API
+#    elif defined(KE_PHYSICS_BODY2D_EXPORT)
+#      define KE_PHYSICS_BODY2D_API __declspec(dllexport)
+#    else
+#      define KE_PHYSICS_BODY2D_API __declspec(dllimport)
+#    endif
+#  else
+#    define KE_PHYSICS_BODY2D_API __attribute__((visibility("default")))
+#  endif
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/// @brief Construction parameters for the 2D body reconciliation system.
+typedef struct ke_physics_body2d_module_params
+{
+    ke_runtime    *runtime;      ///< Registers the system; borrowed, must outlive the module.
+    ke_ecs        *ecs;          ///< Resolves the component ids; borrowed.
+    ke_physics_2d *physics;      ///< The world to drive; borrowed.
+} ke_physics_body2d_module_params;
+
+typedef struct ke_physics_body2d_module ke_physics_body2d_module;
+
+typedef struct ke_physics_body2d_module_handle
+{
+    ke_physics_body2d_module *ref;
+    void (*destroy)(ke_physics_body2d_module *self);
+} ke_physics_body2d_module_handle;
+
+/// @brief Registers the system that creates, steps, and syncs 2D bodies.
+/// @return Handle whose @c ref is NULL on failure.
+KE_PHYSICS_BODY2D_API ke_physics_body2d_module_handle ke_physics_body2d_module_create(
+    const ke_physics_body2d_module_params *params,
+    ke_error **out_error);
+
+#ifdef __cplusplus
+}
+#endif
