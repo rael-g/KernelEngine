@@ -18,13 +18,6 @@ pub const c = @cImport({
 
 pub const gpa = @import("heap.zig").gpa;
 
-// Fold the render module factory (ke_render_module_create) into this lib so it
-// calls ke_render_service_create in-lib — a separate Zig DLL can't link this one's
-// import lib on Windows. Force-referenced so its export fn is emitted.
-comptime {
-    _ = @import("render_module.zig");
-}
-
 // This file holds only the shared state (CoreState + its small accessor
 // methods), the factory/destroy pair, and the vtable wiring. Each vtable
 // slot's actual logic lives in its own file, grouped by concern rather than

@@ -5,7 +5,7 @@
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/service/render_service.h>
-#include <kernel_engine/render/service/render_module_create.h>
+#include <kernel_engine/render/module/render_module_create.h>
 #include <kernel_engine/render/components.h>
 #include <kernel_engine/spatial/transform.h>
 #include <kernel_engine/ecs/ke_ecs.h>

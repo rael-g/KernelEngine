@@ -8,7 +8,7 @@
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/world_create.h>
-#include <kernel_engine/render/service/render_module_create.h>
+#include <kernel_engine/render/module/render_module_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/scheduler/enki/enki_scheduler.h>
