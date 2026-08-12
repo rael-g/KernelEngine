@@ -39,16 +39,36 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const bodies: [*c]c.ke_body2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const tcs0: [*c]c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             const b = &bodies[i];
-            if (b.body != c.KE_BODY_2D_INVALID) continue;
+            if (b.body == c.KE_BODY_2D_INVALID) {
+                // The scene authors placement on the transform, so the body starts
+                // there rather than at the component's zero — otherwise every node
+                // that never assigns Position would spawn at the origin.
+                if (b.position.x == 0 and b.position.y == 0) {
+                    b.position = .{ .x = tcs0[i].position.x, .y = tcs0[i].position.y };
+                    b.angle = zAngle(tcs0[i].rotation);
+                }
+                b.body = p.create_body.?(p, b.type, b.position.x, b.position.y, null);
+                if (b.body == c.KE_BODY_2D_INVALID) continue;
+                p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
+                p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
+                p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
+                continue;
+            }
 
-            b.body = p.create_body.?(p, b.type, b.position.x, b.position.y, null);
-            if (b.body == c.KE_BODY_2D_INVALID) continue;
-            p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
-            p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
-            p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
+            // The write-back below leaves the component equal to the body, so any
+            // difference seen here is a script's own assignment since the last tick.
+            // Comparing is what lets Position/Velocity be plain properties instead of
+            // the component being read-only output.
+            var st: c.ke_body_state_2d = undefined;
+            p.get_body_state.?(p, b.body, &st);
+            if (b.position.x != st.x or b.position.y != st.y or b.angle != st.angle)
+                p.set_body_position.?(p, b.body, b.position.x, b.position.y, b.angle);
+            if (b.velocity.x != st.velocity_x or b.velocity.y != st.velocity_y)
+                p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
         }
     }
 
