@@ -353,7 +353,7 @@
       "usings": []
     },
     {
-      "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host CollisionShape2D/AudioPlayer the same way, hand-written since they have no header yet).",
+      "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host their own node types the same way).",
       "name": "render_components",
       "headers": [
         "src/c/render/kernel_engine/render/components.h"

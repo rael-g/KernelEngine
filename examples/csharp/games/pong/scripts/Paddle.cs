@@ -6,19 +6,18 @@ namespace Pong;
 
 /// <summary>
 /// Kinematic paddle. Physics body + input-driven movement. The visual is a
-/// Sprite2D child declared in Paddle.scene; fixture comes from CollisionShape2D
-/// child; MoveAction comes from the ECS PaddleComponent applied by the scene loader.
+/// Sprite2D child declared in Paddle.scene; MoveAction comes from the ECS PaddleComponent applied by the scene loader.
 /// </summary>
-public sealed class Paddle : Node2D, IPhysicsBody2D
+public sealed class Paddle : Node2D
 {
     const float HalfH = 0.9f;
+    const float HalfW = 0.15f;
     const float Speed = 7f;
 
     private readonly IPhysics2D                  _physics;
     private readonly IInputActionMap<PongAction> _actions;
 
     private BodyHandle2D _body;
-    public BodyHandle2D  PhysicsBody => _body;
 
     private PongAction _moveAction;
     private bool       _moveActionResolved;
@@ -32,6 +31,7 @@ public sealed class Paddle : Node2D, IPhysicsBody2D
     protected override void OnBind(NodeWorld nodeWorld)
     {
         _body = _physics.CreateBody(BodyType2D.Kinematic, Position);
+        _physics.AddBoxFixture(_body, new Vector2(HalfW, HalfH), restitution: 1f);
     }
 
     protected override void OnUnbind() => _physics.DestroyBody(_body);

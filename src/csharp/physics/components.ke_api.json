@@ -21,6 +21,22 @@
         }
       ],
       "external": true
+    },
+    {
+      "name": "ke_shape_kind_2d",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_SHAPE_KIND_2D_BOX",
+          "value": 0,
+          "doc": "Axis-aligned box, sized by half_extents."
+        },
+        {
+          "name": "KE_SHAPE_KIND_2D_CIRCLE",
+          "value": 1,
+          "doc": "Circle centered on the node, sized by radius."
+        }
+      ]
     }
   ],
   "structs": [
@@ -163,6 +179,68 @@
             "idiom"
           ],
           "doc": "The plugin\u0027s body for this entity, assigned when it reconciles the component. Authoring it would name a body the world does not own."
+        }
+      ]
+    },
+    {
+      "name": "ke_collider2d_component",
+      "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. A shape is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin\u0027s own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.",
+      "tags": [
+        "node:CollisionShape2D",
+        "components:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "kind",
+          "type": "ke_shape_kind_2d",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "half_extents",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "density",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "friction",
+          "type": "float",
+          "tags": [
+            "default:0.3"
+          ],
+          "doc": null
+        },
+        {
+          "name": "restitution",
+          "type": "float",
+          "tags": [],
+          "doc": "Bounciness. 0 absorbs the impact, 1 returns all of it."
+        },
+        {
+          "name": "attached",
+          "type": "_Bool",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Whether the fixture has been attached to its body. Set by the plugin once the ancestor body exists; authoring it would claim a fixture the world does not have."
         }
       ]
     }
@@ -487,6 +565,27 @@
             {
               "name": "fixed",
               "type": "_Bool",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "set_body_gravity_scale",
+          "returns": "void",
+          "tags": [],
+          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward. What a floating pickup or a balloon sets, rather than each such body needing its own world.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "scale",
+              "type": "float",
               "tags": [],
               "doc": null
             }

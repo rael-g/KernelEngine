@@ -94,6 +94,14 @@ extern "C"
          */
         void (*set_body_fixed_rotation)(struct ke_physics_2d *self, ke_body_2d body, bool fixed);
 
+        /**
+         * Scales world gravity for this body alone. 1 leaves it at the world's value, 0
+         * makes the body weightless, and a negative value makes it fall upward. What a
+         * floating pickup or a balloon sets, rather than each such body needing its own
+         * world.
+         */
+        void (*set_body_gravity_scale)(struct ke_physics_2d *self, ke_body_2d body, float scale);
+
     } ke_physics_2d;
 
     typedef struct ke_physics_2d_handle

@@ -10,7 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Physics.Abstractions\KernelEngine.Physics.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- CollisionShape2D : Node2D -->
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

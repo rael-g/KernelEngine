@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
     const ke_spatial = b.option([]const u8, "ke-spatial-include", "kernel_engine/spatial include dir") orelse @panic("-Dke-spatial-include required");
     const ke_physics = b.option([]const u8, "ke-physics-include", "kernel_engine/physics include dir") orelse @panic("-Dke-physics-include required");
+    const ke_framework = b.option([]const u8, "ke-framework-include", "kernel_engine/framework include dir") orelse @panic("-Dke-framework-include required");
     const ke_self    = b.option([]const u8, "ke-self-include",    "this plugin's include dir")         orelse @panic("-Dke-self-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir",         "dir with ke_common import lib")     orelse @panic("-Dke-lib-dir required");
 
@@ -24,7 +25,7 @@ pub fn build(b: *std.Build) void {
         .optimize  = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_ecs, ke_runtime, ke_spatial, ke_physics, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_ecs, ke_runtime, ke_spatial, ke_physics, ke_framework, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });

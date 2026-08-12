@@ -121,6 +121,12 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
         Handle->set_body_fixed_rotation(Handle, body, @fixed);
     }
 
+    /// <summary>Scales world gravity for this body alone. 1 leaves it at the world's value, 0 makes the body weightless, and a negative value makes it fall upward. What a floating pickup or a balloon sets, rather than each such body needing its own world.</summary>
+    public void SetBodyGravityScale(uint body, float scale)
+    {
+        Handle->set_body_gravity_scale(Handle, body, scale);
+    }
+
     /// <summary>Releases the native physics2d.</summary>
     public void Dispose()
     {

@@ -7,16 +7,6 @@ name = "Root"
 type = "Pong.Ball"
 
 [[entity]]
-name   = "Shape"
-parent = "Root"
-type   = "CollisionShape2D"
-[entity.properties]
-ShapeKind        = "rectangle"
-ShapeHalfExtents = [0.18, 0.18]
-Restitution      = 1.0
-Friction         = 0.0
-
-[[entity]]
 name   = "Visual"
 parent = "Root"
 type   = "Sprite2D"

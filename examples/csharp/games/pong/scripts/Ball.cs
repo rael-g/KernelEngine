@@ -6,20 +6,21 @@ namespace Pong;
 
 /// <summary>
 /// The ball. Physics body + scoring logic. The visual is a Sprite2D child
-/// declared in Ball.scene; fixture comes from CollisionShape2D child;
-/// sounds come from AudioPlayer children (HitSound, ScoreSound).
+/// declared in Ball.scene; sounds come from AudioPlayer children
+/// (HitSound, ScoreSound).
 /// </summary>
-public sealed class Ball : Node2D, IPhysicsBody2D
+public sealed class Ball : Node2D
 {
     const float InitialSpeed   = 6f;
     const float GoalLineMargin = 0.5f;
+
+    static readonly Vector2 ShapeHalfExtents = new(0.18f, 0.18f);
 
     private readonly IPhysics2D                  _physics;
     private readonly IInputActionMap<PongAction> _actions;
     private readonly ISceneRouter                _router;
 
     private BodyHandle2D  _body;
-    public BodyHandle2D   PhysicsBody => _body;
 
     private AudioPlayer? _hitSound;
     private AudioPlayer? _scoreSound;
@@ -41,6 +42,7 @@ public sealed class Ball : Node2D, IPhysicsBody2D
         // spin from the two-point contact manifold even at zero friction, so the
         // rotation is locked rather than left to the solver.
         _physics.SetBodyFixedRotation(_body, true);
+        _physics.AddBoxFixture(_body, ShapeHalfExtents, friction: 0f, restitution: 1f);
     }
 
     protected override void OnReady()

@@ -39,6 +39,40 @@ extern "C"
 
 #define KE_COMPONENT_NAME_BODY_2D "body2d"
 
+    typedef enum ke_shape_kind_2d
+    {
+        KE_SHAPE_KIND_2D_BOX    = 0, /**< Axis-aligned box, sized by half_extents. */
+        KE_SHAPE_KIND_2D_CIRCLE = 1, /**< Circle centered on the node, sized by radius. */
+    } ke_shape_kind_2d;
+
+    /// [node:CollisionShape2D,components:Node3D]
+    /// One collision fixture, attached to the nearest ancestor that carries a
+    /// ke_body2d_component. A shape is a node of its own rather than a field on the
+    /// body because it has an offset the body does not, and because a body may carry
+    /// several. The physics plugin's own system attaches the fixture by reconciling
+    /// this component against the hierarchy, so a script never names a body.
+    typedef struct ke_collider2d_component
+    {
+        ke_shape_kind_2d kind;
+        /// Half-width and half-height from the node's origin. Read for a box shape.
+        ke_vec2          half_extents; ///< [default:0.5 0.5]
+        /// Read for a circle shape.
+        float            radius; ///< [default:0.5]
+        /// Mass per unit area. Drives the owning body's mass and inertia.
+        float            density; ///< [default:1]
+        /// Coulomb friction against other fixtures. 0 is frictionless.
+        float            friction; ///< [default:0.3]
+        /// Bounciness. 0 absorbs the impact, 1 returns all of it.
+        float            restitution;
+
+        /// [idiom] Whether the fixture has been attached to its body. Set by the
+        /// plugin once the ancestor body exists; authoring it would claim a fixture
+        /// the world does not have.
+        bool             attached;
+    } ke_collider2d_component;
+
+#define KE_COMPONENT_NAME_COLLIDER_2D "collider2d"
+
 #ifdef __cplusplus
 }
 #endif

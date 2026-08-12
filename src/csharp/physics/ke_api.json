@@ -391,6 +391,27 @@
               "doc": null
             }
           ]
+        },
+        {
+          "name": "set_body_gravity_scale",
+          "returns": "void",
+          "tags": [],
+          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward. What a floating pickup or a balloon sets, rather than each such body needing its own world.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "scale",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ]
         }
       ]
     },
