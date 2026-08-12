@@ -109,9 +109,43 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         // runtime ever asking "does this type have OnUpdate" again.
         var hasOnUpdate = classSymbol.GetMembers("OnUpdate").OfType<IMethodSymbol>()
             .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
-        if (hasOnUpdate)
+
+        // A borrow-shaped Update is the model's signature-as-access-list form: the
+        // parameters ARE the reach. Dispatch is emitted here so the user's method
+        // stays free of resolution code and the reach stays readable in the signature.
+        var updateMethod = classSymbol.GetMembers("Update").OfType<IMethodSymbol>()
+            .FirstOrDefault(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
+                && m.Parameters.Length > 0
+                && m.Parameters[0].Type.Name == "View");
+
+        var borrows = updateMethod is null
+            ? ImmutableArray<IParameterSymbol>.Empty
+            : updateMethod.Parameters.Skip(1)
+                .Where(pp => BorrowKindOf(pp.Type) is not null)
+                .ToImmutableArray();
+
+        if (hasOnUpdate || updateMethod is not null)
         {
             sb.AppendLine($"    {overrideModifier} override bool HasBehavior => true;");
+            sb.AppendLine();
+        }
+
+        if (updateMethod is not null && !hasOnUpdate)
+        {
+            sb.AppendLine($"    {overrideModifier} override void OnUpdate(in global::KernelEngine.Framework.View view)");
+            sb.AppendLine("    {");
+            var args = new List<string> { "in view" };
+            foreach (var pp in updateMethod.Parameters.Skip(1))
+            {
+                var kind = BorrowKindOf(pp.Type);
+                if (kind is null) continue;
+                var arg = ((INamedTypeSymbol)pp.Type).TypeArguments[0].ToDisplayString();
+                var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
+                var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : pp.Name;
+                args.Add($"Borrow{kind}<{arg}>(\"{nodeName}\")");
+            }
+            sb.AppendLine($"        Update({string.Join(", ", args)});");
+            sb.AppendLine("    }");
             sb.AppendLine();
         }
 
@@ -120,6 +154,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("        base.CollectBehaviorComponents(into);");
         foreach (var slot in slots)
             sb.AppendLine($"        into.Add(\"{slot.ComponentName}\");");
+        foreach (var b in borrows)
+            foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
+                sb.AppendLine($"        into.Add(\"{cn}\");");
         sb.AppendLine("    }");
         sb.AppendLine();
 
@@ -430,4 +467,30 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>Which borrow a parameter type is, or null when it is not one.</summary>
+    static string? BorrowKindOf(ITypeSymbol type)
+    {
+        if (type is not INamedTypeSymbol named || named.TypeArguments.Length != 1) return null;
+        return named.Name switch
+        {
+            "Child"  => "Child",
+            "Ref"    => "Ref",
+            "Parent" => "Parent",
+            _        => null,
+        };
+    }
+
+    /// <summary>
+    /// The ECS component names a node type reaches, read from the markers on it and
+    /// its bases. A hand-written type carrying no markers contributes nothing, which
+    /// under-declares rather than over-declares its reach.
+    /// </summary>
+    static IEnumerable<string> ComponentNamesOf(INamedTypeSymbol type)
+    {
+        for (var t = type; t is not null; t = t.BaseType)
+            foreach (var a in t.GetAttributes())
+                if (a.AttributeClass?.Name == "GeneratedNodeComponentAttribute" && a.ConstructorArguments.Length > 1)
+                    yield return (string)a.ConstructorArguments[1].Value!;
+    }
 }

@@ -9,7 +9,7 @@ namespace Pong;
 /// declared in Ball.scene; sounds come from AudioPlayer children
 /// (HitSound, ScoreSound).
 /// </summary>
-public sealed class Ball : Node2D
+public sealed partial class Ball : Node2D
 {
     const float InitialSpeed   = 6f;
     const float GoalLineMargin = 0.5f;
@@ -22,11 +22,13 @@ public sealed class Ball : Node2D
 
     private BodyHandle2D  _body;
 
-    private AudioPlayer? _hitSound;
-    private AudioPlayer? _scoreSound;
     private Scoreboard?  _board;
-    private Vector2      _lastVelocity;
-    private bool         _awaitingLaunch = true;
+
+    /// <summary>Velocity seen last tick, used to detect the bounce that plays a sound.</summary>
+    public partial Vector2 LastVelocity { get; set; }
+
+    /// <summary>True while the ball waits at centre for the launch input.</summary>
+    public partial bool AwaitingLaunch { get; set; }
 
     public Ball(IPhysics2D physics, IInputActionMap<PongAction> actions, ISceneRouter router)
     {
@@ -35,7 +37,7 @@ public sealed class Ball : Node2D
         _router  = router;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld)
+    protected override void OnReady()
     {
         _body = _physics.CreateBody(BodyType2D.Dynamic, Position);
         // A square ball that tumbles reads as a bug. Its box collider picks up
@@ -45,17 +47,11 @@ public sealed class Ball : Node2D
         _physics.AddBoxFixture(_body, ShapeHalfExtents, friction: 0f, restitution: 1f);
     }
 
-    protected override void OnReady()
-    {
-        _hitSound   = NodeWorld!.Find<AudioPlayer>("HitSound");
-        _scoreSound = NodeWorld!.Find<AudioPlayer>("ScoreSound");
-    }
-
     protected override void OnUnbind() => _physics.DestroyBody(_body);
 
-    protected override bool HasBehavior => true;
-
-    protected override void OnUpdate(in View view)
+    void Update(in View view,
+        [NodeName("HitSound")]   Child<AudioPlayer> hit,
+        [NodeName("ScoreSound")] Child<AudioPlayer> sfx)
     {
         if (_board is null)
         {
@@ -69,38 +65,38 @@ public sealed class Ball : Node2D
         Rotation = state.Angle;
 
         if (_actions.IsJustPressed(PongAction.Quit,   in view)) _router.LoadScene("Menu");
-        if (_actions.IsJustPressed(PongAction.Launch, in view) && _awaitingLaunch) Launch();
+        if (_actions.IsJustPressed(PongAction.Launch, in view) && AwaitingLaunch) Launch();
 
-        if (_awaitingLaunch) return;
+        if (AwaitingLaunch) return;
 
         var vel = state.Velocity;
-        if (Math.Sign(vel.X) != Math.Sign(_lastVelocity.X) && _lastVelocity.X != 0)
-            _hitSound?.Play();
-        _lastVelocity = vel;
+        if (Math.Sign(vel.X) != Math.Sign(LastVelocity.X) && LastVelocity.X != 0)
+            hit.Node?.Play();
+        LastVelocity = vel;
 
-        if (state.Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true);
-        if (state.Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false);
+        if (state.Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true,  sfx);
+        if (state.Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, sfx);
     }
 
     void Launch()
     {
-        _awaitingLaunch = false;
+        AwaitingLaunch = false;
         _board!.HideHint();
         float dirX = _board.Total % 2 == 0 ? 1f : -1f;
         float dirY = (Random.Shared.NextSingle() - 0.5f) * 0.6f;
         var v = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
         _physics.SetBodyVelocity(_body, v);
-        _lastVelocity = v;
+        LastVelocity = v;
     }
 
-    void Score(bool leftScored)
+    void Score(bool leftScored, Child<AudioPlayer> sfx)
     {
         _board!.RecordGoal(leftScored);
-        _scoreSound?.Play();
+        sfx.Node?.Play();
         _physics.SetBodyPosition(_body, Vector2.Zero);
         _physics.SetBodyVelocity(_body, Vector2.Zero);
-        _lastVelocity   = Vector2.Zero;
-        _awaitingLaunch = true;
+        LastVelocity   = Vector2.Zero;
+        AwaitingLaunch = true;
         _board.ShowHint("Press Space to launch");
     }
 }

@@ -98,6 +98,30 @@ public abstract class Node
     /// </summary>
     protected internal virtual void CollectBehaviorComponents(List<string> into) { }
 
+    /// <summary>
+    /// Resolves a <see cref="Child{T}"/> borrow by node name. Called by generated
+    /// dispatch each tick rather than cached, so a borrow can never outlive the node
+    /// it points at.
+    /// </summary>
+    protected internal Child<T> BorrowChild<T>(string name) where T : Node
+    {
+        foreach (var child in Children)
+            if (child is T typed && child.Name == name) return new Child<T>(typed);
+        return default;
+    }
+
+    /// <summary>Resolves a <see cref="Ref{T}"/> borrow by node name, anywhere in the tree.</summary>
+    protected internal Ref<T> BorrowRef<T>(string name) where T : Node =>
+        new(NodeWorld?.Find(name) as T);
+
+    /// <summary>Resolves a <see cref="Parent{T}"/> borrow to the nearest matching ancestor.</summary>
+    protected internal Parent<T> BorrowParent<T>(string name) where T : Node
+    {
+        for (var p = Parent; p is not null; p = p.Parent)
+            if (p is T typed && (name.Length == 0 || p.Name == name)) return new Parent<T>(typed);
+        return default;
+    }
+
     internal void UnbindFromNodeWorld()
     {
         NodeWorld = null;
