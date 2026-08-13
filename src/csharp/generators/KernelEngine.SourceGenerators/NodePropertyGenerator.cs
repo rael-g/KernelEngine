@@ -24,7 +24,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             static (node, _) => node is MethodDeclarationSyntax { Parent: ClassDeclarationSyntax c } m
                 && m.Identifier.ValueText == "Update"
                 && m.ParameterList.Parameters.Count > 0
-                && c.Modifiers.Any(SyntaxKind.PartialKeyword),
+                && c is not null,
             static (ctx, _) => (ClassDeclarationSyntax)ctx.Node.Parent!);
 
         var classes = propertyOwners.Collect()
@@ -49,6 +49,17 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var model = compilation.GetSemanticModel(classDecl.SyntaxTree);
         if (model.GetDeclaredSymbol(classDecl) is not INamedTypeSymbol classSymbol) return;
         if (!DerivesFromNode(classSymbol)) return;
+
+        // Without partial there is nowhere to emit dispatch into, so a behavior on a
+        // sealed-off class would simply never be called with nothing said about it.
+        if (!classDecl.Modifiers.Any(SyntaxKind.PartialKeyword))
+        {
+            if (classSymbol.GetMembers("Update").OfType<IMethodSymbol>().Any(m =>
+                    SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.Parameters.Length > 0))
+                spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, classDecl.Identifier.GetLocation(),
+                    classSymbol.Name, "the class is not partial"));
+            return;
+        }
 
         var properties = classSymbol.GetMembers().OfType<IPropertySymbol>()
             .Where(p => p.DeclaringSyntaxReferences.Any(r => r.GetSyntax() is PropertyDeclarationSyntax pd && IsPartialAutoProperty(pd)))
@@ -123,10 +134,32 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         // A borrow-shaped Update is the model's signature-as-access-list form: the
         // parameters ARE the reach. Dispatch is emitted here so the user's method
         // stays free of resolution code and the reach stays readable in the signature.
-        var updateMethod = classSymbol.GetMembers("Update").OfType<IMethodSymbol>()
-            .FirstOrDefault(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
-                && m.Parameters.Length > 0
-                && m.Parameters[0].Type.Name == "View");
+        var declaredUpdates = classSymbol.GetMembers("Update").OfType<IMethodSymbol>()
+            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol))
+            .ToImmutableArray();
+
+        var updateMethod = declaredUpdates.FirstOrDefault(m =>
+            m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
+
+        // Every way a behavior can be written and silently not run gets named here.
+        // The failure this replaces surfaced only as a node that did nothing on screen,
+        // with no build output pointing at the method that was skipped.
+        foreach (var m in declaredUpdates)
+        {
+            if (SymbolEqualityComparer.Default.Equals(m, updateMethod)) continue;
+            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, m.Locations.FirstOrDefault(),
+                classSymbol.Name, "its first parameter is not a View"));
+        }
+
+        if (updateMethod is not null && hasOnUpdate)
+            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, updateMethod.Locations.FirstOrDefault(),
+                classSymbol.Name, "it also overrides OnUpdate, which takes precedence"));
+
+        if (updateMethod is not null)
+            foreach (var pp in updateMethod.Parameters.Skip(1))
+                if (BorrowKindOf(pp.Type) is null)
+                    spc.ReportDiagnostic(Diagnostic.Create(UpdateParameterRule, pp.Locations.FirstOrDefault(),
+                        pp.Name, pp.Type.ToDisplayString()));
 
         var borrows = updateMethod is null
             ? ImmutableArray<IParameterSymbol>.Empty
@@ -560,6 +593,22 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         id: "KESG003",
         title: "Node property names a component the node does not declare",
         messageFormat: "Property '{0}' names component '{1}', which this node does not declare with [GeneratedNodeComponent]",
+        category: "KernelEngine.SourceGenerators",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    static readonly DiagnosticDescriptor UpdateNotDispatchedRule = new(
+        id: "KESG005",
+        title: "Behavior method will never run",
+        messageFormat: "'{0}' declares Update but {1}, so no dispatch is generated and the method never runs",
+        category: "KernelEngine.SourceGenerators",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    static readonly DiagnosticDescriptor UpdateParameterRule = new(
+        id: "KESG006",
+        title: "Behavior parameter is not a borrow",
+        messageFormat: "Parameter '{0}' of Update is {1}, which is not Child<T>, Ref<T>, or Parent<T>; every access a behavior has must be a borrow parameter",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

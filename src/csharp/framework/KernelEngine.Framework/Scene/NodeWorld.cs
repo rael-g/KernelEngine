@@ -75,11 +75,32 @@ public sealed class NodeWorld
     private readonly uint _nativeTransformCid;
     private readonly uint _hierarchyCid;
 
-    internal NodeWorld(World world, IEcsRegistry ecs, IComponentRegistry components)
+    private readonly KernelEngine.Logger.ILogger? _logger;
+    private readonly HashSet<string> _reportedBorrows = new();
+
+    /// <summary>
+    /// Reports a borrow that resolved to nothing, once per node-and-name pair.
+    /// </summary>
+    /// <remarks>
+    /// An unresolved borrow is indistinguishable from a working one at the call site —
+    /// every method on it is a no-op — so the node just stops doing part of its job with
+    /// nothing said. Reported once because resolution runs every tick.
+    /// </remarks>
+    internal void ReportUnresolvedBorrow(Node owner, string kind, string typeName, string name)
+    {
+        if (_logger is null) return;
+        if (!_reportedBorrows.Add($"{owner.Entity}/{kind}/{typeName}/{name}")) return;
+        _logger.Log(KernelEngine.Logger.LogLevel.Warning, "scene.node",
+            $"'{owner.Name}' borrows {kind}<{typeName}> named '{name}', which resolves to no node");
+    }
+
+    internal NodeWorld(World world, IEcsRegistry ecs, IComponentRegistry components,
+                       KernelEngine.Logger.ILogger? logger = null)
     {
         _world      = world;
         _ecs        = ecs;
         _components = components;
+        _logger     = logger;
         _nameCid            = ecs.RegisterComponent<NameComponent>("name");
         _nativeTransformCid = ecs.RegisterComponent<TransformComponent>("transform");
         _hierarchyCid       = ecs.RegisterComponent<HierarchyComponent>("hierarchy");
