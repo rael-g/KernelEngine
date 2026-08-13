@@ -187,6 +187,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "kerror-src", kerror_src),
         argF(b, "tomlc99-dir", tomlc99_dir),
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),

@@ -6,8 +6,8 @@
 //
 // [entity.components.X] uses the world's apply registry: look the cid up by
 // name, add the component, build a variant-table entry list from the TOML
-// table, call the registered apply_fn. Components without a registered apply
-// are silently skipped.
+// table, call the registered apply_fn. A block naming an unknown component, or
+// one whose component has no apply registered, is reported and skipped.
 //
 // scene_properties lifetime: every per-entity allocation (strings + entries)
 // comes from the loader's arena and is freed at loader destroy. The arena is
@@ -18,6 +18,7 @@ const std = @import("std");
 
 const c = @import("c.zig").c;
 const heap = @import("heap.zig");
+const world_impl = @import("world.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -275,6 +276,14 @@ fn attachProperties(s: *State, entity: c.ke_entity, props_tbl: *c.toml_table_t) 
 
 // -- components application via apply registry -------------------------------
 
+fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
+    const lg = world_impl.loggerOf(world) orelse return;
+    var buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
+    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "scene.loader", .message = msg.ptr };
+    if (lg.log) |f| f(lg, &ev);
+}
+
 fn applyComponentBlock(
     s: *State,
     entity: c.ke_entity,
@@ -285,14 +294,20 @@ fn applyComponentBlock(
     const e = ecsOf(world) orelse return;
 
     var meta: c.ke_component_meta = undefined;
-    if (!e.component_lookup.?(e, comp_name, &meta, null)) return; // unknown component; skip
+    if (!e.component_lookup.?(e, comp_name, &meta, null)) {
+        warn(world, "scene names component '{s}', which no module registered", .{comp_name});
+        return;
+    }
 
     // No apply registered means no field mapping is defined for this component.
     // Looked up before the component is added, because adding it zero-initialized
     // and then failing to populate it is worse than skipping the block: a node
     // binding later sees the component already present and keeps its own defaults
     // out, leaving the entity with a field of zeroes nobody authored.
-    const apply_fn = world.get_component_apply.?(world, meta.cid) orelse return;
+    const apply_fn = world.get_component_apply.?(world, meta.cid) orelse {
+        warn(world, "component '{s}' has no field mapping registered; its scene block is ignored", .{comp_name});
+        return;
+    };
 
     const comp = e.component_add.?(e, entity, meta.cid) orelse return;
 

@@ -46,6 +46,12 @@ fn stateOf(self: *c.ke_world) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// The logger the world was built with, for plugin-internal diagnostics.
+/// Not a vtable slot: it is this plugin talking to itself, not ABI surface.
+pub fn loggerOf(self: *c.ke_world) ?*c.ke_logger {
+    return stateOf(self).logger;
+}
+
 fn worldEcs(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_ecs {
     const self = self_in orelse return null;
     return stateOf(self).ecs;
