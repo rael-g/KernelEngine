@@ -28,6 +28,19 @@ public sealed class FrameworkModule : IRuntimeModule
             unsafe { return EcsRegistry.Borrow(((INativeEcs)flecsEcs).Native); }
         });
 
+        // Owned here rather than by SceneNodesModule: the world carries it so the
+        // native scene loader can wire a scene's declared connections, which means
+        // it has to exist before the world does.
+        services.AddSingleton<SignalBus>(_ =>
+        {
+            unsafe
+            {
+                var h = KernelEngine.Framework.Native.NativeMethods.signal_bus_create(null, null);
+                if (h.@ref == null) throw new InvalidOperationException("signal_bus_create failed");
+                return new SignalBus(h);
+            }
+        });
+
         services.AddSingleton<World>(sp =>
         {
             var flecsEcs  = (FlecsEcs)sp.GetRequiredService<IEcs>();
@@ -46,6 +59,8 @@ public sealed class FrameworkModule : IRuntimeModule
                 p.ecs        = ((INativeEcs)flecsEcs).Native;
                 p.runtime    = ((INativeRuntime)rtRuntime).Native;
                 p.scene_tree = tree.@ref;
+                p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;
+                p.logger     = sp.GetService<KernelEngine.Logger.INativeLogger>() is { } lg ? lg.Native : null;
                 var w = KernelEngine.Framework.Native.NativeMethods.world_create(&p, null);
                 if (w.@ref == null) throw new InvalidOperationException("world_create failed");
                 return new World(w, tree, ecs, runtime);

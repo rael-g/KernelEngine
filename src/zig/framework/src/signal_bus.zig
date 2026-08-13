@@ -20,6 +20,8 @@ const E = @import("kerror").Errors(c);
 /// Longest signal name the bus stores.
 const name_max = 64;
 
+const unknown_size: u32 = c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN;
+
 const default_max_signals = 64;
 const default_max_connections = 512;
 const default_max_events = 256;
@@ -101,14 +103,20 @@ fn signalId(
         return false;
     }
 
-    for (s.signals[0..s.signal_count], 0..) |sig, i| {
+    for (s.signals[0..s.signal_count], 0..) |*sig, i| {
         if (!std.mem.eql(u8, sig.name[0..sig.name_len], name)) continue;
-        // Name plus payload size is the identity. Returning the existing id
-        // under a different size is how two languages end up reading one
-        // another's bytes at the wrong stride, with nothing to show for it.
-        if (sig.payload_size != payload_size) {
-            E.fail(out_error, .already_exists, "signal already registered with a different payload size", @src());
-            return false;
+        // Name plus payload size is the identity, but only once someone has
+        // declared the size: a caller that just wants the id passes UNKNOWN and
+        // neither learns nor asserts a layout. Two real declarations that
+        // disagree is how two languages end up reading one another's bytes at
+        // the wrong stride, with nothing to show for it.
+        if (payload_size != unknown_size) {
+            if (sig.payload_size == unknown_size) {
+                sig.payload_size = payload_size;
+            } else if (sig.payload_size != payload_size) {
+                E.fail(out_error, .already_exists, "signal already registered with a different payload size", @src());
+                return false;
+            }
         }
         out_id.* = @intCast(i);
         return true;
@@ -217,6 +225,10 @@ fn emit(
     const s = stateOf(self);
     if (signal_id >= s.signal_count) {
         E.fail(out_error, .not_found, "signal id was never registered", @src());
+        return false;
+    }
+    if (s.signals[signal_id].payload_size == unknown_size) {
+        E.fail(out_error, .not_initialized, "signal's payload layout was never declared", @src());
         return false;
     }
     if (payload_size != s.signals[signal_id].payload_size) {
@@ -531,4 +543,28 @@ test "emitting an unregistered signal fails" {
     defer h.destroy.?(h.ref);
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
     try testing.expect(!bus.emit.?(bus, 1, 42, null, 0, null));
+}
+
+test "a signal wired by name before its layout is declared still resolves to one id" {
+    const h = makeBus();
+    defer h.destroy.?(h.ref);
+    const bus: *c.ke_signal_bus = @ptrCast(h.ref);
+
+    var wired: u32 = 0;
+    try testing.expect(bus.signal_id.?(bus, "GoalScored", unknown_size, &wired, null));
+    try testing.expect(bus.connect.?(bus, 1, wired, 2, 0, null));
+
+    // Emitting before anyone declared the layout must fail rather than write a
+    // payload of a size nobody agreed on.
+    var p = Payload{ .left_scored = 1 };
+    try testing.expect(!bus.emit.?(bus, 1, wired, &p, @sizeOf(Payload), null));
+
+    var declared: u32 = 0;
+    try testing.expect(bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &declared, null));
+    try testing.expectEqual(wired, declared);
+
+    try testing.expect(bus.emit.?(bus, 1, declared, &p, @sizeOf(Payload), null));
+    var count: u32 = 0;
+    _ = bus.deliveries.?(bus, &count);
+    try testing.expectEqual(@as(u32, 1), count);
 }

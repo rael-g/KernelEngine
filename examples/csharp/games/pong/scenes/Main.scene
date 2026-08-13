@@ -53,6 +53,10 @@ move_action = "PaddleRightMove"
 name  = "Ball"
 scene = "res://scenes/Ball.scene"
 
+[[entity.connect]]
+signal = "GoalScored"
+target = "Scoreboard"
+
 [[entity]]
 name = "Scoreboard"
 type = "Pong.Scoreboard"

@@ -41,15 +41,6 @@ public sealed class SceneNodesModule : IRuntimeModule
     public void Configure(IServiceCollection services)
     {
         services.AddSpatialNodeTypes();
-        services.AddSingleton<SignalBus>(_ =>
-        {
-            unsafe
-            {
-                var h = KernelEngine.Framework.Native.NativeMethods.signal_bus_create(null, null);
-                if (h.@ref == null) throw new InvalidOperationException("signal_bus_create failed");
-                return new SignalBus(h);
-            }
-        });
         services.AddSingleton<NodeWorld>(sp =>
             new NodeWorld(
                 sp.GetRequiredService<World>(),

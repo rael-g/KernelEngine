@@ -15,6 +15,7 @@ extern "C"
     struct ke_scheduler;
     struct ke_scene_tree;
     struct ke_logger;
+    struct ke_signal_bus;
 
     typedef void (*ke_component_apply_fn)(void                         *component,
                                            const ke_variant_table_entry *entries,
@@ -30,6 +31,10 @@ extern "C"
         struct ke_scene_tree     *scene_tree;
         const char               *project_root;
         struct ke_logger         *logger;
+        /// Signal bus scene-declared connections are wired into; optional,
+        /// borrowed. Without one, a scene's connection blocks are reported and
+        /// skipped rather than silently doing nothing.
+        struct ke_signal_bus     *signal_bus;
     } ke_world_params;
 
     struct ke_world

@@ -350,6 +350,64 @@ fn applyOuterOverrides(s: *State, entity: c.ke_entity, outer: *c.toml_table_t) v
     if (c.toml_table_in(outer, "components")) |comps| applyComponentsSection(s, entity, comps);
 }
 
+// -- signal connections ------------------------------------------------------
+
+/// Wires the `[[entity.connect]]` blocks one entity declares.
+///
+/// Resolved in a pass after every entity in the file exists, because a listener
+/// is as often declared below the emitter as above it, and requiring one order
+/// would make the wiring depend on file layout rather than on what it says.
+/// A target naming a node this file does not declare is reported, not skipped
+/// quietly: a connection nobody made looks exactly like a listener that never
+/// reacts.
+fn applyConnections(
+    s: *State,
+    source: c.ke_entity,
+    entity_tbl: *c.toml_table_t,
+    names: *const NameMap,
+) void {
+    const arr = c.toml_array_in(entity_tbl, "connect") orelse return;
+    const world = s.world;
+
+    const bus = world_impl.signalBusOf(world) orelse {
+        warn(world, "scene declares signal connections but no signal bus was given to the world", .{});
+        return;
+    };
+
+    const n = c.toml_array_nelem(arr);
+    var i: c_int = 0;
+    while (i < n) : (i += 1) {
+        const t = c.toml_table_at(arr, i) orelse continue;
+
+        const signal_d = c.toml_string_in(t, "signal");
+        defer if (signal_d.ok != 0) std.c.free(signal_d.u.s);
+        const target_d = c.toml_string_in(t, "target");
+        defer if (target_d.ok != 0) std.c.free(target_d.u.s);
+
+        if (signal_d.ok == 0 or target_d.ok == 0) {
+            warn(world, "a connect block needs both a signal and a target", .{});
+            continue;
+        }
+
+        const target = names.get(std.mem.span(target_d.u.s)) orelse {
+            warn(world, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
+            continue;
+        };
+
+        var handler: u32 = 0;
+        const handler_d = c.toml_int_in(t, "handler");
+        if (handler_d.ok != 0) handler = @intCast(handler_d.u.i);
+
+        var signal_id: u32 = 0;
+        if (!bus.signal_id.?(bus, signal_d.u.s, c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN, &signal_id, null)) {
+            warn(world, "could not resolve signal '{s}'", .{signal_d.u.s});
+            continue;
+        }
+        if (!bus.connect.?(bus, source, signal_id, target, handler, null))
+            warn(world, "could not connect signal '{s}'", .{signal_d.u.s});
+    }
+}
+
 // -- entity processing -------------------------------------------------------
 
 /// Name -> entity map for resolving `parent = "..."` back-references within one
@@ -529,6 +587,12 @@ fn loadSceneRecursive(
 
     var first_root: c.ke_entity = c.KE_ENTITY_INVALID;
     const n = c.toml_array_nelem(entities);
+
+    // Kept so connections can be wired once every entity exists; an entity's own
+    // index is the only handle back to it, since a connection's source is the
+    // block that declares it whether or not that block named the entity.
+    const created = s.arena.allocArray(c.ke_entity, @intCast(n));
+
     var is_first = true;
     var i: c_int = 0;
     while (i < n) : (i += 1) {
@@ -554,9 +618,18 @@ fn loadSceneRecursive(
         };
 
         if (!processEntity(s, args, &ent, out_error)) return false;
+        if (created) |slots| slots[@intCast(i)] = ent;
         if (is_first) {
             first_root = ent;
             is_first = false;
+        }
+    }
+
+    if (created) |slots| {
+        var j: c_int = 0;
+        while (j < n) : (j += 1) {
+            const et = c.toml_table_at(entities, j) orelse continue;
+            applyConnections(s, slots[@intCast(j)], et, &names);
         }
     }
 

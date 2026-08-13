@@ -30,6 +30,7 @@ const State = struct {
     scene_tree: ?*c.ke_scene_tree, // borrowed
     project_root: [*c]const u8, // borrowed string
     logger: ?*c.ke_logger, // borrowed
+    signal_bus: ?*c.ke_signal_bus, // borrowed
 
     apply_registry: ?[*]ApplyEntry,
     apply_count: u32,
@@ -50,6 +51,12 @@ fn stateOf(self: *c.ke_world) *State {
 /// Not a vtable slot: it is this plugin talking to itself, not ABI surface.
 pub fn loggerOf(self: *c.ke_world) ?*c.ke_logger {
     return stateOf(self).logger;
+}
+
+/// The signal bus the world was built with, for plugin-internal wiring.
+/// Not a vtable slot, same reasoning as loggerOf.
+pub fn signalBusOf(self: *c.ke_world) ?*c.ke_signal_bus {
+    return stateOf(self).signal_bus;
 }
 
 fn worldEcs(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_ecs {
@@ -186,6 +193,7 @@ export fn ke_world_create(
     state.scene_tree = params.scene_tree;
     state.project_root = params.project_root;
     state.logger = params.logger;
+    state.signal_bus = params.signal_bus;
 
     world.handle = state;
     world.ecs = worldEcs;

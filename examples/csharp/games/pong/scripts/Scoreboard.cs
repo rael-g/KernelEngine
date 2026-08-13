@@ -69,15 +69,6 @@ public sealed partial class Scoreboard : Node
         }, "ScoreHint", parent: this);
     }
 
-    /// <summary>
-    /// Wires itself to the ball's goal signal. The listener draws the wire, so the
-    /// ball never names a scoreboard and a scene without one still runs.
-    /// </summary>
-    protected override void OnReady()
-    {
-        if (NodeWorld?.Find("Ball") is Ball ball) NodeWorld.Connect<GoalScored>(ball, this);
-    }
-
     /// <summary>Reacts to the ball's goal signal: records the point and re-arms the hint.</summary>
     void On(in GoalScored e)
     {

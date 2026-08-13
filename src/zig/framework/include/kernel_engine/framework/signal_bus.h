@@ -26,6 +26,13 @@ extern "C"
     /// changeable without touching either node.
     typedef struct ke_signal_bus ke_signal_bus;
 
+/// Passed as the payload size by a caller that only needs the signal's id and
+/// does not know its layout — a scene file wiring two nodes together names the
+/// signal but has no way to know how many bytes it carries. The size stays
+/// unknown until whoever owns the payload type declares it, and only then does
+/// a conflicting declaration become an error.
+#define KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN 0xFFFFFFFFu
+
     /// One delivery of one emission to one connected target.
     /// The payload points into the bus's frame storage and is valid until the
     /// frame is cleared; a consumer that needs it longer copies it.
