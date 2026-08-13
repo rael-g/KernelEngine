@@ -172,6 +172,12 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         var needsUtf8Helpers = false;
 
+        // Scene authoring writes the whole component once, not once per property:
+        // a per-property read-modify-write collapses to last-write-wins whenever the
+        // component write is deferred, because every read still sees the pre-write
+        // value. Each plan records how to place one property into a local copy.
+        var applyPlans = new List<(Slot Slot, IPropertySymbol P, Func<string, string, string> Assign)>();
+
         foreach (var p in properties)
         {
             var wholeAttr = p.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NativeWholeAttribute");
@@ -201,6 +207,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"            if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, s); else {slot.State} = s;");
                 sb.AppendLine("        }");
                 sb.AppendLine("    }");
+                applyPlans.Add((slot, p, (lv, v) =>
+                    $"{lv} = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {backingType}>({v});"));
                 continue;
             }
 
@@ -231,6 +239,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"            if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, s); else {slot.State} = s;");
                 sb.AppendLine("        }");
                 sb.AppendLine("    }");
+                applyPlans.Add((slot, p, (lv, v) => $"GeneratedUtf8Set(ref {lv}.{fieldName}, {v});"));
                 continue;
             }
 
@@ -269,6 +278,19 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine($"            if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, s); else {slot.State} = s;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
+
+            var capturedField = fieldName;
+            var capturedArity = arity;
+            var capturedCoercion = coercion;
+            applyPlans.Add((slot, p, (lv, v) =>
+            {
+                if (capturedArity is int n)
+                    return string.Join(" ", Enumerable.Range(0, n)
+                        .Select(i => $"{lv}.{capturedField}[{i}] = ({v}).{VectorLanes[i]};"));
+                return capturedCoercion is not null
+                    ? $"{lv}.{capturedField} = {capturedCoercion.Value.write(v)};"
+                    : $"{lv}.{capturedField} = {v};";
+            }));
         }
 
         if (needsUtf8Helpers)
@@ -325,7 +347,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         }
         sb.AppendLine("    }");
 
-        EmitApplyProperties(sb, properties, nodeType, classSymbol, overrideModifier);
+        EmitApplyProperties(sb, applyPlans, nodeType, classSymbol, overrideModifier);
 
         sb.AppendLine("}");
 
@@ -338,11 +360,12 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// omits leaves the seeded default untouched, so authoring is additive rather than
     /// a whole-component replacement.
     /// </summary>
-    static void EmitApplyProperties(StringBuilder sb, ImmutableArray<IPropertySymbol> properties,
+    static void EmitApplyProperties(StringBuilder sb,
+        List<(Slot Slot, IPropertySymbol P, Func<string, string, string> Assign)> plans,
         INamedTypeSymbol? nodeType, INamedTypeSymbol classSymbol, string overrideModifier)
     {
-        var readable = properties
-            .Select(p => (Property: p, Accessor: ReaderAccessorFor(p.Type)))
+        var readable = plans
+            .Select(x => (x.Slot, x.P, x.Assign, Accessor: ReaderAccessorFor(x.P.Type)))
             .Where(x => x.Accessor is not null)
             .ToArray();
 
@@ -354,11 +377,20 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         if (readable.Length > 0)
         {
             sb.AppendLine("        if (!TryGetProperties(out var props)) return;");
-            foreach (var (p, accessor) in readable)
+            var touched = readable.Select(x => x.Slot).Distinct().ToArray();
+            foreach (var slot in touched)
+                sb.AppendLine($"        var a{slot.Index} = {slot.Current}();");
+            foreach (var (slot, p, assign, accessor) in readable)
             {
                 var (method, cast) = accessor!.Value;
                 sb.AppendLine($"        if (props.{method}(\"{p.Name}\", out var v_{p.Name}))");
-                sb.AppendLine($"            {p.Name} = {string.Format(cast, "v_" + p.Name)};");
+                sb.AppendLine($"            {assign($"a{slot.Index}", string.Format(cast, "v_" + p.Name))}");
+            }
+            // One write per component, after every authored field has been placed.
+            foreach (var slot in touched)
+            {
+                sb.AppendLine($"        if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, a{slot.Index});");
+                sb.AppendLine($"        else {slot.State} = a{slot.Index};");
             }
         }
         sb.AppendLine("    }");
