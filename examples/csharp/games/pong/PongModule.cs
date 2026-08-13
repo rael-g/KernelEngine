@@ -21,7 +21,6 @@ public sealed class PongModule : IRuntimeModule
         services.AddNodeType<Wall>("Pong.Wall");
         services.AddNodeType<Paddle>("Pong.Paddle");
         services.AddNodeType<Ball>("Pong.Ball");
-        services.AddNodeType<CollisionShape2D>();
         services.AddNodeType<Scoreboard>("Pong.Scoreboard");
         services.AddNodeType<MenuController>("Pong.MenuController");
     }

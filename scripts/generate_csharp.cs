@@ -27,7 +27,7 @@ using System.Text.Json.Nodes;
 using Kabic;
 using Kabic.CSharp;
 
-string? apiPath = null, ns = null, nativeNs = null, outDir = null, enumsOutDir = null, library = null;
+string? apiPath = null, ns = null, nativeNs = null, outDir = null, enumsOutDir = null, library = null, domain = null;
 var explicitProviders = new HashSet<string>();
 var explicitCallbacks = new HashSet<string>();
 var extraUsings = new List<string>();
@@ -54,6 +54,10 @@ for (var i = 0; i < args.Length; i++)
         // guessing it from the domain name is how ke_logger_simple almost
         // shipped as a DllImport against "ke_logger_default", which doesn't exist.
         case "--library": library = args[++i]; break;
+        // Names the generated node-type registrar. Every domain's node types share
+        // one namespace but land in different assemblies, so the class name is what
+        // keeps two domains' registrars from colliding.
+        case "--domain": domain = args[++i]; break;
     }
 }
 
@@ -61,7 +65,7 @@ if (apiPath is null || ns is null || nativeNs is null || outDir is null)
 {
     Console.Error.WriteLine("usage: dotnet run scripts/generate_csharp.cs -- --api <ke_api.json> "
         + "--namespace <NS> --native-namespace <NS.Native> --out <dir> "
-        + "[--provider <vtable>]... [--callback <vtable>]... [--using <NS>]... [--library <so-name>]");
+        + "[--provider <vtable>]... [--callback <vtable>]... [--using <NS>]... [--library <so-name>] [--domain <name>]");
     return 1;
 }
 
@@ -95,11 +99,28 @@ foreach (var callback in classified.Callbacks)
 // ke_api.json is rendered, except the ones this domain only composes against
 // (--compose): the domain that owns them already emits them, and rendering them here
 // too would put a second, divergent copy of the same node type in another assembly.
+var nodeNames = new List<string>();
 foreach (var component in model.Structs.Where(s => !s.IsVtable && !s.External && s.Has("node")))
 {
     var nodeName = component.TagValue("node")!;
+    nodeNames.Add(nodeName);
     File.WriteAllText(Path.Combine(outDir, $"{nodeName}.g.cs"),
         CSharpBackend.RenderNodeType(model, component, ns, nativeNs, extraUsings, convention));
+}
+
+// The registration comes from the same header the type does. Kept by hand it
+// drifts the moment a header gains a node, and the failure lands at scene-load
+// time on an unresolvable type name rather than at the edit that caused it.
+if (nodeNames.Count > 0)
+{
+    if (domain is null)
+    {
+        Console.Error.WriteLine("error: domain renders node types but --domain was not given");
+        return 1;
+    }
+    var registrar = Idioms.TypeName(domain, convention) + "NodeTypes";
+    File.WriteAllText(Path.Combine(outDir, $"{registrar}.g.cs"),
+        CSharpBackend.RenderNodeTypeRegistrar(registrar, nodeNames, ns));
 }
 
 if (classified.FreeFunctionGroups.Count > 0)

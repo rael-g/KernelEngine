@@ -40,6 +40,7 @@ public sealed class SceneNodesModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
+        services.AddSpatialNodeTypes();
         services.AddSingleton<NodeWorld>(sp =>
             new NodeWorld(
                 sp.GetRequiredService<World>(),

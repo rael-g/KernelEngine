@@ -82,15 +82,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         services.AddSingleton<IRenderResources>(this);
         services
-            .AddNodeType<Camera>()
-            .AddNodeType<DirectionalLight>()
-            .AddNodeType<AmbientLight>()
-            .AddNodeType<PointLight>()
-            .AddNodeType<SpotLight>()
-            .AddNodeType<Skybox>()
-            .AddNodeType<MeshRenderer>()
-            .AddNodeType<Sprite2D>()
-            .AddNodeType<Label>();
+            .AddRenderComponentsNodeTypes()
+            .AddUiComponentsNodeTypes()
+            .AddNodeType<Sprite2D>();
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)

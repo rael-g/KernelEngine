@@ -143,6 +143,39 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// Emits the one call that registers every node type this domain renders, so a
+    /// scene naming any of them resolves without a hand-kept list.
+    /// </summary>
+    /// <remarks>
+    /// The registration and the type it registers now come from the same input: adding
+    /// a <c>[node:]</c>-tagged struct to a header registers it. The hand-maintained
+    /// alternative fails silently in the worst possible place — the scene loader,
+    /// at runtime, on a name it cannot resolve, long after the header was written.
+    /// </remarks>
+    public static string RenderNodeTypeRegistrar(string registrarName, IEnumerable<string> nodeNames, string ns)
+    {
+        var o = new List<string>
+        {
+            Header,
+            "using Microsoft.Extensions.DependencyInjection;",
+            "",
+            $"namespace {ns};",
+            "",
+            $"/// <summary>Registers every node type generated for this domain.</summary>",
+            $"public static class {registrarName}",
+            "{",
+            $"    /// <summary>Registers this domain's node types with the scene node registry.</summary>",
+            $"    public static IServiceCollection Add{registrarName}(this IServiceCollection services)",
+            "    {",
+        };
+        foreach (var n in nodeNames) o.Add($"        services.AddNodeType<{n}>();");
+        o.Add("        return services;");
+        o.Add("    }");
+        o.Add("}");
+        return string.Join('\n', o);
+    }
+
+    /// <summary>
     /// The components a node type composes beyond its own, resolved transitively and
     /// de-duplicated. A name that resolves to no <c>[node:]</c>-tagged struct in this
     /// domain's model is an error rather than a silent omission: the resulting node would

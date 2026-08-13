@@ -89,7 +89,7 @@ try
 
         var genArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "generate_csharp.cs"), "--",
             "--api", tmpApiJson, "--namespace", ns, "--native-namespace", nativeNs,
-            "--out", tmpOutDir, "--enums-out", tmpEnumsDir };
+            "--out", tmpOutDir, "--enums-out", tmpEnumsDir, "--domain", name };
         foreach (var u in usings) genArgs.AddRange(["--using", u]);
         if (library is not null) genArgs.AddRange(["--library", library]);
 
