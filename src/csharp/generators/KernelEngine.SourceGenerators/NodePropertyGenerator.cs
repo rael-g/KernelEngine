@@ -22,7 +22,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         // its Update would silently never run.
         var behaviorOwners = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is MethodDeclarationSyntax { Parent: ClassDeclarationSyntax c } m
-                && m.Identifier.ValueText == "Update"
+                && (m.Identifier.ValueText == "Update" || m.Identifier.ValueText == "On")
                 && m.ParameterList.Parameters.Count > 0
                 && c is not null,
             static (ctx, _) => (ClassDeclarationSyntax)ctx.Node.Parent!);
@@ -183,6 +183,10 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 var kind = BorrowKindOf(pp.Type);
                 if (kind is null) continue;
                 var arg = ((INamedTypeSymbol)pp.Type).TypeArguments[0].ToDisplayString();
+                // An Emit borrow resolves by payload type, not by node name: it is
+                // the right to raise a signal from this node, and this node is
+                // already known.
+                if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
                 var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
                 var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : pp.Name;
                 args.Add($"Borrow{kind}<{arg}>(\"{nodeName}\")");
@@ -198,8 +202,13 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         foreach (var slot in slots)
             sb.AppendLine($"        into.Add(\"{slot.ComponentName}\");");
         foreach (var b in borrows)
+        {
+            // An Emit borrow reaches no component: emission lands in the signal
+            // bus's frame storage, which the scheduler does not order on.
+            if (BorrowKindOf(b.Type) == "Emit") continue;
             foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
                 sb.AppendLine($"        into.Add(\"{cn}\");");
+        }
         sb.AppendLine("    }");
         sb.AppendLine();
 
@@ -379,6 +388,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
 
         EmitApplyProperties(sb, applyPlans, nodeType, classSymbol, overrideModifier);
+        EmitSignalDispatch(sb, classSymbol, overrideModifier);
 
         sb.AppendLine("}");
 
@@ -621,6 +631,37 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Emits the dispatch that turns a delivered signal into a call on this node's
+    /// matching <c>On</c> handler. A node with no handler emits nothing, so listening
+    /// costs a virtual call only for types that actually listen.
+    /// </summary>
+    static void EmitSignalDispatch(StringBuilder sb, INamedTypeSymbol classSymbol, string overrideModifier)
+    {
+        var handlers = classSymbol.GetMembers("On").OfType<IMethodSymbol>()
+            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
+                && m.Parameters.Length == 1
+                && m.Parameters[0].Type.IsUnmanagedType
+                && m.Parameters[0].Type.TypeKind == TypeKind.Struct)
+            .ToArray();
+        if (handlers.Length == 0) return;
+
+        sb.AppendLine();
+        sb.AppendLine($"    {overrideModifier} override void GeneratedDeliverSignal(global::System.Type payloadType, global::System.ReadOnlySpan<byte> payload)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        base.GeneratedDeliverSignal(payloadType, payload);");
+        foreach (var h in handlers)
+        {
+            var t = h.Parameters[0].Type.ToDisplayString();
+            sb.AppendLine($"        if (payloadType == typeof({t}))");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            var e = global::System.Runtime.InteropServices.MemoryMarshal.Read<{t}>(payload);");
+            sb.AppendLine("            On(in e);");
+            sb.AppendLine("        }");
+        }
+        sb.AppendLine("    }");
+    }
+
     /// <summary>Which borrow a parameter type is, or null when it is not one.</summary>
     static string? BorrowKindOf(ITypeSymbol type)
     {
@@ -630,6 +671,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             "Child"  => "Child",
             "Ref"    => "Ref",
             "Parent" => "Parent",
+            "Emit"   => "Emit",
             _        => null,
         };
     }

@@ -94,9 +94,66 @@ public sealed class NodeWorld
             $"'{owner.Name}' borrows {kind}<{typeName}> named '{name}', which resolves to no node");
     }
 
-    internal NodeWorld(World world, IEcsRegistry ecs, IComponentRegistry components,
-                       KernelEngine.Logger.ILogger? logger = null)
+    private readonly SignalBus? _signals;
+    private readonly Dictionary<Type, uint> _signalIds = new();
+
+    /// <summary>The signal bus this world raises through, or null when none is registered.</summary>
+    public SignalBus? Signals => _signals;
+
+    /// <summary>
+    /// Resolves the signal id for payload type <typeparamref name="T"/>, registering
+    /// it on first use. The type's name and size are the identity, so a node in
+    /// another language naming the same signal lands on the same id.
+    /// </summary>
+    internal unsafe uint SignalIdOf<T>() where T : unmanaged
     {
+        if (_signalIds.TryGetValue(typeof(T), out var id)) return id;
+        uint resolved = 0;
+        _signals!.SignalId(typeof(T).Name, (uint)sizeof(T), &resolved);
+        _signalIds[typeof(T)]     = resolved;
+        _signalTypes[resolved]    = typeof(T);
+        return resolved;
+    }
+
+    private readonly Dictionary<uint, Type> _signalTypes = new();
+
+    /// <summary>
+    /// Hands one delivery to the node it names. A delivery whose target is no longer
+    /// bound, or whose signal this world never registered a payload type for, is
+    /// dropped: the bus is language-neutral, so an id raised by another runtime is a
+    /// normal case here, not an error.
+    /// </summary>
+    internal unsafe void Deliver(in KernelEngine.Framework.Native.ke_signal_delivery delivery)
+    {
+        if (!_signalTypes.TryGetValue(delivery.signal_id, out var type)) return;
+        if (!_byEntity.TryGetValue(delivery.target, out var node)) return;
+        node.GeneratedDeliverSignal(type,
+            new ReadOnlySpan<byte>((void*)delivery.payload, (int)delivery.payload_size));
+    }
+
+    /// <summary>
+    /// Wires <paramref name="source"/>'s <typeparamref name="T"/> signal to
+    /// <paramref name="target"/>, which receives it through its <c>On(in T)</c>
+    /// handler. Wiring the same pair twice delivers once.
+    /// </summary>
+    public void Connect<T>(Node source, Node target) where T : unmanaged
+    {
+        if (_signals is null) return;
+        _signals.Connect(source.Entity, SignalIdOf<T>(), target.Entity, 0);
+    }
+
+    /// <summary>Removes a connection made by <see cref="Connect{T}"/>.</summary>
+    public bool Disconnect<T>(Node source, Node target) where T : unmanaged =>
+        _signals is not null && _signals.Disconnect(source.Entity, SignalIdOf<T>(), target.Entity, 0);
+
+    internal Emit<T> EmitFor<T>(ulong source) where T : unmanaged =>
+        _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
+
+    internal NodeWorld(World world, IEcsRegistry ecs, IComponentRegistry components,
+                       KernelEngine.Logger.ILogger? logger = null,
+                       SignalBus? signals = null)
+    {
+        _signals    = signals;
         _world      = world;
         _ecs        = ecs;
         _components = components;
@@ -179,6 +236,9 @@ public sealed class NodeWorld
         if (node.HasBehavior && _behaviorsByType.TryGetValue(node.GetType(), out var behaviors)) behaviors.Remove(node);
         _allNodes.Remove(node);
         _byEntity.Remove(node.Entity);
+        // A wire naming a destroyed node would keep routing to an entity id the ECS
+        // is free to hand out again, delivering one node's signal to an unrelated one.
+        _signals?.ForgetEntity(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
         node.UnbindFromNodeWorld();
     }

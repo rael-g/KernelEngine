@@ -123,6 +123,13 @@ public abstract class Node
         return default;
     }
 
+    /// <summary>
+    /// Resolves an <see cref="Emit{T}"/> borrow: the right to raise signal
+    /// <typeparamref name="T"/> from this node.
+    /// </summary>
+    protected internal Emit<T> BorrowEmit<T>() where T : unmanaged =>
+        NodeWorld is null ? default : NodeWorld.EmitFor<T>(Entity);
+
     /// <summary>Resolves a <see cref="Ref{T}"/> borrow by node name, anywhere in the tree.</summary>
     protected internal Ref<T> BorrowRef<T>(string name) where T : Node
     {
@@ -183,6 +190,19 @@ public abstract class Node
     /// the node's own default instead of falling to zero.
     /// </remarks>
     protected internal virtual void GeneratedApplyProperties() { }
+
+    /// <summary>
+    /// Hands this node one signal delivered to it, dispatching to the <c>On</c>
+    /// method whose parameter type is <paramref name="payloadType"/>. Overridden by
+    /// <c>NodePropertyGenerator</c> for node types that declare handlers; base is a
+    /// no-op.
+    /// </summary>
+    /// <remarks>
+    /// Signature-driven like the rest of the model: a node listens by declaring
+    /// <c>void On(in TPayload e)</c>, so what it reacts to is readable from the
+    /// method list rather than from a registration call somewhere else.
+    /// </remarks>
+    protected internal virtual void GeneratedDeliverSignal(Type payloadType, ReadOnlySpan<byte> payload) { }
 
     internal void CompleteBind()
     {

@@ -41,12 +41,22 @@ public sealed class SceneNodesModule : IRuntimeModule
     public void Configure(IServiceCollection services)
     {
         services.AddSpatialNodeTypes();
+        services.AddSingleton<SignalBus>(_ =>
+        {
+            unsafe
+            {
+                var h = KernelEngine.Framework.Native.NativeMethods.signal_bus_create(null, null);
+                if (h.@ref == null) throw new InvalidOperationException("signal_bus_create failed");
+                return new SignalBus(h);
+            }
+        });
         services.AddSingleton<NodeWorld>(sp =>
             new NodeWorld(
                 sp.GetRequiredService<World>(),
                 sp.GetRequiredService<IEcsRegistry>(),
                 sp.GetRequiredService<IComponentRegistry>(),
-                sp.GetService<KernelEngine.Logger.ILogger>()));
+                sp.GetService<KernelEngine.Logger.ILogger>(),
+                sp.GetRequiredService<SignalBus>()));
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
@@ -76,6 +86,30 @@ public sealed class SceneNodesModule : IRuntimeModule
             _inputSnapshot = input?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
         }, accessList: Array.Empty<ComponentAccess>(), pinnedThread: 1);
+
+        // Emission happens in Update, so the clear must be in an earlier phase and
+        // the delivery in a later one: a phase boundary is the runtime's only
+        // ordering guarantee, and waves inside a phase are grouped by component
+        // conflict, which the bus's frame storage is not expressed in.
+        var signals = services.GetService<SignalBus>();
+        if (signals is not null)
+        {
+            runtime.RegisterSystem("Scene.Signals.Clear", RuntimePhase.PreUpdate, (_, _, _) =>
+                signals.ClearFrame(), accessList: Array.Empty<ComponentAccess>());
+
+            runtime.RegisterSystem("Scene.Signals.Deliver", RuntimePhase.PostUpdate, (_, ctx, _) =>
+            {
+                unsafe
+                {
+                    uint count = 0;
+                    var list = signals.Deliveries(&count);
+                    if (list == null) return;
+                    using (nodeWorld.EnterSystem(ctx))
+                        for (uint i = 0; i < count; i++)
+                            nodeWorld.Deliver(in list[i]);
+                }
+            }, accessList: Array.Empty<ComponentAccess>());
+        }
 
         nodeWorld.BehaviorTypeAdded += type =>
         {

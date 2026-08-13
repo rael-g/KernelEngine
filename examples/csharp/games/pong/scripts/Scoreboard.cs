@@ -10,7 +10,7 @@ namespace Pong;
 /// font is loaded once in <see cref="OnBind"/> (which runs on the render
 /// worker) and shared across the three labels.
 /// </summary>
-public sealed class Scoreboard : Node
+public sealed partial class Scoreboard : Node
 {
     private readonly IFontLoader     _fontLoader;
     private readonly IRenderResources _resources;
@@ -67,6 +67,22 @@ public sealed class Scoreboard : Node
             Anchor = new Vector2(0.5f, 1f),
             Offset = new Vector2(0f, -80f),
         }, "ScoreHint", parent: this);
+    }
+
+    /// <summary>
+    /// Wires itself to the ball's goal signal. The listener draws the wire, so the
+    /// ball never names a scoreboard and a scene without one still runs.
+    /// </summary>
+    protected override void OnReady()
+    {
+        if (NodeWorld?.Find("Ball") is Ball ball) NodeWorld.Connect<GoalScored>(ball, this);
+    }
+
+    /// <summary>Reacts to the ball's goal signal: records the point and re-arms the hint.</summary>
+    void On(in GoalScored e)
+    {
+        RecordGoal(e.LeftScored);
+        ShowHint("Press Space to launch");
     }
 
     public void RecordGoal(bool leftScored)

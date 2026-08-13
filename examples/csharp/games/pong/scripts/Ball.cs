@@ -39,7 +39,8 @@ public sealed partial class Ball : Body2D
     void Update(in View view,
         [NodeName("Scoreboard")] Ref<Scoreboard> board,
         [NodeName("HitSound")]   Child<AudioPlayer> hit,
-        [NodeName("ScoreSound")] Child<AudioPlayer> sfx)
+        [NodeName("ScoreSound")] Child<AudioPlayer> sfx,
+        Emit<GoalScored> goal)
     {
         if (_actions.IsJustPressed(PongAction.Quit, in view)) _router.LoadScene("Menu");
 
@@ -50,8 +51,8 @@ public sealed partial class Ball : Body2D
             hit.Node?.Play();
         LastVelocity = Velocity;
 
-        if (Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true,  board, sfx);
-        if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, board, sfx);
+        if (Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true,  goal, sfx);
+        if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, goal, sfx);
     }
 
     void Launch(Ref<Scoreboard> board)
@@ -64,14 +65,13 @@ public sealed partial class Ball : Body2D
         LastVelocity = Velocity;
     }
 
-    void Score(bool leftScored, Ref<Scoreboard> board, Child<AudioPlayer> sfx)
+    void Score(bool leftScored, Emit<GoalScored> goal, Child<AudioPlayer> sfx)
     {
-        board.Node?.RecordGoal(leftScored);
+        goal.Send(new GoalScored(leftScored));
         sfx.Node?.Play();
         Position       = Vector2.Zero;
         Velocity       = Vector2.Zero;
         LastVelocity   = Vector2.Zero;
         AwaitingLaunch = true;
-        board.Node?.ShowHint("Press Space to launch");
     }
 }
