@@ -153,6 +153,19 @@ public abstract class Node
         NodeWorld.SetByCid(Entity, cid, in state);
     }
 
+    /// <summary>
+    /// Applies this node's <c>[entity.properties]</c> block onto its generated
+    /// properties, after <see cref="OnBind"/> has seeded their defaults and before
+    /// <see cref="OnReady"/> runs. Overridden by <c>NodePropertyGenerator</c> for
+    /// node types that declare properties; base is a no-op, so a hand-written node
+    /// keeps reading the bag itself.
+    /// </summary>
+    /// <remarks>
+    /// Seeding first and authoring on top is what makes a field the scene omits keep
+    /// the node's own default instead of falling to zero.
+    /// </remarks>
+    protected internal virtual void GeneratedApplyProperties() { }
+
     internal void CompleteBind()
     {
         OnBind(NodeWorld!);

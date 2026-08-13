@@ -334,6 +334,8 @@ public sealed class NodeWorld
     /// </summary>
     internal void TriggerReady()
     {
+        for (int i = 0; i < _allNodes.Count; i++)
+            _allNodes[i].GeneratedApplyProperties();
         for (int i = _allNodes.Count - 1; i >= 0; i--)
             _allNodes[i].OnReady();
     }
