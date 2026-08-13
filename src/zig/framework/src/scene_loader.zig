@@ -287,10 +287,14 @@ fn applyComponentBlock(
     var meta: c.ke_component_meta = undefined;
     if (!e.component_lookup.?(e, comp_name, &meta, null)) return; // unknown component; skip
 
-    const comp = e.component_add.?(e, entity, meta.cid) orelse return;
-
     // No apply registered means no field mapping is defined for this component.
+    // Looked up before the component is added, because adding it zero-initialized
+    // and then failing to populate it is worse than skipping the block: a node
+    // binding later sees the component already present and keeps its own defaults
+    // out, leaving the entity with a field of zeroes nobody authored.
     const apply_fn = world.get_component_apply.?(world, meta.cid) orelse return;
+
+    const comp = e.component_add.?(e, entity, meta.cid) orelse return;
 
     // Entries come from the arena rather than a fixed stack buffer, so a
     // component block with many fields is applied whole instead of truncated.
