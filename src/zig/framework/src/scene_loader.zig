@@ -276,12 +276,16 @@ fn attachProperties(s: *State, entity: c.ke_entity, props_tbl: *c.toml_table_t) 
 
 // -- components application via apply registry -------------------------------
 
-fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
+fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype) void {
     const lg = world_impl.loggerOf(world) orelse return;
     var buf: [256]u8 = undefined;
     const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "scene.loader", .message = msg.ptr };
+    var ev = c.ke_log_event{ .level = level, .tag = "scene.loader", .message = msg.ptr };
     if (lg.log) |f| f(lg, &ev);
+}
+
+fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
+    log(world, c.KE_LOG_LEVEL_WARNING, fmt, args);
 }
 
 fn applyComponentBlock(
@@ -403,8 +407,11 @@ fn applyConnections(
             warn(world, "could not resolve signal '{s}'", .{signal_d.u.s});
             continue;
         }
-        if (!bus.connect.?(bus, source, signal_id, target, handler, null))
+        if (!bus.connect.?(bus, source, signal_id, target, handler, null)) {
             warn(world, "could not connect signal '{s}'", .{signal_d.u.s});
+            continue;
+        }
+        log(world, c.KE_LOG_LEVEL_INFO, "connected '{s}' from entity {d} to entity {d}", .{ signal_d.u.s, source, target });
     }
 }
 
