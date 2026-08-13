@@ -78,7 +78,6 @@ sealed class KeyEdgeListener : Node
 
     private readonly bool[] _prev = new bool[s_keys.Length];
 
-    protected override void OnBind(NodeWorld nodeWorld) { }
 
     protected override bool HasBehavior => true;
 

@@ -131,7 +131,6 @@ sealed class AudioController : Node
         _bass  = bass;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld) { /* nothing to materialize — this node only carries behavior */ }
 
     protected override bool HasBehavior => true;
 

@@ -118,7 +118,6 @@ sealed class PhysicsScene : Node
         _ballMat  = ballMat;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld) { }
 
     protected override bool HasBehavior => true;
 

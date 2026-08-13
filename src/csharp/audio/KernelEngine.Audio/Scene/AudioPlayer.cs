@@ -18,7 +18,6 @@ public class AudioPlayer : Node3D
 
     public AudioPlayer(IAudio audio) => _audio = audio;
 
-    protected override void OnBind(NodeWorld nodeWorld) { }
 
     protected override void OnReady()
     {

@@ -42,10 +42,22 @@ public abstract class Node
 
     /// <summary>
     /// Called once by <see cref="NodeWorld.AddNode"/> after the entity has been
-    /// created. Subclasses materialize their ECS components here from the
-    /// properties the game code set via object-initializer syntax.
+    /// created and after <see cref="GeneratedBind"/> has materialized this node's
+    /// generated components. Override to materialize components the generator does
+    /// not know about. Base implementation is a no-op.
     /// </summary>
-    protected internal abstract void OnBind(NodeWorld nodeWorld);
+    protected internal virtual void OnBind(NodeWorld nodeWorld) { }
+
+    /// <summary>
+    /// Materializes the components this node's generated properties are backed by:
+    /// resolves each component id and seeds the values authored before binding.
+    /// Overridden by <c>NodePropertyGenerator</c>; base is a no-op.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="OnBind"/> so the generator and the node's own author
+    /// are never competing for the same method — a node that needs both keeps both.
+    /// </remarks>
+    protected internal virtual void GeneratedBind(NodeWorld nodeWorld) { }
 
     /// <summary>
     /// Called once after all entities in the scene are loaded and all
@@ -168,6 +180,7 @@ public abstract class Node
 
     internal void CompleteBind()
     {
+        GeneratedBind(NodeWorld!);
         OnBind(NodeWorld!);
         if (HasBehavior) NodeWorld!.RegisterBehavior(this);
     }

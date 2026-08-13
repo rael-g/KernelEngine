@@ -6,5 +6,4 @@ namespace KernelEngine.Framework;
 /// </summary>
 public class Sprite2D : Node2D
 {
-    protected override void OnBind(NodeWorld nodeWorld) { }
 }
