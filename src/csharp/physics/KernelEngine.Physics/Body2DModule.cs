@@ -20,6 +20,15 @@ public sealed unsafe class Body2DModule : IRuntimeModule
 {
     private ke_physics_body2d_module_handle _handle;
 
+    /// <summary>
+    /// Registers this domain's node types so a scene naming them resolves.
+    /// </summary>
+    public void Configure(IServiceCollection services)
+    {
+        KernelEngine.Framework.SceneServiceCollectionExtensions.AddNodeType<KernelEngine.Framework.Body2D>(services);
+        KernelEngine.Framework.SceneServiceCollectionExtensions.AddNodeType<KernelEngine.Framework.CollisionShape2D>(services);
+    }
+
     /// <inheritdoc />
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
