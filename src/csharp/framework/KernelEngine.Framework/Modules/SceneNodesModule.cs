@@ -62,7 +62,6 @@ public sealed class SceneNodesModule : IRuntimeModule
         // destroy issued from a behavior routes through it and defers the structural
         // change to the wave barrier — so this runs as an ordinary parallel-wave
         // system with no exclusive bypass.
-        var transformCid = nodeWorld.CidOfName("transform");
         var hierarchyCid = nodeWorld.CidOfName("hierarchy");
         var nameCid      = nodeWorld.CidOfName("name");
 
@@ -84,16 +83,20 @@ public sealed class SceneNodesModule : IRuntimeModule
             var names = new List<string>();
             probe.CollectBehaviorComponents(names);
 
+            // Hierarchy and name are read every tick to resolve borrows. Everything
+            // else comes from the type's declared components: claiming a blanket write
+            // on transform put every node type in conflict with every other, which is
+            // one wave per type no matter what the signatures actually reach.
             var access = new List<ComponentAccess>
             {
-                ComponentAccess.Write(transformCid),
                 ComponentAccess.Read(hierarchyCid),
                 ComponentAccess.Read(nameCid),
             };
             foreach (var n in names)
             {
                 var cid = nodeWorld.CidOfName(n);
-                if (cid == transformCid || cid == hierarchyCid || cid == nameCid) continue;
+                if (cid == hierarchyCid || cid == nameCid) continue;
+                if (access.Any(a => a.Cid == cid)) continue;
                 access.Add(ComponentAccess.Write(cid));
             }
 
@@ -106,7 +109,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                     for (int i = 0; i < behaviors.Count; i++)
                         behaviors[i].OnUpdate(in view);
                 }
-            }, accessList: access.ToArray(), pinnedThread: 1);
+            }, accessList: access.ToArray());
         };
 
         // Scene setup runs pinned to a worker thread (GPU upload has thread
