@@ -12,4 +12,6 @@
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/scene_loader_create.h>
 #include <kernel_engine/framework/input_actions_create.h>
+#include <kernel_engine/framework/signal_bus.h>
+#include <kernel_engine/framework/signal_bus_create.h>
 #include <kernel_engine/framework/asset_resolver_create.h>

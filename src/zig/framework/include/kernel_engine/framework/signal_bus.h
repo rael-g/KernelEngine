@@ -27,8 +27,8 @@ extern "C"
     typedef struct ke_signal_bus ke_signal_bus;
 
     /// One delivery of one emission to one connected target.
-    /// @c payload points into the bus's frame storage and is valid until the frame
-    /// is cleared; a consumer that needs it longer copies it.
+    /// The payload points into the bus's frame storage and is valid until the
+    /// frame is cleared; a consumer that needs it longer copies it.
     typedef struct ke_signal_delivery
     {
         ke_entity   source;       ///< Entity that emitted.
@@ -45,18 +45,19 @@ extern "C"
 
         /// Resolves a signal by name, registering it on first use.
         ///
-        /// @c payload_size is part of the identity, not metadata: two languages
+        /// The payload size is part of the identity, not metadata: two languages
         /// naming the same signal with different payload layouts would otherwise
         /// alias one id and read each other's bytes at the wrong stride. A second
         /// registration under a different size fails instead.
+        /// @param name [utf8]
         bool (*signal_id)(struct ke_signal_bus *self,
                           const char           *name,
                           uint32_t              payload_size,
                           uint32_t             *out_id,
                           ke_error            **out_error);
 
-        /// Wires @c source's @c signal_id to @c target, tagged with a handler
-        /// selector the receiving language interprets. Connecting the same
+        /// Wires one source entity's signal to one target entity, tagged with a
+        /// handler selector the receiving language interprets. Connecting the same
         /// quadruple twice is a no-op rather than a duplicate delivery.
         bool (*connect)(struct ke_signal_bus *self,
                         ke_entity             source,
@@ -73,7 +74,7 @@ extern "C"
                            ke_entity             target,
                            uint32_t              handler_id);
 
-        /// Drops every connection referencing @c entity as source or target, so a
+        /// Drops every connection naming this entity as source or target, so a
         /// destroyed node cannot be delivered to or emit through a stale wire.
         void (*forget_entity)(struct ke_signal_bus *self, ke_entity entity);
 

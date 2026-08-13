@@ -353,6 +353,26 @@
       "usings": []
     },
     {
+      "_comment": "The signal bus. Emission is a frame's event, connection is durable data; the vtable is what lets a node in any language be either end of a wire.",
+      "name": "signal_bus",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/signal_bus.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/signal_bus.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": []
+    },
+    {
       "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host their own node types the same way).",
       "name": "render_components",
       "headers": [
