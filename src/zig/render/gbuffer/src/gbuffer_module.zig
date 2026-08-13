@@ -106,19 +106,19 @@ const GBufferModule = struct {
 // identifier limit the core stores material shader names under, plus the suffix.
 const rc_MAX_SHADER_QUALIFIED = 128;
 
-// Left-handed view from a camera transform (identity rotation → look at origin;
+// Right-handed view from a camera transform (identity rotation → look at origin;
 // otherwise the world-matrix basis). Duplicated from forward_module.zig per the
 // decoupling precedent so the encode pass agrees on view space independently.
 fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
     const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
     const q = cam_tc.rotation;
     const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
+        zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
     else blk: {
         const m = cam_tc.world_matrix.m;
         const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
         const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToLh(eye, fwd, up);
+        break :blk zm.lookToRh(eye, fwd, up);
     };
     return view;
 }
@@ -129,15 +129,15 @@ fn makeProjection(ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, a
         const h = cam.orthographic_size * 2.0;
         const w = h * aspect;
         break :ortho if (ndc.z_zero_to_one != 0)
-            zm.orthographicLh(w, h, cam.near_plane, cam.far_plane)
+            zm.orthographicRh(w, h, cam.near_plane, cam.far_plane)
         else
-            zm.orthographicLhGl(w, h, cam.near_plane, cam.far_plane);
+            zm.orthographicRhGl(w, h, cam.near_plane, cam.far_plane);
     } else persp: {
         const fovy = cam.fov * @as(f32, std.math.pi / 180.0);
         break :persp if (ndc.z_zero_to_one != 0)
-            zm.perspectiveFovLh(fovy, aspect, cam.near_plane, cam.far_plane)
+            zm.perspectiveFovRh(fovy, aspect, cam.near_plane, cam.far_plane)
         else
-            zm.perspectiveFovLhGl(fovy, aspect, cam.near_plane, cam.far_plane);
+            zm.perspectiveFovRhGl(fovy, aspect, cam.near_plane, cam.far_plane);
     };
     if (ndc.y_flip != 0) p[1][1] = -p[1][1];
     return p;

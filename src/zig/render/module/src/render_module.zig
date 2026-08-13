@@ -260,13 +260,14 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     // otherwise the game wires its own passes. A failed setup (e.g. a bad shader)
     // fails loudly via out_error — it is never silently skipped.
     if (default_passes != 0) {
-        // Backend clip-space convention — the view stays left-handed (engine
-        // world convention); the projection absorbs the z range + Y flip. A
-        // right-handed-clip backend is rejected (it would need a right-handed
-        // world convention).
+        // Clip space is the backend's; the world is the engine's, and the two are
+        // independent. The world is right-handed (+Y up, +Z toward the viewer, as
+        // glTF authors it) and the projection converts that into the backend's
+        // left-handed clip space while absorbing the z range and Y flip. A
+        // right-handed-clip backend is rejected because nothing here builds one.
         const ndc = dev.get_ndc_convention.?(dev);
         if (ndc.left_handed == 0) {
-            c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: right-handed clip-space backend not supported (engine world convention is left-handed)", @src().file, @intCast(@src().line), null);
+            c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: right-handed clip-space backend not supported", @src().file, @intCast(@src().line), null);
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;

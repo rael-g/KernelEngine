@@ -57,21 +57,21 @@ fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
     const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
     const q = cam_tc.rotation;
     const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
+        zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
     else blk: {
         const m = cam_tc.world_matrix.m;
         const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
         const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToLh(eye, fwd, up);
+        break :blk zm.lookToRh(eye, fwd, up);
     };
     return view;
 }
 
 fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
     var p = if (ndc.z_zero_to_one != 0)
-        zm.perspectiveFovLh(fovy, aspect, near, far)
+        zm.perspectiveFovRh(fovy, aspect, near, far)
     else
-        zm.perspectiveFovLhGl(fovy, aspect, near, far);
+        zm.perspectiveFovRhGl(fovy, aspect, near, far);
     if (ndc.y_flip != 0) p[1][1] = -p[1][1];
     return p;
 }

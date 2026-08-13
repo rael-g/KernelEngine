@@ -72,16 +72,16 @@ fn lightViewProj(ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
     const eye3 = ldir * zm.f32x4s(-25.0);
     const eye = zm.f32x4(eye3[0], eye3[1], eye3[2], 1.0);
     const up = if (@abs(ldir[1]) > 0.99) zm.f32x4(0, 0, 1, 0) else zm.f32x4(0, 1, 0, 0);
-    const lview = zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), up);
+    const lview = zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), up);
     const lproj = makeOrtho(ndc, 20.0, 20.0, 0.1, 50.0);
     return zm.mul(lview, lproj);
 }
 
 fn makeOrtho(ndc: c.ke_ndc_convention, w: f32, h: f32, near: f32, far: f32) zm.Mat {
     var p = if (ndc.z_zero_to_one != 0)
-        zm.orthographicLh(w, h, near, far)
+        zm.orthographicRh(w, h, near, far)
     else
-        zm.orthographicLhGl(w, h, near, far);
+        zm.orthographicRhGl(w, h, near, far);
     if (ndc.y_flip != 0) p[1][1] = -p[1][1];
     return p;
 }
