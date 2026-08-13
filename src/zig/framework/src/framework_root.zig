@@ -31,4 +31,5 @@ comptime {
     _ = @import("scene_hierarchy.zig");
     _ = @import("input_actions.zig");
     _ = @import("scene_loader.zig");
+    _ = @import("signal_bus.zig");
 }

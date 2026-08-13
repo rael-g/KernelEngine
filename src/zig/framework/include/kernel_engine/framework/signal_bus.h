@@ -1,0 +1,109 @@
+#ifndef KERNEL_ENGINE_FRAMEWORK_SIGNAL_BUS_H_
+#define KERNEL_ENGINE_FRAMEWORK_SIGNAL_BUS_H_
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/ecs/ke_ecs.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    /// Routes one node's emission to the nodes connected to it, splitting the two
+    /// lifetimes a signal has.
+    ///
+    /// An emission is a single frame's event: queued while systems run, joined
+    /// against the connection table once, readable until the next frame clears it.
+    /// A connection is durable and language-neutral — it names a target entity and
+    /// a handler, never a closure in one runtime's heap — so a node authored in one
+    /// language can be wired to a signal a node in another language raises.
+    ///
+    /// The join is what keeps an emitter from knowing its listeners: a node calls
+    /// emit against its own entity, and who receives that is a fact of the scene,
+    /// changeable without touching either node.
+    typedef struct ke_signal_bus ke_signal_bus;
+
+    /// One delivery of one emission to one connected target.
+    /// @c payload points into the bus's frame storage and is valid until the frame
+    /// is cleared; a consumer that needs it longer copies it.
+    typedef struct ke_signal_delivery
+    {
+        ke_entity   source;       ///< Entity that emitted.
+        ke_entity   target;       ///< Entity connected to it.
+        uint32_t    signal_id;    ///< Which signal, as resolved by signal_id().
+        uint32_t    handler_id;   ///< Handler selector the connection recorded.
+        const void *payload;      ///< Emission payload, borrowed for the frame.
+        uint32_t    payload_size; ///< Payload length in bytes.
+    } ke_signal_delivery;
+
+    struct ke_signal_bus
+    {
+        void *handle;
+
+        /// Resolves a signal by name, registering it on first use.
+        ///
+        /// @c payload_size is part of the identity, not metadata: two languages
+        /// naming the same signal with different payload layouts would otherwise
+        /// alias one id and read each other's bytes at the wrong stride. A second
+        /// registration under a different size fails instead.
+        bool (*signal_id)(struct ke_signal_bus *self,
+                          const char           *name,
+                          uint32_t              payload_size,
+                          uint32_t             *out_id,
+                          ke_error            **out_error);
+
+        /// Wires @c source's @c signal_id to @c target, tagged with a handler
+        /// selector the receiving language interprets. Connecting the same
+        /// quadruple twice is a no-op rather than a duplicate delivery.
+        bool (*connect)(struct ke_signal_bus *self,
+                        ke_entity             source,
+                        uint32_t              signal_id,
+                        ke_entity             target,
+                        uint32_t              handler_id,
+                        ke_error            **out_error);
+
+        /// Removes a connection previously made by connect(). Returns false when
+        /// no such connection exists.
+        bool (*disconnect)(struct ke_signal_bus *self,
+                           ke_entity             source,
+                           uint32_t              signal_id,
+                           ke_entity             target,
+                           uint32_t              handler_id);
+
+        /// Drops every connection referencing @c entity as source or target, so a
+        /// destroyed node cannot be delivered to or emit through a stale wire.
+        void (*forget_entity)(struct ke_signal_bus *self, ke_entity entity);
+
+        /// Queues one emission for this frame. The payload is copied into frame
+        /// storage, so the caller's buffer need not outlive the call.
+        bool (*emit)(struct ke_signal_bus *self,
+                     ke_entity             source,
+                     uint32_t              signal_id,
+                     const void           *payload,
+                     uint32_t              payload_size,
+                     ke_error            **out_error);
+
+        /// Joins this frame's emissions against the connection table and returns
+        /// the resulting deliveries. Idempotent within a frame: calling it twice
+        /// returns the same list rather than duplicating it.
+        const ke_signal_delivery *(*deliveries)(struct ke_signal_bus *self, uint32_t *out_count);
+
+        /// Discards this frame's emissions and deliveries. Connections survive.
+        void (*clear_frame)(struct ke_signal_bus *self);
+    };
+
+    /// Owner wrapper: destroy releases the connection table and frame storage.
+    typedef struct ke_signal_bus_handle
+    {
+        ke_signal_bus *ref;
+        void (*destroy)(ke_signal_bus *self);
+    } ke_signal_bus_handle;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // KERNEL_ENGINE_FRAMEWORK_SIGNAL_BUS_H_
