@@ -7,6 +7,14 @@ name = "Root"
 type = "Pong.Wall"
 
 [[entity]]
+name   = "Shape"
+parent = "Root"
+type   = "CollisionShape2D"
+[entity.properties]
+HalfExtents = [8.0, 0.25]
+Restitution = 1.0
+
+[[entity]]
 name   = "Visual"
 parent = "Root"
 type   = "Sprite2D"

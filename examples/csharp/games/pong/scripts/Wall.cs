@@ -1,26 +1,14 @@
-﻿using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Physics;
 
 namespace Pong;
 
 /// <summary>
-/// Top / bottom static wall — Box2D static body. The visual is a Sprite2D
-/// child declared in Wall.scene; this script owns only the physics fixture.
+/// Top / bottom static wall. Composes <see cref="Body2D"/> and owns nothing else —
+/// the collider is a CollisionShape2D child and the visual a Sprite2D child, both
+/// declared in Wall.scene.
 /// </summary>
-public sealed class Wall : Node2D
+public sealed partial class Wall : Body2D
 {
-    private readonly IPhysics2D _physics;
-
-    private BodyHandle2D _body;
-
-    public Wall(IPhysics2D physics) => _physics = physics;
-
-    protected override void OnBind(NodeWorld nodeWorld)
-    {
-        _body = _physics.CreateBody(BodyType2D.Static, Position);
-        _physics.AddBoxFixture(_body, new Vector2(8.0f, 0.25f), restitution: 1f);
-    }
-
-    protected override void OnUnbind() => _physics.DestroyBody(_body);
+    public Wall() => Type = BodyType2D.Static;
 }

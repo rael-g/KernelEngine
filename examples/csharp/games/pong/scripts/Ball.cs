@@ -37,7 +37,7 @@ public sealed partial class Ball : Body2D
     }
 
     void Update(in View view,
-        Ref<Scoreboard> board,
+        [NodeName("Scoreboard")] Ref<Scoreboard> board,
         [NodeName("HitSound")]   Child<AudioPlayer> hit,
         [NodeName("ScoreSound")] Child<AudioPlayer> sfx)
     {
