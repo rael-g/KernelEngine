@@ -8,12 +8,21 @@ var gpa = std.heap.c_allocator;
 
 const Module = struct {
     physics: *c.ke_physics_2d,
+    logger: ?*c.ke_logger = null,
     body_queries: [1]c.ke_query_decl = undefined,
     collider_queries: [3]c.ke_query_decl = undefined,
 };
 
 fn moduleOf(user: ?*anyopaque) *Module {
     return @ptrCast(@alignCast(user.?));
+}
+
+fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anytype) void {
+    const lg = logger orelse return;
+    var buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
+    var ev = c.ke_log_event{ .level = level, .tag = "physics.body2d", .message = msg.ptr };
+    if (lg.log) |f| f(lg, &ev);
 }
 
 /// A quaternion carrying only a Z-axis rotation, which is the whole of a 2D
@@ -56,6 +65,9 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
                 p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
                 p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
+                log(m.logger, c.KE_LOG_LEVEL_INFO,
+                    "body on entity {d}: type={d} pos=({d:.3},{d:.3}) angle={d:.4} scale=({d:.3},{d:.3},{d:.3})",
+                    .{ segs[s].entities[i], b.type, b.position.x, b.position.y, b.angle, tcs0[i].scale.x, tcs0[i].scale.y, tcs0[i].scale.z });
                 continue;
             }
 
@@ -154,14 +166,22 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
             const col = &cols[i];
             if (col.attached) continue;
 
-            const body = findBody(&parents, &bodies, segs[s].entities[i]) orelse continue;
+            const body = findBody(&parents, &bodies, segs[s].entities[i]) orelse {
+                log(m.logger, c.KE_LOG_LEVEL_WARNING,
+                    "shape on entity {d} resolves to no body; it will never collide", .{segs[s].entities[i]});
+                continue;
+            };
 
             const off = tcs[i].position;
+            const angle = zAngle(tcs[i].rotation);
             const ok = switch (col.kind) {
                 c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, off.x, off.y, col.density, col.friction, col.restitution, null),
-                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, zAngle(tcs[i].rotation), col.density, col.friction, col.restitution, null),
+                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, angle, col.density, col.friction, col.restitution, null),
             };
             col.attached = ok;
+            log(m.logger, if (ok) c.KE_LOG_LEVEL_INFO else c.KE_LOG_LEVEL_ERROR,
+                "shape on entity {d}: kind={d} half=({d:.3},{d:.3}) r={d:.3} off=({d:.3},{d:.3}) angle={d:.4} density={d:.3} friction={d:.3} restitution={d:.3} attached={}",
+                .{ segs[s].entities[i], col.kind, col.half_extents.x, col.half_extents.y, col.radius, off.x, off.y, angle, col.density, col.friction, col.restitution, ok });
         }
     }
 }
@@ -201,7 +221,7 @@ export fn ke_physics_body2d_module_create(
     const physics = pr.physics orelse return empty;
 
     const m = gpa.create(Module) catch return empty;
-    m.* = .{ .physics = physics };
+    m.* = .{ .physics = physics, .logger = pr.logger };
 
     const body_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_BODY_2D, @sizeOf(c.ke_body2d_component), null);
     const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), null);

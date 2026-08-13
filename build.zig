@@ -349,6 +349,7 @@ pub fn build(b: *std.Build) void {
     const physics_body2d = ctx.plugin("ke_physics_body2d", "src/zig/physics/body2d", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-physics-include", b.pathJoin(&.{ src_c, "physics" })),

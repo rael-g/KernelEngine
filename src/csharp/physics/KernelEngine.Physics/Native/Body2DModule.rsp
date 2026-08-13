@@ -45,3 +45,5 @@ c++
 ke_runtime=KernelEngine.Runtime.Native.ke_runtime
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_physics_2d=KernelEngine.Physics.Native.ke_physics_2d
+
+ke_logger=KernelEngine.Logger.Native.ke_logger

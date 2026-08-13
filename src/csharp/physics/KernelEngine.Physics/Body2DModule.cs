@@ -35,11 +35,14 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         var ecs     = services.GetRequiredService<IEcs>();
         var physics = services.GetRequiredService<IPhysics2D>();
 
+        var logger = services.GetService<KernelEngine.Logger.INativeLogger>();
+
         var @params = new ke_physics_body2d_module_params
         {
             runtime = ((INativeRuntime)runtime).Native,
             ecs     = ((INativeEcs)ecs).Native,
             physics = ((INativePhysics2d)physics).Native,
+            logger  = logger is not null ? logger.Native : null,
         };
 
         ke_error* err = null;

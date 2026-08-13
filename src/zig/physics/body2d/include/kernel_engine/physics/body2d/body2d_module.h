@@ -8,6 +8,7 @@
 #pragma once
 
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/physics/physics_2d.h>
 #include <kernel_engine/runtime/runtime.h>
 
@@ -35,6 +36,7 @@ typedef struct ke_physics_body2d_module_params
     ke_runtime    *runtime;      ///< Registers the system; borrowed, must outlive the module.
     ke_ecs        *ecs;          ///< Resolves the component ids; borrowed.
     ke_physics_2d *physics;      ///< The world to drive; borrowed.
+    ke_logger     *logger;       ///< Reports shapes that resolve to no body; optional, borrowed.
 } ke_physics_body2d_module_params;
 
 typedef struct ke_physics_body2d_module ke_physics_body2d_module;
