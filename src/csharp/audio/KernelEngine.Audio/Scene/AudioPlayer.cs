@@ -5,9 +5,9 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Behavior half of the generated <see cref="AudioPlayer"/> node: turns the clip
 /// path the scene declared into a loaded sound, and releases it when the node
-/// goes away. Path and Volume are generated from the C header, so they are typed,
-/// defaulted, and visible to every language rather than being read out of an
-/// untyped property bag here.
+/// goes away. Path and Volume come from the component the scene authored, applied
+/// by the field table generated from the C header — so a clip declared in a scene
+/// reaches this node the same way in every language.
 /// </summary>
 public partial class AudioPlayer
 {
@@ -19,17 +19,6 @@ public partial class AudioPlayer
 
     protected override void OnReady()
     {
-        // The scene's [entity.properties] block is still the wiring for a node's
-        // own fields; the component block that would feed Path directly has no
-        // registration home yet for this domain.
-        if (TryGetProperties(out var props))
-        {
-            if (props.TryGetString("Path", out var declared) && !string.IsNullOrEmpty(declared))
-                Path = declared!;
-            if (props.TryGetFloat("Volume", out var volume) && volume > 0f)
-                Volume = volume;
-        }
-
         if (string.IsNullOrEmpty(Path)) return;
         _handle = _audio.LoadSound(System.IO.Path.Combine(System.AppContext.BaseDirectory, Path));
     }

@@ -267,3 +267,22 @@ export fn ke_physics_body2d_module_create(
 
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
+
+/// Registers a generated field table, taking its length from the array type so
+/// the count can never drift from the table it describes.
+fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
+    const fields = @typeInfo(@TypeOf(table.*)).array;
+    _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
+}
+
+export fn ke_physics_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) callconv(.c) bool {
+    const e = ecs orelse return false;
+    const w = world orelse return false;
+
+    const body_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_BODY_2D, @sizeOf(c.ke_body2d_component), null);
+    const collider_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_COLLIDER_2D, @sizeOf(c.ke_collider2d_component), null);
+
+    registerFields(w, body_cid, &c.ke_body2d_component_fields);
+    registerFields(w, collider_cid, &c.ke_collider2d_component_fields);
+    return true;
+}

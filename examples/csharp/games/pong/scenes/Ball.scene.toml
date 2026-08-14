@@ -10,10 +10,10 @@ type = "Pong.Ball"
 name   = "Shape"
 parent = "Root"
 type   = "CollisionShape2D"
-[entity.properties]
-HalfExtents = [0.18, 0.18]
-Restitution = 1.0
-Friction    = 0.0
+[entity.collider2d]
+half_extents = [0.18, 0.18]
+restitution  = 1.0
+friction     = 0.0
 
 [[entity]]
 name   = "Visual"
@@ -30,14 +30,14 @@ roughness = 1.0
 name   = "HitSound"
 parent = "Root"
 type   = "AudioPlayer"
-[entity.properties]
-Path   = "assets/sounds/hit.wav"
-Volume = 0.5
+[entity.audio_player]
+path   = "assets/sounds/hit.wav"
+volume = 0.5
 
 [[entity]]
 name   = "ScoreSound"
 parent = "Root"
 type   = "AudioPlayer"
-[entity.properties]
-Path   = "assets/sounds/score.wav"
-Volume = 0.6
+[entity.audio_player]
+path   = "assets/sounds/score.wav"
+volume = 0.6

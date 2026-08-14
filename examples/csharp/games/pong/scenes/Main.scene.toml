@@ -5,8 +5,8 @@ version = 2
 [[entity]]
 name = "Ambient"
 type = "AmbientLight"
-[entity.properties]
-Color = [1.0, 1.0, 1.0]
+[entity.ambient_light]
+color = [1.0, 1.0, 1.0]
 
 [[entity]]
 name = "Camera"
@@ -64,6 +64,6 @@ target = "Scoreboard"
 [[entity]]
 name = "Scoreboard"
 type = "Pong.Scoreboard"
-[entity.properties]
-FontPath = ""
-FontSize = 56.0
+[entity.scoreboard]
+font_path = ""
+font_size = 56.0

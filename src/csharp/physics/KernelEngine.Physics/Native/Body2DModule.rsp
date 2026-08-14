@@ -17,6 +17,8 @@ ke_physics_body2d
 --include-directory
 ../../../../c/runtime
 --include-directory
+../../../../zig/framework/include
+--include-directory
 ../../../../zig/physics/body2d/include
 --file
 ../../../../zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h
@@ -34,6 +36,7 @@ ke_bool=byte
 --exclude
 ke_result
 ke_bool
+ke_world
 --config
 multi-file
 latest-codegen
@@ -45,5 +48,6 @@ c++
 ke_runtime=KernelEngine.Runtime.Native.ke_runtime
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_physics_2d=KernelEngine.Physics.Native.ke_physics_2d
+ke_world=KernelEngine.Framework.Native.ke_world
 
 ke_logger=KernelEngine.Logger.Native.ke_logger

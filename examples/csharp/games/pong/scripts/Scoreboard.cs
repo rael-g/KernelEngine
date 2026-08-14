@@ -20,9 +20,7 @@ public sealed partial class Scoreboard : Node
     private Label? _right;
     private Label? _hint;
 
-    /// <summary>Set by SceneLoader from <c>[entity.properties] FontPath</c>.</summary>
-    public string FontPath { get; set; } = "";
-    public float  FontSize { get; set; } = 48f;
+    private const float DefaultFontSize = 48f;
 
     public int Left  { get; private set; }
     public int Right { get; private set; }
@@ -36,10 +34,18 @@ public sealed partial class Scoreboard : Node
 
     protected override void OnBind(NodeWorld nodeWorld)
     {
-        var path = string.IsNullOrEmpty(FontPath)
-            ? ExamplePaths.SystemFont
-            : FontPath;
-        _font = Font.Load(_resources, _fontLoader, path, pixelSize: FontSize);
+        // Read from the component the scene authored, not from a property on this
+        // node: what a scene writes has to be data, or only C# can read it back.
+        var path = ExamplePaths.SystemFont;
+        var size = DefaultFontSize;
+        if (TryGetComponent<ScoreboardComponent>("scoreboard", out var cfg))
+        {
+            var declared = System.Text.Encoding.UTF8.GetString(
+                ((ReadOnlySpan<byte>)cfg.FontPath)[..((ReadOnlySpan<byte>)cfg.FontPath).IndexOf((byte)0)]);
+            if (!string.IsNullOrEmpty(declared)) path = declared;
+            if (cfg.FontSize > 0f) size = cfg.FontSize;
+        }
+        _font = Font.Load(_resources, _fontLoader, path, pixelSize: size);
 
         _left  = AddChild(new Label
         {

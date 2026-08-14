@@ -10,6 +10,7 @@
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/logger/logger.h>
 #include <kernel_engine/physics/physics_2d.h>
+#include <kernel_engine/framework/world.h>
 #include <kernel_engine/runtime/runtime.h>
 
 #ifndef KE_PHYSICS_BODY2D_API
@@ -52,6 +53,11 @@ typedef struct ke_physics_body2d_module_handle
 KE_PHYSICS_BODY2D_API ke_physics_body2d_module_handle ke_physics_body2d_module_create(
     const ke_physics_body2d_module_params *params,
     ke_error **out_error);
+
+/// @brief Registers physics's component ids and their scene-file field tables against
+///        @p world, so an [entity.body2d] or [entity.collider2d] block applies.
+/// @return false if either argument is NULL.
+KE_PHYSICS_BODY2D_API bool ke_physics_register_scene_apply(ke_ecs *ecs, ke_world *world);
 
 #ifdef __cplusplus
 }

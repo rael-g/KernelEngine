@@ -5,8 +5,8 @@ version = 2
 [[entity]]
 name = "Ambient"
 type = "AmbientLight"
-[entity.properties]
-Color = [1.0, 1.0, 1.0]
+[entity.ambient_light]
+color = [1.0, 1.0, 1.0]
 
 [[entity]]
 name = "Camera"

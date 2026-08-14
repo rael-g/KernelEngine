@@ -6,6 +6,8 @@
 #include <kernel_engine/render/ui/components.h>
 #include <kernel_engine/audio/components.h>
 #include <kernel_engine/audio/module/audio_module.h>
+#include <kernel_engine/physics/components.h>
+#include <kernel_engine/physics/body2d/body2d_module.h>
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/ecs/variant.h>
 #include <kernel_engine/framework/scene_loader_create.h>
@@ -81,6 +83,7 @@ protected:
         // module would (ke_render_module_create does this same call).
         ASSERT_TRUE(ke_render_register_scene_apply(ecs, world));
         ASSERT_TRUE(ke_audio_register_scene_apply(ecs, world));
+        ASSERT_TRUE(ke_physics_register_scene_apply(ecs, world));
 
         loader_h = ke_scene_loader_create(world, nullptr, NULL);
         ASSERT_NE(loader_h.ref, nullptr);
@@ -434,6 +437,32 @@ parent = 999
     auto *h = (ke_hierarchy_component *)ecs->component_get(ecs, child, meta.cid);
     ASSERT_NE(h, nullptr);
     EXPECT_EQ(h->parent, parent);
+}
+
+TEST_F(SceneLoaderTest, Collider2D_FieldsApplied)
+{
+    // The shape a scene gives a collider used to arrive through a C#-only
+    // property bag, so a non-C# host loaded the same file and got the default.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Shape"
+[entity.collider2d]
+half_extents = [0.18, 0.18]
+restitution  = 1.0
+friction     = 0.0
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Shape", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "collider2d", &meta, nullptr));
+    auto *col = (ke_collider2d_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(col, nullptr);
+    EXPECT_FLOAT_EQ(col->half_extents.x, 0.18f);
+    EXPECT_FLOAT_EQ(col->half_extents.y, 0.18f);
+    EXPECT_FLOAT_EQ(col->restitution, 1.0f);
+    EXPECT_FLOAT_EQ(col->friction, 0.0f);
 }
 
 TEST_F(SceneLoaderTest, PointLight_FieldsApplied)

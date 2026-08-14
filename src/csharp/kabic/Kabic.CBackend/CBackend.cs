@@ -46,10 +46,10 @@ public static class CBackend
 
         foreach (var s in Describable(model, convention))
         {
-            var fields = s.Fields.Where(Describes).ToList();
+            var fields = s.Fields.Where(f => Describes(model, f)).ToList();
             sb.AppendLine($"static const ke_component_field {s.Name}_fields[] = {{");
             foreach (var f in fields)
-                sb.AppendLine($"    {{ \"{f.TagValue("name") ?? f.Name}\", {VariantOf(f)}, "
+                sb.AppendLine($"    {{ \"{f.TagValue("name") ?? f.Name}\", {VariantOf(model, f)}, "
                     + $"offsetof({s.Name}, {f.Name}), sizeof((({s.Name} *)0)->{f.Name}) }},");
             sb.AppendLine("};");
             sb.AppendLine();
@@ -70,23 +70,26 @@ public static class CBackend
         model.Structs.Where(s => !s.IsVtable
             && !s.External
             && s.Name.EndsWith(convention.ComponentSuffix, StringComparison.Ordinal)
-            && s.Fields.Any(f => Describes(f)));
+            && s.Fields.Any(f => Describes(model, f)));
 
     /// <summary>
     /// Whether a scene file can address this field at all. <c>[output]</c> is a
     /// field a system writes every tick; describing it would invite a scene to
     /// author a value that is overwritten before anything reads it.
     /// </summary>
-    private static bool Describes(ApiField f) => !f.Has("output") && VariantOf(f) is not null;
+    private static bool Describes(ApiModel model, ApiField f) => !f.Has("output") && VariantOf(model, f) is not null;
 
     /// <summary>
     /// The <c>ke_variant_type</c> a field is addressed as, or null when the field
     /// has no scene-file spelling — a derived matrix or an opaque handle is
     /// produced by a system, never written down.
     /// </summary>
-    private static string? VariantOf(ApiField f)
+    private static string? VariantOf(ApiModel model, ApiField f)
     {
         if (f.Has("bool")) return "KE_VARIANT_BOOL";
+        // An enum is authored by number here; naming an enumerator is a mapping
+        // only the domain declaring it holds, so that stays a domain callback.
+        if (model.Enums.Any(e => e.Name == Base(f.Type))) return "KE_VARIANT_INT";
         return Base(f.Type) switch
         {
             "float" or "double"                        => "KE_VARIANT_FLOAT",
@@ -94,7 +97,8 @@ public static class CBackend
             "ke_vec3"                                  => "KE_VARIANT_VEC3",
             "ke_vec4"                                  => "KE_VARIANT_VEC4",
             "ke_quat"                                  => "KE_VARIANT_QUAT",
-            "bool"                                     => "KE_VARIANT_BOOL",
+            // C spells bool as _Bool after preprocessing; both reach the description.
+            "bool" or "_Bool"                          => "KE_VARIANT_BOOL",
             "int8_t" or "int16_t" or "int32_t" or "int64_t" => "KE_VARIANT_INT",
             "uint8_t" or "uint16_t" or "uint32_t" or "uint64_t" => "KE_VARIANT_INT",
             "int" or "unsigned" or "unsigned int"      => "KE_VARIANT_INT",

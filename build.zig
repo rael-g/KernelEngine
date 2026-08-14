@@ -622,6 +622,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "audio" }),
             b.pathJoin(&.{ src_zig, "audio/module/include" }),
+            b.pathJoin(&.{ src_c, "physics" }),
+            b.pathJoin(&.{ src_zig, "physics/body2d/include" }),
             gtest_include,
         })),
         argF(b, "libs", joinPaths(b, &.{
@@ -635,6 +637,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_audio_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_body2d") }),
             gtest_main_a,
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             gtest_a,
@@ -647,6 +650,7 @@ pub fn build(b: *std.Build) void {
         &logger_simple.step, &input_default.step, &resource_cache_default.step, &framework.step,
         &runtime.step,       &ecs_flecs.step,      &scheduler_enki.step,        &common.step,
         &render_service.step, &render_module.step, &audio_module.step,
+        &physics_body2d.step,
     });
 
     const integration_test_sources = [_][]const u8{

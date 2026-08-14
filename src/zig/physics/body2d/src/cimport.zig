@@ -8,5 +8,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/framework/components.h");
     @cInclude("kernel_engine/physics/physics_2d.h");
     @cInclude("kernel_engine/physics/components.h");
+    @cInclude("kernel_engine/physics/component_fields.h");
+    @cInclude("kernel_engine/framework/world.h");
     @cInclude("kernel_engine/physics/body2d/body2d_module.h");
 });
