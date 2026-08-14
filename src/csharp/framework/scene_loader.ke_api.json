@@ -1,26 +1,6 @@
 {
   "enums": [],
-  "structs": [
-    {
-      "name": "ke_scene_properties",
-      "doc": null,
-      "tags": [],
-      "fields": [
-        {
-          "name": "entries",
-          "type": "const ke_variant_table_entry *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        }
-      ]
-    }
-  ],
+  "structs": [],
   "vtables": [
     {
       "name": "ke_scene_loader",

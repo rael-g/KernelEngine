@@ -416,16 +416,7 @@ public sealed class NodeWorld
     /// </summary>
     internal void TriggerReady()
     {
-        for (int i = 0; i < _allNodes.Count; i++)
-            _allNodes[i].GeneratedApplyProperties();
         for (int i = _allNodes.Count - 1; i >= 0; i--)
             _allNodes[i].OnReady();
     }
-
-    /// <summary>
-    /// Reads the <c>[entity.properties]</c> block declared in the scene file for
-    /// <paramref name="entity"/>. Delegates to <see cref="World.TryGetProperties"/>.
-    /// </summary>
-    internal bool TryGetProperties(ulong entity, out VariantReader reader)
-        => _world.TryGetProperties(entity, out reader);
 }

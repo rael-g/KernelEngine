@@ -68,24 +68,12 @@ public abstract class Node
     protected internal virtual void GeneratedBind(NodeWorld nodeWorld) { }
 
     /// <summary>
-    /// Called once after all entities in the scene are loaded and all
-    /// <c>[entity.properties]</c> blocks have been applied. Override to read
-    /// scene-file properties or look up sibling nodes (via <see cref="NodeWorld.Find"/>)
-    /// that are guaranteed to exist at this point.
+    /// Called once after every entity in the scene is loaded and every component
+    /// block applied. Override to look up sibling nodes, or to act on a component
+    /// the scene authored — both are guaranteed to exist at this point.
     /// Base implementation is a no-op.
     /// </summary>
     protected internal virtual void OnReady() { }
-
-    /// <summary>
-    /// Reads the <c>[entity.properties]</c> block declared in the scene file
-    /// for this node. Returns false when no properties block was declared.
-    /// Only valid during or after <see cref="OnReady"/>.
-    /// </summary>
-    protected bool TryGetProperties(out VariantReader reader)
-    {
-        if (NodeWorld is null) { reader = default; return false; }
-        return NodeWorld.TryGetProperties(Entity, out reader);
-    }
 
     /// <summary>
     /// Called every simulation tick on bound nodes. Default is a no-op so
@@ -247,19 +235,6 @@ public abstract class Node
     /// <summary>Reads one of this node's component values. Counterpart to <see cref="GeneratedSet{T}"/>.</summary>
     protected internal bool GeneratedTryGet<T>(uint cid, out T state) where T : unmanaged =>
         NodeWorld!.TryGetByCid(Entity, cid, out state);
-
-    /// <summary>
-    /// Applies this node's <c>[entity.properties]</c> block onto its generated
-    /// properties, after <see cref="OnBind"/> has seeded their defaults and before
-    /// <see cref="OnReady"/> runs. Overridden by <c>NodePropertyGenerator</c> for
-    /// node types that declare properties; base is a no-op, so a hand-written node
-    /// keeps reading the bag itself.
-    /// </summary>
-    /// <remarks>
-    /// Seeding first and authoring on top is what makes a field the scene omits keep
-    /// the node's own default instead of falling to zero.
-    /// </remarks>
-    protected internal virtual void GeneratedApplyProperties() { }
 
     /// <summary>
     /// Hands this node one signal delivered to it, dispatching to the <c>On</c>

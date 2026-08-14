@@ -73,25 +73,7 @@ public unsafe partial class World : IDisposable
             native->register_component_apply(native, cid, fnPtr, &err), err, "register_component_apply");
     }
 
-    private uint _scenePropertiesCid;
 
-    /// <summary>
-    /// Reads the <c>ke_scene_properties</c> component set by the scene loader for
-    /// <paramref name="entity"/>. Returns false when the entity has no properties block.
-    /// </summary>
-    public unsafe bool TryGetProperties(ulong entity, out VariantReader reader)
-    {
-        if (_scenePropertiesCid == 0 &&
-            !Ecs.TryLookupComponent("scene_properties", out _scenePropertiesCid))
-        {
-            reader = default;
-            return false;
-        }
-        var sp = Ecs.GetComponent<ke_scene_properties>(entity, _scenePropertiesCid);
-        if (sp.IsEmpty) { reader = default; return false; }
-        reader = new VariantReader(sp[0].entries, sp[0].count);
-        return true;
-    }
 
     /// <summary>Also releases the owned scene tree and the GC handles kept for registered apply callbacks.</summary>
     partial void OnDispose()

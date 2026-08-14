@@ -545,44 +545,6 @@ rotation_euler = [0.0, 90.0, 0.0]
     EXPECT_NEAR(t->rotation.w, 0.70710678f, 1e-5f);
 }
 
-// ── scene_properties bag ───────────────────────────────────────────────────
-
-TEST_F(SceneLoaderTest, Properties_AttachedAsSceneProperties)
-{
-    auto p = WriteTempScene(R"(
-[[entity]]
-name = "P"
-[entity.properties]
-Health = 100
-MoveAction = "PlayerMove"
-)");
-    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
-    ke_entity e = tree->find_node(tree, "P", NULL);
-    ASSERT_NE(e, KE_ENTITY_INVALID);
-
-    ke_component_meta meta;
-    ASSERT_TRUE(ecs->component_lookup(ecs, KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta, nullptr));
-    auto *bag = (ke_scene_properties *)ecs->component_get(ecs, e, meta.cid);
-    ASSERT_NE(bag, nullptr);
-    EXPECT_EQ(bag->count, 2u);
-
-    bool saw_health = false, saw_move = false;
-    for (uint32_t i = 0; i < bag->count; ++i) {
-        if (strcmp(bag->entries[i].key, "Health") == 0) {
-            EXPECT_EQ(bag->entries[i].value.type, KE_VARIANT_INT);
-            EXPECT_EQ(bag->entries[i].value.i, 100);
-            saw_health = true;
-        }
-        if (strcmp(bag->entries[i].key, "MoveAction") == 0) {
-            EXPECT_EQ(bag->entries[i].value.type, KE_VARIANT_STRING);
-            EXPECT_STREQ(bag->entries[i].value.s, "PlayerMove");
-            saw_move = true;
-        }
-    }
-    EXPECT_TRUE(saw_health);
-    EXPECT_TRUE(saw_move);
-}
-
 // ── Script factory dispatch ────────────────────────────────────────────────
 
 namespace {

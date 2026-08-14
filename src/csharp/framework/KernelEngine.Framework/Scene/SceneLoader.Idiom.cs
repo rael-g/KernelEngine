@@ -26,14 +26,9 @@ namespace KernelEngine.Framework;
 /// type   = "PaddleController"    # dispatched to the registered script factory
 /// [entity.transform]
 /// position = [0, 1, 0]
-/// [entity.components.mesh]
-/// primitive = "cube"
-/// [entity.properties]
-/// Speed = 5.0                    # free-form bag; see ke_scene_properties
+/// [entity.mesh]
+/// mesh = "cube"                  # every value a scene authors is a component field
 /// </code>
-/// The loader owns the memory behind every <c>ke_scene_properties</c> component
-/// it writes. Dispose this object only after the world has shut down (or after
-/// all scene_properties components have been removed).
 /// </remarks>
 public unsafe partial class SceneLoader
 {

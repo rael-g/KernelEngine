@@ -218,7 +218,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         // a per-property read-modify-write collapses to last-write-wins whenever the
         // component write is deferred, because every read still sees the pre-write
         // value. Each plan records how to place one property into a local copy.
-        var applyPlans = new List<(Slot Slot, IPropertySymbol P, Func<string, string, string> Assign)>();
 
         foreach (var p in properties)
         {
@@ -249,8 +248,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
                 sb.AppendLine("        }");
                 sb.AppendLine("    }");
-                applyPlans.Add((slot, p, (lv, v) =>
-                    $"{lv} = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {backingType}>({v});"));
                 continue;
             }
 
@@ -281,7 +278,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
                 sb.AppendLine("        }");
                 sb.AppendLine("    }");
-                applyPlans.Add((slot, p, (lv, v) => $"GeneratedUtf8Set(ref {lv}.{fieldName}, {v});"));
                 continue;
             }
 
@@ -320,19 +316,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
-
-            var capturedField = fieldName;
-            var capturedArity = arity;
-            var capturedCoercion = coercion;
-            applyPlans.Add((slot, p, (lv, v) =>
-            {
-                if (capturedArity is int n)
-                    return string.Join(" ", Enumerable.Range(0, n)
-                        .Select(i => $"{lv}.{capturedField}[{i}] = ({v}).{VectorLanes[i]};"));
-                return capturedCoercion is not null
-                    ? $"{lv}.{capturedField} = {capturedCoercion.Value.write(v)};"
-                    : $"{lv}.{capturedField} = {v};";
-            }));
         }
 
         if (needsUtf8Helpers)
@@ -387,7 +370,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         }
         sb.AppendLine("    }");
 
-        EmitApplyProperties(sb, applyPlans, nodeType, classSymbol, overrideModifier);
         EmitSignalDispatch(sb, classSymbol, overrideModifier);
 
         sb.AppendLine("}");
@@ -395,46 +377,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         spc.AddSource($"{className}.NodeProperties.g.cs", sb.ToString());
     }
 
-    /// <summary>
-    /// Emits the override that lets a scene file author this node's properties by name.
-    /// Each property the reader can express becomes one keyed lookup; a key the scene
-    /// omits leaves the seeded default untouched, so authoring is additive rather than
-    /// a whole-component replacement.
-    /// </summary>
-    static void EmitApplyProperties(StringBuilder sb,
-        List<(Slot Slot, IPropertySymbol P, Func<string, string, string> Assign)> plans,
-        INamedTypeSymbol? nodeType, INamedTypeSymbol classSymbol, string overrideModifier)
-    {
-        var readable = plans
-            .Select(x => (x.Slot, x.P, x.Assign, Accessor: ReaderAccessorFor(x.P.Type)))
-            .Where(x => x.Accessor is not null)
-            .ToArray();
-
-        sb.AppendLine();
-        sb.AppendLine($"    {overrideModifier} override void GeneratedApplyProperties()");
-        sb.AppendLine("    {");
-        sb.AppendLine("        base.GeneratedApplyProperties();");
-        if (readable.Length > 0)
-        {
-            sb.AppendLine("        if (!TryGetProperties(out var props)) return;");
-            var touched = readable.Select(x => x.Slot).Distinct().ToArray();
-            foreach (var slot in touched)
-                sb.AppendLine($"        var a{slot.Index} = {slot.Current}();");
-            foreach (var (slot, p, assign, accessor) in readable)
-            {
-                var (method, cast) = accessor!.Value;
-                sb.AppendLine($"        if (props.{method}(\"{p.Name}\", out var v_{p.Name}))");
-                sb.AppendLine($"            {assign($"a{slot.Index}", string.Format(cast, "v_" + p.Name))}");
-            }
-            // One write per component, after every authored field has been placed.
-            foreach (var slot in touched)
-            {
-                sb.AppendLine($"        if (IsBound) GeneratedSet({slot.Cid}, a{slot.Index});");
-                sb.AppendLine($"        else {slot.State} = a{slot.Index};");
-            }
-        }
-        sb.AppendLine("    }");
-    }
 
     /// <summary>
     /// The <c>VariantReader</c> accessor that can express <paramref name="type"/>, plus the
@@ -442,30 +384,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// variant vocabulary has no representation for the type, which leaves that property
     /// code-only rather than inventing an encoding for it.
     /// </summary>
-    static (string Method, string Cast)? ReaderAccessorFor(ITypeSymbol type)
-    {
-        if (type.TypeKind == TypeKind.Enum)
-            return ("TryGetInt", $"({type.ToDisplayString()}){{0}}");
-
-        return type.SpecialType switch
-        {
-            SpecialType.System_String  => ("TryGetString", "{0} ?? string.Empty"),
-            SpecialType.System_Boolean => ("TryGetBool", "{0}"),
-            SpecialType.System_Single  => ("TryGetFloat", "{0}"),
-            SpecialType.System_Double  => ("TryGetFloat", "{0}"),
-            SpecialType.System_Int32   => ("TryGetInt", "(int){0}"),
-            SpecialType.System_UInt32  => ("TryGetInt", "(uint){0}"),
-            SpecialType.System_Int64   => ("TryGetInt", "{0}"),
-            _ => type.ToDisplayString() switch
-            {
-                "System.Numerics.Vector2"   => ("TryGetVec2", "{0}"),
-                "System.Numerics.Vector3"   => ("TryGetVec3", "{0}"),
-                "System.Numerics.Vector4"   => ("TryGetVec4", "{0}"),
-                "System.Numerics.Quaternion" => ("TryGetQuat", "{0}"),
-                _ => null,
-            },
-        };
-    }
 
     /// <summary>
     /// One component of a node type's set: the native struct backing it, the name it is

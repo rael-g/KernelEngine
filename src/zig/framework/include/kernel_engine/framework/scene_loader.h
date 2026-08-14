@@ -14,13 +14,6 @@ extern "C"
     typedef bool (*ke_script_factory_func)(void *ctx, ke_entity entity,
                                            const char *type_name, ke_error **out_error);
 
-    typedef struct ke_scene_properties
-    {
-        const ke_variant_table_entry *entries;
-        uint32_t                      count;
-    } ke_scene_properties;
-
-#define KE_SCENE_PROPERTIES_COMPONENT_NAME "scene_properties"
 
     typedef struct ke_scene_loader
     {

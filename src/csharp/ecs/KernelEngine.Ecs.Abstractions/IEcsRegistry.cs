@@ -19,7 +19,7 @@ public interface IEcsRegistry
     /// Resolves a previously-registered component by name. Returns <c>true</c> and writes the
     /// cid into <paramref name="componentId"/> on success; returns <c>false</c> when no
     /// component with that name is known. Bindings use this to discover engine-defined
-    /// components at runtime (e.g. the <c>scene_properties</c> bag the SceneLoader writes).
+    /// components at runtime (e.g. a game-defined component a scene file authors).
     /// </summary>
     bool TryLookupComponent(string name, out uint componentId);
 

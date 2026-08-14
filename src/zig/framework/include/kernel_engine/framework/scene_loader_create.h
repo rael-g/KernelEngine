@@ -26,15 +26,13 @@ extern "C"
 #endif
 
     /// Allocates a scene loader bound to the given world. The loader uses the
-    /// world's apply registry to drive [entity.components.X] blocks and the
+    /// world's component registry to drive [entity.<component>] blocks and the
     /// world's scene_tree to spawn entities. project_root may be NULL — when
     /// provided, "res://" prefixed paths resolve to (project_root + remainder).
     ///
-    /// scene_properties lifetime: entries are copied into per-world arenas
-    /// owned by the loader; freed at loader.destroy(). After destroy() any
-    /// scene_properties component the loader wrote becomes dangling. Destroy
-    /// the loader only after the world has shut down OR after removing every
-    /// scene_properties component the loader populated.
+    /// String lifetime: a value a block authors into a char field is copied into
+    /// the component, but the parsed entries themselves come from an arena freed
+    /// at loader.destroy(). Nothing the loader wrote outlives it by reference.
     KE_FRAMEWORK_API ke_scene_loader_handle ke_scene_loader_create(
         struct ke_world   *world,
         const char        *project_root,

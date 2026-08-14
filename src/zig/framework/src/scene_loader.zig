@@ -1,18 +1,19 @@
 // ke_scene_loader impl, tomlc99 backed.
 //
 // Walks a `.scene.toml` file:
-//   [[entity]] entries -> tree.create_node + transform/components apply +
-//   script factory dispatch + properties bag.
+//   [[entity]] entries -> tree.create_node + component blocks + script factory
+//   dispatch.
 //
-// [entity.components.X] uses the world's apply registry: look the cid up by
-// name, add the component, build a variant-table entry list from the TOML
-// table, call the registered apply_fn. A block naming an unknown component, or
-// one whose component has no apply registered, is reported and skipped.
+// Every `[entity.<component>]` block goes through the world's registry: look the
+// cid up by name, add the component, build a variant-table entry list from the
+// TOML table, apply it through the component's generated field table and then
+// its callback, if either is registered. A block naming an unknown component, or
+// one with no mapping at all, is reported and skipped.
 //
-// scene_properties lifetime: every per-entity allocation (strings + entries)
-// comes from the loader's arena and is freed at loader destroy. The arena is
-// conceptually owned by the world (it outlives the entity); parking it in the
-// loader gives the same end behavior with a simpler ownership graph.
+// Arena lifetime: every per-entity allocation (strings + entries) comes from the
+// loader's arena and is freed at loader destroy. The arena is conceptually owned
+// by the world (it outlives the entity); parking it in the loader gives the same
+// end behavior with a simpler ownership graph.
 
 const std = @import("std");
 
@@ -32,7 +33,7 @@ const res_prefix = "res://";
 
 // -- arena -------------------------------------------------------------------
 //
-// Backs scene_properties components and the variant entries they point at.
+// Backs the variant entries a component block is applied from.
 // Nothing here is ever freed individually — the whole arena goes at once when
 // the loader is destroyed — so std.heap.ArenaAllocator over the plugin heap is
 // the exact shape this needs, with none of a chunk allocator's bookkeeping
@@ -68,8 +69,6 @@ const State = struct {
 
     script_factory: c.ke_script_factory_func,
     script_ctx: ?*anyopaque,
-
-    scene_properties_cid: c.ke_component_id,
 
     arena: Arena,
 };
@@ -239,8 +238,6 @@ fn dispatchScript(s: *State, entity: c.ke_entity, type_name: [*c]const u8) void 
     if (s.script_factory) |factory| _ = factory(s.script_ctx, entity, type_name, null);
 }
 
-// -- properties bag ----------------------------------------------------------
-
 fn tableEntryCount(tbl: *c.toml_table_t) usize {
     return @intCast(c.toml_table_nkval(tbl) + c.toml_table_narr(tbl) + c.toml_table_ntab(tbl));
 }
@@ -261,18 +258,6 @@ fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
         count += 1;
     }
     return entries[0..count];
-}
-
-fn attachProperties(s: *State, entity: c.ke_entity, props_tbl: *c.toml_table_t) void {
-    const world = s.world;
-    const e = ecsOf(world) orelse return;
-
-    const entries = buildEntries(s, props_tbl) orelse return;
-
-    const comp = e.component_add.?(e, entity, s.scene_properties_cid) orelse return;
-    const bag: *c.ke_scene_properties = @ptrCast(@alignCast(comp));
-    bag.entries = entries.ptr;
-    bag.count = @intCast(entries.len);
 }
 
 // -- components application via apply registry -------------------------------
@@ -344,15 +329,19 @@ fn applyComponentBlock(
 
 /// Whether a table under `[[entity]]` describes something other than a component.
 ///
-/// `connect` is a relation between two entities, not a field of one. `properties`
-/// is the retired property bag. `components` was the old nesting level, and is
-/// named here so a file still using it gets told what to write instead of being
-/// reported as a component nobody registered.
+/// `connect` is a relation between two entities, not a field of one.
 fn reservedBlock(key: [*c]const u8) bool {
+    return std.mem.eql(u8, std.mem.span(key), "connect");
+}
+
+/// A block shape that no longer exists, and what to write instead. Named rather
+/// than left to the unknown-component path so an author is told the answer, not
+/// just that something is wrong.
+fn retiredBlock(key: [*c]const u8) ?[]const u8 {
     const k = std.mem.span(key);
-    return std.mem.eql(u8, k, "connect") or
-        std.mem.eql(u8, k, "properties") or
-        std.mem.eql(u8, k, "components");
+    if (std.mem.eql(u8, k, "components")) return "write [entity.<component>] directly";
+    if (std.mem.eql(u8, k, "properties")) return "write the component the value belongs to";
+    return null;
 }
 
 /// Components the scene tree owns. A scene authoring one would be writing the
@@ -375,8 +364,8 @@ fn applyComponentBlocks(s: *State, entity: c.ke_entity, tbl: *c.toml_table_t) vo
     while (true) : (i += 1) {
         const key = c.toml_key_in(tbl, i) orelse break;
         const block = c.toml_table_in(tbl, key) orelse continue;
-        if (std.mem.eql(u8, std.mem.span(key), "components")) {
-            warn(s.world, "[entity.components.X] is no longer read; write [entity.X] instead", .{});
+        if (retiredBlock(key)) |advice| {
+            warn(s.world, "[entity.{s}] is no longer read; {s}", .{ key, advice });
             continue;
         }
         if (reservedBlock(key)) continue;
@@ -581,9 +570,7 @@ fn processEntity(
         std.c.free(type_d.u.s);
     }
 
-    if (c.toml_table_in(args.entity_tbl, "properties")) |props| attachProperties(s, entity, props);
     if (args.override_outer) |outer| {
-        if (c.toml_table_in(outer, "properties")) |props| attachProperties(s, entity, props);
         const outer_type = c.toml_string_in(outer, "type");
         if (outer_type.ok != 0) {
             dispatchScript(s, entity, outer_type.u.s);
@@ -754,7 +741,6 @@ export fn ke_scene_loader_create(
         .project_root = [_]u8{0} ** path_max,
         .script_factory = null,
         .script_ctx = null,
-        .scene_properties_cid = 0,
         .arena = .init(),
     };
 
@@ -764,19 +750,6 @@ export fn ke_scene_loader_create(
         @memcpy(s.project_root[0..n], root[0..n]);
         s.project_root[n] = 0;
     }
-
-    // scene_properties has no apply callback: its layout (entries pointer +
-    // count) is populated wholesale by attachProperties, not field by field.
-    const e = ecsOf(world) orelse {
-        heap.gpa.destroy(s);
-        E.fail(out_error, .not_initialized, "world has no ecs", @src());
-        return null_handle;
-    };
-    var meta: c.ke_component_meta = undefined;
-    s.scene_properties_cid = if (e.component_lookup.?(e, c.KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta, null))
-        meta.cid
-    else
-        e.component_register.?(e, c.KE_SCENE_PROPERTIES_COMPONENT_NAME, @sizeOf(c.ke_scene_properties), null);
 
     s.api.handle = s;
     s.api.load = vtLoad;
