@@ -46,18 +46,11 @@ const UiBatch = struct {
 // sim N+1 || render N pipelining, exactly like camera/mesh/transform above.
 // dst_w <= 0 means "not emitted this frame" (a shrunk text label's unused
 // pooled glyph slot) and is skipped rather than drawn.
-const UiQuadComponent = extern struct {
-    texture: c.ke_texture_handle,
-    dst_x: f32,
-    dst_y: f32,
-    dst_w: f32,
-    dst_h: f32,
-    uv0: f32,
-    uv1: f32,
-    uv2: f32,
-    uv3: f32,
-    color: [4]f32,
-};
+// Declared in kernel_engine/render/ui/components.h, not here: it used to be a
+// second definition of the same struct, kept in step with the C# one by a
+// comment asking both sides not to drift. They already had — the field names
+// disagreed while the bytes happened to line up.
+const UiQuadComponent = c.ke_ui_quad_component;
 
 // A loaded font's glyph table, owned copies so the caller's own ke_font_data
 // (freed via ke_asset_resolver's free_font right after load_font returns) can
@@ -331,9 +324,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             const q = quads[i];
             if (q.dst_w <= 0 or q.dst_h <= 0) continue; // unused pooled slot this frame
             if (vertex_count + 6 > ui.vertices.len) break :quad_loop;
-            emitQuad(ui, &vertex_count, &batch_count, q.texture,
+            emitQuad(ui, &vertex_count, &batch_count, .{ .bits = q.texture_bits },
                 q.dst_x, q.dst_y, q.dst_x + q.dst_w, q.dst_y + q.dst_h,
-                q.uv0, q.uv1, q.uv2, q.uv3, q.color);
+                q.u0, q.v0, q.u1, q.v1, q.color);
         }
     }
 

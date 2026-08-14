@@ -3,6 +3,7 @@
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/render/components.h>
+#include <kernel_engine/render/ui/components.h>
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/ecs/variant.h>
 #include <kernel_engine/framework/scene_loader_create.h>
@@ -336,6 +337,34 @@ intensity = 3.0
     EXPECT_FLOAT_EQ(lv->ambient.x, 0.03f);
     EXPECT_FLOAT_EQ(lv->ambient.z, 0.04f);
     EXPECT_FLOAT_EQ(lv->intensity, 3.0f);
+}
+
+TEST_F(SceneLoaderTest, Label_FieldsApplied)
+{
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Score"
+[entity.components.label]
+text = "0"
+anchor = [0.3, 0.0]
+offset = [0.0, 60.0]
+color = [0.95, 0.95, 0.95, 1.0]
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Score", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "label", &meta, nullptr));
+    auto *l = (ke_label_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(l, nullptr);
+    EXPECT_STREQ(l->text, "0");
+    EXPECT_FLOAT_EQ(l->anchor[0], 0.3f);
+    EXPECT_FLOAT_EQ(l->offset[1], 60.0f);
+    EXPECT_FLOAT_EQ(l->color[3], 1.0f);
+    // glyph_count is the shaping system's output, so a scene must not be able to
+    // seed it even though it sits in the same component.
+    EXPECT_EQ(l->glyph_count, 0u);
 }
 
 TEST_F(SceneLoaderTest, PointLight_FieldsApplied)

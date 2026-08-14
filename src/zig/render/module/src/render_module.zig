@@ -184,6 +184,12 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     registerFields(w, spot_light_cid, &c.ke_spot_light_component_fields);
     registerFields(w, ambient_light_cid, &c.ke_ambient_light_component_fields);
 
+    // "label" is registered by the ui plugin too (whoever calls component_register
+    // first wins the cid), but the ui plugin never sees a ke_world — so without
+    // this, a scene's [entity.components.label] block was silently ignored.
+    const label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
+    registerFields(w, label_cid, &c.ke_label_component_fields);
+
     // Only the two components carrying a key no table can describe keep a
     // callback; it runs after the table and corrects that one key.
     _ = w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null);

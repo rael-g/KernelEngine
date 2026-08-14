@@ -101,7 +101,7 @@ public interface IRenderResources
     /// Registers a font's glyph table with the UI overlay pass, deduped by
     /// <paramref name="key"/> (same convention as <see cref="UploadTexture"/>).
     /// Queuing a UI quad no longer goes through this interface — attach a
-    /// <c>UiQuadComponent</c> ("ui_quad") to an entity via
+    /// <c>ke_ui_quad_component</c> ("ui_quad") to an entity via
     /// <c>NodeWorld</c>/<c>SystemContext.Attach</c> instead; the "render.ui"
     /// pass reads it through a declared ECS query.
     /// </summary>

@@ -33,6 +33,22 @@ extern "C"
 #define KE_LABEL_MAX_TEXT 256
 #define KE_LABEL_MAX_GLYPHS 256
 
+    /// A single screen-space UI quad. Producers — Label's text shaping, a game
+    /// script attaching one directly — write it; the "render.ui" pass reads it
+    /// through a declared query, the same sim-writes/render-reads split every
+    /// other render component uses. A quad of zero size is skipped, which is how
+    /// a pooled slot hides itself.
+    typedef struct ke_ui_quad_component
+    {
+        /// Full generational texture handle bits; UINT32_MAX = the built-in white.
+        uint32_t texture_bits;
+        float    dst_x, dst_y, dst_w, dst_h;
+        float    u0, v0, u1, v1;
+        float    color[4]; ///< [default:1 1 1 1] Premultiplied alpha RGBA.
+    } ke_ui_quad_component;
+
+#define KE_COMPONENT_NAME_UI_QUAD "ui_quad"
+
     /// [node:Label,components:Node3D]
     /// A screen-space text label. Text/anchor/offset/color/font are the caller's
     /// input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE
@@ -50,10 +66,10 @@ extern "C"
         float             color[4]; ///< [default:1 1 1 1]
         char              text[KE_LABEL_MAX_TEXT];
 
-        /// [idiom] Written by "render.ui.labels"; a node authoring it would have
-        /// the value overwritten on the next tick.
+        /// [idiom,output] Written by "render.ui.labels"; a node authoring it would
+        /// have the value overwritten on the next tick.
         uint32_t            glyph_count;
-        /// [idiom] Shaped output, see glyph_count.
+        /// [idiom,output] Shaped output, see glyph_count.
         ke_label_glyph_quad glyphs[KE_LABEL_MAX_GLYPHS];
     } ke_label_component;
 
