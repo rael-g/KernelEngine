@@ -19,7 +19,12 @@ public readonly ref struct View
     public float DeltaTime { get; }
 
     /// <summary>The node world this node belongs to.</summary>
-    public NodeWorld NodeWorld { get; }
+    /// <summary>
+    /// The world driving this tick. Internal for the same reason
+    /// <see cref="Node"/> keeps its own private: a behavior reaching the whole
+    /// world through its view is the same unrestricted access by another door.
+    /// </summary>
+    internal NodeWorld NodeWorld { get; }
 
     private readonly IInputReader? _input;
 

@@ -156,7 +156,7 @@ sealed class PhysicsScene : Node
             for (int i = 0; i < _balls.Count; i++)
             {
                 _physics.DestroyBody(_balls[i].Body);
-                NodeWorld!.DestroyNode(_balls[i].Node);
+                _balls[i].Node.Destroy();
             }
             _balls.Clear();
         }
@@ -170,7 +170,10 @@ sealed class PhysicsScene : Node
 
     private void Spawn(Vector2 at)
     {
-        var node = NodeWorld!.AddNode(
+        // A spawned ball hangs off the spawner: a node reaches the world only
+        // through its own children, so "somewhere in the scene" is not an address
+        // it can name.
+        var node = AddChild(
             new MeshRenderer { MeshHandle = _ballMesh, MaterialHandle = _ballMat },
             $"Ball_{_balls.Count}");
         node.LocalTransform = node.LocalTransform with { Position = new Vector3(at.X, at.Y, 0f) };

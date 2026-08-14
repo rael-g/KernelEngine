@@ -118,6 +118,6 @@ sealed class BackgroundQuad : Node
         quad.color[1] = 0.85f * 0.5f;
         quad.color[2] = 0.30f * 0.5f;
         quad.color[3] = 0.5f;
-        view.NodeWorld.Attach(in view, Entity, _quadCid, in quad);
+        Attach(in view, _quadCid, in quad);
     }
 }

@@ -30,7 +30,7 @@ public sealed partial class Paddle : Body2D
         if (!_moveActionResolved)
         {
             _moveActionResolved = true;
-            if (NodeWorld!.TryGetComponent<PaddleComponent>(Entity, "paddle", out var comp))
+            if (TryGetComponent<PaddleComponent>("paddle", out var comp))
                 _moveAction = comp.MoveAction;
         }
 

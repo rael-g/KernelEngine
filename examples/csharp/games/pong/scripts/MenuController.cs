@@ -35,23 +35,23 @@ public sealed class MenuController : Node
         var fontPath = ExamplePaths.SystemFont;
         _font = Font.Load(_resources, _fontLoader, fontPath, pixelSize: 72f);
 
-        nodeWorld.AddNode(new Label
+        AddChild(new Label
         {
             Text   = "Pong",
             Font   = _font.Handle,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.5f, 0.0f),
             Offset = new Vector2(0f, 140f),
-        }, "Title", parent: this);
+        }, "Title");
 
-        nodeWorld.AddNode(new Label
+        AddChild(new Label
         {
             Text   = "Press Space to start",
             Font   = _font.Handle,
             Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1.0f),
             Offset = new Vector2(0f, -120f),
-        }, "Hint", parent: this);
+        }, "Hint");
     }
 
     protected override bool HasBehavior => true;

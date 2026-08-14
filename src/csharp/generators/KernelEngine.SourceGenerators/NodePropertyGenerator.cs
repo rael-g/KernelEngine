@@ -246,7 +246,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine("        set");
                 sb.AppendLine("        {");
                 sb.AppendLine($"            var s = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {backingType}>(value);");
-                sb.AppendLine($"            if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, s); else {slot.State} = s;");
+                sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
                 sb.AppendLine("        }");
                 sb.AppendLine("    }");
                 applyPlans.Add((slot, p, (lv, v) =>
@@ -278,7 +278,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine("        {");
                 sb.AppendLine($"            var s = {slot.Current}();");
                 sb.AppendLine($"            GeneratedUtf8Set(ref s.{fieldName}, value);");
-                sb.AppendLine($"            if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, s); else {slot.State} = s;");
+                sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
                 sb.AppendLine("        }");
                 sb.AppendLine("    }");
                 applyPlans.Add((slot, p, (lv, v) => $"GeneratedUtf8Set(ref {lv}.{fieldName}, {v});"));
@@ -317,7 +317,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"            s.{fieldName} = {coercion.Value.write("value")};");
             else
                 sb.AppendLine($"            s.{fieldName} = value;");
-            sb.AppendLine($"            if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, s); else {slot.State} = s;");
+            sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
 
@@ -365,7 +365,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         foreach (var slot in slots)
         {
             sb.AppendLine($"    private {slot.TypeName} {slot.Current}() =>");
-            sb.AppendLine($"        IsBound && NodeWorld!.TryGetByCid<{slot.TypeName}>(Entity, {slot.Cid}, out var s) ? s : {slot.State};");
+            sb.AppendLine($"        IsBound && GeneratedTryGet<{slot.TypeName}>({slot.Cid}, out var s) ? s : {slot.State};");
         }
         sb.AppendLine();
 
@@ -429,7 +429,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             // One write per component, after every authored field has been placed.
             foreach (var slot in touched)
             {
-                sb.AppendLine($"        if (IsBound) NodeWorld!.SetByCid(Entity, {slot.Cid}, a{slot.Index});");
+                sb.AppendLine($"        if (IsBound) GeneratedSet({slot.Cid}, a{slot.Index});");
                 sb.AppendLine($"        else {slot.State} = a{slot.Index};");
             }
         }

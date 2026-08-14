@@ -171,7 +171,7 @@ public sealed class NodeWorld
     {
         if (node.IsBound)
             throw new InvalidOperationException($"Node '{node.Name}' is already added to a world.");
-        if (parent is not null && parent.NodeWorld != this)
+        if (parent is not null && !parent.BelongsTo(this))
             throw new InvalidOperationException(
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
@@ -191,7 +191,7 @@ public sealed class NodeWorld
     {
         if (node.IsBound)
             throw new InvalidOperationException($"Node '{node.Name}' is already added to a world.");
-        if (parent is not null && parent.NodeWorld != this)
+        if (parent is not null && !parent.BelongsTo(this))
             throw new InvalidOperationException(
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
@@ -227,7 +227,7 @@ public sealed class NodeWorld
     /// </summary>
     public void DestroyNode(Node node)
     {
-        if (!node.IsBound || node.NodeWorld != this) return;
+        if (!node.IsBound || !node.BelongsTo(this)) return;
         var kids = node.Children.ToArray();
         for (int i = 0; i < kids.Length; i++) DestroyNode(kids[i]);
 

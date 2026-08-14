@@ -14,8 +14,16 @@ public abstract class Node
     /// <summary>ECS entity this node wraps. 0 before AddNode.</summary>
     public ulong Entity { get; private set; }
 
-    /// <summary>The world that owns this node. Null before AddNode.</summary>
-    public NodeWorld? NodeWorld { get; private set; }
+    /// <summary>
+    /// The world that owns this node. Null before AddNode.
+    /// </summary>
+    /// <remarks>
+    /// Not part of a node's surface on purpose. Handing a node the whole world so
+    /// it can create one child is granting access to everything to use almost
+    /// nothing; a node that wants a child says so with <see cref="AddChild{T}"/>,
+    /// and a node that wants to give someone else a child asks that node for it.
+    /// </remarks>
+    private NodeWorld? NodeWorld { get; set; }
 
     /// <summary>
     /// Display name (debug / lookups). Read live from <c>ke_name_component</c> —
@@ -111,6 +119,52 @@ public abstract class Node
     protected internal virtual void CollectBehaviorComponents(List<string> into) { }
 
     /// <summary>
+    /// Creates <paramref name="child"/> as this node's child, under
+    /// <paramref name="name"/>. The name is what a <see cref="Child{T}"/> borrow
+    /// resolves against, so two children of the same type are told apart by it.
+    /// </summary>
+    /// <returns>
+    /// The same instance, now bound — so it can be kept in a field without a
+    /// second lookup.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">This node is not bound yet.</exception>
+    protected T AddChild<T>(T child, string name = "") where T : Node
+    {
+        if (NodeWorld is null)
+            throw new InvalidOperationException(
+                $"'{GetType().Name}' cannot add a child before it is added to a world.");
+        return NodeWorld.AddNode(child, name, parent: this);
+    }
+
+    /// <summary>
+    /// Attaches a component to this entity from inside a behavior, routed through
+    /// the running system so the structural change defers to the wave barrier.
+    /// For a component this node's own type does not declare — one the node
+    /// produces each tick for another domain's pass to read.
+    /// </summary>
+    protected bool Attach<T>(in View view, uint cid, in T value) where T : unmanaged =>
+        KernelEngine.Runtime.SystemContext.Attach(view.SystemContext, Entity, cid, in value);
+
+    /// <summary>
+    /// Removes this node and everything under it from the world. Destroying a
+    /// node other than <c>this</c> means holding a reference to it and asking it
+    /// — the same way adding a child does.
+    /// </summary>
+    public void Destroy() => NodeWorld?.DestroyNode(this);
+
+    /// <summary>
+    /// Reads one of this entity's components by its ECS registration name, for a
+    /// component this node's own type does not declare (one a scene block or
+    /// another domain put there).
+    /// </summary>
+    protected bool TryGetComponent<T>(string componentName, out T value) where T : unmanaged
+    {
+        if (NodeWorld is not null) return NodeWorld.TryGetComponent(Entity, componentName, out value);
+        value = default;
+        return false;
+    }
+
+    /// <summary>
     /// Resolves a <see cref="Child{T}"/> borrow by node name. Called by generated
     /// dispatch each tick rather than cached, so a borrow can never outlive the node
     /// it points at.
@@ -153,6 +207,9 @@ public abstract class Node
         Entity    = 0;
     }
 
+    /// <summary>Whether this node is bound to <paramref name="world"/> specifically.</summary>
+    internal bool BelongsTo(NodeWorld world) => ReferenceEquals(NodeWorld, world);
+
     internal void BindToNodeWorld(NodeWorld nodeWorld, ulong entity)
     {
         PreBind(nodeWorld, entity);
@@ -177,6 +234,19 @@ public abstract class Node
         if (NodeWorld!.TryGetByCid<T>(Entity, cid, out _)) return;
         NodeWorld.SetByCid(Entity, cid, in state);
     }
+
+    /// <summary>
+    /// Writes one of this node's component values. The generated property setters
+    /// go through here rather than through the world itself, which is what lets
+    /// the world stay private to <see cref="Node"/>: reaching a component is the
+    /// only thing a node's own storage needs it for.
+    /// </summary>
+    protected internal void GeneratedSet<T>(uint cid, in T state) where T : unmanaged =>
+        NodeWorld!.SetByCid(Entity, cid, in state);
+
+    /// <summary>Reads one of this node's component values. Counterpart to <see cref="GeneratedSet{T}"/>.</summary>
+    protected internal bool GeneratedTryGet<T>(uint cid, out T state) where T : unmanaged =>
+        NodeWorld!.TryGetByCid(Entity, cid, out state);
 
     /// <summary>
     /// Applies this node's <c>[entity.properties]</c> block onto its generated
