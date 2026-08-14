@@ -9,18 +9,13 @@ using KernelEngine.Physics;
 namespace KernelEngine.Framework;
 
 /// <summary>A 2D rigid body. Pose and motion are stored here in two dimensions because that is what the simulation owns; the composed transform is derived output, written from this component each tick by the physics plugin's own system. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_body2d_component), "body2d")]
-public partial class Body2D : Node
+public partial class Body2D : Node3D
 {
     public Body2D()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
-        _generatedState1.gravity_scale = 1f;
+        _generatedState0.gravity_scale = 1f;
     }
-
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 
     [NativeField("type", Component = typeof(ke_body2d_component))]
     public partial BodyType2D Type { get; set; }

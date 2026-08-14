@@ -8,18 +8,13 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>Scene-wide ambient light node. First entity with this component wins.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_ambient_light_component), "ambient_light")]
-public partial class AmbientLight : Node
+public partial class AmbientLight : Node3D
 {
     public AmbientLight()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
-        _generatedState1.color = new ke_vec3 { x = 0.05f, y = 0.05f, z = 0.05f };
+        _generatedState0.color = new ke_vec3 { x = 0.05f, y = 0.05f, z = 0.05f };
     }
-
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 
     [NativeField("color", Component = typeof(ke_ambient_light_component))]
     public partial Vector3 Color { get; set; }

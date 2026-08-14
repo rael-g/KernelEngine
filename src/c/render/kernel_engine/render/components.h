@@ -11,7 +11,7 @@ extern "C"
 {
 #endif
 
-    /** [node:Camera,components:Node3D] Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera. */
+    /** [node:Camera,base:Node3D] Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera. */
     typedef struct ke_camera_component
     {
         float   fov; ///< [default:60]
@@ -21,7 +21,7 @@ extern "C"
         uint8_t orthographic; ///< [bool]
     } ke_camera_component;
 
-    /** [node:DirectionalLight,components:Node3D] Directional light node. Init properties feed the per-frame light state the renderer consumes. */
+    /** [node:DirectionalLight,base:Node3D] Directional light node. Init properties feed the per-frame light state the renderer consumes. */
     typedef struct ke_directional_light_component
     {
         ke_vec3 direction; ///< [default:0.2 1 0.5]
@@ -30,7 +30,7 @@ extern "C"
         ke_vec3 ambient; ///< [default:0.2 0.2 0.2]
     } ke_directional_light_component;
 
-    /** [node:PointLight,components:Node3D] Point light node — emits light in all directions from this entity's world position. */
+    /** [node:PointLight,base:Node3D] Point light node — emits light in all directions from this entity's world position. */
     typedef struct ke_point_light_component
     {
         ke_vec3 color; ///< [default:1 1 1] Linear RGB.
@@ -38,7 +38,7 @@ extern "C"
         float   radius; ///< [default:10]
     } ke_point_light_component;
 
-    /** [node:SpotLight,components:Node3D] Spot light node — emits a cone of light from this entity's world position. */
+    /** [node:SpotLight,base:Node3D] Spot light node — emits a cone of light from this entity's world position. */
     typedef struct ke_spot_light_component
     {
         ke_vec3 direction; ///< [default:0 -1 0]
@@ -49,13 +49,13 @@ extern "C"
         float   outer_angle; ///< [default:35]
     } ke_spot_light_component;
 
-    /** [node:AmbientLight,components:Node3D] Scene-wide ambient light node. First entity with this component wins. */
+    /** [node:AmbientLight,base:Node3D] Scene-wide ambient light node. First entity with this component wins. */
     typedef struct ke_ambient_light_component
     {
         ke_vec3 color; ///< [default:0.05 0.05 0.05]
     } ke_ambient_light_component;
 
-    /// [node:Skybox,components:Node3D]
+    /// [node:Skybox,base:Node3D]
     /// Environment cubemap driving both the skybox and image-based lighting. Only
     /// the first entity carrying one wins per frame.
     typedef struct ke_skybox_component
@@ -64,7 +64,7 @@ extern "C"
         ke_texture_handle cubemap;
     } ke_skybox_component;
 
-    /// [node:MeshRenderer,components:Node3D]
+    /// [node:MeshRenderer,base:Node3D]
     /// Renders a mesh with a material. `mesh`/`material` double as output:
     /// the native "render.mesh.resolve" system (KE_PHASE_UPDATE,
     /// src/zig/render/service/src/mesh_resolve.zig) fills them whenever

@@ -49,7 +49,7 @@ extern "C"
 
 #define KE_COMPONENT_NAME_UI_QUAD "ui_quad"
 
-    /// [node:Label,components:Node3D]
+    /// [node:Label,base:Node3D]
     /// A screen-space text label. Text/anchor/offset/color/font are the caller's
     /// input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE
     /// tick by the "render.ui.labels" system and read by "render.ui"

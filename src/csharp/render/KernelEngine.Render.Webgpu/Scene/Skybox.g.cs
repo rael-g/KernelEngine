@@ -8,17 +8,12 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_skybox_component), "skybox")]
-public partial class Skybox : Node
+public partial class Skybox : Node3D
 {
     public Skybox()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
     }
-
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 
     [NativeField("cubemap", Component = typeof(ke_skybox_component))]
     public partial KernelEngine.Render.TextureHandle CubemapHandle { get; set; }

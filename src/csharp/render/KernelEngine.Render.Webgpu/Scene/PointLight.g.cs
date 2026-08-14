@@ -8,20 +8,15 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>Point light node — emits light in all directions from this entity's world position.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_point_light_component), "point_light")]
-public partial class PointLight : Node
+public partial class PointLight : Node3D
 {
     public PointLight()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
-        _generatedState1.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState1.intensity = 1f;
-        _generatedState1.radius = 10f;
+        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
+        _generatedState0.intensity = 1f;
+        _generatedState0.radius = 10f;
     }
-
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 
     /// <summary>Linear RGB.</summary>
     [NativeField("color", Component = typeof(ke_point_light_component))]

@@ -102,11 +102,11 @@ public static class CSharpBackend
         var nativeType = component.Name;
         var componentName = convention.ComponentNameFor(component.Name);
 
-        // [components:A+B] — the node's set is its own component plus the transitive set of
-        // every bundle it names. A bundle is referenced by node name and contributes its
-        // components; it never becomes a base class, so composing one adds storage and a
-        // property surface without making this type a subtype of anything but Node.
-        var composed = ComposedSet(model, component);
+        // [base:X] — the node type X this one extends, named by its [node:] name.
+        // Real inheritance rather than flattening X's components in here: what
+        // separates a node from its base is the data it adds, and a reader should
+        // see that separation in the type, not have to diff two generated files.
+        var baseName = BaseNodeOf(model, component) ?? "Node";
 
         var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;" };
         if (nativeNs != "KernelEngine.Common.Native") o.Add($"using {nativeNs};");
@@ -117,17 +117,14 @@ public static class CSharpBackend
         o.Add($"namespace {ns};\n");
         o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
             : $"/// <summary>Mirrors <c>{nativeType}</c>.</summary>");
-        foreach (var c in composed)
-            o.Add($"[GeneratedNodeComponent(typeof({c.Name}), \"{convention.ComponentNameFor(c.Name)}\")]");
         o.Add($"[GeneratedNodeComponent(typeof({nativeType}), \"{componentName}\")]");
-        o.Add($"public partial class {nodeName} : Node");
+        o.Add($"public partial class {nodeName} : {baseName}");
         o.Add("{");
 
-        // The slot order here IS the attribute order above, which is what the Roslyn
-        // generator numbers its backing state by — composed bundles first, own component
-        // last. A default seeded into the wrong index would silently initialize a
-        // different component.
-        var slots = composed.Append(component).ToList();
+        // Only this type's own component. The base class declares its own, and the
+        // Roslyn generator chains GeneratedBind, so every component in the chain is
+        // bound exactly once by the class that owns it.
+        var slots = new List<ApiStruct> { component };
 
         o.Add($"    public {nodeName}()");
         o.Add("    {");
@@ -176,32 +173,24 @@ public static class CSharpBackend
     }
 
     /// <summary>
-    /// The components a node type composes beyond its own, resolved transitively and
-    /// de-duplicated. A name that resolves to no <c>[node:]</c>-tagged struct in this
-    /// domain's model is an error rather than a silent omission: the resulting node would
-    /// compile with a component missing and fail only at runtime, when the property it
-    /// backs reads a default the entity never had.
+    /// The node type this one extends, or null when it extends <c>Node</c> itself.
     /// </summary>
-    static List<ApiStruct> ComposedSet(ApiModel model, ApiStruct component)
+    static string? BaseNodeOf(ApiModel model, ApiStruct component)
     {
-        var result = new List<ApiStruct>();
-        Walk(component);
-        return result;
-
-        void Walk(ApiStruct s)
-        {
-            var spec = s.TagValue("components");
-            if (spec is null) return;
-            foreach (var name in spec.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                var bundle = model.Structs.FirstOrDefault(x => x.TagValue("node") == name)
-                    ?? throw new InvalidOperationException(
-                        $"{s.Name} composes '{name}', which no [node:] struct in this domain declares; "
-                        + "add its header to the domain's composeHeaders");
-                Walk(bundle);
-                if (!result.Any(x => x.Name == bundle.Name)) result.Add(bundle);
-            }
-        }
+        var spec = component.TagValue("base");
+        if (spec is null) return null;
+        // Single inheritance, so a single name. A node needing two components'
+        // worth of data says so with its own struct, not by naming two bases.
+        if (spec.Contains('+'))
+            throw new InvalidOperationException($"{component.Name}: [base:] names one node type, not '{spec}'");
+        // Resolved rather than trusted: a name that matches no [node:] struct would
+        // emit a class extending a type that does not exist, and the error would
+        // land in generated code instead of on the header that caused it.
+        _ = model.Structs.FirstOrDefault(x => x.TagValue("node") == spec)
+            ?? throw new InvalidOperationException(
+                $"{component.Name} extends '{spec}', which no [node:] struct in this domain declares; "
+                + "add its header to the domain's composeHeaders");
+        return spec;
     }
 
     /// <summary>The <c>[default:]</c> seeding for one component, targeting its own backing slot.</summary>

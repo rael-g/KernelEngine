@@ -9,18 +9,13 @@ using KernelEngine.Audio;
 namespace KernelEngine.Framework;
 
 /// <summary>A single audio clip, loaded from the path the scene declares and played on demand. The clip is one node's, not one system's: two AudioPlayer children under the same parent are two clips, told apart by node name.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_audio_player_component), "audio_player")]
-public partial class AudioPlayer : Node
+public partial class AudioPlayer : Node3D
 {
     public AudioPlayer()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
-        _generatedState1.volume = 1f;
+        _generatedState0.volume = 1f;
     }
-
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 
     /// <summary>Path to the audio file, resolved against the project's base directory.</summary>
     [NativeField("path", Component = typeof(ke_audio_player_component))]

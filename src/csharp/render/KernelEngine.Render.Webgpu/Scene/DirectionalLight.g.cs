@@ -8,21 +8,16 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>Directional light node. Init properties feed the per-frame light state the renderer consumes.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_directional_light_component), "directional_light")]
-public partial class DirectionalLight : Node
+public partial class DirectionalLight : Node3D
 {
     public DirectionalLight()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
-        _generatedState1.direction = new ke_vec3 { x = 0.2f, y = 1f, z = 0.5f };
-        _generatedState1.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState1.intensity = 1f;
-        _generatedState1.ambient = new ke_vec3 { x = 0.2f, y = 0.2f, z = 0.2f };
+        _generatedState0.direction = new ke_vec3 { x = 0.2f, y = 1f, z = 0.5f };
+        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
+        _generatedState0.intensity = 1f;
+        _generatedState0.ambient = new ke_vec3 { x = 0.2f, y = 0.2f, z = 0.2f };
     }
-
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 
     [NativeField("direction", Component = typeof(ke_directional_light_component))]
     public partial Vector3 Direction { get; set; }

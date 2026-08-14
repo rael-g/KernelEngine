@@ -125,7 +125,7 @@
       "doc": "A 2D rigid body. Pose and motion are stored here in two dimensions because that is what the simulation owns; the composed transform is derived output, written from this component each tick by the physics plugin\u0027s own system. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.",
       "tags": [
         "node:Body2D",
-        "components:Node3D"
+        "base:Node3D"
       ],
       "fields": [
         {
@@ -187,7 +187,7 @@
       "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. A shape is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin\u0027s own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.",
       "tags": [
         "node:CollisionShape2D",
-        "components:Node3D"
+        "base:Node3D"
       ],
       "fields": [
         {

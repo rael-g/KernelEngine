@@ -15,7 +15,7 @@ extern "C"
 // truncated instead of overflowing.
 #define KE_AUDIO_PLAYER_MAX_PATH 256
 
-    /// [node:AudioPlayer,components:Node3D]
+    /// [node:AudioPlayer,base:Node3D]
     /// A single audio clip, loaded from the path the scene declares and played on
     /// demand. The clip is one node's, not one system's: two AudioPlayer children
     /// under the same parent are two clips, told apart by node name.

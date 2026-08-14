@@ -9,21 +9,16 @@ using KernelEngine.Physics;
 namespace KernelEngine.Framework;
 
 /// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. A shape is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 [GeneratedNodeComponent(typeof(ke_collider2d_component), "collider2d")]
-public partial class CollisionShape2D : Node
+public partial class CollisionShape2D : Node3D
 {
     public CollisionShape2D()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
-        _generatedState1.half_extents = new ke_vec2 { x = 0.5f, y = 0.5f };
-        _generatedState1.radius = 0.5f;
-        _generatedState1.density = 1f;
-        _generatedState1.friction = 0.3f;
+        _generatedState0.half_extents = new ke_vec2 { x = 0.5f, y = 0.5f };
+        _generatedState0.radius = 0.5f;
+        _generatedState0.density = 1f;
+        _generatedState0.friction = 0.3f;
     }
-
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
 
     [NativeField("kind", Component = typeof(ke_collider2d_component))]
     public partial ShapeKind2d Kind { get; set; }
