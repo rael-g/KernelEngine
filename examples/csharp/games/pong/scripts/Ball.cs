@@ -26,6 +26,9 @@ public sealed partial class Ball : Body2D
     /// <summary>True while the ball waits at centre for the launch input.</summary>
     public partial bool AwaitingLaunch { get; set; }
 
+    /// <summary>How many times the ball has been served, which decides serve direction.</summary>
+    public partial int Launches { get; set; }
+
     public Ball(IInputActionMap<PongAction> actions, ISceneRouter router)
     {
         _actions       = actions;
@@ -37,14 +40,14 @@ public sealed partial class Ball : Body2D
     }
 
     void Update(in View view,
-        [NodeName("Scoreboard")] Ref<Scoreboard> board,
         [NodeName("HitSound")]   Child<AudioPlayer> hit,
         [NodeName("ScoreSound")] Child<AudioPlayer> sfx,
-        Emit<GoalScored> goal)
+        Emit<GoalScored> goal,
+        Emit<BallLaunched> launched)
     {
         if (_actions.IsJustPressed(PongAction.Quit, in view)) _router.LoadScene("Menu");
 
-        if (_actions.IsJustPressed(PongAction.Launch, in view) && AwaitingLaunch) Launch(board);
+        if (_actions.IsJustPressed(PongAction.Launch, in view) && AwaitingLaunch) Launch(launched);
         if (AwaitingLaunch) return;
 
         if (Math.Sign(Velocity.X) != Math.Sign(LastVelocity.X) && LastVelocity.X != 0)
@@ -55,11 +58,15 @@ public sealed partial class Ball : Body2D
         if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, goal, sfx);
     }
 
-    void Launch(Ref<Scoreboard> board)
+    void Launch(Emit<BallLaunched> launched)
     {
         AwaitingLaunch = false;
-        board.Node?.HideHint();
-        float dirX = (board.Node?.Total ?? 0) % 2 == 0 ? 1f : -1f;
+        launched.Send(new BallLaunched());
+        // Alternating from the ball's own launch count rather than the scoreboard's
+        // total: which way the ball serves is the ball's business, and reading it off
+        // another node made a rule about serving depend on someone else keeping score.
+        float dirX = Launches % 2 == 0 ? 1f : -1f;
+        Launches++;
         float dirY = (Random.Shared.NextSingle() - 0.5f) * 0.6f;
         Velocity     = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
         LastVelocity = Velocity;

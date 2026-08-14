@@ -69,6 +69,9 @@ public sealed partial class Scoreboard : Node
         }, "ScoreHint", parent: this);
     }
 
+    /// <summary>Clears the launch hint once play actually starts.</summary>
+    void On(in BallLaunched e) => HideHint();
+
     /// <summary>Reacts to the ball's goal signal: records the point and re-arms the hint.</summary>
     void On(in GoalScored e)
     {

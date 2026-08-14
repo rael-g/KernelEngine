@@ -57,6 +57,10 @@ scene = "res://scenes/Ball.scene"
 signal = "GoalScored"
 target = "Scoreboard"
 
+[[entity.connect]]
+signal = "BallLaunched"
+target = "Scoreboard"
+
 [[entity]]
 name = "Scoreboard"
 type = "Pong.Scoreboard"
