@@ -30,7 +30,8 @@ public static class ServiceCollectionExtensions
                 return new KernelEngine.Audio.Audio(handle);
             }
         });
-        KernelEngine.Framework.SceneServiceCollectionExtensions.AddNodeType<KernelEngine.Framework.AudioPlayer>(services);
+        KernelEngine.Framework.AudioComponentsNodeTypes.AddAudioComponentsNodeTypes(services);
+        services.AddAudioScene();
         return services;
     }
 }

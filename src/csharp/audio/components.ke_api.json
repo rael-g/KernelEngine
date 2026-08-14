@@ -1,0 +1,68 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_transform_component",
+      "doc": "Per-entity 3D transform component. Read/written as one atomic unit (position, rotation, and scale are meaningless set independently mid-write) \u2014 kabic\u0027s [whole:] tag maps the whole struct to a single bit-cast property instead of one property per field. world_matrix is derived output, recomputed from the hierarchy each frame; it rides along in the same atomic struct rather than being a separate field a caller could plausibly author.",
+      "tags": [
+        "node:Node3D",
+        "whole:LocalTransform=KernelEngine.Ecs.TransformComponent",
+        "default:KernelEngine.Ecs.TransformComponent.Identity"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "world_matrix",
+          "type": "ke_mat4",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_audio_player_component",
+      "doc": "A single audio clip, loaded from the path the scene declares and played on demand. The clip is one node\u0027s, not one system\u0027s: two AudioPlayer children under the same parent are two clips, told apart by node name.",
+      "tags": [
+        "node:AudioPlayer",
+        "components:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": "Path to the audio file, resolved against the project\u0027s base directory."
+        },
+        {
+          "name": "volume",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Linear gain, 0..1."
+        }
+      ]
+    }
+  ],
+  "vtables": [],
+  "functions": [],
+  "type_aliases": {}
+}

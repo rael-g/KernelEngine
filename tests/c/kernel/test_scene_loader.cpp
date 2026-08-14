@@ -4,6 +4,8 @@
 #include <kernel_engine/framework/components.h>
 #include <kernel_engine/render/components.h>
 #include <kernel_engine/render/ui/components.h>
+#include <kernel_engine/audio/components.h>
+#include <kernel_engine/audio/module/audio_module.h>
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/ecs/variant.h>
 #include <kernel_engine/framework/scene_loader_create.h>
@@ -78,6 +80,7 @@ protected:
         // render's apply callbacks itself, exactly as a real host's render
         // module would (ke_render_module_create does this same call).
         ASSERT_TRUE(ke_render_register_scene_apply(ecs, world));
+        ASSERT_TRUE(ke_audio_register_scene_apply(ecs, world));
 
         loader_h = ke_scene_loader_create(world, nullptr, NULL);
         ASSERT_NE(loader_h.ref, nullptr);
@@ -365,6 +368,27 @@ color = [0.95, 0.95, 0.95, 1.0]
     // glyph_count is the shaping system's output, so a scene must not be able to
     // seed it even though it sits in the same component.
     EXPECT_EQ(l->glyph_count, 0u);
+}
+
+TEST_F(SceneLoaderTest, AudioPlayer_FieldsApplied)
+{
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Hit"
+[entity.components.audio_player]
+path = "assets/sounds/hit.wav"
+volume = 0.5
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Hit", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "audio_player", &meta, nullptr));
+    auto *a = (ke_audio_player_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(a, nullptr);
+    EXPECT_STREQ(a->path, "assets/sounds/hit.wav");
+    EXPECT_FLOAT_EQ(a->volume, 0.5f);
 }
 
 TEST_F(SceneLoaderTest, PointLight_FieldsApplied)

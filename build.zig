@@ -359,6 +359,17 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &runtime.step });
 
+    const audio_module = ctx.plugin("ke_audio_module", "src/zig/audio/module", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
+        argF(b, "ke-audio-include", b.pathJoin(&.{ src_c, "audio" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "audio/module/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &runtime.step });
+
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox = ctx.plugin("ke_render_skybox", "src/zig/render/skybox", &.{
@@ -543,6 +554,7 @@ pub fn build(b: *std.Build) void {
         resource_cache_default, scheduler_enki, runtime,         framework,
         window_glfw,     asset_stb_image,   audio_miniaudio,     text_stb_truetype,
         physics_box2d,   physics_body2d,    asset_assimp,        configuration,
+        audio_module,
         configuration_toml,
         tonemap,         skybox,            ui,                  shadow,
         cluster,         deferred_lighting, gpu_device_webgpu,   gbuffer,
@@ -608,6 +620,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "render/module/include" }),
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
+            b.pathJoin(&.{ src_c, "audio" }),
+            b.pathJoin(&.{ src_zig, "audio/module/include" }),
             gtest_include,
         })),
         argF(b, "libs", joinPaths(b, &.{
@@ -620,6 +634,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_audio_module") }),
             gtest_main_a,
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             gtest_a,
@@ -631,7 +646,7 @@ pub fn build(b: *std.Build) void {
     }) catch @panic("OOM"), &.{
         &logger_simple.step, &input_default.step, &resource_cache_default.step, &framework.step,
         &runtime.step,       &ecs_flecs.step,      &scheduler_enki.step,        &common.step,
-        &render_service.step, &render_module.step,
+        &render_service.step, &render_module.step, &audio_module.step,
     });
 
     const integration_test_sources = [_][]const u8{

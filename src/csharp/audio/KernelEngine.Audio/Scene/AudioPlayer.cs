@@ -1,47 +1,46 @@
-﻿using KernelEngine.Audio;
-
+using KernelEngine.Audio;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Node that loads a single audio clip from a path declared in the scene file
-/// and exposes <see cref="Play"/> for one-shot playback.
-/// Scene-file properties: <c>Path</c> (string, relative to BaseDirectory),
-/// <c>Volume</c> (float, 0..1, default 1.0).
+/// Behavior half of the generated <see cref="AudioPlayer"/> node: turns the clip
+/// path the scene declared into a loaded sound, and releases it when the node
+/// goes away. Path and Volume are generated from the C header, so they are typed,
+/// defaulted, and visible to every language rather than being read out of an
+/// untyped property bag here.
 /// </summary>
-public class AudioPlayer : Node3D
+public partial class AudioPlayer
 {
     private readonly IAudio _audio;
 
     private SoundHandle _handle = SoundHandle.None;
-    private float       _volume = 1f;
 
-    public AudioPlayer(IAudio audio) => _audio = audio;
-
+    public AudioPlayer(IAudio audio) : this() => _audio = audio;
 
     protected override void OnReady()
     {
-        if (!TryGetProperties(out var props)) return;
-
-        if (props.TryGetString("Path", out var path) && !string.IsNullOrEmpty(path))
+        // The scene's [entity.properties] block is still the wiring for a node's
+        // own fields; the component block that would feed Path directly has no
+        // registration home yet for this domain.
+        if (TryGetProperties(out var props))
         {
-            var full = System.IO.Path.Combine(System.AppContext.BaseDirectory, path!);
-            _handle = _audio.LoadSound(full);
+            if (props.TryGetString("Path", out var declared) && !string.IsNullOrEmpty(declared))
+                Path = declared!;
+            if (props.TryGetFloat("Volume", out var volume) && volume > 0f)
+                Volume = volume;
         }
 
-        props.TryGetFloat("Volume", out _volume);
-        if (_volume == 0f) _volume = 1f;
+        if (string.IsNullOrEmpty(Path)) return;
+        _handle = _audio.LoadSound(System.IO.Path.Combine(System.AppContext.BaseDirectory, Path));
     }
 
     protected override void OnUnbind()
     {
-        if (_handle != SoundHandle.None)
-        {
-            _audio.UnloadSound(_handle);
-            _handle = SoundHandle.None;
-        }
+        if (_handle == SoundHandle.None) return;
+        _audio.UnloadSound(_handle);
+        _handle = SoundHandle.None;
     }
 
-    /// <summary>Plays the loaded clip at the configured volume.</summary>
-    public void Play() => _audio.Play(_handle, _volume);
+    /// <summary>Plays the loaded clip at <see cref="Volume"/>, restarting it if already playing.</summary>
+    public void Play() => _audio.Play(_handle, Volume);
 }

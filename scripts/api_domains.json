@@ -172,6 +172,28 @@
       ]
     },
     {
+      "_comment": "Audio's node surface. AudioPlayer used to exist only as a hand-written C# class reading an untyped property bag, so no other language could be one and no field had a type or a default; describing it here is what makes it a node in every language at once. Node3D arrives via composeHeaders, same as render_components.",
+      "name": "audio_components",
+      "headers": [
+        "src/c/audio/kernel_engine/audio/components.h"
+      ],
+      "includeDirs": [
+        "src/c/audio",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "apiJson": "src/csharp/audio/components.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Audio.Native",
+      "outDir": "src/csharp/audio/KernelEngine.Audio/Scene",
+      "usings": [
+        "KernelEngine.Audio"
+      ]
+    },
+    {
       "name": "text",
       "headers": [
         "src/c/text/kernel_engine/text/font.h"
