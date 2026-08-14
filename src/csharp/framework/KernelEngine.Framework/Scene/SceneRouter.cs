@@ -23,7 +23,7 @@ internal sealed class SceneRouter : ISceneRouter
         if (name is null) return;
 
         _nodeWorld.Clear();
-        var path = Path.Combine(AppContext.BaseDirectory, "scenes", $"{name}.scene");
+        var path = Path.Combine(AppContext.BaseDirectory, "scenes", $"{name}.scene.toml");
         _loader.Load(path);
         _nodeWorld.TriggerReady();
         CurrentScene = name;

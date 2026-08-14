@@ -29,7 +29,7 @@ public interface ISceneRouter
 }
 
 /// <summary>
-/// Implemented by the type generated for each <c>.scene</c> file in a project, so
+/// Implemented by the type generated for each <c>.scene.toml</c> file in a project, so
 /// a scene can be named to <see cref="ISceneRouter.LoadScene{TScene}"/> by type.
 /// </summary>
 public interface IScene

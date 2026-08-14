@@ -105,7 +105,8 @@ public sealed class SceneRouterModule : IRuntimeModule
         var s = raw;
         if (s.StartsWith("res://", StringComparison.Ordinal))   s = s.Substring(6);
         if (s.StartsWith("scenes/", StringComparison.Ordinal))  s = s.Substring(7);
-        if (s.EndsWith(".scene", StringComparison.Ordinal))     s = s.Substring(0, s.Length - 6);
+        if (s.EndsWith(".scene.toml", StringComparison.Ordinal)) s = s.Substring(0, s.Length - 11);
+        else if (s.EndsWith(".scene", StringComparison.Ordinal)) s = s.Substring(0, s.Length - 6);
         return s;
     }
 }

@@ -1,7 +1,7 @@
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Maps the string names used in <c>.scene</c> files to managed <see cref="Type"/>s
+/// Maps the string names used in <c>.scene.toml</c> files to managed <see cref="Type"/>s
 /// that <see cref="SceneLoader"/> instantiates. Built at startup via
 /// <c>services.AddNodeType&lt;T&gt;()</c>.
 /// </summary>

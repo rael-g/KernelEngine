@@ -20,8 +20,8 @@
          LoadScene<T> can name them; it puts them under RootNamespace.Scenes,
          which it can only read if the property is made compiler-visible. -->
     <CompilerVisibleProperty Include="RootNamespace" />
-    <AdditionalFiles Include="scenes/**/*.scene" />
-    <Content Include="scenes/**/*.scene">
+    <AdditionalFiles Include="scenes/**/*.scene.toml" />
+    <Content Include="scenes/**/*.scene.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="assets/**/*">
