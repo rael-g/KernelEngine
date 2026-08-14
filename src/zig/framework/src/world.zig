@@ -21,6 +21,8 @@ const apply_initial_capacity: u32 = 16;
 const ApplyEntry = struct {
     cid: c.ke_component_id,
     fn_ptr: c.ke_component_apply_fn,
+    fields: ?[*]const c.ke_component_field,
+    field_count: u32,
 };
 
 const State = struct {
@@ -74,6 +76,38 @@ fn worldSceneTree(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_scene_tree {
     return stateOf(self).scene_tree;
 }
 
+/// The entry for `cid`, appending an empty one when the component has none yet.
+/// Both registration slots share it, so a component can carry a generated field
+/// table and a callback for what the table cannot describe.
+fn entryFor(s: *State, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) ?*ApplyEntry {
+    if (s.apply_registry) |reg| {
+        for (reg[0..s.apply_count]) |*entry| {
+            if (entry.cid == cid) return entry;
+        }
+    }
+
+    if (s.apply_count == s.apply_capacity) {
+        const cap = if (s.apply_capacity != 0) s.apply_capacity * 2 else apply_initial_capacity;
+        const new_buf = heap.gpa.alloc(ApplyEntry, cap) catch {
+            E.fail(out_error, .out_of_memory, "apply registry allocation failed", @src());
+            return null;
+        };
+        if (s.apply_registry) |old| {
+            @memcpy(new_buf[0..s.apply_count], old[0..s.apply_count]);
+            // Released at the capacity it was allocated with, which the state
+            // still holds until the new one is published below.
+            heap.gpa.free(old[0..s.apply_capacity]);
+        }
+        s.apply_registry = new_buf.ptr;
+        s.apply_capacity = cap;
+    }
+
+    const entry = &s.apply_registry.?[s.apply_count];
+    entry.* = .{ .cid = cid, .fn_ptr = null, .fields = null, .field_count = 0 };
+    s.apply_count += 1;
+    return entry;
+}
+
 fn worldRegisterComponentApply(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -88,37 +122,48 @@ fn worldRegisterComponentApply(
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
-    const s = stateOf(self);
-
-    // Replace-if-exists: registering the same cid twice updates the function.
-    if (s.apply_registry) |reg| {
-        for (reg[0..s.apply_count]) |*entry| {
-            if (entry.cid == cid) {
-                entry.fn_ptr = apply_fn;
-                return true;
-            }
-        }
-    }
-
-    if (s.apply_count == s.apply_capacity) {
-        const cap = if (s.apply_capacity != 0) s.apply_capacity * 2 else apply_initial_capacity;
-        const new_buf = heap.gpa.alloc(ApplyEntry, cap) catch {
-            E.fail(out_error, .out_of_memory, "apply registry allocation failed", @src());
-            return false;
-        };
-        if (s.apply_registry) |old| {
-            @memcpy(new_buf[0..s.apply_count], old[0..s.apply_count]);
-            // Released at the capacity it was allocated with, which the state
-            // still holds until the new one is published below.
-            heap.gpa.free(old[0..s.apply_capacity]);
-        }
-        s.apply_registry = new_buf.ptr;
-        s.apply_capacity = cap;
-    }
-
-    s.apply_registry.?[s.apply_count] = .{ .cid = cid, .fn_ptr = apply_fn };
-    s.apply_count += 1;
+    const entry = entryFor(stateOf(self), cid, out_error) orelse return false;
+    entry.fn_ptr = apply_fn;
     return true;
+}
+
+fn worldRegisterComponentFields(
+    self_in: ?*c.ke_world,
+    cid: c.ke_component_id,
+    fields: [*c]const c.ke_component_field,
+    field_count: u32,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    };
+    if (self.handle == null or fields == null or field_count == 0) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const entry = entryFor(stateOf(self), cid, out_error) orelse return false;
+    entry.fields = fields;
+    entry.field_count = field_count;
+    return true;
+}
+
+fn worldGetComponentFields(
+    self_in: ?*c.ke_world,
+    cid: c.ke_component_id,
+    out_count: [*c]u32,
+) callconv(.c) [*c]const c.ke_component_field {
+    const self = self_in orelse return null;
+    if (self.handle == null) return null;
+    const s = stateOf(self);
+    const reg = s.apply_registry orelse return null;
+    for (reg[0..s.apply_count]) |entry| {
+        if (entry.cid != cid) continue;
+        const f = entry.fields orelse return null;
+        if (out_count != null) out_count.* = entry.field_count;
+        return f;
+    }
+    return null;
 }
 
 fn worldGetComponentApply(
@@ -154,13 +199,16 @@ fn registerBuiltin(
     name: [*c]const u8,
     size: usize,
     apply_fn: c.ke_component_apply_fn,
+    fields: ?[*]const c.ke_component_field,
+    field_count: u32,
 ) void {
     var meta: c.ke_component_meta = undefined;
     const cid = if (e.component_lookup.?(e, name, &meta, null))
         meta.cid
     else
         e.component_register.?(e, name, size, null);
-    _ = world.register_component_apply.?(world, cid, apply_fn, null);
+    if (fields) |f| _ = world.register_component_fields.?(world, cid, f, field_count, null);
+    if (apply_fn != null) _ = world.register_component_apply.?(world, cid, apply_fn, null);
 }
 
 export fn ke_world_create(
@@ -199,6 +247,8 @@ export fn ke_world_create(
     world.ecs = worldEcs;
     world.runtime = worldRuntime;
     world.scene_tree = worldSceneTree;
+    world.register_component_fields = worldRegisterComponentFields;
+    world.get_component_fields = worldGetComponentFields;
     world.register_component_apply = worldRegisterComponentApply;
     world.get_component_apply = worldGetComponentApply;
 
@@ -209,7 +259,9 @@ export fn ke_world_create(
     // from its own plugin, via register_component_apply below — the framework
     // plugin has no compile-time knowledge of any other domain's components.
     const e = params.ecs.?;
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), apply.ke_framework_apply_transform);
+    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component),
+        apply.ke_framework_apply_transform,
+        &c.ke_transform_component_fields, c.ke_transform_component_fields.len);
 
     return .{ .ref = world, .destroy = worldDestroy };
 }

@@ -48,6 +48,28 @@ extern "C"
         /** [idiom] Superseded by the managed SceneTree property, same name. */
         struct ke_scene_tree *(*scene_tree)(struct ke_world *self);
 
+        /** Registers the table describing how a scene block's keys land in this
+         * component's memory. Pure data, so a component becomes authorable
+         * without anyone writing code for it in any language — the table is
+         * generated from the header that declares the struct.
+         *
+         * Runs before the apply callback registered for the same component, if
+         * any: the table covers every field it can describe, the callback is
+         * left with what a description cannot express (a unit conversion, an
+         * enum spelled as a string). Borrowed, and must outlive the world;
+         * generated tables have static storage. */
+        bool (*register_component_fields)(struct ke_world          *self,
+                                          ke_component_id           cid,
+                                          const ke_component_field *fields,
+                                          uint32_t                  field_count,
+                                          ke_error                **out_error);
+
+        /** [idiom] Field table registered for `cid`, or NULL. Writes the entry
+         * count through `out_count`. */
+        const ke_component_field *(*get_component_fields)(struct ke_world *self,
+                                                          ke_component_id  cid,
+                                                          uint32_t        *out_count);
+
         /** @param apply [raw_callback] */
         bool (*register_component_apply)(struct ke_world      *self,
                                          ke_component_id       cid,

@@ -32,7 +32,7 @@ public partial class MeshRenderer : Node
     public partial KernelEngine.Render.MaterialHandle MaterialHandle { get; set; }
 
     [NativeField("base_color", Component = typeof(ke_mesh_component))]
-    public partial Vector4 BaseColor { get; set; }
+    public partial Vector4 Color { get; set; }
 
     [NativeField("roughness", Component = typeof(ke_mesh_component))]
     public partial float Roughness { get; set; }

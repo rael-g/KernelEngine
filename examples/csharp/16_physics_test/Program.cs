@@ -45,7 +45,7 @@ var services = new ServiceCollection()
 
         var physics = sp.GetRequiredService<IPhysics2D>();
 
-        var cam = tree.AddNode(new Camera { Fov = 50f, Near = 0.1f, Far = 100f }, "Camera");
+        var cam = tree.AddNode(new Camera { Fov = 50f, NearPlane = 0.1f, FarPlane = 100f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 14f) };
 
         tree.AddNode(new DirectionalLight

@@ -307,10 +307,8 @@ name = "Root"
 
 // ── light applies ──────────────────────────────────────────────────────────
 
-TEST_F(SceneLoaderTest, DirectionalLight_VectorAndScalarFormsAgree)
+TEST_F(SceneLoaderTest, DirectionalLight_FieldsApplied)
 {
-    // The apply accepts both a vec3 ("direction") and per-axis scalars
-    // ("dir_x"); both spellings must land in the same fields.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "SunVec"
@@ -319,16 +317,6 @@ direction = [-0.4, -1.0, -0.3]
 color = [1.0, 0.9, 0.8]
 ambient = [0.03, 0.03, 0.04]
 intensity = 3.0
-
-[[entity]]
-name = "SunScalar"
-[entity.components.directional_light]
-dir_x = -0.4
-dir_y = -1.0
-dir_z = -0.3
-r = 1.0
-g = 0.9
-b = 0.8
 )");
     ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
 
@@ -348,17 +336,6 @@ b = 0.8
     EXPECT_FLOAT_EQ(lv->ambient.x, 0.03f);
     EXPECT_FLOAT_EQ(lv->ambient.z, 0.04f);
     EXPECT_FLOAT_EQ(lv->intensity, 3.0f);
-
-    ke_entity es = tree->find_node(tree, "SunScalar", NULL);
-    ASSERT_NE(es, KE_ENTITY_INVALID);
-    auto *ls = (ke_directional_light_component *)ecs->component_get(ecs, es, meta.cid);
-    ASSERT_NE(ls, nullptr);
-    EXPECT_FLOAT_EQ(ls->direction.x, lv->direction.x);
-    EXPECT_FLOAT_EQ(ls->direction.y, lv->direction.y);
-    EXPECT_FLOAT_EQ(ls->direction.z, lv->direction.z);
-    EXPECT_FLOAT_EQ(ls->color.x, lv->color.x);
-    EXPECT_FLOAT_EQ(ls->color.y, lv->color.y);
-    EXPECT_FLOAT_EQ(ls->color.z, lv->color.z);
 }
 
 TEST_F(SceneLoaderTest, PointLight_FieldsApplied)

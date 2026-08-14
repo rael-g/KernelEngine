@@ -138,22 +138,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var clearColor = _clearColorOverride ?? ResolveClearColor(config);
         _renderService.SetClearColor(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
 
-        // ambient_light has no native apply (components.h) — this is the only place it's applied.
-        if (world != null)
-        {
-            var components = services.GetRequiredService<IComponentRegistry>();
-            world.RegisterComponentApply<AmbientLightComponent>(
-                components.CidOf<AmbientLightComponent>(),
-                static (ref AmbientLightComponent comp, in VariantReader reader) =>
-                {
-                    if (reader.TryGetVec3("Color", out var c)) comp.Color = c;
-                });
-
-            // MeshComponent's own [entity.components.mesh] apply — primitive name +
-            // material fields — is native (component_apply.zig's ke_render_apply_mesh
-            // parses the TOML; render.mesh.resolve, a KE_PHASE_UPDATE system, turns
-            // those into real handles). Nothing left for C# to register here.
-        }
     }
 
     /// <summary>

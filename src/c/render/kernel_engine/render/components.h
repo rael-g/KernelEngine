@@ -15,8 +15,8 @@ extern "C"
     typedef struct ke_camera_component
     {
         float   fov; ///< [default:60]
-        float   near_plane; ///< [default:0.1,name:Near]
-        float   far_plane; ///< [default:1000,name:Far]
+        float   near_plane; ///< [default:0.1]
+        float   far_plane; ///< [default:1000]
         float   orthographic_size; ///< [default:5]
         uint8_t orthographic; ///< [bool]
     } ke_camera_component;
@@ -45,8 +45,8 @@ extern "C"
         ke_vec3 color; ///< [default:1 1 1] Linear RGB.
         float   intensity; ///< [default:1]
         float   range; ///< [default:20]
-        float   inner_angle; ///< [default:25,name:InnerAngleDeg]
-        float   outer_angle; ///< [default:35,name:OuterAngleDeg]
+        float   inner_angle; ///< [default:25]
+        float   outer_angle; ///< [default:35]
     } ke_spot_light_component;
 
     /** [node:AmbientLight,components:Node3D] Scene-wide ambient light node. First entity with this component wins. */
@@ -60,7 +60,7 @@ extern "C"
     /// the first entity carrying one wins per frame.
     typedef struct ke_skybox_component
     {
-        /// [name:CubemapHandle]
+        /// [name:cubemap_handle]
         ke_texture_handle cubemap;
     } ke_skybox_component;
 
@@ -74,15 +74,15 @@ extern "C"
     /// where a handle is still invalid, so the two paths never conflict.
     typedef struct ke_mesh_component
     {
-        /// [name:MeshHandle]
+        /// [name:mesh_handle]
         ke_mesh_handle     mesh;
-        /// [name:MaterialHandle]
+        /// [name:material_handle]
         ke_material_handle material;
-        /// [idiom] Resolved by the scene loader's property-apply path into `mesh`;
-        /// a node authoring it directly would have the value overwritten.
+        /// [idiom,name:mesh] Resolved by the scene loader's property-apply path into
+        /// `mesh`; a node authoring it directly would have the value overwritten.
         char               primitive[32];
 
-        ke_vec4  base_color; ///< [default:1 1 1 1]
+        ke_vec4  base_color; ///< [default:1 1 1 1,name:color]
         float    roughness; ///< [default:1]
         uint32_t alpha_mode; ///< ke_alpha_mode. [default:0]
         float    alpha_cutoff; ///< [default:0.5]

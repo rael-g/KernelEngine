@@ -73,7 +73,7 @@ var services = new ServiceCollection()
             Intensity = 2f,
         }, "Sun");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 6f) };
 
         // Opaque cube behind both quads — proves the transparent pass's LEQUAL

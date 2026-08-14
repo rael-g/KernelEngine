@@ -35,7 +35,7 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Features: hdr_intermediate, aces_tonemapping");
 
         // Camera looking slightly down at the scene from behind and above.
-        var cam = tree.AddNode(new Camera { Fov = 55f, Near = 0.1f, Far = 200f }, "Camera");
+        var cam = tree.AddNode(new Camera { Fov = 55f, NearPlane = 0.1f, FarPlane = 200f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 4f, 12f) };
 
         var sphere = KernelEngine.Render.MeshPrimitives.UvSphere(resources, radius: 1f, rings: 32, segments: 48);

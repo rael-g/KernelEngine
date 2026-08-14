@@ -1,15 +1,8 @@
-// Per-component apply callback for the framework's own component vocabulary —
-// just "transform" (scene_tree's, so framework's to own). Every other domain
-// registers its own cid + apply callback against ke_world from its own
-// plugin (e.g. render's camera/mesh/lights: see
-// src/zig/render/service/src/component_apply.zig), via world->register_component_apply.
-//
-// Conventions:
-//   - Field name matching is case-sensitive and exact ("color" != "Color").
-//   - Type mismatches are silently skipped (loader semantics: unknown <-> ignore).
-//   - Vec arrays from TOML come pre-converted to KE_VARIANT_VEC2/VEC3/VEC4 by
-//     the scene_loader's toml->variant pass. A 3-element array becomes VEC3;
-//     applies decide whether they want VEC3 or VEC4.
+// What the generated ke_component_field table in
+// kernel_engine/spatial/component_fields.h cannot express for "transform", the
+// only component the framework itself owns. Position, rotation and scale are
+// plain fields the table describes and the loader applies before this runs; two
+// keys are left, and neither is a value written at an offset.
 
 const std = @import("std");
 
@@ -49,42 +42,23 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     };
 }
 
-fn asFloat(v: *const c.ke_variant) ?f32 {
-    return switch (v.type) {
-        c.KE_VARIANT_FLOAT => @floatCast(v.unnamed_0.f),
-        c.KE_VARIANT_INT => @floatFromInt(v.unnamed_0.i),
-        else => null,
-    };
-}
-
-// -- transform ---------------------------------------------------------------
-
+/// Two corrections the table cannot make:
+///
+/// `rotation_euler` is three angles standing for the same quaternion `rotation`
+/// holds — a description maps a key to storage and cannot say "and convert".
+///
+/// A 2D `scale` widens to z=0 through the generic path, which is the right fill
+/// for a position and collapses an object flat here. A scale authored in 2D
+/// means "leave depth alone", so z returns to 1.
 pub export fn ke_framework_apply_transform(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const t: *c.ke_transform_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
-        if (keyIs(entry, "position")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                t.position = v.unnamed_0.v3;
-            } else if (v.type == c.KE_VARIANT_VEC2) {
-                t.position = .{ .x = v.unnamed_0.v2.x, .y = v.unnamed_0.v2.y, .z = 0 };
-            }
-        } else if (keyIs(entry, "scale")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                t.scale = v.unnamed_0.v3;
-            } else if (v.type == c.KE_VARIANT_VEC2) {
-                t.scale = .{ .x = v.unnamed_0.v2.x, .y = v.unnamed_0.v2.y, .z = 1 };
-            }
-        } else if (keyIs(entry, "rotation")) {
-            if (v.type == c.KE_VARIANT_VEC4) {
-                t.rotation = .{ .x = v.unnamed_0.v4.x, .y = v.unnamed_0.v4.y, .z = v.unnamed_0.v4.z, .w = v.unnamed_0.v4.w };
-            } else if (v.type == c.KE_VARIANT_QUAT) {
-                t.rotation = v.unnamed_0.q;
-            }
-        } else if (keyIs(entry, "rotation_euler")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
+        if (keyIs(entry, "rotation_euler")) {
+            if (v.type == c.KE_VARIANT_VEC3)
                 t.rotation = eulerDegToQuat(v.unnamed_0.v3.x, v.unnamed_0.v3.y, v.unnamed_0.v3.z);
-            }
+        } else if (keyIs(entry, "scale") and v.type == c.KE_VARIANT_VEC2) {
+            t.scale.z = 1;
         }
     }
 }

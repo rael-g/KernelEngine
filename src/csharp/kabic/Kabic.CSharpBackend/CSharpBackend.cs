@@ -248,7 +248,14 @@ public static class CSharpBackend
             // gets overwritten.
             if (f.Has("idiom")) continue;
 
-            var propName = f.TagValue("name") ?? Idioms.Pascal(f.Name);
+            // [name:] on a FIELD is the field's canonical name in every language,
+            // written the way a C identifier is and cased by each backend — not a
+            // C#-only rename. A field's C spelling, the key a scene file addresses
+            // it by, and the property a binding exposes are one concept; letting
+            // them diverge is what made the scene loader carry a renaming layer no
+            // header knew about. (A [name:] on a vtable SLOT is unrelated: it names
+            // a method, and stays whatever it is written as.)
+            var propName = Idioms.Pascal(f.TagValue("name") ?? f.Name);
             var propType = NodePropertyType(model, f, convention);
             yield return "";
             if (!string.IsNullOrEmpty(f.Doc)) yield return $"    /// <summary>{Escape(f.Doc)}</summary>";

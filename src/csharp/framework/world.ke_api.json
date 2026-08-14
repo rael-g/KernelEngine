@@ -41,6 +41,12 @@
           "type": "struct ke_logger *",
           "tags": [],
           "doc": null
+        },
+        {
+          "name": "signal_bus",
+          "type": "struct ke_signal_bus *",
+          "tags": [],
+          "doc": "Signal bus scene-declared connections are wired into; optional, borrowed. Without one, a scene\u0027s connection blocks are reported and skipped rather than silently doing nothing."
         }
       ]
     }
@@ -88,6 +94,62 @@
           "doc": "Superseded by the managed SceneTree property, same name.",
           "return_doc": null,
           "params": []
+        },
+        {
+          "name": "register_component_fields",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Registers the table describing how a scene block\u0027s keys land in this component\u0027s memory. Pure data, so a component becomes authorable without anyone writing code for it in any language \u2014 the table is generated from the header that declares the struct. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed, and must outlive the world; generated tables have static storage.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "fields",
+              "type": "const ke_component_field *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "field_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "get_component_fields",
+          "returns": "const ke_component_field *",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Field table registered for \u0060cid\u0060, or NULL. Writes the entry count through \u0060out_count\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            }
+          ]
         },
         {
           "name": "register_component_apply",

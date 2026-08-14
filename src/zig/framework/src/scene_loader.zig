@@ -19,6 +19,7 @@ const std = @import("std");
 const c = @import("c.zig").c;
 const heap = @import("heap.zig");
 const world_impl = @import("world.zig");
+const fields_apply = @import("component_fields_apply.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -303,22 +304,42 @@ fn applyComponentBlock(
         return;
     }
 
-    // No apply registered means no field mapping is defined for this component.
-    // Looked up before the component is added, because adding it zero-initialized
-    // and then failing to populate it is worse than skipping the block: a node
-    // binding later sees the component already present and keeps its own defaults
-    // out, leaving the entity with a field of zeroes nobody authored.
-    const apply_fn = world.get_component_apply.?(world, meta.cid) orelse {
+    // Neither a field table nor a callback means no field mapping is defined for
+    // this component. Looked up before the component is added, because adding it
+    // zero-initialized and then failing to populate it is worse than skipping the
+    // block: a node binding later sees the component already present and keeps
+    // its own defaults out, leaving the entity with a field of zeroes nobody
+    // authored.
+    var field_count: u32 = 0;
+    const fields = world.get_component_fields.?(world, meta.cid, &field_count);
+    const apply_fn = world.get_component_apply.?(world, meta.cid);
+    if (fields == null and apply_fn == null) {
         warn(world, "component '{s}' has no field mapping registered; its scene block is ignored", .{comp_name});
         return;
-    };
+    }
 
+    // A component this entity did not already carry starts as whatever the
+    // storage last held: the backend recycles a freed row's memory, so a field
+    // the scene block does not mention reads back as another entity's leftovers
+    // rather than as zero. Clearing it makes the omitted field deterministic.
+    // Only when it is new — an entity whose node already seeded its defaults
+    // must keep them, since the block is an override, not a replacement.
+    const existing = e.component_get.?(e, entity, meta.cid);
     const comp = e.component_add.?(e, entity, meta.cid) orelse return;
+    if (existing == null) {
+        const bytes: [*]u8 = @ptrCast(comp);
+        @memset(bytes[0..meta.size], 0);
+    }
 
     // Entries come from the arena rather than a fixed stack buffer, so a
     // component block with many fields is applied whole instead of truncated.
     const entries = buildEntries(s, comp_tbl) orelse return;
-    apply_fn(comp, entries.ptr, @intCast(entries.len));
+
+    // Table first, callback second: the generated description covers every field
+    // it can express, leaving the callback only what a description cannot say.
+    if (fields != null)
+        fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
+    if (apply_fn) |f| f(comp, entries.ptr, @intCast(entries.len));
 }
 
 /// [entity.transform] is sugar for [entity.components.transform].

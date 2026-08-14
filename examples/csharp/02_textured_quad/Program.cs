@@ -53,7 +53,7 @@ var services = new ServiceCollection()
             Ambient   = new(0.2f, 0.2f, 0.2f),
         }, "Sun");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);

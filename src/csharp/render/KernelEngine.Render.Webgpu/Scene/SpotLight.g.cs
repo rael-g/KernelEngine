@@ -40,8 +40,8 @@ public partial class SpotLight : Node
     public partial float Range { get; set; }
 
     [NativeField("inner_angle", Component = typeof(ke_spot_light_component))]
-    public partial float InnerAngleDeg { get; set; }
+    public partial float InnerAngle { get; set; }
 
     [NativeField("outer_angle", Component = typeof(ke_spot_light_component))]
-    public partial float OuterAngleDeg { get; set; }
+    public partial float OuterAngle { get; set; }
 }

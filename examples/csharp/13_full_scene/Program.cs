@@ -40,7 +40,7 @@ var services = new ServiceCollection()
 
         tree.AddNode(new AmbientLight { Color = new(0.02f, 0.02f, 0.02f) }, "Ambient");
 
-        var cam    = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "MainCamera");
+        var cam    = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "MainCamera");
         var eye    = new Vector3(8f, 8f, 15f);
         var target = new Vector3(0f, 2f, 0f);
         var lookRot = Quaternion.CreateFromRotationMatrix(

@@ -63,29 +63,32 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install.step);
 
     // ── Tests ──────────────────────────────────────────────────────────────
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/signal_bus.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
-        test_mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    test_mod.addIncludePath(b.path("include"));
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_runtime", .{});
-    addTomlc99(b, test_mod, tomlc99_dir);
-    test_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
-
-    const unit_tests = b.addTest(.{ .root_module = test_mod });
-    const run_tests = b.addRunArtifact(unit_tests);
+    // One test artifact per source file that has tests: a Zig test root only
+    // pulls in what it imports, so a file no root reaches is silently untested.
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_tests.step);
+    inline for (.{ "src/signal_bus.zig", "src/component_fields_apply.zig" }) |root| {
+        const test_mod = b.createModule(.{
+            .root_source_file = b.path(root),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+            test_mod.addIncludePath(.{ .cwd_relative = inc });
+        }
+        test_mod.addIncludePath(b.path("include"));
+        test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+        test_mod.linkSystemLibrary("ke_runtime", .{});
+        addTomlc99(b, test_mod, tomlc99_dir);
+        test_mod.addImport("kerror", b.createModule(.{
+            .root_source_file = .{ .cwd_relative = kerror_src },
+            .target = target,
+            .optimize = optimize,
+        }));
+
+        const unit_tests = b.addTest(.{ .root_module = test_mod });
+        test_step.dependOn(&b.addRunArtifact(unit_tests).step);
+    }
 }
 
 /// Wires the shared vendored tomlc99 into `mod`: its include dir plus

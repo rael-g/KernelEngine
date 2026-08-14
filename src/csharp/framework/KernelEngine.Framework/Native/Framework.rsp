@@ -64,6 +64,7 @@ ke_bool=byte
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_runtime=KernelEngine.Runtime.Native.ke_runtime
 ke_variant_table_entry=KernelEngine.Ecs.Native.ke_variant_table_entry
+ke_component_field=KernelEngine.Ecs.Native.ke_component_field
 ke_scheduler=KernelEngine.Scheduler.Native.ke_scheduler
 ke_vertex=KernelEngine.Render.Native.ke_vertex
 ke_material_data=KernelEngine.Asset.Native.ke_material_data
@@ -88,6 +89,7 @@ ke_bool
 ke_ecs
 ke_runtime
 ke_variant_table_entry
+ke_component_field
 ke_scheduler
 ke_vertex
 ke_material_data

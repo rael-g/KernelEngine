@@ -46,7 +46,7 @@ var services = new ServiceCollection()
 
         tree.AddNode(new OrbitingLight { Color = Vector3.One, Intensity = 3.0f }, "Sun");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 1.0f, 5.0f) };
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);

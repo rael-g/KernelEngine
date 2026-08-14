@@ -174,15 +174,28 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     const light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component), null);
     const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(c.ke_point_light_component), null);
     const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(c.ke_spot_light_component), null);
-    _ = e.component_register.?(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, @sizeOf(c.ke_ambient_light_component), null);
+    const ambient_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, @sizeOf(c.ke_ambient_light_component), null);
     _ = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component), null);
 
+    registerFields(w, mesh_cid, &c.ke_mesh_component_fields);
+    registerFields(w, camera_cid, &c.ke_camera_component_fields);
+    registerFields(w, light_cid, &c.ke_directional_light_component_fields);
+    registerFields(w, point_light_cid, &c.ke_point_light_component_fields);
+    registerFields(w, spot_light_cid, &c.ke_spot_light_component_fields);
+    registerFields(w, ambient_light_cid, &c.ke_ambient_light_component_fields);
+
+    // Only the two components carrying a key no table can describe keep a
+    // callback; it runs after the table and corrects that one key.
     _ = w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null);
     _ = w.register_component_apply.?(w, mesh_cid, component_apply.ke_render_apply_mesh, null);
-    _ = w.register_component_apply.?(w, light_cid, component_apply.ke_render_apply_directional_light, null);
-    _ = w.register_component_apply.?(w, point_light_cid, component_apply.ke_render_apply_point_light, null);
-    _ = w.register_component_apply.?(w, spot_light_cid, component_apply.ke_render_apply_spot_light, null);
     return true;
+}
+
+/// Registers a generated field table, taking its length from the array type so
+/// the count can never drift from the table it describes.
+fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
+    const fields = @typeInfo(@TypeOf(table.*)).array;
+    _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
 }
 
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,

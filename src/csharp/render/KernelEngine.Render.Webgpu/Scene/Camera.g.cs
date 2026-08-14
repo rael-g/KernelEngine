@@ -28,10 +28,10 @@ public partial class Camera : Node
     public partial float Fov { get; set; }
 
     [NativeField("near_plane", Component = typeof(ke_camera_component))]
-    public partial float Near { get; set; }
+    public partial float NearPlane { get; set; }
 
     [NativeField("far_plane", Component = typeof(ke_camera_component))]
-    public partial float Far { get; set; }
+    public partial float FarPlane { get; set; }
 
     [NativeField("orthographic_size", Component = typeof(ke_camera_component))]
     public partial float OrthographicSize { get; set; }

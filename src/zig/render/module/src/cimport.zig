@@ -12,6 +12,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/spatial/transform.h");
     @cInclude("kernel_engine/framework/world.h");
     @cInclude("kernel_engine/render/components.h");
+    @cInclude("kernel_engine/render/component_fields.h");
     @cInclude("kernel_engine/render/gpu/gpu_device.h");
     @cInclude("kernel_engine/render/gpu/gpu_commands.h");
     @cInclude("kernel_engine/render/service/render_service.h");

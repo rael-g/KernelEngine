@@ -57,8 +57,7 @@
           "name": "near_plane",
           "type": "float",
           "tags": [
-            "default:0.1",
-            "name:Near"
+            "default:0.1"
           ],
           "doc": null
         },
@@ -66,8 +65,7 @@
           "name": "far_plane",
           "type": "float",
           "tags": [
-            "default:1000",
-            "name:Far"
+            "default:1000"
           ],
           "doc": null
         },
@@ -209,8 +207,7 @@
           "name": "inner_angle",
           "type": "float",
           "tags": [
-            "default:25",
-            "name:InnerAngleDeg"
+            "default:25"
           ],
           "doc": null
         },
@@ -218,8 +215,7 @@
           "name": "outer_angle",
           "type": "float",
           "tags": [
-            "default:35",
-            "name:OuterAngleDeg"
+            "default:35"
           ],
           "doc": null
         }
@@ -255,7 +251,7 @@
           "name": "cubemap",
           "type": "ke_texture_handle",
           "tags": [
-            "name:CubemapHandle"
+            "name:cubemap_handle"
           ],
           "doc": null
         }
@@ -273,7 +269,7 @@
           "name": "mesh",
           "type": "ke_mesh_handle",
           "tags": [
-            "name:MeshHandle"
+            "name:mesh_handle"
           ],
           "doc": null
         },
@@ -281,7 +277,7 @@
           "name": "material",
           "type": "ke_material_handle",
           "tags": [
-            "name:MaterialHandle"
+            "name:material_handle"
           ],
           "doc": null
         },
@@ -289,7 +285,8 @@
           "name": "primitive",
           "type": "char[32]",
           "tags": [
-            "idiom"
+            "idiom",
+            "name:mesh"
           ],
           "doc": "Resolved by the scene loader\u0027s property-apply path into \u0060mesh\u0060; a node authoring it directly would have the value overwritten."
         },
@@ -297,7 +294,8 @@
           "name": "base_color",
           "type": "ke_vec4",
           "tags": [
-            "default:1 1 1 1"
+            "default:1 1 1 1",
+            "name:color"
           ],
           "doc": null
         },

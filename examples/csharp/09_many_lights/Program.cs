@@ -68,7 +68,7 @@ var services = new ServiceCollection()
         // Camera at the corridor entrance. Identity rotation looks at world
         // origin (the entrance), which — standing on-axis just outside it —
         // means looking straight down +Z, the corridor's length axis.
-        var cam = tree.AddNode(new Camera { Fov = 70f, Near = 0.1f, Far = CorridorLength + 50f }, "Camera");
+        var cam = tree.AddNode(new Camera { Fov = 70f, NearPlane = 0.1f, FarPlane = CorridorLength + 50f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, -3f) };
 
         var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
