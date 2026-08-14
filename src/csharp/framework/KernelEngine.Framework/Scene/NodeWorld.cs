@@ -158,9 +158,9 @@ public sealed class NodeWorld
         _ecs        = ecs;
         _components = components;
         _logger     = logger;
-        _nameCid            = ecs.RegisterComponent<NameComponent>("name");
+        _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
         _nativeTransformCid = ecs.RegisterComponent<TransformComponent>("transform");
-        _hierarchyCid       = ecs.RegisterComponent<HierarchyComponent>("hierarchy");
+        _hierarchyCid       = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
     }
 
     /// <summary>
@@ -272,9 +272,10 @@ public sealed class NodeWorld
     /// </summary>
     internal string GetName(ulong entity)
     {
-        var nsp = _ecs.GetComponent<NameComponent>(entity, _nameCid);
+        var nsp = _ecs.GetComponent<Native.ke_name_component>(entity, _nameCid);
         if (nsp.IsEmpty) return "";
-        ReadOnlySpan<byte> bytes = nsp[0].Name;
+        ReadOnlySpan<sbyte> chars = nsp[0].name;
+        var bytes = System.Runtime.InteropServices.MemoryMarshal.Cast<sbyte, byte>(chars);
         var end = bytes.IndexOf((byte)0);
         return Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
     }
@@ -286,9 +287,9 @@ public sealed class NodeWorld
     /// </summary>
     internal Node? GetParent(ulong entity)
     {
-        var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
+        var hsp = _ecs.GetComponent<Native.ke_hierarchy_component>(entity, _hierarchyCid);
         if (hsp.IsEmpty) return null;
-        var parent = hsp[0].Parent;
+        var parent = hsp[0].parent;
         if (parent == 0) return null;
         return _byEntity.TryGetValue(parent, out var p) ? p : null;
     }
@@ -302,16 +303,16 @@ public sealed class NodeWorld
     internal IReadOnlyList<Node> GetChildren(ulong entity)
     {
         var result = new List<Node>();
-        var hsp = _ecs.GetComponent<HierarchyComponent>(entity, _hierarchyCid);
+        var hsp = _ecs.GetComponent<Native.ke_hierarchy_component>(entity, _hierarchyCid);
         if (hsp.IsEmpty) return result;
 
-        var child = hsp[0].FirstChild;
+        var child = hsp[0].first_child;
         while (child != 0)
         {
             if (_byEntity.TryGetValue(child, out var node)) result.Add(node);
-            var chsp = _ecs.GetComponent<HierarchyComponent>(child, _hierarchyCid);
+            var chsp = _ecs.GetComponent<Native.ke_hierarchy_component>(child, _hierarchyCid);
             if (chsp.IsEmpty) break;
-            child = chsp[0].NextSibling;
+            child = chsp[0].next_sibling;
         }
         return result;
     }
