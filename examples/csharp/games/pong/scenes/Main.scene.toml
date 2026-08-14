@@ -13,7 +13,7 @@ name = "Camera"
 type = "Camera"
 [entity.transform]
 position = [0.0, 0.0, 10.0]
-[entity.components.camera]
+[entity.camera]
 orthographic      = true
 orthographic_size = 5.0
 near_plane        = 0.1
@@ -38,7 +38,7 @@ name  = "PaddleLeft"
 scene = "res://scenes/Paddle.scene.toml"
 [entity.transform]
 position = [-7.5, 0.0, 0.0]
-[entity.components.paddle]
+[entity.paddle]
 move_action = "PaddleLeftMove"
 
 [[entity]]
@@ -46,7 +46,7 @@ name  = "PaddleRight"
 scene = "res://scenes/Paddle.scene.toml"
 [entity.transform]
 position = [7.5, 0.0, 0.0]
-[entity.components.paddle]
+[entity.paddle]
 move_action = "PaddleRightMove"
 
 [[entity]]

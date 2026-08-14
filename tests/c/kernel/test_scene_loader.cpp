@@ -159,14 +159,14 @@ position = [1.0, 2.0, 3.0]
     EXPECT_FLOAT_EQ(t->position.z, 3.0f);
 }
 
-// ── [entity.components.X] via apply registry ──────────────────────────────
+// ── [entity.X] via apply registry ──────────────────────────────
 
 TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)
 {
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Crate"
-[entity.components.mesh]
+[entity.mesh]
 mesh = "cube"
 )");
     ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
@@ -185,7 +185,7 @@ TEST_F(SceneLoaderTest, CameraComponent_FovDegreesAlias)
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Cam"
-[entity.components.camera]
+[entity.camera]
 fov_degrees = 60.0
 near_plane = 0.1
 far_plane = 100.0
@@ -278,10 +278,10 @@ name = "Root"
         "[[entity]]\nname = \"Holder\"\n\n"
         "[[entity]]\nname = \"Left\"\nscene = \"" + sub.generic_string() + "\"\n"
         "[entity.transform]\nposition = [-7.5, 0.0, 0.0]\n"
-        "[entity.components.camera]\nfar_plane = 111.0\n\n"
+        "[entity.camera]\nfar_plane = 111.0\n\n"
         "[[entity]]\nname = \"Right\"\nscene = \"" + sub.generic_string() + "\"\n"
         "[entity.transform]\nposition = [7.5, 0.0, 0.0]\n"
-        "[entity.components.camera]\nfar_plane = 222.0\n";
+        "[entity.camera]\nfar_plane = 222.0\n";
     auto main = WriteTempScene(main_text);
 
     ASSERT_TRUE(loader->load(loader, main.string().c_str(), NULL));
@@ -316,7 +316,7 @@ TEST_F(SceneLoaderTest, DirectionalLight_FieldsApplied)
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "SunVec"
-[entity.components.directional_light]
+[entity.directional_light]
 direction = [-0.4, -1.0, -0.3]
 color = [1.0, 0.9, 0.8]
 ambient = [0.03, 0.03, 0.04]
@@ -347,7 +347,7 @@ TEST_F(SceneLoaderTest, Label_FieldsApplied)
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Score"
-[entity.components.label]
+[entity.label]
 text = "0"
 anchor = [0.3, 0.0]
 offset = [0.0, 60.0]
@@ -375,7 +375,7 @@ TEST_F(SceneLoaderTest, AudioPlayer_FieldsApplied)
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Hit"
-[entity.components.audio_player]
+[entity.audio_player]
 path = "assets/sounds/hit.wav"
 volume = 0.5
 )");
@@ -391,12 +391,57 @@ volume = 0.5
     EXPECT_FLOAT_EQ(a->volume, 0.5f);
 }
 
+TEST_F(SceneLoaderTest, LegacyComponentsNesting_IsNotRead)
+{
+    // The old [entity.components.X] level is gone; a file still using it must not
+    // half-work, or the author would be left guessing which fields landed.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Old"
+[entity.components.point_light]
+radius = 42.0
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Old", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "point_light", &meta, nullptr));
+    EXPECT_EQ(ecs->component_get(ecs, e, meta.cid), nullptr);
+}
+
+TEST_F(SceneLoaderTest, InternalComponent_CannotBeAuthored)
+{
+    // hierarchy holds entity ids the scene cannot know; writing one would point
+    // the graph at an entity that does not exist.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Parent"
+
+[[entity]]
+name   = "Child"
+parent = "Parent"
+[entity.hierarchy]
+parent = 999
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity parent = tree->find_node(tree, "Parent", NULL);
+    ke_entity child  = tree->find_node(tree, "Child", NULL);
+    ASSERT_NE(child, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "hierarchy", &meta, nullptr));
+    auto *h = (ke_hierarchy_component *)ecs->component_get(ecs, child, meta.cid);
+    ASSERT_NE(h, nullptr);
+    EXPECT_EQ(h->parent, parent);
+}
+
 TEST_F(SceneLoaderTest, PointLight_FieldsApplied)
 {
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Bulb"
-[entity.components.point_light]
+[entity.point_light]
 color = [0.2, 0.4, 0.6]
 radius = 12.5
 intensity = 2.0
@@ -421,7 +466,7 @@ TEST_F(SceneLoaderTest, SpotLight_FieldsApplied)
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Lamp"
-[entity.components.spot_light]
+[entity.spot_light]
 direction = [0.0, -1.0, 0.0]
 color = [1.0, 0.5, 0.25]
 inner_angle = 0.3
@@ -587,7 +632,7 @@ TEST_F(SceneLoaderTest, UserComponent_AppliedThroughCustomCallback)
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Test"
-[entity.components.demo]
+[entity.demo]
 fov = 1.5
 mode = 7
 )");

@@ -342,37 +342,50 @@ fn applyComponentBlock(
     if (apply_fn) |f| f(comp, entries.ptr, @intCast(entries.len));
 }
 
-/// [entity.transform] is sugar for [entity.components.transform].
-fn applyTransformBlock(s: *State, entity: c.ke_entity, xform_tbl: *c.toml_table_t) void {
-    applyComponentBlock(s, entity, c.KE_COMPONENT_NAME_TRANSFORM, xform_tbl);
+/// Whether a table under `[[entity]]` describes something other than a component.
+///
+/// `connect` is a relation between two entities, not a field of one. `properties`
+/// is the retired property bag. `components` was the old nesting level, and is
+/// named here so a file still using it gets told what to write instead of being
+/// reported as a component nobody registered.
+fn reservedBlock(key: [*c]const u8) bool {
+    const k = std.mem.span(key);
+    return std.mem.eql(u8, k, "connect") or
+        std.mem.eql(u8, k, "properties") or
+        std.mem.eql(u8, k, "components");
 }
 
-/// A subscene's outer [[entity]] block may carry a [transform] override. It is
-/// applied BEFORE dispatch_script so OnBind sees the final position/rotation/
-/// scale; the remaining outer overrides are applied afterwards.
-fn applyOuterTransformEarly(s: *State, entity: c.ke_entity, outer: ?*c.toml_table_t) void {
-    const o = outer orelse return;
-    if (c.toml_table_in(o, "transform")) |xt| applyTransformBlock(s, entity, xt);
+/// Components the scene tree owns. A scene authoring one would be writing the
+/// graph's own bookkeeping — entity ids it cannot know, or a name the entity's
+/// own `name` key already sets.
+fn internalComponent(key: [*c]const u8) bool {
+    const k = std.mem.span(key);
+    return std.mem.eql(u8, k, c.KE_COMPONENT_NAME_NAME) or
+        std.mem.eql(u8, k, c.KE_COMPONENT_NAME_HIERARCHY);
 }
 
-fn applyComponentsSection(s: *State, entity: c.ke_entity, comps: *c.toml_table_t) void {
+/// Applies every `[entity.<component_name>]` block on one table.
+///
+/// One shape for every component, the entity's own transform included: a scene
+/// addresses a component by the name it is registered under, and nothing else.
+/// The entity's identity keys (`name`, `parent`, `type`, `scene`) are scalars, so
+/// they are not tables and never reach here.
+fn applyComponentBlocks(s: *State, entity: c.ke_entity, tbl: *c.toml_table_t) void {
     var i: c_int = 0;
     while (true) : (i += 1) {
-        const cn = c.toml_key_in(comps, i) orelse break;
-        if (c.toml_table_in(comps, cn)) |ct| applyComponentBlock(s, entity, cn, ct);
+        const key = c.toml_key_in(tbl, i) orelse break;
+        const block = c.toml_table_in(tbl, key) orelse continue;
+        if (std.mem.eql(u8, std.mem.span(key), "components")) {
+            warn(s.world, "[entity.components.X] is no longer read; write [entity.X] instead", .{});
+            continue;
+        }
+        if (reservedBlock(key)) continue;
+        if (internalComponent(key)) {
+            warn(s.world, "component '{s}' is the scene tree's own and cannot be authored", .{key});
+            continue;
+        }
+        applyComponentBlock(s, entity, key, block);
     }
-}
-
-fn applyOuterOverrides(s: *State, entity: c.ke_entity, outer: *c.toml_table_t) void {
-    // [entity.transform] was already applied by applyOuterTransformEarly; doing
-    // it again here would be a redundant write.
-    if (c.toml_table_in(outer, "properties")) |props| attachProperties(s, entity, props);
-    const type_d = c.toml_string_in(outer, "type");
-    if (type_d.ok != 0) {
-        dispatchScript(s, entity, type_d.u.s);
-        std.c.free(type_d.u.s);
-    }
-    if (c.toml_table_in(outer, "components")) |comps| applyComponentsSection(s, entity, comps);
 }
 
 // -- signal connections ------------------------------------------------------
@@ -556,10 +569,11 @@ fn processEntity(
         return false;
     }
 
-    if (c.toml_table_in(args.entity_tbl, "transform")) |xt| applyTransformBlock(s, entity, xt);
-
-    // The outer override must land before dispatch_script so OnBind sees it.
-    applyOuterTransformEarly(s, entity, args.override_outer);
+    // Every component the file authors lands before the script is dispatched, so
+    // a node binds onto an entity whose data is already final: its generated seed
+    // keeps whatever the scene wrote and fills only what the scene left out.
+    applyComponentBlocks(s, entity, args.entity_tbl);
+    if (args.override_outer) |outer| applyComponentBlocks(s, entity, outer);
 
     const type_d = c.toml_string_in(args.entity_tbl, "type");
     if (type_d.ok != 0) {
@@ -568,8 +582,14 @@ fn processEntity(
     }
 
     if (c.toml_table_in(args.entity_tbl, "properties")) |props| attachProperties(s, entity, props);
-    if (c.toml_table_in(args.entity_tbl, "components")) |comps| applyComponentsSection(s, entity, comps);
-    if (args.override_outer) |outer| applyOuterOverrides(s, entity, outer);
+    if (args.override_outer) |outer| {
+        if (c.toml_table_in(outer, "properties")) |props| attachProperties(s, entity, props);
+        const outer_type = c.toml_string_in(outer, "type");
+        if (outer_type.ok != 0) {
+            dispatchScript(s, entity, outer_type.u.s);
+            std.c.free(outer_type.u.s);
+        }
+    }
 
     if (name_d.ok != 0) args.names.put(name_d.u.s, entity);
     out_entity.* = entity;

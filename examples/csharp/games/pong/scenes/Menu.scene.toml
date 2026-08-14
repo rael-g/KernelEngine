@@ -13,7 +13,7 @@ name = "Camera"
 type = "Camera"
 [entity.transform]
 position = [0.0, 0.0, 10.0]
-[entity.components.camera]
+[entity.camera]
 orthographic      = true
 orthographic_size = 5.0
 near_plane        = 0.1
