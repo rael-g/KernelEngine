@@ -60,7 +60,7 @@ public sealed class MenuController : Node
     {
         bool launch = _actions.IsPressed(PongAction.Launch, in view);
         bool quit   = _actions.IsPressed(PongAction.Quit,   in view);
-        if (launch && !_prevLaunch) _router.LoadScene("Main");
+        if (launch && !_prevLaunch) _router.LoadScene<Scenes.Main>();
         if (quit   && !_prevQuit)   Environment.Exit(0);
         _prevLaunch = launch;
         _prevQuit   = quit;
