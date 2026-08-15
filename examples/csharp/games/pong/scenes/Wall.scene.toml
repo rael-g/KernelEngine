@@ -9,7 +9,7 @@ type = "Pong.Wall"
 [[entity]]
 name   = "Shape"
 parent = "Root"
-type   = "CollisionShape2D"
+type   = "Collider2D"
 [entity.collider2d]
 half_extents = [8.0, 0.25]
 restitution  = 1.0

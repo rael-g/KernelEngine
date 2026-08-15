@@ -12,7 +12,7 @@ public static class PhysicsComponentsNodeTypes
     public static IServiceCollection AddPhysicsComponentsNodeTypes(this IServiceCollection services)
     {
         services.AddNodeType<Body2D>();
-        services.AddNodeType<CollisionShape2D>();
+        services.AddNodeType<Collider2D>();
         return services;
     }
 }

@@ -230,9 +230,9 @@
     },
     {
       "name": "ke_collider2d_component",
-      "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. A shape is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin\u0027s own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.",
+      "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. Named for what it holds \u2014 a kind, extents, density, friction, restitution \u2014 rather than for a shape it is not. It is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin\u0027s own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.",
       "tags": [
-        "node:CollisionShape2D",
+        "node:Collider2D",
         "base:Node2D"
       ],
       "fields": [

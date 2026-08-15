@@ -8,11 +8,11 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. A shape is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.</summary>
+/// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. Named for what it holds — a kind, extents, density, friction, restitution — rather than for a shape it is not. It is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.</summary>
 [GeneratedNodeComponent(typeof(ke_collider2d_component), "collider2d")]
-public partial class CollisionShape2D : Node2D
+public partial class Collider2D : Node2D
 {
-    public CollisionShape2D()
+    public Collider2D()
     {
         _generatedState0.half_extents = new ke_vec2 { x = 0.5f, y = 0.5f };
         _generatedState0.radius = 0.5f;

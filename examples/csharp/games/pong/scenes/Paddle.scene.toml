@@ -9,7 +9,7 @@ type = "Pong.Paddle"
 [[entity]]
 name   = "Shape"
 parent = "Root"
-type   = "CollisionShape2D"
+type   = "Collider2D"
 [entity.collider2d]
 half_extents = [0.15, 0.9]
 restitution  = 1.0
