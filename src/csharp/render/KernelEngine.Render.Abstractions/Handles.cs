@@ -1,34 +1,39 @@
 ﻿namespace KernelEngine.Render;
 
+// "None" is all-bits-zero, mirroring KE_HANDLE_NONE: a live handle never carries
+// generation 0, so memory that arrives zeroed already reads as no handle. Spelling
+// it any other way would make every default-constructed struct hold a handle that
+// looks live and points at whichever resource landed in slot 0.
+
 public readonly record struct MeshHandle(uint Value)
 {
-    public static readonly MeshHandle None = new(uint.MaxValue);
-    public bool IsValid => Value != uint.MaxValue;
+    public static readonly MeshHandle None = new(0u);
+    public bool IsValid => Value != 0u;
 }
 
 public readonly record struct TextureHandle(uint Value)
 {
-    public static readonly TextureHandle None = new(uint.MaxValue);
-    public bool IsValid => Value != uint.MaxValue;
+    public static readonly TextureHandle None = new(0u);
+    public bool IsValid => Value != 0u;
 }
 
 public readonly record struct MaterialHandle(uint Value)
 {
-    public static readonly MaterialHandle None = new(uint.MaxValue);
-    public bool IsValid => Value != uint.MaxValue;
+    public static readonly MaterialHandle None = new(0u);
+    public bool IsValid => Value != 0u;
 }
 
 public readonly record struct ShadowMapHandle(uint Value)
 {
-    public static readonly ShadowMapHandle None = new(uint.MaxValue);
-    public bool IsValid => Value != uint.MaxValue;
+    public static readonly ShadowMapHandle None = new(0u);
+    public bool IsValid => Value != 0u;
 }
 
 /// <summary>A font's glyph table registered with the UI overlay pass via <see cref="IRenderResources.LoadFont"/>.</summary>
 public readonly record struct FontHandle(uint Value)
 {
-    public static readonly FontHandle None = new(uint.MaxValue);
-    public bool IsValid => Value != uint.MaxValue;
+    public static readonly FontHandle None = new(0u);
+    public bool IsValid => Value != 0u;
 }
 
 /// <summary>

@@ -117,7 +117,7 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
 
     for (ui.fonts, 0..) |f, i| {
         if (f.in_use and std.mem.eql(u8, f.key, key_slice))
-            return .{ .bits = c.ke_handle_make(@intCast(i), 0) };
+            return .{ .bits = c.ke_handle_make(@intCast(i), c.KE_HANDLE_GENERATION_FIRST) };
     }
 
     var slot: ?usize = null;
@@ -147,7 +147,7 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
         .ascent = ascent,
         .in_use = true,
     };
-    return .{ .bits = c.ke_handle_make(@intCast(idx), 0) };
+    return .{ .bits = c.ke_handle_make(@intCast(idx), c.KE_HANDLE_GENERATION_FIRST) };
 }
 
 fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_metrics {

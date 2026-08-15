@@ -70,10 +70,6 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
 
 /// Uploads the image the sprite names, once. Deduped by path inside the resolver,
 /// but the handle is kept so a steady scene stops asking at all.
-///
-/// A zeroed handle would be indistinguishable from a live one (slot 0, generation
-/// 0) — "none" is all-ones — which is why the sprite's first sighting writes
-/// KE_TEXTURE_NONE before anything reads it back.
 fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
     if (c.ke_texture_is_valid(sp.texture_handle)) return sp.texture_handle;
@@ -139,9 +135,6 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         while (i < segs[s].count) : (i += 1) {
             if (sprites[i].attached != 0) continue;
             sprites[i].attached = 1;
-            // Before anything can read it back: a component the scene created is
-            // zeroed, and zero is a handle that looks live.
-            sprites[i].texture_handle = c.KE_TEXTURE_NONE;
             _ = c.ke_system_ctx_attach(ctx, segs[s].entities[i], st.mesh_cid, null, 0);
         }
     }

@@ -3,6 +3,7 @@
 #include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/asset/mesh_data.h>
+#include <kernel_engine/render/handles.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -392,4 +393,29 @@ TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
     
     rh.destroy(rh.ref);
     fs::remove(mat);
+}
+
+// ── Handle encoding ──────────────────────────────────────────────────────────
+
+TEST(HandleEncoding, NoneIsAllBitsZero)
+{
+    // What lets a component the scene file created — which arrives zeroed —
+    // read as holding no handle, without every producer remembering to seed one.
+    EXPECT_EQ(KE_MESH_NONE.bits, 0u);
+    EXPECT_EQ(KE_TEXTURE_NONE.bits, 0u);
+    EXPECT_EQ(KE_MATERIAL_NONE.bits, 0u);
+
+    ke_mesh_handle zeroed{};
+    EXPECT_FALSE(ke_mesh_is_valid(zeroed));
+}
+
+TEST(HandleEncoding, NoLiveHandleCanBeZero)
+{
+    // Slot 0 is a perfectly ordinary slot; what keeps its handle from colliding
+    // with "none" is that a live generation is never 0.
+    for (uint32_t index = 0; index < 8; ++index) {
+        ke_mesh_handle h{ ke_handle_make(index, KE_HANDLE_GENERATION_FIRST) };
+        EXPECT_TRUE(ke_mesh_is_valid(h)) << "index " << index;
+        EXPECT_EQ(ke_handle_index(h.bits), index);
+    }
 }

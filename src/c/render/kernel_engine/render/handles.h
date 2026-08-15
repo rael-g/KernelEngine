@@ -17,9 +17,16 @@ extern "C"
     // A bare index cannot express that, and the aliasing it permits is invisible
     // (wrong mesh drawn, no crash, no log).
     //
-    // 20 index bits (1,048,575 live resources of one kind) and 12 generation
-    // bits (4,095 reuses of a slot before the generation wraps and a very old
+    // 20 index bits (1,048,576 live resources of one kind) and 12 generation
+    // bits (4,094 reuses of a slot before the generation wraps and a very old
     // handle could collide again).
+    //
+    // A live handle's generation is never 0, which is what makes all-bits-zero
+    // mean "no handle". That matters because zero is what memory arrives as: a
+    // component the scene file created, a struct a caller left default. Spelling
+    // "none" any other way makes every producer of a handle field responsible for
+    // seeding it, and the one that forgets does not fail — it points at whichever
+    // resource happened to land in slot 0.
 
 #define KE_HANDLE_INDEX_BITS      20u
 #define KE_HANDLE_GENERATION_BITS 12u
@@ -27,12 +34,13 @@ extern "C"
 #define KE_HANDLE_INDEX_MASK      ((1u << KE_HANDLE_INDEX_BITS) - 1u)
 #define KE_HANDLE_GENERATION_MASK ((1u << KE_HANDLE_GENERATION_BITS) - 1u)
 
-    /// Highest index value; reserved to spell "no handle", so it is never a live slot.
-#define KE_HANDLE_INDEX_NONE KE_HANDLE_INDEX_MASK
+    /// Lowest generation a live handle can carry. Generation 0 is reserved so no
+    /// live handle is ever all-bits-zero.
+#define KE_HANDLE_GENERATION_FIRST 1u
 
-    /// The invalid handle. Index bits are all-ones (the reserved index), so no
-    /// generation can ever produce a live handle equal to it.
-#define KE_HANDLE_NONE UINT32_MAX
+    /// The invalid handle: all bits zero, which is what uninitialized memory
+    /// already holds.
+#define KE_HANDLE_NONE 0u
 
     static inline uint32_t ke_handle_index(uint32_t bits)
     {

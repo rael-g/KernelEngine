@@ -16,7 +16,7 @@ extern "C"
     } ke_ui_font_handle;
 
 #ifndef CLANGSHARP
-#define KE_UI_FONT_NONE ((ke_ui_font_handle){ UINT32_MAX })
+#define KE_UI_FONT_NONE ((ke_ui_font_handle){ KE_HANDLE_NONE })
 #endif
 
     typedef struct ke_label_glyph_quad
