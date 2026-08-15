@@ -164,6 +164,13 @@
         "src/c/physics/kernel_engine/physics/physics_2d.h"
       ],
       "apiJson": "src/csharp/physics/components.ke_api.json",
+      "cOut": {
+        "file": "src/c/physics/kernel_engine/physics/component_fields.h",
+        "guard": "KERNEL_ENGINE_PHYSICS_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/physics/components.h"
+        ]
+      },
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Physics.Native",
       "outDir": "src/csharp/physics/KernelEngine.Physics/Scene",
@@ -186,6 +193,13 @@
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ],
       "apiJson": "src/csharp/audio/components.ke_api.json",
+      "cOut": {
+        "file": "src/c/audio/kernel_engine/audio/component_fields.h",
+        "guard": "KERNEL_ENGINE_AUDIO_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/audio/components.h"
+        ]
+      },
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Audio.Native",
       "outDir": "src/csharp/audio/KernelEngine.Audio/Scene",
@@ -302,6 +316,13 @@
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/spatial.ke_api.json",
+      "cOut": {
+        "file": "src/c/spatial/kernel_engine/spatial/component_fields.h",
+        "guard": "KERNEL_ENGINE_SPATIAL_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/spatial/transform.h"
+        ]
+      },
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Common.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Scene",
@@ -406,6 +427,13 @@
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/render/components.ke_api.json",
+      "cOut": {
+        "file": "src/c/render/kernel_engine/render/component_fields.h",
+        "guard": "KERNEL_ENGINE_RENDER_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/render/components.h"
+        ]
+      },
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
       "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",
@@ -426,6 +454,13 @@
         "src/c/spatial"
       ],
       "apiJson": "src/csharp/render/ui_components.ke_api.json",
+      "cOut": {
+        "file": "src/c/render/kernel_engine/render/ui/component_fields.h",
+        "guard": "KERNEL_ENGINE_RENDER_UI_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/render/ui/components.h"
+        ]
+      },
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
       "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",

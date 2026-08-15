@@ -37,6 +37,7 @@ dotnet test KernelEngine.slnx
 ```bash
 dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
 dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
+dotnet run scripts/regenerate_api.cs  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 ```
 

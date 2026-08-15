@@ -106,6 +106,31 @@ try
                 + $"(committed: {Path.GetRelativePath(rootDir, committedOutDir)})");
             driftDetected = true;
         }
+
+        // The C field tables are what a scene block applies through, in every
+        // language. Left uncovered, a header gaining a field leaves a stale table
+        // behind and the value silently stops arriving — the exact failure the
+        // tables exist to kill.
+        if (d["cOut"] is JsonObject cOut)
+        {
+            var committedCFile = Path.Combine(rootDir, cOut["file"]!.GetValue<string>());
+            var tmpCFile = Path.Combine(tmpRoot, name, "component_fields.h");
+            var cArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "generate_c.cs"), "--",
+                "--api", tmpApiJson, "--out", tmpCFile, "--guard", cOut["guard"]!.GetValue<string>() };
+            foreach (var inc in cOut["includes"]!.AsArray()) cArgs.AddRange(["--include", inc!.GetValue<string>()]);
+
+            if (!RunDotnet(cArgs, out var cErr))
+            {
+                Console.WriteLine($"[!] {name}: C field table generation failed:\n{cErr}");
+                driftDetected = true;
+            }
+            else if (!FilesEqual(tmpCFile, committedCFile))
+            {
+                Console.WriteLine($"[!] {name}: generated C field table is out of date "
+                    + $"(committed: {Path.GetRelativePath(rootDir, committedCFile)})");
+                driftDetected = true;
+            }
+        }
     }
 }
 finally
@@ -116,9 +141,7 @@ finally
 if (driftDetected)
 {
     Console.WriteLine("\nDrift detected. Regenerate with:");
-    Console.WriteLine("  dotnet run scripts/extract_api.cs -- --out <apiJson> -I <dir>... <header.h>...");
-    Console.WriteLine("  dotnet run scripts/generate_csharp.cs -- --api <apiJson> --namespace <NS> "
-        + "--native-namespace <NS.Native> --out <dir> --enums-out <dir>");
+    Console.WriteLine("  dotnet run scripts/regenerate_api.cs");
     return 1;
 }
 
