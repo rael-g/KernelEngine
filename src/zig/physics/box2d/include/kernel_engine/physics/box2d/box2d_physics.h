@@ -1,6 +1,4 @@
-﻿// ke_physics_2d_box2d_create — factory for the Box2D-backed 2D physics world
-
-#pragma once
+﻿#pragma once
 
 #include <kernel_engine/physics/physics_2d.h>
 
