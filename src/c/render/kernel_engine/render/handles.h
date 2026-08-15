@@ -9,25 +9,6 @@ extern "C"
 {
 #endif
 
-    // Resource handles are generational: `bits` packs a slot index with the
-    // generation that slot carried when the handle was minted. Releasing a
-    // resource frees its slot for reuse and bumps the slot's generation, so a
-    // handle kept past its release no longer matches — it resolves to an error
-    // instead of silently aliasing whatever resource landed in the slot next.
-    // A bare index cannot express that, and the aliasing it permits is invisible
-    // (wrong mesh drawn, no crash, no log).
-    //
-    // 20 index bits (1,048,576 live resources of one kind) and 12 generation
-    // bits (4,094 reuses of a slot before the generation wraps and a very old
-    // handle could collide again).
-    //
-    // A live handle's generation is never 0, which is what makes all-bits-zero
-    // mean "no handle". That matters because zero is what memory arrives as: a
-    // component the scene file created, a struct a caller left default. Spelling
-    // "none" any other way makes every producer of a handle field responsible for
-    // seeding it, and the one that forgets does not fail — it points at whichever
-    // resource happened to land in slot 0.
-
 #define KE_HANDLE_INDEX_BITS      20u
 #define KE_HANDLE_GENERATION_BITS 12u
 
@@ -64,11 +45,6 @@ extern "C"
     typedef struct ke_cubemap_handle     { uint32_t bits; } ke_cubemap_handle;
     typedef struct ke_shadow_map_handle  { uint32_t bits; } ke_shadow_map_handle;
 
-    // glTF 2.0 material.alphaMode. OPAQUE and MASK both stay in the G-buffer (MASK
-    // discards below alpha_cutoff but writes no blend); BLEND is the only mode the
-    // transparent forward pass shades. Lives alongside the handles because both the
-    // asset-side material spec and the render core's material creation need it,
-    // and neither should pull in the other's header.
     typedef enum ke_alpha_mode
     {
         KE_ALPHA_MODE_OPAQUE,
@@ -84,10 +60,6 @@ extern "C"
 #define KE_SHADOW_MAP_NONE  ((ke_shadow_map_handle){ KE_HANDLE_NONE })
 #endif
 
-    // Cheap syntactic check only: a handle that passed here may still be stale
-    // (released, slot reused). Staleness is only detectable by the owner, which
-    // compares the generation against the slot's — hence resolution returns a
-    // result, and callers handle it.
     static inline bool ke_mesh_is_valid(ke_mesh_handle h)
         { return h.bits != KE_HANDLE_NONE; }
     static inline bool ke_texture_is_valid(ke_texture_handle h)

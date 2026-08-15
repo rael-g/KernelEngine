@@ -11,8 +11,6 @@ extern "C"
 {
 #endif
 
-// ── Opaque resource handles (uint64_t, never raw pointers) ────────────────
-
 typedef uint64_t ke_gpu_buffer;
 typedef uint64_t ke_gpu_texture;
 typedef uint64_t ke_gpu_texture_view;
@@ -24,23 +22,12 @@ typedef uint64_t ke_gpu_bind_group;
 typedef uint64_t ke_gpu_queue;
 typedef uint64_t ke_gpu_fence;
 
-// ── Forward declarations for L4 typed recording objects ───────────────────
-
 typedef struct ke_gpu_command_encoder ke_gpu_command_encoder;
 typedef struct ke_gpu_command_buffer  ke_gpu_command_buffer;
 typedef struct ke_gpu_render_pass     ke_gpu_render_pass;
 typedef struct ke_gpu_compute_pass    ke_gpu_compute_pass;
 
-// ── Forward declaration ───────────────────────────────────────────────────
-
 typedef struct ke_gpu_device ke_gpu_device;
-
-// ── GPU-domain error types ────────────────────────────────────────────────
-// Backend-agnostic GPU error vocabulary. The active device plugin provides the
-// singletons. A backend declares more specific types that inherit from these
-// (e.g. KE_ERROR_WGPU_SHADER_COMPILATION in gpu_device_webgpu_create.h), so a
-// caller can match the backend type, this GPU category, or the generic root —
-// all via ke_error_is().
 
 /// A shader module failed to compile/validate (source rejected by the backend).
 extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
@@ -52,20 +39,12 @@ extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
 /// decides how to react (retry smaller, surface to the user, etc).
 extern const ke_error_type KE_ERROR_GPU_RESOURCE_CREATION;
 
-// ── Clip-space (NDC) convention ───────────────────────────────────────────
-// The one math-adjacent fact only the backend knows. The engine implements no
-// matrix math; a consumer queries this and builds its projection with its own
-// library (System.Numerics / GLM / zmath) so the result is correct per backend.
 typedef struct ke_ndc_convention
 {
     ke_bool z_zero_to_one; ///< 1 = clip z in [0,1] (Vulkan/D3D/WebGPU), 0 = [-1,1] (GL)
     ke_bool y_flip;        ///< 1 = framebuffer origin top-left needs Y flip in projection
     ke_bool left_handed;   ///< 1 = left-handed clip space, 0 = right-handed
 } ke_ndc_convention;
-
-// ══════════════════════════════════════════════════════════════════════════
-// Params structs
-// ══════════════════════════════════════════════════════════════════════════
 
 typedef struct ke_gpu_buffer_params
 {
@@ -123,8 +102,6 @@ typedef struct ke_gpu_shader_module_params
     const char *entry_point; ///< debug label; per-stage entry is in pipeline params
 } ke_gpu_shader_module_params;
 
-// ── Vertex attribute / buffer layout ──────────────────────────────────────
-
 typedef struct ke_gpu_vertex_attribute
 {
     uint32_t             shader_location;
@@ -140,8 +117,6 @@ typedef struct ke_gpu_vertex_buffer_layout
     const ke_gpu_vertex_attribute *attributes;
 } ke_gpu_vertex_buffer_layout;
 
-// ── Blend state ───────────────────────────────────────────────────────────
-
 typedef struct ke_gpu_blend_state
 {
     ke_bool             blend_enabled;
@@ -153,8 +128,6 @@ typedef struct ke_gpu_blend_state
     ke_gpu_blend_op     alpha_op;
     uint8_t             write_mask; ///< bitmask: bit 0=R, 1=G, 2=B, 3=A
 } ke_gpu_blend_state;
-
-// ── Depth / stencil state ─────────────────────────────────────────────────
 
 typedef struct ke_gpu_depth_stencil_state
 {
@@ -174,8 +147,6 @@ typedef struct ke_gpu_depth_stencil_state
     uint8_t                 stencil_write_mask;
 } ke_gpu_depth_stencil_state;
 
-// ── Bind group layout ─────────────────────────────────────────────────────
-
 typedef struct ke_gpu_bind_group_layout_entry
 {
     uint32_t            binding;
@@ -192,8 +163,6 @@ typedef struct ke_gpu_bind_group_layout_params
     uint32_t                              entry_count;
     const ke_gpu_bind_group_layout_entry *entries;
 } ke_gpu_bind_group_layout_params;
-
-// ── Bind group (instance) ─────────────────────────────────────────────────
 
 typedef struct ke_gpu_bind_group_entry
 {
@@ -213,8 +182,6 @@ typedef struct ke_gpu_bind_group_params
     const ke_gpu_bind_group_entry *entries;
 } ke_gpu_bind_group_params;
 
-// ── Render pipeline ───────────────────────────────────────────────────────
-
 typedef struct ke_gpu_render_pipeline_params
 {
     ke_gpu_shader_module             vertex_module;
@@ -231,16 +198,9 @@ typedef struct ke_gpu_render_pipeline_params
     ke_gpu_bind_group_layout         bind_group_layouts[4];
     uint32_t                         bind_group_layout_count;
     ke_bool                          alpha_to_coverage_enabled;
-    // Color render targets, in SV_Target order. A multi-target (MRT) pass —
-    // e.g. a deferred G-buffer encode — sets several; a single-target pass sets
-    // color_target_count = 1. A count of 0 is treated as 1 (back-compat with a
-    // zero-initialized params). Each slot's format 0 → swapchain surface format.
-    // The shared blend_state/write_mask above applies to every target.
     ke_gpu_texture_format            color_target_formats[8];
     uint32_t                         color_target_count;
 } ke_gpu_render_pipeline_params;
-
-// ── Compute pipeline ──────────────────────────────────────────────────────
 
 typedef struct ke_gpu_compute_pipeline_params
 {
@@ -249,8 +209,6 @@ typedef struct ke_gpu_compute_pipeline_params
     ke_gpu_bind_group_layout bind_group_layouts[4];
     uint32_t                 bind_group_layout_count;
 } ke_gpu_compute_pipeline_params;
-
-// ── Render pass begin params ──────────────────────────────────────────────
 
 typedef struct ke_gpu_color_attachment
 {
@@ -278,8 +236,6 @@ typedef struct ke_gpu_render_pass_params
     uint32_t                               color_attachment_count;
     const ke_gpu_depth_stencil_attachment *depth_stencil_attachment;
 } ke_gpu_render_pass_params;
-
-// ── Resource barrier ──────────────────────────────────────────────────────
 
 typedef enum ke_gpu_barrier_type
 {
@@ -310,27 +266,16 @@ typedef struct ke_gpu_barrier
     };
 } ke_gpu_barrier;
 
-// ══════════════════════════════════════════════════════════════════════════
-// ke_gpu_device — L3 vtable
-//
-// Fallible operations return bool and set *out_error on failure.
-// Resource creation slots return KE_GPU_INVALID_HANDLE on failure.
-// The backing `rp_*` / `cp_*` / `encoder_*` slots drive the L4 typed
-// recording objects in gpu_commands.h; L5+ callers use those, not these.
-// ══════════════════════════════════════════════════════════════════════════
-
 typedef struct ke_gpu_device
 {
     void *handle;
 
-    // ── Queue ──────────────────────────────────────────────────────────────
     ke_gpu_queue (*get_default_queue)(struct ke_gpu_device *self);
     void (*queue_submit)(struct ke_gpu_device *self, ke_gpu_queue q,
                          ke_gpu_command_buffer *const *cmds, uint32_t cmd_count);
     void (*queue_present)(struct ke_gpu_device *self, ke_gpu_queue q);
     void (*queue_wait_idle)(struct ke_gpu_device *self, ke_gpu_queue q);
 
-    // ── Fence (timeline) ───────────────────────────────────────────────────
     ke_gpu_fence (*create_fence)(struct ke_gpu_device *self, uint64_t initial_value);
     void (*queue_signal_fence)(struct ke_gpu_device *self, ke_gpu_queue q,
                                ke_gpu_fence f, uint64_t value);
@@ -339,7 +284,6 @@ typedef struct ke_gpu_device
     uint64_t (*get_fence_value)(struct ke_gpu_device *self, ke_gpu_fence f);
     void (*destroy_fence)(struct ke_gpu_device *self, ke_gpu_fence f);
 
-    // ── Resource creation ──────────────────────────────────────────────────
     ke_gpu_buffer          (*create_buffer)(struct ke_gpu_device *self,
                                             const ke_gpu_buffer_params *p,
                                             ke_error **out_error);
@@ -363,7 +307,6 @@ typedef struct ke_gpu_device
                                                 const ke_gpu_bind_group_params *p,
                                                 ke_error **out_error);
 
-    // ── Resource destruction ───────────────────────────────────────────────
     void (*destroy_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h);
     void (*destroy_texture)(struct ke_gpu_device *self, ke_gpu_texture h);
     void (*destroy_texture_view)(struct ke_gpu_device *self, ke_gpu_texture_view h);
@@ -373,24 +316,19 @@ typedef struct ke_gpu_device
     void (*destroy_bind_group_layout)(struct ke_gpu_device *self, ke_gpu_bind_group_layout h);
     void (*destroy_bind_group)(struct ke_gpu_device *self, ke_gpu_bind_group h);
 
-    // ── Command encoder factory (returns a fully populated L4 object) ────────
     ke_gpu_command_encoder *(*create_command_encoder)(struct ke_gpu_device *self);
 
-    // ── Immediate buffer write (queue upload, no map/unmap required) ──────────
     void (*write_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
                          uint64_t offset, const void *data, size_t size);
 
-    // ── Mapped writes ──────────────────────────────────────────────────────
     void *(*map_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
                         size_t offset, size_t size);
     void *(*map_buffer_write)(struct ke_gpu_device *self, ke_gpu_buffer h,
                               size_t offset, size_t size);
     void  (*unmap_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h);
 
-    // ── Capabilities ───────────────────────────────────────────────────────
     void (*get_capabilities)(struct ke_gpu_device *self, ke_gpu_capabilities *out);
 
-    // ── Extension query ────────────────────────────────────────────────────
     /// Returns a typed extension vtable by name, or NULL if unsupported.
     const void *(*query_extension)(struct ke_gpu_device *self, const char *name);
 
@@ -420,8 +358,6 @@ typedef struct ke_gpu_device
     /// entries those callbacks update). A no-op if nothing is pending.
     void (*flush_pipeline_compiles)(struct ke_gpu_device *self);
 } ke_gpu_device;
-
-// ── Owner wrapper ──────────────────────────────────────────────────────────
 
 typedef struct ke_gpu_device_handle
 {

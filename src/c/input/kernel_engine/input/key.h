@@ -1,10 +1,6 @@
 #ifndef KERNEL_ENGINE_INPUT_KEY_H_
 #define KERNEL_ENGINE_INPUT_KEY_H_
 
-// Keyboard and mouse-button codes. Values mirror the GLFW constants — kept
-// identical so a caller can pass either a ke_key or a raw int through the input
-// snapshot without converting. Key codes index the snapshot's key bitsets.
-
 #ifdef __cplusplus
 extern "C"
 {

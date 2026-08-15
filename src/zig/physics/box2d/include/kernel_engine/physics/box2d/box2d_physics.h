@@ -1,6 +1,4 @@
 ﻿// ke_physics_2d_box2d_create — factory for the Box2D-backed 2D physics world
-// (the only export this plugin has; everything else it offers is reached
-// through the ke_physics_2d vtable the factory returns).
 
 #pragma once
 

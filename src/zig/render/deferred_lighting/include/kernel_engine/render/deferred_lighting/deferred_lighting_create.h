@@ -25,12 +25,6 @@ extern "C"
 {
 #endif
 
-    // Opaque — nothing outside this plugin calls into it; it registers its own
-    // render.deferred_lighting system into `runtime` at create time. Reads
-    // shadow's and cluster's outputs by name through the borrowed
-    // ke_render_service's named-resource table ("shadow_map" view, "shadow_lvp"
-    // buffer, "cluster_lights" bind group) rather than a *ShadowModule/
-    // *ClusterModule pointer.
     typedef struct ke_render_deferred_lighting ke_render_deferred_lighting;
 
     typedef struct ke_render_deferred_lighting_handle
@@ -39,11 +33,6 @@ extern "C"
         void (*destroy)(ke_render_deferred_lighting *self);
     } ke_render_deferred_lighting_handle;
 
-    // Creates the deferred-lighting pass (the opaque path's second half —
-    // decodes the G-buffer and shades it). `runtime`/`core`/`device` are
-    // borrowed. camera_cid/world_transform_cid/light_cid/ambient_cid/skybox_cid/
-    // frame_cid are cids the aggregator already registered. Handle's ref is
-    // NULL on failure.
     KE_RENDER_DEFERRED_LIGHTING_API ke_render_deferred_lighting_handle ke_render_deferred_lighting_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_logger *logger, ke_bool ibl_enabled,

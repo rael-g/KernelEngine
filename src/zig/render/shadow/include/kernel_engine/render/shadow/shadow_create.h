@@ -24,11 +24,6 @@ extern "C"
 {
 #endif
 
-    // Opaque — nothing outside this plugin calls into it; it registers its own
-    // render.shadow system into `runtime` at create time (only when `enabled`)
-    // and publishes its outputs through the borrowed ke_render_service's named-
-    // resource table ("shadow_map" view, "shadow_lvp" buffer) rather than a
-    // vtable another pass would call into.
     typedef struct ke_render_shadow ke_render_shadow;
 
     typedef struct ke_render_shadow_handle
@@ -37,13 +32,6 @@ extern "C"
         void (*destroy)(ke_render_shadow *self);
     } ke_render_shadow_handle;
 
-    // Creates the shadow-depth pass. `runtime`/`core`/`device` are borrowed.
-    // mesh_cid/world_transform_cid/light_cid/frame_cid are cids the aggregator
-    // already registered. When `enabled` is false, the tiny "shadow_lvp"
-    // uniform is still published (shadow_feature.slang's neutral-default hook
-    // resource) but no render target/pipeline/system is created — deferred/
-    // forward's setup resolves shadow_map's absence as the "off" signal.
-    // Handle's ref is NULL on failure.
     KE_RENDER_SHADOW_API ke_render_shadow_handle ke_render_shadow_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_bool enabled,

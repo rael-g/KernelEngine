@@ -25,11 +25,6 @@ extern "C"
         float u0, v0, u1, v1;
     } ke_label_glyph_quad;
 
-// text/glyphs are fixed-size, like ke_name_component's char name[64] elsewhere
-// in this codebase: an ECS component is a C ABI struct, so a caller-provided
-// ceiling is unavoidable here, not a design choice. 256 covers any UI label a
-// game actually authors; text/glyphs beyond the cap are silently truncated
-// rather than overflowing.
 #define KE_LABEL_MAX_TEXT 256
 #define KE_LABEL_MAX_GLYPHS 256
 

@@ -14,8 +14,6 @@
 
 namespace fs = std::filesystem;
 
-// ── Mock image loader ────────────────────────────────────────────────────────
-
 struct MockImageLoader
 {
     ke_image_loader  api{};
@@ -63,8 +61,6 @@ static fs::path WriteTempFile(const std::string &suffix, const std::string &cont
     return path;
 }
 
-// ── Fixture ──────────────────────────────────────────────────────────────────
-
 class AssetResolverTest : public ::testing::Test
 {
 protected:
@@ -88,8 +84,6 @@ protected:
         if (resolver_h.ref) resolver_h.destroy(resolver_h.ref);
     }
 };
-
-// ── Texture resolution ──────────────────────────────────────────────────────
 
 TEST_F(AssetResolverTest, ResolveTexture_AbsolutePath_DispatchesToLoader)
 {
@@ -131,8 +125,6 @@ TEST_F(AssetResolverTest, ResolveTexture_NoLoader_ReturnsInvalidArgument)
     rh.destroy(rh.ref);
 }
 
-// ── Mesh resolution ─────────────────────────────────────────────────────────
-
 TEST_F(AssetResolverTest, ResolveMesh_AllPrimitives_Works)
 {
     ke_mesh_shape_data data{};
@@ -155,7 +147,6 @@ TEST_F(AssetResolverTest, ResolveMesh_Cube_EachFaceIsFlatWithCornerUvs)
 
     for (uint32_t f = 0; f < 6; ++f) {
         const ke_vertex *q = &data.vertices[f * 4];
-        // A face's four corners share one axis-aligned normal.
         for (uint32_t k = 1; k < 4; ++k) {
             EXPECT_FLOAT_EQ(q[k].nx, q[0].nx) << "face " << f;
             EXPECT_FLOAT_EQ(q[k].ny, q[0].ny) << "face " << f;
@@ -163,7 +154,6 @@ TEST_F(AssetResolverTest, ResolveMesh_Cube_EachFaceIsFlatWithCornerUvs)
         }
         EXPECT_FLOAT_EQ(std::fabs(q[0].nx) + std::fabs(q[0].ny) + std::fabs(q[0].nz), 1.0f)
             << "face " << f;
-        // Corner UVs wind (0,0) (1,0) (1,1) (0,1).
         EXPECT_FLOAT_EQ(q[0].u, 0.0f); EXPECT_FLOAT_EQ(q[0].v, 0.0f);
         EXPECT_FLOAT_EQ(q[1].u, 1.0f); EXPECT_FLOAT_EQ(q[1].v, 0.0f);
         EXPECT_FLOAT_EQ(q[2].u, 1.0f); EXPECT_FLOAT_EQ(q[2].v, 1.0f);
@@ -175,7 +165,6 @@ TEST_F(AssetResolverTest, ResolveMesh_Cube_EachFaceIsFlatWithCornerUvs)
         }
     }
 
-    // The six faces must point six different ways.
     for (uint32_t a = 0; a < 6; ++a) {
         for (uint32_t b = a + 1; b < 6; ++b) {
             const ke_vertex &va = data.vertices[a * 4];
@@ -213,7 +202,6 @@ TEST_F(AssetResolverTest, ResolveMesh_QuadAndPlane_NormalsDiffer)
     ke_mesh_shape_data plane{};
     ASSERT_TRUE(resolver->resolve_mesh(resolver, "res://primitives/quad", &quad, nullptr));
     ASSERT_TRUE(resolver->resolve_mesh(resolver, "res://primitives/plane", &plane, nullptr));
-    // Quad faces +Z in XY; plane faces +Y in XZ.
     EXPECT_FLOAT_EQ(quad.vertices[0].nz, 1.0f);
     EXPECT_FLOAT_EQ(plane.vertices[0].ny, 1.0f);
     EXPECT_FLOAT_EQ(quad.vertices[0].x, -0.5f);
@@ -232,8 +220,6 @@ TEST_F(AssetResolverTest, ResolvePath_NormalizesSlashes)
 {
     auto img = WriteTempFile(".png");
     std::string path = img.string();
-    // Replace / with \ or vice-versa to test normalization if implemented,
-    // but resolver mostly relies on std::filesystem which handles it on Windows.
     ke_texture_data *data = nullptr;
     EXPECT_TRUE(resolver->resolve_texture(resolver, path.c_str(), &data, nullptr));
     resolver->free_texture(resolver, data);
@@ -323,11 +309,8 @@ TEST_F(AssetResolverTest, ResolveMaterial_DistortionStrength_Parses)
     fs::remove(mat);
 }
 
-// ── Material resolution ────────────────────────────────────────────────────
-
 TEST_F(AssetResolverTest, Create_NullImageAndRoot_ReturnsValidHandle)
 {
-    // Both loaders null + no root is legal; resolve_* slots will fail at call time.
     ke_asset_resolver_handle rh2 = ke_asset_resolver_create(nullptr, nullptr, nullptr, NULL);
     EXPECT_NE(rh2.ref, nullptr);
     if (rh2.ref && rh2.destroy) rh2.destroy(rh2.ref);
@@ -387,7 +370,6 @@ TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
     
     auto mat = WriteTempFile(".material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
     ke_material_spec spec{};
-    // Use the full absolute path from temp dir as the reference after res://
     std::string ref = "res://" + mat.string();
     EXPECT_TRUE(r->resolve_material(r, ref.c_str(), &spec, nullptr));
     
@@ -395,12 +377,8 @@ TEST_F(AssetResolverTest, ResolvePath_NoRoot_StripsPrefix)
     fs::remove(mat);
 }
 
-// ── Handle encoding ──────────────────────────────────────────────────────────
-
 TEST(HandleEncoding, NoneIsAllBitsZero)
 {
-    // What lets a component the scene file created — which arrives zeroed —
-    // read as holding no handle, without every producer remembering to seed one.
     EXPECT_EQ(KE_MESH_NONE.bits, 0u);
     EXPECT_EQ(KE_TEXTURE_NONE.bits, 0u);
     EXPECT_EQ(KE_MATERIAL_NONE.bits, 0u);
@@ -411,8 +389,6 @@ TEST(HandleEncoding, NoneIsAllBitsZero)
 
 TEST(HandleEncoding, NoLiveHandleCanBeZero)
 {
-    // Slot 0 is a perfectly ordinary slot; what keeps its handle from colliding
-    // with "none" is that a live generation is never 0.
     for (uint32_t index = 0; index < 8; ++index) {
         ke_mesh_handle h{ ke_handle_make(index, KE_HANDLE_GENERATION_FIRST) };
         EXPECT_TRUE(ke_mesh_is_valid(h)) << "index " << index;

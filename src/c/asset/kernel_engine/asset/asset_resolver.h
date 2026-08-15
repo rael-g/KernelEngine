@@ -1,22 +1,6 @@
 #ifndef KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
 #define KERNEL_ENGINE_ASSET_ASSET_RESOLVER_H_
 
-// ke_asset_resolver — maps res:// (and absolute) paths to typed CPU-side asset
-// data using injected loader plugins. Part of item 3 of the Tier S scripting
-// ABI: scene loader's set_property callbacks see resolved handles instead of
-// raw "res://..." strings.
-//
-// Path schemes:
-//   "res://x/y.png"   — prefix stripped, joined onto the project_root passed
-//                       to ke_asset_resolver_create. Project_root must be set
-//                       for res:// to work.
-//   "/abs/path.png"   — used as-is.
-//   "rel/path.png"    — used as-is (caller's CWD).
-//
-// Loader plugins (e.g. stb_image, assimp) are injected. The resolver never
-// links them directly; bindings construct the loader, hand it over, and the
-// resolver dispatches based on file extension.
-
 #include <kernel_engine/render/material_file.h>
 #include <kernel_engine/render/handles.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -99,16 +83,6 @@ extern "C"
                                   ke_error                **out_error);
 
         void (*free_font)(struct ke_asset_resolver *self, ke_font_data *data);
-
-        // ── Cached load-from-path (decode + upload + dedup, one call) ───────
-        //
-        // The path itself is the resource_cache key (see kernel_engine/resource_cache),
-        // so a second call with the same path returns the already-uploaded handle
-        // (retained) without touching disk or the GPU again. `core` is the render
-        // core to upload into — a caller composes the resolver (CPU decode, this
-        // plugin) with whichever render core owns the GPU resources; the resolver
-        // holds no reference to it beyond the call. Callers own the returned
-        // reference and release it like any other core handle.
 
         /**
          * Resolves and uploads a texture, deduped by `path`. On a cache hit,

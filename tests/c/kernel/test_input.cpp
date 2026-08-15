@@ -17,15 +17,11 @@ protected:
     }
 };
 
-// --- Creation Tests ---
-
 TEST(InputInitTest, Create_ReturnsValidHandle) {
     ke_input_handle h = ke_input_create(nullptr, NULL);
     ASSERT_NE(h.ref, nullptr);
     h.destroy(h.ref);
 }
-
-// --- Destroy Tests ---
 
 TEST(InputDestroyTest, Destroy_NullInput_DoesNotCrash) {
     ke_input_handle i = ke_input_create(nullptr, NULL);
@@ -41,8 +37,6 @@ TEST_F(InputTest, Destroy_WorksNormally) {
     input_h = {};
     SUCCEED();
 }
-
-// --- Update and State Tests ---
 
 TEST_F(InputTest, Update_NullSelf_ReturnsFalse) {
     auto update_fn = input->update;
@@ -71,7 +65,6 @@ TEST_F(InputTest, MouseMove_CalculatesDelta) {
     input->on_mouse_move(input, 150.0f, 180.0f);
     ke_input_snapshot snapshot;
     input->get_snapshot(input, &snapshot);
-    // Initial jump to (100,200) + movement to (150,180) = 150 cumulative delta in this frame
     ASSERT_FLOAT_EQ(snapshot.mouse_dx, 150.0f);
     ASSERT_FLOAT_EQ(snapshot.mouse_dy, 180.0f);
 }
@@ -116,14 +109,12 @@ TEST_F(InputTest, DrainEvents_CapsAtCapacity) {
 }
 
 TEST_F(InputTest, EventQueue_Overflow_IsHandled) {
-    // Capacity is 512
     for(int i=0; i<600; ++i) {
         input->on_mouse_scroll(input, 1, 1);
     }
     
     ke_input_event events[10];
     uint32_t count = input->drain_events(input, events, 10);
-    // Should have drained the first 10 and cleared the overflow flag
     ASSERT_EQ(count, 10);
 }
 

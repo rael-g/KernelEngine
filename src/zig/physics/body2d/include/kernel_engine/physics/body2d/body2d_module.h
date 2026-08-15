@@ -1,9 +1,3 @@
-// ke_physics_body2d_module_create — factory for the system that reconciles
-// ke_body2d_component against a physics world (the only export this plugin has).
-//
-// Backend-agnostic on purpose: it drives whatever ke_physics_2d it is handed, so
-// it lives beside the Box2D plugin rather than inside it. Swapping the physics
-// backend must not mean rewriting the component-to-body reconciliation.
 
 #pragma once
 

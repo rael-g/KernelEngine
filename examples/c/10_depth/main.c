@@ -20,10 +20,8 @@ static void die(const char *msg, ke_error *err)
     ke_error_fatal(&fallback);
 }
 
-// xyz + rgb
 typedef struct { float x, y, z, r, g, b; } vertex_t;
 
-// Back quad (z=0.5): red — should be occluded where the front quad overlaps
 static const vertex_t back_verts[] = {
     { -0.6f, -0.6f, 0.5f,  1.0f, 0.2f, 0.2f },
     {  0.6f, -0.6f, 0.5f,  1.0f, 0.2f, 0.2f },
@@ -31,7 +29,6 @@ static const vertex_t back_verts[] = {
     { -0.6f,  0.6f, 0.5f,  1.0f, 0.2f, 0.2f },
 };
 
-// Front quad (z=0.2): blue — should always win where it covers back quad
 static const vertex_t front_verts[] = {
     { -0.4f, -0.4f, 0.2f,  0.2f, 0.4f, 1.0f },
     {  0.7f, -0.4f, 0.2f,  0.2f, 0.4f, 1.0f },
@@ -65,8 +62,6 @@ int main(void)
         (const ke_gpu_surface_ext *)gpu.ref->query_extension(gpu.ref, KE_GPU_SURFACE_EXT_NAME);
     if (!surf_ext) die("surface ext", NULL);
 
-    // ── Depth texture (recreated on resize; fixed size for this demo) ─────────
-
     ke_gpu_texture depth_tex = gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
         .format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
@@ -85,8 +80,6 @@ int main(void)
         });
     if (depth_view == KE_GPU_INVALID_HANDLE) die("depth view", NULL);
 
-    // ── Geometry ──────────────────────────────────────────────────────────────
-
     ke_gpu_buffer vbo_back  = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
         .initial_data = back_verts,  .size = sizeof(back_verts),  .usage = KE_GPU_BUFFER_USAGE_VERTEX }, &err);
     if (vbo_back == KE_GPU_INVALID_HANDLE) die("back vertex buffer creation failed", err);
@@ -97,14 +90,10 @@ int main(void)
         .initial_data = quad_idx, .size = sizeof(quad_idx), .usage = KE_GPU_BUFFER_USAGE_INDEX }, &err);
     if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", err);
 
-    // ── Shaders ───────────────────────────────────────────────────────────────
-
     ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
         .code = depth_vert_spv, .byte_size = sizeof(depth_vert_spv), .entry_point = "main" }, &err);
     ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
         .code = depth_frag_spv, .byte_size = sizeof(depth_frag_spv), .entry_point = "main" }, &err);
-
-    // ── Pipeline (depth write + less-or-equal test) ───────────────────────────
 
     ke_gpu_vertex_attribute attrs[] = {
         { .shader_location = 0, .format = KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -167,11 +156,9 @@ int main(void)
         rp->set_pipeline(rp, pipeline);
         rp->set_index_buffer(rp, ibo, KE_GPU_INDEX_FORMAT_UINT16, 0);
 
-        // Draw back quad first (red, z=0.5)
         rp->set_vertex_buffer(rp, 0, vbo_back, 0);
         rp->draw_indexed(rp, 6, 1, 0, 0, 0);
 
-        // Draw front quad (blue, z=0.2) — depth test ensures it wins
         rp->set_vertex_buffer(rp, 0, vbo_front, 0);
         rp->draw_indexed(rp, 6, 1, 0, 0, 0);
 

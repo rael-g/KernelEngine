@@ -1,11 +1,6 @@
 #ifndef KERNEL_ENGINE_EXAMPLES_CONSOLE_SINK_H_
 #define KERNEL_ENGINE_EXAMPLES_CONSOLE_SINK_H_
 
-// Example-only glue. Console output is a built block (concrete I/O policy)
-// and intentionally not provided by the kernel — C# users get
-// `ConsoleSink` / `Serilog`; C examples that just want logs on stderr can
-// drop this tiny header in.
-
 #include <kernel_engine/logger/logger.h>
 #include <stdio.h>
 

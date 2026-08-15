@@ -53,8 +53,6 @@ TEST_F(StbFontTest, LoadFont_ZeroAtlasSize_ReturnsNull) {
 }
 
 TEST_F(StbFontTest, LoadFont_Successful) {
-    // No font ships with the repo, so probe the usual system locations. The
-    // loader only needs some valid TTF; which one it is does not matter.
     const char* candidates[] = {
         "C:/Windows/Fonts/arial.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",

@@ -25,11 +25,6 @@ extern "C"
 {
 #endif
 
-    // Opaque — nothing outside this plugin calls into it; it registers its own
-    // render.forward_transparent system into `runtime` at create time. Reads
-    // shadow's and cluster's outputs by name through the borrowed
-    // ke_render_service (same pattern as ke_render_deferred_lighting) rather than
-    // a *ShadowModule/*ClusterModule pointer.
     typedef struct ke_render_forward ke_render_forward;
 
     typedef struct ke_render_forward_handle
@@ -38,12 +33,6 @@ extern "C"
         void (*destroy)(ke_render_forward *self);
     } ke_render_forward_handle;
 
-    // Creates the transparent-forward pass (the BLEND-only counterpart to the
-    // opaque G-buffer path — gbuffer_module skips BLEND materials, this pass
-    // draws them, sorted back-to-front, blending into "hdr" after skybox).
-    // `runtime`/`core`/`device` are borrowed. mesh_cid/world_transform_cid/
-    // camera_cid/light_cid/ambient_cid/skybox_cid/frame_cid are cids the
-    // aggregator already registered. Handle's ref is NULL on failure.
     KE_RENDER_FORWARD_API ke_render_forward_handle ke_render_forward_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_logger *logger, ke_bool ibl_enabled,

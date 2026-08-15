@@ -2,11 +2,6 @@
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/common/error.h>
 
-// The window plugin's C ABI. Its internals — the backend-agnostic core and the
-// GLFW device behind it — are covered by the plugin's own Zig tests, which can
-// substitute a fake device for that seam. C++ no longer has a handle on it now
-// that the implementation is Zig, so the mock-based core tests moved there.
-
 TEST(WindowFactoryTest, Create_NullParams_ReturnsNullHandle) {
     ASSERT_EQ(ke_window_glfw_create(nullptr, nullptr).ref, nullptr);
 }
@@ -22,8 +17,6 @@ TEST(WindowFactoryTest, Create_NullParams_ReportsInvalidArgument) {
 TEST(WindowFactoryTest, Create_Success_YieldsAUsableWindow) {
     ke_window_glfw_params params = { nullptr, nullptr, "Test", 800, 600, false };
     ke_window_handle w = ke_window_glfw_create(&params, nullptr);
-    // A headless environment legitimately fails to open a window; both outcomes
-    // are valid, but a live handle must actually work.
     if (w.ref == nullptr) GTEST_SKIP() << "no display available";
 
     int32_t width = 0, height = 0;

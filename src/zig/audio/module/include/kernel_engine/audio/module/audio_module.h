@@ -1,10 +1,3 @@
-// ke_audio_register_scene_apply — makes audio's scene-file component vocabulary
-// known to a world (the only export this plugin has).
-//
-// Lives beside the miniaudio backend rather than inside it, for the same reason
-// ke_physics_body2d lives beside Box2D: the vocabulary is the domain's, not one
-// backend's. Swapping the audio backend must not mean re-teaching the scene
-// loader what an audio_player is.
 
 #pragma once
 

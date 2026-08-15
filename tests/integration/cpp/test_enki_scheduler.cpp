@@ -59,7 +59,6 @@ TEST_F(EnkiSchedulerTest, IsCompleted_Works) {
         }
     }, &can_finish);
 
-    // It might still be false or true depending on timing, but after wait it MUST be true.
     can_finish.store(true);
     scheduler->wait(scheduler, task);
     ASSERT_TRUE(scheduler->is_completed(scheduler, task));
@@ -75,9 +74,6 @@ TEST_F(EnkiSchedulerTest, API_NullChecks) {
     scheduler->wait(nullptr, nullptr);
     scheduler->wait(scheduler, nullptr);
 
-    // Documented semantic: a null task is treated as "no task to wait on, therefore
-    // complete" so polling loops on stale handles exit cleanly. Defensive callers
-    // should still pass valid task pointers; null is a safety net, not a contract.
     ASSERT_TRUE(scheduler->is_completed(scheduler, nullptr));
 }
 

@@ -9,10 +9,6 @@ extern "C"
 {
 #endif
 
-// Fixed-size, like ke_name_component's char name[64] elsewhere in this codebase:
-// an ECS component is a C ABI struct, so a caller-provided ceiling is
-// unavoidable here rather than a design choice. A path longer than this is
-// truncated instead of overflowing.
 #define KE_AUDIO_PLAYER_MAX_PATH 256
 
     /// [node:AudioPlayer,base:Node3D]

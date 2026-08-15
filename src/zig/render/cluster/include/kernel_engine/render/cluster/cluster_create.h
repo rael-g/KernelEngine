@@ -24,11 +24,6 @@ extern "C"
 {
 #endif
 
-    // Opaque — nothing outside this plugin calls into it; it registers its own
-    // render.cull system into `runtime` at create time and publishes its
-    // outputs through the borrowed ke_render_service's named-resource table
-    // ("cluster_lights" bind group + layout, "light_clusters" ordering tag)
-    // rather than a vtable another pass would call into.
     typedef struct ke_render_cluster ke_render_cluster;
 
     typedef struct ke_render_cluster_handle
@@ -37,11 +32,6 @@ extern "C"
         void (*destroy)(ke_render_cluster *self);
     } ke_render_cluster_handle;
 
-    // Creates the clustered-light-cull pass. `runtime`/`core`/`device` are
-    // borrowed. grid_x/y/z + max_lights_per_cluster are the caller-configured
-    // workload shape (ke_render_cluster_params), not an engine-imposed limit.
-    // point_light_cid/spot_light_cid/world_transform_cid/camera_cid/frame_cid are
-    // cids the aggregator already registered. Handle's ref is NULL on failure.
     KE_RENDER_CLUSTER_API ke_render_cluster_handle ke_render_cluster_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_logger *logger, uint32_t grid_x, uint32_t grid_y, uint32_t grid_z,

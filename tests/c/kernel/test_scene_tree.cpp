@@ -32,8 +32,6 @@ protected:
     }
 };
 
-// ── Root + creation ─────────────────────────────────────────────────────────
-
 TEST_F(SceneTreeTest, Root_IsValid)
 {
     ke_entity r = tree->root(tree);
@@ -58,8 +56,6 @@ TEST_F(SceneTreeTest, CreateNode_AcceptsExplicitParent)
 
 TEST_F(SceneTreeTest, CreateNode_SiblingsUnderOneParentAreAllReachable)
 {
-    // Every consumer that walks a node's children (rendering, transform
-    // propagation) depends on the sibling chain holding all of them.
     ke_entity parent = tree->create_node(tree, "P", KE_ENTITY_INVALID, NULL, NULL);
     ke_entity a = tree->create_node(tree, "A", parent, NULL, NULL);
     ke_entity b = tree->create_node(tree, "B", parent, NULL, NULL);
@@ -72,7 +68,6 @@ TEST_F(SceneTreeTest, CreateNode_SiblingsUnderOneParentAreAllReachable)
     EXPECT_EQ(tree->find_node(tree, "P/B", NULL), b);
     EXPECT_EQ(tree->find_node(tree, "P/C", NULL), c);
 
-    // Walk the raw hierarchy chain and count what is actually linked.
     ke_component_meta meta;
     ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_HIERARCHY, &meta, nullptr));
     auto *ph = (ke_hierarchy_component *)ecs->component_get(ecs, parent, meta.cid);
@@ -90,9 +85,6 @@ TEST_F(SceneTreeTest, CreateNode_SiblingsUnderOneParentAreAllReachable)
 
 TEST_F(SceneTreeTest, CreateNode_SiblingsLinkInInsertionOrder)
 {
-    // The native list appends (last_child tracks the tail in O(1)); any consumer
-    // walking first_child -> next_sibling must see creation order, matching what
-    // a managed List<Node>.Add-built mirror already assumes.
     ke_entity parent = tree->create_node(tree, "P", KE_ENTITY_INVALID, NULL, NULL);
     ke_entity a = tree->create_node(tree, "A", parent, NULL, NULL);
     ke_entity b = tree->create_node(tree, "B", parent, NULL, NULL);
@@ -115,8 +107,6 @@ TEST_F(SceneTreeTest, CreateNode_SiblingsLinkInInsertionOrder)
     EXPECT_EQ(order[2], c);
     EXPECT_EQ(ph->last_child, c);
 }
-
-// ── find_node ───────────────────────────────────────────────────────────────
 
 TEST_F(SceneTreeTest, FindNode_EmptyOrNullReturnsInvalid)
 {
@@ -184,8 +174,6 @@ TEST_F(SceneTreeTest, FindNode_ByPath_EmptySegments_AreSkipped)
     EXPECT_EQ(tree->find_node(tree, "//A///", NULL), a);
 }
 
-// ── destroy_node ────────────────────────────────────────────────────────────
-
 TEST_F(SceneTreeTest, DestroyNode_RejectsInvalidEntity)
 {
     EXPECT_FALSE(tree->destroy_node(tree, KE_ENTITY_INVALID, NULL, NULL));
@@ -212,14 +200,12 @@ TEST_F(SceneTreeTest, DestroyNode_UnlinksFromParent)
 
 TEST_F(SceneTreeTest, DestroyNode_UnlinksFromMiddleOfChain)
 {
-    // Create 3 nodes; create_node prepends, so list is Root -> 3 -> 2 -> 1.
     tree->create_node(tree, "1", KE_ENTITY_INVALID, NULL, NULL);
     ke_entity c2 = tree->create_node(tree, "2", KE_ENTITY_INVALID, NULL, NULL);
     tree->create_node(tree, "3", KE_ENTITY_INVALID, NULL, NULL);
 
     EXPECT_TRUE(tree->destroy_node(tree, c2, NULL, NULL));
 
-    // 1 and 3 should still resolve.
     EXPECT_NE(tree->find_node(tree, "1", NULL), KE_ENTITY_INVALID);
     EXPECT_NE(tree->find_node(tree, "3", NULL), KE_ENTITY_INVALID);
     EXPECT_EQ(tree->find_node(tree, "2", NULL), KE_ENTITY_INVALID);
@@ -237,14 +223,8 @@ TEST_F(SceneTreeTest, DestroyAll_ClearsChildrenButKeepsRoot)
     EXPECT_EQ(tree->find_node(tree, "B", NULL), KE_ENTITY_INVALID);
 }
 
-// ── Factory edge cases ──────────────────────────────────────────────────────
-
-// ── Transform propagation ───────────────────────────────────────────────────
-
 namespace {
 
-// A node carries the pose its type declares, and create_node declares none, so a
-// test that poses a node attaches the 3D transform itself.
 ke_transform_component *TransformOf(ke_ecs *ecs, ke_entity e)
 {
     ke_component_meta meta;
@@ -300,7 +280,6 @@ TEST_F(SceneTreeTest, PropagateTransforms_ChildTranslationComposesWithParent)
     TransformOf(ecs, child)->position  = ke_vec3{  1.0f, 2.0f, 3.0f };
     tree->propagate_transforms(tree);
 
-    // Row-major with translation in the last row.
     auto *pt = WorldOf(ecs, parent);
     EXPECT_FLOAT_EQ(pt->matrix.m[12], 10.0f);
 
@@ -319,22 +298,18 @@ TEST_F(SceneTreeTest, PropagateTransforms_ParentScaleScalesChildOffset)
     TransformOf(ecs, child)->position = ke_vec3{ 1.0f, 0.0f, 0.0f };
     tree->propagate_transforms(tree);
 
-    // The child sits one unit out in a parent scaled 2x, so it lands at 2.
     auto *ct = WorldOf(ecs, child);
     EXPECT_FLOAT_EQ(ct->matrix.m[12], 2.0f);
-    // And inherits the scale on its own basis row.
     EXPECT_FLOAT_EQ(ct->matrix.m[0], 2.0f);
 }
 
 TEST_F(SceneTreeTest, PropagateTransforms_QuarterTurnAboutYMapsXToMinusZ)
 {
     ke_entity n = tree->create_node(tree, "N", KE_ENTITY_INVALID, NULL, NULL);
-    // 90° about Y as a quaternion.
     const float s = 0.70710678f;
     TransformOf(ecs, n)->rotation = ke_quat{ 0.0f, s, 0.0f, s };
     tree->propagate_transforms(tree);
 
-    // The basis X row must rotate onto -Z.
     auto *t = WorldOf(ecs, n);
     EXPECT_NEAR(t->matrix.m[0], 0.0f, 1e-5f);
     EXPECT_NEAR(t->matrix.m[1], 0.0f, 1e-5f);
@@ -365,11 +340,6 @@ TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)
 
 TEST_F(SceneTreeTest, Create_NullArgs_ErrorTypeNameMatchesTheSharedVocabulary)
 {
-    // A Zig plugin fills ke_error through its own error-type singletons, which
-    // are distinct instances from ke_common's — callers (C# included) match by
-    // NAME, so the two sides' strings must stay byte-identical. A rename on one
-    // side alone would silently stop every `Is("ke.error.invalid_argument")`
-    // check from matching.
     ke_error *err = nullptr;
     EXPECT_EQ(ke_scene_tree_create(nullptr, NULL, &err).ref, nullptr);
     ASSERT_NE(err, nullptr);

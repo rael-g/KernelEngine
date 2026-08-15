@@ -3,10 +3,6 @@
 #include <atomic>
 #include <cstdlib>
 
-// ── Synchronous mock scheduler (no OS threads) ────────────────────────────────
-//
-// Executes tasks immediately on the calling thread so tests are deterministic.
-
 namespace {
 
 struct MockTask {
@@ -51,8 +47,6 @@ ke_scheduler make_sync_scheduler() {
 }
 
 } // namespace
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 class TaskSchedulerTest : public ::testing::Test {
 protected:

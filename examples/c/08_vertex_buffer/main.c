@@ -36,8 +36,6 @@ int main(void)
 
     ke_error *err = NULL;
 
-    // ── Window ───────────────────────────────────────────────────────────────
-
     ke_window_glfw_params wp = {
         .logger     = NULL,
         .input      = NULL,
@@ -49,8 +47,6 @@ int main(void)
     ke_window_handle win = ke_window_glfw_create(&wp, &err);
     if (!win.ref) die("window create failed", err);
     if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
-
-    // ── GPU device ────────────────────────────────────────────────────────────
 
     ke_gpu_device_webgpu_params dp = {
         .logger            = NULL,
@@ -64,8 +60,6 @@ int main(void)
         (const ke_gpu_surface_ext *)gpu.ref->query_extension(gpu.ref, KE_GPU_SURFACE_EXT_NAME);
     if (!surf_ext) die("surface extension not available", NULL);
 
-    // ── Vertex buffer ─────────────────────────────────────────────────────────
-
     ke_gpu_buffer_params vbp = {
         .initial_data       = vertices,
         .size               = sizeof(vertices),
@@ -75,8 +69,6 @@ int main(void)
     ke_gpu_buffer vbo = gpu.ref->create_buffer(gpu.ref, &vbp, &err);
     if (vbo == KE_GPU_INVALID_HANDLE) die("vertex buffer creation failed", err);
 
-    // ── Index buffer ──────────────────────────────────────────────────────────
-
     ke_gpu_buffer_params ibp = {
         .initial_data       = indices,
         .size               = sizeof(indices),
@@ -85,8 +77,6 @@ int main(void)
     };
     ke_gpu_buffer ibo = gpu.ref->create_buffer(gpu.ref, &ibp, &err);
     if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", err);
-
-    // ── Shaders ───────────────────────────────────────────────────────────────
 
     ke_gpu_shader_module_params vsp = {
         .code        = mesh_vert_spv,
@@ -104,9 +94,6 @@ int main(void)
 
     if (vs == KE_GPU_INVALID_HANDLE) die("vertex shader failed", NULL);
     if (fs == KE_GPU_INVALID_HANDLE) die("fragment shader failed", NULL);
-
-    // ── Pipeline ─────────────────────────────────────────────────────────────
-    // layout: location 0 = vec2 pos, location 1 = vec3 color, interleaved
 
     ke_gpu_vertex_attribute attrs[] = {
         { .shader_location = 0, .format = KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = 0 },
@@ -149,8 +136,6 @@ int main(void)
 
     ke_gpu_queue q = gpu.ref->get_default_queue(gpu.ref);
 
-    // ── Loop ──────────────────────────────────────────────────────────────────
-
     printf("Rendering quad. Close the window to exit.\n");
 
     while (!win.ref->should_close(win.ref))
@@ -190,8 +175,6 @@ int main(void)
         gpu.ref->queue_present(gpu.ref, q);
         gpu.ref->destroy_texture_view(gpu.ref, view);
     }
-
-    // ── Cleanup ───────────────────────────────────────────────────────────────
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
     gpu.ref->destroy_buffer(gpu.ref, ibo);

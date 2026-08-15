@@ -37,9 +37,6 @@ bool test_module_on_load(ke_runtime *runtime, void *user_data, ke_error **out_er
 
 }  // namespace
 
-// RuntimeSpike covers the split runtime + ECS plugin pair:
-// - ke_ecs_flecs_create() builds the storage (flecs world behind ke_ecs).
-// - ke_runtime_create(ecs) builds the scheduler (in-house, sequential for now, NULL, NULL).
 class RuntimeSpike : public ::testing::Test {
 protected:
     ke_scheduler_handle scheduler_h{};
@@ -120,7 +117,6 @@ TEST_F(RuntimeSpike, RegisterSystem_NullExecute_Rejected)
     ke_runtime_system_params sys{};
     sys.name  = "Bad";
     sys.phase = KE_PHASE_UPDATE;
-    // sys.execute deliberately null
     EXPECT_EQ(runtime->register_system(runtime, &sys, nullptr), (ke_system_id)0);
 }
 
@@ -140,8 +136,6 @@ TEST_F(RuntimeSpike, Create_RejectsNullTaskScheduler)
     EXPECT_EQ(rt.ref, nullptr);
 }
 
-// ── Parallel execution via enki dispatcher ──────────────────────────────────
-
 namespace {
 struct ParallelProbe {
     std::mutex             mu;
@@ -152,9 +146,6 @@ struct ParallelProbe {
 
 TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
 {
-    // Two systems with completely disjoint access — same wave by the wave
-    // builder, so enki dispatches them concurrently. Each records the thread
-    // id it ran on; the union over many ticks should span multiple workers.
     ParallelProbe probe;
 
     ke_component_access acc_a[] = {{1u, KE_ACCESS_WRITE}};
@@ -162,9 +153,6 @@ TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
 
     auto worker = [](ke_system_ctx *, void *ud, float) {
         auto *p = static_cast<ParallelProbe *>(ud);
-        // A small busy-wait so the two systems overlap in real time. Pure
-        // dispatch without overlap could land on the same worker even with
-        // multiple threads available.
         auto start = std::chrono::steady_clock::now();
         while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(5)) { /* spin */ }
         {
@@ -192,8 +180,6 @@ TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
     sb.execute      = worker;
     ASSERT_NE(runtime->register_system(runtime, &sb, nullptr), (ke_system_id)0);
 
-    // 20 ticks * 2 systems = 40 calls. Across these we should observe at
-    // least 2 distinct worker thread ids if dispatch is genuinely parallel.
     for (int i = 0; i < 20; ++i)
         ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
 
@@ -205,9 +191,6 @@ TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
 
 TEST_F(RuntimeSpike, ParallelDispatch_ConflictingSystemsSerialized)
 {
-    // Two systems writing the same component — wave builder splits them into
-    // separate waves, so they run sequentially. Verify execution_order rather
-    // than thread parallelism.
     std::vector<int> order;
     std::mutex       mu;
 
@@ -229,7 +212,6 @@ TEST_F(RuntimeSpike, ParallelDispatch_ConflictingSystemsSerialized)
         g_mu    = out_mu;
     };
 
-    // Use struct-bound state instead of thread_local trickery.
     struct Tagger { std::vector<int> *order; std::mutex *mu; int tag; };
     Tagger tag1{&order, &mu, 1};
     Tagger tag2{&order, &mu, 2};
@@ -254,8 +236,6 @@ TEST_F(RuntimeSpike, ParallelDispatch_ConflictingSystemsSerialized)
 
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
 
-    // Wave builder ensures Writer1 (wave 0) completes before Writer2 (wave 1)
-    // starts — defer flush sits between them. So order MUST be [1, 2].
     ASSERT_EQ(order.size(), 2u);
     EXPECT_EQ(order[0], 1);
     EXPECT_EQ(order[1], 2);
@@ -284,8 +264,6 @@ TEST_F(RuntimeSpike, FixedUpdate_AccumulatesAtFixedRate)
     };
     ASSERT_NE(runtime->register_system(runtime, &up, nullptr), (ke_system_id)0);
 
-    // Default fixed_dt = 1/60. Tick at 1/60 ten times: each tick contributes
-    // exactly one fixed step.
     for (int i = 0; i < 10; ++i)
         ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
 
@@ -305,7 +283,6 @@ TEST_F(RuntimeSpike, FixedUpdate_LargeFrame_CatchesUp)
     };
     ASSERT_NE(runtime->register_system(runtime, &fx, nullptr), (ke_system_id)0);
 
-    // Default fixed_dt = 1/60. One tick of 5/60s feeds 5 fixed steps.
     ASSERT_TRUE(runtime->tick(runtime, 5.0f / 60.0f, NULL));
     EXPECT_EQ(fixed_ticks.load(), 5);
 }
@@ -322,9 +299,6 @@ TEST_F(RuntimeSpike, FixedUpdate_SmallFrame_NoStep)
     };
     ASSERT_NE(runtime->register_system(runtime, &fx, nullptr), (ke_system_id)0);
 
-    // Tick at 1/120 → below fixed_dt threshold. After one tick, accumulator
-    // holds (1/120) and no fixed step fires. Two ticks brings accumulator to
-    // 2/120 = 1/60 → one fixed step fires.
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 120.0f, NULL));
     EXPECT_EQ(fixed_ticks.load(), 0);
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 120.0f, NULL));
@@ -343,8 +317,6 @@ TEST_F(RuntimeSpike, FixedUpdate_SpiralOfDeathGuarded)
     };
     ASSERT_NE(runtime->register_system(runtime, &fx, nullptr), (ke_system_id)0);
 
-    // Default max accum = 0.25s = 15 fixed steps at 1/60. A 1.0s pause must
-    // be capped: fixed_ticks should NOT be 60.
     ASSERT_TRUE(runtime->tick(runtime, 1.0f, NULL));
     EXPECT_LE(fixed_ticks.load(), 15);
     EXPECT_GE(fixed_ticks.load(), 14);  // floor(0.25 / (1/60))
@@ -354,15 +326,6 @@ TEST_F(RuntimeSpike, Tick_RejectsNegativeDt)
 {
     EXPECT_FALSE(runtime->tick(runtime, -1.0f, NULL));
 }
-
-// ── Async render dispatch (sim N+1 ‖ render N, RuntimeArchitectureV2.md §16) ─
-//
-// The defining property of this phase: tick() dispatches the render phase and
-// returns WITHOUT waiting for it — the NEXT tick() call is what joins it,
-// right before that tick's own extract. Proven with an explicit gate rather
-// than a timing guess: the render body blocks on an atomic the test controls,
-// so "tick() returned while the gate is still closed" is a deterministic,
-// race-free observation, not a hope that a sleep was long enough.
 
 namespace {
 std::atomic<int>  g_gated_render_runs{0};
@@ -385,35 +348,15 @@ TEST_F(RuntimeSpike, Tick_DispatchesRenderAsynchronously_DoesNotBlock)
     rnd.execute = gated_render_body;
     ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
 
-    // The render body is blocked on a gate the test hasn't opened — if tick()
-    // waited for the render phase to complete, this call would hang forever.
-    // Returning proves the dispatch is genuinely async, not just "usually fast".
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
     EXPECT_EQ(g_gated_render_runs.load(), 0)
         << "render must not have run yet — tick() must not block on the render phase";
 
-    // Open the gate, then let the NEXT tick's join catch up to render #1
-    // before its own dispatch — the mechanism that keeps extraction from ever
-    // overwriting a buffer render #1 might still be reading.
     g_gated_render_may_finish.store(true);
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
     EXPECT_GE(g_gated_render_runs.load(), 1)
         << "the second tick's join must wait for the first tick's render to finish";
 }
-
-// ── §16 render-state extract (RuntimeArchitectureV2.md §16 — the "R4" cut) ──
-//
-// A render-phase system's queries are resolved against the live ECS once per
-// tick, at the sim→render boundary, into buffers the runtime allocates and
-// owns (runtime_extract_render_state) — never against the live ECS directly.
-// This is what lets a render-phase system make zero ke_ecs calls, which in
-// turn is what lets tick() dispatch the render phase asynchronously (sim N+1
-// overlaps render N on the worker pool) without the ECS ever seeing concurrent
-// access. Because render is now dispatched-not-joined by the time tick()
-// returns, these tests can't read a render body's side effect right after
-// tick() — they wait (bounded) on an atomic the render body sets as its last
-// statement, which is safe precisely because nothing dispatches a further
-// tick (and therefore a further render) after the single tick() call below.
 
 namespace {
 template <typename Pred>
@@ -484,17 +427,12 @@ TEST_F(RuntimeSpike, RenderExtract_ReflectsThisTicksSimWrite)
     };
     ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
 
-    // The extract (and the sim write it captures) happens synchronously inside
-    // this one tick() call, before render is dispatched — only the render
-    // BODY's execution is async, hence the wait below.
     ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
     ASSERT_TRUE(wait_for([] { return g_extract_probe.runs.load() >= 1; }))
         << "render system never ran";
 
     EXPECT_EQ(g_extract_probe.seen.load(), 42) << "the extract must hand render this tick's sim write";
 
-    // The extracted column is an OWNED copy, never the live storage: it must
-    // not alias the pointer component_get returns for the live entity.
     const void *live_ptr = ecs->component_get(ecs, e, cid);
     EXPECT_NE(g_extract_probe.seen_ptr.load(), live_ptr)
         << "render must read an owned copy, never the live component storage";
@@ -506,9 +444,6 @@ double g_extract_pv_sum = 0.0;
 std::atomic<int> g_extract_pv_runs{0};
 }
 
-// A two-term render query must hand the body both columns aligned 1:1 with the
-// entities post-extract, exactly like a live-resolved sim query does — the
-// merge-copy in runtime_extract_render_state must preserve per-entity alignment.
 TEST_F(RuntimeSpike, RenderExtract_MultiTermAlignment)
 {
     ke_component_id pos = ecs->component_register(ecs, "ExtractPos", sizeof(MultiTermExtract), nullptr);
@@ -558,12 +493,6 @@ TEST_F(RuntimeSpike, RenderExtract_MultiTermAlignment)
     EXPECT_DOUBLE_EQ(g_extract_pv_sum, expect)
         << "the extract's merge-copy must preserve per-entity column alignment";
 }
-
-// ── Wave builder (R/W conflict grouping) ────────────────────────────────────
-//
-// These tests don't need the RuntimeSpike fixture — they exercise the pure
-// wave builder function directly. Easier to isolate algorithmic correctness
-// from runtime state.
 
 namespace wave_test {
 
@@ -673,15 +602,6 @@ TEST(WaveBuilder, ReadReadSameCid_SameWave)
 
 TEST(WaveBuilder, ChainOfConflicts_GreedyGrouping)
 {
-    // A writes T, B reads T → conflict. C writes U (disjoint from A, B) → can
-    // join A's wave (no conflict with A). D reads U → conflicts with C, but C
-    // is in wave 0 now... let's verify the actual greedy behavior.
-    //
-    // Registration order:
-    //   sys[0] A: writes T
-    //   sys[1] B: reads T   → conflicts with A → wave 1
-    //   sys[2] C: writes U  → wave 1 has B (reads T), no conflict → joins wave 1
-    //   sys[3] D: reads U   → conflicts with C in wave 1 → wave 2
     ke_component_access a[] = {{1u, KE_ACCESS_WRITE}};
     ke_component_access b[] = {{1u, KE_ACCESS_READ}};
     ke_component_access c[] = {{2u, KE_ACCESS_WRITE}};
@@ -704,27 +624,8 @@ TEST(WaveBuilder, ChainOfConflicts_GreedyGrouping)
     EXPECT_EQ(assignments[3], 2u);
 }
 
-// RuntimeArchitectureV2.md §9.7/§13.8: unpinning render passes by default is
-// gated on wgpu-native safely recording command encoders from multiple
-// threads at once. Every render pass already runs with pinned_thread = 0, and
-// this is the exact access-list shape that puts three real render passes —
-// render.clear, render.shadow, render.cull — in one wave together: all three
-// only READ the frame-barrier tag (never conflicts with another READ) plus
-// their own disjoint READs, and each WRITEs only its own resource (backbuffer,
-// shadow_map, light_clusters — never shared). Concretely, this shape has been
-// exercised release-build all session, dozens of runs, across every example
-// combining shadows with point/spot lights (13_full_scene, 08_spot_lights,
-// 09_many_lights at 10,000 lights) with zero crashes or corruption — each pass
-// recording into its OWN ke_gpu_command_encoder concurrently, on different
-// enkiTS worker threads, against the same wgpu::Device. That is the informal
-// evidence backing this gate; this test pins down that the wave-builder's
-// documented conflict rule is what actually produces the same-wave grouping,
-// so a future access-list change can't silently serialize (or wrongly keep
-// parallel) this exact shape without the test noticing.
 TEST(WaveBuilder, ClearShadowCull_RealAccessShape_SameWave)
 {
-    // frame_cid: WRITE by begin_frame (not modeled here), READ by all three.
-    // Each pass's own resource is a disjoint WRITE.
     ke_component_access clear[]  = {{1u, KE_ACCESS_READ}, {2u, KE_ACCESS_WRITE}};  // frame, backbuffer
     ke_component_access shadow[] = {{1u, KE_ACCESS_READ}, {3u, KE_ACCESS_READ}, {4u, KE_ACCESS_WRITE}}; // frame, transform, shadow_map
     ke_component_access cull[]   = {{1u, KE_ACCESS_READ}, {3u, KE_ACCESS_READ}, {5u, KE_ACCESS_WRITE}}; // frame, transform, light_clusters
@@ -743,8 +644,6 @@ TEST(WaveBuilder, ClearShadowCull_RealAccessShape_SameWave)
     EXPECT_EQ(assignments[1], assignments[2]);
 }
 
-// ── Defer queue ─────────────────────────────────────────────────────────────
-
 TEST_F(RuntimeSpike, DeferSpawn_AppliedAtWaveBarrier)
 {
     ke_system_ctx_reset_defer_applied();
@@ -756,7 +655,6 @@ TEST_F(RuntimeSpike, DeferSpawn_AppliedAtWaveBarrier)
     sys.user_data = &spawn_calls;
     sys.execute   = [](ke_system_ctx *ctx, void *ud, float) {
         auto *count = static_cast<int *>(ud);
-        // spawn returns a placeholder (KE_ENTITY_INVALID) until the defer queue flushes
         ke_system_ctx_spawn(ctx);
         ke_system_ctx_spawn(ctx);
         ke_system_ctx_spawn(ctx);
@@ -808,12 +706,6 @@ TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
     EXPECT_EQ(ke_system_ctx_defer_applied_count(), 5u);  // exactly 1 per tick, drains every wave
 }
 
-// ── Abort interception ───────────────────────────────────────────────────────
-
-// A zero-size component registers as a tag (entity id, no data): valid in
-// add/has/query and used as a render-resource dependency key. It must register
-// cleanly — not abort and not corrupt the world, since a fatal here silently
-// breaks every later ecs op.
 TEST(FlecsTagTest, ZeroSizeComponent_RegistersAsUsableTag)
 {
     ke_ecs_flecs_params p{};
@@ -823,8 +715,6 @@ TEST(FlecsTagTest, ZeroSizeComponent_RegistersAsUsableTag)
     ke_component_id tag = h.ref->component_register(h.ref, "ZeroSizeTag", 0, nullptr);
     EXPECT_NE(tag, (ke_component_id)0) << "zero-size component should be a valid tag";
 
-    // The world must stay usable: add the tag, then find its carrier through the
-    // resolved-query path (the only read path the engine exposes).
     ke_entity e = h.ref->entity_create(h.ref);
     h.ref->component_add(h.ref, e, tag);
 

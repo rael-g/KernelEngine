@@ -1,6 +1,3 @@
-// ke_window_glfw_create — factory for the GLFW-backed window (the only export
-// this plugin has; everything else it offers is reached through the ke_window
-// vtable the factory returns).
 
 #pragma once
 

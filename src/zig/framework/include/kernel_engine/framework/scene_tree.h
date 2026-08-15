@@ -10,9 +10,6 @@ extern "C"
 {
 #endif
 
-    // Forward declaration: a node created or destroyed from inside a running
-    // system passes its ke_system_ctx so the structural change is deferred to the
-    // wave barrier. Passing NULL performs the change immediately (scene load, setup).
     typedef struct ke_system_ctx ke_system_ctx;
 
     typedef struct ke_scene_tree
@@ -33,7 +30,6 @@ extern "C"
         ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path, ke_error **out_error);
 
         void (*propagate_transforms)(struct ke_scene_tree *self);
-
 
     } ke_scene_tree;
 

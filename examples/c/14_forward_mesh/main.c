@@ -35,10 +35,6 @@ static double now_seconds(void)
 #endif
 }
 
-// Interleaved position(3) + normal(3) + uv(2) + tangent(3), unit cube centred
-// at the origin. The tangent (+U direction per face) and uv matter for the
-// vertex stride the forward pipeline expects (11 floats); this example uses the
-// white material, so the values are not otherwise visible.
 typedef struct { float px, py, pz, nx, ny, nz, u, v, tx, ty, tz; } vtx;
 static const vtx cube[] = {
     {-0.5f,-0.5f, 0.5f, 0,0, 1, 0,1, 1,0,0},{ 0.5f,-0.5f, 0.5f, 0,0, 1, 1,1, 1,0,0},{ 0.5f, 0.5f, 0.5f, 0,0, 1, 1,0, 1,0,0},{-0.5f, 0.5f, 0.5f, 0,0, 1, 0,0, 1,0,0}, // +Z
@@ -85,7 +81,6 @@ int main(void)
     if (!render.ref) die("render module", err);
     ke_render_service *core = ke_render_module_core(render.ref);
 
-    // ── Upload the cube + populate the scene (camera + one mesh entity) ──────
     ke_mesh_handle cube_h = core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &err);
     if (!ke_mesh_is_valid(cube_h)) die("upload_mesh", err);
@@ -122,8 +117,6 @@ int main(void)
     ke_mesh_component *ent_m = ecs.ref->component_add(ecs.ref, ent, mesh_cid);
     *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat };
 
-    // Shading keeps the directional term switched off until a light entity
-    // exists, so without this the cube resolves to black.
     ke_entity sun = ecs.ref->entity_create(ecs.ref);
     ke_directional_light_component *sun_l = ecs.ref->component_add(ecs.ref, sun, light_cid);
     *sun_l = (ke_directional_light_component){

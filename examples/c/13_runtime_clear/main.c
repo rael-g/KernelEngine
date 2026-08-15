@@ -36,7 +36,6 @@ int main(void)
     printf("--- c_demo_13: clear screen via runtime-driven render passes ---\n");
     ke_error *err = NULL;
 
-    // ── Window + GPU device ──────────────────────────────────────────────────
     ke_window_glfw_params wp = {
         .logger = NULL, .input = NULL,
         .title = "c_demo_13 runtime clear", .width = 1024, .height = 640,
@@ -49,7 +48,6 @@ int main(void)
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 
-    // ── Runtime triple: ecs + scheduler + runtime ────────────────────────────
     ke_ecs_flecs_params ep = { .reserved = 0 };
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
@@ -61,7 +59,6 @@ int main(void)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rp, &err);
     if (!rt.ref) die("runtime", err);
 
-    // ── Install the render module — default_passes registers the render chain ─
     ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, NULL, 1, NULL, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
 
@@ -75,7 +72,6 @@ int main(void)
         prev = t;
     }
 
-    // ── Cleanup (module before runtime: its systems point at the module state) ─
     render.destroy(render.ref);
     rt.destroy(rt.ref);
     sched.destroy(sched.ref);

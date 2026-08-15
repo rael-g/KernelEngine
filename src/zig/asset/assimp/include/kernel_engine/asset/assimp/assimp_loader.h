@@ -1,6 +1,3 @@
-// ke_asset_loader_assimp_create — factory for the Assimp-backed asset loader
-// (the only export this plugin has; everything else it offers is reached
-// through the ke_asset_loader vtable the factory returns).
 
 #pragma once
 

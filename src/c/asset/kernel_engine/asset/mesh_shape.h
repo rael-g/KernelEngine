@@ -1,12 +1,6 @@
 #ifndef KERNEL_ENGINE_ASSET_MESH_SHAPE_H_
 #define KERNEL_ENGINE_ASSET_MESH_SHAPE_H_
 
-// ke_mesh_shape — POD vocabulary for common CPU-side primitives (quad/plane/
-// cube/sphere) baked by the framework plugin. Baking and freeing are internal
-// to the framework plugin; external consumers reach the result via
-// ke_asset_resolver->resolve_mesh(path, &data) using paths shaped like
-// "res://primitives/<name>".
-
 #include <kernel_engine/render/mesh.h>  // ke_vertex
 #include <stdint.h>
 

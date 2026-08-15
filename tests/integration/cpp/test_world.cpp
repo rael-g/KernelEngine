@@ -41,7 +41,6 @@ struct WorldFixture {
     }
 
     void teardown() {
-        // "Quem cria, owna": destroy in reverse-create order; world borrows the rest.
         if (world_h.ref) world_h.destroy(world_h.ref);
         if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
         if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
@@ -60,7 +59,6 @@ TEST(WorldB2, Create_Accessors_Destroy)
     EXPECT_NE(f.world->runtime(f.world), nullptr);
     EXPECT_EQ(f.world->scene_tree(f.world), nullptr);  // B2 transitional
 
-    // Spawn an entity to prove ecs is functional.
     ke_ecs *ecs = f.world->ecs(f.world);
     ke_entity e = ecs->entity_create(ecs);
     EXPECT_NE(e, KE_ENTITY_INVALID);
@@ -79,13 +77,11 @@ TEST(WorldB2, MultiWorld_Isolation)
     ke_ecs *eb = wb.world->ecs(wb.world);
     ASSERT_NE(ea, eb);
 
-    // Spawn one entity in each world.
     ke_entity a = ea->entity_create(ea);
     ke_entity b = eb->entity_create(eb);
     EXPECT_NE(a, KE_ENTITY_INVALID);
     EXPECT_NE(b, KE_ENTITY_INVALID);
 
-    // Destroying one world must not invalidate the other.
     wa.teardown();
 
     ke_entity b2 = eb->entity_create(eb);

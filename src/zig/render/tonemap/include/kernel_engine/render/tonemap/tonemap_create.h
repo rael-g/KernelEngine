@@ -23,9 +23,6 @@ extern "C"
 {
 #endif
 
-    // Opaque — nothing outside this plugin calls into it; it registers its own
-    // render.tonemap system into `runtime` at create time and does its work
-    // through the borrowed ke_render_service (reads "hdr", writes "backbuffer").
     typedef struct ke_render_tonemap ke_render_tonemap;
 
     typedef struct ke_render_tonemap_handle
@@ -34,10 +31,6 @@ extern "C"
         void (*destroy)(ke_render_tonemap *self);
     } ke_render_tonemap_handle;
 
-    // Creates the ACES tonemap pass and registers it as a runtime system.
-    // `runtime`, `core`, `device`, `logger` are borrowed (see ke_world for the
-    // precedent: a plugin storing only public handles, never another plugin's
-    // private state). Handle's ref is NULL on failure.
     KE_RENDER_TONEMAP_API ke_render_tonemap_handle ke_render_tonemap_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_logger *logger, ke_error **out_error);

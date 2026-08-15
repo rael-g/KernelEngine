@@ -19,8 +19,6 @@ protected:
     }
 };
 
-// --- Creation Tests ---
-
 TEST(AssetLoaderInitTest, Create_NullParams_ReturnsInvalidArgument) {
     ke_asset_loader_handle l = ke_asset_loader_assimp_create(nullptr, nullptr);
     ASSERT_EQ(l.ref, nullptr);
@@ -32,8 +30,6 @@ TEST(AssetLoaderInitTest, Create_Success_ReturnsOk) {
     ASSERT_NE(l.ref, nullptr);
     l.destroy(l.ref);
 }
-
-// --- API Tests ---
 
 TEST_F(AssetLoaderTest, LoadModel_NullPath_ReturnsInvalidArgument) {
     ke_model_data* out = loader->load_model(loader, nullptr, nullptr);
@@ -65,7 +61,6 @@ TEST_F(AssetLoaderTest, LoadModel_ValidFile_ReturnsOk) {
 }
 
 TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
-    // Synchronous mock scheduler
     ke_scheduler scheduler{};
     scheduler.dispatch = [](ke_scheduler*, ke_task_func f, void* d) -> ke_task* {
         f(d);
@@ -83,35 +78,25 @@ TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
         [](const ke_error *error, ke_model_data* data, void* user) {
             auto* c = (Context*)user;
             c->err = error;
-            // The completion owns the model; releasing it here is the async
-            // counterpart of the free that follows a synchronous load.
             if (data != nullptr) c->loader->free_model(c->loader, data);
             c->done = true;
         }, &ctx);
 
-    // Wait or skip if file missing
     if (ctx.err != nullptr) GTEST_SKIP() << "File not found for async test";
 
     ASSERT_TRUE(ctx.done);
 }
 
-// A model's memory belongs to the loader that produced it, so this exercises
-// the free path on a real load rather than on a hand-built record: every block
-// released here has to be one the loader itself allocated.
 TEST_F(AssetLoaderTest, FreeModel_RealData_Works) {
     ke_model_data* model = loader->load_model(loader, "assets/Box.gltf", nullptr);
     if (model == nullptr) GTEST_SKIP() << "assets/Box.gltf not found at expected path";
 
-    // Meshes, materials and textures each have their own branch in free_model;
-    // a model with all three present is what makes the test worth running.
     EXPECT_GT(model->mesh_count, 0);
     EXPECT_GT(model->material_count, 0);
 
     loader->free_model(loader, model);
     SUCCEED();
 }
-
-// --- Destroy Tests ---
 
 TEST_F(AssetLoaderTest, LoadModelAsync_NullArgs_ReturnsNull) {
     ke_scheduler scheduler{};

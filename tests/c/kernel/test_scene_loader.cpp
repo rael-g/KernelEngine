@@ -76,11 +76,6 @@ protected:
         ASSERT_NE(world_h.ref, nullptr);
         world = world_h.ref;
 
-        // Camera/mesh/directional_light/point_light/spot_light are render's own
-        // scene-file vocabulary, not framework's — this test exercises the
-        // scene loader (framework's job) applying them, so it registers
-        // render's apply callbacks itself, exactly as a real host's render
-        // module would (ke_render_module_create does this same call).
         ASSERT_TRUE(ke_render_register_scene_apply(ecs, world));
         ASSERT_TRUE(ke_audio_register_scene_apply(ecs, world));
         ASSERT_TRUE(ke_physics_register_scene_apply(ecs, world));
@@ -94,15 +89,12 @@ protected:
     {
         if (loader_h.ref) loader_h.destroy(loader_h.ref);
         if (world_h.ref) world_h.destroy(world_h.ref);
-        // world borrows ecs/runtime/scene_tree — caller destroys in reverse-create order.
         if (tree_h.ref) tree_h.destroy(tree_h.ref);
         if (runtime_h.ref) runtime_h.destroy(runtime_h.ref);
         if (ecs_h.ref) ecs_h.destroy(ecs_h.ref);
         if (scheduler_h.ref) scheduler_h.destroy(scheduler_h.ref);
     }
 };
-
-// ── Smoke ────────────────────────────────────────────────────────────────────
 
 TEST_F(SceneLoaderTest, EmptyFile_NoEntities_ReturnsOk)
 {
@@ -138,8 +130,6 @@ parent = "World"
     ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
     EXPECT_NE(tree->find_node(tree, "World/Child", NULL), KE_ENTITY_INVALID);
 }
-
-// ── Transform application ──────────────────────────────────────────────────
 
 TEST_F(SceneLoaderTest, Transform_PositionApplied)
 {
@@ -183,8 +173,6 @@ depth    = 5.0
     ASSERT_NE(t, nullptr);
     EXPECT_FLOAT_EQ(t->position.x, 1.0f);
     EXPECT_FLOAT_EQ(t->position.y, 2.0f);
-    // Authored in degrees like every other rotation in a scene file, stored in
-    // radians like the physics that reads it.
     EXPECT_NEAR(t->rotation, 1.57079633f, 1e-5f);
     EXPECT_FLOAT_EQ(t->scale.x, 3.0f);
     EXPECT_FLOAT_EQ(t->scale.y, 4.0f);
@@ -221,17 +209,12 @@ alpha_mode = "blend"
     EXPECT_TRUE(sp->flip_h);
     EXPECT_FALSE(sp->flip_v);
     EXPECT_FLOAT_EQ(sp->color.w, 0.8f);
-    // Authored by the enumerator's name, which no field table can express.
     EXPECT_EQ(sp->alpha_mode, (uint32_t)KE_ALPHA_MODE_BLEND);
-    // Never authorable: the resolve system owns it.
     EXPECT_FALSE(sp->attached);
 }
 
 TEST_F(SceneLoaderTest, PartialBlock_LeavesTheHeaderDefaultStanding)
 {
-    // The bug this covers: a block authoring one field used to zero every other,
-    // so a mesh with only a color came out with roughness 0 where the header
-    // declares 1 — deterministic, invisible, and wrong.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Partial"
@@ -254,9 +237,6 @@ color = [1.0, 0.0, 0.0, 1.0]
 
 TEST_F(SceneLoaderTest, Label_NamesItsFontByPath)
 {
-    // What this replaces: the font was a handle, so the only way to have one was
-    // to bake it in the host's own language and hand the value over. A scene
-    // could not say which font it wanted at all.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Title"
@@ -275,12 +255,8 @@ font_size = 72.0
     ASSERT_NE(l, nullptr);
     EXPECT_STREQ(l->font, "res://fonts/title.ttf");
     EXPECT_FLOAT_EQ(l->font_size, 72.0f);
-    // The bake is the resolve system's, and it has not run: no handle yet, and
-    // no handle is now spelled zero.
     EXPECT_EQ(l->font_handle.bits, 0u);
 }
-
-// ── [entity.X] via apply registry ──────────────────────────────
 
 TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)
 {
@@ -319,18 +295,13 @@ far_plane = 100.0
     ASSERT_TRUE(ecs->component_lookup(ecs, "camera", &meta, nullptr));
     auto *c = (ke_camera_component *)ecs->component_get(ecs, e, meta.cid);
     ASSERT_NE(c, nullptr);
-    // 60° → 1.0472 rad
     EXPECT_NEAR(c->fov, 1.0472f, 0.001f);
     EXPECT_FLOAT_EQ(c->near_plane, 0.1f);
     EXPECT_FLOAT_EQ(c->far_plane, 100.0f);
 }
 
-// ── subscene composition ───────────────────────────────────────────────────
-
 TEST_F(SceneLoaderTest, Subscene_EntitiesAreSplicedUnderTheReferencingName)
 {
-    // Mirrors the shape real scenes use: an outer entity names a subscene file,
-    // and the subscene's own entities back-reference each other by name.
     auto sub = WriteTempScene(R"(
 [[entity]]
 name = "Root"
@@ -355,11 +326,9 @@ position = [-7.5, 0.0, 0.0]
 
     ASSERT_TRUE(loader->load(loader, main.string().c_str(), NULL));
 
-    // The subscene root takes the referencing entity's name, not its own.
     ke_entity paddle = tree->find_node(tree, "PaddleLeft", NULL);
     ASSERT_NE(paddle, KE_ENTITY_INVALID);
 
-    // And the subscene's child came along with it.
     ke_entity visual = tree->find_node(tree, "Visual", NULL);
     ASSERT_NE(visual, KE_ENTITY_INVALID);
 
@@ -369,14 +338,12 @@ position = [-7.5, 0.0, 0.0]
     ASSERT_NE(vh, nullptr);
     EXPECT_EQ(vh->parent, paddle) << "subscene child must hang off the spliced root";
 
-    // The outer [transform] override must reach the subscene root.
     ke_component_meta tmeta;
     ASSERT_TRUE(ecs->component_lookup(ecs, KE_COMPONENT_NAME_TRANSFORM, &tmeta, nullptr));
     auto *pt = (ke_transform_component *)ecs->component_get(ecs, paddle, tmeta.cid);
     ASSERT_NE(pt, nullptr);
     EXPECT_FLOAT_EQ(pt->position.x, -7.5f);
 
-    // The subscene's own transform survived too.
     auto *vt = (ke_transform_component *)ecs->component_get(ecs, visual, tmeta.cid);
     ASSERT_NE(vt, nullptr);
     EXPECT_FLOAT_EQ(vt->scale.x, 0.3f);
@@ -385,11 +352,6 @@ position = [-7.5, 0.0, 0.0]
 
 TEST_F(SceneLoaderTest, Subscene_OuterTransformAndComponentOverridesStayPairedPerInstance)
 {
-    // Pong's exact shape: two entities reference the SAME subscene, and each
-    // carries BOTH an outer [transform] override (applied early) and an outer
-    // [components.X] override (applied late). The two overrides for one instance
-    // must land on the same spliced root — a mix-up swaps e.g. paddle position
-    // and control action across the two instances.
     auto sub = WriteTempScene(R"(
 [[entity]]
 name = "Root"
@@ -423,14 +385,11 @@ name = "Root"
     ASSERT_NE(lt, nullptr); ASSERT_NE(lc, nullptr);
     ASSERT_NE(rt, nullptr); ASSERT_NE(rc, nullptr);
 
-    // Position -7.5 must be paired with far_plane 111 (both from the Left block).
     EXPECT_FLOAT_EQ(lt->position.x, -7.5f);
     EXPECT_FLOAT_EQ(lc->far_plane, 111.0f);
     EXPECT_FLOAT_EQ(rt->position.x, 7.5f);
     EXPECT_FLOAT_EQ(rc->far_plane, 222.0f);
 }
-
-// ── light applies ──────────────────────────────────────────────────────────
 
 TEST_F(SceneLoaderTest, DirectionalLight_FieldsApplied)
 {
@@ -486,8 +445,6 @@ color = [0.95, 0.95, 0.95, 1.0]
     EXPECT_FLOAT_EQ(l->anchor[0], 0.3f);
     EXPECT_FLOAT_EQ(l->offset[1], 60.0f);
     EXPECT_FLOAT_EQ(l->color[3], 1.0f);
-    // glyph_count is the shaping system's output, so a scene must not be able to
-    // seed it even though it sits in the same component.
     EXPECT_EQ(l->glyph_count, 0u);
 }
 
@@ -514,8 +471,6 @@ volume = 0.5
 
 TEST_F(SceneLoaderTest, LegacyComponentsNesting_IsNotRead)
 {
-    // The old [entity.components.X] level is gone. Loading anyway would leave the
-    // author guessing which fields landed, so the file is refused outright.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Old"
@@ -529,8 +484,6 @@ radius = 42.0
 
 TEST_F(SceneLoaderTest, InternalComponent_CannotBeAuthored)
 {
-    // hierarchy holds entity ids the scene cannot know; writing one would point
-    // the graph at an entity that does not exist.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Parent"
@@ -548,9 +501,6 @@ parent = 999
 
 TEST_F(SceneLoaderTest, UnknownFieldInAKnownComponent_FailsTheLoad)
 {
-    // The last silent failure the format had: the component resolves, the block is
-    // read, and one mistyped key is dropped on the floor. Nothing downstream can
-    // tell that value from one the author never wrote.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Typo"
@@ -565,9 +515,6 @@ raidus = 9.0
 
 TEST_F(SceneLoaderTest, KeyOnlyTheDomainCallbackKnows_IsNotReportedAsUnknown)
 {
-    // rotation_euler is not a field of any component: it is three angles standing
-    // for the quaternion one holds, which only the domain's callback can map. The
-    // check has to see the callback's claim, or every such key would fail the load.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Turned"
@@ -579,8 +526,6 @@ rotation_euler = [0.0, 90.0, 0.0]
 
 TEST_F(SceneLoaderTest, UnknownComponent_FailsTheLoad)
 {
-    // A typo in a component name is the failure this whole format is exposed to,
-    // and the only moment it can be caught is now, synchronously, at load.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Typo"
@@ -594,8 +539,6 @@ radius = 42.0
 
 TEST_F(SceneLoaderTest, Collider2D_FieldsApplied)
 {
-    // The shape a scene gives a collider used to arrive through a C#-only
-    // property bag, so a non-C# host loaded the same file and got the default.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Shape"
@@ -676,8 +619,6 @@ intensity = 4.0
 
 TEST_F(SceneLoaderTest, Transform_RotationEulerDegreesToQuaternion)
 {
-    // 90° about Y alone: the ZYX intrinsic composition must reduce to
-    // (0, sin45, 0, cos45) with no bleed into the other axes.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Turned"
@@ -697,8 +638,6 @@ rotation_euler = [0.0, 90.0, 0.0]
     EXPECT_NEAR(t->rotation.z, 0.0f, 1e-5f);
     EXPECT_NEAR(t->rotation.w, 0.70710678f, 1e-5f);
 }
-
-// ── Script factory dispatch ────────────────────────────────────────────────
 
 namespace {
 struct ScriptCallSpy {
@@ -736,7 +675,6 @@ type = "PaddleController"
 
 TEST_F(SceneLoaderTest, Script_NoFactory_EntityStillCreated)
 {
-    // No factory registered — entity is created but script dispatch is a no-op.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Lone"
@@ -746,16 +684,12 @@ type = "Whatever"
     EXPECT_NE(tree->find_node(tree, "Lone", NULL), KE_ENTITY_INVALID);
 }
 
-// ── User component with custom apply ────────────────────────────────────
-
 namespace {
 struct DemoComp {
     float   fov;
     int32_t mode;
 };
 
-// Marks what it takes, the same contract every apply callback follows: a key
-// nobody claims is reported as one the component does not have.
 void demo_apply(void *c, ke_variant_table_entry *entries, uint32_t count) {
     DemoComp *d = (DemoComp *)c;
     for (uint32_t i = 0; i < count; ++i) {
@@ -793,8 +727,6 @@ mode = 7
     EXPECT_FLOAT_EQ(d->fov, 1.5f);
     EXPECT_EQ(d->mode, 7);
 }
-
-// ── Create-arg validation ──────────────────────────────────────────────────
 
 TEST_F(SceneLoaderTest, Create_RejectsNullArgs)
 {

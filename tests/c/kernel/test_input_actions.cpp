@@ -13,8 +13,6 @@
 
 namespace fs = std::filesystem;
 
-// Helpers ────────────────────────────────────────────────────────────────────
-
 static fs::path WriteTempInputFile(const std::string &contents, const char *suffix)
 {
     auto path = fs::temp_directory_path() / (std::string("ke_input_actions_test_") +
@@ -27,8 +25,6 @@ static void SetKeyDown(ke_input_snapshot &snap, int key)
 {
     snap.keys_down[key / 64] |= (1ULL << (key % 64));
 }
-
-// ── Fixture ──────────────────────────────────────────────────────────────────
 
 class InputActionsTest : public ::testing::Test
 {
@@ -47,8 +43,6 @@ protected:
         if (actions_h.ref && actions_h.destroy) actions_h.destroy(actions_h.ref);
     }
 };
-
-// ── Loader smoke ─────────────────────────────────────────────────────────────
 
 TEST_F(InputActionsTest, Load_MissingFile_ReturnsNotFound)
 {
@@ -74,8 +68,6 @@ bindings = [ { kind = "key_pair", negative = "S", positive = "W" } ]
     fs::remove(path);
 }
 
-// ── Button binding ──────────────────────────────────────────────────────────
-
 TEST_F(InputActionsTest, ButtonBinding_ReportsPressedAndReleased)
 {
     auto path = WriteTempInputFile(R"(
@@ -88,23 +80,19 @@ bindings = [ { kind = "key", key = "Space" } ]
     int32_t id = actions->get_action_id(actions, "Jump");
 
     ke_input_snapshot snap{};
-    // First frame: not pressed.
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_FALSE(actions->is_action_down(actions, id));
     EXPECT_FALSE(actions->was_action_pressed(actions, id));
 
-    // Press Space.
     SetKeyDown(snap, KE_KEY_SPACE);
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_TRUE(actions->is_action_down(actions, id));
     EXPECT_TRUE(actions->was_action_pressed(actions, id));
 
-    // Hold Space → no longer "just pressed".
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_TRUE(actions->is_action_down(actions, id));
     EXPECT_FALSE(actions->was_action_pressed(actions, id));
 
-    // Release Space.
     snap = {};
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_FALSE(actions->is_action_down(actions, id));
@@ -112,8 +100,6 @@ bindings = [ { kind = "key", key = "Space" } ]
 
     fs::remove(path);
 }
-
-// ── KeyPair binding (Axis1D) ────────────────────────────────────────────────
 
 TEST_F(InputActionsTest, KeyPair_ReportsAxisValue)
 {
@@ -127,18 +113,15 @@ bindings = [ { kind = "key_pair", negative = "S", positive = "W" } ]
     int32_t id = actions->get_action_id(actions, "Move");
 
     ke_input_snapshot snap{};
-    // W only → +1
     SetKeyDown(snap, KE_KEY_W);
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_FLOAT_EQ(actions->get_axis1d(actions, id), 1.0f);
 
-    // S only → -1
     snap = {};
     SetKeyDown(snap, KE_KEY_S);
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_FLOAT_EQ(actions->get_axis1d(actions, id), -1.0f);
 
-    // Both → 0
     snap = {};
     SetKeyDown(snap, KE_KEY_W);
     SetKeyDown(snap, KE_KEY_S);
@@ -147,8 +130,6 @@ bindings = [ { kind = "key_pair", negative = "S", positive = "W" } ]
 
     fs::remove(path);
 }
-
-// ── KeyQuad binding (Axis2D) ────────────────────────────────────────────────
 
 TEST_F(InputActionsTest, KeyQuad_ReportsAxis2D)
 {
@@ -173,8 +154,6 @@ bindings = [ { kind = "key_quad", up = "W", down = "S", left = "A", right = "D" 
     fs::remove(path);
 }
 
-// ── Mouse binding ───────────────────────────────────────────────────────────
-
 TEST_F(InputActionsTest, MouseBinding_DrivesButtonAction)
 {
     auto path = WriteTempInputFile(R"(
@@ -193,8 +172,6 @@ bindings = [ { kind = "mouse", button = "Left" } ]
 
     fs::remove(path);
 }
-
-// ── on_event callback ──────────────────────────────────────────────────────
 
 TEST_F(InputActionsTest, Evaluate_FiresStartedAndCanceledEvents)
 {
@@ -222,7 +199,6 @@ bindings = [ { kind = "key", key = "Space" } ]
     SetKeyDown(snap, KE_KEY_SPACE);
     actions->evaluate(actions, &snap, cb, &c, nullptr); // start
     EXPECT_EQ(c.started, 1);
-    // Button never fires Performed (Started conveys the press; matches C# dispatcher).
     EXPECT_EQ(c.performed, 0);
 
     actions->evaluate(actions, &snap, cb, &c, nullptr); // still down → no new start, no performed
@@ -236,8 +212,6 @@ bindings = [ { kind = "key", key = "Space" } ]
     (void)id;
     fs::remove(path);
 }
-
-// ── Programmatic registration ────────────────────────────────────────────────
 
 TEST_F(InputActionsTest, AddAction_AssignsSequentialIds)
 {
@@ -328,8 +302,6 @@ TEST_F(InputActionsTest, Create_ReturnsValidHandle)
 TEST_F(InputActionsTest, GetAxis3D_Works)
 {
     int32_t id = actions->add_action(actions, "Move", KE_ACTION_TYPE_AXIS3D);
-    // No easy way to drive 3D axis via keys/mouse currently in implementation, 
-    // but we can check the default value.
     float x = 0, y = 0, z = 0;
     actions->get_axis3d(actions, id, &x, &y, &z);
     EXPECT_FLOAT_EQ(x, 0.0f);

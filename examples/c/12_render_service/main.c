@@ -47,9 +47,6 @@ int main(void)
     ke_render_service_handle core = ke_render_service_create(gpu.ref, ecs.ref, "shaders", &err);
     if (!core.ref) die("render core", err);
 
-    // ── Triangle pipeline — engine-level setup via the device ────────────────
-    // The backend advertises its shader language; this build feeds it WGSL
-    // (slangc compiled triangle.slang -> WGSL). One module, two entry points.
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
 
     ke_gpu_shader_module shader = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
@@ -73,7 +70,6 @@ int main(void)
     if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", NULL);
     gpu.ref->destroy_shader_module(gpu.ref, shader);
 
-    // ── Pass I/O: this pass writes the backbuffer ────────────────────────────
     const char *writes[] = { "backbuffer" };
     ke_render_pass_io io = { .reads = NULL, .reads_count = 0, .writes = writes, .writes_count = 1 };
 

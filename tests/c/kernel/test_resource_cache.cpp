@@ -1,14 +1,8 @@
 ﻿#include <gtest/gtest.h>
 #include <kernel_engine/resource_cache/resource_cache.h>
 
-// All tests share the malloc allocator; the cache is single-threaded inside,
-// which matches our test execution model.
-
 namespace {
 
-// Cache-wide destroy callback: counts invocations + records the last freed
-// handle. State lives in static globals because the destroy_fn is per-cache
-// now (Tier 1 decision); per-test state is reset in SetUp.
 int                g_destroy_calls   = 0;
 ke_resource_handle g_last_destroyed  = KE_RESOURCE_HANDLE_NONE;
 int               *g_marker_ctx     = nullptr;
@@ -58,8 +52,6 @@ protected:
         cache = cache_h.ref;
     }
 };
-
-// ── Lifecycle ────────────────────────────────────────────────────────────────
 
 TEST_F(ResourceCacheTest, Register_StartsRefcountAtOne)
 {
@@ -122,8 +114,6 @@ TEST_F(ResourceCacheTest, HandleZero_IsValid)
     EXPECT_EQ(marker, 1);
 }
 
-// ── Path cache ───────────────────────────────────────────────────────────────
-
 TEST_F(ResourceCacheTest, TryGetCached_MissReturnsFalse)
 {
     ke_resource_handle out = 0;
@@ -138,7 +128,6 @@ TEST_F(ResourceCacheTest, InsertThenGet_HitsAndRetains)
     ke_resource_handle out = KE_RESOURCE_HANDLE_NONE;
     EXPECT_TRUE(cache->try_get_cached(cache, "res://x.mesh", &out));
     EXPECT_EQ(out, 10u);
-    // try_get_cached retained → refcount is 2. Releasing once doesn't free.
     EXPECT_TRUE(cache->release(cache, 10, NULL));
     EXPECT_EQ(g_destroy_calls, 0);
     EXPECT_TRUE(cache->release(cache, 10, NULL));
@@ -150,7 +139,6 @@ TEST_F(ResourceCacheTest, CacheInsert_DuplicateKey_ReturnsInvalidArgument)
     ASSERT_TRUE(cache->register_resource(cache, 20, NULL));
     ASSERT_TRUE(cache->register_resource(cache, 21, NULL));
     EXPECT_TRUE(cache->cache_insert(cache, "res://y.tex", 20, NULL));
-    // Duplicate key — caller must try_get_cached first.
     EXPECT_FALSE(cache->cache_insert(cache, "res://y.tex", 21, NULL));
     cache->release(cache, 20, NULL);
     cache->release(cache, 21, NULL);
@@ -175,13 +163,10 @@ TEST_F(ResourceCacheTest, CacheEvict_RemovesPathButKeepsResource)
     cache->cache_evict(cache, "res://z.mat");
     ke_resource_handle out = 0;
     EXPECT_FALSE(cache->try_get_cached(cache, "res://z.mat", &out));
-    // Resource itself is still alive (refcount = 1 from register).
     EXPECT_EQ(g_destroy_calls, 0);
     cache->release(cache, 30, NULL);
     EXPECT_EQ(g_destroy_calls, 1);
 }
-
-// ── Capacity / rehash ────────────────────────────────────────────────────────
 
 TEST_F(ResourceCacheTest, HandlesManyInsertionsThroughRehash)
 {
@@ -206,8 +191,6 @@ TEST_F(ResourceCacheTest, ReinsertionAfterReleaseReusesTombstone)
     cache->release(cache, 65, NULL);
     EXPECT_FALSE(cache->retain(cache, 65, NULL));
 }
-
-// ── Edge cases ───────────────────────────────────────────────────────────────
 
 TEST_F(ResourceCacheTest, TryGetCached_ReturnsFalse_WhenResourceWasReleasedExternally)
 {

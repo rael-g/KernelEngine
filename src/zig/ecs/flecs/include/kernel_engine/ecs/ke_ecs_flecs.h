@@ -1,12 +1,6 @@
 ﻿#ifndef KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 #define KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 
-// ke_ecs_flecs — flecs-backed implementation of the ke_ecs contract.
-//
-// The flecs build linked by this plugin strips the pipeline / system / timer
-// addons. flecs is used as storage + queries + observers only; the scheduler
-// is the in-house ke_runtime (see kernel/runtime/runtime_create.h).
-
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 

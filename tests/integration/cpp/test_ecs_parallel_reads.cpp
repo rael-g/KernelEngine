@@ -6,17 +6,6 @@
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/scheduler/enki/enki_scheduler.h>
 
-// Asserts the contract invariant that ke_ecs storage is never touched
-// concurrently during a parallel wave. Two systems that only READ a component
-// share one wave (read/read has no conflict) and both run at once — but the
-// ONLY door a wave body has to component memory is ke_system_ctx_view, which
-// makes zero ke_ecs calls (segments are resolved single-threaded before the
-// wave dispatches). So "storage is never touched concurrently" is not a
-// runtime property to police — it is architecturally impossible for a wave
-// body to touch ke_ecs at all. This test exercises real concurrent reads
-// (300 ticks with two systems forced into the same wave) as a smoke test that
-// nothing crashes or corrupts, not as a race-detector run.
-
 namespace {
 
 struct Pos
@@ -24,9 +13,6 @@ struct Pos
     float x, y, z;
 };
 
-// Reads a component through the resolved view: walk the archetype segments and
-// the aligned column. No ke_ecs call happens here, so two of these in one wave
-// never touch the storage concurrently.
 void reader_body(ke_system_ctx *ctx, void *, float)
 {
     size_t                seg_count = 0;
@@ -112,9 +98,6 @@ TEST_F(EcsParallelReads, TwoReadersSameWave_NoConcurrentStorageAccess)
     ASSERT_NE(runtime->register_system(runtime, &a, nullptr), 0u);
     ASSERT_NE(runtime->register_system(runtime, &b, nullptr), 0u);
 
-    // Both only READ pos → no write conflict → the wave-builder must place them in
-    // the same wave, so they run in parallel. If that stops being true the test no
-    // longer exercises concurrent reads.
     ke_runtime_system_params sysz[2] = {a, b};
     uint32_t                  waves[2] = {0, 0};
     uint32_t                  wave_count = 0;
@@ -143,8 +126,6 @@ void posvel_body(ke_system_ctx *ctx, void *, float)
 }
 }  // namespace
 
-// A two-term query must hand the body both columns aligned 1:1 with the entities,
-// so columns[0][i] and columns[1][i] belong to the same entity.
 TEST_F(EcsParallelReads, MultiTermQuery_AlignedColumns)
 {
     ke_component_id pos = ecs->component_register(ecs, "pos2", sizeof(Pos), nullptr);
@@ -158,8 +139,6 @@ TEST_F(EcsParallelReads, MultiTermQuery_AlignedColumns)
         ke_entity e = ecs->entity_create(ecs);
         ecs->component_add(ecs, e, pos);
         ecs->component_add(ecs, e, vel);
-        // Re-fetch after both adds: the second add moves the entity to a new
-        // archetype, so a pointer from the first add would be stale.
         Pos *p = static_cast<Pos *>(ecs->component_get(ecs, e, pos));
         Vel *v = static_cast<Vel *>(ecs->component_get(ecs, e, vel));
         ASSERT_NE(p, nullptr);

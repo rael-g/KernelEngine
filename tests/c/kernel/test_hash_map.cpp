@@ -20,13 +20,9 @@ protected:
     }
 };
 
-// --- Initialization Tests ---
-
 TEST(HashMapInitTest, Init_NullMap_ReturnsInvalidArgument) {
     ASSERT_EQ(ke_hash_map_init(nullptr, 16), KE_ERROR);
 }
-
-// --- Destroy Tests ---
 
 TEST(HashMapDestroyTest, Destroy_NullMap_DoesNotCrash) {
     ke_hash_map_destroy(nullptr);
@@ -39,8 +35,6 @@ TEST(HashMapDestroyTest, Destroy_NullEntries_DoesNotCrash) {
     ke_hash_map_destroy(&m);
     SUCCEED();
 }
-
-// --- Insert Tests ---
 
 TEST_F(HashMapTest, Insert_NullMap_ReturnsInvalidArgument) {
     int v = 1;
@@ -80,8 +74,6 @@ TEST_F(HashMapTest, Insert_DoesNotIncrementSizeForDuplicateKey) {
     ASSERT_EQ(map.size, size_after_first);
 }
 
-// --- Get Tests ---
-
 TEST_F(HashMapTest, Get_ExistingKey_ReturnsCorrectValue) {
     int v = 42;
     ke_hash_map_insert(&map, 123, &v);
@@ -110,10 +102,7 @@ TEST_F(HashMapTest, Get_CapacityZero_ReturnsNull) {
     ASSERT_EQ(ke_hash_map_get(&map, 1), nullptr);
 }
 
-// --- Rehash and Probing Tests ---
-
 TEST_F(HashMapTest, Rehash_TriggersWhenLoadFactorExceeded) {
-    // Capacity 16, load factor 0.7 -> 11.2 -> 12 elements should trigger rehash
     int values[12];
     size_t initial_cap = map.capacity;
     for (int i = 0; i < 12; ++i) {
@@ -131,7 +120,6 @@ TEST_F(HashMapTest, Get_WorksAfterRehash) {
 }
 
 TEST_F(HashMapTest, Get_WorksWithCollisionLinearProbing) {
-    // Force collision: 1 % 16 = 1, 17 % 16 = 1
     int v1 = 1, v2 = 2;
     ke_hash_map_insert(&map, 1, &v1);
     ke_hash_map_insert(&map, 17, &v2);
@@ -139,19 +127,16 @@ TEST_F(HashMapTest, Get_WorksWithCollisionLinearProbing) {
 }
 
 TEST_F(HashMapTest, Get_FullLoopBreak_ReturnsNull) {
-    // Manually fill map to 100% without rehashing to test the loop break in get
     ke_hash_map_destroy(&map);
     ke_hash_map_init(&map, 4);
     map_initialized = true;
 
     int v = 1;
-    // Keys that probe to 0, 1, 2, 3
     map.entries[0].key = 4; map.entries[0].value = &v;
     map.entries[1].key = 1; map.entries[1].value = &v;
     map.entries[2].key = 2; map.entries[2].value = &v;
     map.entries[3].key = 3; map.entries[3].value = &v;
     map.size = 4;
 
-    // Search for key that is not there, and all slots are full
     ASSERT_EQ(ke_hash_map_get(&map, 5), nullptr);
 }

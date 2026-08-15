@@ -20,8 +20,6 @@ extern "C"
 {
 #endif
 
-    // Creates an empty settings store. A loader populates it via the set_* slots.
-    // Handle's ref is NULL on failure.
     KE_CONFIGURATION_API ke_configuration_handle ke_configuration_create(ke_error **out_error);
 
 #ifdef __cplusplus

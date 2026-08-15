@@ -4,7 +4,6 @@
 #include <string.h>
 
 namespace {
-// Inline console sink for tests (the kernel no longer ships one; see W.16).
 void test_console_sink_log(ke_logger_sink *, const ke_log_event *event)
 {
     fprintf(stderr, "[%s] %s: %s\n",
@@ -38,15 +37,11 @@ protected:
     }
 };
 
-// --- Creation Tests ---
-
 TEST(LoggerInitTest, Create_ReturnsValidHandle) {
     ke_logger_handle h = ke_logger_create(NULL);
     ASSERT_NE(h.ref, nullptr);
     h.destroy(h.ref);
 }
-
-// --- Destroy Tests ---
 
 TEST_F(LoggerTest, Destroy_NullLogger_DoesNotCrash) {
     auto destroy_fn = logger_h.destroy;
@@ -62,8 +57,6 @@ TEST_F(LoggerTest, Destroy_WithSinks_Works) {
     logger_h = {};
     SUCCEED();
 }
-
-// --- Log and Sink Tests ---
 
 TEST_F(LoggerTest, Log_NullSelf_DoesNotCrash) {
     ke_log_event ev = { KE_LOG_LEVEL_INFO, "TAG", "Msg" };
@@ -162,8 +155,6 @@ TEST_F(LoggerTest, Destroy_CallsSinkDestroy) {
     
     ASSERT_EQ(destroy_count, 1);
 }
-
-// --- Helper Tests ---
 
 TEST(LoggerHelperTest, LevelToString_ValidLevels) {
     ASSERT_STREQ(ke_log_level_to_string(KE_LOG_LEVEL_INFO), "INFO");

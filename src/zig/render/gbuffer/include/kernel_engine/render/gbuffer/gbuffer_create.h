@@ -23,10 +23,6 @@ extern "C"
 {
 #endif
 
-    // Opaque — nothing outside this plugin calls into it; it registers its own
-    // render.gbuffer system into `runtime` at create time and does its work
-    // through the borrowed ke_render_service (writes gbuffer_albedo/normal/
-    // emissive + depth).
     typedef struct ke_render_gbuffer ke_render_gbuffer;
 
     typedef struct ke_render_gbuffer_handle
@@ -35,11 +31,6 @@ extern "C"
         void (*destroy)(ke_render_gbuffer *self);
     } ke_render_gbuffer_handle;
 
-    // Creates the deferred G-buffer encode pass and registers it as a runtime
-    // system. `runtime`/`core`/`device` are borrowed. mesh_cid/world_transform_cid/
-    // camera_cid/frame_cid are cids the aggregator already registered (this
-    // plugin never touches ke_ecs directly, only the plain ids). Handle's ref
-    // is NULL on failure.
     KE_RENDER_GBUFFER_API ke_render_gbuffer_handle ke_render_gbuffer_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc,

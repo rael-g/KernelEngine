@@ -10,7 +10,6 @@ TEST(MeshShapeTest, Bake_Quad_HasFourVerticesAndSixIndices)
     ASSERT_EQ(ke_mesh_shape_bake_internal(KE_MESH_PRIMITIVE_QUAD, 0, &data), KE_OK);
     EXPECT_EQ(data.vertex_count, 4u);
     EXPECT_EQ(data.index_count,  6u);
-    // First vertex sits at (-0.5, -0.5, 0) with normal +Z, UV (0,0).
     EXPECT_FLOAT_EQ(data.vertices[0].x,  -0.5f);
     EXPECT_FLOAT_EQ(data.vertices[0].y,  -0.5f);
     EXPECT_FLOAT_EQ(data.vertices[0].z,   0.0f);
@@ -42,10 +41,8 @@ TEST(MeshShapeTest, Bake_Sphere_DefaultSegmentsCountsMatchFormula)
 {
     ke_mesh_shape_data data{};
     ASSERT_EQ(ke_mesh_shape_bake_internal(KE_MESH_PRIMITIVE_SPHERE, 0, &data), KE_OK);
-    // segments = 32 default → rings = 16
     EXPECT_EQ(data.vertex_count, (16u + 1u) * (32u + 1u));
     EXPECT_EQ(data.index_count,  16u * 32u * 6u);
-    // Every sphere vertex sits at radius 0.5.
     for (uint32_t i = 0; i < data.vertex_count; ++i) {
         float r = std::sqrt(data.vertices[i].x * data.vertices[i].x +
                             data.vertices[i].y * data.vertices[i].y +
