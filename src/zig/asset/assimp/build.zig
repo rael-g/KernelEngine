@@ -51,7 +51,7 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install.step);
 
     const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/tests.zig"),
+        .root_source_file = b.path("src/assimp_loader.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,

@@ -506,9 +506,8 @@ pub fn build(b: *std.Build) void {
     const tests_integration_cpp = b.pathJoin(&.{ root, "tests/integration/cpp" });
 
     const kernel_test_sources = [_][]const u8{
-        "test_input.cpp",         "test_logger.cpp",       "test_asset_resolver.cpp",
-        "test_resource_cache.cpp", "test_scene_tree.cpp",  "test_input_actions.cpp",
-        "test_scene_loader.cpp",
+        "test_asset_resolver.cpp", "test_scene_tree.cpp",
+        "test_input_actions.cpp",  "test_scene_loader.cpp",
     };
     var kernel_test_sources_abs: [kernel_test_sources.len][]const u8 = undefined;
     for (kernel_test_sources, 0..) |s, i| kernel_test_sources_abs[i] = b.pathJoin(&.{ tests_c_kernel, s });
@@ -569,10 +568,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const integration_test_sources = [_][]const u8{
-        "test_world.cpp",           "test_factories.cpp",        "test_window_glfw.cpp",
-        "test_asset_loader.cpp",    "test_stb_image_loader.cpp", "test_enki_scheduler.cpp",
-        "test_miniaudio_audio.cpp", "test_box2d_physics.cpp",    "test_stb_font.cpp",
-        "test_runtime.cpp",         "test_ecs_parallel_reads.cpp",
+        "test_runtime.cpp", "test_ecs_parallel_reads.cpp",
     };
     var integration_test_sources_abs: [integration_test_sources.len][]const u8 = undefined;
     for (integration_test_sources, 0..) |s, i| integration_test_sources_abs[i] = b.pathJoin(&.{ tests_integration_cpp, s });

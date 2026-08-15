@@ -36,4 +36,25 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/stb_font.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inline for (.{ ke_common, ke_logger, ke_text, ke_self, stb_include }) |inc| {
+        test_mod.addIncludePath(.{ .cwd_relative = inc });
+    }
+    test_mod.addCSourceFile(.{ .file = b.path("src/stb_font_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    test_mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
+    test_mod.addCMacro("KE_TEXT_STB_TRUETYPE_EXPORT", "");
+
+    const unit_tests = b.addTest(.{ .root_module = test_mod });
+    const run_tests = b.addRunArtifact(unit_tests);
+    b.step("test", "Run the stb_truetype font loader unit tests").dependOn(&run_tests.step);
 }

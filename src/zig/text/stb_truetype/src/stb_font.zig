@@ -206,3 +206,90 @@ export fn ke_font_loader_stb_create(
 
     return .{ .ref = loader, .destroy = &destroy };
 }
+
+const testing = std.testing;
+
+const font_candidates = [_][*c]const u8{
+    "C:/Windows/Fonts/arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+};
+
+fn createLoader() c.ke_font_loader_handle {
+    var params = std.mem.zeroes(c.ke_font_loader_stb_params);
+    params.logger = null;
+    return ke_font_loader_stb_create(&params, null);
+}
+
+test "creating the loader with null params returns a null handle" {
+    const h = ke_font_loader_stb_create(null, null);
+    try testing.expect(h.ref == null);
+}
+
+test "loading a font from a null path fails" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const data = h.ref.*.load_font.?(h.ref, null, 16.0, 32, 96, 512, null);
+    try testing.expect(data == null);
+}
+
+test "loading a font with a zero pixel size fails" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const data = h.ref.*.load_font.?(h.ref, "test.ttf", 0.0, 32, 96, 512, null);
+    try testing.expect(data == null);
+}
+
+test "loading a font with a negative pixel size fails" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const data = h.ref.*.load_font.?(h.ref, "test.ttf", -1.0, 32, 96, 512, null);
+    try testing.expect(data == null);
+}
+
+test "loading a font with a zero codepoint count fails" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const data = h.ref.*.load_font.?(h.ref, "test.ttf", 16.0, 32, 0, 512, null);
+    try testing.expect(data == null);
+}
+
+test "loading a font with a zero atlas size fails" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const data = h.ref.*.load_font.?(h.ref, "test.ttf", 16.0, 32, 96, 0, null);
+    try testing.expect(data == null);
+}
+
+test "loading a real system font produces an atlas with every requested glyph" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    for (font_candidates) |path| {
+        const data = h.ref.*.load_font.?(h.ref, path, 16.0, 32, 96, 512, null);
+        if (data != null) {
+            defer h.ref.*.free_font.?(h.ref, data);
+            try testing.expectEqual(@as(u32, 96), data.*.glyph_count);
+            try testing.expect(data.*.atlas_rgba != null);
+            return;
+        }
+    }
+    return error.SkipZigTest;
+}
+
+test "destroying a null loader is a no-op" {
+    destroy(null);
+}

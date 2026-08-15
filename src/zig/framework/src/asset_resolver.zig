@@ -1,4 +1,3 @@
-
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -519,4 +518,89 @@ export fn ke_asset_resolver_create(
     s.api.resolve_material_into = vtResolveMaterialInto;
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
+}
+
+const testing = std.testing;
+
+const material_tolerance: f32 = 1e-6;
+
+const MaterialFile = struct {
+    tmp: std.testing.TmpDir,
+    path: [std.fs.max_path_bytes]u8,
+
+    fn init(contents: []const u8) !MaterialFile {
+        var self = MaterialFile{ .tmp = std.testing.tmpDir(.{}), .path = undefined };
+        errdefer self.tmp.cleanup();
+
+        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = "probe.material", .data = contents });
+
+        const joined = try std.fmt.bufPrint(
+            &self.path,
+            ".zig-cache/tmp/{s}/probe.material",
+            .{self.tmp.sub_path},
+        );
+        self.path[joined.len] = 0;
+        return self;
+    }
+
+    fn cPath(self: *const MaterialFile) [*:0]const u8 {
+        return @ptrCast(&self.path);
+    }
+
+    fn deinit(self: *MaterialFile) void {
+        self.tmp.cleanup();
+    }
+};
+
+test "a material file that is not there fails instead of yielding a blank material" {
+    var spec = std.mem.zeroes(c.ke_material_spec);
+    try testing.expect(!parseMaterialFile("/this/does/not/exist.material", &spec));
+}
+
+test "a file without a material section is not a material" {
+    var file = try MaterialFile.init("[other_section]\nfoo = 1\n");
+    defer file.deinit();
+
+    var spec = std.mem.zeroes(c.ke_material_spec);
+    try testing.expect(!parseMaterialFile(file.cPath(), &spec));
+}
+
+test "every authored key reaches the spec it was written for" {
+    var file = try MaterialFile.init(
+        \\[material]
+        \\base_color = [0.8, 0.2, 0.1, 1.0]
+        \\metallic   = 0.7
+        \\roughness  = 0.25
+        \\albedo     = "res://textures/rust.png"
+        \\normal     = "res://textures/rust_n.png"
+        \\
+    );
+    defer file.deinit();
+
+    var spec = std.mem.zeroes(c.ke_material_spec);
+    try testing.expect(parseMaterialFile(file.cPath(), &spec));
+
+    try testing.expectApproxEqAbs(@as(f32, 0.8), spec.base_color[0], material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.2), spec.base_color[1], material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.1), spec.base_color[2], material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), spec.base_color[3], material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.7), spec.metallic, material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.25), spec.roughness, material_tolerance);
+    try testing.expectEqualStrings("res://textures/rust.png", std.mem.sliceTo(&spec.albedo_path, 0));
+    try testing.expectEqualStrings("res://textures/rust_n.png", std.mem.sliceTo(&spec.normal_path, 0));
+}
+
+test "a key the author left out falls back to the default rather than to zero" {
+    var file = try MaterialFile.init("[material]\nmetallic = 1.0\n");
+    defer file.deinit();
+
+    var spec = std.mem.zeroes(c.ke_material_spec);
+    try testing.expect(parseMaterialFile(file.cPath(), &spec));
+
+    try testing.expectApproxEqAbs(@as(f32, 1.0), spec.metallic, material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), spec.base_color[0], material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), spec.base_color[3], material_tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.5), spec.roughness, material_tolerance);
+    try testing.expectEqualStrings("", std.mem.sliceTo(&spec.albedo_path, 0));
+    try testing.expectEqualStrings("", std.mem.sliceTo(&spec.normal_path, 0));
 }

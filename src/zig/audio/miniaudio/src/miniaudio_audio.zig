@@ -220,3 +220,86 @@ export fn ke_audio_miniaudio_create(
     logInfo(state.logger, "miniaudio backend initialized");
     return .{ .ref = api, .destroy = &audioDestroy };
 }
+
+const testing = std.testing;
+
+fn createAudio() c.ke_audio_handle {
+    var params = std.mem.zeroes(c.ke_audio_miniaudio_params);
+    params.logger = null;
+    return ke_audio_miniaudio_create(&params, null);
+}
+
+test "creating the backend yields a usable handle when a device is available" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.destroy != null);
+}
+
+test "creating the backend with null params returns a null handle" {
+    const h = ke_audio_miniaudio_create(null, null);
+    try testing.expect(h.ref == null);
+}
+
+test "loading a sound with a null path returns the invalid sound id" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    const id = h.ref.*.load_sound.?(h.ref, null, null);
+    try testing.expectEqual(@as(c.ke_audio_sound, c.KE_AUDIO_SOUND_INVALID), id);
+}
+
+test "loading a sound from a path that does not exist returns the invalid sound id" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    const id = h.ref.*.load_sound.?(h.ref, "nonexistent.wav", null);
+    try testing.expectEqual(@as(c.ke_audio_sound, c.KE_AUDIO_SOUND_INVALID), id);
+}
+
+test "unloading the invalid sound id is a no-op" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.unload_sound.?(h.ref, c.KE_AUDIO_SOUND_INVALID);
+}
+
+test "stopping through a null backend is a no-op" {
+    audioStop(null, c.KE_AUDIO_SOUND_INVALID);
+}
+
+test "setting the master volume through a null backend is a no-op" {
+    audioSetMasterVolume(null, 1.0);
+}
+
+test "destroying a null backend is a no-op" {
+    audioDestroy(null);
+}
+
+test "playing a sound that was never loaded fails" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    const ok = h.ref.*.play.?(h.ref, 12345, 1.0, 0, null);
+    try testing.expect(!ok);
+}
+
+test "the master volume accepts the full unit range" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.set_master_volume.?(h.ref, 0.5);
+    h.ref.*.set_master_volume.?(h.ref, 0.0);
+    h.ref.*.set_master_volume.?(h.ref, 1.0);
+}
+
+test "playing through a null backend returns false" {
+    const ok = audioPlay(null, c.KE_AUDIO_SOUND_INVALID, 1.0, 0, null);
+    try testing.expect(!ok);
+}

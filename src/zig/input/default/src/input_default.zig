@@ -254,3 +254,191 @@ export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) cal
 
     return .{ .ref = api, .destroy = &inputDestroy };
 }
+
+const testing = std.testing;
+
+test "create returns a usable handle" {
+    const h = ke_input_create(null, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+}
+
+test "destroy tolerates a null input" {
+    const h = ke_input_create(null, null);
+    const destroy_fn = h.destroy.?;
+    destroy_fn(h.ref);
+    destroy_fn(null);
+}
+
+test "destroy releases a live input" {
+    const h = ke_input_create(null, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+}
+
+test "update on a null self returns false" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    try testing.expect(!h.ref.*.update.?(null, null));
+}
+
+test "a key press is visible until the next update" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    _ = h.ref.*.update.?(h.ref, null);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
+    try testing.expect(h.ref.*.is_key_pressed.?(h.ref, 65) != 0);
+}
+
+test "a pressed key appears in the snapshot bitset" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
+
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+    h.ref.*.get_snapshot.?(h.ref, &snapshot);
+
+    const word: usize = 65 / 64;
+    const bit = @as(u64, 1) << (65 % 64);
+    try testing.expect((snapshot.keys_pressed[word] & bit) != 0);
+}
+
+test "mouse motion accumulates a delta within the frame" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_mouse_move.?(h.ref, 100.0, 200.0);
+    _ = h.ref.*.update.?(h.ref, null);
+    h.ref.*.on_mouse_move.?(h.ref, 150.0, 180.0);
+
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+    h.ref.*.get_snapshot.?(h.ref, &snapshot);
+    try testing.expectEqual(@as(f32, 50.0), snapshot.mouse_dx);
+    try testing.expectEqual(@as(f32, -20.0), snapshot.mouse_dy);
+    try testing.expectEqual(@as(f32, 150.0), snapshot.mouse_x);
+    try testing.expectEqual(@as(f32, 180.0), snapshot.mouse_y);
+}
+
+test "a mouse button press shows up as both pressed and down" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    _ = h.ref.*.update.?(h.ref, null);
+    h.ref.*.on_mouse_button.?(h.ref, 0, c.KE_INPUT_ACTION_PRESS);
+
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+    h.ref.*.get_snapshot.?(h.ref, &snapshot);
+    try testing.expect((snapshot.mouse_buttons_pressed & 1) != 0);
+    try testing.expect((snapshot.mouse_buttons_down & 1) != 0);
+}
+
+test "scroll deltas reach the snapshot" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_mouse_scroll.?(h.ref, 1.5, -2.5);
+
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+    h.ref.*.get_snapshot.?(h.ref, &snapshot);
+    try testing.expectEqual(@as(f32, 1.5), snapshot.scroll_dx);
+    try testing.expectEqual(@as(f32, -2.5), snapshot.scroll_dy);
+}
+
+test "draining yields the key events in the order they arrived" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_RELEASE);
+
+    var events = std.mem.zeroes([10]c.ke_input_event);
+    const count = h.ref.*.drain_events.?(h.ref, &events, 10);
+
+    try testing.expectEqual(@as(u32, 2), count);
+    try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_KEY_DOWN), events[0].kind);
+    try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_KEY_UP), events[1].kind);
+}
+
+test "draining never writes past the caller capacity" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
+    h.ref.*.on_key.?(h.ref, 66, c.KE_INPUT_ACTION_PRESS);
+
+    var events = std.mem.zeroes([1]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 1), h.ref.*.drain_events.?(h.ref, &events, 1));
+}
+
+test "an overflowing event queue still drains what it kept" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    for (0..600) |_| {
+        h.ref.*.on_mouse_scroll.?(h.ref, 1, 1);
+    }
+
+    var events = std.mem.zeroes([10]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 10), h.ref.*.drain_events.?(h.ref, &events, 10));
+}
+
+test "a held key stays down across an update while pressed clears" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_key.?(h.ref, 10, c.KE_INPUT_ACTION_PRESS);
+    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10) != 0);
+
+    _ = h.ref.*.update.?(h.ref, null);
+    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10) != 0);
+    try testing.expect(h.ref.*.is_key_pressed.?(h.ref, 10) == 0);
+
+    h.ref.*.on_key.?(h.ref, 10, c.KE_INPUT_ACTION_RELEASE);
+    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10) == 0);
+    try testing.expect(h.ref.*.is_key_released.?(h.ref, 10) != 0);
+}
+
+test "an out of range key code is ignored" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_key.?(h.ref, -1, c.KE_INPUT_ACTION_PRESS);
+    h.ref.*.on_key.?(h.ref, 999, c.KE_INPUT_ACTION_PRESS);
+
+    var events = std.mem.zeroes([4]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 0), h.ref.*.drain_events.?(h.ref, &events, 4));
+}
+
+test "is key down on a null self returns false" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(@as(c.ke_bool, 0), h.ref.*.is_key_down.?(null, 65));
+}
+
+test "is key pressed on a null self returns false" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(@as(c.ke_bool, 0), h.ref.*.is_key_pressed.?(null, 65));
+}
+
+test "is key released on a null self returns false" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(@as(c.ke_bool, 0), h.ref.*.is_key_released.?(null, 65));
+}
+
+test "get snapshot tolerates a null self or a null destination" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.get_snapshot.?(null, null);
+
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+    h.ref.*.get_snapshot.?(null, &snapshot);
+    h.ref.*.get_snapshot.?(h.ref, null);
+}
+
+test "draining with a null self or a null buffer returns zero" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    var events = std.mem.zeroes([1]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 0), h.ref.*.drain_events.?(null, &events, 1));
+    try testing.expectEqual(@as(u32, 0), h.ref.*.drain_events.?(h.ref, null, 1));
+}
+
+test "mouse motion on a null self is ignored" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_mouse_move.?(null, 1, 1);
+}

@@ -1,4 +1,3 @@
-
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -241,14 +240,124 @@ export fn ke_world_create(
     world.get_component_apply = worldGetComponentApply;
 
     const e = params.ecs.?;
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component),
-        apply.ke_framework_apply_transform,
-        &c.ke_transform_component_fields, c.ke_transform_component_fields.len);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component),
-        apply.ke_framework_apply_transform2d,
-        &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component),
-        null, null, 0);
+    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), apply.ke_framework_apply_transform, &c.ke_transform_component_fields, c.ke_transform_component_fields.len);
+    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component), apply.ke_framework_apply_transform2d, &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len);
+    registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), null, null, 0);
 
     return .{ .ref = world, .destroy = worldDestroy };
+}
+
+const testing = std.testing;
+
+const StubEcs = struct {
+    vtable: c.ke_ecs,
+    next_cid: c.ke_component_id,
+    next_entity: c.ke_entity,
+};
+
+fn stubEcsOf(self: ?*c.ke_ecs) *StubEcs {
+    return @ptrCast(@alignCast(self.?.handle));
+}
+
+fn stubComponentLookup(
+    self: ?*c.ke_ecs,
+    name: [*c]const u8,
+    out_meta: [*c]c.ke_component_meta,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    _ = self;
+    _ = name;
+    _ = out_meta;
+    _ = out_error;
+    return false;
+}
+
+fn stubComponentRegister(
+    self: ?*c.ke_ecs,
+    name: [*c]const u8,
+    element_size: usize,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_component_id {
+    _ = name;
+    _ = element_size;
+    _ = out_error;
+    const s = stubEcsOf(self);
+    s.next_cid += 1;
+    return s.next_cid;
+}
+
+fn stubEntityCreate(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
+    const s = stubEcsOf(self);
+    s.next_entity += 1;
+    return s.next_entity;
+}
+
+fn stubEcsInit(s: *StubEcs) void {
+    s.* = std.mem.zeroes(StubEcs);
+    s.vtable.handle = s;
+    s.vtable.component_lookup = stubComponentLookup;
+    s.vtable.component_register = stubComponentRegister;
+    s.vtable.entity_create = stubEntityCreate;
+}
+
+test "a world hands back the ecs and runtime it was built with, and no tree it never got" {
+    var ecs: StubEcs = undefined;
+    stubEcsInit(&ecs);
+    var runtime = std.mem.zeroes(c.ke_runtime);
+
+    var params = std.mem.zeroes(c.ke_world_params);
+    params.ecs = &ecs.vtable;
+    params.runtime = &runtime;
+    params.project_root = "res/";
+
+    const h = ke_world_create(&params, null);
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const w = h.ref.?;
+    try testing.expectEqual(@as(?*c.ke_ecs, &ecs.vtable), w.*.ecs.?(w));
+    try testing.expectEqual(@as(?*c.ke_runtime, &runtime), w.*.runtime.?(w));
+    try testing.expect(w.*.scene_tree.?(w) == null);
+
+    const e = w.*.ecs.?(w).?;
+    try testing.expect(e.*.entity_create.?(e) != c.KE_ENTITY_INVALID);
+}
+
+test "two worlds never share the ecs, and destroying one leaves the other alive" {
+    var ecs_a: StubEcs = undefined;
+    var ecs_b: StubEcs = undefined;
+    stubEcsInit(&ecs_a);
+    stubEcsInit(&ecs_b);
+    var runtime = std.mem.zeroes(c.ke_runtime);
+
+    var pa = std.mem.zeroes(c.ke_world_params);
+    pa.ecs = &ecs_a.vtable;
+    pa.runtime = &runtime;
+    var pb = std.mem.zeroes(c.ke_world_params);
+    pb.ecs = &ecs_b.vtable;
+    pb.runtime = &runtime;
+
+    const ha = ke_world_create(&pa, null);
+    const hb = ke_world_create(&pb, null);
+    try testing.expect(ha.ref != null);
+    try testing.expect(hb.ref != null);
+
+    const wa = ha.ref.?;
+    const wb = hb.ref.?;
+    const ea = wa.*.ecs.?(wa).?;
+    const eb = wb.*.ecs.?(wb).?;
+    try testing.expect(ea != eb);
+
+    const a = ea.*.entity_create.?(ea);
+    const b = eb.*.entity_create.?(eb);
+    try testing.expect(a != c.KE_ENTITY_INVALID);
+    try testing.expect(b != c.KE_ENTITY_INVALID);
+
+    ha.destroy.?(ha.ref);
+
+    const b2 = eb.*.entity_create.?(eb);
+    try testing.expect(b2 != c.KE_ENTITY_INVALID);
+    try testing.expect(b2 != b);
+
+    hb.destroy.?(hb.ref);
 }

@@ -1,4 +1,3 @@
-
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -395,4 +394,170 @@ export fn ke_asset_loader_assimp_create(
     s.api.load_model_async = vtLoadModelAsync;
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
+}
+
+const testing = std.testing;
+
+fn makeLoader() c.ke_asset_loader_handle {
+    var params = std.mem.zeroes(c.ke_asset_loader_assimp_params);
+    params.logger = null;
+    return ke_asset_loader_assimp_create(&params, null);
+}
+
+var box_gltf_buffer: [std.fs.max_path_bytes]u8 = undefined;
+
+const climb_prefixes = [_][]const u8{
+    "",
+    "../",
+    "../../",
+    "../../../",
+    "../../../../",
+    "../../../../../",
+    "../../../../../../",
+    "../../../../../../../",
+};
+
+fn boxGltfPath() ?[:0]const u8 {
+    const cwd = std.Io.Dir.cwd();
+    for (climb_prefixes) |prefix| {
+        const candidate = std.fmt.bufPrintZ(&box_gltf_buffer, "{s}assets/Box.gltf", .{prefix}) catch return null;
+        cwd.access(testing.io, candidate, .{ .read = true }) catch continue;
+        return candidate;
+    }
+    return null;
+}
+
+fn immediateDispatch(self: [*c]c.ke_scheduler, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
+    _ = self;
+    if (func) |f| f(data);
+    return @ptrFromInt(1);
+}
+
+const AsyncResult = struct {
+    done: bool = false,
+    failed: bool = false,
+    loader: ?*c.ke_asset_loader = null,
+};
+
+fn asyncComplete(err: [*c]const c.ke_error, data: ?*c.ke_model_data, user: ?*anyopaque) callconv(.c) void {
+    const result: *AsyncResult = @ptrCast(@alignCast(user orelse return));
+    result.failed = err != null;
+    if (data) |model| {
+        const l = result.loader.?;
+        l.free_model.?(l, model);
+    }
+    result.done = true;
+}
+
+test "creating a loader without params fails" {
+    const h = ke_asset_loader_assimp_create(null, null);
+    try testing.expect(h.ref == null);
+}
+
+test "creating a loader with params yields a usable vtable" {
+    const h = makeLoader();
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+}
+
+test "loading a null path yields no model" {
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref.*.load_model.?(h.ref, null, null) == null);
+}
+
+test "loading a file that does not exist yields no model" {
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref.*.load_model.?(h.ref, "non_existent_file.obj", null) == null);
+}
+
+test "freeing a null model is ignored" {
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.free_model.?(h.ref, null);
+}
+
+test "loading the box fixture yields at least one mesh" {
+    const path = boxGltfPath() orelse return error.SkipZigTest;
+
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    const model = h.ref.*.load_model.?(h.ref, path.ptr, null);
+    try testing.expect(model != null);
+    defer h.ref.*.free_model.?(h.ref, model);
+
+    try testing.expect(model.*.mesh_count > 0);
+}
+
+test "the box fixture carries a material alongside its meshes" {
+    const path = boxGltfPath() orelse return error.SkipZigTest;
+
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    const model = h.ref.*.load_model.?(h.ref, path.ptr, null);
+    try testing.expect(model != null);
+    defer h.ref.*.free_model.?(h.ref, model);
+
+    try testing.expect(model.*.mesh_count > 0);
+    try testing.expect(model.*.material_count > 0);
+}
+
+test "an async load runs to completion on the scheduler it was given" {
+    const path = boxGltfPath() orelse return error.SkipZigTest;
+
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    var scheduler = std.mem.zeroes(c.ke_scheduler);
+    scheduler.dispatch = &immediateDispatch;
+
+    var result = AsyncResult{ .loader = h.ref };
+    const task = h.ref.*.load_model_async.?(h.ref, &scheduler, path.ptr, &asyncComplete, &result);
+
+    try testing.expect(task != null);
+    try testing.expect(result.done);
+    try testing.expect(!result.failed);
+}
+
+test "an async load rejects a missing loader scheduler or path" {
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    var scheduler = std.mem.zeroes(c.ke_scheduler);
+    scheduler.dispatch = &immediateDispatch;
+
+    try testing.expect(h.ref.*.load_model_async.?(null, &scheduler, "test.obj", &asyncComplete, null) == null);
+    try testing.expect(h.ref.*.load_model_async.?(h.ref, null, "test.obj", &asyncComplete, null) == null);
+    try testing.expect(h.ref.*.load_model_async.?(h.ref, &scheduler, null, &asyncComplete, null) == null);
+}
+
+test "an async load rejects a missing completion callback" {
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    var scheduler = std.mem.zeroes(c.ke_scheduler);
+    scheduler.dispatch = &immediateDispatch;
+
+    try testing.expect(h.ref.*.load_model_async.?(h.ref, &scheduler, "test.obj", null, null) == null);
+}
+
+test "a malformed model file yields a model carrying no meshes" {
+    const cwd = std.Io.Dir.cwd();
+    try cwd.writeFile(testing.io, .{ .sub_path = "malformed.obj", .data = "THIS IS NOT VALID OBJ CONTENT\n" });
+    defer cwd.deleteFile(testing.io, "malformed.obj") catch {};
+
+    const h = makeLoader();
+    defer h.destroy.?(h.ref);
+
+    const model = h.ref.*.load_model.?(h.ref, "malformed.obj", null);
+    try testing.expect(model != null);
+    defer h.ref.*.free_model.?(h.ref, model);
+
+    try testing.expectEqual(@as(u32, 0), model.*.mesh_count);
 }

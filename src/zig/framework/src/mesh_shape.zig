@@ -1,4 +1,3 @@
-
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -258,4 +257,83 @@ pub export fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callc
     data.indices = null;
     data.vertex_count = 0;
     data.index_count = 0;
+}
+
+const testing = std.testing;
+
+const tolerance: f32 = 1e-5;
+
+fn bake(prim: c.ke_mesh_primitive, segments: u32) !c.ke_mesh_shape_data {
+    var data = std.mem.zeroes(c.ke_mesh_shape_data);
+    try testing.expect(ke_mesh_shape_bake_internal(prim, segments, &data));
+    return data;
+}
+
+test "a baked quad carries four corners and two triangles" {
+    var data = try bake(c.KE_MESH_PRIMITIVE_QUAD, 0);
+
+    try testing.expectEqual(@as(u32, 4), data.vertex_count);
+    try testing.expectEqual(@as(u32, 6), data.index_count);
+    try testing.expectApproxEqAbs(@as(f32, -0.5), data.vertices[0].x, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, -0.5), data.vertices[0].y, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices[0].z, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), data.vertices[0].nz, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices[0].u, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices[0].v, tolerance);
+
+    ke_mesh_shape_free_internal(&data);
+    try testing.expect(data.vertices == null);
+}
+
+test "a plane faces up while a quad faces the camera" {
+    var data = try bake(c.KE_MESH_PRIMITIVE_PLANE, 0);
+    defer ke_mesh_shape_free_internal(&data);
+
+    try testing.expectApproxEqAbs(@as(f32, 1.0), data.vertices[0].ny, tolerance);
+}
+
+test "a baked cube gives every face its own corners rather than sharing them" {
+    var data = try bake(c.KE_MESH_PRIMITIVE_CUBE, 0);
+    defer ke_mesh_shape_free_internal(&data);
+
+    try testing.expectEqual(@as(u32, 24), data.vertex_count);
+    try testing.expectEqual(@as(u32, 36), data.index_count);
+}
+
+test "a sphere asked for no segments falls back to the default grid" {
+    var data = try bake(c.KE_MESH_PRIMITIVE_SPHERE, 0);
+    defer ke_mesh_shape_free_internal(&data);
+
+    try testing.expectEqual(@as(u32, (16 + 1) * (32 + 1)), data.vertex_count);
+    try testing.expectEqual(@as(u32, 16 * 32 * 6), data.index_count);
+}
+
+test "every vertex of a baked sphere sits on a half-unit radius" {
+    var data = try bake(c.KE_MESH_PRIMITIVE_SPHERE, 0);
+    defer ke_mesh_shape_free_internal(&data);
+
+    for (data.vertices[0..data.vertex_count]) |v| {
+        const r = @sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+        try testing.expectApproxEqAbs(@as(f32, 0.5), r, tolerance);
+    }
+}
+
+test "a sphere asked for one segment is clamped to something bakeable" {
+    var data = try bake(c.KE_MESH_PRIMITIVE_SPHERE, 1);
+    defer ke_mesh_shape_free_internal(&data);
+
+    try testing.expect(data.vertex_count > 0);
+}
+
+test "baking into nowhere fails instead of writing through a null pointer" {
+    try testing.expect(!ke_mesh_shape_bake_internal(c.KE_MESH_PRIMITIVE_QUAD, 0, null));
+}
+
+test "freeing a null or already empty shape is harmless" {
+    ke_mesh_shape_free_internal(null);
+
+    var data = std.mem.zeroes(c.ke_mesh_shape_data);
+    ke_mesh_shape_free_internal(&data);
+
+    try testing.expect(data.vertices == null);
 }

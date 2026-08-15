@@ -50,9 +50,9 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install.step);
 
     const test_step = b.step("test", "Run unit tests");
-    inline for (.{ "src/signal_bus.zig", "src/component_fields_apply.zig", "src/mat4.zig" }) |root| {
+    {
         const test_mod = b.createModule(.{
-            .root_source_file = b.path(root),
+            .root_source_file = b.path("src/framework_root.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,

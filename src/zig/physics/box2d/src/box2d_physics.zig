@@ -1,4 +1,3 @@
-
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -318,4 +317,186 @@ export fn ke_physics_2d_box2d_create(
 
     logInfo(s.logger, "Box2D physics world initialized");
     return .{ .ref = &s.api, .destroy = destroy };
+}
+
+const testing = std.testing;
+
+fn makeWorld(gravity_x: f32, gravity_y: f32) c.ke_physics_2d_handle {
+    var params = std.mem.zeroes(c.ke_physics_2d_box2d_params);
+    params.logger = null;
+    params.gravity_x = gravity_x;
+    params.gravity_y = gravity_y;
+    return ke_physics_2d_box2d_create(&params, null);
+}
+
+test "creating a world yields a usable vtable" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref != null);
+    try testing.expect(h.destroy != null);
+}
+
+test "setting gravity on a fresh world is accepted" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.set_gravity.?(h.ref, 0.0, -10.0);
+}
+
+test "stepping an empty world is accepted" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.step.?(h.ref, 0.016);
+}
+
+test "creating a body returns a handle that is not the invalid sentinel" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(body != c.KE_BODY_2D_INVALID);
+}
+
+test "a box fixture attaches to an existing body" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, body, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.3, 0.1, null));
+}
+
+test "a circle fixture attaches to an existing body" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_circle_fixture.?(h.ref, body, 1.0, 0.0, 0.0, 1.0, 0.3, 0.1, null));
+}
+
+test "a body reports the position it was created at" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 10.0, 20.0, null);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 10.0), state.x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 20.0), state.y, 1e-5);
+}
+
+test "setting a body position moves it and sets its angle" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    h.ref.*.set_body_position.?(h.ref, body, 5.0, 5.0, 0.78);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 5.0), state.x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 5.0), state.y, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 0.78), state.angle, 1e-5);
+}
+
+test "setting a body velocity is readable back before any step" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    h.ref.*.set_body_velocity.?(h.ref, body, 1.0, 2.0);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 1.0), state.velocity_x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 2.0), state.velocity_y, 1e-5);
+}
+
+test "an impulse pushes a body along both axes it was applied on" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, body, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.3, 0.1, null));
+    h.ref.*.apply_impulse.?(h.ref, body, 10.0, 10.0);
+
+    h.ref.*.step.?(h.ref, 0.016);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expect(state.velocity_x > 0.0);
+    try testing.expect(state.velocity_y > 0.0);
+}
+
+test "destroying a body retires its handle" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    h.ref.*.destroy_body.?(h.ref, body);
+
+    var state = c.ke_body_state_2d{
+        .x = 42.0,
+        .y = 42.0,
+        .angle = 42.0,
+        .velocity_x = 42.0,
+        .velocity_y = 42.0,
+        .angular_velocity = 42.0,
+    };
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 0.0), state.x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), state.y, 1e-5);
+}
+
+test "a rotation locked box never picks up spin when it bounces off a wall" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const wall = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_STATIC, 2.0, 0.0, null);
+    try testing.expect(wall != c.KE_BODY_2D_INVALID);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null));
+
+    const ball = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(ball != c.KE_BODY_2D_INVALID);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, ball, 0.18, 0.18, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null));
+    h.ref.*.set_body_fixed_rotation.?(h.ref, ball, true);
+    h.ref.*.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    var i: usize = 0;
+    while (i < 120) : (i += 1) {
+        h.ref.*.step.?(h.ref, 1.0 / 60.0);
+        h.ref.*.get_body_state.?(h.ref, ball, &state);
+        try testing.expectApproxEqAbs(@as(f32, 0.0), state.angular_velocity, 1e-5);
+    }
+
+    try testing.expectApproxEqAbs(@as(f32, 0.0), state.angle, 1e-5);
+    try testing.expect(state.velocity_x < 0.0);
+}
+
+test "a frictionless circle hitting a wall head on does not start spinning" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const wall = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_STATIC, 2.0, 0.0, null);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null));
+
+    const ball = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_circle_fixture.?(h.ref, ball, 0.18, 0.0, 0.0, 1.0, 0.0, 1.0, null));
+    h.ref.*.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    var i: usize = 0;
+    while (i < 120) : (i += 1) {
+        h.ref.*.step.?(h.ref, 1.0 / 60.0);
+        h.ref.*.get_body_state.?(h.ref, ball, &state);
+        try testing.expectApproxEqAbs(@as(f32, 0.0), state.angular_velocity, 1e-3);
+    }
 }

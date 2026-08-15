@@ -118,3 +118,85 @@ export fn ke_image_loader_stb_create(
 
     return .{ .ref = loader, .destroy = &destroy };
 }
+
+const testing = std.testing;
+
+const testing_libc = @cImport({
+    @cInclude("stdio.h");
+});
+
+fn createLoader() c.ke_image_loader_handle {
+    var params = std.mem.zeroes(c.ke_image_loader_stb_params);
+    return ke_image_loader_stb_create(&params, null);
+}
+
+test "creating the loader wires up a handle with every vtable slot filled" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref.*.handle != null);
+    try testing.expect(h.destroy != null);
+    try testing.expect(h.ref.*.load_image != null);
+}
+
+test "creating the loader with null params returns a null handle" {
+    const h = ke_image_loader_stb_create(null, null);
+    try testing.expect(h.ref == null);
+}
+
+test "loading an image with a null loader or a null path fails" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref.*.load_image.?(null, "path", null) == null);
+    try testing.expect(h.ref.*.load_image.?(h.ref, null, null) == null);
+}
+
+test "freeing a null image is a no-op" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.free_image.?(h.ref, null);
+    h.ref.*.free_image.?(null, null);
+}
+
+test "loading a one pixel targa yields its dimensions and pixels" {
+    const tga = [_]u8{
+        0,   0,   2,  0,   0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0,
+        255, 128, 64, 255,
+    };
+
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var dir_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const dir_len = try tmp.dir.realPath(testing.io, &dir_buf);
+    const dir_path = dir_buf[0..dir_len];
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(&path_buf, "{s}/test_image.tga", .{dir_path});
+
+    const fp = testing_libc.fopen(path.ptr, "wb") orelse return error.FixtureWriteFailed;
+    const written = testing_libc.fwrite(&tga, 1, tga.len, fp);
+    _ = testing_libc.fclose(fp);
+    try testing.expectEqual(@as(usize, tga.len), written);
+
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const data = h.ref.*.load_image.?(h.ref, path.ptr, null);
+    try testing.expect(data != null);
+    defer h.ref.*.free_image.?(h.ref, data);
+
+    try testing.expectEqual(@as(u32, 1), data.*.width);
+    try testing.expectEqual(@as(u32, 1), data.*.height);
+    try testing.expect(data.*.pixels != null);
+}
+
+test "destroying a null loader is a no-op" {
+    destroy(null);
+}

@@ -43,4 +43,31 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/miniaudio_audio.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_self, miniaudio_include }) |inc| {
+        test_mod.addIncludePath(.{ .cwd_relative = inc });
+    }
+    test_mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
+    test_mod.addRPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
+    test_mod.linkSystemLibrary("ke_resource_cache_default", .{});
+    if (target.result.os.tag == .windows) {
+        test_mod.linkSystemLibrary("winmm", .{});
+    }
+    test_mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
+    test_mod.addCMacro("KE_AUDIO_MINIAUDIO_EXPORT", "");
+
+    const unit_tests = b.addTest(.{ .root_module = test_mod });
+    const run_tests = b.addRunArtifact(unit_tests);
+    b.step("test", "Run the miniaudio audio unit tests").dependOn(&run_tests.step);
 }
