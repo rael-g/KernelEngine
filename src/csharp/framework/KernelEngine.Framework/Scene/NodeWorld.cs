@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
@@ -97,11 +97,6 @@ public sealed class NodeWorld
     /// <summary>
     /// Reports a borrow that named no node and found more than one of its type.
     /// </summary>
-    /// <remarks>
-    /// Picking the first would make which node a behavior drives depend on the order
-    /// the scene declared its children — the borrow resolves to something, and the
-    /// wrong thing moves. Naming both candidates says what a NodeName would settle.
-    /// </remarks>
     internal void ReportAmbiguousBorrow(Node owner, string kind, string typeName, string first, string second)
     {
         if (_logger is null) return;

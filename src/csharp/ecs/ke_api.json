@@ -34,7 +34,7 @@
           "name": "default_value",
           "type": "ke_variant",
           "tags": [],
-          "doc": "What the field holds when nobody says otherwise, straight from the header that declares it. KE_VARIANT_NULL means the declaration named none, and zero stands. Carried here rather than left to each language\u0027s own node constructor, because a component a scene creates has no node: without this, authoring one field of a block zeroes every other."
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
         }
       ]
     },

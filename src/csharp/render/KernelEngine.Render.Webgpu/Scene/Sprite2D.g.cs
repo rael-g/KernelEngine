@@ -7,7 +7,7 @@ using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A textured quad in the plane. Everything that makes one sprite differ from another lives here rather than in a mesh a scene happened to author beside it: which image, which rectangle of it, how big, around what point, and mirrored on which axis. The native "render.sprite2d.resolve" system turns that into the geometry and material the render passes already consume, so a sprite is a node with data in every language instead of a name for a quad.</summary>
+/// <summary>A textured quad in the plane, resolved into geometry and a material by the "render.sprite2d.resolve" system.</summary>
 [GeneratedNodeComponent(typeof(ke_sprite2d_component), "sprite2d")]
 public partial class Sprite2D : Node2D
 {

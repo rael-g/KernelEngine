@@ -54,8 +54,7 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
     return core.upload_mesh.?(core, key.ptr, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
 }
 
-/// Uploads the image the sprite names, once. Deduped by path inside the resolver,
-/// but the handle is kept so a steady scene stops asking at all.
+/// Uploads the image the sprite names, once.
 fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
     if (c.ke_texture_is_valid(sp.texture_handle)) return sp.texture_handle;

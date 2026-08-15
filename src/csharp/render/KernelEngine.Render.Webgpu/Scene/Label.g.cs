@@ -20,7 +20,7 @@ public partial class Label : Node3D
         _generatedState0.color[3] = 1f;
     }
 
-    /// <summary>Font file to draw with. Baked and registered by the native "render.label.resolve" system, which is what lets a scene name a font instead of a host handing the label a handle only its language holds.</summary>
+    /// <summary>Font file to draw with, baked by the "render.label.resolve" system.</summary>
     [NativeField("font", Component = typeof(ke_label_component))]
     public partial string Font { get; set; }
 

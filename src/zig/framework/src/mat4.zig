@@ -48,8 +48,7 @@ pub fn fromTransform(
     };
 }
 
-/// Composes a 2D pose into the same row-major affine matrix a 3D one produces:
-/// rotation is about Z, and depth is the Z the plane sits at.
+/// Composes a 2D pose into a row-major affine matrix, rotating about Z.
 pub fn fromTransform2d(
     out: *c.ke_mat4,
     pos: *const c.ke_vec2,

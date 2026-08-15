@@ -15,12 +15,10 @@ extern "C"
 #define KE_HANDLE_INDEX_MASK      ((1u << KE_HANDLE_INDEX_BITS) - 1u)
 #define KE_HANDLE_GENERATION_MASK ((1u << KE_HANDLE_GENERATION_BITS) - 1u)
 
-    /// Lowest generation a live handle can carry. Generation 0 is reserved so no
-    /// live handle is ever all-bits-zero.
+    /// Lowest generation a live handle carries; 0 is reserved.
 #define KE_HANDLE_GENERATION_FIRST 1u
 
-    /// The invalid handle: all bits zero, which is what uninitialized memory
-    /// already holds.
+    /// The invalid handle.
 #define KE_HANDLE_NONE 0u
 
     static inline uint32_t ke_handle_index(uint32_t bits)

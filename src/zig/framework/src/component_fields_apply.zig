@@ -28,9 +28,7 @@ fn asBool(v: *const c.ke_variant) ?bool {
     };
 }
 
-/// A vec4 out of anything narrower, filling w with 1: a color authored as three
-/// components means opaque, which is the only reading that leaves the field
-/// usable rather than fully transparent.
+/// A vec4 out of anything narrower, filling w with 1.
 fn asVec4(v: *const c.ke_variant) ?c.ke_vec4 {
     return switch (v.type) {
         c.KE_VARIANT_VEC4 => v.unnamed_0.v4,
@@ -40,9 +38,7 @@ fn asVec4(v: *const c.ke_variant) ?c.ke_vec4 {
     };
 }
 
-/// A vec3 out of anything narrower, filling z with 0. A field where 0 is the
-/// wrong fill (a scale, where it collapses the object) is the domain callback's
-/// to correct afterwards.
+/// A vec3 out of anything narrower, filling z with 0.
 fn asVec3(v: *const c.ke_variant) ?c.ke_vec3 {
     return switch (v.type) {
         c.KE_VARIANT_VEC3 => v.unnamed_0.v3,
@@ -122,9 +118,8 @@ fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
     return std.mem.eql(u8, std.mem.span(key), std.mem.span(name));
 }
 
-/// Applies every entry the table describes. Entries are scanned per field
-/// rather than the reverse so a duplicated key resolves the same way a
-/// hand-written apply resolved it: the last one authored wins.
+/// Applies every entry the table describes; a duplicated key resolves to the
+/// last one authored.
 pub fn apply(
     component: ?*anyopaque,
     entries: [*c]c.ke_variant_table_entry,
@@ -145,13 +140,7 @@ pub fn apply(
     }
 }
 
-/// Writes every field's declared default into a component that has none yet.
-///
-/// A component a scene creates has no node behind it to run a constructor, so
-/// without this a block that authors one field leaves every other at zero — a
-/// roughness of 0 where the header says 1. Seeding through the same writeField
-/// the authored path uses means a default and a value can never disagree about
-/// what the field's type accepts.
+/// Writes every field's declared default into a component.
 pub fn seedDefaults(
     component: ?*anyopaque,
     fields: [*]const c.ke_component_field,
@@ -184,8 +173,6 @@ const probe_fields = [_]c.ke_component_field{
     .{ .name = "label", .type = c.KE_VARIANT_STRING, .offset = @offsetOf(Probe, "label"), .size = 8 },
 };
 
-/// Copies into a mutable buffer because apply marks each entry it takes, and a
-/// test's literal list is const.
 fn applyTo(p: *Probe, list: []const c.ke_variant_table_entry) void {
     var buf: [8]c.ke_variant_table_entry = undefined;
     @memcpy(buf[0..list.len], list);

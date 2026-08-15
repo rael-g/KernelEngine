@@ -7,13 +7,11 @@ const std = @import("std");
 pub const State = struct {
     core: *c.ke_render_service,
     ui: *c.ke_render_ui,
-    /// Borrowed, optional: null where the host wired no font loader, and a label
-    /// naming a file then draws nothing rather than failing a frame.
+    /// Borrowed, optional.
     resolver: ?*c.ke_asset_resolver,
 };
 
-/// The bake is keyed by every parameter that changes its pixels, so the same
-/// file at another size is a different atlas rather than a silent reuse.
+/// Bakes and registers the font, keyed by every parameter of the bake.
 fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     const resolver = st.resolver orelse return c.KE_UI_FONT_NONE;
 

@@ -238,11 +238,7 @@ fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
     log(world, c.KE_LOG_LEVEL_WARNING, fmt, args);
 }
 
-/// Loading a scene is synchronous, so a scene that cannot be honoured is a
-/// failure, not a log line. A block naming a component nobody registered, a
-/// block shape that was retired, or a connection that resolves to nothing all
-/// mean the file says something the engine will not do — and a game that starts
-/// anyway looks right until the exact moment it matters.
+/// Reports a structural fault and fails the load.
 fn structural(
     world: *c.ke_world,
     out_error: [*c][*c]c.ke_error,
@@ -311,15 +307,11 @@ fn applyComponentBlock(
 }
 
 /// Whether a table under `[[entity]]` describes something other than a component.
-///
-/// `connect` is a relation between two entities, not a field of one.
 fn reservedBlock(key: [*c]const u8) bool {
     return std.mem.eql(u8, std.mem.span(key), "connect");
 }
 
-/// A block shape that no longer exists, and what to write instead. Named rather
-/// than left to the unknown-component path so an author is told the answer, not
-/// just that something is wrong.
+/// A retired block shape, and what to write instead.
 fn retiredBlock(key: [*c]const u8) ?[]const u8 {
     const k = std.mem.span(key);
     if (std.mem.eql(u8, k, "components")) return "write [entity.<component>] directly";
@@ -327,9 +319,7 @@ fn retiredBlock(key: [*c]const u8) ?[]const u8 {
     return null;
 }
 
-/// Components the scene tree owns. A scene authoring one would be writing the
-/// graph's own bookkeeping — entity ids it cannot know, or a name the entity's
-/// own `name` key already sets.
+/// Components the scene tree owns, which a scene may not author.
 fn internalComponent(key: [*c]const u8) bool {
     const k = std.mem.span(key);
     return std.mem.eql(u8, k, c.KE_COMPONENT_NAME_NAME) or
@@ -337,11 +327,6 @@ fn internalComponent(key: [*c]const u8) bool {
 }
 
 /// Applies every `[entity.<component_name>]` block on one table.
-///
-/// One shape for every component, the entity's own transform included: a scene
-/// addresses a component by the name it is registered under, and nothing else.
-/// The entity's identity keys (`name`, `parent`, `type`, `scene`) are scalars, so
-/// they are not tables and never reach here.
 fn applyComponentBlocks(
     s: *State,
     entity: c.ke_entity,
@@ -371,9 +356,8 @@ fn applyComponentBlocks(
 /// Resolved in a pass after every entity in the file exists, because a listener
 /// is as often declared below the emitter as above it, and requiring one order
 /// would make the wiring depend on file layout rather than on what it says.
-/// A connection that resolves to nothing fails the load: a wire nobody made
-/// looks exactly like a listener that never reacts, and only one of the two is
-/// something the author can see.
+/// Wires the connect blocks one entity declares. A connection that resolves to
+/// nothing fails the load.
 fn applyConnections(
     s: *State,
     source: c.ke_entity,

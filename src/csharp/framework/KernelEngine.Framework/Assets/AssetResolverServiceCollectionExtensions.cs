@@ -8,15 +8,8 @@ namespace KernelEngine.Framework;
 /// an uploaded GPU handle.
 /// </summary>
 /// <remarks>
-/// The host adds it, and only a host that wants file-backed assets pays for it. It is
-/// not folded into any other module on purpose: which loader decodes an image belongs
-/// to the asset domain, and a render or framework module that created one for you
-/// would be choosing on your behalf and coupling itself to a domain it only consumes.
-/// <para>
-/// The loaders are read from the container when present, so
-/// <c>AddStbImageLoader()</c> before this is what gives it images to decode. Without
-/// them the resolver still exists and simply resolves nothing.
-/// </para>
+/// The loaders are read from the container when present; without them the resolver
+/// resolves nothing.
 /// </remarks>
 public static class AssetResolverServiceCollectionExtensions
 {

@@ -7,7 +7,7 @@ using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Per-entity authored 2D pose. A node placed in a plane says so: it carries two axes and one angle, and can no longer be handed a quaternion or a third scale axis by accident. Depth is where the plane sits along Z — the same axis the depth test and the transparent sort read, so two blended sprites order by an authored value instead of by storage order.</summary>
+/// <summary>An entity's authored 2D pose, read and written as one unit.</summary>
 [GeneratedNodeComponent(typeof(ke_transform2d_component), "transform2d")]
 public partial class Node2D : Node
 {
@@ -19,13 +19,14 @@ public partial class Node2D : Node
     [NativeField("position", Component = typeof(ke_transform2d_component))]
     public partial Vector2 Position { get; set; }
 
-    /// <summary>Radians, CCW positive. A scene authors degrees, as it does in 3D.</summary>
+    /// <summary>Radians, CCW positive; a scene authors degrees.</summary>
     [NativeField("rotation", Component = typeof(ke_transform2d_component))]
     public partial float Rotation { get; set; }
 
     [NativeField("scale", Component = typeof(ke_transform2d_component))]
     public partial Vector2 Scale { get; set; }
 
+    /// <summary>Where the plane sits along Z.</summary>
     [NativeField("depth", Component = typeof(ke_transform2d_component))]
     public partial float Depth { get; set; }
 }

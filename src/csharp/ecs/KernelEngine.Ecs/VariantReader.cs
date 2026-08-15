@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 
@@ -31,13 +31,7 @@ public ref struct VariantReader
     /// <summary>
     /// Whether <paramref name="key"/> names this entry, marking it taken when it does.
     /// </summary>
-    /// <remarks>
-    /// The loader reports every entry nothing claimed as a field the component does
-    /// not have, which is how a mistyped key stops being a value that quietly never
-    /// arrives. The claim is on the key alone: a key this reader recognises but whose
-    /// value it cannot use is a different complaint, and reporting it as unknown
-    /// would name the wrong problem.
-    /// </remarks>
+    /// <remarks>The claim is on the key alone, whatever the value's type.</remarks>
     private static unsafe bool Claims(ref ke_variant_table_entry e, string key)
     {
         if (!KeyEquals(e.key, key)) return false;

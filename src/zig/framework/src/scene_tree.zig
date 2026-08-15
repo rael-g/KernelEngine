@@ -79,13 +79,8 @@ fn vtRoot(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_entity {
     return stateOf(self).root;
 }
 
-/// Attaches the scene-graph components to an already-created (or reserved)
-/// entity, populates them, and prepends it into the parent's child list. No
-/// authored pose is among them: in how many dimensions a node is placed, or
-/// whether it is placed at all, is the node type's declaration. Only valid where
-/// structural changes are legal: outside a wave, or at the wave barrier via the
-/// deferred callback. Destroys the entity and returns false if any component add
-/// fails.
+/// Attaches the scene-graph components to an entity and prepends it into its
+/// parent's child list. Valid only where structural changes are legal.
 fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) bool {
     if (s.ecs.component_add.?(s.ecs, entity, s.world_transform_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.hierarchy_cid) == null or

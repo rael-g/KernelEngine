@@ -1,4 +1,4 @@
-﻿using KernelEngine.Ecs;
+using KernelEngine.Ecs;
 
 
 namespace KernelEngine.Framework;
@@ -156,12 +156,7 @@ public abstract class Node
     /// Resolves a <see cref="Child{T}"/> borrow. Called by generated dispatch each
     /// tick rather than cached, so a borrow can never outlive the node it points at.
     /// </summary>
-    /// <remarks>
-    /// An empty <paramref name="name"/> resolves by type, which is what a borrow
-    /// declaring one child of a type means. A name is only needed to tell two
-    /// children of the same type apart, and asking for one where there is nothing to
-    /// disambiguate made every borrow carry an attribute for nothing.
-    /// </remarks>
+    /// <remarks>An empty <paramref name="name"/> resolves by type.</remarks>
     protected internal Child<T> BorrowChild<T>(string name) where T : Node
     {
         T? found = null;

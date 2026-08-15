@@ -82,11 +82,6 @@ public static class CBackend
     /// Renders a field's <c>[default:]</c> as an initializer for the table's
     /// ke_variant, or the null variant when the header declares none.
     /// </summary>
-    /// <remarks>
-    /// The variant's type is the field's own, so seeding runs through the same
-    /// coercions an authored value does — one path, not a second one that could
-    /// disagree about what a vec2 means in a vec3 field.
-    /// </remarks>
     private static string DefaultOf(ApiModel model, ApiField f)
     {
         var d = f.TagValue("default");
