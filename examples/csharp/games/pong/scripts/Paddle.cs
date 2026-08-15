@@ -6,8 +6,7 @@ namespace Pong;
 
 /// <summary>
 /// Kinematic paddle driven by input. Composes <see cref="Body2D"/>, so movement is a
-/// write to <c>Velocity</c> and the physics plugin advances it. MoveAction comes from
-/// the ECS PaddleComponent the scene loader applies.
+/// write to <c>Velocity</c> and the physics plugin advances it.
 /// </summary>
 public sealed partial class Paddle : Body2D
 {
@@ -16,8 +15,8 @@ public sealed partial class Paddle : Body2D
 
     private readonly IInputActionMap<PongAction> _actions;
 
-    private PongAction _moveAction;
-    private bool       _moveActionResolved;
+    /// <summary>Which action moves this paddle. Authored per instance in the scene.</summary>
+    public partial PongAction MoveAction { get; set; }
 
     public Paddle(IInputActionMap<PongAction> actions)
     {
@@ -27,14 +26,7 @@ public sealed partial class Paddle : Body2D
 
     void Update(in View view)
     {
-        if (!_moveActionResolved)
-        {
-            _moveActionResolved = true;
-            if (TryGetComponent<PaddleComponent>("paddle", out var comp))
-                _moveAction = comp.MoveAction;
-        }
-
-        float vy = _actions.GetAxis1D(_moveAction, in view) * Speed;
+        float vy = _actions.GetAxis1D(MoveAction, in view) * Speed;
 
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
         if (vy > 0 && Position.Y >=  maxY) vy = 0;
