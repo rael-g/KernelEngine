@@ -7,6 +7,12 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <RootNamespace>Pong</RootNamespace>
+    <!-- A game written against this engine is half generated: a node's ECS
+         accessors, its component, the scene names. Writing that to disk is how
+         someone reads what their own node turned into, instead of taking the
+         generator's word for it. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
