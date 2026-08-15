@@ -1,49 +1,18 @@
 const std = @import("std");
 
-// The engine's build orchestrator, replacing CMake. vcpkg (manifest mode,
-// vcpkg.json + vcpkg-configuration.json at repo root) is invoked directly —
-// no CMake toolchain file involved, confirmed to work standalone. Every
-// engine plugin already builds itself via its own build.zig (a leftover of
-// the CMake-driven "zig build" custom commands); this file's job is purely
-// to invoke each one, in dependency order, with a shared --prefix so every
-// .so converges into one output/lib directory and every consumer needs only
-// one rpath entry to find them all.
-//
-// Scope note: this currently wires the non-render plugin chain (everything
-// through ke_framework/ke_window_glfw/asset+audio+text backends/box2d) plus
-// one example end to end. The render pipeline (ke_gpu_device_webgpu + the 11
-// render/* modules, which also drive Slang/GLSL shader generation) and the
-// remaining examples/tests are follow-up work — see docs/RuntimeArchitectureV2.md
-// for what's tracked.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const debug = optimize == .Debug;
 
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
-    // Forwarded only to the two GTest suites (system clang++-built): they're
-    // the only native binaries whose linker (system, not Zig's own) can
-    // handle Clang's profiling-runtime relocations. See tests/c/kernel/build.zig.
     const coverage = b.option(bool, "coverage", "instrument the GTest suites for Clang source-based coverage") orelse false;
 
-    // vcpkg dependencies build with `zig cc`/`zig c++`
-    // (vcpkg-triplets/x64-{windows,linux}-zig.cmake) instead of the system
-    // toolchain — no Visual Studio/SDK or system C/C++ toolchain required.
     const triplet = switch (target.result.os.tag) {
         .windows => "x64-windows-zig",
         else => "x64-linux-zig",
     };
 
-    // ── vcpkg (fetched, not a system dependency) ─────────────────────────────
-    // vcpkg itself is a small orchestrator binary (microsoft/vcpkg-tool) plus
-    // the scripts/triplets it needs to run standalone (the "standalone
-    // bundle" release asset) — fetched the same way wgpu-native/Slang are.
-    // Port recipes and the C/C++ library sources they build are resolved by
-    // vcpkg itself at install time via its git registry (vcpkg-configuration.json),
-    // same as any vcpkg install; that isn't something a build-time fetch can
-    // shortcut. `-Dvcpkg-root=`/`$VCPKG_ROOT` still override this for anyone
-    // who already has vcpkg installed.
     const vcpkg_tool_version = "2026-07-13";
     const vcpkg_dir_default = b.pathJoin(&.{ root, ".cache", b.fmt("vcpkg-{s}", .{vcpkg_tool_version}) });
     const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
@@ -62,7 +31,6 @@ pub fn build(b: *std.Build) void {
         ),
     });
 
-    // ── vcpkg (manifest mode) ────────────────────────────────────────────────
     const vcpkg_installed = b.pathJoin(&.{ root, "vcpkg_installed_zig" });
     const vcpkg_overlay_triplets = b.pathJoin(&.{ root, "vcpkg-triplets" });
     var vcpkg_install_args: std.ArrayList([]const u8) = .empty;
@@ -81,29 +49,16 @@ pub fn build(b: *std.Build) void {
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
     const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
     const vcpkg_lib = if (debug) b.pathJoin(&.{ vcpkg_installed, triplet, "debug", "lib" }) else vcpkg_lib_release;
-    // gtest/gmock's *_main archives live one level down, under manual-link —
-    // needed once tests join this build.
-    // const vcpkg_manual_link = b.pathJoin(&.{ vcpkg_lib, "manual-link" });
 
-    // ── shared paths ─────────────────────────────────────────────────────────
     const src_c = b.pathJoin(&.{ root, "src/c" });
     const src_zig = b.pathJoin(&.{ root, "src/zig" });
     const kerror_src = b.pathJoin(&.{ src_zig, "common/kerror.zig" });
-    // Single shared tomlc99 copy, consumed by every plugin that parses TOML
-    // (ke_framework, ke_configuration_toml).
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
-    // Absolute, always: each plugin's `zig build` runs with its OWN directory
-    // as cwd, so a relative --prefix here would resolve against the wrong
-    // place there.
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
     else
         b.pathJoin(&.{ root, b.install_prefix });
 
-    // ── Slang toolchain (fetched, not a system dependency) ──────────────────
-    // slangc is a standalone shader-slang/slang release — no Vulkan SDK
-    // linkage — fetched the same way wgpu-native is: a direct release archive
-    // download, cached under .cache/, no system package or PATH entry needed.
     const slang_version = "2025.17.2";
     const slang_url_name = switch (target.result.os.tag) {
         .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
@@ -132,7 +87,6 @@ pub fn build(b: *std.Build) void {
         .slang_step = &slang_fetch.step,
     };
 
-    // ── kernel built-ins ─────────────────────────────────────────────────────
     const common = ctx.plugin("ke_common", "src/zig/common", &.{}, &.{});
 
     const logger_simple = ctx.plugin("ke_logger_simple", "src/zig/logger/simple", &.{
@@ -242,9 +196,6 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
     }, &.{});
 
-    // vcpkg's zlib/minizip ports name their static archives "z"/"minizip" on
-    // x64-linux but "zs"/"minizips" under our x64-windows-zig triplet (port
-    // CMakeLists quirk, not something this build controls).
     const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
         b.pathJoin(&.{ vcpkg_lib, if (debug) "libassimpd.a" else "libassimp.a" }),
@@ -282,12 +233,6 @@ pub fn build(b: *std.Build) void {
         argF(b, "tomlc99-dir", tomlc99_dir),
     }, &.{&common.step});
 
-    // ── WebGPU backend ───────────────────────────────────────────────────────
-    // CMake fetched this through eliemichel/WebGPU-distribution, a wrapper
-    // repo whose only job (for our config) is to download the same prebuilt
-    // wgpu-native release archive this fetches directly — cutting out a git
-    // clone of a whole wrapper project to reach one URL its own CMake was
-    // going to build anyway.
     const wgpu_version = "v24.0.3.1";
     const wgpu_url_name = switch (target.result.os.tag) {
         .windows => "wgpu-windows-x86_64-msvc-release",
@@ -320,9 +265,6 @@ pub fn build(b: *std.Build) void {
         argF(b, "wgpu-lib", wgpu_lib_dir),
     }, &.{ &common.step, &wgpu_fetch.step });
 
-    // wgpu-native is linked dynamically: every consumer needs its .so beside
-    // them at runtime. Copied into the shared lib dir once, here, rather than
-    // every consumer computing its own rpath into the .cache tree.
     const wgpu_copy = b.addSystemCommand(&.{
         "cp", "-f",
         b.pathJoin(&.{ wgpu_lib_dir, wgpu_native_filename }),
@@ -330,7 +272,6 @@ pub fn build(b: *std.Build) void {
     });
     wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
 
-    // ── render pipeline: 6 standalone passes (plain slang, no material system) ─
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
@@ -433,14 +374,6 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step });
 
-    // ── render pipeline: material-system passes (gbuffer, forward) ──────────
-    // Every authored material × this pass, the cartesian product each pass
-    // would otherwise have to hardcode. Mirrors cmake/CompileMaterialShaders.cmake's
-    // ke_compile_material_shaders: glob every KE_MATERIALS_DIRS directory
-    // (engine defaults + a downstream example's own materials tree, proving a
-    // game can author materials without touching engine source), generate a
-    // per-(material,pass) wrapper via generate_material_wrapper.cs, then
-    // compile it the same way any other pass shader compiles.
     const materials_dirs = [_][]const u8{
         b.pathJoin(&.{ shader_lib_dir, "materials" }),
         b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" }),
@@ -485,12 +418,6 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &runtime.step });
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
-    // ke_render_service: the forward-renderer aggregator. Its @embedFile of the
-    // magenta fallback shader means those two WGSL files must exist on disk
-    // BEFORE core's own `zig build` starts — a harder ordering constraint than
-    // a normal link dependency, so the compile steps are threaded into core's
-    // deps explicitly rather than relying on the shared shaders_out directory
-    // existing by coincidence.
     const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
     const magenta_slang = b.pathJoin(&.{ src_zig, "render/service/shaders/magenta.slang" });
     const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{});
@@ -545,10 +472,6 @@ pub fn build(b: *std.Build) void {
         &deferred_lighting.step, &forward.step,
     });
 
-    // Every plugin is an independent `zig build` process invocation, not a
-    // real Zig module dependency — nothing here transitively pulls the others
-    // in, so the default install step must list every one explicitly (unlike
-    // a normal Zig dependency graph, where depending on the leaf would do it).
     const all_plugins = [_]*std.Build.Step.Run{
         render_module,   common,            logger_simple,       ecs_flecs,
         input_default,
@@ -564,13 +487,6 @@ pub fn build(b: *std.Build) void {
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
 
-    // Windows has no rpath equivalent: a consumer .exe in bin/ won't find its
-    // dependency .dlls sitting in a sibling lib/ the way a Linux binary finds
-    // its .so via -rpath. Every plugin still installs to lib/ (matching Linux,
-    // and matching where the .lib import libraries the link step needs live),
-    // so the fix is a straight copy of the built .dlls into bin/ once, here —
-    // matching the "C# expects native libraries at build/native/bin/" contract
-    // CLAUDE.md already documents for the managed side.
     if (target.result.os.tag == .windows) {
         const copy_dlls_to_bin = b.addSystemCommand(&.{
             "sh", "-c",
@@ -582,8 +498,6 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&copy_dlls_to_bin.step);
     }
 
-    // ── GTest suites (system C++ compiler — Zig's own libc++ is ABI-incompatible
-    // with vcpkg's libstdc++-built GTest archives) ──────────────────────────────
     const gtest_include = vcpkg_include;
     const gtest_a = b.pathJoin(&.{ vcpkg_lib, "libgtest.a" });
     const gtest_main_a = b.pathJoin(&.{ vcpkg_lib, "manual-link", "libgtest_main.a" });
@@ -730,14 +644,6 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&test_ke_kernel.step);
     b.getInstallStep().dependOn(&test_integration_cpp.step);
 
-    // ── C examples ───────────────────────────────────────────────────────────
-    // Every example's own build.zig hardcodes exe name "demo" installed to its
-    // own prefix's bin/ — fine in isolation, but a shared --prefix across all
-    // of them would make every later example overwrite the previous one's
-    // binary. Each example instead builds into its own private sub-prefix,
-    // then gets copied into the shared bin/ under its own c_demo_NN name —
-    // the same two-path pattern CMake used to dodge the IMPORTED_LOCATION
-    // collision bug, applied here to dodge an install-path collision instead.
     const demo01 = ctx.example("c_demo_01", "examples/c/01_minimal_log", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "logger" }),
@@ -749,13 +655,8 @@ pub fn build(b: *std.Build) void {
     const demo_step = b.step("demo01", "Build examples/c/01_minimal_log with zero CMake involved");
     demo_step.dependOn(&demo01.step);
 
-    // ── remaining C examples ────────────────────────────────────────────────
     const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
 
-    // glslangValidator (unlike compile_slang.cs) never creates its own output
-    // directory — it just fails with "Failed to open file" the first time
-    // zig-out doesn't exist yet, so every glslang-driven example's shader dir
-    // is created up front, mirroring CMake's file(MAKE_DIRECTORY ...) calls.
     {
         var threaded: std.Io.Threaded = .init(b.allocator, .{});
         defer threaded.deinit();
@@ -971,15 +872,6 @@ const Ctx = struct {
     prefix: []const u8,
     release_flag: []const u8,
     vcpkg_step: *std.Build.Step,
-    // Forwarded to every sub-`zig build` invocation. Some plugins pin
-    // `.default_target = .{ .abi = .gnu }` themselves (ke_common and other
-    // "pure-logic" built-ins); most don't, including every example and test
-    // binary. Left unset, Zig's native-target resolution picks the msvc ABI
-    // on Windows even with no MSVC installed — a mix of gnu-ABI plugin DLLs
-    // and an msvc-ABI host .exe fails to load at runtime (STATUS_DLL_NOT_FOUND
-    // on a UCRT forwarder). Forcing the same target everywhere, from the one
-    // place that already knows the triplet story, is simpler than auditing
-    // every sub-build.zig for a consistent default.
     target_arg: []const u8,
     slangc_exe: []const u8,
     slang_step: *std.Build.Step,
