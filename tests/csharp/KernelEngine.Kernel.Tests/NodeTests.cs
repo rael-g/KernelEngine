@@ -1,9 +1,20 @@
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using KernelEngine.Framework;
 using Xunit;
 
 namespace EngineTests;
+
+/// <summary>
+/// A node whose text property declares how much it holds. The capacity is part of the
+/// component's ABI, so it is the node's to state and the engine's to enforce.
+/// </summary>
+public sealed partial class TextProbe : Node
+{
+    [NodeText(8)]
+    public partial string Title { get; set; }
+}
 
 public class NodeTests
 {
@@ -76,6 +87,23 @@ public class NodeTests
             CollectBehaviorComponents(into);
             return into;
         }
+    }
+
+    [Fact]
+    public void TextThatFitsRoundTrips()
+    {
+        var probe = new TextProbe { Title = "abcdefg" };
+        Assert.Equal("abcdefg", probe.Title);
+    }
+
+    [Fact]
+    public void TextTooLongIsRefused_NotTruncated()
+    {
+        // Truncating would store a path that opens nothing, and the failure would
+        // surface far from the assignment that caused it.
+        var probe = new TextProbe();
+        var ex = Assert.Throws<ArgumentException>(() => probe.Title = "abcdefgh");
+        Assert.Contains("Title", ex.Message);
     }
 
     [Fact]

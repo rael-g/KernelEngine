@@ -106,9 +106,20 @@ public unsafe partial class World : IDisposable
 
         internal unsafe void Invoke(void* comp, ke_variant_table_entry* entries, uint count)
         {
-            var reader    = new VariantReader(entries, count);
-            ref var typed = ref *(T*)comp;
-            _callback(ref typed, in reader);
+            try
+            {
+                var reader    = new VariantReader(entries, count);
+                ref var typed = ref *(T*)comp;
+                _callback(ref typed, in reader);
+            }
+            catch (Exception ex)
+            {
+                // The caller is native. An exception thrown across those frames is
+                // undefined behaviour, so it is parked and rethrown by the load that
+                // caused it — a value the component cannot hold is a scene error,
+                // and the author has to hear it.
+                SceneLoader.ParkException(ex);
+            }
         }
     }
 }

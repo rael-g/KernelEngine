@@ -113,10 +113,22 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         if (!isNative && !slots.IsEmpty)
         {
+            // A string is stored as a fixed UTF-8 buffer, not a managed reference: the
+            // component has to be plain memory for a language other than this one to
+            // read it at all. Its capacity is the node author's call — see NodeText.
+            foreach (var p in properties.Where(p => p.Type.SpecialType == SpecialType.System_String))
+            {
+                sb.AppendLine($"    [global::System.Runtime.CompilerServices.InlineArray({TextCapacityOf(p)})]");
+                sb.AppendLine($"    private struct {p.Name}Buffer {{ private byte _first; }}");
+                sb.AppendLine();
+            }
+
             sb.AppendLine($"    private struct {slots[0].TypeName}");
             sb.AppendLine("    {");
             foreach (var p in properties)
-                sb.AppendLine($"        public {p.Type.ToDisplayString()} {p.Name};");
+                sb.AppendLine(p.Type.SpecialType == SpecialType.System_String
+                    ? $"        public {p.Name}Buffer {p.Name};"
+                    : $"        public {p.Type.ToDisplayString()} {p.Name};");
             sb.AppendLine("    }");
             sb.AppendLine();
         }
@@ -266,6 +278,28 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             // A `char[N]` component field projected as a string. The buffer's own
             // capacity is the truncation point — it is the component's ABI, so the
             // property cannot widen it, only refuse to overflow it.
+            // A game type's component has no C header behind it, so the buffer that
+            // makes a string storable is generated here, sized by the node's author.
+            if (p.Type.SpecialType == SpecialType.System_String && !isNative)
+            {
+                needsUtf8Helpers = true;
+                sb.AppendLine($"    public partial string {p.Name}");
+                sb.AppendLine("    {");
+                sb.AppendLine("        get");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            var s = {slot.Current}();");
+                sb.AppendLine($"            return GeneratedUtf8Get(ref s.{p.Name});");
+                sb.AppendLine("        }");
+                sb.AppendLine("        set");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            var s = {slot.Current}();");
+                sb.AppendLine($"            GeneratedUtf8Set(ref s.{p.Name}, value, \"{p.Name}\");");
+                sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
+                sb.AppendLine("        }");
+                sb.AppendLine("    }");
+                continue;
+            }
+
             if (p.Type.SpecialType == SpecialType.System_String && isFixedBuffer)
             {
                 needsUtf8Helpers = true;
@@ -279,7 +313,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine("        set");
                 sb.AppendLine("        {");
                 sb.AppendLine($"            var s = {slot.Current}();");
-                sb.AppendLine($"            GeneratedUtf8Set(ref s.{fieldName}, value);");
+                sb.AppendLine($"            GeneratedUtf8Set(ref s.{fieldName}, value, \"{p.Name}\");");
                 sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
                 sb.AppendLine("        }");
                 sb.AppendLine("    }");
@@ -337,15 +371,21 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine("        return global::System.Text.Encoding.UTF8.GetString(nul < 0 ? bytes : bytes.Slice(0, nul));");
             sb.AppendLine("    }");
             sb.AppendLine();
-            sb.AppendLine("    private static void GeneratedUtf8Set<TBuf>(ref TBuf buffer, string value) where TBuf : struct");
+            // Refuses rather than truncates. The buffer's capacity is the component's
+            // ABI, so a value that does not fit is a fact the caller has to hear now: a
+            // silently shortened path is a file that fails to open much later, pointing
+            // at nothing that explains it.
+            sb.AppendLine("    private static void GeneratedUtf8Set<TBuf>(ref TBuf buffer, string value, string property) where TBuf : struct");
             sb.AppendLine("    {");
             sb.AppendLine("        var bytes = global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(");
             sb.AppendLine("            global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref buffer, 1));");
+            sb.AppendLine("        var text = value ?? string.Empty;");
+            sb.AppendLine("        var needed = global::System.Text.Encoding.UTF8.GetByteCount(text);");
+            sb.AppendLine("        if (needed > bytes.Length - 1)");
+            sb.AppendLine("            throw new global::System.ArgumentException(");
+            sb.AppendLine("                $\"{property} holds {bytes.Length - 1} bytes of UTF-8, and the value needs {needed}.\", property);");
             sb.AppendLine("        bytes.Clear();");
-            // Encoder.Convert truncates at a character boundary instead of throwing
-            // or splitting a multi-byte sequence; the cleared tail leaves the NUL.
-            sb.AppendLine("        global::System.Text.Encoding.UTF8.GetEncoder().Convert(");
-            sb.AppendLine("            (value ?? string.Empty).AsSpan(), bytes.Slice(0, bytes.Length - 1), true, out _, out _, out _);");
+            sb.AppendLine("        global::System.Text.Encoding.UTF8.GetBytes(text.AsSpan(), bytes);");
             sb.AppendLine("    }");
         }
 
@@ -386,6 +426,24 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
 
+
+    /// <summary>
+    /// Bytes of UTF-8 a string property stores, from its <c>[NodeText]</c> or the
+    /// default when it declares none.
+    /// </summary>
+    /// <remarks>
+    /// The default exists so a node that never thought about it still works; it is not a
+    /// ceiling anyone is stuck with, because exceeding it throws and names the attribute
+    /// that raises it rather than truncating.
+    /// </remarks>
+    const int DefaultTextCapacity = 128;
+
+    static int TextCapacityOf(IPropertySymbol p)
+    {
+        var attr = p.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeTextAttribute");
+        if (attr is null || attr.ConstructorArguments.Length == 0) return DefaultTextCapacity;
+        return attr.ConstructorArguments[0].Value is int n && n > 1 ? n : DefaultTextCapacity;
+    }
 
     /// <summary>The name a scene file addresses this node's own component by.</summary>
     /// <remarks>
@@ -444,9 +502,18 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"                comp.{p.Name} = e_{key};");
                 continue;
             }
+            // A string lands in the property's fixed buffer through the same checked
+            // writer the setter uses, so a scene authoring a value too long for the
+            // component fails the load instead of storing a truncated one.
+            if (t.SpecialType == SpecialType.System_String)
+            {
+                sb.AppendLine($"            if (reader.TryGetString(\"{key}\", out var v_{key}))");
+                sb.AppendLine($"                GeneratedUtf8Set(ref comp.{p.Name}, v_{key} ?? string.Empty, \"{p.Name}\");");
+                continue;
+            }
+
             var read = t.ToDisplayString() switch
             {
-                "string" or "string?" => $"reader.TryGetString(\"{key}\", out var v_{key})",
                 "float" or "double" => $"reader.TryGetFloat(\"{key}\", out var v_{key})",
                 "bool" => $"reader.TryGetBool(\"{key}\", out var v_{key})",
                 "int" or "uint" or "long" or "short" or "byte" => $"reader.TryGetInt(\"{key}\", out var v_{key})",

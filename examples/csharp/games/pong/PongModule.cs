@@ -31,18 +31,6 @@ public sealed class PongModule : IRuntimeModule
 
         Paddle.RegisterSceneApply(world, ecs);
 
-        var scoreboardCid = ecs.RegisterComponent<ScoreboardComponent>("scoreboard");
-        world.RegisterComponentApply(scoreboardCid, static (ref ScoreboardComponent comp, in VariantReader reader) =>
-        {
-            if (reader.TryGetString("font_path", out var path) && !string.IsNullOrEmpty(path))
-            {
-                var bytes = System.Text.Encoding.UTF8.GetBytes(path!);
-                var dst   = (Span<byte>)comp.FontPath;
-                var n     = Math.Min(bytes.Length, dst.Length - 1);
-                bytes.AsSpan(0, n).CopyTo(dst);
-                dst[n] = 0;
-            }
-            if (reader.TryGetFloat("font_size", out var size) && size > 0f) comp.FontSize = size;
-        });
+        Scoreboard.RegisterSceneApply(world, ecs);
     }
 }

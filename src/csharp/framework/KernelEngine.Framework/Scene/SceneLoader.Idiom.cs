@@ -42,6 +42,16 @@ public unsafe partial class SceneLoader
     private static Exception? s_pendingException;
 
     /// <summary>
+    /// Holds an exception raised inside a callback the native loader invoked, to be
+    /// rethrown by <c>Load</c> once the native stack has unwound.
+    /// </summary>
+    /// <remarks>
+    /// Letting it propagate through native frames is undefined behaviour, and swallowing
+    /// it turns a scene the engine could not honour into a game that starts anyway.
+    /// </remarks>
+    internal static void ParkException(Exception ex) => s_pendingException ??= ex;
+
+    /// <summary>
     /// Creates a native scene loader bound to <paramref name="world"/>.
     /// </summary>
     /// <param name="world">The world into which entities are loaded.</param>
