@@ -227,6 +227,31 @@ alpha_mode = "blend"
     EXPECT_FALSE(sp->attached);
 }
 
+TEST_F(SceneLoaderTest, PartialBlock_LeavesTheHeaderDefaultStanding)
+{
+    // The bug this covers: a block authoring one field used to zero every other,
+    // so a mesh with only a color came out with roughness 0 where the header
+    // declares 1 — deterministic, invisible, and wrong.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Partial"
+[entity.mesh]
+color = [1.0, 0.0, 0.0, 1.0]
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Partial", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "mesh", &meta, nullptr));
+    auto *m = (ke_mesh_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(m, nullptr);
+    EXPECT_FLOAT_EQ(m->base_color.x, 1.0f);
+    EXPECT_FLOAT_EQ(m->roughness, 1.0f);
+    EXPECT_FLOAT_EQ(m->ior, 1.5f);
+    EXPECT_FLOAT_EQ(m->alpha_cutoff, 0.5f);
+}
+
 // ── [entity.X] via apply registry ──────────────────────────────
 
 TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)

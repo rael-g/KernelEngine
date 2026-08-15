@@ -161,6 +161,25 @@ pub fn apply(
     }
 }
 
+/// Writes every field's declared default into a component that has none yet.
+///
+/// A component a scene creates has no node behind it to run a constructor, so
+/// without this a block that authors one field leaves every other at zero — a
+/// roughness of 0 where the header says 1. Seeding through the same writeField
+/// the authored path uses means a default and a value can never disagree about
+/// what the field's type accepts.
+pub fn seedDefaults(
+    component: ?*anyopaque,
+    fields: [*]const c.ke_component_field,
+    field_count: u32,
+) void {
+    const base: [*]u8 = @ptrCast(component orelse return);
+    for (fields[0..field_count]) |*field| {
+        if (field.default_value.type == c.KE_VARIANT_NULL) continue;
+        writeField(base, field, &field.default_value);
+    }
+}
+
 // -- tests -------------------------------------------------------------------
 
 const testing = std.testing;
@@ -193,6 +212,35 @@ fn vFloat(f: f64) c.ke_variant {
 
 fn vInt(i: i64) c.ke_variant {
     return .{ .type = c.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
+}
+
+const seeded_fields = [_]c.ke_component_field{
+    .{ .name = "amount", .type = c.KE_VARIANT_FLOAT, .offset = @offsetOf(Probe, "amount"), .size = 4, .default_value = vFloat(1.0) },
+    .{ .name = "tint", .type = c.KE_VARIANT_VEC4, .offset = @offsetOf(Probe, "tint"), .size = 16, .default_value = .{ .type = c.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = 1, .y = 1, .z = 1, .w = 1 } } } },
+    .{ .name = "count", .type = c.KE_VARIANT_INT, .offset = @offsetOf(Probe, "count"), .size = 4 },
+};
+
+test "a field the header gives a default starts there, not at zero" {
+    var p = std.mem.zeroes(Probe);
+    seedDefaults(&p, &seeded_fields, seeded_fields.len);
+
+    try testing.expectEqual(@as(f32, 1.0), p.amount);
+    try testing.expectEqual(@as(f32, 1.0), p.tint.w);
+    // Declared without one: zero stands, and nothing invented a default for it.
+    try testing.expectEqual(@as(i32, 0), p.count);
+}
+
+test "an authored value overrides the default it was seeded with" {
+    var p = std.mem.zeroes(Probe);
+    seedDefaults(&p, &seeded_fields, seeded_fields.len);
+    apply(&p, &[_]c.ke_variant_table_entry{
+        .{ .key = "amount", .value = vFloat(0.25) },
+    }, 1, &seeded_fields, seeded_fields.len);
+
+    try testing.expectEqual(@as(f32, 0.25), p.amount);
+    // And a field the block never mentions keeps the default rather than being
+    // reset by the block's arrival.
+    try testing.expectEqual(@as(f32, 1.0), p.tint.w);
 }
 
 test "writes each described field at its own offset" {

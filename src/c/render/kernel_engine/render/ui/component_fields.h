@@ -7,23 +7,23 @@
 #include <stddef.h>
 
 static const ke_component_field ke_ui_quad_component_fields[] = {
-    { "texture_bits", KE_VARIANT_INT, offsetof(ke_ui_quad_component, texture_bits), sizeof(((ke_ui_quad_component *)0)->texture_bits) },
-    { "dst_x", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_x), sizeof(((ke_ui_quad_component *)0)->dst_x) },
-    { "dst_y", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_y), sizeof(((ke_ui_quad_component *)0)->dst_y) },
-    { "dst_w", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_w), sizeof(((ke_ui_quad_component *)0)->dst_w) },
-    { "dst_h", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_h), sizeof(((ke_ui_quad_component *)0)->dst_h) },
-    { "u0", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, u0), sizeof(((ke_ui_quad_component *)0)->u0) },
-    { "v0", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, v0), sizeof(((ke_ui_quad_component *)0)->v0) },
-    { "u1", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, u1), sizeof(((ke_ui_quad_component *)0)->u1) },
-    { "v1", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, v1), sizeof(((ke_ui_quad_component *)0)->v1) },
-    { "color", KE_VARIANT_VEC4, offsetof(ke_ui_quad_component, color), sizeof(((ke_ui_quad_component *)0)->color) },
+    { "texture_bits", KE_VARIANT_INT, offsetof(ke_ui_quad_component, texture_bits), sizeof(((ke_ui_quad_component *)0)->texture_bits), { KE_VARIANT_NULL, { 0 } } },
+    { "dst_x", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_x), sizeof(((ke_ui_quad_component *)0)->dst_x), { KE_VARIANT_NULL, { 0 } } },
+    { "dst_y", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_y), sizeof(((ke_ui_quad_component *)0)->dst_y), { KE_VARIANT_NULL, { 0 } } },
+    { "dst_w", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_w), sizeof(((ke_ui_quad_component *)0)->dst_w), { KE_VARIANT_NULL, { 0 } } },
+    { "dst_h", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_h), sizeof(((ke_ui_quad_component *)0)->dst_h), { KE_VARIANT_NULL, { 0 } } },
+    { "u0", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, u0), sizeof(((ke_ui_quad_component *)0)->u0), { KE_VARIANT_NULL, { 0 } } },
+    { "v0", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, v0), sizeof(((ke_ui_quad_component *)0)->v0), { KE_VARIANT_NULL, { 0 } } },
+    { "u1", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, u1), sizeof(((ke_ui_quad_component *)0)->u1), { KE_VARIANT_NULL, { 0 } } },
+    { "v1", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, v1), sizeof(((ke_ui_quad_component *)0)->v1), { KE_VARIANT_NULL, { 0 } } },
+    { "color", KE_VARIANT_VEC4, offsetof(ke_ui_quad_component, color), sizeof(((ke_ui_quad_component *)0)->color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } } },
 };
 
 static const ke_component_field ke_label_component_fields[] = {
-    { "anchor", KE_VARIANT_VEC2, offsetof(ke_label_component, anchor), sizeof(((ke_label_component *)0)->anchor) },
-    { "offset", KE_VARIANT_VEC2, offsetof(ke_label_component, offset), sizeof(((ke_label_component *)0)->offset) },
-    { "color", KE_VARIANT_VEC4, offsetof(ke_label_component, color), sizeof(((ke_label_component *)0)->color) },
-    { "text", KE_VARIANT_STRING, offsetof(ke_label_component, text), sizeof(((ke_label_component *)0)->text) },
+    { "anchor", KE_VARIANT_VEC2, offsetof(ke_label_component, anchor), sizeof(((ke_label_component *)0)->anchor), { KE_VARIANT_NULL, { 0 } } },
+    { "offset", KE_VARIANT_VEC2, offsetof(ke_label_component, offset), sizeof(((ke_label_component *)0)->offset), { KE_VARIANT_NULL, { 0 } } },
+    { "color", KE_VARIANT_VEC4, offsetof(ke_label_component, color), sizeof(((ke_label_component *)0)->color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } } },
+    { "text", KE_VARIANT_STRING, offsetof(ke_label_component, text), sizeof(((ke_label_component *)0)->text), { KE_VARIANT_NULL, { 0 } } },
 };
 
 #endif /* KERNEL_ENGINE_RENDER_UI_COMPONENT_FIELDS_H_ */

@@ -14,4 +14,6 @@ public unsafe partial struct ke_component_field
 
     [NativeTypeName("uint32_t")]
     public uint size;
+
+    public ke_variant default_value;
 }

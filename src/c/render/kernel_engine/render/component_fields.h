@@ -7,60 +7,60 @@
 #include <stddef.h>
 
 static const ke_component_field ke_camera_component_fields[] = {
-    { "fov", KE_VARIANT_FLOAT, offsetof(ke_camera_component, fov), sizeof(((ke_camera_component *)0)->fov) },
-    { "near_plane", KE_VARIANT_FLOAT, offsetof(ke_camera_component, near_plane), sizeof(((ke_camera_component *)0)->near_plane) },
-    { "far_plane", KE_VARIANT_FLOAT, offsetof(ke_camera_component, far_plane), sizeof(((ke_camera_component *)0)->far_plane) },
-    { "orthographic_size", KE_VARIANT_FLOAT, offsetof(ke_camera_component, orthographic_size), sizeof(((ke_camera_component *)0)->orthographic_size) },
-    { "orthographic", KE_VARIANT_BOOL, offsetof(ke_camera_component, orthographic), sizeof(((ke_camera_component *)0)->orthographic) },
+    { "fov", KE_VARIANT_FLOAT, offsetof(ke_camera_component, fov), sizeof(((ke_camera_component *)0)->fov), { KE_VARIANT_FLOAT, { .f = 60.0 } } },
+    { "near_plane", KE_VARIANT_FLOAT, offsetof(ke_camera_component, near_plane), sizeof(((ke_camera_component *)0)->near_plane), { KE_VARIANT_FLOAT, { .f = 0.1 } } },
+    { "far_plane", KE_VARIANT_FLOAT, offsetof(ke_camera_component, far_plane), sizeof(((ke_camera_component *)0)->far_plane), { KE_VARIANT_FLOAT, { .f = 1000.0 } } },
+    { "orthographic_size", KE_VARIANT_FLOAT, offsetof(ke_camera_component, orthographic_size), sizeof(((ke_camera_component *)0)->orthographic_size), { KE_VARIANT_FLOAT, { .f = 5.0 } } },
+    { "orthographic", KE_VARIANT_BOOL, offsetof(ke_camera_component, orthographic), sizeof(((ke_camera_component *)0)->orthographic), { KE_VARIANT_NULL, { 0 } } },
 };
 
 static const ke_component_field ke_directional_light_component_fields[] = {
-    { "direction", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, direction), sizeof(((ke_directional_light_component *)0)->direction) },
-    { "color", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, color), sizeof(((ke_directional_light_component *)0)->color) },
-    { "intensity", KE_VARIANT_FLOAT, offsetof(ke_directional_light_component, intensity), sizeof(((ke_directional_light_component *)0)->intensity) },
-    { "ambient", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, ambient), sizeof(((ke_directional_light_component *)0)->ambient) },
+    { "direction", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, direction), sizeof(((ke_directional_light_component *)0)->direction), { KE_VARIANT_VEC3, { .v3 = { 0.2f, 1.0f, 0.5f } } } },
+    { "color", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, color), sizeof(((ke_directional_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } } },
+    { "intensity", KE_VARIANT_FLOAT, offsetof(ke_directional_light_component, intensity), sizeof(((ke_directional_light_component *)0)->intensity), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
+    { "ambient", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, ambient), sizeof(((ke_directional_light_component *)0)->ambient), { KE_VARIANT_VEC3, { .v3 = { 0.2f, 0.2f, 0.2f } } } },
 };
 
 static const ke_component_field ke_point_light_component_fields[] = {
-    { "color", KE_VARIANT_VEC3, offsetof(ke_point_light_component, color), sizeof(((ke_point_light_component *)0)->color) },
-    { "intensity", KE_VARIANT_FLOAT, offsetof(ke_point_light_component, intensity), sizeof(((ke_point_light_component *)0)->intensity) },
-    { "radius", KE_VARIANT_FLOAT, offsetof(ke_point_light_component, radius), sizeof(((ke_point_light_component *)0)->radius) },
+    { "color", KE_VARIANT_VEC3, offsetof(ke_point_light_component, color), sizeof(((ke_point_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } } },
+    { "intensity", KE_VARIANT_FLOAT, offsetof(ke_point_light_component, intensity), sizeof(((ke_point_light_component *)0)->intensity), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
+    { "radius", KE_VARIANT_FLOAT, offsetof(ke_point_light_component, radius), sizeof(((ke_point_light_component *)0)->radius), { KE_VARIANT_FLOAT, { .f = 10.0 } } },
 };
 
 static const ke_component_field ke_spot_light_component_fields[] = {
-    { "direction", KE_VARIANT_VEC3, offsetof(ke_spot_light_component, direction), sizeof(((ke_spot_light_component *)0)->direction) },
-    { "color", KE_VARIANT_VEC3, offsetof(ke_spot_light_component, color), sizeof(((ke_spot_light_component *)0)->color) },
-    { "intensity", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, intensity), sizeof(((ke_spot_light_component *)0)->intensity) },
-    { "range", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, range), sizeof(((ke_spot_light_component *)0)->range) },
-    { "inner_angle", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, inner_angle), sizeof(((ke_spot_light_component *)0)->inner_angle) },
-    { "outer_angle", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, outer_angle), sizeof(((ke_spot_light_component *)0)->outer_angle) },
+    { "direction", KE_VARIANT_VEC3, offsetof(ke_spot_light_component, direction), sizeof(((ke_spot_light_component *)0)->direction), { KE_VARIANT_VEC3, { .v3 = { 0.0f, -1.0f, 0.0f } } } },
+    { "color", KE_VARIANT_VEC3, offsetof(ke_spot_light_component, color), sizeof(((ke_spot_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } } },
+    { "intensity", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, intensity), sizeof(((ke_spot_light_component *)0)->intensity), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
+    { "range", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, range), sizeof(((ke_spot_light_component *)0)->range), { KE_VARIANT_FLOAT, { .f = 20.0 } } },
+    { "inner_angle", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, inner_angle), sizeof(((ke_spot_light_component *)0)->inner_angle), { KE_VARIANT_FLOAT, { .f = 25.0 } } },
+    { "outer_angle", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, outer_angle), sizeof(((ke_spot_light_component *)0)->outer_angle), { KE_VARIANT_FLOAT, { .f = 35.0 } } },
 };
 
 static const ke_component_field ke_ambient_light_component_fields[] = {
-    { "color", KE_VARIANT_VEC3, offsetof(ke_ambient_light_component, color), sizeof(((ke_ambient_light_component *)0)->color) },
+    { "color", KE_VARIANT_VEC3, offsetof(ke_ambient_light_component, color), sizeof(((ke_ambient_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 0.05f, 0.05f, 0.05f } } } },
 };
 
 static const ke_component_field ke_mesh_component_fields[] = {
-    { "mesh", KE_VARIANT_STRING, offsetof(ke_mesh_component, primitive), sizeof(((ke_mesh_component *)0)->primitive) },
-    { "color", KE_VARIANT_VEC4, offsetof(ke_mesh_component, base_color), sizeof(((ke_mesh_component *)0)->base_color) },
-    { "roughness", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, roughness), sizeof(((ke_mesh_component *)0)->roughness) },
-    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_mesh_component, alpha_mode), sizeof(((ke_mesh_component *)0)->alpha_mode) },
-    { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, alpha_cutoff), sizeof(((ke_mesh_component *)0)->alpha_cutoff) },
-    { "ior", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, ior), sizeof(((ke_mesh_component *)0)->ior) },
-    { "distortion_strength", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, distortion_strength), sizeof(((ke_mesh_component *)0)->distortion_strength) },
+    { "mesh", KE_VARIANT_STRING, offsetof(ke_mesh_component, primitive), sizeof(((ke_mesh_component *)0)->primitive), { KE_VARIANT_NULL, { 0 } } },
+    { "color", KE_VARIANT_VEC4, offsetof(ke_mesh_component, base_color), sizeof(((ke_mesh_component *)0)->base_color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } } },
+    { "roughness", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, roughness), sizeof(((ke_mesh_component *)0)->roughness), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
+    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_mesh_component, alpha_mode), sizeof(((ke_mesh_component *)0)->alpha_mode), { KE_VARIANT_NULL, { 0 } } },
+    { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, alpha_cutoff), sizeof(((ke_mesh_component *)0)->alpha_cutoff), { KE_VARIANT_FLOAT, { .f = 0.5 } } },
+    { "ior", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, ior), sizeof(((ke_mesh_component *)0)->ior), { KE_VARIANT_FLOAT, { .f = 1.5 } } },
+    { "distortion_strength", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, distortion_strength), sizeof(((ke_mesh_component *)0)->distortion_strength), { KE_VARIANT_FLOAT, { .f = 0.05 } } },
 };
 
 static const ke_component_field ke_sprite2d_component_fields[] = {
-    { "texture", KE_VARIANT_STRING, offsetof(ke_sprite2d_component, texture), sizeof(((ke_sprite2d_component *)0)->texture) },
-    { "region", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, region), sizeof(((ke_sprite2d_component *)0)->region) },
-    { "size", KE_VARIANT_VEC2, offsetof(ke_sprite2d_component, size), sizeof(((ke_sprite2d_component *)0)->size) },
-    { "pivot", KE_VARIANT_VEC2, offsetof(ke_sprite2d_component, pivot), sizeof(((ke_sprite2d_component *)0)->pivot) },
-    { "flip_h", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_h), sizeof(((ke_sprite2d_component *)0)->flip_h) },
-    { "flip_v", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_v), sizeof(((ke_sprite2d_component *)0)->flip_v) },
-    { "color", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, color), sizeof(((ke_sprite2d_component *)0)->color) },
-    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_sprite2d_component, alpha_mode), sizeof(((ke_sprite2d_component *)0)->alpha_mode) },
-    { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_sprite2d_component, alpha_cutoff), sizeof(((ke_sprite2d_component *)0)->alpha_cutoff) },
-    { "attached", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, attached), sizeof(((ke_sprite2d_component *)0)->attached) },
+    { "texture", KE_VARIANT_STRING, offsetof(ke_sprite2d_component, texture), sizeof(((ke_sprite2d_component *)0)->texture), { KE_VARIANT_NULL, { 0 } } },
+    { "region", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, region), sizeof(((ke_sprite2d_component *)0)->region), { KE_VARIANT_VEC4, { .v4 = { 0.0f, 0.0f, 1.0f, 1.0f } } } },
+    { "size", KE_VARIANT_VEC2, offsetof(ke_sprite2d_component, size), sizeof(((ke_sprite2d_component *)0)->size), { KE_VARIANT_VEC2, { .v2 = { 1.0f, 1.0f } } } },
+    { "pivot", KE_VARIANT_VEC2, offsetof(ke_sprite2d_component, pivot), sizeof(((ke_sprite2d_component *)0)->pivot), { KE_VARIANT_VEC2, { .v2 = { 0.5f, 0.5f } } } },
+    { "flip_h", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_h), sizeof(((ke_sprite2d_component *)0)->flip_h), { KE_VARIANT_NULL, { 0 } } },
+    { "flip_v", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_v), sizeof(((ke_sprite2d_component *)0)->flip_v), { KE_VARIANT_NULL, { 0 } } },
+    { "color", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, color), sizeof(((ke_sprite2d_component *)0)->color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } } },
+    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_sprite2d_component, alpha_mode), sizeof(((ke_sprite2d_component *)0)->alpha_mode), { KE_VARIANT_NULL, { 0 } } },
+    { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_sprite2d_component, alpha_cutoff), sizeof(((ke_sprite2d_component *)0)->alpha_cutoff), { KE_VARIANT_FLOAT, { .f = 0.5 } } },
+    { "attached", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, attached), sizeof(((ke_sprite2d_component *)0)->attached), { KE_VARIANT_NULL, { 0 } } },
 };
 
 #endif /* KERNEL_ENGINE_RENDER_COMPONENT_FIELDS_H_ */

@@ -7,23 +7,23 @@
 #include <stddef.h>
 
 static const ke_component_field ke_body2d_component_fields[] = {
-    { "type", KE_VARIANT_INT, offsetof(ke_body2d_component, type), sizeof(((ke_body2d_component *)0)->type) },
-    { "position", KE_VARIANT_VEC2, offsetof(ke_body2d_component, position), sizeof(((ke_body2d_component *)0)->position) },
-    { "angle", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, angle), sizeof(((ke_body2d_component *)0)->angle) },
-    { "velocity", KE_VARIANT_VEC2, offsetof(ke_body2d_component, velocity), sizeof(((ke_body2d_component *)0)->velocity) },
-    { "angular_velocity", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, angular_velocity), sizeof(((ke_body2d_component *)0)->angular_velocity) },
-    { "gravity_scale", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, gravity_scale), sizeof(((ke_body2d_component *)0)->gravity_scale) },
-    { "fixed_rotation", KE_VARIANT_BOOL, offsetof(ke_body2d_component, fixed_rotation), sizeof(((ke_body2d_component *)0)->fixed_rotation) },
+    { "type", KE_VARIANT_INT, offsetof(ke_body2d_component, type), sizeof(((ke_body2d_component *)0)->type), { KE_VARIANT_NULL, { 0 } } },
+    { "position", KE_VARIANT_VEC2, offsetof(ke_body2d_component, position), sizeof(((ke_body2d_component *)0)->position), { KE_VARIANT_NULL, { 0 } } },
+    { "angle", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, angle), sizeof(((ke_body2d_component *)0)->angle), { KE_VARIANT_NULL, { 0 } } },
+    { "velocity", KE_VARIANT_VEC2, offsetof(ke_body2d_component, velocity), sizeof(((ke_body2d_component *)0)->velocity), { KE_VARIANT_NULL, { 0 } } },
+    { "angular_velocity", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, angular_velocity), sizeof(((ke_body2d_component *)0)->angular_velocity), { KE_VARIANT_NULL, { 0 } } },
+    { "gravity_scale", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, gravity_scale), sizeof(((ke_body2d_component *)0)->gravity_scale), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
+    { "fixed_rotation", KE_VARIANT_BOOL, offsetof(ke_body2d_component, fixed_rotation), sizeof(((ke_body2d_component *)0)->fixed_rotation), { KE_VARIANT_NULL, { 0 } } },
 };
 
 static const ke_component_field ke_collider2d_component_fields[] = {
-    { "kind", KE_VARIANT_INT, offsetof(ke_collider2d_component, kind), sizeof(((ke_collider2d_component *)0)->kind) },
-    { "half_extents", KE_VARIANT_VEC2, offsetof(ke_collider2d_component, half_extents), sizeof(((ke_collider2d_component *)0)->half_extents) },
-    { "radius", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, radius), sizeof(((ke_collider2d_component *)0)->radius) },
-    { "density", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, density), sizeof(((ke_collider2d_component *)0)->density) },
-    { "friction", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, friction), sizeof(((ke_collider2d_component *)0)->friction) },
-    { "restitution", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, restitution), sizeof(((ke_collider2d_component *)0)->restitution) },
-    { "attached", KE_VARIANT_BOOL, offsetof(ke_collider2d_component, attached), sizeof(((ke_collider2d_component *)0)->attached) },
+    { "kind", KE_VARIANT_INT, offsetof(ke_collider2d_component, kind), sizeof(((ke_collider2d_component *)0)->kind), { KE_VARIANT_NULL, { 0 } } },
+    { "half_extents", KE_VARIANT_VEC2, offsetof(ke_collider2d_component, half_extents), sizeof(((ke_collider2d_component *)0)->half_extents), { KE_VARIANT_VEC2, { .v2 = { 0.5f, 0.5f } } } },
+    { "radius", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, radius), sizeof(((ke_collider2d_component *)0)->radius), { KE_VARIANT_FLOAT, { .f = 0.5 } } },
+    { "density", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, density), sizeof(((ke_collider2d_component *)0)->density), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
+    { "friction", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, friction), sizeof(((ke_collider2d_component *)0)->friction), { KE_VARIANT_FLOAT, { .f = 0.3 } } },
+    { "restitution", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, restitution), sizeof(((ke_collider2d_component *)0)->restitution), { KE_VARIANT_NULL, { 0 } } },
+    { "attached", KE_VARIANT_BOOL, offsetof(ke_collider2d_component, attached), sizeof(((ke_collider2d_component *)0)->attached), { KE_VARIANT_NULL, { 0 } } },
 };
 
 #endif /* KERNEL_ENGINE_PHYSICS_COMPONENT_FIELDS_H_ */

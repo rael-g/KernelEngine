@@ -338,6 +338,10 @@ fn applyComponentBlock(
     if (existing == null) {
         const bytes: [*]u8 = @ptrCast(comp);
         @memset(bytes[0..meta.size], 0);
+        // Zero is not what the header said the field holds. A component born of a
+        // scene block has no node behind it to run a constructor, so the table's
+        // declared defaults are the only ones it will ever get.
+        if (fields) |f| fields_apply.seedDefaults(comp, f, field_count);
     }
 
     // Entries come from the arena rather than a fixed stack buffer, so a

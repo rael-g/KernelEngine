@@ -50,7 +50,8 @@ public static class CBackend
             sb.AppendLine($"static const ke_component_field {s.Name}_fields[] = {{");
             foreach (var f in fields)
                 sb.AppendLine($"    {{ \"{f.TagValue("name") ?? f.Name}\", {VariantOf(model, f)}, "
-                    + $"offsetof({s.Name}, {f.Name}), sizeof((({s.Name} *)0)->{f.Name}) }},");
+                    + $"offsetof({s.Name}, {f.Name}), sizeof((({s.Name} *)0)->{f.Name}), "
+                    + $"{DefaultOf(model, f)} }},");
             sb.AppendLine("};");
             sb.AppendLine();
         }
@@ -77,6 +78,58 @@ public static class CBackend
     /// field a system writes every tick; describing it would invite a scene to
     /// author a value that is overwritten before anything reads it.
     /// </summary>
+    /// <summary>
+    /// Renders a field's <c>[default:]</c> as an initializer for the table's
+    /// ke_variant, or the null variant when the header declares none.
+    /// </summary>
+    /// <remarks>
+    /// The variant's type is the field's own, so seeding runs through the same
+    /// coercions an authored value does — one path, not a second one that could
+    /// disagree about what a vec2 means in a vec3 field.
+    /// </remarks>
+    private static string DefaultOf(ApiModel model, ApiField f)
+    {
+        var d = f.TagValue("default");
+        if (d is null) return "{ KE_VARIANT_NULL, { 0 } }";
+
+        var variant = VariantOf(model, f);
+        var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var lanes = variant switch
+        {
+            "KE_VARIANT_VEC2" => 2, "KE_VARIANT_VEC3" => 3,
+            "KE_VARIANT_VEC4" or "KE_VARIANT_QUAT" => 4,
+            _ => 1,
+        };
+        if (parts.Length != lanes)
+            throw new InvalidOperationException(
+                $"{f.Name}: [default:{d}] has {parts.Length} components but {variant} takes {lanes}");
+
+        var lane = variant switch
+        {
+            "KE_VARIANT_VEC2" => ".v2", "KE_VARIANT_VEC3" => ".v3",
+            "KE_VARIANT_VEC4" => ".v4", "KE_VARIANT_QUAT" => ".q",
+            "KE_VARIANT_BOOL" => ".b", "KE_VARIANT_INT" => ".i",
+            "KE_VARIANT_FLOAT" => ".f", "KE_VARIANT_STRING" => ".s",
+            _ => null,
+        };
+        if (lane is null) return "{ KE_VARIANT_NULL, { 0 } }";
+
+        var value = variant switch
+        {
+            "KE_VARIANT_STRING" => $"\"{d}\"",
+            "KE_VARIANT_BOOL" => d is "1" or "true" ? "true" : "false",
+            "KE_VARIANT_INT" => d,
+            // The variant's own float lane is a double, so the literal carries no
+            // suffix; a vector's lanes are floats and do.
+            "KE_VARIANT_FLOAT" => CDouble(parts[0]),
+            _ => "{ " + string.Join(", ", parts.Select(p => CDouble(p) + "f")) + " }",
+        };
+        return $"{{ {variant}, {{ {lane} = {value} }} }}";
+    }
+
+    /// <summary>A C floating literal: "5" is not one, "5.0" is.</summary>
+    private static string CDouble(string raw) => raw.Contains('.') ? raw : raw + ".0";
+
     private static bool Describes(ApiModel model, ApiField f) => !f.Has("output") && VariantOf(model, f) is not null;
 
     /// <summary>
