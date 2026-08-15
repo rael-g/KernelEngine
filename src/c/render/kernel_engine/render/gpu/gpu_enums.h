@@ -242,4 +242,4 @@ typedef struct ke_gpu_capabilities
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_GPU_ENUMS_H_
+#endif

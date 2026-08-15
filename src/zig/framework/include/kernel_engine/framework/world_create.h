@@ -31,4 +31,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
+#endif

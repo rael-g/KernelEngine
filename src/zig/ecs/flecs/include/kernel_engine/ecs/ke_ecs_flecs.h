@@ -24,7 +24,7 @@ extern "C" {
 
 typedef struct ke_ecs_flecs_params
 {
-    int reserved;  // empty for the spike; expanded as the surface grows
+    int reserved;
 } ke_ecs_flecs_params;
 
 /// Creates a ke_ecs vtable backed by an internally-owned flecs world.
@@ -41,4 +41,4 @@ KE_ECS_FLECS_API ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *pa
 }
 #endif
 
-#endif  // KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
+#endif

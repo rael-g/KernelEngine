@@ -47,4 +47,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_SIGNAL_BUS_CREATE_H_
+#endif

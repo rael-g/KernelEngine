@@ -16,4 +16,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_COMMON_TYPES_H_
+#endif

@@ -105,7 +105,7 @@ int main(void)
         win.ref->poll_events(win.ref, NULL);
 
         ke_gpu_texture_view view = surf_ext->acquire_current_texture_view(surf_ext);
-        if (view == KE_GPU_INVALID_HANDLE) continue; // minimised or surface lost
+        if (view == KE_GPU_INVALID_HANDLE) continue;
 
         ke_gpu_clear_value clear = { .color = { 0.1f, 0.1f, 0.1f, 1.0f } };
         ke_gpu_color_attachment ca = {

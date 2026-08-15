@@ -100,4 +100,4 @@ KE_COMMON_API _Noreturn void ke_error_fatal(const ke_error* err);
 }
 #endif
 
-#endif // KERNEL_ENGINE_COMMON_ERROR_H_
+#endif

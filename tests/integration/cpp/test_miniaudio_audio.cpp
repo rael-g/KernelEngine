@@ -11,7 +11,7 @@ protected:
         params.logger = nullptr;
 
         audio_h = ke_audio_miniaudio_create(&params, nullptr);
-        audio = audio_h.ref;  // may be null if no audio device available
+        audio = audio_h.ref;
     }
 
     void TearDown() override {

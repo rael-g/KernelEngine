@@ -99,4 +99,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_WORLD_H_
+#endif

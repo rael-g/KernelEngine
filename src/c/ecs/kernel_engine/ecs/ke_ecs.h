@@ -127,4 +127,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ECS_KE_ECS_H_
+#endif

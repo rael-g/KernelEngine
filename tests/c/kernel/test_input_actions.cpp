@@ -143,13 +143,13 @@ bindings = [ { kind = "key_quad", up = "W", down = "S", left = "A", right = "D" 
     int32_t id = actions->get_action_id(actions, "Move");
 
     ke_input_snapshot snap{};
-    SetKeyDown(snap, KE_KEY_W); // up
-    SetKeyDown(snap, KE_KEY_D); // right
+    SetKeyDown(snap, KE_KEY_W);
+    SetKeyDown(snap, KE_KEY_D);
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     float x = 0, y = 0;
     actions->get_axis2d(actions, id, &x, &y);
-    EXPECT_FLOAT_EQ(x, 1.0f);   // right - left
-    EXPECT_FLOAT_EQ(y, 1.0f);   // up - down
+    EXPECT_FLOAT_EQ(x, 1.0f);
+    EXPECT_FLOAT_EQ(y, 1.0f);
 
     fs::remove(path);
 }
@@ -193,20 +193,20 @@ bindings = [ { kind = "key", key = "Space" } ]
     };
 
     ke_input_snapshot snap{};
-    actions->evaluate(actions, &snap, cb, &c, nullptr); // no-op
+    actions->evaluate(actions, &snap, cb, &c, nullptr);
     EXPECT_EQ(c.started, 0);
 
     SetKeyDown(snap, KE_KEY_SPACE);
-    actions->evaluate(actions, &snap, cb, &c, nullptr); // start
+    actions->evaluate(actions, &snap, cb, &c, nullptr);
     EXPECT_EQ(c.started, 1);
     EXPECT_EQ(c.performed, 0);
 
-    actions->evaluate(actions, &snap, cb, &c, nullptr); // still down → no new start, no performed
+    actions->evaluate(actions, &snap, cb, &c, nullptr);
     EXPECT_EQ(c.started, 1);
     EXPECT_EQ(c.performed, 0);
 
     snap = {};
-    actions->evaluate(actions, &snap, cb, &c, nullptr); // cancel
+    actions->evaluate(actions, &snap, cb, &c, nullptr);
     EXPECT_EQ(c.canceled, 1);
 
     (void)id;
@@ -324,6 +324,6 @@ TEST_F(InputActionsTest, WasActionPressed_FalseWhenNotInitialPress)
     actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_TRUE(actions->was_action_pressed(actions, id));
     
-    actions->evaluate(actions, &snap, nullptr, nullptr, nullptr); // Second frame with key down
+    actions->evaluate(actions, &snap, nullptr, nullptr, nullptr);
     EXPECT_FALSE(actions->was_action_pressed(actions, id));
 }

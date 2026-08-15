@@ -56,7 +56,7 @@ TEST(StbImageLoaderTest, LoadImage_ValidFile_ReturnsOk)
     const char* path = "test_image.tga";
     unsigned char tga[] = {
         0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0,
-        255, 128, 64, 255 // BGRA in TGA? STB converts to RGBA
+        255, 128, 64, 255
     };
     FILE* f = fopen(path, "wb");
     fwrite(tga, 1, sizeof(tga), f);

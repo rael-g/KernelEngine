@@ -62,4 +62,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_COMMON_MATH_H_
+#endif

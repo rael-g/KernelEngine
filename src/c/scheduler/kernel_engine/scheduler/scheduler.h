@@ -72,4 +72,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_SCHEDULER_SCHEDULER_H_
+#endif

@@ -85,4 +85,4 @@ typedef struct ke_logger ke_logger;
 }
 #endif
 
-#endif // KERNEL_ENGINE_LOGGER_LOGGER_H_
+#endif

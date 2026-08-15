@@ -39,4 +39,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ASSET_IMAGE_LOADER_H_
+#endif

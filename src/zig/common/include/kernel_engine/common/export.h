@@ -37,4 +37,4 @@
 #  define KE_RUNTIME_API KE_IMPORT
 #endif
 
-#endif // KERNEL_ENGINE_COMMON_EXPORT_H_
+#endif

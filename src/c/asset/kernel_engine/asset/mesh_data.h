@@ -58,4 +58,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ASSET_MESH_DATA_H_
+#endif

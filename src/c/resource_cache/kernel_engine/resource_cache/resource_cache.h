@@ -27,7 +27,7 @@ extern "C"
 
     typedef struct ke_resource_cache
     {
-        void *handle; // opaque; owned by the implementation
+        void *handle;
 
         /// Registers a new resource with refcount = 1. Returns KE_ERROR_INVALID_ARGUMENT
         /// if handle == KE_RESOURCE_HANDLE_NONE or if already registered.
@@ -74,4 +74,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
+#endif

@@ -254,7 +254,7 @@ ke_world_transform_component *WorldOf(ke_ecs *ecs, ke_entity e)
     return (ke_world_transform_component *)ecs->component_get(ecs, e, meta.cid);
 }
 
-} // namespace
+}
 
 TEST_F(SceneTreeTest, PropagateTransforms_FreshNodeIsIdentity)
 {

@@ -29,4 +29,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_COMPONENTS_H_
+#endif

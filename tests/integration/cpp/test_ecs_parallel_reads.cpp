@@ -28,7 +28,7 @@ void reader_body(ke_system_ctx *ctx, void *, float)
     (void)sink;
 }
 
-}  // namespace
+}
 
 class EcsParallelReads : public ::testing::Test
 {
@@ -124,7 +124,7 @@ void posvel_body(ke_system_ctx *ctx, void *, float)
             g_pv_sum += static_cast<double>(pc[i].x) + static_cast<double>(vc[i].x);
     }
 }
-}  // namespace
+}
 
 TEST_F(EcsParallelReads, MultiTermQuery_AlignedColumns)
 {

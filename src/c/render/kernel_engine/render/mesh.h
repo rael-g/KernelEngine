@@ -23,4 +23,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_MESH_H_
+#endif

@@ -14,7 +14,7 @@ struct Init
     }
 };
 Init g_init;
-} // namespace
+}
 
 extern "C" int ke_probe_ctor_ran(void)
 {

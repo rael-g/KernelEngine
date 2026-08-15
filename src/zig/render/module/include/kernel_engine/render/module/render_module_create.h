@@ -26,16 +26,16 @@ typedef struct ke_render_module_handle
 
 typedef struct ke_render_cluster_params
 {
-    uint32_t grid_x;                  // screen-tile columns; 0 = default (32)
-    uint32_t grid_y;                  // screen-tile rows; 0 = default (18)
-    uint32_t grid_z;                  // depth slices; 0 = default (24)
-    uint32_t max_lights_per_cluster;   // per-froxel index-list cap; 0 = default (256)
+    uint32_t grid_x;
+    uint32_t grid_y;
+    uint32_t grid_z;
+    uint32_t max_lights_per_cluster;
 } ke_render_cluster_params;
 
 typedef struct ke_render_feature_params
 {
-    ke_bool enable_shadows; // 0 = no shadow pass, no shadow map, no shadow shader bindings
-    ke_bool enable_ibl;     // 0 = no IBL sampling in materials (IndirectIBL contribution); skybox rendering is unaffected
+    ke_bool enable_shadows;
+    ke_bool enable_ibl;
 } ke_render_feature_params;
 
 KE_RENDER_CORE_API ke_render_module_handle

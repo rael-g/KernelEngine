@@ -88,4 +88,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ECS_VARIANT_H_
+#endif

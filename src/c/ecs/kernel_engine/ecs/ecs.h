@@ -28,4 +28,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ECS_ECS_H_
+#endif

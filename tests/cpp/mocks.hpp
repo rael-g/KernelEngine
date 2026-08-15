@@ -72,5 +72,5 @@ public:
     MOCK_METHOD(const GpuMemoryBuffer*, LoadShaderBinary, (core::RenderContext& ctx, const std::string& name), (override));
 };
 
-} // namespace core
-} // namespace kernel_engine::render
+}
+}

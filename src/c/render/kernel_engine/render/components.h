@@ -142,4 +142,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_COMPONENTS_H_
+#endif

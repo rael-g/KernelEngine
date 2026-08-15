@@ -55,4 +55,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_WINDOW_WINDOW_H_
+#endif

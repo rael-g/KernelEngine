@@ -87,4 +87,4 @@ struct ke_gpu_command_buffer
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_GPU_COMMANDS_H_
+#endif

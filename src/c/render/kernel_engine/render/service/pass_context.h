@@ -31,4 +31,4 @@ struct ke_render_pass_ctx
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_CORE_PASS_CONTEXT_H_
+#endif

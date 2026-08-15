@@ -735,5 +735,5 @@ TEST_F(SceneLoaderTest, Create_RejectsNullArgs)
 
 TEST_F(SceneLoaderTest, Destroy_NullSelf_IsSafe)
 {
-    loader_h.destroy(nullptr);  // must not crash
+    loader_h.destroy(nullptr);
 }

@@ -35,7 +35,7 @@ bool test_module_on_load(ke_runtime *runtime, void *user_data, ke_error **out_er
     return sid != 0;
 }
 
-}  // namespace
+}
 
 class RuntimeSpike : public ::testing::Test {
 protected:
@@ -154,7 +154,7 @@ TEST_F(RuntimeSpike, ParallelDispatch_DisjointSystemsRunOnMultipleThreads)
     auto worker = [](ke_system_ctx *, void *ud, float) {
         auto *p = static_cast<ParallelProbe *>(ud);
         auto start = std::chrono::steady_clock::now();
-        while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(5)) { /* spin */ }
+        while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(5)) {  }
         {
             std::lock_guard<std::mutex> lk(p->mu);
             p->thread_ids.insert(std::this_thread::get_id());
@@ -222,7 +222,7 @@ TEST_F(RuntimeSpike, ParallelDispatch_ConflictingSystemsSerialized)
         t->order->push_back(t->tag);
     };
 
-    (void)make_tagger;  // suppress unused capture helper
+    (void)make_tagger;
 
     ke_runtime_system_params s1{};
     s1.name = "Writer1"; s1.phase = KE_PHASE_UPDATE; s1.access_list = acc; s1.access_count = 1;
@@ -319,7 +319,7 @@ TEST_F(RuntimeSpike, FixedUpdate_SpiralOfDeathGuarded)
 
     ASSERT_TRUE(runtime->tick(runtime, 1.0f, NULL));
     EXPECT_LE(fixed_ticks.load(), 15);
-    EXPECT_GE(fixed_ticks.load(), 14);  // floor(0.25 / (1/60))
+    EXPECT_GE(fixed_ticks.load(), 14);
 }
 
 TEST_F(RuntimeSpike, Tick_RejectsNegativeDt)
@@ -423,7 +423,7 @@ TEST_F(RuntimeSpike, RenderExtract_ReflectsThisTicksSimWrite)
             g_extract_probe.seen.store(static_cast<const int *>(segs[0].columns[0])[0]);
             g_extract_probe.seen_ptr.store(segs[0].columns[0]);
         }
-        g_extract_probe.runs.fetch_add(1); // last statement: signals the write above is visible
+        g_extract_probe.runs.fetch_add(1);
     };
     ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
 
@@ -481,7 +481,7 @@ TEST_F(RuntimeSpike, RenderExtract_MultiTermAlignment)
             for (size_t i = 0; i < segs[s].count; i++)
                 g_extract_pv_sum += static_cast<double>(pc[i].x) + static_cast<double>(vc[i].x);
         }
-        g_extract_pv_runs.fetch_add(1); // last statement: signals the sum above is visible
+        g_extract_pv_runs.fetch_add(1);
     };
     ASSERT_NE(runtime->register_system(runtime, &rnd, nullptr), 0u);
 
@@ -507,7 +507,7 @@ ke_runtime_system_params make_system(const ke_component_access *list, uint32_t c
     return s;
 }
 
-}  // namespace wave_test
+}
 
 TEST(WaveBuilder, Empty_NoWaves)
 {
@@ -626,9 +626,9 @@ TEST(WaveBuilder, ChainOfConflicts_GreedyGrouping)
 
 TEST(WaveBuilder, ClearShadowCull_RealAccessShape_SameWave)
 {
-    ke_component_access clear[]  = {{1u, KE_ACCESS_READ}, {2u, KE_ACCESS_WRITE}};  // frame, backbuffer
-    ke_component_access shadow[] = {{1u, KE_ACCESS_READ}, {3u, KE_ACCESS_READ}, {4u, KE_ACCESS_WRITE}}; // frame, transform, shadow_map
-    ke_component_access cull[]   = {{1u, KE_ACCESS_READ}, {3u, KE_ACCESS_READ}, {5u, KE_ACCESS_WRITE}}; // frame, transform, light_clusters
+    ke_component_access clear[]  = {{1u, KE_ACCESS_READ}, {2u, KE_ACCESS_WRITE}};
+    ke_component_access shadow[] = {{1u, KE_ACCESS_READ}, {3u, KE_ACCESS_READ}, {4u, KE_ACCESS_WRITE}};
+    ke_component_access cull[]   = {{1u, KE_ACCESS_READ}, {3u, KE_ACCESS_READ}, {5u, KE_ACCESS_WRITE}};
     ke_runtime_system_params sys[] = {
         wave_test::make_system(clear, 2),
         wave_test::make_system(shadow, 3),
@@ -703,7 +703,7 @@ TEST_F(RuntimeSpike, DeferQueue_DrainsBetweenTicks)
     for (int i = 0; i < 5; ++i)
         ASSERT_TRUE(runtime->tick(runtime, 1.0f / 60.0f, NULL));
 
-    EXPECT_EQ(ke_system_ctx_defer_applied_count(), 5u);  // exactly 1 per tick, drains every wave
+    EXPECT_EQ(ke_system_ctx_defer_applied_count(), 5u);
 }
 
 TEST(FlecsTagTest, ZeroSizeComponent_RegistersAsUsableTag)

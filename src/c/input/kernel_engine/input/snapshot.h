@@ -98,4 +98,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_INPUT_SNAPSHOT_H_
+#endif

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_ASSET_MESH_SHAPE_H_
 #define KERNEL_ENGINE_ASSET_MESH_SHAPE_H_
 
-#include <kernel_engine/render/mesh.h>  // ke_vertex
+#include <kernel_engine/render/mesh.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -29,4 +29,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ASSET_MESH_SHAPE_H_
+#endif

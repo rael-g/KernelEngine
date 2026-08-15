@@ -64,7 +64,7 @@ TEST_F(AssetLoaderTest, LoadModelAsync_Works) {
     ke_scheduler scheduler{};
     scheduler.dispatch = [](ke_scheduler*, ke_task_func f, void* d) -> ke_task* {
         f(d);
-        return (ke_task*)1; // Fake task
+        return (ke_task*)1;
     };
 
     struct Context {

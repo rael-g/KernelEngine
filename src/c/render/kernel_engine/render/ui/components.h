@@ -84,4 +84,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_UI_COMPONENTS_H_
+#endif

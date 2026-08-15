@@ -39,5 +39,5 @@ TEST(WindowFactoryTest, Api_NullSelf_IsSafe) {
     EXPECT_FALSE(w.ref->get_size(nullptr, nullptr, nullptr, nullptr));
 
     w.destroy(w.ref);
-    w.destroy(nullptr); // destroying a null handle must not crash
+    w.destroy(nullptr);
 }

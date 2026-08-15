@@ -82,4 +82,4 @@ KE_RUNTIME_API bool     ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity enti
 }
 #endif
 
-#endif // KERNEL_ENGINE_RUNTIME_SYSTEM_CTX_H_
+#endif

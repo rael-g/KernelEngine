@@ -52,4 +52,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_INPUT_EVENT_H_
+#endif

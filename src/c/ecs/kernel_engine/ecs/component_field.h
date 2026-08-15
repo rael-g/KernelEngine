@@ -27,4 +27,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ECS_COMPONENT_FIELD_H_
+#endif

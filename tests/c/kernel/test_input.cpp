@@ -44,8 +44,8 @@ TEST_F(InputTest, Update_NullSelf_ReturnsFalse) {
 }
 
 TEST_F(InputTest, KeyPressed_IsDetected) {
-    input->update(input, nullptr);        // clear previous frame
-    input->on_key(input, 65, 1); // 'A' press event arrives
+    input->update(input, nullptr);
+    input->on_key(input, 65, 1);
     ASSERT_TRUE(input->is_key_pressed(input, 65));
 }
 
@@ -60,7 +60,7 @@ TEST_F(InputTest, Snapshot_KeyIsCaptured) {
 }
 
 TEST_F(InputTest, MouseMove_CalculatesDelta) {
-    input->update(input, nullptr); // reset to (0,0) with no delta
+    input->update(input, nullptr);
     input->on_mouse_move(input, 100.0f, 200.0f);
     input->on_mouse_move(input, 150.0f, 180.0f);
     ke_input_snapshot snapshot;
@@ -71,7 +71,7 @@ TEST_F(InputTest, MouseMove_CalculatesDelta) {
 
 TEST_F(InputTest, MouseButton_IsDetected) {
     input->update(input, nullptr);
-    input->on_mouse_button(input, 0, 1); // Left Down
+    input->on_mouse_button(input, 0, 1);
     ke_input_snapshot snapshot;
     input->get_snapshot(input, &snapshot);
     ASSERT_TRUE(snapshot.mouse_buttons_pressed & (1u << 0));
@@ -87,8 +87,8 @@ TEST_F(InputTest, MouseScroll_IsDetected) {
 }
 
 TEST_F(InputTest, DrainEvents_Works) {
-    input->on_key(input, 65, 1); // Down
-    input->on_key(input, 65, 0); // Up
+    input->on_key(input, 65, 1);
+    input->on_key(input, 65, 0);
     
     ke_input_event events[10];
     uint32_t count = input->drain_events(input, events, 10);
@@ -123,8 +123,8 @@ TEST_F(InputTest, IsKeyDown_WorksAcrossUpdate) {
     ASSERT_TRUE(input->is_key_down(input, 10));
     
     input->update(input, nullptr);
-    ASSERT_TRUE(input->is_key_down(input, 10)); // Still down
-    ASSERT_FALSE(input->is_key_pressed(input, 10)); // But not pressed this frame
+    ASSERT_TRUE(input->is_key_down(input, 10));
+    ASSERT_FALSE(input->is_key_pressed(input, 10));
     
     input->on_key(input, 10, 0);
     ASSERT_FALSE(input->is_key_down(input, 10));

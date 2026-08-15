@@ -31,4 +31,4 @@ KE_RUNTIME_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
 }
 #endif
 
-#endif  // KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
+#endif

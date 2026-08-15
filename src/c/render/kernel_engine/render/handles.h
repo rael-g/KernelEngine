@@ -75,4 +75,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_HANDLES_H_
+#endif

@@ -43,4 +43,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
+#endif

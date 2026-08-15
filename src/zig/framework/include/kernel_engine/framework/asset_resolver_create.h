@@ -42,4 +42,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_ASSET_RESOLVER_CREATE_H_
+#endif

@@ -16,7 +16,7 @@ void marker_destroy(ke_resource_handle, void *ctx) {
     if (ctx) (*(int *)ctx)++;
 }
 
-}  // namespace
+}
 
 class ResourceCacheTest : public ::testing::Test
 {
@@ -75,13 +75,13 @@ TEST_F(ResourceCacheTest, Register_RejectsDuplicate)
 TEST_F(ResourceCacheTest, Retain_IncrementsRefcount)
 {
     ASSERT_TRUE(cache->register_resource(cache, 1, NULL));
-    EXPECT_TRUE(cache->retain(cache, 1, NULL));   // 1 → 2
-    EXPECT_TRUE(cache->retain(cache, 1, NULL));   // 2 → 3
-    EXPECT_TRUE(cache->release(cache, 1, NULL));  // 3 → 2
+    EXPECT_TRUE(cache->retain(cache, 1, NULL));
+    EXPECT_TRUE(cache->retain(cache, 1, NULL));
+    EXPECT_TRUE(cache->release(cache, 1, NULL));
     EXPECT_EQ(g_destroy_calls, 0);
-    EXPECT_TRUE(cache->release(cache, 1, NULL));  // 2 → 1
+    EXPECT_TRUE(cache->release(cache, 1, NULL));
     EXPECT_EQ(g_destroy_calls, 0);
-    EXPECT_TRUE(cache->release(cache, 1, NULL));  // 1 → 0 → destroy
+    EXPECT_TRUE(cache->release(cache, 1, NULL));
     EXPECT_EQ(g_destroy_calls, 1);
     EXPECT_EQ(g_last_destroyed, 1u);
 }
@@ -185,7 +185,7 @@ TEST_F(ResourceCacheTest, ReinsertionAfterReleaseReusesTombstone)
 {
     ASSERT_TRUE(cache->register_resource(cache, 1, NULL));
     cache->release(cache, 1, NULL);
-    ASSERT_TRUE(cache->register_resource(cache, 65, NULL));  // collides with 1 mod 64
+    ASSERT_TRUE(cache->register_resource(cache, 65, NULL));
     EXPECT_TRUE(cache->retain(cache, 65, NULL));
     cache->release(cache, 65, NULL);
     cache->release(cache, 65, NULL);

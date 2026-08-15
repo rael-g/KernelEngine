@@ -20,7 +20,7 @@ extern "C"
 
     typedef struct ke_configuration
     {
-        void *handle; // opaque; owned by the implementation
+        void *handle;
 
         int64_t (*get_int)(struct ke_configuration *self, const char *section, const char *key, int64_t fallback);
         double (*get_double)(struct ke_configuration *self, const char *section, const char *key, double fallback);
@@ -56,4 +56,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_H_
+#endif

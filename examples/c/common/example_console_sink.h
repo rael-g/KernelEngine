@@ -24,4 +24,4 @@ static ke_logger_sink ke_example_console_sink(ke_log_level min_level)
     return sink;
 }
 
-#endif // KERNEL_ENGINE_EXAMPLES_CONSOLE_SINK_H_
+#endif

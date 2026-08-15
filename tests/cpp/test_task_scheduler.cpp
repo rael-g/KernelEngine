@@ -46,7 +46,7 @@ ke_scheduler make_sync_scheduler() {
     return s;
 }
 
-} // namespace
+}
 
 class TaskSchedulerTest : public ::testing::Test {
 protected:

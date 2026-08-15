@@ -41,4 +41,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_SCENE_HIERARCHY_CREATE_H_
+#endif

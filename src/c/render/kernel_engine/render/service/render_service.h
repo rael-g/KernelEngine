@@ -40,9 +40,9 @@ typedef struct ke_render_resource_desc
     ke_render_resource_type type;
     ke_gpu_texture_format   format;
     ke_render_size_mode     size_mode;
-    uint32_t                width;   // used when size_mode = ABSOLUTE
+    uint32_t                width;   ///< Read when size_mode is ABSOLUTE.
     uint32_t                height;
-    float                   scale_x; // used when size_mode = RELATIVE_TO_BACKBUFFER
+    float                   scale_x; ///< Read when size_mode is RELATIVE_TO_BACKBUFFER.
     float                   scale_y;
     /// Per-resource clear color.
     float                   clear_value[4];
@@ -129,10 +129,10 @@ struct ke_render_service
      * @param shader [utf8,nullable] Authored material name; NULL/empty selects the engine default.
      */
     ke_material_handle (*create_material)(struct ke_render_service *self, const char *key,
-                                          const float *base_color, // rgba (4 floats)
+                                          const float *base_color,
                                           float metallic, float roughness,
                                           ke_texture_handle albedo,
-                                          ke_texture_handle normal, // KE_TEXTURE_NONE = flat
+                                          ke_texture_handle normal,
                                           ke_alpha_mode alpha_mode,
                                           float alpha_cutoff,
                                           float ior,
@@ -251,4 +251,4 @@ typedef struct ke_render_service_handle
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_CORE_RENDER_CORE_H_
+#endif

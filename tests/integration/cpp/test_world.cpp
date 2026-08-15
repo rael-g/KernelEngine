@@ -33,7 +33,7 @@ struct WorldFixture {
         wp.scheduler = scheduler_h.ref;
         wp.ecs            = ecs_h.ref;
         wp.runtime        = runtime_h.ref;
-        wp.scene_tree     = nullptr;  // C-phase reintroduces; B2 ships ke_world without scene_tree
+        wp.scene_tree     = nullptr;
         wp.project_root   = project_root;
         world_h = ke_world_create(&wp, NULL);
         world = world_h.ref;
@@ -48,7 +48,7 @@ struct WorldFixture {
     }
 };
 
-}  // namespace
+}
 
 TEST(WorldB2, Create_Accessors_Destroy)
 {
@@ -57,7 +57,7 @@ TEST(WorldB2, Create_Accessors_Destroy)
 
     EXPECT_NE(f.world->ecs(f.world), nullptr);
     EXPECT_NE(f.world->runtime(f.world), nullptr);
-    EXPECT_EQ(f.world->scene_tree(f.world), nullptr);  // B2 transitional
+    EXPECT_EQ(f.world->scene_tree(f.world), nullptr);
 
     ke_ecs *ecs = f.world->ecs(f.world);
     ke_entity e = ecs->entity_create(ecs);

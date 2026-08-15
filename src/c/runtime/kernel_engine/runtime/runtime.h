@@ -105,4 +105,4 @@ typedef struct ke_runtime_handle {
 }
 #endif
 
-#endif // KERNEL_ENGINE_RUNTIME_RUNTIME_H_
+#endif

@@ -71,4 +71,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_TEXT_FONT_H_
+#endif

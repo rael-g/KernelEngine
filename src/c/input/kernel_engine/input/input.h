@@ -106,4 +106,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_INPUT_INPUT_H_
+#endif

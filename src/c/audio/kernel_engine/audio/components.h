@@ -28,4 +28,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_AUDIO_COMPONENTS_H_
+#endif

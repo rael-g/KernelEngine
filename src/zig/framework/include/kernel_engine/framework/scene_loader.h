@@ -41,4 +41,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
+#endif

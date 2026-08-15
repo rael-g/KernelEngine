@@ -19,7 +19,7 @@ ke_logger_sink test_console_sink(ke_log_level min_level)
     s.log       = test_console_sink_log;
     return s;
 }
-} // namespace
+}
 
 class LoggerTest : public ::testing::Test {
 protected:
@@ -117,7 +117,7 @@ TEST_F(LoggerTest, Log_SkipsSink_WhenLogFnIsNull) {
     ke_logger_sink sink;
     sink.handle = nullptr;
     sink.min_level = KE_LOG_LEVEL_TRACE;
-    sink.log = nullptr; // Null log function
+    sink.log = nullptr;
     sink.destroy = nullptr;
     
     logger->add_sink(logger, sink, NULL);

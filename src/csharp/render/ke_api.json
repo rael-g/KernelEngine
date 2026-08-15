@@ -67,7 +67,7 @@
           "name": "width",
           "type": "uint32_t",
           "tags": [],
-          "doc": "used when size_mode = ABSOLUTE"
+          "doc": "Read when size_mode is ABSOLUTE."
         },
         {
           "name": "height",
@@ -79,7 +79,7 @@
           "name": "scale_x",
           "type": "float",
           "tags": [],
-          "doc": "used when size_mode = RELATIVE_TO_BACKBUFFER"
+          "doc": "Read when size_mode is RELATIVE_TO_BACKBUFFER."
         },
         {
           "name": "scale_y",

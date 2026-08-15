@@ -57,4 +57,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_SPATIAL_TRANSFORM_H_
+#endif

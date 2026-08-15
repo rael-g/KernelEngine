@@ -114,4 +114,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_SIGNAL_BUS_H_
+#endif
