@@ -28,7 +28,6 @@ public sealed class CsprojEditor
 
         var groupForRefs = FindOrCreateItemGroupForReferences();
         var entry = new XElement("ProjectReference", new XAttribute("Include", normalized));
-        // Pretty insert with newline + indent matching the group's existing children.
         if (groupForRefs.HasElements)
         {
             var last = groupForRefs.Elements().Last();
@@ -52,7 +51,6 @@ public sealed class CsprojEditor
             .FirstOrDefault(e => PathsEqual((string?)e.Attribute("Include"), normalized));
         if (entry is null) return false;
 
-        // Drop the entry plus its preceding whitespace so we don't leave a blank line.
         if (entry.PreviousNode is XText leading) leading.Remove();
         entry.Remove();
         return true;
@@ -74,9 +72,6 @@ public sealed class CsprojEditor
                      .FirstOrDefault(g => g.Elements("ProjectReference").Any());
         if (ig != null) return ig;
 
-        // Create a dedicated ItemGroup for ProjectReferences. Don't reuse a Content group —
-        // mixing concerns in one ItemGroup is visibly ugly and breaks the convention every other
-        // csproj in the repo follows.
         var newGroup = new XElement("ItemGroup");
         root.Add(new XText("\n  "), newGroup, new XText("\n"));
         return newGroup;

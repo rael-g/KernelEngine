@@ -128,28 +128,14 @@ public sealed class Convention
         ComponentSuffix = "_component",
         ParamsSuffix = "_params",
         ErrorOutParamType = "ke_error**",
-        // C spells `bool` as `_Bool` after preprocessing; both reach the description.
-        // `ke_bool` is this ABI's own boolean typedef, used interchangeably with
-        // the two — ClangSharp maps it to a raw `byte` return rather than `bool`,
-        // so a caller of this list must still know to compare it against zero.
         BooleanReturnTypes = ["_Bool", "bool", "ke_bool"],
         TypeNameOverrides = new Dictionary<string, string>
         {
-            // Would derive to `Ecs` inside namespace KernelEngine.Ecs, making the
-            // type unreferenceable without full qualification everywhere.
             ["ke_ecs"] = "EcsRegistry",
-            // Preserves the pre-migration public name; nothing else in the
-            // rename would be gained (no namespace collision), but every
-            // existing call site already knows this type as NativeAssetResolver.
             ["ke_asset_resolver"] = "NativeAssetResolver",
             ["ke_input_actions"] = "NativeInputActions",
-            // Derived casing would be Physics2d/BodyType2d; this ABI's managed
-            // surface has always spelled the dimension suffix with a capital D.
             ["ke_physics_2d"] = "Physics2D",
             ["ke_body_type_2d"] = "BodyType2D",
-            // Bare `Phase`/`Access` are too generic for types every module sees
-            // when registering a system, and both would read as unqualified
-            // nouns at call sites that already spell the domain out.
             ["ke_phase"] = "RuntimePhase",
             ["ke_access"] = "RuntimeAccess",
         },

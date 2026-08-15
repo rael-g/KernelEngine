@@ -1,6 +1,3 @@
-// kabic's IR reader: turns ke_api.json (produced by kabic's frontend,
-// scripts/extract_api.cs) into a typed model. Language-independent — no
-// rendering decision belongs here, only the shape of the description itself.
 
 namespace Kabic;
 

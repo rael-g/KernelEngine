@@ -11,15 +11,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Input;
 
-// 00_input_test — smoke test for the View-funneled input. The new Framework
-// exposes input via polling (`view.IsKeyDown(int)`); cross-frame edge
-// detection lives in the node. The legacy InputEvent (KeyDown/KeyUp/Scroll/
-// Mouse) pipeline isn't ported yet — Kanban tracks it separately.
-//
-// Click the window first so it has keyboard focus, then:
-//   • Tap a key (A-Z, Space, arrows)  → "KEY DOWN ..." / "KEY UP ..."
-//   • Escape                          → quit
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -59,13 +50,8 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[00_input_test] Exited cleanly.");
 
-// ── Walks a fixed set of GLFW keycodes each frame, diffs against previous ────
-
 sealed class KeyEdgeListener : Node
 {
-    // Subset that covers what most tests want: letters A-Z, digits 0-9, space,
-    // arrows, escape, shift/ctrl/alt. Iterating the full keyboard is fine too
-    // since GLFW keycodes are sparse over [32..348].
     private static readonly (int Code, string Name)[] s_keys =
     {
         (32,  "Space"),
@@ -77,7 +63,6 @@ sealed class KeyEdgeListener : Node
     };
 
     private readonly bool[] _prev = new bool[s_keys.Length];
-
 
     protected override bool HasBehavior => true;
 

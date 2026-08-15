@@ -48,8 +48,6 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         _handle = KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &err);
         if (_handle.@ref == null) throw KernelError.FromNative(err, "physics_body2d_module_create");
 
-        // Teaches the scene loader this domain's components. Absent for a host with
-        // no scene loader, which has nothing to teach.
         var world = services.GetService<KernelEngine.Framework.World>();
         if (world is not null)
             KernelEngine.Physics.Native.NativeMethods.physics_register_scene_apply(

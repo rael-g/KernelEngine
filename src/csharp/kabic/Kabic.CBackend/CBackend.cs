@@ -119,8 +119,6 @@ public static class CBackend
             "KE_VARIANT_STRING" => $"\"{d}\"",
             "KE_VARIANT_BOOL" => d is "1" or "true" ? "true" : "false",
             "KE_VARIANT_INT" => d,
-            // The variant's own float lane is a double, so the literal carries no
-            // suffix; a vector's lanes are floats and do.
             "KE_VARIANT_FLOAT" => CDouble(parts[0]),
             _ => "{ " + string.Join(", ", parts.Select(p => CDouble(p) + "f")) + " }",
         };
@@ -140,8 +138,6 @@ public static class CBackend
     private static string? VariantOf(ApiModel model, ApiField f)
     {
         if (f.Has("bool")) return "KE_VARIANT_BOOL";
-        // An enum is authored by number here; naming an enumerator is a mapping
-        // only the domain declaring it holds, so that stays a domain callback.
         if (model.Enums.Any(e => e.Name == Base(f.Type))) return "KE_VARIANT_INT";
         return Base(f.Type) switch
         {
@@ -150,14 +146,11 @@ public static class CBackend
             "ke_vec3"                                  => "KE_VARIANT_VEC3",
             "ke_vec4"                                  => "KE_VARIANT_VEC4",
             "ke_quat"                                  => "KE_VARIANT_QUAT",
-            // C spells bool as _Bool after preprocessing; both reach the description.
             "bool" or "_Bool"                          => "KE_VARIANT_BOOL",
             "int8_t" or "int16_t" or "int32_t" or "int64_t" => "KE_VARIANT_INT",
             "uint8_t" or "uint16_t" or "uint32_t" or "uint64_t" => "KE_VARIANT_INT",
             "int" or "unsigned" or "unsigned int"      => "KE_VARIANT_INT",
             var t when t.StartsWith("char[")           => "KE_VARIANT_STRING",
-            // A bare float array is the same vector a ke_vecN names, spelled
-            // without the typedef; the C# backend already reads it that way.
             "float[2]"                                 => "KE_VARIANT_VEC2",
             "float[3]"                                 => "KE_VARIANT_VEC3",
             "float[4]"                                 => "KE_VARIANT_VEC4",

@@ -1,12 +1,3 @@
-// kabic's frontend: recovering what the AST alone cannot.
-//
-// Parameter names are absent from the AST for function-pointer fields: C
-// function *types* carry no parameter names. Clang does report the exact
-// byte range of most declarations, but that range collapses to empty when
-// the declaration's type comes through a macro (`bool` from <stdbool.h> is
-// the case that bit this extractor during development) — so names are
-// recovered by finding the `(*name)(...)` declarator text directly, which
-// does not depend on those ranges at all.
 
 using System.Text.RegularExpressions;
 

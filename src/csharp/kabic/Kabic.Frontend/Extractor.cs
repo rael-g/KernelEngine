@@ -1,8 +1,3 @@
-// kabic's frontend proper: walks a clang AST (from `zig cc -ast-dump=json`)
-// into the SAME ApiModel that Kabic.Core's Classifier consumes — the reader
-// and writer of ke_api.json share one model definition, so the schema cannot
-// silently drift between the two sides the way two hand-kept-in-sync copies
-// eventually would.
 
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -21,21 +16,9 @@ public static class Extractor
         auxHeaderNames ??= [];
         composeHeaderNames ??= [];
 
-        // clang's JSON AST is delta-encoded: loc.file (NOT includedFrom.file,
-        // which names the *including* file and would misattribute every
-        // declaration to the synthesized translation unit) appears only when
-        // it changes from the previous node, so the current file has to be
-        // carried forward across siblings.
         (bool Owned, bool AuxOnly, bool Compose, string? File) Owns(JsonObject node)
         {
             var f = node["loc"]?.AsObject()["file"]?.GetValue<string>();
-            // Normalized once here so every downstream sourceBytes[file] lookup
-            // matches regardless of whether clang echoed this particular include
-            // as absolute, relative, or through a bind-mount prefix (observed to
-            // vary run-to-run for the same header set) — the caller's sourceBytes
-            // dictionary is keyed the same way. An unnormalized mismatch doesn't
-            // throw; it silently falls back to the WRONG file's bytes, corrupting
-            // every byte-offset slice (param names, enum literals) taken from it.
             if (f is not null) currentFile = Path.GetFullPath(f);
             if (currentFile is null) return (false, false, false, null);
             var fileName = Path.GetFileName(currentFile);
@@ -56,20 +39,8 @@ public static class Extractor
             var name = node["name"]?.GetValue<string>();
             var bytes = file is not null && sourceBytes.TryGetValue(file, out var b) ? b : sourceBytes.Values.First();
 
-            // A header pulled in purely so a foreign domain's typedef'd primitives
-            // resolve (--aux) contributes ONLY those typedefs — its own vtables,
-            // enums, and functions are somebody else's domain to describe, and
-            // parsing them here just adds unused noise (and, empirically, a
-            // flakier param-name extraction on declarations nothing here consumes).
             if (auxOnly && kind != "TypedefDecl") continue;
 
-            // A header this domain composes against (--compose) contributes its structs
-            // and the enums their fields are typed by, so a node here can reference a
-            // bundle another domain owns and have both the component set and the names of
-            // its field types resolve. Its functions and vtables stay somebody else's
-            // domain to describe, exactly as with --aux. Everything admitted this way is
-            // marked External: the owning domain emits it, and a second copy in another
-            // assembly would be a distinct type that no longer converts.
             if (compose && kind is not ("TypedefDecl" or "RecordDecl" or "EnumDecl")) continue;
 
             switch (kind)
@@ -86,13 +57,6 @@ public static class Extractor
                     api.Functions.Add(ExtractFunction(node, name, errors));
                     break;
 
-                // A typedef naming a plain primitive (ke_entity -> uint64_t) is an
-                // alias every backend must see through; one naming a struct or enum
-                // is a real type the description already carries under its own key.
-                // A function-pointer typedef (ke_defer_fn -> void (*)(ke_ecs *, void *))
-                // is recorded too: it names no type of its own, so a backend that
-                // never sees the target has nothing to emit and leaves the bare alias
-                // in its output, which then does not compile.
                 case "TypedefDecl" when name is not null:
                 {
                     var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
@@ -118,13 +82,6 @@ public static class Extractor
             string rawValue = next.ToString();
             var isInt = true;
 
-            // An initializer naming exactly one other enumerator is an alias
-            // (KE_MOUSE_BUTTON_LEFT = KE_MOUSE_BUTTON_1), and emitting the name
-            // keeps that relationship visible in the generated code. Anything
-            // else is an expression, and only clang's folded ConstantExpr value
-            // is trustworthy there: reading the source tokens yields the first
-            // one and drops the rest, so `1 << 0` and `1 << 1` both come out as
-            // 1 and distinct bitmask flags silently collapse onto each other.
             var initializer = Regex.Match(SliceRange(bytes, e), @"=\s*(.+?)\s*(?:,|\}|$)");
             var aliasOnly = initializer.Success
                 && Regex.IsMatch(initializer.Groups[1].Value.Trim(), @"^[A-Za-z_]\w*$");
@@ -163,10 +120,6 @@ public static class Extractor
             var f = c!.AsObject();
             if (f["kind"]?.GetValue<string>() != "FieldDecl") continue;
             var fieldName = f["name"]?.GetValue<string>();
-            // An anonymous union/struct member has no name and no ABI-portable
-            // description (which member is "active" isn't derivable from the type
-            // alone) — skip it rather than crash; a consumer needing it stays on
-            // the idiom layer, same as [raw_callback].
             if (fieldName is null)
             {
                 Console.Error.WriteLine($"note: {name}: skipping unnamed field (anonymous union/struct) — "

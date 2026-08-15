@@ -26,7 +26,6 @@ public unsafe partial class Scheduler : IScheduler
 
         var handle = GCHandle.Alloc(action);
         Handle->dispatch_pinned(Handle, threadNum, &NativePinnedCallback, (void*)GCHandle.ToIntPtr(handle));
-        // Fire-and-forget; native callback frees the handle.
     }
 
     /// <inheritdoc/>

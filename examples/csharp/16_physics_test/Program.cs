@@ -15,13 +15,6 @@ using KernelEngine.Render;
 using KernelEngine.Physics;
 using KernelEngine.Input;
 
-// 16_physics_test — kernel ke_physics_2d → Box2D plugin → IPhysics2D. Camera
-// at +Z looking at origin flattens the 3D scene into a 2D side-view. Cubes
-// drop onto a static floor and bounce.
-//   • Space → spawn a cube at a random X
-//   • R     → destroy every spawned cube + reset
-//   • Esc   → quit
-
 const float FloorY     = -3f;
 const float FloorHalfW = 8f;
 const float FloorHalfH = 0.5f;
@@ -93,8 +86,6 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[16_physics_test] Exited cleanly.");
 
-// ── PhysicsScene — drives the simulation + spawns/destroys balls on input ────
-
 sealed class PhysicsScene : Node
 {
     private const int KeySpace  = 32;
@@ -118,14 +109,12 @@ sealed class PhysicsScene : Node
         _ballMat  = ballMat;
     }
 
-
     protected override bool HasBehavior => true;
 
     protected override void OnUpdate(in View view)
     {
         if (!_initialDropped)
         {
-            // First-frame drop so something is happening before any input.
             Spawn(new Vector2(0f, 4f));
             _initialDropped = true;
         }
@@ -170,9 +159,6 @@ sealed class PhysicsScene : Node
 
     private void Spawn(Vector2 at)
     {
-        // A spawned ball hangs off the spawner: a node reaches the world only
-        // through its own children, so "somewhere in the scene" is not an address
-        // it can name.
         var node = AddChild(
             new MeshRenderer { MeshHandle = _ballMesh, MaterialHandle = _ballMat },
             $"Ball_{_balls.Count}");

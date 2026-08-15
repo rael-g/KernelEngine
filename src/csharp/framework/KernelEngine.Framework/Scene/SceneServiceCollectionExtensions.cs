@@ -31,12 +31,6 @@ public static class SceneServiceCollectionExtensions
                 sp.GetRequiredService<World>(),
                 AppContext.BaseDirectory));
 
-        // No builtin node types registered here — Framework has no concept of
-        // any other domain's node types (the same "no universe knowledge" rule
-        // that keeps ke_world from hardcoding render's components). Each
-        // domain's own composition extension (WebgpuRenderModule.Configure,
-        // AddPhysics2DBox2D, AddAudioMiniAudio, ...) calls AddNodeType<T>()
-        // for its own types.
     }
 }
 

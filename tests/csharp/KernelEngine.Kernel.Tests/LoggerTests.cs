@@ -8,8 +8,6 @@ public class LoggerTests
     [Fact]
     public void Logger_CanBeCreatedAndDestroyed()
     {        var logger = new Logger();
-        // implicit destroy via finalizer or we could make it IDisposable
-        // Logger in its current impl doesn't seem to be IDisposable but maybe it should be.
     }
 
     [Fact]

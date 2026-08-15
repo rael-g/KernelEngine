@@ -1,11 +1,5 @@
 const std = @import("std");
 
-// Builds test_ke_kernel by invoking the SYSTEM C++ compiler directly — see
-// tests/integration/cpp/build.zig for why (ABI mismatch between Zig's own
-// libc++ and the libstdc++ vcpkg's GTest archives were built with). Zig is
-// the build orchestrator here; the compile+link is the same system compiler
-// CMake already used.
-
 pub fn build(b: *std.Build) void {
     const cxx = b.option([]const u8, "cxx", "C++ compiler") orelse "clang++";
     const sources = b.option([]const u8, "sources", "'|'-separated absolute .cpp source paths") orelse @panic("-Dsources required");
@@ -14,12 +8,6 @@ pub fn build(b: *std.Build) void {
     const rpaths = b.option([]const u8, "rpaths", "'|'-separated rpath directories") orelse @panic("-Drpaths required");
     const defines = b.option([]const u8, "defines", "'|'-separated -D defines") orelse "";
     const output = b.option([]const u8, "output", "absolute path for the built executable") orelse @panic("-Doutput required");
-    // Clang source-based instrumentation for this suite's own translation
-    // units only. It cannot reach the engine logic inside the linked ke_*.so
-    // plugins: those are built by Zig's own linker, which rejects the
-    // profiling-runtime relocations Clang's instrumented objects carry
-    // (verified: "fatal linker error: unhandled relocation type R_X86_64_PC64
-    // ... __llvm_prf_data" when tried on a Zig-linked shared library).
     const coverage = b.option(bool, "coverage", "instrument this suite's own sources for Clang source-based coverage") orelse false;
 
     const run = b.addSystemCommand(&.{ cxx, "-std=gnu++17", "-fPIE" });

@@ -12,7 +12,6 @@ internal static class TopologicalSort
         var input = modules.ToList();
         var remaining = input.Select(m => m.Id).ToHashSet(StringComparer.Ordinal);
 
-        // Build edges: edge from dep → m means dep must come first.
         var inDegree = input.ToDictionary(m => m.Id, _ => 0, StringComparer.Ordinal);
         var dependents = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
@@ -28,7 +27,6 @@ internal static class TopologicalSort
             }
         }
 
-        // Walk input in original order; pick the first one with zero in-degree, emit it, repeat.
         var ordered = new List<ModuleSpec>(input.Count);
         var remainingList = new List<ModuleSpec>(input);
 

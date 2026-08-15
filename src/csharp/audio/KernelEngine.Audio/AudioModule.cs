@@ -21,7 +21,6 @@ public sealed unsafe class AudioModule : IRuntimeModule
     /// <inheritdoc />
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        // Absent for a host with no scene loader; there is nothing to teach then.
         var world = services.GetService<KernelEngine.Framework.World>();
         if (world is null) return;
 

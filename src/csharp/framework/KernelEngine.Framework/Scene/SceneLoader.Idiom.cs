@@ -35,8 +35,6 @@ public unsafe partial class SceneLoader
     private GCHandle _scriptHandle;
     private Func<ulong, string, bool>? _scriptClosure;
 
-    // Pending managed exception from inside ScriptTrampoline, rethrown once
-    // the native stack has unwound.
     [System.Runtime.CompilerServices.ModuleInitializer]
     internal static void InitPendingException() => s_pendingException = null;
     private static Exception? s_pendingException;

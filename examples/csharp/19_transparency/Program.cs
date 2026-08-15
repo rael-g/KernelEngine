@@ -13,15 +13,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 19_transparency — validates the transparent-forward pass (§8.15): an opaque
-// cube behind two overlapping BLEND quads at different depths. Depth-tests the
-// pass's LEQUAL-no-write behavior against the cube (it must not be occluded by
-// the quads) and its back-to-front sort (the quads must composite red-then-blue,
-// not the reverse — swapping the sort comparison flips the blended color where
-// they overlap, which is the only way to see the ordering is correct by eye).
-// A multi-color cubemap skybox gives the refraction hook something with visible
-// structure to bend — a flat clear color can't show lateral distortion at all.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -37,10 +28,6 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Example: 19_transparency");
         Console.WriteLine("[KernelEngine] Features: transparent_forward, back_to_front_sort, blend, refraction");
 
-        // Procedural cubemap — one solid color per face (+X,-X,+Y,-Y,+Z,-Z), same
-        // technique as 05_skybox_ibl. Gives the glass quad's refraction hook a
-        // structured background (face-colored quadrants) instead of a flat clear
-        // color, so lateral bending is actually visible.
         const uint faceSize = 64;
         var faces = new byte[faceSize * faceSize * 4 * 6];
         (byte R, byte G, byte B)[] skyColors =
@@ -76,16 +63,11 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 6f) };
 
-        // Opaque cube behind both quads — proves the transparent pass's LEQUAL
-        // depth test never occludes it (no depth write from the quads).
         var cube  = KernelEngine.Render.MeshPrimitives.Cube(resources);
         var gray  = resources.CreateMaterial("gray", new Vector4(0.6f, 0.6f, 0.6f, 1f));
         var back  = tree.AddNode(new MeshRenderer { MeshHandle = cube, MaterialHandle = gray }, "OpaqueCube");
         back.LocalTransform = back.LocalTransform with { Position = new Vector3(0f, 0f, -2f), Scale = new Vector3(1.5f) };
 
-        // Two overlapping BLEND quads. Farther (red) at z=0, nearer (blue) at
-        // z=1 — sorted back-to-front, the blue quad must composite AFTER red
-        // where they overlap.
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var red  = resources.CreateMaterial("red", new Vector4(1f, 0.15f, 0.15f, 0.5f), alphaMode: AlphaMode.Blend);
         var blue = resources.CreateMaterial("blue", new Vector4(0.15f, 0.35f, 1f, 0.5f), alphaMode: AlphaMode.Blend);
@@ -96,9 +78,6 @@ var services = new ServiceCollection()
         var near = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = blue }, "NearQuad");
         near.LocalTransform = near.LocalTransform with { Position = new Vector3(0.4f, 0f, 1f), Scale = new Vector3(2f) };
 
-        // A third, separate quad off to the side — a near-clear "glass" pane with
-        // a strong ior + distortion_strength so refraction_contribution's lateral
-        // bend of the skybox is visible on its own, decoupled from the sort test.
         var glass = resources.CreateMaterial("glass", new Vector4(1f, 1f, 1f, 0.15f), alphaMode: AlphaMode.Blend,
             ior: 1.5f, distortionStrength: 0.25f);
         var glassNode = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = glass }, "GlassQuad");

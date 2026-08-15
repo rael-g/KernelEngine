@@ -16,8 +16,6 @@ public static class Commands
         var catalog = ModuleCatalog.DiscoverInEngineRepo(ctx.EngineRoot);
         var spec    = catalog.Get(id);
 
-        // Pull every required transitive dep into the manifest too — saves the user the chore
-        // of remembering them all and matches what every package manager already does.
         var manifest = ProjectManifest.Load(ctx.ProjectFilePath);
         var newlyAdded = new List<string>();
         AddRecursive(spec, catalog, manifest, newlyAdded);
@@ -58,8 +56,6 @@ public static class Commands
             return;
         }
 
-        // Are there other active modules still shipping in the same csproj? If yes, keep the
-        // ProjectReference — only the last hold-out triggers the csproj entry removal.
         var stillNeeded = manifest.Modules
             .Select(catalog.Get)
             .Any(m => string.Equals(m.CsprojRef, spec.CsprojRef, StringComparison.OrdinalIgnoreCase));
@@ -163,19 +159,14 @@ public static class Commands
 
         DotnetRunner.Run("new", "sln",     "-n", name, "-o", parent);
         DotnetRunner.Run("new", "console", "-n", name, "-o", projectDir, "-f", "net10.0");
-        // Recent dotnet SDKs emit .slnx (XML solution) instead of .sln; fall back if the new format
-        // isn't present so the command works across SDK versions.
         var slnPath = new[] { ".slnx", ".sln" }
             .Select(ext => Path.Combine(parent, name + ext))
             .FirstOrDefault(File.Exists)
             ?? throw new InvalidOperationException("`dotnet new sln` produced neither a .sln nor a .slnx file.");
         DotnetRunner.Run("sln", slnPath, "add", Path.Combine(projectDir, name + ".csproj"));
 
-        // `dotnet new console` ships a Hello-World Program.cs — overwrite it with the ke scaffold so
-        // `ke add module` has the canonical `var services = new ServiceCollection()...` anchor to splice into.
         File.WriteAllText(Path.Combine(projectDir, "Program.cs"), ProgramCsSync.ScaffoldTemplate());
 
-        // Minimal Project file. Modules array starts empty; `ke add module` populates it.
         var nl = Environment.NewLine;
         File.WriteAllText(
             Path.Combine(projectDir, "Project"),
@@ -203,8 +194,6 @@ public static class Commands
             Console.WriteLine($"    {id}");
         }
     }
-
-    // ── helpers ─────────────────────────────────────────────────────────────
 
     private static void AddRecursive(ModuleSpec spec, ModuleCatalog catalog, ProjectManifest manifest, List<string> added)
     {

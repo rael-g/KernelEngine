@@ -17,9 +17,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             static (node, _) => node is PropertyDeclarationSyntax { Parent: ClassDeclarationSyntax } p && IsPartialAutoProperty(p),
             static (ctx, _) => (ClassDeclarationSyntax)ctx.Node.Parent!);
 
-        // A node whose only generated member is its behavior dispatch declares no
-        // partial property at all, so property syntax alone would never see it and
-        // its Update would silently never run.
         var behaviorOwners = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is MethodDeclarationSyntax { Parent: ClassDeclarationSyntax c } m
                 && (m.Identifier.ValueText == "Update" || m.Identifier.ValueText == "On")
@@ -50,8 +47,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         if (model.GetDeclaredSymbol(classDecl) is not INamedTypeSymbol classSymbol) return;
         if (!DerivesFromNode(classSymbol)) return;
 
-        // Without partial there is nowhere to emit dispatch into, so a behavior on a
-        // sealed-off class would simply never be called with nothing said about it.
         if (!classDecl.Modifiers.Any(SyntaxKind.PartialKeyword))
         {
             if (classSymbol.GetMembers("Update").OfType<IMethodSymbol>().Any(m =>
@@ -72,21 +67,12 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? null : classSymbol.ContainingNamespace.ToDisplayString();
         var className = classSymbol.Name;
 
-        // protected internal members (OnBind, HasBehavior) keep protected internal
-        // when overridden from Node's own assembly (Framework) — only a CROSS-assembly
-        // override is required to narrow to plain protected. Node3D is the first
-        // generated type to live in the same assembly as Node itself; every other
-        // generated/hand-written node type lives in a domain assembly (Render.Webgpu,
-        // Physics, ...), where narrowing is mandatory, not optional.
         INamedTypeSymbol? nodeType = classSymbol.BaseType;
         while (nodeType is not null && nodeType.Name != "Node") nodeType = nodeType.BaseType;
         var overrideModifier = nodeType is not null && SymbolEqualityComparer.Default.Equals(nodeType.ContainingAssembly, classSymbol.ContainingAssembly)
             ? "protected internal"
             : "protected";
 
-        // A node type is a component SET: one slot per declared component, each with its
-        // own backing state and cid. A game-authored type declares none, and gets a single
-        // synthesized slot instead — the same shape, so nothing below branches on it twice.
         var isNative = markers.Length > 0;
         var slots = isNative
             ? markers.Select((m, i) => new Slot(
@@ -95,11 +81,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                     (string)m.ConstructorArguments[1].Value!,
                     i))
                 .ToImmutableArray()
-            // A game type's component is named after the node, in the same
-            // snake_case a native one uses: a scene addresses [entity.paddle]
-            // without knowing which language the node behind it was written in.
-            // Its struct is nested and private — it belongs to the node visibly,
-            // in a stack trace as much as in the file, and pollutes no namespace.
             : properties.IsEmpty
                 ? ImmutableArray<Slot>.Empty
                 : [new Slot(null, "Data", SnakeCase(className), 0)];
@@ -113,9 +94,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         if (!isNative && !slots.IsEmpty)
         {
-            // A string is stored as a fixed UTF-8 buffer, not a managed reference: the
-            // component has to be plain memory for a language other than this one to
-            // read it at all. Its capacity is the node author's call — see NodeText.
             foreach (var p in properties.Where(p => p.Type.SpecialType == SpecialType.System_String))
             {
                 sb.AppendLine($"    [global::System.Runtime.CompilerServices.InlineArray({TextCapacityOf(p)})]");
@@ -140,17 +118,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         }
         sb.AppendLine();
 
-        // Node.HasBehavior used to be discovered by reflecting on the instance at
-        // bind time; it is now a compile-time decision. The user's own partial
-        // declares OnUpdate (or doesn't) — that's a fact this generator can see
-        // in the same syntax pass, so it emits the override here instead of the
-        // runtime ever asking "does this type have OnUpdate" again.
         var hasOnUpdate = classSymbol.GetMembers("OnUpdate").OfType<IMethodSymbol>()
             .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
 
-        // A borrow-shaped Update is the model's signature-as-access-list form: the
-        // parameters ARE the reach. Dispatch is emitted here so the user's method
-        // stays free of resolution code and the reach stays readable in the signature.
         var declaredUpdates = classSymbol.GetMembers("Update").OfType<IMethodSymbol>()
             .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol))
             .ToImmutableArray();
@@ -158,9 +128,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var updateMethod = declaredUpdates.FirstOrDefault(m =>
             m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
 
-        // Every way a behavior can be written and silently not run gets named here.
-        // The failure this replaces surfaced only as a node that did nothing on screen,
-        // with no build output pointing at the method that was skipped.
         foreach (var m in declaredUpdates)
         {
             if (SymbolEqualityComparer.Default.Equals(m, updateMethod)) continue;
@@ -200,13 +167,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 var kind = BorrowKindOf(pp.Type);
                 if (kind is null) continue;
                 var arg = ((INamedTypeSymbol)pp.Type).TypeArguments[0].ToDisplayString();
-                // An Emit borrow resolves by payload type, not by node name: it is
-                // the right to raise a signal from this node, and this node is
-                // already known.
                 if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
-                // No name means "the one of this type", which is what a borrow says
-                // when the type is already unambiguous. Defaulting to the parameter's
-                // own name made every borrow need a NodeName to say what it meant.
                 var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
                 var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
                 args.Add($"Borrow{kind}<{arg}>(\"{nodeName}\")");
@@ -223,8 +184,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine($"        into.Add(\"{slot.ComponentName}\");");
         foreach (var b in borrows)
         {
-            // An Emit borrow reaches no component: emission lands in the signal
-            // bus's frame storage, which the scheduler does not order on.
             if (BorrowKindOf(b.Type) == "Emit") continue;
             foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
                 sb.AppendLine($"        into.Add(\"{cn}\");");
@@ -233,11 +192,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine();
 
         var needsUtf8Helpers = false;
-
-        // Scene authoring writes the whole component once, not once per property:
-        // a per-property read-modify-write collapses to last-write-wins whenever the
-        // component write is deferred, because every read still sees the pre-write
-        // value. Each plan records how to place one property into a local copy.
 
         foreach (var p in properties)
         {
@@ -254,10 +208,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
             if (wholeAttr is not null)
             {
-                // The whole backing struct, bit-cast — not a per-field read/write.
-                // Same shape as a hand-written whole-struct property (Node3D's
-                // LocalTransform before this became generatable), except the cast
-                // replaces field-by-field assignment so the write stays atomic.
                 var propType = p.Type.ToDisplayString();
                 sb.AppendLine($"    public partial {propType} {p.Name}");
                 sb.AppendLine("    {");
@@ -273,16 +223,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
             var fieldName = isNative ? declaredFieldName : p.Name;
             var fieldSymbol = backingTypeSymbol?.GetMembers(fieldName).OfType<IFieldSymbol>().FirstOrDefault();
-            // ClangSharp backs a C `float x[N]` with a generated `_x_e__FixedBuffer` type —
-            // only THAT shape indexes by [i]; a named ke_vecN/ke_quat field (below) is a
-            // bit-cast coercion instead, even though its C# property is also Vector2/3/4.
             var isFixedBuffer = fieldSymbol is not null && fieldSymbol.Type.Name.EndsWith("_e__FixedBuffer");
 
-            // A `char[N]` component field projected as a string. The buffer's own
-            // capacity is the truncation point — it is the component's ABI, so the
-            // property cannot widen it, only refuse to overflow it.
-            // A game type's component has no C header behind it, so the buffer that
-            // makes a string storable is generated here, sized by the node's author.
             if (p.Type.SpecialType == SpecialType.System_String && !isNative)
             {
                 needsUtf8Helpers = true;
@@ -362,9 +304,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         if (needsUtf8Helpers)
         {
-            // Generic over the inline-array type so one pair serves every char[N]
-            // field regardless of its capacity: CreateSpan(ref buf, 1) + AsBytes
-            // yields exactly sizeof(TBuf) bytes, which IS N for a char buffer.
             sb.AppendLine();
             sb.AppendLine("    private static string GeneratedUtf8Get<TBuf>(ref TBuf buffer) where TBuf : struct");
             sb.AppendLine("    {");
@@ -374,10 +313,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine("        return global::System.Text.Encoding.UTF8.GetString(nul < 0 ? bytes : bytes.Slice(0, nul));");
             sb.AppendLine("    }");
             sb.AppendLine();
-            // Refuses rather than truncates. The buffer's capacity is the component's
-            // ABI, so a value that does not fit is a fact the caller has to hear now: a
-            // silently shortened path is a file that fails to open much later, pointing
-            // at nothing that explains it.
             sb.AppendLine("    private static void GeneratedUtf8Set<TBuf>(ref TBuf buffer, string value, string property) where TBuf : struct");
             sb.AppendLine("    {");
             sb.AppendLine("        var bytes = global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(");
@@ -402,11 +337,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         sb.AppendLine($"    {overrideModifier} override void GeneratedBind(global::KernelEngine.Framework.NodeWorld nodeWorld)");
         sb.AppendLine("    {");
-        // A node type deriving from another generated node (MeshRenderer : Node3D)
-        // binds TWO components, one per class in the chain, each with its own
-        // _generatedCid. Overriding without chaining would leave every base
-        // class's component unbound — its cid stays 0 and every write to its
-        // properties is silently dropped.
         sb.AppendLine("        base.GeneratedBind(nodeWorld);");
         foreach (var slot in slots)
         {
@@ -427,8 +357,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         spc.AddSource($"{className}.NodeProperties.g.cs", sb.ToString());
     }
-
-
 
     /// <summary>
     /// Bytes of UTF-8 a string property stores, from its <c>[NodeText]</c> or the
@@ -463,8 +391,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             var ch = name[i];
             if (char.IsUpper(ch))
             {
-                // A run of capitals is one word, so UIRoot reads ui_root, not u_i_root;
-                // a capital after a digit continues one, so Sprite2D reads sprite2d.
                 var startsWord = i > 0 && !char.IsDigit(name[i - 1])
                     && (!char.IsUpper(name[i - 1])
                         || (i + 1 < name.Length && !char.IsUpper(name[i + 1])));
@@ -507,9 +433,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine($"                comp.{p.Name} = e_{key};");
                 continue;
             }
-            // A string lands in the property's fixed buffer through the same checked
-            // writer the setter uses, so a scene authoring a value too long for the
-            // component fails the load instead of storing a truncated one.
             if (t.SpecialType == SpecialType.System_String)
             {
                 sb.AppendLine($"            if (reader.TryGetString(\"{key}\", out var v_{key}))");
@@ -528,8 +451,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 "System.Numerics.Quaternion" => $"reader.TryGetQuat(\"{key}\", out var v_{key})",
                 _ => null,
             };
-            // A property whose type the scene vocabulary cannot spell stays code-only
-            // rather than getting an encoding invented for it here.
             if (read is null) continue;
             var cast = t.ToDisplayString() switch
             {
@@ -585,8 +506,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             return null;
         }
 
-        // A whole-struct property names no field, so nothing but an explicit Component can
-        // say which of several structs it IS.
         if (isWhole)
         {
             spc.ReportDiagnostic(Diagnostic.Create(UnnamedWholeRule, property.Locations.FirstOrDefault(), property.Name));
@@ -617,17 +536,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         return type.Name switch { "Vector2" => 2, "Vector3" => 3, "Vector4" => 4, _ => null };
     }
 
-    // ke_vec2/ke_vec3/ke_vec4/ke_quat (KernelEngine.Common.Native) are layout-identical
-    // to their System.Numerics counterparts by construction (see kabic's NamedVectorTypes),
-    // so the coercion is a bit-cast, not a field-by-field copy.
     static readonly Dictionary<string, string> NativeVectorNames = new()
     {
         ["Vector2"] = "ke_vec2", ["Vector3"] = "ke_vec3", ["Vector4"] = "ke_vec4", ["Quaternion"] = "ke_quat",
     };
 
-    // ke_mesh_handle / ke_material_handle are { uint32_t bits; }; their managed
-    // counterparts are readonly record struct H(uint Value). Same size, same single
-    // field, so the coercion is a bit-cast like the vector one above.
     static readonly Dictionary<string, string> NativeHandleNames = new()
     {
         ["MeshHandle"] = "ke_mesh_handle", ["MaterialHandle"] = "ke_material_handle",
@@ -638,10 +551,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     {
         if (propertyType.SpecialType == SpecialType.System_Boolean && fieldType.SpecialType == SpecialType.System_Byte)
             return (expr => $"{expr} != 0", expr => $"(byte)({expr} ? 1 : 0)");
-        // A domain's managed enum and the ClangSharp binding of the same C enum are two
-        // declarations of one set of named integers, generated from one header. Their
-        // underlying types need not match — kabic picks int, ClangSharp mirrors C's
-        // unsigned — but the members and their values do, so the conversion is a cast.
         if (propertyType.TypeKind == TypeKind.Enum && fieldType.TypeKind == TypeKind.Enum)
         {
             var pn = propertyType.ToDisplayString();

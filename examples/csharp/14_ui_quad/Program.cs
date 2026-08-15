@@ -15,11 +15,6 @@ using KernelEngine.Render;
 using KernelEngine.Render.Native;
 using KernelEngine.Text;
 
-// 14_ui_quad — UI overlay smoke test: one flat-color rectangle + three
-// stb_truetype-backed Labels positioned via anchor + offset. Validates the
-// render-v2 UI pass (screen-space quads composited after tonemap) and the
-// Label / glyph atlas pipeline end-to-end.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -97,8 +92,6 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[14_ui_quad] Exited cleanly.");
 
-// ── Solid-color background quad, queued every frame by attaching a ke_ui_quad_component ──
-
 sealed class BackgroundQuad : Node
 {
     private uint _quadCid;
@@ -116,7 +109,6 @@ sealed class BackgroundQuad : Node
             dst_x = 360, dst_y = 220, dst_w = 240, dst_h = 100,
             u0 = 0, v0 = 0, u1 = 1, v1 = 1,
         };
-        // Premultiplied alpha RGBA.
         quad.color[0] = 0.20f * 0.5f;
         quad.color[1] = 0.85f * 0.5f;
         quad.color[2] = 0.30f * 0.5f;

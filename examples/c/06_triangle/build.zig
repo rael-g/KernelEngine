@@ -1,17 +1,10 @@
 const std = @import("std");
 
-// Builds this example via Zig's own C frontend, after generating the SPIR-V
-// header pair with glslangValidator — the same tool CMake invoked directly.
-// See examples/c/01_minimal_log/build.zig for why plain C doesn't need the
-// system-compiler dance the GTest suites do.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     const glslang = b.option([]const u8, "glslang", "path to glslangValidator") orelse "glslangValidator";
-    // e.g. "triangle" turns into triangle.vert.glsl -> triangle_vert.h
-    // (symbol triangle_vert_spv) and the matching .frag pair.
     const shader_name = b.option([]const u8, "shader-name", "base name shared by the .vert.glsl/.frag.glsl pair") orelse @panic("-Dshader-name required");
     const shader_out_dir = b.option([]const u8, "shader-out-dir", "directory to write generated shader headers into") orelse @panic("-Dshader-out-dir required");
     const include_dirs = b.option([]const u8, "include-dirs", "'|'-separated include directories") orelse "";

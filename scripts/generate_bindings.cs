@@ -6,37 +6,17 @@ using System.Runtime.CompilerServices;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 var csharpDir = Path.Combine(rootDir, "src", "csharp");
 
-// dotnet run compiles/caches file-based apps elsewhere, so AppContext.BaseDirectory
-// does not point at this file's actual location — CallerFilePath, resolved at
-// compile time against this source file, does.
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 
 Console.WriteLine($"Restoring .NET tools in {csharpDir}...");
 Run(["dotnet", "tool", "restore"], csharpDir);
 
-// ClangSharpPInvokeGenerator's Linux package ships libclang.so alone, without the
-// "resource dir" of builtin headers (stdbool.h, stddef.h, ...) a normal clang
-// install carries alongside it — without it, parsing any header that includes
-// <stdbool.h> fails with "file not found". Fetched once (matching the pinned
-// clang version exactly, via the llvm-project source tree — these are the same
-// plain-text headers regardless of platform) and reused across runs.
 const string ClangVersion = "21.1.8";
 var resourceDir = Path.Combine(rootDir, ".cache", $"clang-resource-dir-{ClangVersion}");
 await EnsureClangResourceDir(resourceDir, ClangVersion);
 
-// uint64_t/int64_t are platform-independent by the C standard's own guarantee (always
-// exactly 64 bits) — but glibc happens to implement that guarantee via `unsigned long`
-// (ambiguous-width in general C, though not here), while Windows' CRT uses `unsigned
-// long long` (unambiguous). ClangSharp keys off which spelling was used rather than the
-// typedef's actual guarantee, so it emits `nuint`/`nint` (a *genuinely* dynamic-width
-// C# type) only on Linux. Remapping the two stdint.h typedefs directly makes every
-// derived type (ke_entity, GPU handles, ...) and every raw field/param resolve
-// identically regardless of which OS ran the generator.
 var extraArgs = new[] { "-a", $"-resource-dir={resourceDir}", "-r", "uint64_t=ulong", "-r", "int64_t=long" };
 
-// Same package also fails to resolve libclang.so itself via normal shared-library
-// search paths when invoked through `dotnet tool run` — needs its own directory
-// added explicitly. Windows' tool resolution doesn't have this problem.
 Dictionary<string, string>? env = null;
 if (!OperatingSystem.IsWindows())
 {
@@ -64,7 +44,6 @@ foreach (var rsp in rspFiles)
 {
     Console.WriteLine($"\n--- Generating: {Path.GetRelativePath(rootDir, rsp)} ---");
 
-    // Wipe the output dir first so bindings for types removed from the headers don't linger.
     var outDir = OutputDirFor(rsp);
     if (outDir is not null && Directory.Exists(outDir))
     {
@@ -75,11 +54,6 @@ foreach (var rsp in rspFiles)
     string[] command = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", $"@{rsp}", .. extraArgs];
     var (exitCode, stdout, stderr) = Run(command, Path.GetDirectoryName(rsp)!, env);
 
-    // What counts as failure is whether anything was written, not the tool's exit
-    // code: ClangSharp exits non-zero for a warning too, and most headers here
-    // produce one. Treating that as failure made 17 of these "fail" on every run,
-    // which is how a real breakage — a missing include that emitted nothing and
-    // left the wiped directory empty — looked exactly like the usual noise.
     var wrote = outDir is not null && Directory.Exists(outDir)
         && Directory.EnumerateFiles(outDir, "*.cs", SearchOption.AllDirectories).Any();
 
@@ -100,9 +74,6 @@ foreach (var rsp in rspFiles)
 Console.WriteLine($"\nDone. {successCount}/{rspFiles.Count} bindings regenerated successfully.");
 return successCount == rspFiles.Count ? 0 : 1;
 
-// ClangSharp resolves --output relative to the working directory, which is set to the
-// .rsp's own folder. Multi-file codegen emits one .cs per type there, so wiping this
-// directory before regenerating is what drops bindings for types removed from headers.
 static string? OutputDirFor(string rsp)
 {
     var rspDir = Path.GetDirectoryName(rsp)!;

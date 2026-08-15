@@ -13,11 +13,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 01_window_scene — a single orange quad spinning on the screen under a fixed
-// directional light. Smallest possible scene that exercises window + renderer
-// + framework + a scripted node behavior. The render passes read the scene's ECS
-// components directly.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -25,8 +20,6 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))
-    // Render module before the scene module: its OnLoad creates the render core
-    // (so mesh upload works) before the scene setup callback runs.
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.15f, 0.15f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
@@ -82,8 +75,6 @@ while (!window.ShouldClose())
 runtime.UnloadModules(sp);
 
 Console.WriteLine("[01_window_scene] Exited cleanly.");
-
-// â”€â”€ A MeshRenderer that spins around Y at 90 deg/s â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class SpinningQuad : MeshRenderer
 {

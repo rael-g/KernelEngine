@@ -253,8 +253,6 @@ public sealed class NodeWorld
         if (node.HasBehavior && _behaviorsByType.TryGetValue(node.GetType(), out var behaviors)) behaviors.Remove(node);
         _allNodes.Remove(node);
         _byEntity.Remove(node.Entity);
-        // A wire naming a destroyed node would keep routing to an entity id the ECS
-        // is free to hand out again, delivering one node's signal to an unrelated one.
         _signals?.ForgetEntity(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
         node.UnbindFromNodeWorld();

@@ -102,16 +102,10 @@ public static class CSharpBackend
         var nativeType = component.Name;
         var componentName = convention.ComponentNameFor(component.Name);
 
-        // [base:X] — the node type X this one extends, named by its [node:] name.
-        // Real inheritance rather than flattening X's components in here: what
-        // separates a node from its base is the data it adds, and a reader should
-        // see that separation in the type, not have to diff two generated files.
         var baseName = BaseNodeOf(model, component) ?? "Node";
 
         var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;" };
         if (nativeNs != "KernelEngine.Common.Native") o.Add($"using {nativeNs};");
-        // A composed component's field can be typed by a name the owning domain emits
-        // (an enum, a handle); the domain's configured usings are what resolve it.
         foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};\n");
@@ -121,9 +115,6 @@ public static class CSharpBackend
         o.Add($"public partial class {nodeName} : {baseName}");
         o.Add("{");
 
-        // Only this type's own component. The base class declares its own, and the
-        // Roslyn generator chains GeneratedBind, so every component in the chain is
-        // bound exactly once by the class that owns it.
         var slots = new List<ApiStruct> { component };
 
         o.Add($"    public {nodeName}()");
@@ -179,13 +170,8 @@ public static class CSharpBackend
     {
         var spec = component.TagValue("base");
         if (spec is null) return null;
-        // Single inheritance, so a single name. A node needing two components'
-        // worth of data says so with its own struct, not by naming two bases.
         if (spec.Contains('+'))
             throw new InvalidOperationException($"{component.Name}: [base:] names one node type, not '{spec}'");
-        // Resolved rather than trusted: a name that matches no [node:] struct would
-        // emit a class extending a type that does not exist, and the error would
-        // land in generated code instead of on the header that caused it.
         _ = model.Structs.FirstOrDefault(x => x.TagValue("node") == spec)
             ?? throw new InvalidOperationException(
                 $"{component.Name} extends '{spec}', which no [node:] struct in this domain declares; "
@@ -230,20 +216,8 @@ public static class CSharpBackend
 
         foreach (var f in c.Fields)
         {
-            // [idiom] — the field is part of the component's ABI but not part of
-            // the node's authoring surface, because something other than the node
-            // owns writing it (the scene loader's property-apply path). Emitting a
-            // settable property for one would invite callers to author a value that
-            // gets overwritten.
             if (f.Has("idiom")) continue;
 
-            // [name:] on a FIELD is the field's canonical name in every language,
-            // written the way a C identifier is and cased by each backend — not a
-            // C#-only rename. A field's C spelling, the key a scene file addresses
-            // it by, and the property a binding exposes are one concept; letting
-            // them diverge is what made the scene loader carry a renaming layer no
-            // header knew about. (A [name:] on a vtable SLOT is unrelated: it names
-            // a method, and stays whatever it is written as.)
             var propName = Idioms.Pascal(f.TagValue("name") ?? f.Name);
             var propType = NodePropertyType(model, f, convention);
             yield return "";
@@ -266,12 +240,6 @@ public static class CSharpBackend
         return m.Success && int.Parse(m.Groups[1].Value) is >= 2 and <= 4 ? int.Parse(m.Groups[1].Value) : null;
     }
 
-    // ke_vec2/ke_vec3/ke_vec4/ke_quat are the engine's own math types (common/math.h,
-    // remapped so every domain's ClangSharp binding reuses the one Common.Native
-    // definition) — layout-identical to their System.Numerics counterparts, so the
-    // Roslyn NodePropertyGenerator's coercion is a bit-cast, not field-by-field copy.
-    // Field names here (x/y/z/w) are ke_vecN's own — required to build a native-type
-    // object initializer for [default:] values.
     static readonly Dictionary<string, (string CsType, string[] Lanes)> NamedVectorTypes = new()
     {
         ["ke_vec2"] = ("Vector2", ["x", "y"]),
@@ -280,10 +248,6 @@ public static class CSharpBackend
         ["ke_quat"] = ("Quaternion", ["x", "y", "z", "w"]),
     };
 
-    // Resource handles are single-uint32 structs on both sides, so a node property
-    // can carry the managed one the rest of the C# surface already speaks
-    // (IRenderResources hands back a MeshHandle, not a ke_mesh_handle) and the
-    // Roslyn generator bit-casts at the boundary, exactly as it does for ke_vecN.
     static readonly Dictionary<string, string> NamedHandleTypes = new()
     {
         ["ke_mesh_handle"] = "KernelEngine.Render.MeshHandle",
@@ -292,11 +256,6 @@ public static class CSharpBackend
         ["ke_ui_font_handle"] = "KernelEngine.Render.FontHandle",
     };
 
-    // A fixed-size `char[N]` inside a component is the C ABI's only way to carry
-    // text: an ECS component is a plain struct, so it cannot own a pointer to
-    // memory with a different lifetime. The node surface projects it as a plain
-    // string and the Roslyn generator encodes/decodes UTF-8 at the boundary,
-    // truncating at the buffer's capacity the same way the native writers do.
     static bool IsCharArray(string cType) =>
         System.Text.RegularExpressions.Regex.IsMatch(cType.Trim(), @"^(const\s+)?char\s*\[\d+\]$");
 
@@ -305,8 +264,6 @@ public static class CSharpBackend
         NamedHandleTypes.TryGetValue(f.Type.Trim(), out var h) ? h :
         VectorArity(f.Type) is int n ? $"Vector{n}"
         : NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.CsType
-        // An enum-typed field names a real type, whether this domain describes the enum
-        // or only composes against it; CsType would otherwise leave the bare C spelling.
         : model.Enums.Any(e => e.Name == f.Type.Trim()) ? Idioms.TypeName(f.Type.Trim(), convention)
         : f.Has("bool") ? "bool" : CsType(model, f.Type);
 
@@ -484,11 +441,6 @@ public static class CSharpBackend
     static void RenderSlotMethod(ApiModel model, List<string> o, ClassifiedSlot cs, Convention convention)
     {
         var slot = cs.Slot;
-        // [name:] lets the header pick the emitted name. Needed when the plain
-        // derived name has to stay free for a hand-written counterpart that wraps
-        // this one — a raw slot call cannot marshal a managed exception parked by
-        // a callback, so the wrapper, not the generated method, must own the name
-        // callers reach for.
         var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
 
         switch (cs.Shape)
@@ -834,11 +786,6 @@ public static class CSharpBackend
             $"namespace {ns};",
             "",
             $"/// <summary>Free-function operations on <see cref=\"{owner}\"/>.</summary>",
-            // Not a `static class`: the same owner may also have a vtable, whose
-            // provider is emitted as a partial class of this very name. Declaring
-            // both as one partial type merges them into a single managed surface
-            // instead of colliding, and a partial holding only statics is still
-            // valid when no provider exists.
             $"public unsafe partial class {ownerCs}",
             "{",
         ]);

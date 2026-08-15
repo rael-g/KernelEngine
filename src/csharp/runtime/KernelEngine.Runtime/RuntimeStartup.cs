@@ -34,8 +34,6 @@ public static class RuntimeStartup
             runtime.RegisterModule(module.Name, rt => module.OnLoad(rt, services));
         }
 
-        // Remember the load order so UnloadModules can reverse it. Weak ref
-        // means we don't keep the runtime alive past its natural lifetime.
         s_loadOrder.AddOrUpdate(runtime, ordered);
     }
 
@@ -57,10 +55,6 @@ public static class RuntimeStartup
         if (!s_loadOrder.TryGetValue(runtime, out var ordered)) return;
         s_loadOrder.Remove(runtime);
 
-        // The last tick() dispatched its render phase asynchronously and may
-        // not have finished yet. Modules unload here — often tearing down the
-        // GPU device/swapchain the still-running render phase is reading —
-        // so it must be joined first.
         runtime.Flush();
 
         for (int i = ordered.Count - 1; i >= 0; i--)

@@ -13,11 +13,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 07_point_lights — a 6×6 quad grid lit by four moving colored point lights, no
-// directional light. Render v2 (webgpu): the forward pass accumulates each
-// PointLightComponent (position from its transform) with distance attenuation;
-// an AmbientLight fills the unlit areas.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -41,7 +36,6 @@ var services = new ServiceCollection()
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var mat  = resources.CreateMaterial("grid_quad", Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
-        // Grid of quads at z=0, x,y ∈ {-5, -3, -1, 1, 3, 5}.
         for (int x = -5; x <= 5; x += 2)
         for (int y = -5; y <= 5; y += 2)
         {
@@ -82,8 +76,6 @@ while (!window.ShouldClose())
 runtime.UnloadModules(sp);
 
 Console.WriteLine("[07_point_lights] Exited cleanly.");
-
-// ── Moving point light — orbits the origin with per-instance phase ───────────
 
 sealed class MovingPointLight : PointLight
 {

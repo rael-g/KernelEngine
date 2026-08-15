@@ -14,9 +14,6 @@ public class HandleTests
     [Fact]
     public void MeshHandle_None_IsAllBitsZero()
     {
-        // The property the whole scheme rests on: memory that arrives zeroed —
-        // a component the scene file created, a struct left default — already
-        // reads as no handle, with nobody having to seed it.
         Assert.Equal(0u, MeshHandle.None.Value);
     }
 

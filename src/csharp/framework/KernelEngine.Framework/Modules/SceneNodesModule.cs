@@ -59,18 +59,9 @@ public sealed class SceneNodesModule : IRuntimeModule
         var scheduler = services.GetRequiredService<IScheduler>();
         var evaluator = services.GetService<IActionEvaluator>();
 
-        // The ctx-aware overload hands each tick its system context. Node create/
-        // destroy issued from a behavior routes through it and defers the structural
-        // change to the wave barrier — so this runs as an ordinary parallel-wave
-        // system with no exclusive bypass.
         var hierarchyCid = nodeWorld.CidOfName("hierarchy");
         var nameCid      = nodeWorld.CidOfName("name");
 
-        // Sampling runs once per tick in an earlier phase, not inside each node-type
-        // system: a rising edge read by two systems in the same tick would be seen
-        // twice, and the phase boundary is the runtime's only ordering guarantee —
-        // waves inside a phase are grouped by component conflict, which input is not
-        // expressed in.
         runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _, _) =>
         {
             input?.Update();
@@ -78,10 +69,6 @@ public sealed class SceneNodesModule : IRuntimeModule
             evaluator?.Evaluate(_inputSnapshot);
         }, accessList: Array.Empty<ComponentAccess>(), pinnedThread: 1);
 
-        // Emission happens in Update, so the clear must be in an earlier phase and
-        // the delivery in a later one: a phase boundary is the runtime's only
-        // ordering guarantee, and waves inside a phase are grouped by component
-        // conflict, which the bus's frame storage is not expressed in.
         var signals = services.GetService<SignalBus>();
         if (signals is not null)
         {
@@ -108,10 +95,6 @@ public sealed class SceneNodesModule : IRuntimeModule
             var names = new List<string>();
             probe.CollectBehaviorComponents(names);
 
-            // Hierarchy and name are read every tick to resolve borrows. Everything
-            // else comes from the type's declared components: claiming a blanket write
-            // on transform put every node type in conflict with every other, which is
-            // one wave per type no matter what the signatures actually reach.
             var access = new List<ComponentAccess>
             {
                 ComponentAccess.Read(hierarchyCid),
@@ -137,9 +120,6 @@ public sealed class SceneNodesModule : IRuntimeModule
             }, accessList: access.ToArray());
         };
 
-        // Scene setup runs pinned to a worker thread (GPU upload has thread
-        // affinity when a render module is present), after every domain
-        // module's OnLoad has registered its own components/applies/node types.
         var done = new System.Threading.ManualResetEventSlim(false);
         Exception? err = null;
         scheduler.DispatchPinned(SetupWorker, () =>

@@ -17,11 +17,6 @@ using KernelEngine.Logger;
 using KernelEngine.Audio;
 using KernelEngine.Input;
 
-// Pong — driven by Project + actions.input + scenes/Main.scene. Program.cs
-// just wires the engine modules and points the scene loader at Main.scene;
-// everything visible — the field layout, the scripts, the input bindings —
-// lives in the data files.
-
 var services = new ServiceCollection()
     .AddProjectConfig()
     .AddLogger()

@@ -14,10 +14,6 @@ namespace EngineTests;
 /// </summary>
 public sealed class SchedulerTests
 {
-    // ── Sync mock callbacks ───────────────────────────────────────────────────
-    //
-    // [UnmanagedCallersOnly] methods cannot be called from managed code directly,
-    // so SyncDispatch cannot delegate to SyncDispatchOnComplete — logic is inlined.
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe ke_task* SyncDispatchOnComplete(
@@ -51,8 +47,6 @@ public sealed class SchedulerTests
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void NoopWait(ke_scheduler* self, ke_task* task) { }
 
-    // ── Mock handle ───────────────────────────────────────────────────────────
-
     private sealed class MockSchedulerHandle : IDisposable
     {
         private unsafe ke_scheduler* _ptr;
@@ -79,8 +73,6 @@ public sealed class SchedulerTests
         }
     }
 
-    // ── Task (existing Dispatch API) ──────────────────────────────────────────
-
     [Fact]
     public async Task Dispatch_Action_Executes()
     {
@@ -105,8 +97,6 @@ public sealed class SchedulerTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => mock.Scheduler.Dispatch<int>(() => throw new InvalidOperationException("boom")));
     }
-
-    // ── KernelTask (new DispatchKernelTask API) ───────────────────────────────────────
 
     [Fact]
     public async Task DispatchKernelTask_Action_IsAwaitable()
@@ -175,7 +165,6 @@ public sealed class SchedulerTests
     [Fact]
     public async Task DispatchKernelTask_ComposesLikeTask()
     {
-        // KernelTask<T> composes with async/await identically to Task<T>
         using var mock = new MockSchedulerHandle();
         var s = mock.Scheduler;
 

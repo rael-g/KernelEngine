@@ -1,12 +1,3 @@
-// Writing ke_api.json from Kabic.Core's model. Only the frontend writes this
-// file (every reader — Kabic.Core.ApiReader, and therefore every backend —
-// only ever reads it), so the serializer lives here, not in Kabic.Core: a
-// type shared for reading doesn't need to also carry its own write path.
-//
-// Built as a JsonNode tree, not JsonSerializer.Serialize<T>: file-based
-// `dotnet run` apps disable reflection-based serialization by default in
-// .NET 10, and a manual tree needs no source-generated JsonSerializerContext
-// to route around that.
 
 using System.Text.Json.Nodes;
 

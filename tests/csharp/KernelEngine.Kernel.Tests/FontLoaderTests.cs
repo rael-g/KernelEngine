@@ -118,6 +118,5 @@ public class FontLoaderTests
         loader.Dispose();
 
         Assert.True(DestroyCalled);
-        // MockDestroy doesn't free memory — don't double-free here.
     }
 }

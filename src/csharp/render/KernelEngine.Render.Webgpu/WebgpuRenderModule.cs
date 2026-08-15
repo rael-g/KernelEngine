@@ -93,7 +93,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var ecs       = services.GetRequiredService<IEcs>();
         var logger    = services.GetService<INativeLogger>();
         var scheduler = services.GetRequiredService<IScheduler>();
-        // Optional: absent for raw-ECS examples with no scene loader.
         var world     = services.GetService<KernelEngine.Framework.World>();
 
         var win = ((INativeWindow)window).Native;
@@ -105,10 +104,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         ke_error* err = null;
 
-        // wgpu-native's async pipeline-compile primitive is unimplemented
-        // upstream — this backend emulates create_render_pipeline_async by
-        // dispatching the real compile onto this scheduler instead (see
-        // gpu_device_webgpu_create.h's doc comment on the `scheduler` field).
         var dp = new ke_gpu_device_webgpu_params { window = win, enable_validation = 1, scheduler = sc };
         _device = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, &err);
         if (_device.@ref == null)
@@ -125,10 +120,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 : (uint)(config?.GetInt("render", "max_lights_per_cluster", 0) ?? 0),
         };
         var fp = _featureParams;
-        // Borrowed from the container, never created here: which loader decodes an
-        // image is the asset domain's business, and a host that wants no file-backed
-        // assets registers none. Its absence costs a sprite naming a file its texture,
-        // nothing else.
         var ar = services.GetService<KernelEngine.Framework.NativeAssetResolver>() is { } resolver
             ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
             : null;
@@ -139,8 +130,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw Fail("render module create failed", err);
 
         _core = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_core(_module.@ref);
-        // Borrowed, not owned: the render module (not this wrapper) destroys
-        // ke_render_service, via _module.destroy in OnUnload.
         _renderService = RenderService.Borrow(_core);
         var clearColor = _clearColorOverride ?? ResolveClearColor(config);
         _renderService.SetClearColor(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);

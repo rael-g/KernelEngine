@@ -1,7 +1,6 @@
 using KernelEngine.Render;
 using KernelEngine.Text;
 
-
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -41,8 +40,6 @@ public sealed class Font
     {
         using var data = loader.LoadFontAsync(path, pixelSize, atlasSize, firstCodepoint, codepointCount)
                                .GetAwaiter().GetResult();
-        // Bake parameters are part of the key: the same font file at a different
-        // size/range/atlas resolution is a genuinely different texture.
         var key = $"font:{path}:{pixelSize}:{atlasSize}:{firstCodepoint}:{codepointCount}";
         var atlas = resources.UploadTexture(key, data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
 

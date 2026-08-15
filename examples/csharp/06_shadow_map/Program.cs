@@ -13,12 +13,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 06_shadow_map — directional shadow casting onto a floor plane. A red cube sits
-// above a gray floor; the sun's azimuth sweeps over time so the cube's shadow
-// slides across the floor, making the shadow projection visible at a glance.
-// Render v2 (webgpu): a discrete shadow-depth pass renders the casters from the
-// light's point of view into a depth map, and the forward pass samples it.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -47,8 +41,6 @@ var services = new ServiceCollection()
             Ambient   = new(0.15f, 0.15f, 0.15f),
         }, "Sun");
 
-        // Look-at-origin camera (identity rotation): from above and behind, it
-        // frames the floor + cube + the cast shadow without a free-look rig.
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 10f) };
 
@@ -79,10 +71,6 @@ while (!window.ShouldClose())
 runtime.UnloadModules(sp);
 
 Console.WriteLine("[06_shadow_map] Exited cleanly.");
-
-// ── Animated sun — direction sweeps in azimuth ───────────────────────────────
-// The light travels downward (negative Y) so it lights the floor; the X term
-// sweeps with sin(t) so the cube's shadow slides across the floor.
 
 sealed class AnimatedSun : DirectionalLight
 {

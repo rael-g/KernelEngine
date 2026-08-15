@@ -13,12 +13,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 08_spot_lights — three colored spot lights orbiting above a floor + grid of
-// cubes. Each spot's direction tracks the origin so the cones sweep across the
-// floor and cubes. Render v2 (webgpu): the forward pass accumulates each
-// SpotLightComponent (position from its transform, direction explicit) with
-// distance × cone falloff.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -95,8 +89,6 @@ while (!window.ShouldClose())
 runtime.UnloadModules(sp);
 
 Console.WriteLine("[08_spot_lights] Exited cleanly.");
-
-// ── Orbiting spot light — position circles, direction points at the origin ───
 
 sealed class OrbitingSpot : SpotLight
 {

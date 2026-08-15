@@ -9,10 +9,6 @@ using KernelEngine.Scheduler;
 using KernelEngine.Window;
 using KernelEngine.Logger;
 
-// Uniform Add<> pattern. Infrastructure (allocator/logger/ecs/scheduler/runtime)
-// + modules (window/render/etc.) go through one verb. Headless variants drop
-// modules they don't need; runtime never knows what's there.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -27,8 +23,6 @@ var runtime  = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 
-// FpsCounter — host-side system registered directly. Demonstrates that any
-// caller can talk to the runtime; modules aren't the only way.
 var sw           = Stopwatch.StartNew();
 double lastPrint = 0;
 long   ticks     = 0;

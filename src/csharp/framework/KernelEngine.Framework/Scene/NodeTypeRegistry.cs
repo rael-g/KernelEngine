@@ -95,8 +95,6 @@ public sealed class NodeTypeRegistry
             if (char.IsUpper(ch))
             {
                 var prev = i > 0 ? name[i - 1] : '.';
-                // A run of capitals is one word, so UIRoot reads ui_root; a capital
-                // after a digit continues one, so Sprite2D reads sprite2d.
                 var startsWord = prev != '.' && prev != '_' && !char.IsDigit(prev)
                     && (!char.IsUpper(prev) || (i + 1 < name.Length && char.IsLower(name[i + 1])));
                 if (startsWord) sb.Append('_');

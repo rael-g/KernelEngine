@@ -21,8 +21,6 @@ public unsafe partial class World : IDisposable
     private readonly delegate* unmanaged[Cdecl]<ke_scene_tree*, void> _destroyTree;
     private SceneTree? _sceneTree;
 
-    // Keeps managed apply delegate wrappers alive so the GC doesn't collect
-    // them while native code holds the function pointer.
     private readonly List<GCHandle> _applyHandles = [];
 
     /// <summary>ECS registry borrowed by this world. Same instance as the DI-registered <see cref="IEcsRegistry"/>.</summary>
@@ -73,8 +71,6 @@ public unsafe partial class World : IDisposable
             native->register_component_apply(native, cid, fnPtr, &err), err, "register_component_apply");
     }
 
-
-
     /// <summary>Also releases the owned scene tree and the GC handles kept for registered apply callbacks.</summary>
     partial void OnDispose()
     {
@@ -88,7 +84,6 @@ public unsafe partial class World : IDisposable
         _applyHandles.Clear();
     }
 
-    // Non-generic delegate so Marshal.GetFunctionPointerForDelegate accepts it.
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private unsafe delegate void ApplyNativeFn(void* comp, ke_variant_table_entry* entries, uint count);
 
@@ -114,10 +109,6 @@ public unsafe partial class World : IDisposable
             }
             catch (Exception ex)
             {
-                // The caller is native. An exception thrown across those frames is
-                // undefined behaviour, so it is parked and rethrown by the load that
-                // caused it — a value the component cannot hold is a scene error,
-                // and the author has to hear it.
                 SceneLoader.ParkException(ex);
             }
         }

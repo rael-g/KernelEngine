@@ -22,13 +22,11 @@ public unsafe partial class FontLoader : IFontLoader
     {
         ArgumentNullException.ThrowIfNull(path);
 
-        // Decode on a worker so ke.sim isn't blocked on disk + CPU bake.
         return Task.Run(() =>
         {
             var data = LoadFont(path, pixelSize, firstCodepoint, codepointCount, atlasSize);
             try
             {
-                // Copy native atlas + glyphs into managed arrays so the native buffer can be freed.
                 var atlasLen = (int)(data->atlas_width * data->atlas_height * 4);
                 var atlas    = new byte[atlasLen];
                 Marshal.Copy((IntPtr)data->atlas_rgba, atlas, 0, atlasLen);

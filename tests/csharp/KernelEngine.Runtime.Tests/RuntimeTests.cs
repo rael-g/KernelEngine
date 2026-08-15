@@ -5,8 +5,6 @@ using Xunit;
 
 namespace KernelEngine.Runtime.Tests;
 
-// Managed coverage for the split Runtime + FlecsEcs + TaskScheduler triple.
-// Mirrors the C++ RuntimeSpike suite in tests/integration/cpp/test_runtime.cpp.
 public class RuntimeTests : IDisposable
 {
     private readonly EnkiScheduler _taskScheduler = new();

@@ -13,16 +13,6 @@ using KernelEngine.Logger;
 using KernelEngine.Audio;
 using KernelEngine.Input;
 
-// 15_audio_test — kernel ke_audio → miniaudio plugin → IAudio C# wrapper.
-// Two short sine WAVs are generated to %TEMP% at startup (no committed binary
-// assets). Click the window to focus, then:
-//   • Space  → play the 440 Hz beep
-//   • L      → toggle a 220 Hz looping bass
-//   • Escape → quit
-//
-// Edge detection is done in OnUpdate by tracking the previous frame's key
-// state, since the new Framework doesn't yet ship an OnInput event hook.
-
 var beepPath = WriteSineWav(440, durationMs: 150);
 var bassPath = WriteSineWav(220, durationMs: 500);
 
@@ -72,8 +62,6 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[15_audio_test] Exited cleanly.");
 
-// ── Synthesizes a short 16-bit mono PCM sine WAV with a 10 ms env fade ───────
-
 static string WriteSineWav(int frequency, int durationMs)
 {
     const int sampleRate = 44100;
@@ -107,8 +95,6 @@ static string WriteSineWav(int frequency, int durationMs)
     return path;
 }
 
-// ── AudioController node — polls keys + edge-detects key-down ────────────────
-
 sealed class AudioController : Node
 {
     private const int KeySpace  = 32;
@@ -130,7 +116,6 @@ sealed class AudioController : Node
         _beep  = beep;
         _bass  = bass;
     }
-
 
     protected override bool HasBehavior => true;
 

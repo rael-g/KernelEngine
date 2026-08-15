@@ -1,17 +1,8 @@
-// kabic's C# naming and type-mapping conventions (ScriptingArchitectureV3
-// §6.2): the only place PascalCase/camelCase, C# reserved-word escaping, and
-// the C-type -> C# primitive table live. Pure decisions about how C# reads;
-// nothing here decides what a slot MEANS (that's Kabic.Core's Classifier).
 
 namespace Kabic.CSharp;
 
 using Kabic;
 using System.Text.RegularExpressions;
-
-
-// =============================================================================
-// -- C#-only naming and type-mapping conventions -----------------------------
-// =============================================================================
 
 public static class Idioms
 {
@@ -21,9 +12,6 @@ public static class Idioms
         ["uint64_t"] = "ulong", ["int64_t"] = "long", ["float"] = "float", ["double"] = "double",
         ["void"] = "void", ["size_t"] = "nuint",
         ["uint16_t"] = "ushort", ["int16_t"] = "short", ["uint8_t"] = "byte", ["int8_t"] = "sbyte",
-        // A bare `char` crossing the ABI is a single UTF-8/ASCII byte, never the
-        // UTF-16 C# `char` — matches the `sbyte*` convention every hand-written
-        // string marshal in this codebase already uses for `const char *`.
         ["char"] = "sbyte",
     };
 
@@ -61,8 +49,6 @@ public static class Idioms
     /// become the invalid `1`, so it backs off to `Button1`.
     public static string EnumMember(string raw, string enumName)
     {
-        // enumName is already ke_snake_case; its natural macro prefix is its own
-        // uppercase form, e.g. ke_mouse_button -> KE_MOUSE_BUTTON_.
         var prefix = enumName.ToUpperInvariant() + "_";
         var parts = prefix.TrimEnd('_').Split('_');
         for (var keep = 0; keep <= parts.Length; keep++)
@@ -87,9 +73,6 @@ public static class Idioms
     public static string CsPrimitive(string cType)
     {
         var t = cType.Trim();
-        // An opaque `void *` return (a platform handle: HWND, X11 Window, ...)
-        // is `nint` by convention here, not a raw unsafe pointer — matches the
-        // hand-written precedent this replaces (`(nint)get_native_handle(...)`).
         if (t is "void *" or "void*") return "nint";
         return Prim.GetValueOrDefault(t, t);
     }

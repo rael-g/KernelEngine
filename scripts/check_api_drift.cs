@@ -1,20 +1,5 @@
 #!/usr/bin/env dotnet run
 
-// kabic's drift gate: detects drift between the C headers and the ke_api.json-driven generated
-// C# for every domain in scripts/api_domains.json (ScriptingArchitectureV3
-// §8.7: "ke_api.json is an output, regenerated from headers"). Run after
-// editing any migrated domain's headers to catch a forgotten
-// `dotnet run scripts/extract_api.cs` + `generate_csharp.cs`.
-//
-// Deliberately content-based, not mtime-based (see scripts/check_bindings_drift.cs,
-// which predates this and compares timestamps): a fresh checkout, a rebase, or
-// any operation that touches file times without touching content produces a
-// false positive or negative under mtime comparison. Regenerating into a temp
-// directory and diffing bytes has neither failure mode, and regeneration here
-// is cheap and fully deterministic.
-//
-// Usage: dotnet run scripts/check_api_drift.cs [-- --zig <path>]
-
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
@@ -57,14 +42,8 @@ try
 
         var tmpApiJson = Path.Combine(tmpRoot, $"{name}.ke_api.json");
         var tmpOutDir = Path.Combine(tmpRoot, name, "out");
-        // Only a real, separate location when the manifest names one (e.g. input's
-        // enums live in a different project/dir than its vtable wrapper); otherwise
-        // enums land in the same dir as everything else, so compare against that.
         var tmpEnumsDir = d["abstractionsOutDir"] is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
 
-        // --no-cache: `dotnet run <file>.cs` reuses a cached build of the script's
-        // referenced #:project, so an edit to kabic itself is silently ignored and
-        // this gate reports drift computed by the previous generator build.
         var extractArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
             "--out", tmpApiJson };
         if (zigOverride is not null) extractArgs.AddRange(["--zig", zigOverride]);
@@ -107,10 +86,6 @@ try
             driftDetected = true;
         }
 
-        // The C field tables are what a scene block applies through, in every
-        // language. Left uncovered, a header gaining a field leaves a stale table
-        // behind and the value silently stops arriving — the exact failure the
-        // tables exist to kill.
         if (d["cOut"] is JsonObject cOut)
         {
             var committedCFile = Path.Combine(rootDir, cOut["file"]!.GetValue<string>());
@@ -148,8 +123,6 @@ if (driftDetected)
 Console.WriteLine("No drift detected.");
 return 0;
 
-// ---------------------------------------------------------------------------
-
 static bool RunDotnet(List<string> args, out string stderr)
 {
     using var process = new Process
@@ -167,12 +140,6 @@ static bool RunDotnet(List<string> args, out string stderr)
 static bool FilesEqual(string a, string b) =>
     File.Exists(b) && File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
 
-// `a` is this domain's OWN fresh regeneration; `b` is the committed dir. Checks
-// that everything `a` produced is present and byte-identical in `b` — NOT that
-// `b` has nothing else, since several small domains (e.g. world/scene_tree/
-// scene_loader/input_actions, all under KernelEngine.Framework) legitimately
-// share one physical Generated/ directory, each contributing its own files
-// alongside siblings this domain's own regeneration never touches.
 static bool DirsEqual(string a, string b)
 {
     if (!Directory.Exists(a)) return true; // a domain with no enums never gets an enums dir

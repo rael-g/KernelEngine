@@ -9,11 +9,6 @@ using KernelEngine.Scheduler;
 using KernelEngine.Window;
 using KernelEngine.Logger;
 
-// Render v2 (webgpu) in the application pipeline: same runtime + module host as
-// 01_runtime_clear_color, but the render path is the v2 WebgpuRenderModule —
-// device + render core in Zig, passes registered as KE_PHASE_RENDER systems.
-// The host only ticks the runtime; no render calls in the loop.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()

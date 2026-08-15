@@ -15,10 +15,6 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-// 13_full_scene — ground plane, a loaded Box.gltf, directional + ambient light,
-// and 8 point lights orbiting the model. Exercises ACES tonemapping (built into
-// the render-v2 pipeline) and animated node behavior via OnUpdate.
-
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
 var services = new ServiceCollection()
@@ -126,8 +122,6 @@ while (!window.ShouldClose())
 runtime.UnloadModules(sp);
 
 Console.WriteLine("[13_full_scene] Exited cleanly.");
-
-// ── Orbiting point light — circles the origin at fixed height ────────────────
 
 sealed class OrbitingLight : PointLight
 {

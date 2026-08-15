@@ -1,16 +1,5 @@
 #!/usr/bin/env dotnet run
 
-// Regenerates every kabic-described domain in place, driven by
-// scripts/api_domains.json — the same manifest scripts/check_api_drift.cs reads.
-//
-// Before this existed only the gate knew how to run the pipeline, and it
-// regenerates into a temp dir; regenerating for real meant retyping the
-// frontend's and each backend's arguments by hand, which is how a domain
-// already got generated with the wrong parameters and emitted a duplicate enum.
-// The manifest is the single description; running it is one command.
-//
-// Usage: dotnet run scripts/regenerate_api.cs [-- [--zig <path>] [--domain <name>]...]
-
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
@@ -88,8 +77,6 @@ foreach (var dRaw in domains)
 }
 
 return 0;
-
-// ---------------------------------------------------------------------------
 
 static bool RunDotnet(List<string> args, out string stderr)
 {

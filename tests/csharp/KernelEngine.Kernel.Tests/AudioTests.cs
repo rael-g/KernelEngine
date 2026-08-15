@@ -160,7 +160,5 @@ public class AudioTests
         audio.Dispose();
 
         Assert.True(DestroyCalled);
-        // Note: MockDestroy does not free memory; handle.@ref was freed by the destroy fn.
-        // If MockDestroy doesn't free, we must not double-free here.
     }
 }

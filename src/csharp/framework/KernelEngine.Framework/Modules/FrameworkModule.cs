@@ -21,16 +21,12 @@ public sealed class FrameworkModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
-        // IEcsRegistry is registered first because World's constructor borrows it.
         services.AddSingleton<IEcsRegistry>(sp =>
         {
             var flecsEcs = (FlecsEcs)sp.GetRequiredService<IEcs>();
             unsafe { return EcsRegistry.Borrow(((INativeEcs)flecsEcs).Native); }
         });
 
-        // Owned here rather than by SceneNodesModule: the world carries it so the
-        // native scene loader can wire a scene's declared connections, which means
-        // it has to exist before the world does.
         services.AddSingleton<SignalBus>(_ =>
         {
             unsafe
@@ -49,8 +45,6 @@ public sealed class FrameworkModule : IRuntimeModule
             var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
             {
-                // Handing the tree a runtime is what registers transform propagation
-                // as a system; without it the host has to drive propagation itself.
                 var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
                     ((INativeEcs)flecsEcs).Native, ((INativeRuntime)rtRuntime).Native, null);
                 if (tree.@ref == null) throw new InvalidOperationException("scene_tree_create failed");
@@ -69,13 +63,6 @@ public sealed class FrameworkModule : IRuntimeModule
 
         services.AddSingleton<ComponentRegistry>(sp =>
         {
-            // World (and its scene_tree) must be fully initialized before ComponentRegistry
-            // so that kernel components like "transform" are registered at their native C
-            // sizes (104 bytes) before this registry re-registers them at framework sizes
-            // (40 bytes). If scene_tree runs second, flecs stores transform at 40 bytes
-            // and C writes of ke_transform_component (104 bytes) corrupt adjacent heap.
-            // This guarantee must live in the factory so it holds no matter which
-            // consumer resolves ComponentRegistry first.
             _ = sp.GetRequiredService<World>();
             return new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>());
         });

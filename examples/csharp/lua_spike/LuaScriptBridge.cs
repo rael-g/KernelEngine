@@ -58,8 +58,6 @@ internal static unsafe class LuaScriptBridge
             cb.State.Dispose();
     }
 
-    // ── Trampolines ───────────────────────────────────────────────────────────
-
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ke_result NativeOnAwake(ulong entity)
     {

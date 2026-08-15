@@ -1,8 +1,3 @@
-// kabic's frontend: clang's Doxygen-lite comment AST.
-//
-// @param tags carry a leading `[tag1,tag2]` block, which is this codebase's
-// only annotation vocabulary (docs/ScriptingArchitectureV3.md §5.2) — nothing
-// downstream should ever need __attribute__((annotate(...))) again.
 
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -54,9 +49,6 @@ public static class DocParser
         }
 
         var pmap = paramChunks.ToDictionary(kv => kv.Key, kv => SplitTags(kv.Value));
-        // A slot's own summary can lead with a [tag] block too — the same bracket
-        // convention as @param, just describing the SLOT (e.g. [lifecycle:init]
-        // on ke_window.on_initialize) rather than one of its parameters.
         var (summaryTags, summaryText) = SplitTags(summary);
         return (summaryTags, summaryText,
                 pmap, string.Join(' ', string.Join(' ', returnChunks).Split(' ', StringSplitOptions.RemoveEmptyEntries)));

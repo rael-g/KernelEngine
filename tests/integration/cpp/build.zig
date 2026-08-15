@@ -1,19 +1,5 @@
 const std = @import("std");
 
-// Builds test_integration_cpp by invoking the SYSTEM C++ compiler directly —
-// not Zig's own C++ frontend. These are real GTest binaries linking vcpkg's
-// GTest archives, which were compiled with the system toolchain's libstdc++;
-// Zig's bundled C++ frontend links its own libc++ instead, an incompatible
-// ABI for the std::string/std::ostream types that cross the gtest boundary
-// (confirmed by hand: linking failed with std::__1::* vs std::__cxx11::*
-// symbol mismatches). So Zig is the build orchestrator here, replacing
-// CMake's role, while the actual compile+link is the same system compiler
-// CMake already invoked — same includes, same libraries, same flags.
-//
-// All the multi-value options below are "|"-separated single strings rather
-// than repeated flags, matching the convention already used for Assimp's
-// dependency chain in src/zig/asset/assimp/CMakeLists.txt.
-
 pub fn build(b: *std.Build) void {
     const cxx = b.option([]const u8, "cxx", "C++ compiler") orelse "clang++";
     const sources = b.option([]const u8, "sources", "'|'-separated absolute .cpp source paths") orelse @panic("-Dsources required");
@@ -22,10 +8,6 @@ pub fn build(b: *std.Build) void {
     const rpaths = b.option([]const u8, "rpaths", "'|'-separated rpath directories") orelse @panic("-Drpaths required");
     const defines = b.option([]const u8, "defines", "'|'-separated -D defines") orelse "";
     const output = b.option([]const u8, "output", "absolute path for the built executable") orelse @panic("-Doutput required");
-    // See tests/c/kernel/build.zig for why this only reaches this suite's own
-    // translation units, not the engine logic inside the linked ke_*.so
-    // plugins (those are Zig-linked; Zig's linker rejects Clang's profiling
-    // relocations).
     const coverage = b.option(bool, "coverage", "instrument this suite's own sources for Clang source-based coverage") orelse false;
 
     const run = b.addSystemCommand(&.{ cxx, "-std=gnu++17", "-fPIE" });

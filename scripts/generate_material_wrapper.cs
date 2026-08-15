@@ -1,17 +1,5 @@
 #!/usr/bin/env dotnet run
 
-// Emit one (material x pass) wrapper .slang from a pass template.
-//
-// An authored material is only a `struct X : IMaterial` — it declares no entry
-// point and imports no pass, so it cannot be compiled on its own. Each consuming
-// pass ships a wrapper template (`<pass>_material.slang.in`) that knows how to
-// bind an IMaterial into that pass's entry points. This pairs the two, which is
-// what makes the (material x pass) product a build-time artifact rather than
-// something a pass hardcodes.
-//
-// The material's struct name is read from the source (the `: IMaterial`
-// conformance), not from a sidecar — a material declares what it is in one place.
-
 using System.Text.RegularExpressions;
 
 string? material = null, template = null, output = null;
@@ -39,8 +27,6 @@ var materialSrc = await File.ReadAllTextAsync(material);
 var structName = FindMaterialStruct(materialSrc, material);
 if (structName is null) return 1;
 
-// Slang imports by module name; the module is the file stem, resolved off
-// the include path the compile step passes.
 var moduleName = Path.GetFileNameWithoutExtension(material);
 
 var wrapper = (await File.ReadAllTextAsync(template))
@@ -51,7 +37,6 @@ Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
 await File.WriteAllTextAsync(output, wrapper);
 return 0;
 
-// `struct Foo : IMaterial {` — the conformance is the declaration of intent.
 static string? FindMaterialStruct(string source, string path)
 {
     var matches = Regex.Matches(source, @"^\s*struct\s+(\w+)\s*:\s*IMaterial\b", RegexOptions.Multiline);

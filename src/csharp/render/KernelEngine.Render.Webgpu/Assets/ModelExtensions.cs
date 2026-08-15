@@ -2,7 +2,6 @@ using System.Numerics;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -30,9 +29,6 @@ public static class ModelExtensions
         for (int i = 0; i < model.Textures.Count; i++)
         {
             var tex = model.Textures[i];
-            // A texture loaded from its own file dedups by that path (shared across
-            // any model referencing the same file); an embedded texture has no path
-            // identity of its own, so it keys per model instance instead.
             var texKey = string.IsNullOrEmpty(tex.Path) ? $"{rootName}#tex{i}" : tex.Path;
             textures[i] = resources.UploadTexture(texKey, tex.Width, tex.Height, tex.Pixels);
         }

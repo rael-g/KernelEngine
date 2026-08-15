@@ -37,7 +37,6 @@ public unsafe partial class AssetLoader : IAssetLoader
         var native = ((INativeAssetLoader)this).Native;
         var tcs = new TaskCompletionSource<IModel>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // Store loader as nint because pointers cannot be generic type arguments.
         var state = ((nint)native, tcs);
         var stateHandle = GCHandle.Alloc(state);
 

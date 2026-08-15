@@ -12,11 +12,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 02_textured_quad — procedural checkerboard texture on the built-in quad, lit
-// by one directional light. Render v2 (webgpu): a glTF-style material (white
-// base-color factor × albedo texture) referenced by the mesh; the shading pass
-// samples it.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -30,7 +25,6 @@ var services = new ServiceCollection()
     {
         var resources = sp.GetRequiredService<IRenderResources>();
 
-        // Procedural 128×128 checkerboard, 16-pixel squares.
         const uint width  = 128;
         const uint height = 128;
         var pixels = new byte[width * height * 4];

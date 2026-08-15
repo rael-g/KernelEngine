@@ -9,9 +9,6 @@ public static class LoggerServiceCollectionExtensions
     /// <summary>Registers a <see cref="Logger"/> singleton backed by the kernel allocator.</summary>
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {
-        // Resolved lazily, so every AddConsoleSink/AddSink registered after this
-        // call is still attached: a sink nobody hands to the logger is a sink that
-        // silently swallows the whole engine's output.
         services.AddSingleton(sp =>
         {
             var logger = new Logger();

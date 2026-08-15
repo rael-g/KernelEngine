@@ -33,7 +33,6 @@ public static class GameActionsEnumEditor
         var raw  = text.ToString();
         var nl   = raw.Contains("\r\n") ? "\r\n" : "\n";
 
-        // Empty enum body — splice between the braces.
         if (decl.Members.Count == 0)
         {
             var enumLineStart = raw.LastIndexOf('\n', decl.SpanStart - 1) + 1;
@@ -43,14 +42,10 @@ public static class GameActionsEnumEditor
             return raw.Substring(0, emptySplice) + $"{nl}{indent0}{memberName},{nl}{enumIndent}" + raw.Substring(emptySplice);
         }
 
-        // Mirror the indentation of an existing member.
         var first = decl.Members[0];
         var firstLineStart = raw.LastIndexOf('\n', first.SpanStart - 1) + 1;
         var indent = raw.Substring(firstLineStart, first.SpanStart - firstLineStart);
 
-        // FullSpan of the last separator (when present) includes its trailing trivia — that's the
-        // line-end comment + newline after `Quit, // Button`. Splicing there means the new line
-        // lands cleanly under the previous member without intruding on its comment.
         var separators = decl.Members.GetSeparators().ToList();
         int spliceAt;
         string prefix;
@@ -61,10 +56,8 @@ public static class GameActionsEnumEditor
         }
         else
         {
-            // Last member has no trailing comma. FullSpan covers its trailing trivia (comment + nl).
             spliceAt = decl.Members[^1].FullSpan.End;
             prefix   = ","; // injected at end of the previous member's line, before its trailing newline
-            // Step back over the line-terminator so the comma lands on the same line as the member.
             while (spliceAt > 0 && (raw[spliceAt - 1] == '\n' || raw[spliceAt - 1] == '\r')) spliceAt--;
         }
 

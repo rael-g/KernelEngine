@@ -25,7 +25,6 @@ public struct MeshVertex
     }
 }
 
-// 32-byte inline storage mirroring ke_mesh_component's char primitive[32] tag.
 [InlineArray(32)]
 public struct PrimitiveTag
 {
@@ -47,11 +46,6 @@ public struct MeshComponent
     public MaterialHandle Material;
     public PrimitiveTag   Primitive;
 
-    // Surface parameters the forward pass reads straight off this component
-    // rather than through the material. Field order and types are the ABI:
-    // ke_mesh_component grew these after this mirror was written, and since
-    // nothing compared the two sizes the mismatch stayed invisible until
-    // component_register began validating them.
     public Vector4 BaseColor;
     public float   Roughness;
     public uint    AlphaMode;
@@ -74,10 +68,6 @@ public struct MeshComponent
         DistortionStrength = 0.05f,
     };
 }
-
-// Light and environment vocabulary. These mirror the kernel's
-// render/components.h one-for-one — field order is the ABI the render core
-// reads, so it must not be reordered independently of that header.
 
 /// <summary>
 /// Scene-wide ambient light color. First entity wins. Kept as a managed mirror

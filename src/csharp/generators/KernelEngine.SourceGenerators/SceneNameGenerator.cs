@@ -84,8 +84,6 @@ public sealed class SceneNameGenerator : IIncrementalGenerator
             sb.AppendLine();
             sb.AppendLine($"namespace {ns}.Scenes;");
 
-            // Distinct: the same scene name reaching the generator twice (a file
-            // listed by two globs) would otherwise emit the type twice.
             foreach (var name in names.Distinct().OrderBy(n => n, StringComparer.Ordinal))
             {
                 if (!IsIdentifier(name))

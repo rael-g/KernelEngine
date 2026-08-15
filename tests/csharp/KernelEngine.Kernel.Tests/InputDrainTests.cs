@@ -37,7 +37,6 @@ public unsafe class InputDrainTests
         var mock = (ke_input*)NativeMemory.AllocZeroed((nuint)sizeof(ke_input));
         mock->drain_events = &MockDrainEvents;        var input = new Input(null);
         
-        // Use reflection to swap _native for our mock
         var field = typeof(Input).GetField("_native", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         var oldNativeValue = field!.GetValue(input)!;
         field.SetValue(input, System.Reflection.Pointer.Box(mock, typeof(ke_input*)));
@@ -63,7 +62,6 @@ public unsafe class InputDrainTests
     public void SnapshotAccessors_DecodeBitsets()
     {
         var data = new ke_input_snapshot();
-        // Key 65 (A) -> word 1, bit 1
         data.keys_down[1] = 1UL << (65 % 64);
         data.mouse_buttons_down = 1u << (int)MouseButton.Right;
 

@@ -14,12 +14,6 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Input;
 
-// 05_skybox_ibl — a procedural cubemap as both the visible skybox and the IBL
-// environment for a metallic quad. Render v2 (webgpu): the skybox is drawn in
-// the forward pass and the forward IBL samples the same cubemap (direct env
-// sampling; split-sum is deferred debt). A free-look camera (arrows = look,
-// WASD/Shift/Ctrl = move) flies around to see every face + the IBL response.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -36,7 +30,6 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Example: 05_skybox_ibl");
         Console.WriteLine("[KernelEngine] Features: skybox_cubemap, ibl_env_map, pbr_ggx, freelook_camera");
 
-        // Procedural cubemap — one solid color per face (+X,-X,+Y,-Y,+Z,-Z).
         const uint faceSize = 64;
         var faces = new byte[faceSize * faceSize * 4 * 6];
         (byte R, byte G, byte B)[] colors =
@@ -98,8 +91,6 @@ runtime.UnloadModules(sp);
 
 Console.WriteLine("[05_skybox_ibl] Exited cleanly.");
 
-// ── FreeLook camera — arrows: look, WASD: move, Shift/Ctrl: fly ──────────────
-
 sealed class FreeLook : Camera
 {
     private const float MoveSpeed = 8.0f;
@@ -114,9 +105,6 @@ sealed class FreeLook : Camera
     {
         float dt = view.DeltaTime;
 
-        // The engine's camera looks down local −Z with a left-handed view, so its
-        // right axis is −localX (cross(up, forward)). Yaw therefore increases to
-        // the right and the strafe axis is −UnitX — matching what the view shows.
         if (view.IsKeyDown(262)) _yaw   += RotateDeg * dt; // Right arrow
         if (view.IsKeyDown(263)) _yaw   -= RotateDeg * dt; // Left arrow
         if (view.IsKeyDown(265)) _pitch += RotateDeg * dt; // Up arrow

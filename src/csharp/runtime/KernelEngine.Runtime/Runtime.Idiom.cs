@@ -22,9 +22,6 @@ public sealed unsafe partial class Runtime : IRuntime
     private readonly List<GCHandle> _moduleHandles = [];
     private readonly List<GCHandle> _systemHandles = [];
 
-    // Exception propagation across the C ABI boundary. enki may dispatch the
-    // execute callback onto a worker thread, so this can't be [ThreadStatic] —
-    // Tick reads on the calling thread but the trampoline writes on a worker.
     private static readonly object s_excLock = new();
     private static Exception? s_pendingException;
 
@@ -84,9 +81,6 @@ public sealed unsafe partial class Runtime : IRuntime
     {
     }
 
-    // The runtime needs raw C ABI handles, not interfaces. Recognizing the
-    // concrete wrappers is contained to these two helpers; a future impl would
-    // add its own native-handle protocol rather than widen this.
     private static ke_ecs* NativeEcsOf(IEcs ecs)
     {
         ArgumentNullException.ThrowIfNull(ecs);
@@ -126,8 +120,6 @@ public sealed unsafe partial class Runtime : IRuntime
             p.on_load   = &ModuleLoadTrampoline;
 
             var id = RegisterModule(&p);
-            // Surface any exception captured by the trampoline so the caller gets
-            // the real stack trace, not just a generic failure.
             Exception? trampolineEx;
             lock (s_excLock) { trampolineEx = s_pendingException; s_pendingException = null; }
             if (trampolineEx != null)
@@ -174,8 +166,6 @@ public sealed unsafe partial class Runtime : IRuntime
         var queryCount = queries?.Count ?? 0;
         var accessCount = accessList?.Count ?? 0;
 
-        // Sized to at least one so `fixed` has something to pin; the params carry
-        // a null pointer when the count is zero, so the spare element is unread.
         var nativeQueries = new ke_query_decl[Math.Max(queryCount, 1)];
         for (var q = 0; q < queryCount; q++)
         {
@@ -233,8 +223,6 @@ public sealed unsafe partial class Runtime : IRuntime
     /// <inheritdoc />
     public void Flush() => FlushRender();
 
-    // Runs from the generated Dispose, after the native runtime is released, so
-    // no worker can still be holding one of these roots.
     partial void OnDispose()
     {
         foreach (var h in _moduleHandles) if (h.IsAllocated) h.Free();

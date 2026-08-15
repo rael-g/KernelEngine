@@ -15,10 +15,6 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-// 12_asset_loading — loads assets/Box.gltf via the Assimp plugin and places it
-// in a lit scene. Exercises the IRenderResources overload of AddModel so
-// textures, materials and meshes flow through the render-v2 upload path.
-
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
 var services = new ServiceCollection()

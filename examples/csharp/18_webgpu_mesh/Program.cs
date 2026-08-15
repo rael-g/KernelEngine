@@ -11,11 +11,6 @@ using KernelEngine.Window.Glfw;
 using KernelEngine.Logger;
 using Microsoft.Extensions.DependencyInjection;
 
-// Render v2 (webgpu) first 3D scene: a lit cube drawn by the render core's
-// forward pass. The host uploads the mesh and populates Camera + Mesh + Transform
-// components; the forward pass (a KE_PHASE_RENDER system installed by the module)
-// reads them and draws. No render calls in the loop — only runtime.Tick.
-
 var render = new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir);
 
 var services = new ServiceCollection()
@@ -34,7 +29,6 @@ var ecs     = sp.GetRequiredService<IEcs>();
 
 runtime.LoadModules(sp);
 
-// ── Upload the cube + material, populate the scene (camera + one mesh entity) ─
 var cube   = MeshPrimitives.Cube(render);
 var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
@@ -64,8 +58,6 @@ entW.Matrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
 entM = MeshComponent.Default with { Mesh = cube, Material = orange };
 
-// Shading keeps the directional term switched off until a light entity
-// exists, so without this the cube resolves to black.
 var sun = reg.CreateEntity();
 ref var sunL = ref reg.AddComponent<DirectionalLight>(sun, lightCid)[0];
 sunL = new DirectionalLight

@@ -13,11 +13,6 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 04_normal_map — two quads side by side; the right one carries a procedural
-// ripple normal map, the left has the same material without it. Render v2
-// (webgpu): tangent-space normal mapping in the forward pass perturbs the PBR
-// lighting (watch the specular highlight under the static directional light).
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -33,8 +28,6 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Example: 04_normal_map");
         Console.WriteLine("[KernelEngine] Features: normal_map, tbn, tangent_space, pbr_ggx");
 
-        // Procedural ripple normal map (128×128) — each texel encodes a unit
-        // normal in tangent space, mapped to RGB via N = (n + 1) / 2.
         const uint w = 128, h = 128;
         var pixels = new byte[w * h * 4];
         for (int y = 0; y < h; y++)
