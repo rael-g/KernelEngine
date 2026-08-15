@@ -53,7 +53,11 @@ public class NodeTests
         var components = new BodyProbe().Components();
 
         Assert.Contains("body2d", components);
-        Assert.Contains("transform", components);
+        Assert.Contains("transform2d", components);
+        // A body is placed in a plane, so nothing must be attaching it the three
+        // dimensional pose as well: two authored poses on one entity is a graph the
+        // hierarchy would have to pick between.
+        Assert.DoesNotContain("transform", components);
     }
 
     [Fact]
@@ -62,5 +66,23 @@ public class NodeTests
         // What separates Node from Node3D: a node that is not placed in space
         // carries no transform, and nothing should be attaching one for it.
         Assert.Empty(new NodeProbe().Components());
+    }
+
+    private sealed class SpatialProbe : Node3D
+    {
+        public List<string> Components()
+        {
+            var into = new List<string>();
+            CollectBehaviorComponents(into);
+            return into;
+        }
+    }
+
+    [Fact]
+    public void SpatialAndPlanarNodesCarryDifferentPoses()
+    {
+        // The whole point of the split: neither node type can be handed the other's
+        // pose, so a 2D node never receives a quaternion and a 3D one never a depth.
+        Assert.Equal(["transform"], new SpatialProbe().Components());
     }
 }

@@ -24,6 +24,23 @@ extern "C"
 
 #define KE_COMPONENT_NAME_TRANSFORM "transform"
 
+    /// [node:Node2D]
+    /// Per-entity authored 2D pose. A node placed in a plane says so: it carries
+    /// two axes and one angle, and can no longer be handed a quaternion or a
+    /// third scale axis by accident. Depth is where the plane sits along Z — the
+    /// same axis the depth test and the transparent sort read, so two blended
+    /// sprites order by an authored value instead of by storage order.
+    typedef struct ke_transform2d_component
+    {
+        ke_vec2 position;
+        /// Radians, CCW positive. A scene authors degrees, as it does in 3D.
+        float   rotation;
+        ke_vec2 scale; ///< [default:1 1]
+        float   depth;
+    } ke_transform2d_component;
+
+#define KE_COMPONENT_NAME_TRANSFORM_2D "transform2d"
+
     /// Where an entity ended up in world space, composed down the hierarchy from
     /// every ancestor's authored pose. The hierarchy is its only writer. It is a
     /// component of its own so a consumer that needs nothing but the resolved

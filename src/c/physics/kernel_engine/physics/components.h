@@ -10,10 +10,11 @@ extern "C"
 {
 #endif
 
-    /// [node:Body2D,base:Node3D]
-    /// A 2D rigid body. Pose and motion are stored here in two dimensions because that is
-    /// what the simulation owns; the composed transform is derived output, written from
-    /// this component each tick by the physics plugin's own system. The same system
+    /// [node:Body2D,base:Node2D]
+    /// A 2D rigid body. Pose and motion are stored here because the simulation owns them
+    /// between ticks; the node's own transform2d is written back from this component each
+    /// tick by the physics plugin's own system, so what a script reads and what the
+    /// hierarchy composes are the same two dimensions the body moves in. The same system
     /// creates and destroys the underlying body by reconciling this component against the
     /// world, so the entity is the identity and a script never acquires, threads, or
     /// releases a handle.
@@ -45,7 +46,7 @@ extern "C"
         KE_SHAPE_KIND_2D_CIRCLE = 1, /**< Circle centered on the node, sized by radius. */
     } ke_shape_kind_2d;
 
-    /// [node:CollisionShape2D,base:Node3D]
+    /// [node:CollisionShape2D,base:Node2D]
     /// One collision fixture, attached to the nearest ancestor that carries a
     /// ke_body2d_component. A shape is a node of its own rather than a field on the
     /// body because it has an offset the body does not, and because a body may carry

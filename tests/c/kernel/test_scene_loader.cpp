@@ -162,6 +162,35 @@ position = [1.0, 2.0, 3.0]
     EXPECT_FLOAT_EQ(t->position.z, 3.0f);
 }
 
+TEST_F(SceneLoaderTest, Transform2d_PoseAppliedAndRotationIsDegrees)
+{
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Flat"
+[entity.transform2d]
+position = [1.0, 2.0]
+rotation = 90.0
+scale    = [3.0, 4.0]
+depth    = 5.0
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Flat", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "transform2d", &meta, nullptr));
+    auto *t = (ke_transform2d_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(t, nullptr);
+    EXPECT_FLOAT_EQ(t->position.x, 1.0f);
+    EXPECT_FLOAT_EQ(t->position.y, 2.0f);
+    // Authored in degrees like every other rotation in a scene file, stored in
+    // radians like the physics that reads it.
+    EXPECT_NEAR(t->rotation, 1.57079633f, 1e-5f);
+    EXPECT_FLOAT_EQ(t->scale.x, 3.0f);
+    EXPECT_FLOAT_EQ(t->scale.y, 4.0f);
+    EXPECT_FLOAT_EQ(t->depth, 5.0f);
+}
+
 // ── [entity.X] via apply registry ──────────────────────────────
 
 TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)

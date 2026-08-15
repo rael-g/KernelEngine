@@ -32,6 +32,42 @@
       "external": true
     },
     {
+      "name": "ke_transform2d_component",
+      "doc": "Per-entity authored 2D pose. A node placed in a plane says so: it carries two axes and one angle, and can no longer be handed a quaternion or a third scale axis by accident. Depth is where the plane sits along Z \u2014 the same axis the depth test and the transparent sort read, so two blended sprites order by an authored value instead of by storage order.",
+      "tags": [
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive. A scene authors degrees, as it does in 3D."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_world_transform_component",
       "doc": "Where an entity ended up in world space, composed down the hierarchy from every ancestor\u0027s authored pose. The hierarchy is its only writer. It is a component of its own so a consumer that needs nothing but the resolved matrix declares exactly that, and never learns in how many dimensions the pose behind it was authored.",
       "tags": [],

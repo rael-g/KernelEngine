@@ -10,7 +10,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. A shape is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.</summary>
 [GeneratedNodeComponent(typeof(ke_collider2d_component), "collider2d")]
-public partial class CollisionShape2D : Node3D
+public partial class CollisionShape2D : Node2D
 {
     public CollisionShape2D()
     {

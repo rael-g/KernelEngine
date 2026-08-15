@@ -8,9 +8,9 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A 2D rigid body. Pose and motion are stored here in two dimensions because that is what the simulation owns; the composed transform is derived output, written from this component each tick by the physics plugin's own system. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.</summary>
+/// <summary>A 2D rigid body. Pose and motion are stored here because the simulation owns them between ticks; the node's own transform2d is written back from this component each tick by the physics plugin's own system, so what a script reads and what the hierarchy composes are the same two dimensions the body moves in. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.</summary>
 [GeneratedNodeComponent(typeof(ke_body2d_component), "body2d")]
-public partial class Body2D : Node3D
+public partial class Body2D : Node2D
 {
     public Body2D()
     {

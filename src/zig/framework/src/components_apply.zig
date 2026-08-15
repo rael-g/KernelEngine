@@ -42,6 +42,17 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     };
 }
 
+/// A 2D pose stores radians, and a scene authors degrees — the same unit it
+/// authors 3D rotation in. A description maps a key to storage and cannot say
+/// "and convert", so the conversion lands here.
+pub export fn ke_framework_apply_transform2d(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+    const t: *c.ke_transform2d_component = @ptrCast(@alignCast(ptr));
+    for (entries(e, n)) |*entry| {
+        if (!keyIs(entry, "rotation")) continue;
+        t.rotation = t.rotation * (pi / 180.0);
+    }
+}
+
 /// Two corrections the table cannot make:
 ///
 /// `rotation_euler` is three angles standing for the same quaternion `rotation`

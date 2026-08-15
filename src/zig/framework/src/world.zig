@@ -262,6 +262,9 @@ export fn ke_world_create(
     registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component),
         apply.ke_framework_apply_transform,
         &c.ke_transform_component_fields, c.ke_transform_component_fields.len);
+    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component),
+        apply.ke_framework_apply_transform2d,
+        &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len);
     // No fields and no apply: the hierarchy is its only writer, so a scene block
     // naming it has nothing to set. Registering it here is what fixes its size
     // once, before any consumer can register the name against a different one.

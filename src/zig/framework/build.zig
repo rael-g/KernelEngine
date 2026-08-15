@@ -66,7 +66,7 @@ pub fn build(b: *std.Build) void {
     // One test artifact per source file that has tests: a Zig test root only
     // pulls in what it imports, so a file no root reaches is silently untested.
     const test_step = b.step("test", "Run unit tests");
-    inline for (.{ "src/signal_bus.zig", "src/component_fields_apply.zig" }) |root| {
+    inline for (.{ "src/signal_bus.zig", "src/component_fields_apply.zig", "src/mat4.zig" }) |root| {
         const test_mod = b.createModule(.{
             .root_source_file = b.path(root),
             .target = target,

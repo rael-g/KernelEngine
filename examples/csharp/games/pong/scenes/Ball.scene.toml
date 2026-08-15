@@ -19,8 +19,8 @@ friction     = 0.0
 name   = "Visual"
 parent = "Root"
 type   = "Sprite2D"
-[entity.transform]
-scale = [0.36, 0.36, 1.0]
+[entity.transform2d]
+scale = [0.36, 0.36]
 [entity.mesh]
 mesh      = "quad"
 color     = [0.95, 0.95, 0.95, 1.0]

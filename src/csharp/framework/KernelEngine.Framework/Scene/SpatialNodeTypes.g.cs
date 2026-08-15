@@ -12,6 +12,7 @@ public static class SpatialNodeTypes
     public static IServiceCollection AddSpatialNodeTypes(this IServiceCollection services)
     {
         services.AddNodeType<Node3D>();
+        services.AddNodeType<Node2D>();
         return services;
     }
 }

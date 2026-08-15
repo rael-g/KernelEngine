@@ -25,19 +25,6 @@ fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anyt
     if (lg.log) |f| f(lg, &ev);
 }
 
-/// A quaternion carrying only a Z-axis rotation, which is the whole of a 2D
-/// body's orientation once expressed in the 3D transform every node composes.
-fn zRotation(angle: f32) c.ke_quat {
-    const half = angle * 0.5;
-    return .{ .x = 0, .y = 0, .z = @sin(half), .w = @cos(half) };
-}
-
-/// The Z-axis rotation carried by a quaternion, which is the only component of
-/// it a 2D shape's placement can express.
-fn zAngle(q: c.ke_quat) f32 {
-    return 2.0 * std.math.atan2(q.z, q.w);
-}
-
 fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) void {
     const m = moduleOf(user);
     const p = m.physics;
@@ -48,7 +35,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const bodies: [*c]c.ke_body2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs0: [*c]c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        const tcs0: [*c]c.ke_transform2d_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             const b = &bodies[i];
@@ -57,8 +44,8 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
                 // there rather than at the component's zero — otherwise every node
                 // that never assigns Position would spawn at the origin.
                 if (b.position.x == 0 and b.position.y == 0) {
-                    b.position = .{ .x = tcs0[i].position.x, .y = tcs0[i].position.y };
-                    b.angle = zAngle(tcs0[i].rotation);
+                    b.position = tcs0[i].position;
+                    b.angle = tcs0[i].rotation;
                 }
                 b.body = p.create_body.?(p, b.type, b.position.x, b.position.y, null);
                 if (b.body == c.KE_BODY_2D_INVALID) continue;
@@ -66,8 +53,8 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
                 p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
                 log(m.logger, c.KE_LOG_LEVEL_INFO,
-                    "body on entity {d}: type={d} pos=({d:.3},{d:.3}) angle={d:.4} scale=({d:.3},{d:.3},{d:.3})",
-                    .{ segs[s].entities[i], b.type, b.position.x, b.position.y, b.angle, tcs0[i].scale.x, tcs0[i].scale.y, tcs0[i].scale.z });
+                    "body on entity {d}: type={d} pos=({d:.3},{d:.3}) angle={d:.4} scale=({d:.3},{d:.3})",
+                    .{ segs[s].entities[i], b.type, b.position.x, b.position.y, b.angle, tcs0[i].scale.x, tcs0[i].scale.y });
                 continue;
             }
 
@@ -89,7 +76,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
     s = 0;
     while (s < segc) : (s += 1) {
         const bodies: [*c]c.ke_body2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs: [*c]c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        const tcs: [*c]c.ke_transform2d_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             const b = &bodies[i];
@@ -103,9 +90,8 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
             b.velocity = .{ .x = st.velocity_x, .y = st.velocity_y };
             b.angular_velocity = st.angular_velocity;
 
-            tcs[i].position.x = st.x;
-            tcs[i].position.y = st.y;
-            tcs[i].rotation = zRotation(st.angle);
+            tcs[i].position = .{ .x = st.x, .y = st.y };
+            tcs[i].rotation = st.angle;
         }
     }
 }
@@ -160,7 +146,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
     s = 0;
     while (s < segc) : (s += 1) {
         const cols: [*c]c.ke_collider2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs: [*c]c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        const tcs: [*c]c.ke_transform2d_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             const col = &cols[i];
@@ -173,7 +159,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
             };
 
             const off = tcs[i].position;
-            const angle = zAngle(tcs[i].rotation);
+            const angle = tcs[i].rotation;
             const ok = switch (col.kind) {
                 c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, off.x, off.y, col.density, col.friction, col.restitution, null),
                 else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, angle, col.density, col.friction, col.restitution, null),
@@ -224,7 +210,7 @@ export fn ke_physics_body2d_module_create(
     m.* = .{ .physics = physics, .logger = pr.logger };
 
     const body_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_BODY_2D, @sizeOf(c.ke_body2d_component), null);
-    const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), null);
+    const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component), null);
     const collider_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_COLLIDER_2D, @sizeOf(c.ke_collider2d_component), null);
     const hierarchy_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, @sizeOf(c.ke_hierarchy_component), null);
 

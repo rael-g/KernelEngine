@@ -243,11 +243,28 @@ TEST_F(SceneTreeTest, DestroyAll_ClearsChildrenButKeepsRoot)
 
 namespace {
 
+// A node carries the pose its type declares, and create_node declares none, so a
+// test that poses a node attaches the 3D transform itself.
 ke_transform_component *TransformOf(ke_ecs *ecs, ke_entity e)
 {
     ke_component_meta meta;
     if (!ecs->component_lookup(ecs, KE_COMPONENT_NAME_TRANSFORM, &meta, nullptr)) return nullptr;
-    return (ke_transform_component *)ecs->component_get(ecs, e, meta.cid);
+    auto *t = (ke_transform_component *)ecs->component_get(ecs, e, meta.cid);
+    if (t != nullptr) return t;
+    t = (ke_transform_component *)ecs->component_add(ecs, e, meta.cid);
+    if (t != nullptr) *t = ke_transform_component{ { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 } };
+    return t;
+}
+
+ke_transform2d_component *Transform2dOf(ke_ecs *ecs, ke_entity e)
+{
+    ke_component_meta meta;
+    if (!ecs->component_lookup(ecs, KE_COMPONENT_NAME_TRANSFORM_2D, &meta, nullptr)) return nullptr;
+    auto *t = (ke_transform2d_component *)ecs->component_get(ecs, e, meta.cid);
+    if (t != nullptr) return t;
+    t = (ke_transform2d_component *)ecs->component_add(ecs, e, meta.cid);
+    if (t != nullptr) *t = ke_transform2d_component{ { 0, 0 }, 0.0f, { 1, 1 }, 0.0f };
+    return t;
 }
 
 ke_world_transform_component *WorldOf(ke_ecs *ecs, ke_entity e)

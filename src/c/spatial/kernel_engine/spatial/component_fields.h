@@ -12,4 +12,11 @@ static const ke_component_field ke_transform_component_fields[] = {
     { "scale", KE_VARIANT_VEC3, offsetof(ke_transform_component, scale), sizeof(((ke_transform_component *)0)->scale) },
 };
 
+static const ke_component_field ke_transform2d_component_fields[] = {
+    { "position", KE_VARIANT_VEC2, offsetof(ke_transform2d_component, position), sizeof(((ke_transform2d_component *)0)->position) },
+    { "rotation", KE_VARIANT_FLOAT, offsetof(ke_transform2d_component, rotation), sizeof(((ke_transform2d_component *)0)->rotation) },
+    { "scale", KE_VARIANT_VEC2, offsetof(ke_transform2d_component, scale), sizeof(((ke_transform2d_component *)0)->scale) },
+    { "depth", KE_VARIANT_FLOAT, offsetof(ke_transform2d_component, depth), sizeof(((ke_transform2d_component *)0)->depth) },
+};
+
 #endif /* KERNEL_ENGINE_SPATIAL_COMPONENT_FIELDS_H_ */
