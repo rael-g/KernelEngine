@@ -73,8 +73,28 @@ foreach (var rsp in rspFiles)
     }
 
     string[] command = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", $"@{rsp}", .. extraArgs];
-    if (Run(command, Path.GetDirectoryName(rsp)!, env))
+    var (exitCode, stdout, stderr) = Run(command, Path.GetDirectoryName(rsp)!, env);
+
+    // What counts as failure is whether anything was written, not the tool's exit
+    // code: ClangSharp exits non-zero for a warning too, and most headers here
+    // produce one. Treating that as failure made 17 of these "fail" on every run,
+    // which is how a real breakage — a missing include that emitted nothing and
+    // left the wiped directory empty — looked exactly like the usual noise.
+    var wrote = outDir is not null && Directory.Exists(outDir)
+        && Directory.EnumerateFiles(outDir, "*.cs", SearchOption.AllDirectories).Any();
+
+    var name = Path.GetRelativePath(rootDir, rsp);
+    if (wrote)
+    {
         successCount++;
+        if (exitCode != 0) Console.WriteLine($"WARNINGS: {name} (bindings written)");
+    }
+    else
+    {
+        Console.WriteLine($"FAILED: {name} wrote no bindings");
+        Console.WriteLine($"STDOUT: {stdout}");
+        Console.WriteLine($"STDERR: {stderr}");
+    }
 }
 
 Console.WriteLine($"\nDone. {successCount}/{rspFiles.Count} bindings regenerated successfully.");
@@ -120,7 +140,7 @@ static async Task EnsureClangResourceDir(string resourceDir, string clangVersion
     }
 }
 
-static bool Run(string[] command, string cwd, Dictionary<string, string>? env = null)
+static (int ExitCode, string Stdout, string Stderr) Run(string[] command, string cwd, Dictionary<string, string>? env = null)
 {
     Console.WriteLine($"Running: {string.Join(' ', command)} in {cwd}");
     using var process = new Process
@@ -140,15 +160,5 @@ static bool Run(string[] command, string cwd, Dictionary<string, string>? env = 
     var stderr = process.StandardError.ReadToEnd();
     process.WaitForExit();
 
-    if (process.ExitCode != 0)
-    {
-        Console.WriteLine($"FAILED: {command[^1]}");
-        Console.WriteLine($"STDOUT: {stdout}");
-        Console.WriteLine($"STDERR: {stderr}");
-    }
-    else
-    {
-        Console.WriteLine($"SUCCESS: {command[^1]}");
-    }
-    return process.ExitCode == 0;
+    return (process.ExitCode, stdout, stderr);
 }
