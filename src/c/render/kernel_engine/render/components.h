@@ -90,6 +90,46 @@ extern "C"
         float    distortion_strength; ///< [default:0.05]
     } ke_mesh_component;
 
+    /// [node:Sprite2D,base:Node2D]
+    /// A textured quad in the plane. Everything that makes one sprite differ from
+    /// another lives here rather than in a mesh a scene happened to author beside
+    /// it: which image, which rectangle of it, how big, around what point, and
+    /// mirrored on which axis. The native "render.sprite2d.resolve" system turns
+    /// that into the geometry and material the render passes already consume, so a
+    /// sprite is a node with data in every language instead of a name for a quad.
+    typedef struct ke_sprite2d_component
+    {
+        /// Image to sample. Empty draws the plain tinted quad.
+        char     texture[128];
+        /// Rectangle of the image to draw, in normalized coordinates: x, y, width,
+        /// height. The default is the whole image, so an unauthored sprite is not
+        /// an atlas lookup that happens to land on nothing.
+        ke_vec4  region; ///< [default:0 0 1 1]
+        /// Size in world units. Multiplies the node's scale rather than replacing
+        /// it: how big the sprite is and how big the node is are different
+        /// questions, and only the first belongs to the image.
+        ke_vec2  size; ///< [default:1 1]
+        /// Point of the quad the node's origin sits on, in normalized coordinates.
+        /// The default centres it; 0,0 is the bottom-left corner.
+        ke_vec2  pivot; ///< [default:0.5 0.5]
+        uint8_t  flip_h; ///< [bool]
+        uint8_t  flip_v; ///< [bool]
+        /// Multiplies the sampled image. Linear RGBA.
+        ke_vec4  color; ///< [default:1 1 1 1]
+        uint32_t alpha_mode; ///< ke_alpha_mode. [default:0]
+        float    alpha_cutoff; ///< [default:0.5]
+
+        /// [idiom] The image resolved from `texture`, assigned by the resolve
+        /// system. Authoring it would name a texture the renderer does not hold.
+        ke_texture_handle texture_handle;
+
+        /// [idiom] Whether the quad this sprite draws through has been attached.
+        /// Set by the resolve system once it has; authoring it would claim
+        /// geometry the entity does not carry.
+        uint8_t           attached; ///< [bool]
+    } ke_sprite2d_component;
+
+#define KE_COMPONENT_NAME_SPRITE_2D         "sprite2d"
 #define KE_COMPONENT_NAME_CAMERA            "camera"
 #define KE_COMPONENT_NAME_DIRECTIONAL_LIGHT "directional_light"
 #define KE_COMPONENT_NAME_POINT_LIGHT       "point_light"

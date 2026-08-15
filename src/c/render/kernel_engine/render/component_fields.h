@@ -50,4 +50,17 @@ static const ke_component_field ke_mesh_component_fields[] = {
     { "distortion_strength", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, distortion_strength), sizeof(((ke_mesh_component *)0)->distortion_strength) },
 };
 
+static const ke_component_field ke_sprite2d_component_fields[] = {
+    { "texture", KE_VARIANT_STRING, offsetof(ke_sprite2d_component, texture), sizeof(((ke_sprite2d_component *)0)->texture) },
+    { "region", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, region), sizeof(((ke_sprite2d_component *)0)->region) },
+    { "size", KE_VARIANT_VEC2, offsetof(ke_sprite2d_component, size), sizeof(((ke_sprite2d_component *)0)->size) },
+    { "pivot", KE_VARIANT_VEC2, offsetof(ke_sprite2d_component, pivot), sizeof(((ke_sprite2d_component *)0)->pivot) },
+    { "flip_h", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_h), sizeof(((ke_sprite2d_component *)0)->flip_h) },
+    { "flip_v", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_v), sizeof(((ke_sprite2d_component *)0)->flip_v) },
+    { "color", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, color), sizeof(((ke_sprite2d_component *)0)->color) },
+    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_sprite2d_component, alpha_mode), sizeof(((ke_sprite2d_component *)0)->alpha_mode) },
+    { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_sprite2d_component, alpha_cutoff), sizeof(((ke_sprite2d_component *)0)->alpha_cutoff) },
+    { "attached", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, attached), sizeof(((ke_sprite2d_component *)0)->attached) },
+};
+
 #endif /* KERNEL_ENGINE_RENDER_COMPONENT_FIELDS_H_ */

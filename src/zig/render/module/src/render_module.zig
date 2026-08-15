@@ -2,6 +2,7 @@ const std = @import("std");
 const cimport = @import("cimport.zig");
 const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
+const sprite_resolve = @import("sprite_resolve.zig");
 
 // Compiled into the ke_render_service library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -46,6 +47,8 @@ const ModuleState = struct {
     clear_access: [2]c.ke_component_access, // WRITE backbuffer, READ frame
     end_access: [2]c.ke_component_access, // READ backbuffer, WRITE frame
     mesh_resolve_queries: [1]c.ke_query_decl, // "render.mesh.resolve": WRITE mesh
+    sprite_resolve_queries: [2]c.ke_query_decl, // "render.sprite2d.resolve": [sprite+mesh], [sprite]
+    sprite_resolve_state: sprite_resolve.State,
 
     // Feature pass modules — each owns its own GPU resources, runtime system(s),
     // and shaders, in its own file. Set up in dependency order: shadow + cluster
@@ -176,6 +179,7 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     const spot_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(c.ke_spot_light_component), null);
     const ambient_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, @sizeOf(c.ke_ambient_light_component), null);
     _ = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component), null);
+    const sprite_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPRITE_2D, @sizeOf(c.ke_sprite2d_component), null);
 
     registerFields(w, mesh_cid, &c.ke_mesh_component_fields);
     registerFields(w, camera_cid, &c.ke_camera_component_fields);
@@ -183,6 +187,7 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     registerFields(w, point_light_cid, &c.ke_point_light_component_fields);
     registerFields(w, spot_light_cid, &c.ke_spot_light_component_fields);
     registerFields(w, ambient_light_cid, &c.ke_ambient_light_component_fields);
+    registerFields(w, sprite_cid, &c.ke_sprite2d_component_fields);
 
     // "label" is registered by the ui plugin too (whoever calls component_register
     // first wins the cid), but the ui plugin never sees a ke_world — so without
@@ -190,10 +195,11 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     const label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
     registerFields(w, label_cid, &c.ke_label_component_fields);
 
-    // Only the two components carrying a key no table can describe keep a
-    // callback; it runs after the table and corrects that one key.
+    // Only the components carrying a key no table can describe keep a callback;
+    // it runs after the table and corrects that one key.
     _ = w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null);
     _ = w.register_component_apply.?(w, mesh_cid, component_apply.ke_render_apply_mesh, null);
+    _ = w.register_component_apply.?(w, sprite_cid, component_apply.ke_render_apply_sprite2d, null);
     return true;
 }
 
@@ -325,6 +331,24 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         mesh_resolve_params.user_data = st.core.ref;
         mesh_resolve_params.execute = mesh_resolve.system;
         _ = rt.register_system.?(rt, &mesh_resolve_params, null);
+
+        const sprite_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPRITE_2D, @sizeOf(c.ke_sprite2d_component), null);
+        st.sprite_resolve_state = .{ .core = st.core.ref, .mesh_cid = mesh_cid };
+        st.sprite_resolve_queries = std.mem.zeroes([2]c.ke_query_decl);
+        st.sprite_resolve_queries[0].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };
+        st.sprite_resolve_queries[0].terms[1] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };
+        st.sprite_resolve_queries[0].term_count = 2;
+        st.sprite_resolve_queries[1].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };
+        st.sprite_resolve_queries[1].term_count = 1;
+        var sprite_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
+        sprite_resolve_params.name = "render.sprite2d.resolve";
+        sprite_resolve_params.phase = c.KE_PHASE_UPDATE;
+        sprite_resolve_params.queries = &st.sprite_resolve_queries;
+        sprite_resolve_params.query_count = st.sprite_resolve_queries.len;
+        sprite_resolve_params.pinned_thread = 0;
+        sprite_resolve_params.user_data = &st.sprite_resolve_state;
+        sprite_resolve_params.execute = sprite_resolve.system;
+        _ = rt.register_system.?(rt, &sprite_resolve_params, null);
 
         // begin_frame/clear are registered first, unconditionally, before any
         // pass's setup runs: gbuffer is its own physical plugin whose create()

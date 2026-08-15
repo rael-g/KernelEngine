@@ -43,6 +43,14 @@ pub export fn ke_render_apply_camera(ptr: ?*anyopaque, e: [*c]const c.ke_variant
     }
 }
 
+fn alphaModeOf(v: *const c.ke_variant) ?u32 {
+    if (v.type != c.KE_VARIANT_STRING or v.unnamed_0.s == null) return null;
+    const mode = std.mem.span(v.unnamed_0.s);
+    if (std.mem.eql(u8, mode, "mask")) return c.KE_ALPHA_MODE_MASK;
+    if (std.mem.eql(u8, mode, "blend")) return c.KE_ALPHA_MODE_BLEND;
+    return c.KE_ALPHA_MODE_OPAQUE;
+}
+
 /// `alpha_mode` is authored as the enumerator's name rather than its number.
 /// The table would write the string's bytes over a uint32_t; naming an
 /// enumerator is a mapping only the domain that declares the enum holds.
@@ -50,14 +58,15 @@ pub export fn ke_render_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_t
     const m: *c.ke_mesh_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "alpha_mode")) continue;
-        const v = &entry.value;
-        if (v.type != c.KE_VARIANT_STRING or v.unnamed_0.s == null) continue;
-        const mode = std.mem.span(v.unnamed_0.s);
-        m.alpha_mode = if (std.mem.eql(u8, mode, "mask"))
-            c.KE_ALPHA_MODE_MASK
-        else if (std.mem.eql(u8, mode, "blend"))
-            c.KE_ALPHA_MODE_BLEND
-        else
-            c.KE_ALPHA_MODE_OPAQUE;
+        if (alphaModeOf(&entry.value)) |mode| m.alpha_mode = mode;
+    }
+}
+
+/// Same enumerator-by-name mapping as a mesh's, for the same reason.
+pub export fn ke_render_apply_sprite2d(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+    const sp: *c.ke_sprite2d_component = @ptrCast(@alignCast(ptr));
+    for (entries(e, n)) |*entry| {
+        if (!keyIs(entry, "alpha_mode")) continue;
+        if (alphaModeOf(&entry.value)) |mode| sp.alpha_mode = mode;
     }
 }

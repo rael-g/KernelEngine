@@ -18,6 +18,7 @@ public static class RenderComponentsNodeTypes
         services.AddNodeType<AmbientLight>();
         services.AddNodeType<Skybox>();
         services.AddNodeType<MeshRenderer>();
+        services.AddNodeType<Sprite2D>();
         return services;
     }
 }

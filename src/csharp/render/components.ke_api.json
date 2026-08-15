@@ -384,6 +384,100 @@
           "doc": null
         }
       ]
+    },
+    {
+      "name": "ke_sprite2d_component",
+      "doc": "A textured quad in the plane. Everything that makes one sprite differ from another lives here rather than in a mesh a scene happened to author beside it: which image, which rectangle of it, how big, around what point, and mirrored on which axis. The native \u0022render.sprite2d.resolve\u0022 system turns that into the geometry and material the render passes already consume, so a sprite is a node with data in every language instead of a name for a quad.",
+      "tags": [
+        "node:Sprite2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "texture",
+          "type": "char[128]",
+          "tags": [],
+          "doc": "Image to sample. Empty draws the plain tinted quad."
+        },
+        {
+          "name": "region",
+          "type": "ke_vec4",
+          "tags": [
+            "default:0 0 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "pivot",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_h",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_v",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "ke_alpha_mode. [default:0]"
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "texture_handle",
+          "type": "ke_texture_handle",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "The image resolved from \u0060texture\u0060, assigned by the resolve system. Authoring it would name a texture the renderer does not hold."
+        },
+        {
+          "name": "attached",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        }
+      ]
     }
   ],
   "vtables": [],

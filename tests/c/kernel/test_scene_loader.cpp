@@ -191,6 +191,42 @@ depth    = 5.0
     EXPECT_FLOAT_EQ(t->depth, 5.0f);
 }
 
+TEST_F(SceneLoaderTest, Sprite2d_FieldsApplied)
+{
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Coin"
+[entity.sprite2d]
+texture    = "res://atlas.png"
+region     = [0.25, 0.5, 0.25, 0.5]
+size       = [2.0, 3.0]
+pivot      = [0.0, 1.0]
+flip_h     = true
+color      = [0.5, 0.6, 0.7, 0.8]
+alpha_mode = "blend"
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Coin", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "sprite2d", &meta, nullptr));
+    auto *sp = (ke_sprite2d_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(sp, nullptr);
+    EXPECT_STREQ(sp->texture, "res://atlas.png");
+    EXPECT_FLOAT_EQ(sp->region.x, 0.25f);
+    EXPECT_FLOAT_EQ(sp->region.w, 0.5f);
+    EXPECT_FLOAT_EQ(sp->size.x, 2.0f);
+    EXPECT_FLOAT_EQ(sp->pivot.y, 1.0f);
+    EXPECT_TRUE(sp->flip_h);
+    EXPECT_FALSE(sp->flip_v);
+    EXPECT_FLOAT_EQ(sp->color.w, 0.8f);
+    // Authored by the enumerator's name, which no field table can express.
+    EXPECT_EQ(sp->alpha_mode, (uint32_t)KE_ALPHA_MODE_BLEND);
+    // Never authorable: the resolve system owns it.
+    EXPECT_FALSE(sp->attached);
+}
+
 // ── [entity.X] via apply registry ──────────────────────────────
 
 TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)

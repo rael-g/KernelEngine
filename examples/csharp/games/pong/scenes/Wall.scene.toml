@@ -18,9 +18,6 @@ restitution  = 1.0
 name   = "Visual"
 parent = "Root"
 type   = "Sprite2D"
-[entity.transform2d]
-scale = [16.0, 0.5]
-[entity.mesh]
-mesh      = "quad"
-color     = [0.15, 0.15, 0.20, 1.0]
-roughness = 1.0
+[entity.sprite2d]
+size  = [16.0, 0.5]
+color = [0.15, 0.15, 0.20, 1.0]

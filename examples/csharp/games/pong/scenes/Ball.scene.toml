@@ -19,12 +19,9 @@ friction     = 0.0
 name   = "Visual"
 parent = "Root"
 type   = "Sprite2D"
-[entity.transform2d]
-scale = [0.36, 0.36]
-[entity.mesh]
-mesh      = "quad"
-color     = [0.95, 0.95, 0.95, 1.0]
-roughness = 1.0
+[entity.sprite2d]
+size  = [0.36, 0.36]
+color = [0.95, 0.95, 0.95, 1.0]
 
 [[entity]]
 name   = "HitSound"
