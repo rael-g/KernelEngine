@@ -11,14 +11,19 @@ const c = @import("c.zig").c;
 const pi: f32 = 3.14159265358979323846;
 
 /// Entries arrive as a C pointer + count; the callbacks only ever read them.
-fn entries(e: [*c]const c.ke_variant_table_entry, n: u32) []const c.ke_variant_table_entry {
+fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     if (n == 0) return &.{};
     return e[0..n];
 }
 
-fn keyIs(entry: *const c.ke_variant_table_entry, name: []const u8) bool {
+/// Marks the entry as taken on a match: asking whether a key is yours and being
+/// told yes is what claiming it means, and the loader reads that back to find the
+/// keys nothing in the engine wanted.
+fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     if (entry.key == null) return false;
-    return std.mem.eql(u8, std.mem.span(entry.key), name);
+    if (!std.mem.eql(u8, std.mem.span(entry.key), name)) return false;
+    entry.consumed = true;
+    return true;
 }
 
 // Euler ZYX intrinsic, degrees in -> quaternion. Matches C# SceneLoader's
@@ -45,7 +50,7 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
 /// A 2D pose stores radians, and a scene authors degrees — the same unit it
 /// authors 3D rotation in. A description maps a key to storage and cannot say
 /// "and convert", so the conversion lands here.
-pub export fn ke_framework_apply_transform2d(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_transform2d(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const t: *c.ke_transform2d_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "rotation")) continue;
@@ -61,7 +66,7 @@ pub export fn ke_framework_apply_transform2d(ptr: ?*anyopaque, e: [*c]const c.ke
 /// A 2D `scale` widens to z=0 through the generic path, which is the right fill
 /// for a position and collapses an object flat here. A scale authored in 2D
 /// means "leave depth alone", so z returns to 1.
-pub export fn ke_framework_apply_transform(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_framework_apply_transform(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const t: *c.ke_transform_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;

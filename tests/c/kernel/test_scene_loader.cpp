@@ -518,6 +518,37 @@ parent = 999
     EXPECT_NE(err, nullptr);
 }
 
+TEST_F(SceneLoaderTest, UnknownFieldInAKnownComponent_FailsTheLoad)
+{
+    // The last silent failure the format had: the component resolves, the block is
+    // read, and one mistyped key is dropped on the floor. Nothing downstream can
+    // tell that value from one the author never wrote.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Typo"
+[entity.point_light]
+radius = 4.0
+raidus = 9.0
+)");
+    ke_error *err = nullptr;
+    EXPECT_FALSE(loader->load(loader, p.string().c_str(), &err));
+    EXPECT_NE(err, nullptr);
+}
+
+TEST_F(SceneLoaderTest, KeyOnlyTheDomainCallbackKnows_IsNotReportedAsUnknown)
+{
+    // rotation_euler is not a field of any component: it is three angles standing
+    // for the quaternion one holds, which only the domain's callback can map. The
+    // check has to see the callback's claim, or every such key would fail the load.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Turned"
+[entity.transform]
+rotation_euler = [0.0, 90.0, 0.0]
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+}
+
 TEST_F(SceneLoaderTest, UnknownComponent_FailsTheLoad)
 {
     // A typo in a component name is the failure this whole format is exposed to,
@@ -695,14 +726,18 @@ struct DemoComp {
     int32_t mode;
 };
 
-void demo_apply(void *c, const ke_variant_table_entry *entries, uint32_t count) {
+// Marks what it takes, the same contract every apply callback follows: a key
+// nobody claims is reported as one the component does not have.
+void demo_apply(void *c, ke_variant_table_entry *entries, uint32_t count) {
     DemoComp *d = (DemoComp *)c;
     for (uint32_t i = 0; i < count; ++i) {
         if (strcmp(entries[i].key, "fov") == 0) {
             if (entries[i].value.type == KE_VARIANT_FLOAT) d->fov = (float)entries[i].value.f;
             else if (entries[i].value.type == KE_VARIANT_INT) d->fov = (float)entries[i].value.i;
+            entries[i].consumed = true;
         } else if (strcmp(entries[i].key, "mode") == 0 && entries[i].value.type == KE_VARIANT_INT) {
             d->mode = (int32_t)entries[i].value.i;
+            entries[i].consumed = true;
         }
     }
 }

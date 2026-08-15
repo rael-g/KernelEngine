@@ -356,6 +356,16 @@ fn applyComponentBlock(
     if (fields != null)
         fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
     if (apply_fn) |f| f(comp, entries.ptr, @intCast(entries.len));
+
+    // Whatever neither the table nor the callback claimed is a key no build of
+    // this engine has a use for — a typo, or a field that was removed. Ignoring
+    // it is how a value silently never arrives, which is the whole reason the
+    // entry carries the flag.
+    for (entries) |*entry| {
+        if (entry.consumed) continue;
+        structural(world, out_error, "component '{s}' has no field '{s}'", .{ comp_name, entry.key });
+        return false;
+    }
     return true;
 }
 

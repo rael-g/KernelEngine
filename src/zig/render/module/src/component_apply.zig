@@ -15,14 +15,19 @@ const c = @import("cimport.zig").c;
 const pi: f32 = 3.14159265358979323846;
 
 /// Entries arrive as a C pointer + count; the callbacks only ever read them.
-fn entries(e: [*c]const c.ke_variant_table_entry, n: u32) []const c.ke_variant_table_entry {
+fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     if (n == 0) return &.{};
     return e[0..n];
 }
 
-fn keyIs(entry: *const c.ke_variant_table_entry, name: []const u8) bool {
+/// Marks the entry as taken on a match: asking whether a key is yours and being
+/// told yes is what claiming it means, and the loader reads that back to find the
+/// keys nothing in the engine wanted.
+fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     if (entry.key == null) return false;
-    return std.mem.eql(u8, std.mem.span(entry.key), name);
+    if (!std.mem.eql(u8, std.mem.span(entry.key), name)) return false;
+    entry.consumed = true;
+    return true;
 }
 
 fn asFloat(v: *const c.ke_variant) ?f32 {
@@ -35,7 +40,7 @@ fn asFloat(v: *const c.ke_variant) ?f32 {
 
 /// `fov_degrees` is the same field as `fov` in a different unit. A table maps a
 /// key to storage; it has no way to say "and multiply by pi/180".
-pub export fn ke_render_apply_camera(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_render_apply_camera(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const cam: *c.ke_camera_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "fov_degrees")) continue;
@@ -54,7 +59,7 @@ fn alphaModeOf(v: *const c.ke_variant) ?u32 {
 /// `alpha_mode` is authored as the enumerator's name rather than its number.
 /// The table would write the string's bytes over a uint32_t; naming an
 /// enumerator is a mapping only the domain that declares the enum holds.
-pub export fn ke_render_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_render_apply_mesh(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const m: *c.ke_mesh_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "alpha_mode")) continue;
@@ -63,7 +68,7 @@ pub export fn ke_render_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_t
 }
 
 /// Same enumerator-by-name mapping as a mesh's, for the same reason.
-pub export fn ke_render_apply_sprite2d(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+pub export fn ke_render_apply_sprite2d(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) void {
     const sp: *c.ke_sprite2d_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "alpha_mode")) continue;

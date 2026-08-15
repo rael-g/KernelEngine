@@ -8,4 +8,6 @@ public unsafe partial struct ke_variant_table_entry
     public sbyte* key;
 
     public ke_variant value;
+
+    public bool consumed;
 }

@@ -144,7 +144,7 @@ fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
 /// hand-written apply resolved it: the last one authored wins.
 pub fn apply(
     component: ?*anyopaque,
-    entries: [*c]const c.ke_variant_table_entry,
+    entries: [*c]c.ke_variant_table_entry,
     count: u32,
     fields: [*]const c.ke_component_field,
     field_count: u32,
@@ -156,6 +156,10 @@ pub fn apply(
         for (fields[0..field_count]) |*field| {
             if (!keyIs(entry.key, field.name)) continue;
             writeField(base, field, &entry.value);
+            // Claimed even when the value could not be coerced: the description
+            // does know this key, so reporting it as unknown would name the wrong
+            // problem.
+            entry.consumed = true;
             break;
         }
     }
@@ -202,8 +206,12 @@ const probe_fields = [_]c.ke_component_field{
     .{ .name = "label", .type = c.KE_VARIANT_STRING, .offset = @offsetOf(Probe, "label"), .size = 8 },
 };
 
+/// Copies into a mutable buffer because apply marks each entry it takes, and a
+/// test's literal list is const.
 fn applyTo(p: *Probe, list: []const c.ke_variant_table_entry) void {
-    apply(p, list.ptr, @intCast(list.len), &probe_fields, probe_fields.len);
+    var buf: [8]c.ke_variant_table_entry = undefined;
+    @memcpy(buf[0..list.len], list);
+    apply(p, &buf, @intCast(list.len), &probe_fields, probe_fields.len);
 }
 
 fn vFloat(f: f64) c.ke_variant {
@@ -233,9 +241,10 @@ test "a field the header gives a default starts there, not at zero" {
 test "an authored value overrides the default it was seeded with" {
     var p = std.mem.zeroes(Probe);
     seedDefaults(&p, &seeded_fields, seeded_fields.len);
-    apply(&p, &[_]c.ke_variant_table_entry{
+    var one = [_]c.ke_variant_table_entry{
         .{ .key = "amount", .value = vFloat(0.25) },
-    }, 1, &seeded_fields, seeded_fields.len);
+    };
+    apply(&p, &one, one.len, &seeded_fields, seeded_fields.len);
 
     try testing.expectEqual(@as(f32, 0.25), p.amount);
     // And a field the block never mentions keeps the default rather than being

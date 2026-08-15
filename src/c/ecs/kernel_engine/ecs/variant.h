@@ -43,10 +43,18 @@ extern "C"
         };
     } ke_variant;
 
+    /// One authored key and its value.
+    ///
+    /// `consumed` is written by whoever accepts the key — the generated field table
+    /// for a field it describes, the domain's own callback for one it does not. The
+    /// loader reads it back afterwards, so a key nobody wanted is a typo it can
+    /// name instead of a value that quietly never arrives. Both paths have to mark,
+    /// which is why it lives on the entry rather than in either of them.
     typedef struct ke_variant_table_entry
     {
         const char *key;
         ke_variant  value;
+        bool        consumed;
     } ke_variant_table_entry;
 
     typedef struct ke_variant_table
