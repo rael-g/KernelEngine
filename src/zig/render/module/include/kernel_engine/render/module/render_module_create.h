@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/render/service/render_service_create.h>
 #include <kernel_engine/render/ui/ui_create.h>
 #include <kernel_engine/text/font.h>
@@ -61,13 +62,19 @@ typedef struct ke_render_feature_params
 // through ke_scene_loader), since nothing will ever ask for those callbacks.
 // `logger` is optional (NULL is valid) — when present, the module routes its
 // own runtime diagnostics (e.g. a scene exceeding a fixed resource cap) through
-// it instead of staying silent. `cluster_params` and `feature_params` are optional (NULL
+// it instead of staying silent. `asset_resolver` is optional and borrowed: the
+// resolve systems hand it a path a scene authored and get back an uploaded
+// handle. The module never creates one — which loader decodes an image is the
+// asset domain's business and the host's choice, and a render module that built
+// its own would be deciding both. Without one, a component naming a file keeps
+// whatever it would have had with no file named. `cluster_params` and `feature_params` are optional (NULL
 // = all defaults). `shader_dir` is required — an absolute path to the
 // directory every pass's build-time-compiled shaders were installed into (see
 // ke_render_service_create); forwarded to the render core unchanged.
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_world *world, ke_bool default_passes, struct ke_logger *logger,
+                        ke_asset_resolver *asset_resolver,
                         const ke_render_cluster_params *cluster_params,
                         const ke_render_feature_params *feature_params,
                         const char *shader_dir, ke_error **out_error);

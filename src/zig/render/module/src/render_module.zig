@@ -212,6 +212,7 @@ fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
 
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
                                   world: ?*c.ke_world, default_passes: c.ke_bool, logger: ?*c.ke_logger,
+                                  asset_resolver: ?*c.ke_asset_resolver,
                                   cluster_params: ?*const c.ke_render_cluster_params,
                                   feature_params: ?*const c.ke_render_feature_params,
                                   shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
@@ -333,7 +334,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         _ = rt.register_system.?(rt, &mesh_resolve_params, null);
 
         const sprite_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SPRITE_2D, @sizeOf(c.ke_sprite2d_component), null);
-        st.sprite_resolve_state = .{ .core = st.core.ref, .mesh_cid = mesh_cid };
+        st.sprite_resolve_state = .{ .core = st.core.ref, .mesh_cid = mesh_cid, .resolver = asset_resolver };
         st.sprite_resolve_queries = std.mem.zeroes([2]c.ke_query_decl);
         st.sprite_resolve_queries[0].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };
         st.sprite_resolve_queries[0].terms[1] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };

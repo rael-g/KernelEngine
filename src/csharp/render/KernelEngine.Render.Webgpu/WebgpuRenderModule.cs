@@ -125,9 +125,16 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 : (uint)(config?.GetInt("render", "max_lights_per_cluster", 0) ?? 0),
         };
         var fp = _featureParams;
+        // Borrowed from the container, never created here: which loader decodes an
+        // image is the asset domain's business, and a host that wants no file-backed
+        // assets registers none. Its absence costs a sprite naming a file its texture,
+        // nothing else.
+        var ar = services.GetService<KernelEngine.Framework.NativeAssetResolver>() is { } resolver
+            ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
+            : null;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
-            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, wd, 1, lg, &cp, &fp, (sbyte*)sd, &err);
+            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, wd, 1, lg, ar, &cp, &fp, (sbyte*)sd, &err);
         if (_module.@ref == null)
             throw Fail("render module create failed", err);
 

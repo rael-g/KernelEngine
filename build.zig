@@ -526,6 +526,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
+        argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
         argF(b, "ke-service-include", b.pathJoin(&.{ src_zig, "render/service/include" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/module/include" })),
         argF(b, "ke-tonemap-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
@@ -903,6 +904,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_c, "asset" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
@@ -937,6 +939,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_c, "asset" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{

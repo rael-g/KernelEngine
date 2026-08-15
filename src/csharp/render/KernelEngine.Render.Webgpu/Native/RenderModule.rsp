@@ -24,6 +24,8 @@ ke_render_module
 ../../../../c/text
 --include-directory
 ../../../../zig/framework/include
+--include-directory
+../../../../c/asset
 --file
 ../../../../zig/render/module/include/kernel_engine/render/module/render_module_create.h
 --traverse
@@ -44,6 +46,7 @@ ke_ecs=KernelEngine.Ecs.Native.ke_ecs
 ke_gpu_device=ke_gpu_device
 ke_logger=KernelEngine.Logger.Native.ke_logger
 ke_world=KernelEngine.Framework.Native.ke_world
+ke_asset_resolver=KernelEngine.Asset.Native.ke_asset_resolver
 ke_result=ke_result
 ke_ui_font_handle=KernelEngine.Render.Native.ke_ui_font_handle
 ke_label_glyph_quad=KernelEngine.Render.Native.ke_label_glyph_quad
@@ -58,6 +61,7 @@ ke_runtime
 ke_ecs
 ke_logger
 ke_world
+ke_asset_resolver
 ke_render_ui_create
 ke_font_loader
 ke_font_loader_handle

@@ -19,6 +19,7 @@ pub fn build(b: *std.Build) void {
     const ke_framework = b.option([]const u8, "ke-framework-include", "ke_framework's public include dir")   orelse @panic("-Dke-framework-include required");
     const ke_text      = b.option([]const u8, "ke-text-include",      "kernel_engine/text include dir")      orelse @panic("-Dke-text-include required");
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
+    const ke_asset     = b.option([]const u8, "ke-asset-include",     "kernel_engine/asset include dir")     orelse @panic("-Dke-asset-include required");
     const ke_service   = b.option([]const u8, "ke-service-include",  "ke_render_service plugin include dir") orelse @panic("-Dke-service-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const ke_tonemap   = b.option([]const u8, "ke-tonemap-include",   "ke_render_tonemap plugin include dir") orelse @panic("-Dke-tonemap-include required");
@@ -38,7 +39,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     inline for (.{
-        ke_common, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_text, ke_logger,
+        ke_common, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_text, ke_logger, ke_asset,
         ke_service, ke_self, ke_tonemap, ke_skybox, ke_ui, ke_gbuffer, ke_shadow, ke_cluster,
         ke_deferred_lighting, ke_forward,
     }) |inc| {

@@ -28,6 +28,10 @@ const Vertex = extern struct {
 pub const State = struct {
     core: *c.ke_render_service,
     mesh_cid: c.ke_component_id,
+    /// Borrowed, optional: turns an authored path into an uploaded texture. Null
+    /// where the host wired no loader, and a sprite naming a file then draws
+    /// untextured rather than failing a frame.
+    resolver: ?*c.ke_asset_resolver,
 };
 
 fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_mesh_handle {
@@ -64,17 +68,25 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
     return core.upload_mesh.?(core, key.ptr, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
 }
 
-/// A zeroed handle is indistinguishable from a live one (slot 0, generation 0) —
-/// "none" is all-ones — so an unresolved sprite must be recognised by having no
-/// path to resolve, never by the handle field looking empty.
-fn textureOf(sp: *const c.ke_sprite2d_component) c.ke_texture_handle {
+/// Uploads the image the sprite names, once. Deduped by path inside the resolver,
+/// but the handle is kept so a steady scene stops asking at all.
+///
+/// A zeroed handle would be indistinguishable from a live one (slot 0, generation
+/// 0) — "none" is all-ones — which is why the sprite's first sighting writes
+/// KE_TEXTURE_NONE before anything reads it back.
+fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
+    if (c.ke_texture_is_valid(sp.texture_handle)) return sp.texture_handle;
+
+    const resolver = st.resolver orelse return c.KE_TEXTURE_NONE;
+    sp.texture_handle = resolver.resolve_texture_into.?(resolver, st.core, &sp.texture, null);
     return sp.texture_handle;
 }
 
-fn materialFor(core: *c.ke_render_service, sp: *c.ke_sprite2d_component) c.ke_material_handle {
+fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
+    const core = st.core;
     const col = sp.color;
-    const tex = textureOf(sp);
+    const tex = resolveTexture(st, sp);
     var key_buf: [192]u8 = undefined;
     const key = std.fmt.bufPrintZ(&key_buf, "sprite:{d}:{d}:{d}:{d}:{d}:{d}:{d}", .{
         col.x, col.y, col.z, col.w, tex.bits, sp.alpha_mode, sp.alpha_cutoff,
@@ -115,7 +127,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
             const sp: *c.ke_sprite2d_component = @ptrCast(&sprites[i]);
             sp.attached = 1;
             meshes[i].mesh = quadFor(st.core, sp);
-            meshes[i].material = materialFor(st.core, sp);
+            meshes[i].material = materialFor(st, sp);
         }
     }
 
@@ -127,6 +139,9 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         while (i < segs[s].count) : (i += 1) {
             if (sprites[i].attached != 0) continue;
             sprites[i].attached = 1;
+            // Before anything can read it back: a component the scene created is
+            // zeroed, and zero is a handle that looks live.
+            sprites[i].texture_handle = c.KE_TEXTURE_NONE;
             _ = c.ke_system_ctx_attach(ctx, segs[s].entities[i], st.mesh_cid, null, 0);
         }
     }
