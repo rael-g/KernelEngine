@@ -3,6 +3,7 @@ const cimport = @import("cimport.zig");
 const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
 const sprite_resolve = @import("sprite_resolve.zig");
+const label_resolve = @import("label_resolve.zig");
 
 // Compiled into the ke_render_service library (folded here because a separate Zig
 // DLL cannot link another Zig DLL's import lib on Windows). Calls the render
@@ -49,6 +50,8 @@ const ModuleState = struct {
     mesh_resolve_queries: [1]c.ke_query_decl, // "render.mesh.resolve": WRITE mesh
     sprite_resolve_queries: [2]c.ke_query_decl, // "render.sprite2d.resolve": [sprite+mesh], [sprite]
     sprite_resolve_state: sprite_resolve.State,
+    label_resolve_queries: [1]c.ke_query_decl, // "render.label.resolve": WRITE label
+    label_resolve_state: label_resolve.State,
 
     // Feature pass modules — each owns its own GPU resources, runtime system(s),
     // and shaders, in its own file. Set up in dependency order: shadow + cluster
@@ -350,6 +353,21 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         sprite_resolve_params.user_data = &st.sprite_resolve_state;
         sprite_resolve_params.execute = sprite_resolve.system;
         _ = rt.register_system.?(rt, &sprite_resolve_params, null);
+
+        const label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
+        st.label_resolve_state = .{ .core = st.core.ref, .ui = st.ui.ref, .resolver = asset_resolver };
+        st.label_resolve_queries = std.mem.zeroes([1]c.ke_query_decl);
+        st.label_resolve_queries[0].terms[0] = .{ .cid = label_cid, .access = c.KE_ACCESS_WRITE };
+        st.label_resolve_queries[0].term_count = 1;
+        var label_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
+        label_resolve_params.name = "render.label.resolve";
+        label_resolve_params.phase = c.KE_PHASE_UPDATE;
+        label_resolve_params.queries = &st.label_resolve_queries;
+        label_resolve_params.query_count = st.label_resolve_queries.len;
+        label_resolve_params.pinned_thread = 0;
+        label_resolve_params.user_data = &st.label_resolve_state;
+        label_resolve_params.execute = label_resolve.system;
+        _ = rt.register_system.?(rt, &label_resolve_params, null);
 
         // begin_frame/clear are registered first, unconditionally, before any
         // pass's setup runs: gbuffer is its own physical plugin whose create()

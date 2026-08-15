@@ -230,9 +230,26 @@
       "fields": [
         {
           "name": "font",
-          "type": "ke_ui_font_handle",
+          "type": "char[128]",
           "tags": [],
+          "doc": "Font file to draw with. Baked and registered by the native \u0022render.label.resolve\u0022 system, which is what lets a scene name a font instead of a host handing the label a handle only its language holds."
+        },
+        {
+          "name": "font_size",
+          "type": "float",
+          "tags": [
+            "default:32"
+          ],
           "doc": null
+        },
+        {
+          "name": "font_handle",
+          "type": "ke_ui_font_handle",
+          "tags": [
+            "idiom",
+            "name:font_handle"
+          ],
+          "doc": "Resolved from \u0060font\u0060; a node authoring it would name a font the overlay pass does not hold."
         },
         {
           "name": "anchor",

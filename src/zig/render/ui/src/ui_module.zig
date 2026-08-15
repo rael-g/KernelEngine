@@ -165,8 +165,8 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     const l: *c.ke_label_component = @ptrCast(l_ptr);
     l.glyph_count = 0;
 
-    const font_idx = c.ke_handle_index(l.font.bits);
-    if (l.font.bits == c.KE_HANDLE_NONE or font_idx >= MAX_UI_FONTS or !ui.fonts[font_idx].in_use)
+    const font_idx = c.ke_handle_index(l.font_handle.bits);
+    if (l.font_handle.bits == c.KE_HANDLE_NONE or font_idx >= MAX_UI_FONTS or !ui.fonts[font_idx].in_use)
         return;
     const font = &ui.fonts[font_idx];
 
@@ -338,7 +338,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             const l = labels[i];
             if (l.glyph_count == 0) continue;
 
-            const font_idx = c.ke_handle_index(l.font.bits);
+            const font_idx = c.ke_handle_index(l.font_handle.bits);
             const tex = ui.fonts[font_idx].atlas;
             const premul = [4]f32{ l.color[0] * l.color[3], l.color[1] * l.color[3], l.color[2] * l.color[3], l.color[3] };
 

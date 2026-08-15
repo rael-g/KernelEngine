@@ -252,6 +252,34 @@ color = [1.0, 0.0, 0.0, 1.0]
     EXPECT_FLOAT_EQ(m->alpha_cutoff, 0.5f);
 }
 
+TEST_F(SceneLoaderTest, Label_NamesItsFontByPath)
+{
+    // What this replaces: the font was a handle, so the only way to have one was
+    // to bake it in the host's own language and hand the value over. A scene
+    // could not say which font it wanted at all.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Title"
+[entity.label]
+text      = "Pong"
+font      = "res://fonts/title.ttf"
+font_size = 72.0
+)");
+    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
+    ke_entity e = tree->find_node(tree, "Title", NULL);
+    ASSERT_NE(e, KE_ENTITY_INVALID);
+
+    ke_component_meta meta;
+    ASSERT_TRUE(ecs->component_lookup(ecs, "label", &meta, nullptr));
+    auto *l = (ke_label_component *)ecs->component_get(ecs, e, meta.cid);
+    ASSERT_NE(l, nullptr);
+    EXPECT_STREQ(l->font, "res://fonts/title.ttf");
+    EXPECT_FLOAT_EQ(l->font_size, 72.0f);
+    // The bake is the resolve system's, and it has not run: no handle yet, and
+    // no handle is now spelled zero.
+    EXPECT_EQ(l->font_handle.bits, 0u);
+}
+
 // ── [entity.X] via apply registry ──────────────────────────────
 
 TEST_F(SceneLoaderTest, MeshComponent_AppliedByName)

@@ -46,7 +46,8 @@ public sealed partial class Scoreboard : Node
         _left  = AddChild(new Label
         {
             Text   = "0",
-            Font   = _font.Handle,
+            Font     = path,
+            FontSize = FontSize,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.30f, 0f),
             Offset = new Vector2(0f, 60f),
@@ -55,7 +56,8 @@ public sealed partial class Scoreboard : Node
         _right = AddChild(new Label
         {
             Text   = "0",
-            Font   = _font.Handle,
+            Font     = path,
+            FontSize = FontSize,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.70f, 0f),
             Offset = new Vector2(0f, 60f),
@@ -64,7 +66,8 @@ public sealed partial class Scoreboard : Node
         _hint  = AddChild(new Label
         {
             Text   = "",
-            Font   = _font.Handle,
+            Font     = path,
+            FontSize = FontSize,
             Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1f),
             Offset = new Vector2(0f, -80f),

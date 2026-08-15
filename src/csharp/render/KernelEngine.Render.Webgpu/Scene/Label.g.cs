@@ -13,14 +13,19 @@ public partial class Label : Node3D
 {
     public Label()
     {
+        _generatedState0.font_size = 32f;
         _generatedState0.color[0] = 1f;
         _generatedState0.color[1] = 1f;
         _generatedState0.color[2] = 1f;
         _generatedState0.color[3] = 1f;
     }
 
+    /// <summary>Font file to draw with. Baked and registered by the native "render.label.resolve" system, which is what lets a scene name a font instead of a host handing the label a handle only its language holds.</summary>
     [NativeField("font", Component = typeof(ke_label_component))]
-    public partial KernelEngine.Render.FontHandle Font { get; set; }
+    public partial string Font { get; set; }
+
+    [NativeField("font_size", Component = typeof(ke_label_component))]
+    public partial float FontSize { get; set; }
 
     /// <summary>Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right.</summary>
     [NativeField("anchor", Component = typeof(ke_label_component))]

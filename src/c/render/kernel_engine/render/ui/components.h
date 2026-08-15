@@ -58,7 +58,17 @@ extern "C"
     /// CPU-side accumulator, no pool to grow or reuse.
     typedef struct ke_label_component
     {
-        ke_ui_font_handle font;
+        /// Font file to draw with. Baked and registered by the native
+        /// "render.label.resolve" system, which is what lets a scene name a font
+        /// instead of a host handing the label a handle only its language holds.
+        char              font[128];
+        /// Size the font is baked at, in pixels. Part of the bake key: the same
+        /// file at another size is a different atlas.
+        float             font_size; ///< [default:32]
+
+        /// [idiom,name:font_handle] Resolved from `font`; a node authoring it
+        /// would name a font the overlay pass does not hold.
+        ke_ui_font_handle font_handle;
         /// Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right.
         float             anchor[2];
         /// Pixel offset applied AFTER anchor positioning.
