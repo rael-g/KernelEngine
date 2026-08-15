@@ -153,14 +153,29 @@ public abstract class Node
     }
 
     /// <summary>
-    /// Resolves a <see cref="Child{T}"/> borrow by node name. Called by generated
-    /// dispatch each tick rather than cached, so a borrow can never outlive the node
-    /// it points at.
+    /// Resolves a <see cref="Child{T}"/> borrow. Called by generated dispatch each
+    /// tick rather than cached, so a borrow can never outlive the node it points at.
     /// </summary>
+    /// <remarks>
+    /// An empty <paramref name="name"/> resolves by type, which is what a borrow
+    /// declaring one child of a type means. A name is only needed to tell two
+    /// children of the same type apart, and asking for one where there is nothing to
+    /// disambiguate made every borrow carry an attribute for nothing.
+    /// </remarks>
     protected internal Child<T> BorrowChild<T>(string name) where T : Node
     {
+        T? found = null;
         foreach (var child in Children)
-            if (child is T typed && child.Name == name) return new Child<T>(typed);
+        {
+            if (child is not T typed || (name.Length != 0 && child.Name != name)) continue;
+            if (found is not null)
+            {
+                NodeWorld?.ReportAmbiguousBorrow(this, "Child", typeof(T).Name, found.Name, child.Name);
+                return default;
+            }
+            found = typed;
+        }
+        if (found is not null) return new Child<T>(found);
         NodeWorld?.ReportUnresolvedBorrow(this, "Child", typeof(T).Name, name);
         return default;
     }
@@ -172,10 +187,31 @@ public abstract class Node
     protected internal Emit<T> BorrowEmit<T>() where T : unmanaged =>
         NodeWorld is null ? default : NodeWorld.EmitFor<T>(Entity);
 
-    /// <summary>Resolves a <see cref="Ref{T}"/> borrow by node name, anywhere in the tree.</summary>
+    /// <summary>
+    /// Resolves a <see cref="Ref{T}"/> borrow anywhere in the tree, by name or — when
+    /// none is given — by type, the same rule a child borrow follows.
+    /// </summary>
     protected internal Ref<T> BorrowRef<T>(string name) where T : Node
     {
-        if (NodeWorld?.Find(name) is T typed) return new Ref<T>(typed);
+        if (name.Length != 0)
+        {
+            if (NodeWorld?.Find(name) is T named) return new Ref<T>(named);
+            NodeWorld?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
+            return default;
+        }
+
+        T? found = null;
+        foreach (var node in NodeWorld?.AllNodes ?? [])
+        {
+            if (node is not T typed) continue;
+            if (found is not null)
+            {
+                NodeWorld?.ReportAmbiguousBorrow(this, "Ref", typeof(T).Name, found.Name, node.Name);
+                return default;
+            }
+            found = typed;
+        }
+        if (found is not null) return new Ref<T>(found);
         NodeWorld?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
         return default;
     }

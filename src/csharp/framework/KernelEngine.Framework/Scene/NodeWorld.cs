@@ -94,6 +94,23 @@ public sealed class NodeWorld
             $"'{owner.Name}' borrows {kind}<{typeName}> named '{name}', which resolves to no node");
     }
 
+    /// <summary>
+    /// Reports a borrow that named no node and found more than one of its type.
+    /// </summary>
+    /// <remarks>
+    /// Picking the first would make which node a behavior drives depend on the order
+    /// the scene declared its children — the borrow resolves to something, and the
+    /// wrong thing moves. Naming both candidates says what a NodeName would settle.
+    /// </remarks>
+    internal void ReportAmbiguousBorrow(Node owner, string kind, string typeName, string first, string second)
+    {
+        if (_logger is null) return;
+        if (!_reportedBorrows.Add($"{owner.Entity}/{kind}/{typeName}/?")) return;
+        _logger.Log(KernelEngine.Logger.LogLevel.Warning, "scene.node",
+            $"'{owner.Name}' borrows {kind}<{typeName}> with no name, and both '{first}' and '{second}' answer to it; "
+            + "give the borrow a NodeName");
+    }
+
     private readonly SignalBus? _signals;
     private readonly Dictionary<Type, uint> _signalIds = new();
 

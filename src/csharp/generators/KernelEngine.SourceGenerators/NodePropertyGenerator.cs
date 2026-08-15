@@ -204,8 +204,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 // the right to raise a signal from this node, and this node is
                 // already known.
                 if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
+                // No name means "the one of this type", which is what a borrow says
+                // when the type is already unambiguous. Defaulting to the parameter's
+                // own name made every borrow need a NodeName to say what it meant.
                 var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
-                var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : pp.Name;
+                var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
                 args.Add($"Borrow{kind}<{arg}>(\"{nodeName}\")");
             }
             sb.AppendLine($"        Update({string.Join(", ", args)});");
