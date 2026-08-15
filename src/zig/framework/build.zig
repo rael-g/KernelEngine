@@ -1,20 +1,9 @@
 const std = @import("std");
 
-// Build the ke_framework shared library (Zig 0.16 API) — the engine's
-// opinionated composition layer (world, scene tree, scene loader, asset
-// resolver, input actions).
-//
-// The module is Zig end to end. The only C left is vendored tomlc99, which Zig
-// compiles itself, so nothing built by another toolchain is linked *into* this
-// module; errors go through the shared Zig kerror seam rather than ke_common.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
 
-    // The single shared tomlc99 copy lives under src/zig/common. The root
-    // build.zig threads its absolute path in; a standalone `zig build` here
-    // defaults to the in-tree location relative to this plugin.
     const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "path to the shared vendored tomlc99 dir") orelse
         b.pathJoin(&.{ b.build_root.path.?, "..", "common", "third_party", "tomlc99" });
 
@@ -41,8 +30,6 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
-    // The scene tree's hierarchy systems read component memory through
-    // ke_system_ctx_view, which ke_runtime exports as a free function.
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_runtime", .{});
     addTomlc99(b, mod, tomlc99_dir);
@@ -62,9 +49,6 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
-    // ── Tests ──────────────────────────────────────────────────────────────
-    // One test artifact per source file that has tests: a Zig test root only
-    // pulls in what it imports, so a file no root reaches is silently untested.
     const test_step = b.step("test", "Run unit tests");
     inline for (.{ "src/signal_bus.zig", "src/component_fields_apply.zig", "src/mat4.zig" }) |root| {
         const test_mod = b.createModule(.{

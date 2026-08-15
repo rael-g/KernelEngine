@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// Build the ke_render_service shared library (Zig 0.16 API).
-// Backend-agnostic: it talks only to the ke_gpu_device / ke_ecs vtables passed
-// to its factory. No webgpu/window link.
-
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});

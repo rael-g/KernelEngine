@@ -1,11 +1,5 @@
 const std = @import("std");
 
-// Build the ke_logger_simple shared library (Zig 0.16 API) — a kernel built-in
-// (multi-sink logger). Pure logic: no third-party C, no vcpkg lib, and no
-// ke_common LINK — the common headers are @cImport'd for the ke_error struct
-// layout only; errors are translated to the C ABI at the export seam by the
-// shared Zig kerror utility. Allocates through Zig's own allocator.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});

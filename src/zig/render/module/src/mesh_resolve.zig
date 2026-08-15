@@ -1,28 +1,9 @@
-// "render.mesh.resolve" — the native system that turns a scene-authored
-// ke_mesh_component (a primitive name + material-authoring fields, both plain
-// data) into real GPU handles. This is the logic MeshRenderer.cs used to do
-// by hand-written C# reaching into IRenderResources/MeshPrimitives; the node
-// itself never held any of it — it only ever wrote MeshHandle/MaterialHandle
-// straight through. Moving the resolution into a system, not a node, is what
-// makes MeshRenderer a pure ECS facade: it writes data, this system (or a
-// caller with already-resolved handles) is what gives that data meaning.
-//
-// Runs every KE_PHASE_UPDATE tick with write access to "mesh", but only acts
-// on an entity whose mesh/material handle is still KE_MESH_NONE/
-// KE_MATERIAL_NONE — upload_mesh/create_material are both dedup-cached by key,
-// so re-checking an already-resolved entity is a cheap validity check, not a
-// re-upload.
 
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
 const std = @import("std");
 
-// Matches the forward pipeline's expected vertex stride (11 floats): position
-// + normal + uv + tangent. No native ke_mesh_vertex struct exists — upload_mesh
-// takes raw bytes by design (a mesh's vertex layout is a pipeline concern, not
-// an ABI one) — this is the same layout convention examples/c/14_forward_mesh
-// and the C# MeshVertex struct already use.
 const Vertex = extern struct {
     position: [3]f32,
     normal: [3]f32,
@@ -169,10 +150,6 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
     if (c.ke_material_is_valid(mc.material)) return;
     const bc = mc.base_color;
 
-    // No file backs an inline scene-authored color, so the key is the
-    // material's own parameters — two entities authored with identical
-    // inline values dedup to one material via upload_mesh/create_material's
-    // own key-cache.
     var key_buf: [160]u8 = undefined;
     const key = std.fmt.bufPrintZ(
         &key_buf,

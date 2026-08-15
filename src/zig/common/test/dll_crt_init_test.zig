@@ -1,24 +1,3 @@
-// Guards the Windows DLL entry-point workaround in kerror.zig from both sides.
-//
-// Two probe DLLs are built from identical sources, differing only in whether
-// they re-export mingw's `_DllMainCRTStartup` (probe_dll_fixed.zig does,
-// probe_dll_plain.zig does not). Each links a C++ translation unit whose global
-// constructor sets a value; reading that value back says whether the CRT ran
-// the C++ initializer section at DLL attach.
-//
-//   - The regression half asserts the *fixed* DLL constructs its globals. It
-//     fails if the workaround is dropped or stops working, which would
-//     otherwise surface as a segfault deep inside Assimp with nothing pointing
-//     back here.
-//
-//   - The canary half asserts the *plain* DLL does NOT construct them, pinning
-//     down that the workaround is still load-bearing. When a future Zig release
-//     performs the mingw CRT bring-up in its own DLL entry, this assertion
-//     starts failing — that failure is the signal to delete the workaround (the
-//     `_DllMainCRTStartup` re-export in every plugin root plus the decl in
-//     kerror.zig) and these probes along with it. Its message says so.
-//
-// Windows-only: on other targets Zig's DLL entry point is not in play at all.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -26,9 +5,6 @@ const testing = std.testing;
 
 const build_options = @import("build_options");
 
-// std.DynLib has no Windows backend in Zig 0.16, so the loader is spelled out
-// against kernel32 directly. LoadLibrary is what actually matters here: it is
-// the call that triggers the DLL entry point whose behaviour is under test.
 extern "kernel32" fn LoadLibraryA(path: [*:0]const u8) callconv(.winapi) ?*anyopaque;
 extern "kernel32" fn FreeLibrary(module: *anyopaque) callconv(.winapi) c_int;
 extern "kernel32" fn GetProcAddress(module: *anyopaque, name: [*:0]const u8) callconv(.winapi) ?*anyopaque;
@@ -60,10 +36,6 @@ const Probe = struct {
     }
 };
 
-// Failing here means the workaround stopped working — most likely the
-// `_DllMainCRTStartup` re-export was dropped from a plugin root, or Zig changed
-// how std.start decides to export its stub. Do not delete this test to make it
-// pass: it is standing in for a segfault deep inside Assimp.
 test "a plugin DLL that re-exports mingw's entry point runs its C++ static initializers" {
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
@@ -74,8 +46,6 @@ test "a plugin DLL that re-exports mingw's entry point runs its C++ static initi
     try testing.expectEqualStrings("constructed", try probe.marker());
 }
 
-// Failing here is the opposite signal: Zig probably fixed the defect, and the
-// workaround can go. The failure message spells out what to remove.
 test "canary: without the re-export Zig's stub entry point still skips them" {
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 

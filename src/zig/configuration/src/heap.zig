@@ -1,4 +1,3 @@
-// The configuration plugin's own heap.
 
 const std = @import("std");
 

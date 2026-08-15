@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
@@ -11,40 +7,12 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-// Deferred G-buffer encode pass — the opaque path's first half. Draws every
-// mesh through its material's encode pipeline, writing the surface
-// (albedo/metallic/normal/roughness/ao/emissive) into 3 color targets + depth.
-// No lighting: the deferred_lighting pass reads these back and shades. Unlike
-// forward, this pass needs no shadow/ibl/cluster/skybox handles — encode is
-// pure surface capture.
-//
-// Target layout (must match gbuffer.slang + deferred_lighting.slang):
-//   RT0 RGBA8:   albedo.rgb, metallic
-//   RT1 RGBA8:   octNormal.xy, roughness, ao
-//   RT2 RGBA16F: emissive.rgb, alpha
-// Depth32Float is written here and sampled by deferred to reconstruct position.
-//
-// A standalone plugin: talks to the rest of the render pipeline only through
-// the borrowed ke_render_service/ke_runtime handles passed to create() — it never
-// sees another pass's private struct.
-
-// The pass draws any authored material: at draw time it reads the material's
-// shader name (ke_render_service::material_shader), resolves "<name>.gbuffer"
-// through load_shader, and gets the matching PSO. It hardcodes no material and
-// carries no fixed variant count — the (material x pass) set is a build
-// artifact (see cmake/CompileMaterialShaders.cmake), not a runtime constant.
 const PASS_NAME = "gbuffer";
-// The engine's default material shader — the same name ke_render_service resolves
-// an unknown/none material to. Duplicated here (not imported) per the plugin
-// decoupling precedent, only to warm a PSO at setup before any scene material.
 const DEFAULT_MATERIAL_SHADER = "standard";
 
-// Duplicated from the other pass modules per the decoupling precedent (see
-// shadow_module.zig): small shared constants kept local, not imported.
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
-// Set 2 — per-object transform. Matches forward_common.slang PerObject.
 const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
@@ -59,18 +27,9 @@ const GBufferModule = struct {
     world_transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
 
-    // Pipeline params shared by every material this pass draws: identical bind-
-    // group/vertex/target layout, differing only in the two shader modules,
-    // which are filled per-draw from the material's shader name (see system()).
-    // Re-queried via core.get_or_create_pipeline every record() call — a handle
-    // cached once at setup can't observe the async real-PSO upgrade. attrs/vbl
-    // are held here (not setup-locals) so vertex_buffers stays a stable pointer
-    // for the PSO key's lifetime.
     pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
-    // The encode shader binds only set 1 (material) + set 2 (object); set 0 is
-    // an empty layout so the positional bind_group_layouts array has no hole.
     empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     empty_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -80,15 +39,8 @@ const GBufferModule = struct {
     io: c.ke_render_pass_io = undefined,
     access: [8]c.ke_component_access = undefined, // 3 gbuffer + depth writes; mesh/transform/camera/frame reads
     access_count: u32 = 0,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all.
     queries: [2]c.ke_query_decl = undefined, // [camera, transform], [mesh, transform]
 
-    // Fills pipeline_template's two shader modules from the material's authored
-    // shader name, resolving "<shader>.gbuffer" for each stage. Returns false
-    // (draw skipped) if either stage fails to load. Called per draw; load_shader
-    // is a cache hit after the first resolve of a given material.
     fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
         var name_buf: [rc_MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
@@ -102,13 +54,8 @@ const GBufferModule = struct {
     }
 };
 
-// A shader name ("standard") plus a ".<pass>" suffix — bounded by the same
-// identifier limit the core stores material shader names under, plus the suffix.
 const rc_MAX_SHADER_QUALIFIED = 128;
 
-// Right-handed view from a camera transform (identity rotation → look at origin;
-// otherwise the world-matrix basis). Duplicated from forward_module.zig per the
-// decoupling precedent so the encode pass agrees on view space independently.
 /// View matrix from where the camera ended up in world space. A camera whose
 /// basis carries no rotation at all is aimed at the origin instead: an authored
 /// camera that only set a position would otherwise stare down -Z at nothing.
@@ -123,7 +70,6 @@ fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
     return zm.lookToRh(eye, fwd, up);
 }
 
-// orthographic_size is the half-height of the view volume; width follows from aspect.
 fn makeProjection(ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
     var p = if (cam.orthographic != 0) ortho: {
         const h = cam.orthographic_size * 2.0;
@@ -151,14 +97,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const gb = moduleOf(user);
     const core = gb.core;
 
-    // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
 
     const pc = core.*.begin_pass.?(core, ctx, &gb.io);
     if (pc == null) return;
 
-    // No camera — open/close so the G-buffer targets are cleared, then bail.
     if (cam_segc == 0 or cam_segs[0].count == 0) {
         const rp0 = pc.*.begin_render.?(pc);
         rp0.*.end.?(rp0);
@@ -181,9 +125,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0); // set 0: empty (encode uses only sets 1+2)
 
-    // View 1 = [mesh, transform], columns aligned. Per-draw uniform writes are
-    // deferred by the core and replayed before the submit, so uploading inside
-    // the draw loop still lands ahead of the draws that read it.
     var draw_idx: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 1, &segc);
@@ -193,9 +134,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
-            // BLEND materials are the transparent-forward pass's exclusive draws;
-            // this pass never encodes them (a G-buffer holds one surface per pixel,
-            // and blended fragments can't be adjudicated to a single one).
             if (core.*.material_alpha_mode.?(core, meshes[i].material) == c.KE_ALPHA_MODE_BLEND) continue;
 
             var vbo: c.ke_gpu_buffer = 0;
@@ -211,12 +149,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             const offset: u32 = draw_idx * UNIFORM_STRIDE;
             core.*.upload.?(core, gb.obj_uniform, offset, &u, @sizeOf(PerObject));
 
-            // Per-draw PSO by the material's authored shader: resolve
-            // "<shader>.gbuffer" to this pass's compiled (material x pass)
-            // wrapper. load_shader + get_or_create_pipeline both dedup, so a
-            // repeated material is a cache hit; sorting draws by PSO to batch
-            // state changes is a separate, later optimization. A material whose
-            // shader fails to resolve is skipped (already logged by load_shader).
             if (!gb.resolvePipeline(core.*.material_shader.?(core, meshes[i].material))) continue;
             rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_template));
 
@@ -243,8 +175,6 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.world_transform_cid = world_transform_cid;
     gb.camera_cid = camera_cid;
 
-    // Set 0 — empty: the encode shader binds only material (set 1) + object
-    // (set 2), but the pipeline's positional layout array must fill index 0.
     gb.empty_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
         .entry_count = 0,
         .entries = null,
@@ -256,7 +186,6 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (gb.empty_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // Set 2 — per-object transform ring (dynamic offset, vertex stage).
     const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0,
         .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
@@ -282,9 +211,6 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .attributes = &gb.attrs,
     };
 
-    // Template shared by every material: layout, state, targets — everything but
-    // the two shader modules, which resolvePipeline() fills per draw from the
-    // material's shader name.
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
@@ -301,16 +227,12 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.bind_group_layouts[1] = core.*.material_layout.?(core); // set 1: per-material
     pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object
     pp.bind_group_layout_count = 3;
-    // MRT: the three G-buffer targets, in SV_Target order (matches gbuffer.slang
-    // and the io.writes order below).
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM; // albedo + metallic
     pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM; // octNormal + roughness + ao
     pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // emissive + alpha
     pp.color_target_count = 3;
     gb.pipeline_template = pp;
 
-    // Warm the default material's PSO so a pipeline exists before the first
-    // draw resolves it. Any material a scene actually uses is resolved on demand.
     if (!gb.resolvePipeline(DEFAULT_MATERIAL_SHADER)) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: default material shader failed to load", @src().file, @intCast(@src().line), null);
         return false;
@@ -343,9 +265,6 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (gb.obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // Declare the G-buffer targets (all relative-to-backbuffer) + the depth
-    // buffer. depth is declared with SAMPLED usage (resource_table.zig) so the
-    // deferred pass can read it back to reconstruct position.
     const albedo_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "gbuffer_albedo",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
@@ -375,18 +294,12 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
 
-    // Writes in SV_Target order (albedo, normal, emissive) + depth. ctxBeginRender
-    // builds color attachments in this order, so it must match the pipeline's
-    // color_target_formats and gbuffer.slang's SV_Target indices.
     gb.writes = .{ "gbuffer_albedo", "gbuffer_normal", "gbuffer_emissive", "depth" };
     gb.io = std.mem.zeroes(c.ke_render_pass_io);
     gb.io.writes = @ptrCast(&gb.writes);
     gb.io.writes_count = 4;
     gb.io.cmd_slot = 3; // after cull (slot 2), before deferred-lighting
 
-    // frame_cid brackets the pass inside the frame barrier (begin writes it,
-    // every pass reads it, end writes it), so begin_frame strictly precedes and
-    // end_frame strictly follows this pass — same as every other pass module.
     gb.access = .{
         .{ .cid = albedo_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = normal_cid, .access = c.KE_ACCESS_WRITE },
@@ -399,8 +312,6 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
     gb.access_count = 8;
 
-    // Data the body reads through resolved views. Index order is the
-    // query_index passed to ke_system_ctx_view.
     const rd = c.KE_ACCESS_READ;
     gb.queries = std.mem.zeroes([2]c.ke_query_decl);
     gb.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };

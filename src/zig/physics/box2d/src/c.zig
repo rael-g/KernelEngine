@@ -1,6 +1,3 @@
-// Single @cImport for the plugin — separate blocks would produce distinct Zig
-// types for the same C struct, so anything crossing between these files would
-// stop typechecking.
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");

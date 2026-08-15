@@ -1,7 +1,3 @@
-// ke_scene_tree impl. Owns the cids of the framework's three scene-graph
-// components (transform/hierarchy/name) registered against the caller-supplied
-// ke_ecs. All hierarchy bookkeeping flows through ECS component reads/writes;
-// there is no separate side state.
 
 const std = @import("std");
 
@@ -25,16 +21,12 @@ const State = struct {
     world_transform_cid: c.ke_component_id,
     hierarchy_cid: c.ke_component_id,
     name_cid: c.ke_component_id,
-    // Owned when a runtime was supplied: the systems keeping world matrices in
-    // step with these components. Destroyed with the tree.
     hierarchy: c.ke_scene_hierarchy_handle,
 };
 
 fn stateOf(self: *c.ke_scene_tree) *State {
     return @ptrCast(@alignCast(self.handle));
 }
-
-// -- helpers -----------------------------------------------------------------
 
 fn getHierarchy(s: *State, e: c.ke_entity) ?*c.ke_hierarchy_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.hierarchy_cid)));
@@ -81,15 +73,11 @@ fn identityMatrix() c.ke_mat4 {
     return m;
 }
 
-// -- vtable: root ------------------------------------------------------------
-
 fn vtRoot(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_entity {
     const self = self_in orelse return c.KE_ENTITY_INVALID;
     if (self.handle == null) return c.KE_ENTITY_INVALID;
     return stateOf(self).root;
 }
-
-// -- vtable: create_node -----------------------------------------------------
 
 /// Attaches the scene-graph components to an already-created (or reserved)
 /// entity, populates them, and prepends it into the parent's child list. No
@@ -99,10 +87,6 @@ fn vtRoot(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_entity {
 /// deferred callback. Destroys the entity and returns false if any component add
 /// fails.
 fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) bool {
-    // Add every component FIRST so the entity's archetype is stable. Each
-    // component_add in flecs can move the entity to a new archetype and
-    // invalidate any pointer captured from an earlier add — only once every add
-    // is done can the field data be safely fetched and written.
     if (s.ecs.component_add.?(s.ecs, entity, s.world_transform_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.hierarchy_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.name_cid) == null)
@@ -129,12 +113,6 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
         writeName(&n.name, name);
     }
 
-    // Append into the parent's child list (doubly linked, O(1) via last_child) —
-    // matches insertion order, which is what every managed-layer child list
-    // (C#'s List<Node>.Add) already assumes; a prepend-based link here would
-    // silently reverse iteration order the moment a caller reads the native
-    // list directly instead of a synced copy. Re-fetch the hierarchy pointers:
-    // the writes above may have moved archetypes.
     const h = getHierarchy(s, entity);
     const ph = getHierarchy(s, parent);
     if (ph != null and h != null) {
@@ -149,8 +127,6 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
     return true;
 }
 
-// A reserved entity finalized at the wave barrier. Carries its own name copy so
-// the payload stays self-contained after the arena copy.
 const PendingCreate = extern struct {
     s: *State,
     entity: c.ke_entity,
@@ -177,11 +153,6 @@ fn vtCreateNode(
     const s = stateOf(self);
     const parent = if (parent_in == c.KE_ENTITY_INVALID) s.root else parent_in;
 
-    // Inside a system body (ctx set) the world is mid-wave and structural
-    // changes are illegal. Reserve a real id now (safe, atomic) and defer the
-    // component adds + parent linking to the wave barrier, where they run
-    // serially in registration order — so sibling links stay consistent even
-    // across multiple creations under the same parent this tick.
     if (ctx_in) |ctx| {
         const entity = ctx.reserve.?(ctx);
         if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
@@ -197,14 +168,11 @@ fn vtCreateNode(
         return entity;
     }
 
-    // Immediate path (scene load, setup, tests): outside any wave.
     const entity = s.ecs.entity_create.?(s.ecs);
     if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
     if (!populateNode(s, entity, name, parent)) return c.KE_ENTITY_INVALID;
     return entity;
 }
-
-// -- vtable: find_node -------------------------------------------------------
 
 fn nameEqualsSegment(name: ?*const c.ke_name_component, seg: []const u8) bool {
     const n = name orelse return false;
@@ -250,7 +218,6 @@ fn vtFindNode(
         return findByName(s, s.root, path);
     }
 
-    // Leading "/" or "." are addressing noise: both mean "from the root".
     var rest = path;
     while (rest.len > 0 and (rest[0] == '/' or rest[0] == '.')) rest = rest[1..];
 
@@ -263,8 +230,6 @@ fn vtFindNode(
     }
     return current;
 }
-
-// -- vtable: destroy_node / destroy_all --------------------------------------
 
 fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) void {
     if (getHierarchy(s, e)) |h| {
@@ -281,8 +246,6 @@ fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) void {
 /// Unlinks from the parent's child list, then destroys the subtree. The
 /// structural part is legal only outside a wave or at the wave barrier.
 fn destroySubtree(s: *State, entity: c.ke_entity) void {
-    // Snapshot the navigation fields up front: the get_hierarchy calls below
-    // (for parent and siblings) may move flecs archetypes and invalidate `h`.
     const h = getHierarchy(s, entity) orelse return;
     const h_prev = h.prev_sibling;
     const h_next = h.next_sibling;
@@ -336,8 +299,6 @@ fn vtDestroyNode(
         return false;
     }
 
-    // Inside a system body entity_destroy is structural and illegal mid-wave;
-    // defer the whole unlink + teardown to the wave barrier.
     if (ctx_in) |ctx| {
         var pd: PendingDestroy = .{ .s = s, .entity = entity };
         if (!ctx.@"defer".?(ctx, cbDestroyNode, &pd, @sizeOf(PendingDestroy))) {
@@ -356,7 +317,6 @@ fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
 
-    // Destroy every child of root; root itself stays so the tree remains usable.
     const rh = getHierarchy(s, s.root) orelse return;
     var child = rh.first_child;
     while (child != c.KE_ENTITY_INVALID) {
@@ -364,14 +324,11 @@ fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
         destroyEntitiesRecursive(s, child);
         child = next;
     }
-    // Re-fetch: the destroys above may have moved the root's archetype.
     if (getHierarchy(s, s.root)) |h| {
         h.first_child = c.KE_ENTITY_INVALID;
         h.last_child = c.KE_ENTITY_INVALID;
     }
 }
-
-// -- vtable: propagate_transforms --------------------------------------------
 
 fn propagateRecursive(s: *State, entity: c.ke_entity, parent_world: *const c.ke_mat4) void {
     var child_parent = parent_world;
@@ -409,8 +366,6 @@ fn vtPropagateTransforms(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     }
 }
 
-// -- teardown ----------------------------------------------------------------
-
 fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -419,8 +374,6 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     destroyEntitiesRecursive(s, s.root);
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_scene_tree_create(
     ecs_in: ?*c.ke_ecs,
@@ -461,8 +414,6 @@ export fn ke_scene_tree_create(
         E.fail(out_error, .general, "root entity creation failed", @src());
         return null_handle;
     }
-    // Add all components FIRST, then fetch and populate: each add can move the
-    // entity to a new archetype and invalidate pointers from earlier adds.
     if (ecs.component_add.?(ecs, s.root, s.hierarchy_cid) == null or
         ecs.component_add.?(ecs, s.root, s.name_cid) == null)
     {
@@ -493,8 +444,6 @@ export fn ke_scene_tree_create(
     s.api.find_node = vtFindNode;
     s.api.propagate_transforms = vtPropagateTransforms;
 
-    // Registered only once the components above exist, since the hierarchy
-    // resolves them by name and refuses to run against an ecs that has none.
     if (runtime) |rt| {
         s.hierarchy = c.ke_scene_hierarchy_create(rt, ecs, out_error);
         if (s.hierarchy.ref == null) {

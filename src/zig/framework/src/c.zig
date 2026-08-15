@@ -1,8 +1,3 @@
-// Single @cImport for the whole plugin.
-//
-// Separate @cImport blocks produce separate types even when they include the
-// same header, so a struct passed between two framework translation units would
-// not typecheck. Every file imports `c` from here instead.
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");

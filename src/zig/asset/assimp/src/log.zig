@@ -1,5 +1,3 @@
-// Logging helpers shared by the loader, converter and texture decoder. All are
-// no-ops when the host supplied no logger.
 
 const std = @import("std");
 

@@ -1,7 +1,3 @@
-// The window-backend seam: what a platform device must provide for the core to
-// drive it. Kept as an explicit vtable rather than folded into the GLFW code so
-// a second backend (SDL, a headless test device) is a new file filling this
-// struct, not a rewrite of the core.
 
 pub const Config = struct {
     title: [*:0]const u8,

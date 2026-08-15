@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const builtin = @import("builtin");
 const wgpu = @cImport({
@@ -18,22 +14,12 @@ const ke = @cImport({
     @cInclude("kernel_engine/scheduler/scheduler.h");
 });
 
-// ── Factory params (mirrors ke_gpu_device_webgpu_params in the factory header) ─
-
 const Params = extern struct {
     logger:            ?*anyopaque,
     window:            ?*ke.ke_window,
     enable_validation: ke.ke_bool,
-    // Optional, borrowed. See gpu_device_webgpu_create.h's doc comment: wgpu-native's
-    // async pipeline-compile entry points are unimplemented upstream, so this
-    // backend emulates create_render_pipeline_async by dispatching the actual
-    // compile onto this scheduler — an implementation detail of THIS backend,
-    // not part of ke_gpu_device's contract (a future browser backend, or a
-    // wgpu-native release that implements the real primitive, needs no scheduler).
     scheduler:         ?*ke.ke_scheduler,
 };
-
-// ── Internal error set ─────────────────────────────────────────────────────
 
 const GpuError = error{
     OutOfMemory,
@@ -42,8 +28,6 @@ const GpuError = error{
     SurfaceCreationFailed,
     NotImplemented,
 };
-
-// ── State ──────────────────────────────────────────────────────────────────
 
 const DeviceState = struct {
     instance:                wgpu.WGPUInstance,
@@ -57,16 +41,6 @@ const DeviceState = struct {
     surface_w:               u32,               // last configured swapchain size
     surface_h:               u32,
     scheduler:               ?*ke.ke_scheduler,  // borrowed, optional — see Params.scheduler
-    // Tasks dispatched by createRenderPipelineAsync, not yet wait()'d. Every
-    // dispatched ke_task MUST have wait() called on it exactly once — enkiTS's
-    // wait() is also what frees the task's memory (see EnkiScheduler::wait);
-    // never calling it leaks, calling it twice double-frees. reapCompletedCompiles
-    // (pumped every queuePresent) wait()s+frees any that finished; anything
-    // still outstanding is caught by flush_pipeline_compiles at shutdown.
-    // Appends only ever happen during single-threaded module setup (every
-    // pass's setup() runs serially, before the first tick()), so the array
-    // itself needs no lock despite the worker threads running concurrently
-    // with later frames.
     pending_compiles:        [MAX_PENDING_COMPILES]?*ke.ke_task,
     pending_compiles_count:  u32,
 };
@@ -80,8 +54,6 @@ fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
 fn state(dev: [*c]ke.ke_gpu_device) *DeviceState {
     return @ptrCast(@alignCast(ptr(dev).handle));
 }
-
-// ── ke_error translation (ABI seam only) ──────────────────────────────────
 
 fn setError(
     out_error: ?*?*ke.ke_error,
@@ -98,8 +70,6 @@ fn setError(
     };
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
-
-// ── Enum mappings ke → wgpu ────────────────────────────────────────────────
 
 fn toWgpuTextureFormat(f: ke.ke_gpu_texture_format) wgpu.WGPUTextureFormat {
     return switch (f) {
@@ -149,7 +119,6 @@ fn toWgpuTextureAspect(a: ke.ke_gpu_texture_aspect) wgpu.WGPUTextureAspect {
     if (a & ke.KE_GPU_TEXTURE_ASPECT_STENCIL != 0) return wgpu.WGPUTextureAspect_StencilOnly;
     return wgpu.WGPUTextureAspect_All;
 }
-
 
 fn toWgpuLoadOp(op: ke.ke_gpu_load_op) wgpu.WGPULoadOp {
     return switch (op) {
@@ -271,8 +240,6 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
     };
 }
 
-// ── Factory (internal) ─────────────────────────────────────────────────────
-
 const gpa = std.heap.c_allocator;
 
 fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
@@ -367,11 +334,6 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
     if (s.surface) |surf| {
         var caps: wgpu.WGPUSurfaceCapabilities = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
         _ = wgpu.wgpuSurfaceGetCapabilities(surf, s.adapter, &caps);
-        // Prefer a plain (non-sRGB) format: the tonemap pass owns the linear ->
-        // display gamma encode explicitly (tonemap.slang). caps.formats[0] is
-        // driver-ordered and commonly an *Srgb variant on Windows/Vulkan/D3D12 —
-        // taking it blindly stacks a second (hardware) gamma encode on top of the
-        // shader's, washing out colors regardless of light intensity.
         s.surface_format = wgpu.WGPUTextureFormat_BGRA8Unorm;
         var i: usize = 0;
         while (i < caps.formatCount) : (i += 1) {
@@ -453,8 +415,6 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
     return dev;
 }
 
-// ── ABI boundary — factory ─────────────────────────────────────────────────
-
 export fn ke_gpu_device_webgpu_create(
     params: ?*const Params,
     out_error: ?*?*ke.ke_error,
@@ -488,8 +448,6 @@ export fn ke_gpu_device_webgpu_create(
     return .{ .ref = dev, .destroy = deviceDestroy };
 }
 
-// ── Destroy ────────────────────────────────────────────────────────────────
-
 fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     const s = state(dev);
     wgpu.wgpuQueueRelease(s.queue);
@@ -501,8 +459,6 @@ fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     gpa.destroy(s);
     gpa.destroy(ptr(dev));
 }
-
-// ── wgpu v24 sync callbacks ────────────────────────────────────────────────
 
 fn adapterCallback(
     _: wgpu.WGPURequestAdapterStatus,
@@ -526,8 +482,6 @@ fn deviceCallback(
     out.* = device;
 }
 
-// ── Queue ──────────────────────────────────────────────────────────────────
-
 fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
     return @intFromPtr(state(dev).queue);
 }
@@ -545,11 +499,6 @@ fn queueSubmit(
     wgpu.wgpuQueueSubmit(@ptrFromInt(q), @intCast(n), &buf);
 }
 
-// wait()s (and thereby frees — see DeviceState.pending_compiles's doc comment)
-// every pending compile that has already finished. Never blocks: a not-yet-
-// finished entry is left in place for a later call to catch. Called every
-// present so completed compiles' tasks don't pile up; flush_pipeline_compiles
-// is the shutdown-time version that DOES block, for whatever is left.
 fn reapCompletedCompiles(s: *DeviceState) void {
     const sched = s.scheduler orelse return;
     var i: u32 = 0;
@@ -581,8 +530,6 @@ fn queueWaitIdle(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) voi
     _ = wgpu.wgpuDevicePoll(state(dev).device, 1, null);
 }
 
-// ── Fence (timeline) ───────────────────────────────────────────────────────
-
 fn createFence(_: [*c]ke.ke_gpu_device, _: u64) callconv(.c) ke.ke_gpu_fence { return ke.KE_GPU_INVALID_HANDLE; }
 fn queueSignalFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue, _: ke.ke_gpu_fence, _: u64) callconv(.c) void {}
 fn waitFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence, _: u64, _: u64, out_error: ?*?*ke.ke_error) callconv(.c) bool {
@@ -591,10 +538,6 @@ fn waitFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence, _: u64, _: u64, out_er
 }
 fn getFenceValue(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.c) u64 { return 0; }
 fn destroyFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.c) void {}
-
-// ── Resource creation ──────────────────────────────────────────────────────
-
-// ── Usage/stage flag converters ────────────────────────────────────────────
 
 fn mapBufferUsage(ke_usage: ke.ke_gpu_buffer_usage) wgpu.WGPUBufferUsage {
     var u: wgpu.WGPUBufferUsage = wgpu.WGPUBufferUsage_None;
@@ -633,7 +576,6 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params,
     const pp = @as(*const ke.ke_gpu_buffer_params, @ptrCast(p));
     const s = state(dev);
     var usage = mapBufferUsage(pp.usage);
-    // wgpuQueueWriteBuffer requires COPY_DST; add it automatically when uploading initial data.
     if (pp.initial_data != null) usage |= wgpu.WGPUBufferUsage_CopyDst;
     const desc = wgpu.WGPUBufferDescriptor{
         .nextInChain      = null,
@@ -643,9 +585,6 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params,
         .mappedAtCreation = if (pp.mapped_at_creation != 0) 1 else 0,
     };
 
-    // Scope the validation so an over-limit request (e.g. exceeding this
-    // device's max buffer size) surfaces as a described ke_error instead of
-    // firing wgpu-native's uncaptured-error path (a hard, unrecoverable abort).
     wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
     const buf: wgpu.WGPUBuffer = wgpu.wgpuDeviceCreateBuffer(s.device, &desc);
     var se = ScopeError{ .captured = false, .buf = undefined };
@@ -688,7 +627,6 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     };
     const tex: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
     if (pp.initial_data != null) {
-        // bytes_per_row must be a multiple of 256 (wgpu alignment requirement).
         const bytes_per_pixel: u32 = 4; // assume RGBA8
         const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
         const bytes_per_row: u32 = (unaligned_bpr + 255) & ~@as(u32, 255);
@@ -769,15 +707,11 @@ fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_languag
 }
 
 fn getNdcConvention(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_ndc_convention {
-    // WebGPU NDC: z in [0,1], y-up (no projection flip, unlike Vulkan),
-    // left-handed clip space (x-right, y-up, z away from viewer).
     return .{ .z_zero_to_one = 1, .y_flip = 0, .left_handed = 1 };
 }
 
 const SPIRV_MAGIC: u32 = 0x07230203;
 
-// GPU-domain shader error (declared in gpu_device.h) and the wgpu-native
-// specialization (declared in gpu_device_webgpu_create.h) that inherits it.
 export const KE_ERROR_GPU_SHADER_COMPILATION: ke.ke_error_type = .{
     .name = "ke.render.gpu.shader_compilation",
     .parent = &ke.KE_ERROR_INVALID_ARGUMENT,
@@ -823,8 +757,6 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
     const pp = @as(*const ke.ke_gpu_shader_module_params, @ptrCast(p));
     const device = state(dev).device;
 
-    // The backend speaks WGSL natively but also accepts SPIR-V via passthrough;
-    // disambiguate by the SPIR-V magic word in the first four bytes.
     const is_spirv = pp.byte_size >= 4 and
         @as(*align(1) const u32, @ptrCast(pp.code)).* == SPIRV_MAGIC;
 
@@ -832,11 +764,6 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
         .nextInChain = null,
         .label       = .{ .data = pp.entry_point, .length = wgpu.WGPU_STRLEN },
     };
-    // spirv.code needs 4-byte alignment; only touch @alignCast on the branch
-    // that's actually SPIR-V — WGSL source bytes (e.g. an @embedFile'd shader)
-    // carry no such guarantee, and @alignCast panics on a misaligned pointer
-    // even when the resulting value is never read (Zig still evaluates the
-    // whole struct literal eagerly if constructed unconditionally).
     var spirv: wgpu.WGPUShaderSourceSPIRV = undefined;
     const wgsl = wgpu.WGPUShaderSourceWGSL{
         .chain = .{ .next = null, .sType = wgpu.WGPUSType_ShaderSourceWGSL },
@@ -853,8 +780,6 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
         desc.nextInChain = @ptrCast(&wgsl);
     }
 
-    // Scope the validation so a bad source surfaces as a described ke_error
-    // instead of firing the device's uncaptured-error path (a hard panic).
     wgpu.wgpuDevicePushErrorScope(device, wgpu.WGPUErrorFilter_Validation);
     const handle = wgpu.wgpuDeviceCreateShaderModule(device, &desc);
     var se = ScopeError{ .captured = false, .buf = undefined };
@@ -875,14 +800,6 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
     return @intFromPtr(handle);
 }
 
-// Backing storage for a WGPURenderPipelineDescriptor built by
-// buildRenderPipelineDescriptor. The descriptor's internal pointers reference
-// this struct's own fields, so it must be built in place (via *RenderPipelineDescBuild,
-// never returned by value) and stay alive for exactly as long as the descriptor
-// itself is read — true for both the synchronous create call (returns after
-// reading it) and the async enqueue call (also only reads the descriptor
-// synchronously; the compile that happens later does not re-read it), per
-// WebGPU's descriptor-consumption contract.
 const RenderPipelineDescBuild = struct {
     desc: wgpu.WGPURenderPipelineDescriptor,
     pipeline_layout: wgpu.WGPUPipelineLayout,
@@ -895,15 +812,9 @@ const RenderPipelineDescBuild = struct {
     bgl_handles: [4]wgpu.WGPUBindGroupLayout,
 };
 
-// Fills `build.desc` (and `build.pipeline_layout`) from `p`. Does NOT create
-// the pipeline or release the layout — the caller does that, since the two
-// callers (sync create, async create) create the pipeline via a different
-// wgpu call and only the caller knows when the descriptor has definitely been
-// consumed and the layout is safe to release.
 fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params, build: *RenderPipelineDescBuild) void {
     const pp = @as(*const ke.ke_gpu_render_pipeline_params, @ptrCast(p));
 
-    // Vertex attributes + buffer layouts
     var attr_offset: usize = 0;
     const buf_count = @min(pp.vertex_buffer_count, build.wgpu_bufs.len);
 
@@ -927,9 +838,6 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         attr_offset += ac;
     }
 
-    // Color targets, in SV_Target order. A count of 0 means one target (back-compat
-    // with a zero-initialized params); each slot's format 0 → swapchain surface
-    // format. The shared blend_state/write_mask applies to every target.
     const s = state(dev);
     const target_count = @min(@max(pp.color_target_count, 1), 8);
     const bs = pp.blend_state;
@@ -969,7 +877,6 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         .targets      = &build.color_targets,
     };
 
-    // Depth/stencil
     const ds = pp.depth_stencil;
     build.ds_state = .{
         .nextInChain         = null,
@@ -995,7 +902,6 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         .depthBiasClamp      = 0.0,
     };
 
-    // Build explicit pipeline layout when bind group layouts are declared.
     build.pipeline_layout = null;
     if (pp.bind_group_layout_count > 0) {
         const bgl_count = @min(pp.bind_group_layout_count, build.bgl_handles.len);
@@ -1047,24 +953,6 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
     return @intFromPtr(wgpu.wgpuDeviceCreateRenderPipeline(state(dev).device, &build.desc));
 }
 
-// wgpuDeviceCreateRenderPipelineAsync (and the compute variant) are listed as
-// unimplemented upstream — panics "not implemented" at call time, even on
-// wgpu-native's trunk (verified 2026-07-13, not just this vendored release).
-// This backend emulates the ke_gpu_device::create_render_pipeline_async
-// CONTRACT itself (dispatch off-thread, callback when ready) by running the
-// real, synchronous wgpuDeviceCreateRenderPipeline call on this device's own
-// scheduler instead of relying on the (absent) native async primitive. This
-// is an implementation detail of THIS backend only — ke_render_service's
-// get_or_create_pipeline (the caller) has no idea which strategy is in play,
-// and neither would a browser backend (where the real async primitive exists
-// and this emulation would never be reached).
-//
-// The descriptor build (buildRenderPipelineDescriptor) reads the CALLER's
-// params — including pointers the caller only guarantees valid for the
-// duration of this call (e.g. a pass's setup() stack-local vertex-attribute
-// array). So the copy into RenderPipelineDescBuild must happen synchronously,
-// on the calling thread, before this function returns; only the actual
-// (potentially slow) compile call is deferred to a worker.
 const AsyncCompileJob = struct {
     device: wgpu.WGPUDevice,
     build: RenderPipelineDescBuild, // heap-owned; build.desc's pointers reference this struct's own fields
@@ -1072,18 +960,6 @@ const AsyncCompileJob = struct {
     user: ?*anyopaque,
 };
 
-// Manual-test-only seam: set KE_PSO_ASYNC_DELAY_MS to artificially stretch the
-// async compile so the magenta fallback stays visible long enough to inspect
-// on screen (real driver compiles are typically too fast to see the swap).
-// Never engaged unless a developer explicitly sets the env var — never part
-// of any shipped/default behavior. 0 (unset/unparseable) = no delay.
-//
-// Gated to blend-enabled pipelines only (KE_PSO_ASYNC_DELAY_BLEND_ONLY=1) so
-// the delay can simulate the realistic "new object encountered mid-session"
-// story — e.g. 19_transparency's opaque cube (gbuffer, no blend) renders
-// immediately while its BLEND quads (forward's separate PSO) stay magenta for
-// the delay, instead of everything on screen (including fullscreen passes)
-// going magenta at once from a uniform cold-cache boot.
 extern "kernel32" fn Sleep(dwMilliseconds: c_ulong) callconv(.winapi) void;
 extern "c" fn usleep(usec: c_uint) c_int;
 
@@ -1112,11 +988,6 @@ fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) void {
     debugSleepMs(debugAsyncDelayMs(&job.build));
     const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(job.device, &job.build.desc);
     if (job.build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(job.build.pipeline_layout);
-    // Release the extra refs createRenderPipelineAsync took on the shader
-    // modules — see its doc comment. The pass that created them may already
-    // have released its own reference by now; wgpuDeviceCreateRenderPipeline
-    // above took whatever internal reference IT needs, so it's safe to drop
-    // ours now that the compile call has returned.
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleRelease(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleRelease(m);
     job.on_ready(if (pipeline != null) @intFromPtr(pipeline) else ke.KE_GPU_INVALID_HANDLE, job.user);
@@ -1129,8 +1000,6 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
     const s = state(dev);
 
     const sched = s.scheduler orelse {
-        // No scheduler wired: degrade to synchronous compile-then-callback.
-        // Correct (never hangs), just not actually async.
         var build: RenderPipelineDescBuild = undefined;
         buildRenderPipelineDescriptor(dev, p, &build);
         defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
@@ -1139,13 +1008,8 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
         return;
     };
 
-    // Reap first so a burst of misses doesn't fill the tracking array with
-    // already-finished entries that just haven't been wait()'d yet.
     reapCompletedCompiles(s);
     if (s.pending_compiles_count >= MAX_PENDING_COMPILES) {
-        // Can't track this one's task (would leak the ke_task, since wait()
-        // must be called exactly once and we'd have nowhere to store the
-        // pointer) — degrade to synchronous rather than leak or drop it.
         var build: RenderPipelineDescBuild = undefined;
         buildRenderPipelineDescriptor(dev, p, &build);
         defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
@@ -1162,12 +1026,6 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
     job.on_ready = cb;
     job.user = user;
     buildRenderPipelineDescriptor(dev, p, &job.build); // synchronous — see doc comment above
-    // The caller (a pass's setup()) commonly destroys its own shader-module
-    // reference via `defer` right after this function returns — which, for a
-    // real async dispatch, happens well before the worker actually calls
-    // wgpuDeviceCreateRenderPipeline. AddRef here (on the calling thread, while
-    // the caller's reference is still guaranteed valid) keeps the modules
-    // alive until runAsyncCompileJob releases these extra refs post-compile.
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     const task = sched.dispatch.?(sched, runAsyncCompileJob, job);
@@ -1175,12 +1033,6 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
     s.pending_compiles_count += 1;
 }
 
-// Blocks until every pipeline compile kicked via create_render_pipeline_async
-// has invoked its on_ready callback (wait() only returns once the dispatched
-// task's body — which calls on_ready before returning — has finished). Call
-// before destroying anything an in-flight on_ready callback might still write
-// into; a no-op if nothing is pending. Mirrors ke_runtime::flush_render's
-// fix for the identical class of shutdown-ordering bug.
 fn flushPipelineCompiles(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     const s = state(dev);
     const sched = s.scheduler orelse return;
@@ -1261,12 +1113,6 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
                 entries[i].texture.multisampled  = 0;
             },
             ke.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE => {
-                // A depth-format texture read by texel fetch (Slang `Texture2D<float>`
-                // + .Load → WGSL `texture_2d<f32>` + textureLoad). Depth formats are
-                // unfilterable, so the binding must be UnfilterableFloat — NOT Float
-                // (filterable, rejected for a depth format) and NOT Depth (which is
-                // for `texture_depth_2d` + a comparison sampler; a future
-                // comparison-sampled shadow map would use that instead).
                 entries[i].texture.sampleType    = wgpu.WGPUTextureSampleType_UnfilterableFloat;
                 entries[i].texture.viewDimension = wgpu.WGPUTextureViewDimension_2D;
                 entries[i].texture.multisampled  = 0;
@@ -1324,9 +1170,6 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
     };
     const s = state(dev);
 
-    // Same rationale as createBuffer: a binding range exceeding this device's
-    // limits (e.g. max_*_buffer_binding_size) must surface as a ke_error, not
-    // fire wgpu-native's uncaptured-error path (a hard, unrecoverable abort).
     wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
     const bg: wgpu.WGPUBindGroup = wgpu.wgpuDeviceCreateBindGroup(s.device, &desc);
     var se = ScopeError{ .captured = false, .buf = undefined };
@@ -1347,8 +1190,6 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
     return @intFromPtr(bg orelse return ke.KE_GPU_INVALID_HANDLE);
 }
 
-// ── Resource destruction ───────────────────────────────────────────────────
-
 fn destroyBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer) callconv(.c) void {
     wgpu.wgpuBufferDestroy(@ptrFromInt(h));
     wgpu.wgpuBufferRelease(@ptrFromInt(h));
@@ -1363,8 +1204,6 @@ fn destroyShaderModule(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_shader_module) call
 fn destroyPipeline(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_pipeline) callconv(.c) void { wgpu.wgpuRenderPipelineRelease(@ptrFromInt(h)); }
 fn destroyBindGroupLayout(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group_layout) callconv(.c) void { wgpu.wgpuBindGroupLayoutRelease(@ptrFromInt(h)); }
 fn destroyBindGroup(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group) callconv(.c) void { wgpu.wgpuBindGroupRelease(@ptrFromInt(h)); }
-
-// ── L2 — render pass slot implementations ─────────────────────────────────
 
 fn rpSetPipeline(rp: [*c]ke.ke_gpu_render_pass, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderSetPipeline(@ptrCast(rp.*.handle), @ptrFromInt(pipe));
@@ -1404,8 +1243,6 @@ fn rpEnd(rp: [*c]ke.ke_gpu_render_pass) callconv(.c) void {
     gpa.destroy(@as(*ke.ke_gpu_render_pass, @ptrCast(rp)));
 }
 
-// ── L2 — compute pass slot implementations ────────────────────────────────
-
 fn cpSetPipeline(cp: [*c]ke.ke_gpu_compute_pass, pipe: ke.ke_gpu_pipeline) callconv(.c) void {
     wgpu.wgpuComputePassEncoderSetPipeline(@ptrCast(cp.*.handle), @ptrFromInt(pipe));
 }
@@ -1424,14 +1261,10 @@ fn cpEnd(cp: [*c]ke.ke_gpu_compute_pass) callconv(.c) void {
     gpa.destroy(@as(*ke.ke_gpu_compute_pass, @ptrCast(cp)));
 }
 
-// ── L2 — command buffer ───────────────────────────────────────────────────
-
 fn cmdBufDestroy(cmd: [*c]ke.ke_gpu_command_buffer) callconv(.c) void {
     wgpu.wgpuCommandBufferRelease(@ptrCast(cmd.*.handle));
     gpa.destroy(@as(*ke.ke_gpu_command_buffer, @ptrCast(cmd)));
 }
-
-// ── L2 — command encoder slot implementations ─────────────────────────────
 
 fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu_render_pass_params) callconv(.c) [*c]ke.ke_gpu_render_pass {
     const pp = @as(*const ke.ke_gpu_render_pass_params, @ptrCast(p));
@@ -1458,9 +1291,6 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
         const depth_ro = dsa.depth_read_only != 0;
         ds_attach = .{
             .view              = @ptrFromInt(dsa.view),
-            // The WebGPU spec requires depthLoadOp/StoreOp to be left Undefined
-            // when depthReadOnly is set — providing an explicit op alongside it
-            // is a validation error ("Read-only attachment with load").
             .depthLoadOp       = if (depth_ro) wgpu.WGPULoadOp_Undefined else toWgpuLoadOp(dsa.depth_load_op),
             .depthStoreOp      = if (depth_ro) wgpu.WGPUStoreOp_Undefined else toWgpuStoreOp(dsa.depth_store_op),
             .depthClearValue   = dsa.clear_depth,
@@ -1555,8 +1385,6 @@ fn encDestroy(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) void {
     gpa.destroy(@as(*ke.ke_gpu_command_encoder, @ptrCast(enc)));
 }
 
-// ── L2 — command encoder factory ──────────────────────────────────────────
-
 fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_command_encoder {
     const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
     const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse return null;
@@ -1576,13 +1404,9 @@ fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_co
     return enc;
 }
 
-// ── Immediate buffer write ─────────────────────────────────────────────────
-
 fn writeBuffer(dev: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     wgpu.wgpuQueueWriteBuffer(state(dev).queue, @ptrFromInt(h), offset, data, size);
 }
-
-// ── Mapped writes ──────────────────────────────────────────────────────────
 
 fn mapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
     return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
@@ -1593,8 +1417,6 @@ fn mapBufferWrite(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, s
 fn unmapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer) callconv(.c) void {
     wgpu.wgpuBufferUnmap(@ptrFromInt(h));
 }
-
-// ── Capabilities ───────────────────────────────────────────────────────────
 
 fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) callconv(.c) void {
     const p = @as(*ke.ke_gpu_capabilities, @ptrCast(out));
@@ -1615,8 +1437,6 @@ fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) c
     p.max_compute_workgroup_size_y = limits.maxComputeWorkgroupSizeY;
     p.max_compute_workgroup_size_z = limits.maxComputeWorkgroupSizeZ;
 }
-
-// ── Surface extension ──────────────────────────────────────────────────────
 
 const SurfaceExt = extern struct {
     acquire_current_texture_view: *const fn (*const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view,
@@ -1648,8 +1468,6 @@ fn surfaceExtCurrentSize(self: *const SurfaceExt, out_w: [*c]u32, out_h: [*c]u32
     if (out_w != null) out_w.* = s.surface_w;
     if (out_h != null) out_h.* = s.surface_h;
 }
-
-// ── Extension query ────────────────────────────────────────────────────────
 
 fn queryExtension(dev: [*c]ke.ke_gpu_device, name: [*c]const u8) callconv(.c) ?*const anyopaque {
     const s = state(dev);

@@ -1,10 +1,5 @@
 const std = @import("std");
 
-// Build the ke_render_cluster shared library (Zig 0.16 API).
-// A standalone render pass plugin: talks to the rest of the pipeline only
-// through the borrowed ke_runtime/ke_render_service/ke_gpu_device handles passed
-// to its factory — no link to ke_render_service's Zig sources.
-
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -32,8 +27,6 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("ke_runtime", .{}); // ke_system_ctx_view
     mod.addCMacro("KE_RENDER_CLUSTER_EXPORT", "");
 
-    // Matrix math for the cull pass's camera/view transform. The engine
-    // implements no math; this Zig module brings its own via zmath.
     const zmath = b.dependency("zmath", .{});
     mod.addImport("zmath", zmath.module("root"));
 

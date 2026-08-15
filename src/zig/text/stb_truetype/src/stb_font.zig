@@ -1,27 +1,15 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const gpa = std.heap.c_allocator;
 
-// Declarations only — the implementation is compiled as C from
-// stb_font_impl.c (see build.zig); translate-c cannot reliably lower stb's
-// bit-packed internals, so @cImport never sees STB_TRUETYPE_IMPLEMENTATION.
 const stb = @cImport({
     @cInclude("stb_truetype.h");
 });
 
-// Zig 0.16 moved file IO behind std.Io (needs an Io instance to construct;
-// std.posix.read explicitly refuses Windows in this version). libc is
-// already linked — same choice shader_loader.zig made for the same reason.
 const libc = @cImport({
     @cInclude("stdio.h");
 });
@@ -31,7 +19,6 @@ const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
 const State = struct {
@@ -80,14 +67,12 @@ fn loadFont(
         return null;
     }
 
-    // 1. Slurp the TTF.
     const ttf = readFile(path) orelse {
         E.fail(out_error, .io, "failed to open or read font file", @src());
         return null;
     };
     defer gpa.free(ttf);
 
-    // 2. Pack the requested codepoint range into a grayscale alpha atlas.
     const w = atlas_size;
     const h = atlas_size;
     const alpha = gpa.alloc(u8, @as(usize, w) * @as(usize, h)) catch {
@@ -118,7 +103,6 @@ fn loadFont(
     }
     stb.stbtt_PackEnd(&pc);
 
-    // 3. Expand alpha -> RGBA8 (white RGB + glyph-coverage alpha).
     const atlas_rgba = gpa.alloc(u8, @as(usize, w) * @as(usize, h) * 4) catch {
         E.fail(out_error, .out_of_memory, "atlas allocation failed", @src());
         return null;
@@ -130,7 +114,6 @@ fn loadFont(
         atlas_rgba[i * 4 + 3] = alpha[i];
     }
 
-    // 4. Glyph metrics + line-height from the unscaled font's v-metrics scaled to pixel_size.
     var info: stb.stbtt_fontinfo = undefined;
     if (stb.stbtt_InitFont(&info, ttf.ptr, stb.stbtt_GetFontOffsetForIndex(ttf.ptr, 0)) == 0) {
         gpa.free(atlas_rgba);
@@ -165,7 +148,6 @@ fn loadFont(
         glyphs[i].advance_x = pcc.xadvance;
     }
 
-    // 5. Assemble ke_font_data.
     const fd = gpa.create(c.ke_font_data) catch {
         gpa.free(atlas_rgba);
         gpa.free(glyphs);

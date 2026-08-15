@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const c = @cImport({
@@ -11,13 +7,7 @@ const c = @cImport({
     @cInclude("kernel_engine/runtime/system_ctx.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
-
-// In-house scheduler: ke_system_ctx is the only door to component memory inside
-// an execute call; sequential phase walk with Bevy-style R/W wave grouping,
-// enki-backed dispatch, a per-wave defer queue, and a fixed-timestep
-// accumulator. Sim N+1 ‖ render N pipelining per RuntimeArchitectureV2.md §16.
 
 const KE_MAX_QUERIES_PER_SYSTEM = 8;
 const KE_MAX_SEGMENTS_PER_QUERY = 32;
@@ -28,12 +18,6 @@ const KE_RUNTIME_PHASE_COUNT = 7;
 const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
-
-// ── allocation helpers ───────────────────────────────────────────────────────
-//
-// Every buffer here has its length tracked alongside it (a *_capacity field,
-// or a fixed KE_MAX_* size for the storage that never grows), so a Zig slice
-// can always be reconstructed at the point of freeing.
 
 const heap = @import("heap.zig");
 
@@ -58,8 +42,6 @@ fn cAllocBytes(n: usize) ?*anyopaque {
 fn cFreeBytes(p: ?*anyopaque, n: usize) void {
     if (p) |pp| heap.gpa.free(@as([*]u8, @ptrCast(pp))[0..n]);
 }
-
-// ── Defer queue ─────────────────────────────────────────────────────────────
 
 const DeferKind = enum(c_int) {
     spawn = 1,
@@ -88,9 +70,6 @@ const DeferQueue = struct {
     arena_capacity: usize = 0,
 };
 
-// Runtime-private state behind ke_system_ctx.handle. The public vtable struct
-// (c.ke_system_ctx) lives in system_ctx.h; bindCtx wires its slots to the
-// exported ke_system_ctx_* functions and points handle here.
 const CtxState = struct {
     ecs: ?*c.ke_ecs,
     access_list: ?[*]const c.ke_component_access,
@@ -117,8 +96,6 @@ fn bindCtx(ctx: *c.ke_system_ctx, state: *CtxState) void {
     ctx.detach = &ke_system_ctx_detach;
     ctx.despawn = &ke_system_ctx_despawn;
 }
-
-// ── Wave builder (Bevy-style R/W conflict grouping) ─────────────────────────
 
 fn termWrites(a: c.ke_component_access) bool {
     return (@as(c_uint, @intCast(a.access)) & ACCESS_WRITE) != 0;
@@ -215,8 +192,6 @@ export fn ke_runtime_debug_compute_waves(
     out_wave_count.* = current_wave + 1;
 }
 
-// ── ke_system_ctx public API ────────────────────────────────────────────────
-
 export fn ke_system_ctx_view(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
     if (out_count != null) out_count.* = 0;
     const s = ctxOf(ctx) orelse return null;
@@ -239,7 +214,6 @@ fn deferReserve(q: *DeferQueue, needed: usize) bool {
     return true;
 }
 
-// Returns the byte offset where the bytes landed (maxUsize on OOM).
 /// Payloads are copied into one byte arena and later handed back to a callback
 /// that casts them to its own struct, so each has to start on an address that
 /// struct could legally live at. Without this an odd-sized payload leaves the
@@ -301,7 +275,6 @@ export fn ke_system_ctx_spawn(ctx: ?*c.ke_system_ctx) callconv(.c) c.ke_entity {
     q.count += 1;
     cmd.kind = .spawn;
     cmd.spawn_out = null;
-    // Placeholder; actual id assigned at flush. Caller must not use before flush.
     return c.KE_ENTITY_INVALID;
 }
 
@@ -380,8 +353,6 @@ export fn ke_system_ctx_reset_defer_applied() callconv(.c) void {
     s_defer_applied_total = 0;
 }
 
-// ── Runtime state ───────────────────────────────────────────────────────────
-
 const ExtractedQuery = struct {
     seg: c.ke_ecs_segment,
     entities_buf: ?[*]c.ke_entity,
@@ -439,8 +410,6 @@ const RuntimeHandle = struct {
 fn handleOf(self: *c.ke_runtime) *RuntimeHandle {
     return @ptrCast(@alignCast(self.handle));
 }
-
-// ── Vtable impls ────────────────────────────────────────────────────────────
 
 fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_module_id {
     if (self == null or self.?.handle == null or p == null or p.*.on_load == null) {
@@ -529,7 +498,6 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         }
         rs.query_count = qn;
 
-        // Fold direct access entries into the derived list too.
         for (0..p.*.access_count) |i| {
             var found = false;
             for (0..rs.derived_access_count) |d| {
@@ -561,8 +529,6 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
     return h.state.next_system_id;
 }
 
-// ── Wave dispatch ───────────────────────────────────────────────────────────
-
 const TaskPkg = struct {
     state: CtxState, // runtime-private; ctx.handle points here
     ctx: c.ke_system_ctx, // public vtable handed to the system body
@@ -575,13 +541,6 @@ const TaskPkg = struct {
 
 fn taskPkgRun(data: ?*anyopaque) callconv(.c) void {
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
-    // The render phase dispatches asynchronously and can still be in flight
-    // when the next tick's sim phases start mutating the same ke_ecs (see
-    // runtimeTick). A render-phase system deferring a structural op would
-    // apply it via deferFlush from the render task, racing sim's writes.
-    // No render system does this today, but the guard makes it impossible
-    // rather than merely unexercised: leaving defer_q null here makes every
-    // ke_system_ctx_defer/spawn/attach/detach/despawn call return false.
     if (pkg.allow_defer) pkg.state.defer_q = &pkg.defer_q;
     pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt);
 }
@@ -697,7 +656,6 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
         var wc = WaveRunCtx{ .h = h, .pkgs = pkgs, .tasks = tasks, .pinned = pinned, .wave_size = wave_size };
         runWaveBody(&wc);
 
-        // Wave barrier: flush each system's deferred changes in registration order.
         var t: u32 = 0;
         while (t < wave_size) : (t += 1) {
             deferFlush(&pkgs[t].defer_q, h.state.ecs);
@@ -890,8 +848,6 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     }
     cFree(RuntimeHandle, @ptrCast(h), 1);
 }
-
-// ── Factory ─────────────────────────────────────────────────────────────────
 
 export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]const c.ke_runtime_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_runtime_handle {
     const empty = c.ke_runtime_handle{ .ref = null, .destroy = null };

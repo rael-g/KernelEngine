@@ -5,32 +5,17 @@ const mesh_resolve = @import("mesh_resolve.zig");
 const sprite_resolve = @import("sprite_resolve.zig");
 const label_resolve = @import("label_resolve.zig");
 
-// Compiled into the ke_render_service library (folded here because a separate Zig
-// DLL cannot link another Zig DLL's import lib on Windows). Calls the render
-// core factory in-lib; the device is caller-created and borrowed. Shared with
-// shadow_module.zig via cimport.zig — a second @cImport of the same headers
-// would produce distinct, incompatible types for the same C struct.
 pub const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
 const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) void;
 
-// Clustered-forward grid + per-froxel cap defaults. These are workload-tuning
-// values the caller can override via ke_render_cluster_params (0 field = keep
-// the default below) — not engine-imposed limits. A froxel holding more
-// concurrently overlapping lights than max_lights_per_cluster silently drops
-// the excess (a real correctness limit of the algorithm), so a caller running
-// a denser scene than these defaults suit should raise the field rather than
-// hit that ceiling. The grid/cull machinery itself lives in cluster_module.zig
-// now; these defaults stay here because they're resolved from the caller's
-// ke_render_cluster_params before cluster_module.setup is even called.
 const DEFAULT_GRID_X: u32 = 32;
 const DEFAULT_GRID_Y: u32 = 18;
 const DEFAULT_GRID_Z: u32 = 24;
 const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
 
-// The device is borrowed (caller-owned); only the render core is owned here.
 const ModuleState = struct {
     core: c.ke_render_service_handle,
     device: *c.ke_gpu_device,
@@ -39,10 +24,6 @@ const ModuleState = struct {
 
     bb_writes: [1][*c]const u8,
     io: c.ke_render_pass_io,
-    // Frame barrier: begin_frame WRITES "frame", every pass READS it, end_frame
-    // WRITES it (write-after-read). W→R→W brackets all passes into one frame so
-    // begin (clears the slot table + acquires the backbuffer) strictly precedes
-    // every pass and end (submits) strictly follows; passes stay parallel (R/R).
     frame_cid: c.ke_component_id,
     begin_access: [2]c.ke_component_access, // WRITE backbuffer, WRITE frame
     clear_access: [2]c.ke_component_access, // WRITE backbuffer, READ frame
@@ -53,47 +34,19 @@ const ModuleState = struct {
     label_resolve_queries: [1]c.ke_query_decl, // "render.label.resolve": WRITE label
     label_resolve_state: label_resolve.State,
 
-    // Feature pass modules — each owns its own GPU resources, runtime system(s),
-    // and shaders, in its own file. Set up in dependency order: shadow + cluster
-    // produce handles gbuffer/deferred/forward consume; gbuffer encodes the
-    // opaque G-buffer; deferred-lighting shades it (borrowing shadow/cluster +
-    // tracking the env cubemap for IBL); skybox fills the pixels neither wrote;
-    // forward shades the transparent (BLEND) surfaces gbuffer skipped, sharing
-    // deferred's shadow/cluster/IBL wiring plus its own refraction snapshot.
-    // This aggregator holds them so their addresses are stable for the
-    // borrowed pointers and the systems' user_data.
-    // Shadow is its own physical plugin (ke_render_shadow) — this aggregator
-    // only holds the borrowed handle it returned, not its private state.
     shadow: c.ke_render_shadow_handle,
-    // Cluster is its own physical plugin (ke_render_cluster) — this aggregator
-    // only holds the borrowed handle it returned, not its private state.
     cluster: c.ke_render_cluster_handle,
-    // Gbuffer encode is its own physical plugin (ke_render_gbuffer) — this
-    // aggregator only holds the borrowed handle it returned, not its private state.
     gbuffer: c.ke_render_gbuffer_handle,
-    // Deferred lighting is its own physical plugin (ke_render_deferred_lighting)
-    // — this aggregator only holds the borrowed handle it returned, not its
-    // private state.
     deferred: c.ke_render_deferred_lighting_handle,
-    // Skybox is its own physical plugin (ke_render_skybox) — this aggregator
-    // only holds the borrowed handle it returned, not its private state.
     skybox: c.ke_render_skybox_handle,
-    // Forward is its own physical plugin (ke_render_forward) — this aggregator
-    // only holds the borrowed handle it returned, not its private state.
     forward: c.ke_render_forward_handle,
-    // Tonemap is its own physical plugin (ke_render_tonemap) — this aggregator
-    // only holds the borrowed handle it returned, not its private state.
     tonemap: c.ke_render_tonemap_handle,
-    // UI is its own physical plugin (ke_render_ui) — this aggregator only
-    // holds the borrowed vtable handle it returned, not its private state.
     ui: c.ke_render_ui_handle,
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
     return @alignCast(@ptrCast(user.?));
 }
-
-// ── Frame-boundary systems (ordered by the backbuffer tag-cid) ────────────────
 
 fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st = stateOf(user);
@@ -136,11 +89,6 @@ export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.k
     return st.core.ref;
 }
 
-// Forwards into the ui plugin's own vtable (ke_render_ui.load_font), not
-// handled by ke_render_service. Queuing a quad no longer goes through this
-// module at all — game code attaches the "ui_quad" ECS component directly
-// (via NodeWorld/SystemContext), the same channel every other render-phase
-// pass consumes sim-written data through. See ke_render_ui for why.
 export fn ke_render_module_load_font(module: ?*c.ke_render_module, key: [*c]const u8,
                                      atlas: c.ke_texture_handle, glyphs: [*c]const c.ke_glyph_metrics,
                                      glyph_count: u32, line_height: f32, ascent: f32,
@@ -165,12 +113,6 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
 
 const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
 
-// Registers this domain's own cids + [entity.components.X] scene-file apply
-// callbacks (camera/mesh/directional_light/point_light/spot_light/ambient_light/
-// skybox) against `world`, independent of any GPU device. `ke_render_module_create`
-// calls this itself when given a non-null world; a caller that only needs the
-// ECS schema populated (e.g. a headless scene-loader test) can call it directly
-// instead of standing up a full render module.
 export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) callconv(.c) bool {
     const e = ecs orelse return false;
     const w = world orelse return false;
@@ -192,14 +134,9 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     registerFields(w, ambient_light_cid, &c.ke_ambient_light_component_fields);
     registerFields(w, sprite_cid, &c.ke_sprite2d_component_fields);
 
-    // "label" is registered by the ui plugin too (whoever calls component_register
-    // first wins the cid), but the ui plugin never sees a ke_world — so without
-    // this, a scene's [entity.components.label] block was silently ignored.
     const label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
     registerFields(w, label_cid, &c.ke_label_component_fields);
 
-    // Only the components carrying a key no table can describe keep a callback;
-    // it runs after the table and corrects that one key.
     _ = w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null);
     _ = w.register_component_apply.?(w, mesh_cid, component_apply.ke_render_apply_mesh, null);
     _ = w.register_component_apply.?(w, sprite_cid, component_apply.ke_render_apply_sprite2d, null);
@@ -232,11 +169,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     };
     st.core = core_h;
     st.device = dev;
-    // 0 (or an absent params struct) means "use the engine default" per field —
-    // a caller running a denser scene than the default sweet spot can raise
-    // any of these rather than hit a hardcoded ceiling.
-    // Resolved here (rather than inside cluster_module.setup) because
-    // ke_render_cluster_params is render_module.zig's own C ABI surface.
     var grid_x: u32 = undefined;
     var grid_y: u32 = undefined;
     var grid_z: u32 = undefined;
@@ -270,7 +202,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.io.cmd_slot = 0; // clear pass → frame command slot 0
 
     const bb_cid = core_h.ref.*.cid.?(core_h.ref, "backbuffer");
-    // Zero-size tag for the frame barrier (see ModuleState.frame_cid).
     st.frame_cid = e.component_register.?(e, "render.frame", 0, null);
     st.begin_access = .{
         .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
@@ -285,15 +216,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         .{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE },
     };
 
-    // No pass is imposed. default_passes registers the conventional chain;
-    // otherwise the game wires its own passes. A failed setup (e.g. a bad shader)
-    // fails loudly via out_error — it is never silently skipped.
     if (default_passes != 0) {
-        // Clip space is the backend's; the world is the engine's, and the two are
-        // independent. The world is right-handed (+Y up, +Z toward the viewer, as
-        // glTF authors it) and the projection converts that into the backend's
-        // left-handed clip space while absorbing the z range and Y flip. A
-        // right-handed-clip backend is rejected because nothing here builds one.
         const ndc = dev.get_ndc_convention.?(dev);
         if (ndc.left_handed == 0) {
             c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: right-handed clip-space backend not supported", @src().file, @intCast(@src().line), null);
@@ -302,9 +225,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return empty;
         }
 
-        // Cross-cutting component ids, registered once here (idempotent by name)
-        // and handed to each feature module's setup — the modules share cids by
-        // name, none owns the registry.
         const mesh_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_MESH, @sizeOf(c.ke_mesh_component), null);
         const world_transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), null);
         const camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component), null);
@@ -314,16 +234,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const ambient_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, @sizeOf(c.ke_ambient_light_component), null);
         const skybox_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component), null);
 
-        // [entity.components.X] scene-file property application for render's own
-        // vocabulary — registered against the caller's world (if any) rather
-        // than hardcoded into the framework plugin (which owns only "transform").
-        // Idempotent, so a re-registration on repeated create() is safe.
         _ = ke_render_register_scene_apply(e, world);
 
-        // "render.mesh.resolve" — the system that turns a scene-authored
-        // primitive name + material fields into real mesh/material handles
-        // (mesh_resolve.zig). MeshRenderer.cs never held this logic; this is
-        // the system that gives its plain data meaning.
         st.mesh_resolve_queries[0].terms[0] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };
         st.mesh_resolve_queries[0].term_count = 1;
         var mesh_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
@@ -369,29 +281,9 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         label_resolve_params.execute = label_resolve.system;
         _ = rt.register_system.?(rt, &label_resolve_params, null);
 
-        // begin_frame/clear are registered first, unconditionally, before any
-        // pass's setup runs: gbuffer is its own physical plugin whose create()
-        // call both configures it (declaring gbuffer_albedo/normal/emissive —
-        // deferred_lighting.setup() below resolves those cids) AND registers
-        // its runtime system in the same call. Registering begin_frame/clear
-        // up front guarantees they're ahead of gbuffer's system in the wave
-        // order regardless of where gbuffer's combined call lands (registration
-        // order determines wave placement — see the tonemap/skybox plugins for
-        // the same lesson learned the hard way: an out-of-order registration
-        // races ahead of begin_frame's per-slot encoder pre-creation).
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
 
-        // Setup order is a real dependency chain: shadow + cluster publish their
-        // outputs (LVP uniform, shadow view, light-list bind group + layout)
-        // into the named-resource table first, so gbuffer/deferred/forward can
-        // look them up by name — none of them holds a pointer to ShadowModule/
-        // ClusterModule. gbuffer encodes; deferred-lighting decodes + shades.
-        //
-        // Shadow is its own physical plugin: create() both declares its
-        // resources ("shadow_map" view, "shadow_lvp" buffer — deferred/forward
-        // resolve them by name) and registers its runtime system only when
-        // enabled, in the position its old registerSys call used to occupy.
         st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, @intFromBool(shadow_enabled),
                                               mesh_cid, world_transform_cid, light_cid, st.frame_cid, out_error);
         if (st.shadow.ref == null) {
@@ -400,11 +292,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return empty;
         }
 
-        // Cluster is its own physical plugin: create() both declares its
-        // outputs ("cluster_lights" bind group + layout, "light_clusters"
-        // ordering tag — deferred/forward resolve them by name) and registers
-        // its runtime system, in the position its old registerSys call used
-        // to occupy.
         st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
                                                 point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.cluster.ref == null) {
@@ -413,10 +300,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return empty;
         }
 
-        // Gbuffer is its own physical plugin: create() both declares its
-        // resources (gbuffer_albedo/normal/emissive/depth — needed by
-        // deferred-lighting's setup below) and registers its runtime system,
-        // in the position its old registerSys call used to occupy.
         st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, ndc, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.gbuffer.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
@@ -424,10 +307,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return empty;
         }
 
-        // Deferred lighting is its own physical plugin: create() both decodes
-        // the G-buffer setup (reading shadow/cluster's outputs by name through
-        // ke_render_service) and registers its runtime system, in the position
-        // its old registerSys call used to occupy.
         st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
                                                             camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
@@ -435,20 +314,12 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        // Skybox is its own physical plugin: its factory registers its own
-        // runtime system directly, matching the position its old registerSys
-        // call used to occupy (registration order matters — see tonemap above).
         st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.skybox.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
         }
-        // Forward is its own physical plugin: create() both configures the
-        // transparent-only pipeline (reading shadow/cluster's outputs by name
-        // through ke_render_service, sharing deferred-lighting's shading hooks)
-        // and registers its runtime system, in the position its old
-        // registerSys call used to occupy.
         st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
                                                 mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
@@ -456,23 +327,12 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        // Tonemap is its own physical plugin: its factory registers its own
-        // runtime system directly (no registerSys call here, unlike the
-        // in-process modules above). Created here — matching the position the
-        // in-process module's own registerSys call used to occupy — because
-        // registration ORDER (not just declared cid access) affects which wave
-        // a tied system lands in; creating it earlier raced it ahead of
-        // begin_frame's per-slot encoder pre-creation.
         st.tonemap = c.ke_render_tonemap_create(rt, st.core.ref, dev, logger, out_error);
         if (st.tonemap.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
         }
-        // UI overlay pass: its own physical plugin, factory registers its own
-        // runtime system, matching the position its old registerSys call
-        // occupied. cmd_slot 8 = after tonemap's slot 7 (loads, doesn't clear,
-        // the backbuffer tonemap just wrote, so text/quads composite on top).
         st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, 8, out_error);
         if (st.ui.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);

@@ -1,20 +1,11 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const gpa = std.heap.c_allocator;
 
-// Declarations only — the implementation is compiled as C from
-// miniaudio_impl.c (see build.zig); translate-c cannot reliably lower
-// miniaudio's internals, so @cImport never sees MINIAUDIO_IMPLEMENTATION.
 const ma = @cImport({
     @cInclude("miniaudio.h");
 });
@@ -25,7 +16,6 @@ const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
 const LoadedSound = struct {
@@ -33,13 +23,6 @@ const LoadedSound = struct {
     initialized: bool,
 };
 
-// Sounds are refcounted and deduped by path through ke_resource_cache — the
-// same kernel-built-in primitive the render core owns its texture/mesh/
-// material caches through. A second load_sound with the same path returns
-// the already-loaded id, retained; the underlying ma_sound is only decoded
-// once and only freed at refcount zero. `sounds`/`next_id` are only ever
-// touched by the calling thread; miniaudio's hardware-callback thread never
-// reaches into this map.
 const State = struct {
     logger: ?*c.ke_logger,
     engine: ma.ma_engine,
@@ -62,9 +45,6 @@ fn logInfo(logger: ?*c.ke_logger, msg: [*c]const u8) void {
     lg.log.?(lg, &ev);
 }
 
-// ke_resource_cache destroy_fn: fires at refcount zero (a matching
-// unload_sound call, or cache teardown for every still-live sound).
-// ctx is the State.
 fn destroySoundResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(ctx.?));
     const slot: ?*LoadedSound = if (state.sounds.fetchRemove(handle)) |kv| kv.value else null;
@@ -77,8 +57,6 @@ fn destroySoundResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv
 fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
     const api = self orelse return;
     const state: *State = @ptrCast(@alignCast(api.handle));
-    // Fires destroySoundResource for every sound still referenced, which
-    // uninits it and erases it from `sounds` — no separate teardown loop.
     state.cache_destroy(state.cache);
     if (state.engine_ready) ma.ma_engine_uninit(&state.engine);
     state.sounds.deinit();
@@ -151,7 +129,6 @@ fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: c.ke_b
     }
     const s = slot.?;
 
-    // Re-trigger semantics: stop + rewind so play() on an already-playing handle restarts cleanly.
     _ = ma.ma_sound_stop(&s.sound);
     _ = ma.ma_sound_seek_to_pcm_frame(&s.sound, 0);
     ma.ma_sound_set_volume(&s.sound, volume);

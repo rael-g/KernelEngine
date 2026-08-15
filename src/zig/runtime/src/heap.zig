@@ -1,5 +1,3 @@
-// The runtime plugin's own heap. Render-phase work is dispatched onto the
-// scheduler's pool, so allocation here must be safe from any thread.
 
 const std = @import("std");
 

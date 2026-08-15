@@ -1,18 +1,3 @@
-// ke_input_actions impl. Parses `.input` TOML files into an internal table of
-// actions + bindings, evaluates them against ke_input_snapshot per frame, and
-// exposes polling + event paths. Schema:
-//
-//     [action.NAME]
-//     type = "Button" | "Axis1D" | "Axis2D" | "Axis3D"
-//     bindings = [
-//         { kind = "key",        key      = "Space" },
-//         { kind = "key_pair",   negative = "S",      positive = "W" },
-//         { kind = "key_quad",   up = "W", down = "S", left = "A", right = "D" },
-//         { kind = "mouse",      button   = "Left" },
-//     ]
-//
-// Action ids are assigned in declaration order (first action = 0). Callers
-// cache them via get_action_id() after load and reuse across frames.
 
 const std = @import("std");
 
@@ -32,11 +17,6 @@ const binding_initial_capacity: u32 = 4;
 const key_bit_count: c_int = @intCast(
     @typeInfo(@FieldType(c.ke_input_snapshot, "keys_down")).array.len * 64,
 );
-
-// -- name -> enum lookup tables ----------------------------------------------
-//
-// Linear-scan arrays consulted only at .input parse time, never in the
-// per-frame evaluate path, so a hash would buy nothing. Order is irrelevant.
 
 const KeyNameEntry = struct { name: []const u8, code: c_int };
 
@@ -144,13 +124,10 @@ fn parseActionType(s: [*c]const u8) c.ke_action_type {
     return c.KE_ACTION_TYPE_BUTTON;
 }
 
-// -- internal model ----------------------------------------------------------
-
 const BindingKind = enum(u8) { key, key_pair, key_quad, mouse_button };
 
 const Binding = struct {
     kind: BindingKind,
-    // Key codes. k0 doubles as the mouse button id for .mouse_button.
     k0: c_int = 0,
     k1: c_int = 0,
     k2: c_int = 0,
@@ -203,8 +180,6 @@ fn stateOf(self: *c.ke_input_actions) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-// -- dynamic-array helpers ---------------------------------------------------
-
 /// Grows a malloc'd array to hold at least `needed` elements, doubling from
 /// `initial`. Returns null on allocation failure, leaving the old buffer intact.
 fn growArray(
@@ -221,8 +196,6 @@ fn growArray(
     const new_buf = heap.gpa.alloc(T, cap) catch return null;
     if (buf) |old| {
         @memcpy(new_buf[0..count], old[0..count]);
-        // The old block is released at the capacity it was allocated with,
-        // which `capacity` still holds until it is overwritten below.
         heap.gpa.free(old[0..capacity.*]);
     }
     capacity.* = cap;
@@ -267,8 +240,6 @@ fn copyName(dst: []u8, src: []const u8) void {
     dst[n] = 0;
 }
 
-// -- snapshot sampling -------------------------------------------------------
-
 fn isKeyDown(snap: *const c.ke_input_snapshot, key: c_int) bool {
     if (key < 0 or key >= key_bit_count) return false;
     const k: usize = @intCast(key);
@@ -304,8 +275,6 @@ fn sampleBinding(b: *const Binding, snap: *const c.ke_input_snapshot) struct { S
     }
     return .{ out, out.x != 0.0 or out.y != 0.0 or out.z != 0.0 };
 }
-
-// -- binding parser (from TOML table) ----------------------------------------
 
 /// tomlc99 hands back malloc'd strings the caller must release.
 fn freeDatumStr(d: c.toml_datum_t) void {
@@ -364,8 +333,6 @@ fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding) bool {
     return false;
 }
 
-// -- vtable: load ------------------------------------------------------------
-
 fn vtLoad(
     self_in: ?*c.ke_input_actions,
     path: [*c]const u8,
@@ -395,7 +362,6 @@ fn vtLoad(
     }
     defer c.toml_free(root);
 
-    // A file with no [action] section is valid and simply defines nothing.
     const action_section = c.toml_table_in(root, "action") orelse return true;
 
     var i: c_int = 0;
@@ -438,8 +404,6 @@ fn vtLoad(
 
     return true;
 }
-
-// -- vtable: lookup and programmatic registration ----------------------------
 
 fn vtGetActionId(self_in: ?*c.ke_input_actions, name: [*c]const u8) callconv(.c) i32 {
     const self = self_in orelse return -1;
@@ -570,8 +534,6 @@ fn vtBindKeyQuad(
     }, out_error);
 }
 
-// -- vtable: evaluate --------------------------------------------------------
-
 fn vtEvaluate(
     self_in: ?*c.ke_input_actions,
     snapshot_in: ?*const c.ke_input_snapshot,
@@ -610,7 +572,6 @@ fn vtEvaluate(
                 if (a.type == c.KE_ACTION_TYPE_BUTTON) {
                     acc.x = 1.0;
                 } else {
-                    // Strongest contribution per axis wins across bindings.
                     if (@abs(sampled.x) > @abs(acc.x)) acc.x = sampled.x;
                     if (@abs(sampled.y) > @abs(acc.y)) acc.y = sampled.y;
                     if (@abs(sampled.z) > @abs(acc.z)) acc.z = sampled.z;
@@ -652,8 +613,6 @@ fn vtEvaluate(
     return true;
 }
 
-// -- vtable: polling ---------------------------------------------------------
-
 fn getAction(self_in: ?*c.ke_input_actions, id: i32) ?*const Action {
     const self = self_in orelse return null;
     if (self.handle == null) return null;
@@ -667,10 +626,6 @@ fn vtIsActionDown(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     return a.curr_active;
 }
 
-// Both edge queries branch and return a literal rather than returning the
-// `and` expression directly: Zig 0.16 materializes such a computed bool into
-// the C-ABI return register as 0xFF instead of 0x01, which a C/C++ caller
-// reads back as an invalid bool. Returning constants sidesteps that.
 fn vtWasActionPressed(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
     if (a.curr_active and !a.prev_active) return true;
@@ -707,8 +662,6 @@ fn vtGetAxis3d(
     if (out_z != null) out_z.* = if (a) |act| act.curr_z else 0.0;
 }
 
-// -- teardown ----------------------------------------------------------------
-
 fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -717,8 +670,6 @@ fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     if (s.actions) |actions| heap.gpa.free(actions[0..s.action_capacity]);
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_actions_handle {
     const null_handle = std.mem.zeroes(c.ke_input_actions_handle);

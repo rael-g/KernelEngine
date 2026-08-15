@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
@@ -11,19 +7,6 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-// Skybox — a standalone pass. Fullscreen triangle that fills the pixels the
-// geometry did not cover (G-buffer depth at far), sampling the environment
-// cubemap by the reconstructed view direction. Runs after deferred-lighting
-// (which shaded the covered pixels) and before tonemap, writing "hdr" with load
-// (composite, not clear). No depth attachment — it discards covered pixels by
-// texel-fetching the depth buffer.
-//
-// A standalone plugin: talks to the rest of the render pipeline only through
-// the borrowed ke_render_service/ke_runtime handles passed to create() — it never
-// sees another pass's private struct. "depth" is resolved by name (the
-// producing pass declares it before this one registers its own system).
-
-// Matches skybox.slang's SkyFrame.
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
 const SkyboxModule = struct {
@@ -35,9 +18,6 @@ const SkyboxModule = struct {
     world_transform_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    // Re-queried via core.get_or_create_pipeline every record() call — see
-    // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade.
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
     bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // rebuilt per frame (transient depth view)
@@ -47,9 +27,6 @@ const SkyboxModule = struct {
     reads: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all.
     queries: [2]c.ke_query_decl = undefined, // [camera, transform], [skybox]
 };
 
@@ -85,7 +62,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const core = sm.core;
     const dev = sm.device;
 
-    // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return; // no camera → deferred already cleared hdr
@@ -101,8 +77,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    // Rotation-only view (translation zeroed) × proj, inverted → clip-to-world
-    // direction so the cubemap stays centred on the camera (infinite background).
     const view = cameraView(cam_wt);
     var vm: [16]f32 = undefined;
     zm.storeMat(vm[0..], view);
@@ -116,8 +90,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     zm.storeMat(frame.inv_sky_view_proj[0..], zm.inverse(sky_vp));
     core.*.upload.?(core, sm.frame_uniform, 0, &frame, @sizeOf(SkyFrame));
 
-    // Environment cubemap from the first skybox entity (default black otherwise).
-    // View 1 = [skybox].
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
     const env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
@@ -177,8 +149,6 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entries = &bgl_entries,
     });
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
     const sky_vs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sky_vs == c.KE_GPU_INVALID_HANDLE) return false;
     const sky_fs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
@@ -233,8 +203,6 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
 
-    // Data the body reads through resolved views. Index order is the
-    // query_index passed to ke_system_ctx_view.
     const rd = c.KE_ACCESS_READ;
     sm.queries = std.mem.zeroes([2]c.ke_query_decl);
     sm.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };

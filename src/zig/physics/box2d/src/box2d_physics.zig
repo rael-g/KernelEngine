@@ -1,21 +1,8 @@
-// ke_physics_2d backed by Box2D v3.
-//
-// Box2D v3 addresses bodies by value handle (b2BodyId: index + world +
-// generation) rather than by pointer, so the id table maps the engine's opaque
-// ke_body_2d onto that struct instead of onto a pointer. Everything else keeps
-// the behaviour the previous implementation settled on — see the notes at each
-// decision point.
 
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
@@ -68,8 +55,6 @@ fn lookup(s: *State, id: c.ke_body_2d) ?c.b2BodyId {
     const entry = s.bodies.?[idx];
     return if (entry.live) entry.body else null;
 }
-
-// -- vtable ------------------------------------------------------------------
 
 fn setGravity(self_in: ?*c.ke_physics_2d, x: f32, y: f32) callconv(.c) void {
     const self = self_in orelse return;
@@ -130,7 +115,6 @@ fn createBody(
 
     s.bodies.?[s.body_count] = .{ .body = body, .live = true };
     s.body_count += 1;
-    // Bias by one: handle 0 is reserved as invalid.
     return @intCast(s.body_count);
 }
 
@@ -140,8 +124,6 @@ fn destroyBody(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d) callconv(.c) void {
     const s = stateOf(self);
     const body = lookup(s, id) orelse return;
     c.b2DestroyBody(body);
-    // The slot is retired rather than reused: handles already handed out must
-    // not silently start addressing a different body.
     s.bodies.?[id - 1].live = false;
 }
 
@@ -219,8 +201,6 @@ fn addCircleFixture(
 
 fn getBodyState(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, out_in: ?*c.ke_body_state_2d) callconv(.c) void {
     const out = out_in orelse return;
-    // Zeroed up front so an unknown handle reads as a resting body at the
-    // origin rather than as uninitialised memory.
     out.* = std.mem.zeroes(c.ke_body_state_2d);
 
     const self = self_in orelse return;
@@ -231,7 +211,6 @@ fn getBodyState(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, out_in: ?*c.ke_bod
     const v = c.b2Body_GetLinearVelocity(body);
     out.x = p.x;
     out.y = p.y;
-    // v3 stores orientation as a cosine/sine pair; the contract wants radians.
     out.angle = rotAngle(c.b2Body_GetRotation(body));
     out.velocity_x = v.x;
     out.velocity_y = v.y;
@@ -256,7 +235,6 @@ fn applyImpulse(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, ix: f32, iy: f32) 
     const self = self_in orelse return;
     if (self.handle == null) return;
     const body = lookup(stateOf(self), id) orelse return;
-    // wake = true: an impulse aimed at a sleeping body is meant to move it.
     c.b2Body_ApplyLinearImpulseToCenter(body, .{ .x = ix, .y = iy }, true);
 }
 
@@ -274,12 +252,6 @@ fn setBodyGravityScale(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, scale: f32)
     c.b2Body_SetGravityScale(body, scale);
 }
 
-// -- rotation helpers --------------------------------------------------------
-//
-// b2MakeRot / b2Rot_GetAngle are static inline in Box2D's headers, so they
-// export no symbol to link against and translate-c does not always lower them.
-// Reimplemented here against the same representation (a unit cosine/sine pair).
-
 fn makeRot(radians: f32) c.b2Rot {
     return .{ .c = @cos(radians), .s = @sin(radians) };
 }
@@ -288,20 +260,14 @@ fn rotAngle(q: c.b2Rot) f32 {
     return std.math.atan2(q.s, q.c);
 }
 
-// -- teardown ----------------------------------------------------------------
-
 fn destroy(self_in: ?*c.ke_physics_2d) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
-    // Destroying the world takes every body with it, so the table only needs
-    // its own storage released.
     c.b2DestroyWorld(s.world);
     if (s.bodies) |b| heap.gpa.free(b[0..s.body_capacity]);
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_physics_2d_box2d_create(
     params_in: ?*const c.ke_physics_2d_box2d_params,
@@ -328,9 +294,6 @@ export fn ke_physics_2d_box2d_create(
     };
 
     var world_def = c.b2DefaultWorldDef();
-    // The caller's gravity is used verbatim — zero means zero, which top-down
-    // games rely on. The managed AddBox2D() supplies (0, -9.81) as its default,
-    // so omitting it still yields Earth gravity.
     world_def.gravity = .{ .x = params.gravity_x, .y = params.gravity_y };
     s.world = c.b2CreateWorld(&world_def);
     if (!c.b2World_IsValid(s.world)) {

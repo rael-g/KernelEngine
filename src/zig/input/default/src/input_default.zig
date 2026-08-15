@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const gpa = std.heap.c_allocator;
@@ -12,7 +8,6 @@ const c = @cImport({
     @cInclude("kernel_engine/input/input.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
 const MAX_KEYS = c.KE_INPUT_MAX_KEYS;
@@ -33,9 +28,6 @@ const State = struct {
     mouse_buttons_pressed: u32,
     mouse_buttons_released: u32,
 
-    // Fixed-capacity, single-producer/single-consumer (ke.main) event queue.
-    // Overflow is silently dropped — game devs polling via is_key_down still
-    // see correct state. Capacity sized for ~1ms of furious input at 1000Hz.
     events: [EVENT_CAPACITY]c.ke_input_event,
     event_count: u32,
     event_overflow: bool,
@@ -74,8 +66,6 @@ fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) b
     s.mouse_buttons_pressed = 0;
     s.mouse_buttons_released = 0;
 
-    // Events are produced during PollEvents (after update()) and drained by the
-    // framework on the same tick; update() clears any stragglers.
     s.event_count = 0;
     s.event_overflow = false;
     return true;
@@ -104,7 +94,6 @@ fn inputOnMouseMove(self: ?*c.ke_input, x: f32, y: f32) callconv(.c) void {
     s.mouse_dy += (y - s.mouse_y);
     s.mouse_x = x;
     s.mouse_y = y;
-    // No event push: cursor position is continuous state, read via snapshot.
 }
 
 fn inputOnMouseButton(self: ?*c.ke_input, button: i32, action: i32) callconv(.c) void {
@@ -185,11 +174,6 @@ fn inputGetSnapshot(self: ?*c.ke_input, out: [*c]c.ke_input_snapshot) callconv(.
     o.mouse_buttons_pressed = s.mouse_buttons_pressed;
     o.mouse_buttons_released = s.mouse_buttons_released;
 }
-
-// -- snapshot accessors ------------------------------------------------------
-// The snapshot travels as a plain value with no vtable, so its bitset packing
-// would otherwise have to be re-derived by every consumer. These are the one
-// canonical decode; nothing outside this file needs to know the word/bit split.
 
 fn keyBit(snapshot: [*c]const c.ke_input_snapshot, words: *const [c.KE_INPUT_KEY_WORDS]u64, key: i32) c.ke_bool {
     if (snapshot == null) return 0;

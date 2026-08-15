@@ -1,16 +1,8 @@
-// ke_asset_loader backed by Assimp, through Assimp's C API.
 
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so Assimp's C++ global
-// constructors actually run — without it every entry point reads state that was
-// never constructed. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
@@ -57,8 +49,6 @@ const state_heap = std.heap.smp_allocator;
 fn stateOf(self: *c.ke_asset_loader) *State {
     return @ptrCast(@alignCast(self.handle));
 }
-
-// -- texture table -----------------------------------------------------------
 
 /// One entry per distinct texture reference in the model. Assimp names embedded
 /// textures "*N", so the key doubles as the dedup identity and the source.
@@ -108,17 +98,13 @@ fn registerTexture(
     @memcpy(entry.key[0..kn], key[0..kn]);
 
     if (key[0] == '*') {
-        // "*N" refers to the scene's Nth embedded texture.
         entry.is_embedded = true;
         const idx = std.fmt.parseInt(u32, key[1..], 10) catch {
-            // An unparseable reference is kept as an entry so material indices
-            // stay stable; it decodes to the white fallback.
             table.items.append(table.gpa, entry) catch return -1;
             return @intCast(table.items.items.len - 1);
         };
         if (idx < scene.mNumTextures) entry.embedded = scene.mTextures[idx];
     } else {
-        // External file, relative to the model's own directory.
         var i: usize = 0;
         for (dir) |ch| {
             if (i >= entry.resolved_path.len - 1) break;
@@ -137,8 +123,6 @@ fn registerTexture(
     return @intCast(table.items.items.len - 1);
 }
 
-// -- load --------------------------------------------------------------------
-
 fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.ke_model_data {
     if (path == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -150,8 +134,6 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     c.aiSetImportPropertyInteger(props, c.AI_CONFIG_PP_SLM_VERTEX_LIMIT, vertex_limit);
 
     const scene_c = c.aiImportFileExWithProperties(path, import_flags, null, props);
-    // An incomplete scene is treated as a failure: the caller asked for a model,
-    // and half of one would surface later as missing geometry.
     if (scene_c == null or scene_c.*.mRootNode == null or
         (scene_c.*.mFlags & c.AI_SCENE_FLAGS_INCOMPLETE) != 0)
     {
@@ -170,7 +152,6 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     var table = TextureTable{ .items = .empty, .gpa = gpa };
     defer table.items.deinit(gpa);
 
-    // -- materials, collecting their texture references -----------------------
     const mat_count = scene.mNumMaterials;
     const mats = gpa.alloc(c.ke_material_data, mat_count) catch {
         E.fail(out_error, .out_of_memory, "material allocation failed", @src());
@@ -193,18 +174,15 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
         const am = scene.mMaterials[mi];
         converter.convertMaterial(am, &mats[mi]);
 
-        // glTF's base-colour slot first, then the classic diffuse one.
         albedo_idx[mi] = registerTexture(&table, &scene, dir, am, c.aiTextureType_BASE_COLOR);
         if (albedo_idx[mi] < 0)
             albedo_idx[mi] = registerTexture(&table, &scene, dir, am, c.aiTextureType_DIFFUSE);
 
-        // Real normal maps first; HEIGHT is where several exporters put them.
         normal_idx[mi] = registerTexture(&table, &scene, dir, am, c.aiTextureType_NORMALS);
         if (normal_idx[mi] < 0)
             normal_idx[mi] = registerTexture(&table, &scene, dir, am, c.aiTextureType_HEIGHT);
     }
 
-    // -- decode the collected textures ---------------------------------------
     const tex_count: u32 = @intCast(table.items.items.len);
     const texs = gpa.alloc(c.ke_texture_data, tex_count) catch {
         gpa.free(mats);
@@ -224,13 +202,11 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
         }
     }
 
-    // Patched only now: the indices are into the table that decoding just filled.
     for (0..mat_count) |mi| {
         mats[mi].albedo_texture_index = albedo_idx[mi];
         mats[mi].normal_map_texture_index = normal_idx[mi];
     }
 
-    // -- meshes ---------------------------------------------------------------
     const mesh_count = scene.mNumMeshes;
     const meshes = gpa.alloc(c.ke_mesh_data, mesh_count) catch {
         gpa.free(mats);
@@ -241,8 +217,6 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     for (0..mesh_count) |si| {
         const am = scene.mMeshes[si];
         _ = converter.convertMesh(gpa, am, &meshes[si]);
-        // Out-of-range material references become -1 rather than indexing past
-        // the material array.
         meshes[si].material_index = if (am.*.mMaterialIndex < mat_count)
             @intCast(am.*.mMaterialIndex)
         else
@@ -269,8 +243,6 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     return model;
 }
 
-// -- vtable ------------------------------------------------------------------
-
 fn vtLoadModel(
     self_in: ?*c.ke_asset_loader,
     path: [*c]const u8,
@@ -296,8 +268,6 @@ fn vtFreeModel(self_in: ?*c.ke_asset_loader, data_in: ?*c.ke_model_data) callcon
     const data = data_in orelse return;
     const gpa = stateOf(self).gpa;
 
-    // The C records hold [*c] pointers; recast to plain many-item pointers so a
-    // slice can be rebuilt from the count that travels with each array.
     if (data.meshes) |raw| {
         const meshes: [*]c.ke_mesh_data = @ptrCast(raw);
         for (0..data.mesh_count) |i| converter.freeMesh(gpa, &meshes[i]);
@@ -315,11 +285,6 @@ fn vtFreeModel(self_in: ?*c.ke_asset_loader, data_in: ?*c.ke_model_data) callcon
     gpa.destroy(data);
 }
 
-// -- async -------------------------------------------------------------------
-
-// Program-lifetime errors for the async path: the completion callback may run
-// after the failing frame is gone, so the error it receives cannot point into
-// a thread-local slot.
 const oom_error = c.ke_error{
     .type = E.typeOf(.out_of_memory),
     .message = "out of memory preparing async model load",
@@ -396,14 +361,10 @@ fn vtDestroy(self_in: ?*c.ke_asset_loader) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     if (debug_heap) {
-        // Reports every model the host loaded and never freed, with the stack
-        // that allocated it, instead of letting the leak pass unremarked.
         if (s.heap.deinit() == .leak) log.warn(s.logger, "Asset loader destroyed with model memory still live");
     }
     state_heap.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_asset_loader_assimp_create(
     params_in: ?*const c.ke_asset_loader_assimp_params,
@@ -426,8 +387,6 @@ export fn ke_asset_loader_assimp_create(
         .heap = if (debug_heap) .init else {},
         .gpa = undefined,
     };
-    // Bound after the struct is in its final place: the tracking heap's
-    // interface holds a pointer back into the field it lives in.
     s.gpa = if (debug_heap) s.heap.allocator() else std.heap.smp_allocator;
 
     s.api.handle = s;

@@ -1,6 +1,3 @@
-// ke_world impl — default framework aggregator. Holds ecs+runtime+scene_tree
-// handed over by the host on create, and the component-apply registry the
-// scene loader consults.
 
 const std = @import("std");
 
@@ -15,9 +12,6 @@ const apply = @import("components_apply.zig");
 /// trades a little memory against a few early reallocs.
 const apply_initial_capacity: u32 = 16;
 
-// A tiny linear array of (cid, fn) pairs. The scene loader is the only consumer
-// today and lookups happen at scene-load time, not per frame, so a linear scan
-// over the typical 6-20 entries is fine. Past ~64 this wants a hash.
 const ApplyEntry = struct {
     cid: c.ke_component_id,
     fn_ptr: c.ke_component_apply_fn,
@@ -39,7 +33,6 @@ const State = struct {
     apply_capacity: u32,
 };
 
-// State and vtable live in one allocation, so freeing the state frees both.
 const Block = struct {
     state: State,
     world: c.ke_world,
@@ -94,8 +87,6 @@ fn entryFor(s: *State, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) ?*
         };
         if (s.apply_registry) |old| {
             @memcpy(new_buf[0..s.apply_count], old[0..s.apply_count]);
-            // Released at the capacity it was allocated with, which the state
-            // still holds until the new one is published below.
             heap.gpa.free(old[0..s.apply_capacity]);
         }
         s.apply_registry = new_buf.ptr;
@@ -185,9 +176,6 @@ fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     if (s.apply_registry) |reg| heap.gpa.free(reg[0..s.apply_capacity]);
-    // ecs, runtime and scene_tree are borrowed: whoever created them destroys
-    // them after world->destroy(). The state sits at the head of the block, so
-    // freeing it releases the vtable too.
     heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
 }
 
@@ -252,12 +240,6 @@ export fn ke_world_create(
     world.register_component_apply = worldRegisterComponentApply;
     world.get_component_apply = worldGetComponentApply;
 
-    // Register the framework's own component vocabulary — spatial's transform
-    // and the world transform derived from it (framework's to own, since
-    // scene_tree owns the propagation between them). Every other domain (render's camera/mesh/lights, physics's
-    // bodies, ...) registers its own cid + apply callback against this world
-    // from its own plugin, via register_component_apply below — the framework
-    // plugin has no compile-time knowledge of any other domain's components.
     const e = params.ecs.?;
     registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component),
         apply.ke_framework_apply_transform,
@@ -265,9 +247,6 @@ export fn ke_world_create(
     registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component),
         apply.ke_framework_apply_transform2d,
         &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len);
-    // No fields and no apply: the hierarchy is its only writer, so a scene block
-    // naming it has nothing to set. Registering it here is what fixes its size
-    // once, before any consumer can register the name against a different one.
     registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component),
         null, null, 0);
 

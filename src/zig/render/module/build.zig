@@ -1,12 +1,5 @@
 const std = @import("std");
 
-// Build the ke_render_module shared library (Zig 0.16 API).
-// The optional "batteries included" composition: it instantiates a render
-// service plus the standard set of passes and wires them together. A host that
-// wants a different set skips this library entirely and instantiates the
-// service and the passes it wants directly — which is why the service links
-// none of them and nothing here is reachable from the service side.
-
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});

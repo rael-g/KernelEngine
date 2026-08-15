@@ -2,19 +2,10 @@ const rc = @import("render_service.zig");
 const c = rc.c;
 const gpa = rc.gpa;
 
-// Pass-recording surface: opens/closes a ke_render_pass_ctx, the render-pass
-// begin (color/depth attachment resolution from named-resource writes), and
-// the compute-pass recording proxy. wgpu-native cannot record a compute pass
-// concurrently with a render pass (deadlock), so begin_compute hands back a
-// proxy that appends commands into a per-slot ComputeRecord instead of a live
-// device pass; end_frame (frame_lifecycle.zig) replays it single-threaded.
-
 pub fn beginPass(self: [*c]c.ke_render_service, sys: ?*c.ke_system_ctx, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     _ = sys;
     const st = rc.coreOf(self);
     const ps = gpa.create(rc.PassState) catch return null;
-    // Use this pass's pre-created encoder (made serially in begin_frame) so the
-    // non-thread-safe create_command_encoder never runs on parallel pass threads.
     const slot = io.*.cmd_slot;
     const enc = if (slot < rc.NUM_PRECREATED_ENCODERS) st.cmd_encoders[slot] else st.device.create_command_encoder.?(st.device);
     ps.* = .{
@@ -43,11 +34,6 @@ pub fn beginPass(self: [*c]c.ke_render_service, sys: ?*c.ke_system_ctx, io: [*c]
 pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
     const st = rc.coreOf(self);
     const ps = rc.passOf(ctx);
-    // Park the encoder in this pass's slot; end_frame finishes it single-threaded.
-    // The encoder outlives this call (it is NOT destroyed here). Distinct slots →
-    // no race with a parallel pass. A compute pass recorded nothing into the encoder
-    // (its commands were accumulated in compute_records[slot]); cmd_valid stays false
-    // so end_frame replays the compute record into this slot's encoder instead.
     const slot = ps.io.cmd_slot;
     if (slot < rc.MAX_CMD_BUFFERS) {
         st.cmd_encoders[slot] = ps.encoder;
@@ -76,15 +62,6 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     while (i < ps.io.writes_count) : (i += 1) {
         const r = ps.core.find(ps.io.writes[i]) orelse continue;
         if (rc.isDepthFormat(r.format)) {
-            // io.load also governs depth: a pass that composites onto existing
-            // color content (transparent-forward onto "hdr") tests against the
-            // opaque depth someone else already wrote — it loads rather than
-            // clears. depth_read_only stays false either way: that render-pass
-            // flag is for sampling the SAME depth texture as a bound resource
-            // while it's also attached (skybox's texel-fetch case), which this
-            // pass doesn't do — the pipeline's depth_write_enabled=0 is what
-            // actually prevents this pass from modifying the buffer it tests
-            // against; the attachment's store_op is a harmless no-op write.
             depth = if (ps.io.load != 0) .{
                 .view = r.view,
                 .depth_load_op = c.KE_GPU_LOAD_OP_LOAD,
@@ -106,8 +83,6 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
             };
             has_depth = true;
         } else if (color_count < rc.MAX_COLOR_ATTACH) {
-            // Use per-resource clear when alpha != 0 (explicit override); otherwise
-            // fall back to the core's global scene clear color.
             const cv: [4]f32 = if (r.clear_value[3] != 0.0)
                 r.clear_value
             else
@@ -130,10 +105,6 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     return ps.encoder.begin_render_pass.?(ps.encoder, &params);
 }
 
-// Opens compute recording. Instead of a live device compute pass (recording one
-// concurrently with a render pass deadlocks on wgpu-native), it hands back a proxy
-// that appends the commands to this slot's compute_records; end_frame replays them
-// single-threaded. The pass body uses the same ke_gpu_compute_pass interface.
 fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_compute_pass {
     const ps = rc.passOf(self);
     ps.is_compute = true;

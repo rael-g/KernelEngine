@@ -1,8 +1,3 @@
-// What the generated ke_component_field table in
-// kernel_engine/spatial/component_fields.h cannot express for "transform", the
-// only component the framework itself owns. Position, rotation and scale are
-// plain fields the table describes and the loader applies before this runs; two
-// keys are left, and neither is a value written at an offset.
 
 const std = @import("std");
 
@@ -26,8 +21,6 @@ fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     return true;
 }
 
-// Euler ZYX intrinsic, degrees in -> quaternion. Matches C# SceneLoader's
-// CreateFromYawPitchRoll(yaw=y, pitch=x, roll=z).
 fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     const k = pi / 180.0 * 0.5;
     const x = dx * k;

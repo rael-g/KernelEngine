@@ -1,14 +1,6 @@
 const std = @import("std");
 
-// Build the ke_scheduler_enki shared library (Zig 0.16 API) — the enkiTS-backed
-// task scheduler. Uses enkiTS's C API, so no C++ of our own; enkiTS itself is a
-// C++ static library, which is why the C++ runtime is linked in. No ke_common
-// LINK — the common headers are @cImport'd for the ke_error layout only and
-// errors translate at the export seam via the shared Zig kerror utility.
-
 pub fn build(b: *std.Build) void {
-    // Plain native target: pinning the abi would make Zig treat this as a cross
-    // build and stop searching the host paths where the C++ runtime lives.
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -23,8 +15,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .link_libc = true,
-        // enkiTS is built against Zig's bundled libc++; this .so must embed
-        // and export the same runtime for downstream consumers.
         .link_libcpp = true,
     });
     inline for (.{ ke_common, ke_scheduler, enki_include }) |inc| {

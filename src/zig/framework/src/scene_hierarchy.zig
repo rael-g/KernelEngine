@@ -1,7 +1,3 @@
-// ke_scene_hierarchy impl. Turns the intrusive parent/child links into a flat
-// parents-before-children order, then walks that order to resolve world
-// matrices — both as runtime systems, so the scheduler sees the component
-// access instead of the work happening behind its back.
 
 const std = @import("std");
 
@@ -18,12 +14,7 @@ const State = struct {
     world_transform_cid: c.ke_component_id,
     hierarchy_cid: c.ke_component_id,
 
-    // Entities in an order where a parent always precedes its children, rebuilt
-    // every tick. Capacity is retained across ticks so a steady-state scene stops
-    // allocating after its first frame.
     order: std.ArrayList(c.ke_entity) = .empty,
-    // Explicit DFS stack: an intrusive tree has no depth bound, and recursing it
-    // would make scene depth a stack-overflow risk with no ke_result to return.
     stack: std.ArrayList(c.ke_entity) = .empty,
 
     queries: [1]c.ke_query_decl = undefined,
@@ -52,8 +43,6 @@ fn identityMatrix() c.ke_mat4 {
     return m;
 }
 
-// -- flatten -----------------------------------------------------------------
-
 /// Appends `root` and its whole subtree, parents first. Iterative: children are
 /// pushed onto the stack and popped later, which reproduces a depth-first order
 /// without the call depth.
@@ -77,8 +66,6 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
     if (segs == null) return;
 
-    // Only roots are seeded; every other entity is reached through its parent,
-    // so an entity whose parent link is stale cannot be visited twice.
     for (0..segc) |si| {
         const seg = segs[si];
         const hs: [*]const c.ke_hierarchy_component = @ptrCast(@alignCast(seg.columns[0].?));
@@ -87,8 +74,6 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
         }
     }
 }
-
-// -- propagate ---------------------------------------------------------------
 
 /// Flattening and propagation are one system on purpose. Split in two they would
 /// declare no conflicting access — a reader of hierarchy and a writer of
@@ -102,8 +87,6 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.
 
     const identity = identityMatrix();
 
-    // Parents-before-children means a parent's world matrix is already final by
-    // the time its children are read, so one forward pass is enough.
     for (s.order.items) |entity| {
         const w = worldTransformOf(s, entity) orelse continue;
         const h = hierarchyOf(s, entity);
@@ -115,9 +98,6 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.
             break :blk &pw.matrix;
         };
 
-        // A node carries one authored pose, in the dimensions its type declares,
-        // or none at all — a node that is only somewhere in the tree inherits its
-        // parent's place untouched.
         var local = identity;
         if (transformOf(s, entity)) |t| {
             mat4.fromTransform(&local, &t.position, &t.rotation, &t.scale);
@@ -128,8 +108,6 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.
     }
 }
 
-// -- teardown ----------------------------------------------------------------
-
 fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
     const self = self_in orelse return;
     const s: *State = @ptrCast(@alignCast(self));
@@ -137,8 +115,6 @@ fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
     s.stack.deinit(heap.gpa);
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_scene_hierarchy_create(
     runtime_in: ?*c.ke_runtime,
@@ -155,9 +131,6 @@ export fn ke_scene_hierarchy_create(
         return empty;
     };
 
-    // Looked up, never registered: the cids must be the ones a scene_tree already
-    // owns, or these systems would maintain a second, unrelated set of components
-    // while the real scene graph silently stopped being propagated.
     var transform_meta: c.ke_component_meta = undefined;
     var transform2d_meta: c.ke_component_meta = undefined;
     var world_transform_meta: c.ke_component_meta = undefined;
@@ -194,10 +167,6 @@ export fn ke_scene_hierarchy_create(
         .{ .cid = s.world_transform_cid, .access = c.KE_ACCESS_WRITE },
     };
 
-    // POST_UPDATE: after gameplay has moved things, before the render phase reads
-    // world matrices. Declaring the world-transform write is what makes the
-    // scheduler order this against anything else touching them, rather than the
-    // ordering resting on nobody else happening to be in this phase.
     var propagate = std.mem.zeroes(c.ke_runtime_system_params);
     propagate.name = "scene.propagate_transforms";
     propagate.phase = c.KE_PHASE_POST_UPDATE;

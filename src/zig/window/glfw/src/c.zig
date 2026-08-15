@@ -1,9 +1,3 @@
-// Single @cImport for the plugin — separate blocks would produce distinct Zig
-// types for the same C struct, so anything crossing between these files would
-// stop typechecking.
-//
-// The native-handle accessors live behind per-platform GLFW_EXPOSE_NATIVE_*
-// defines; they must be set before glfw3native.h is pulled in.
 
 const builtin = @import("builtin");
 

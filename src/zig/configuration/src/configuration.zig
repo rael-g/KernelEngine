@@ -1,17 +1,6 @@
-// ke_configuration impl (Zig) — kernel primitive. Format-agnostic typed
-// settings store behind the C ABI in kernel_engine/configuration/configuration.h.
-//
-// Scale note: a configuration store holds tens of entries, not thousands, and is
-// read at module init then written rarely (a settings menu). A growable list with
-// linear search is the right shape — simpler and easier to keep correct than a
-// hashed table for this workload.
 
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const ke = @cImport({
     @cInclude("kernel_engine/common/error.h");
@@ -21,8 +10,6 @@ const ke = @cImport({
 const gpa = @import("heap.zig").gpa;
 
 const NONE: u32 = std.math.maxInt(u32); // == KE_CONFIGURATION_SUBSCRIPTION_NONE
-
-// ── Value + storage ─────────────────────────────────────────────────────────
 
 const Value = union(enum) {
     int: i64,
@@ -56,13 +43,9 @@ fn state(self: [*c]ke.ke_configuration) *State {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
-// ── ke_error translation (ABI seam only) ────────────────────────────────────
-
 fn setErr(out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]const u8, src: std.builtin.SourceLocation) void {
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
-
-// ── Store helpers ───────────────────────────────────────────────────────────
 
 fn findEntry(st: *State, section: []const u8, key: []const u8) ?*Entry {
     for (st.entries.items) |*e| {
@@ -78,9 +61,6 @@ fn freeStringPayload(e: *Entry) void {
     }
 }
 
-// Locates the (section, key) entry or appends a fresh one ready to receive a
-// value. Any prior string payload of an existing entry is freed so the union can
-// be reassigned. Returns null (and sets out_error) only on allocation failure.
 fn upsert(st: *State, section: []const u8, key: []const u8, out_error: ?*?*ke.ke_error) ?*Entry {
     if (findEntry(st, section, key)) |e| {
         freeStringPayload(e);
@@ -105,7 +85,6 @@ fn upsert(st: *State, section: []const u8, key: []const u8, out_error: ?*?*ke.ke
     return &st.entries.items[st.entries.items.len - 1];
 }
 
-// Fires every active subscription whose section matches. Called after a write.
 fn notify(st: *State, section_c: [*c]const u8) void {
     const section = std.mem.span(section_c);
     for (st.subs.items) |*s| {
@@ -114,8 +93,6 @@ fn notify(st: *State, section_c: [*c]const u8) void {
         }
     }
 }
-
-// ── vtable: typed reads ─────────────────────────────────────────────────────
 
 fn getInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
     if (section == null or key == null) return fallback;
@@ -161,8 +138,6 @@ fn getString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
     return fallback;
 }
 
-// ── vtable: typed writes ────────────────────────────────────────────────────
-
 fn setInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (self == null or section == null or key == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
@@ -205,8 +180,6 @@ fn setString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
         return false;
     }
     const st = state(self);
-    // Copy the new value BEFORE upsert frees any prior payload, so a failed dup
-    // never leaves the entry pointing at freed memory.
     const copy = gpa.dupeZ(u8, std.mem.span(value)) catch {
         setErr(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "configuration: string value allocation failed", @src());
         return false;
@@ -220,15 +193,11 @@ fn setString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
     return true;
 }
 
-// ── vtable: subscriptions ───────────────────────────────────────────────────
-
 fn subscribe(self: [*c]ke.ke_configuration, section: [*c]const u8, cb: ke.ke_configuration_change_func, ctx: ?*anyopaque) callconv(.c) ke.ke_configuration_subscription {
     if (self == null or section == null or cb == null) return NONE;
     const st = state(self);
     const sec = std.mem.span(section);
 
-    // Reuse an inactive slot before growing. Its stale section string is freed
-    // here (not at unsubscribe) to keep unsubscribe a pure flag flip.
     var reuse: ?*Sub = null;
     for (st.subs.items) |*s| {
         if (!s.active) {
@@ -258,16 +227,12 @@ fn unsubscribe(self: [*c]ke.ke_configuration, sub: ke.ke_configuration_subscript
     const st = state(self);
     for (st.subs.items) |*s| {
         if (s.active and s.id == sub) {
-            // Leave section allocated; freed on slot reuse or destroy. This keeps
-            // unsubscribe a pure flag flip and avoids a double free on reuse.
             s.active = false;
             s.cb = null;
             return;
         }
     }
 }
-
-// ── vtable: teardown ────────────────────────────────────────────────────────
 
 fn destroy(self: [*c]ke.ke_configuration) callconv(.c) void {
     if (self == null) return;
@@ -282,8 +247,6 @@ fn destroy(self: [*c]ke.ke_configuration) callconv(.c) void {
     st.subs.deinit(gpa);
     gpa.destroy(st);
 }
-
-// ── Factory ─────────────────────────────────────────────────────────────────
 
 export fn ke_configuration_create(out_error: ?*?*ke.ke_error) ke.ke_configuration_handle {
     const st = gpa.create(State) catch {
@@ -310,8 +273,6 @@ export fn ke_configuration_create(out_error: ?*?*ke.ke_error) ke.ke_configuratio
     };
     return .{ .ref = &st.api, .destroy = destroy };
 }
-
-// ── Native tests ────────────────────────────────────────────────────────────
 
 const TestProbe = struct {
     calls: u32 = 0,

@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
@@ -11,34 +7,16 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-// Shadow-depth pass — a standalone plugin: talks to the rest of the render
-// pipeline only through the borrowed ke_render_service/ke_runtime handles passed
-// to create() — it never sees another pass's private struct. It publishes its
-// outputs ("shadow_map" view, "shadow_lvp" buffer) through the named-resource
-// table; deferred/forward resolve them by name. When `enabled` is false,
-// create() still publishes the tiny "shadow_lvp" uniform (a shading shader
-// samples the shadow hook unconditionally; a neutral-default resource makes it
-// a no-op) but none of the expensive resources (shadow_map/shadow_depth render
-// targets, pipeline, per-draw buffers, the "render.shadow" system) exist.
-
 const SHADOW_RES = 1024; // shadow map resolution
 
-// Duplicated from render_module.zig rather than shared, matching the
-// decoupling precedent already established in cluster_feature.slang (its own
-// header comment: "Duplicated rather than shared via import to keep this
-// feature decoupled from the pass file").
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
-// Per-object model for the shadow pass (set 1).
 const ShadowObj = extern struct { model: [16]f32 };
-
 
 const ShadowModule = struct {
     enabled: bool = false,
 
-    // Borrowed cross-cutting refs, captured once at setup so the system body
-    // never reaches into the parent ModuleState.
     core: *c.ke_render_service = undefined,
     ndc: c.ke_ndc_convention = undefined,
     mesh_cid: c.ke_component_id = undefined,
@@ -47,9 +25,6 @@ const ShadowModule = struct {
     frame_cid: c.ke_component_id = undefined,
 
     view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE, // the shadow map's view — read by the forward's set-0 binding 3/5
-    // Re-queried via core.get_or_create_pipeline every record() call — see
-    // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade.
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE, // set 0 (this pass) AND read by the forward's binding 4
     lvp_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
@@ -59,14 +34,9 @@ const ShadowModule = struct {
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all. Index order here is the query_index the body passes to it.
     queries: [2]c.ke_query_decl = undefined, // [directional_light], [mesh, transform]
 };
 
-// Orthographic light view-proj; the light source sits opposite the travel
-// direction. Frustum extent 20, far plane 50.
 fn lightViewProj(ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
     const ldir = zm.normalize3(ldir_in);
     const eye3 = ldir * zm.f32x4s(-25.0);
@@ -86,9 +56,6 @@ fn makeOrtho(ndc: c.ke_ndc_convention, w: f32, h: f32, near: f32, far: f32) zm.M
     return p;
 }
 
-// View 0 = [directional_light]; the first match is the active sun. Null when
-// the scene declares no directional light — the caller skips the pass rather
-// than shadowing from an invented direction.
 fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
@@ -105,9 +72,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const sh = moduleOf(user);
     const core = sh.core;
 
-    // No directional light means there is no directional shadow to render;
-    // the map keeps whatever the previous frame left and consumers gate on
-    // the same absence.
     const light_dir = lightDirOf(ctx) orelse return;
 
     const lvp = lightViewProj(sh.ndc, light_dir);
@@ -122,9 +86,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sh.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, sh.lvp_bg, null, 0);
 
-    // View 1 = [mesh, transform], columns aligned. Per-draw uniform writes are
-    // deferred by the core and replayed before the submit, so uploading inside
-    // the draw loop still lands ahead of the draws that read it.
     var draw_idx: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 1, &segc);
@@ -155,10 +116,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.end_pass.?(core, pc);
 }
 
-// Allocates lvp_uniform unconditionally (tiny, 64 bytes — shadow_feature.slang's
-// neutral-default hook resource) and, only when `enabled`, the expensive
-// resources: the shadow_map/shadow_depth render targets, the shadow pipeline,
-// and the per-draw uniform ring.
 fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, enabled: bool, mesh_cid: c.ke_component_id,
          world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
@@ -173,9 +130,6 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
     if (sh.lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    // Published under a name (not a *ShadowModule pointer) so any pass can bind
-    // it without knowing this module's private struct — the same contract
-    // "shadow_map" already uses for the shadow view below.
     _ = core.*.import_buffer.?(core, "shadow_lvp", sh.lvp_uniform, 64, null);
 
     if (!enabled) return true;
@@ -203,8 +157,6 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, null);
     sh.view = core.*.resource_view.?(core, "shadow_map");
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
     const sh_vs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sh_vs == c.KE_GPU_INVALID_HANDLE) return false;
     const sh_fs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
@@ -266,8 +218,6 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
 
-    // Data the body reads through resolved views. Index order is the
-    // query_index passed to ke_system_ctx_view.
     const rd = c.KE_ACCESS_READ;
     sh.queries = std.mem.zeroes([2]c.ke_query_decl);
     sh.queries[0].terms[0] = .{ .cid = light_cid, .access = rd };

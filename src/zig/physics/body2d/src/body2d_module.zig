@@ -40,9 +40,6 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
         while (i < segs[s].count) : (i += 1) {
             const b = &bodies[i];
             if (b.body == c.KE_BODY_2D_INVALID) {
-                // The scene authors placement on the transform, so the body starts
-                // there rather than at the component's zero — otherwise every node
-                // that never assigns Position would spawn at the origin.
                 if (b.position.x == 0 and b.position.y == 0) {
                     b.position = tcs0[i].position;
                     b.angle = tcs0[i].rotation;
@@ -58,10 +55,6 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
                 continue;
             }
 
-            // The write-back below leaves the component equal to the body, so any
-            // difference seen here is a script's own assignment since the last tick.
-            // Comparing is what lets Position/Velocity be plain properties instead of
-            // the component being read-only output.
             var st: c.ke_body_state_2d = undefined;
             p.get_body_state.?(p, b.body, &st);
             if (b.position.x != st.x or b.position.y != st.y or b.angle != st.angle)

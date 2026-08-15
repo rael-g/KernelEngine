@@ -1,12 +1,3 @@
-// What the generated ke_component_field tables in
-// kernel_engine/render/component_fields.h cannot express for render's scene-file
-// component vocabulary. Every plain field — name, offset, type, coercion — is
-// described by the table and applied by the framework before these run; what is
-// left here is the handful of keys whose meaning is not "write this value at
-// this offset".
-//
-// A callback registered for a component runs after that component's table, so
-// these only ever correct or add.
 
 const std = @import("std");
 

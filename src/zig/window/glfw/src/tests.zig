@@ -1,8 +1,3 @@
-// Tests for the backend-agnostic window core, driven through a fake device.
-//
-// These replace the gmock-based tests the C++ implementation had: the device
-// seam is a Zig vtable now, so the substitute lives here rather than in the C++
-// suite, which can only reach the plugin's C ABI.
 
 const std = @import("std");
 const testing = std.testing;
@@ -10,8 +5,6 @@ const testing = std.testing;
 const c = @import("c.zig").c;
 const device = @import("device.zig");
 const core_mod = @import("core.zig");
-
-// -- fake device -------------------------------------------------------------
 
 const FakeDevice = struct {
     initialize_result: bool = true,
@@ -78,7 +71,6 @@ const FakeDevice = struct {
                 return from(ptr).native_handle;
             }
         }.f,
-        // The fake is stack-owned by each test, so teardown only records.
         .destroy = struct {
             fn f(ptr: *anyopaque) void {
                 from(ptr).destroy_calls += 1;
@@ -86,8 +78,6 @@ const FakeDevice = struct {
         }.f,
     };
 };
-
-// -- fake input --------------------------------------------------------------
 
 const InputSpy = struct {
     var keys: [8]struct { code: i32, action: c_int } = undefined;
@@ -142,8 +132,6 @@ fn makeCore(dev: *FakeDevice, input: ?*c.ke_input) *core_mod.Core {
 fn destroyCore(core: *core_mod.Core) void {
     core_mod.Core.destroyApi(core.toApi());
 }
-
-// -- delegation --------------------------------------------------------------
 
 test "initialize forwards to the device and is idempotent" {
     var dev = FakeDevice{};
@@ -208,8 +196,6 @@ test "shutdown reaches the device" {
     try testing.expect(dev.shutdown_calls >= 1);
 }
 
-// -- null-self handling ------------------------------------------------------
-
 test "the C ABI slots tolerate a null self" {
     var dev = FakeDevice{};
     const core = makeCore(&dev, null);
@@ -223,8 +209,6 @@ test "the C ABI slots tolerate a null self" {
     try testing.expect(!api.on_shutdown.?(null, null));
     core_mod.Core.destroyApi(null); // must not crash
 }
-
-// -- event translation -------------------------------------------------------
 
 test "key events reach ke_input with the right action" {
     InputSpy.reset();

@@ -1,4 +1,3 @@
-// Single shared @cImport for this plugin's Zig files.
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/ecs/ecs.h");

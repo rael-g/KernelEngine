@@ -1,15 +1,3 @@
-// "render.label.resolve" — bakes the font a label names and registers it with
-// the overlay pass.
-//
-// A label used to receive a font handle, which meant the only way to have one
-// was to bake the font in the host's own language and hand the value over: the
-// C# Font class did it, and no scene and no other language could. Naming the
-// file in the component moves the whole path — decode, atlas upload, glyph table
-// — behind a system every host gets for free.
-//
-// Lives here rather than in the ui plugin because this is where the pieces meet:
-// the asset resolver the host supplied, the render service that owns textures,
-// and the overlay pass's own load_font. The ui plugin knows none of the first.
 
 const cimport = @import("cimport.zig");
 const c = cimport.c;
@@ -61,8 +49,6 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             const l: *c.ke_label_component = @ptrCast(&labels[i]);
-            // A label handed a handle directly keeps it: the bake is for the ones
-            // that named a file, and load_font dedups the rest by key anyway.
             if (l.font[0] == 0 or l.font_handle.bits != c.KE_HANDLE_NONE) continue;
             l.font_handle = bake(st, l);
         }

@@ -1,11 +1,3 @@
-// Probe DLL *without* the mingw-entry-point workaround — i.e. what a plugin
-// looks like if someone writes one and forgets, or if the workaround is
-// removed. Identical to probe_dll_fixed.zig except for the missing
-// `_DllMainCRTStartup` re-export, so the pair isolates exactly that one line.
-//
-// This is the canary half: dll_crt_init_test.zig asserts this DLL's C++ global
-// constructors do NOT run. When that assertion starts failing, Zig has fixed
-// the underlying defect and the workaround can be retired.
 
 const std = @import("std");
 

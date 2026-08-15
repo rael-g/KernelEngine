@@ -1,15 +1,6 @@
 const std = @import("std");
 
-// Build the ke_text_stb_truetype shared library (Zig 0.16 API).
-// A standalone plugin: bakes a glyph atlas via the vendored stb_truetype.h
-// (vcpkg). Allocates through Zig's own allocator (std.heap.c_allocator),
-// same choice as ke_asset_stb_image.
-
 pub fn build(b: *std.Build) void {
-    // GNU ABI (Zig's Windows default), matching every other Zig plugin. Safe
-    // because nothing MSVC-built is linked into this module: the only C is
-    // stb_truetype's header-only implementation, which Zig compiles itself;
-    // ke_common is consumed across a plain C-ABI DLL boundary (ABI-neutral).
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
 
@@ -30,11 +21,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_text, ke_self, stb_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    // stb_truetype is header-only: this is the one translation unit that
-    // compiles the implementation. @cImport only ever sees the declarations —
-    // translate-c cannot lower stb's internals.
-    // -fno-sanitize=undefined: stb does pointer arithmetic the Debug UBSan flags
-    // as UB; it is not our code to fix.
     mod.addCSourceFile(.{ .file = b.path("src/stb_font_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);

@@ -1,15 +1,5 @@
 const std = @import("std");
 
-// Build the ke_configuration shared library (Zig 0.16 API).
-//
-// Through CMake the include/lib paths are passed automatically. For standalone
-// builds (and `zig build test`):
-//
-//   zig build \
-//     -Dke-common-include=/path/to/src/zig/common/include \
-//     -Dke-config-include=/path/to/src/c/configuration \
-//     -Dke-lib-dir=/path/to/dir/with/ke_common/import/lib
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -18,7 +8,6 @@ pub fn build(b: *std.Build) void {
     const ke_config = b.option([]const u8, "ke-config-include", "Path to kernel_engine/configuration include dir") orelse @panic("-Dke-config-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "Dir containing ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
-    // ── Shared library ─────────────────────────────────────────────────────
     const mod = b.createModule(.{
         .root_source_file = b.path("src/configuration.zig"),
         .target = target,
@@ -42,7 +31,6 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
-    // ── Tests ──────────────────────────────────────────────────────────────
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/configuration.zig"),
         .target = target,

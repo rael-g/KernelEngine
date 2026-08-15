@@ -1,10 +1,5 @@
 const std = @import("std");
 
-// Build the ke_resource_cache_default shared library (Zig 0.16 API) — a kernel
-// built-in (generic refcount + path-keyed dedup cache). Pure logic: no
-// third-party C, no vcpkg lib. Allocates through Zig's own allocator;
-// ke_common is consumed across a plain C-ABI DLL boundary (ABI-neutral).
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});

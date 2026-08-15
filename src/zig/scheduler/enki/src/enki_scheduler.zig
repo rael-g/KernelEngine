@@ -1,19 +1,8 @@
-// ke_scheduler backed by enkiTS, through enkiTS's C API.
-//
-// enkiTS carries per-task state as a void* argument rather than by subclassing,
-// so each dispatch allocates a Task that owns both the enkiTS handle and the
-// callback it must run. The ke_task* handed back to the caller is that Task.
 
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
@@ -66,14 +55,10 @@ fn untag(task: *c.ke_task) struct { task: *Task, pinned: bool } {
     };
 }
 
-// -- enkiTS entry points -----------------------------------------------------
-
 fn taskSetExecute(start: u32, end: u32, threadnum: u32, args: ?*anyopaque) callconv(.c) void {
     _ = start;
     _ = end;
     _ = threadnum;
-    // The engine's task contract is a single call, not a partitioned range, so
-    // the set size stays 1 and the range bounds are ignored.
     const task: *Task = @ptrCast(@alignCast(args orelse return));
     task.run();
 }
@@ -101,8 +86,6 @@ fn allocTask(
     };
     return task;
 }
-
-// -- vtable ------------------------------------------------------------------
 
 fn dispatch(
     self_in: ?*c.ke_scheduler,
@@ -133,8 +116,6 @@ fn dispatchOnComplete(
     task.handle = set;
     task.tagged_self = tag(task, false);
 
-    // The worker may run and complete the task before this call returns, so
-    // everything it reads must already be in place.
     c.enkiAddTaskSetArgs(ets, set, task, 1);
     return task.tagged_self;
 }
@@ -179,8 +160,6 @@ fn wait(self_in: ?*c.ke_scheduler, task_in: ?*c.ke_task) callconv(.c) void {
         c.enkiWaitForTaskSet(ets, set);
         c.enkiDeleteTaskSet(ets, set);
     }
-    // wait() is the task's teardown point, matching the contract callers rely
-    // on: the handle is dead once it returns.
     heap.gpa.destroy(t.task);
 }
 
@@ -194,8 +173,6 @@ fn getNumWorkers(self_in: ?*c.ke_scheduler) callconv(.c) u32 {
     const self = self_in orelse return 0;
     if (self.handle == null) return 0;
     const ets = stateOf(self).ets orelse return 0;
-    // enkiTS counts the calling thread (id 0) among its task threads; workers
-    // are 1..N-1.
     const total = c.enkiGetNumTaskThreads(ets);
     return if (total > 0) total - 1 else 0;
 }
@@ -211,8 +188,6 @@ fn destroy(self_in: ?*c.ke_scheduler) callconv(.c) void {
     }
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle {
     const null_handle = std.mem.zeroes(c.ke_scheduler_handle);

@@ -1,18 +1,3 @@
-// Applies a scene block to component memory by reading the component's
-// ke_component_field table, instead of running a callback written by hand for
-// that one component. The table is generated from the header that declares the
-// struct, so a component gains a scene-file surface the moment the header
-// describes it, in every language at once.
-//
-// Conventions, unchanged from the callbacks this replaces:
-//   - Key matching is case-sensitive and exact.
-//   - A key the table does not describe is ignored, as is a value whose type
-//     cannot be coerced into the field: a scene file is allowed to carry keys
-//     this build does not understand.
-//
-// What a table cannot express stays in a callback the domain registers for the
-// same component, which runs after this: a unit conversion (degrees to radians),
-// an enum spelled as a string, a field whose meaning depends on another.
 
 const std = @import("std");
 
@@ -119,8 +104,6 @@ fn writeField(base: [*]u8, field: *const c.ke_component_field, v: *const c.ke_va
             const val = asVec4(v) orelse return;
             writeBytes(base, field, std.mem.asBytes(&val));
         },
-        // A char array, always left NUL-terminated: the field is read back as a
-        // C string, so a value filling it exactly still has to lose its last byte.
         c.KE_VARIANT_STRING => {
             if (v.type != c.KE_VARIANT_STRING) return;
             const s = v.unnamed_0.s orelse return;
@@ -156,9 +139,6 @@ pub fn apply(
         for (fields[0..field_count]) |*field| {
             if (!keyIs(entry.key, field.name)) continue;
             writeField(base, field, &entry.value);
-            // Claimed even when the value could not be coerced: the description
-            // does know this key, so reporting it as unknown would name the wrong
-            // problem.
             entry.consumed = true;
             break;
         }
@@ -183,8 +163,6 @@ pub fn seedDefaults(
         writeField(base, field, &field.default_value);
     }
 }
-
-// -- tests -------------------------------------------------------------------
 
 const testing = std.testing;
 
@@ -234,7 +212,6 @@ test "a field the header gives a default starts there, not at zero" {
 
     try testing.expectEqual(@as(f32, 1.0), p.amount);
     try testing.expectEqual(@as(f32, 1.0), p.tint.w);
-    // Declared without one: zero stands, and nothing invented a default for it.
     try testing.expectEqual(@as(i32, 0), p.count);
 }
 
@@ -247,8 +224,6 @@ test "an authored value overrides the default it was seeded with" {
     apply(&p, &one, one.len, &seeded_fields, seeded_fields.len);
 
     try testing.expectEqual(@as(f32, 0.25), p.amount);
-    // And a field the block never mentions keeps the default rather than being
-    // reset by the block's arrival.
     try testing.expectEqual(@as(f32, 1.0), p.tint.w);
 }
 

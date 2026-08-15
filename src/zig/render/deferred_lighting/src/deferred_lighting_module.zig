@@ -1,35 +1,12 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-// Deferred lighting pass — the opaque path's second half. Fullscreen triangle
-// that reads the G-buffer (gbuffer plugin wrote it) + depth, reconstructs world
-// position, and shades with the shared hooks (shadow/cluster/ibl + ke.pbr).
-// Those are the same functions the forward pass calls: the shading library does
-// not care whether it runs inside a mesh fragment or a fullscreen dispatch.
-// Writes "hdr", which tonemap reads.
-//
-// Bind groups mirror what the shared feature shaders require:
-//   set 0: frame UBO (0) + shadow (4,5,6) + ibl (7,8)   — same layout as forward
-//   set 1: the 3 G-buffer targets + depth (texel-fetched, no sampler)
-//   set 2: empty (the features leave set 2 unused; the positional array needs it)
-//   set 3: cluster light lists — same as forward
-// Shadow's and cluster's outputs (LVP uniform, shadow view, light-list bind
-// group + layout) are looked up by name through the borrowed ke_render_service —
-// this plugin never holds a pointer to the shadow/cluster plugins. Owns the
-// env-cubemap tracking its IBL sampling needs (rebuilding set 0 when the
-// environment changes).
-
 const gpa = std.heap.c_allocator;
 
-// Matches deferred_lighting.slang's DeferredFrame (std140).
 const DeferredFrame = extern struct {
     camera_pos: [4]f32,
     light_dir: [4]f32,
@@ -40,7 +17,6 @@ const DeferredFrame = extern struct {
     view: [16]f32,
     inv_view_proj: [16]f32,
 };
-
 
 const DeferredLightingModule = struct {
     core: *c.ke_render_service = undefined,
@@ -55,9 +31,6 @@ const DeferredLightingModule = struct {
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    // Re-queried via core.get_or_create_pipeline every record() call — see
-    // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade.
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
     gbuf_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 1
@@ -71,13 +44,7 @@ const DeferredLightingModule = struct {
     reads: [6][*c]const u8 = undefined,
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
-    // 5 unconditional (hdr write; albedo/normal/emissive/depth read) + 1
-    // conditional (shadow_map) + 7 unconditional (cluster/camera/transform/
-    // light/ambient/skybox/frame) = 13 max.
     access: [13]c.ke_component_access = undefined,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all.
     queries: [4]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient]
     access_count: u32 = 0,
 };
@@ -96,7 +63,6 @@ fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
     return zm.lookToRh(eye, fwd, up);
 }
 
-// orthographic_size is the half-height of the view volume; width follows from aspect.
 fn makeProjection(ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
     var p = if (cam.orthographic != 0) ortho: {
         const h = cam.orthographic_size * 2.0;
@@ -129,9 +95,6 @@ inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-// Set 0 — frame UBO + shadow (4,5,6) + ibl (7,8). Same shape as forward's set 0
-// so the shared shadow_feature/ibl_feature bindings resolve. Rebuilt only when
-// the bound environment cubemap changes (rare — scene load).
 fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     const dev = dl.device;
     const core = dl.core;
@@ -140,10 +103,6 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE }); // black cube
     const smp = core.*.sampler.?(core);
 
-    // Shadow's outputs are looked up by name, not through a pointer to the
-    // shadow plugin — resource_view returns KE_GPU_INVALID_HANDLE when shadow
-    // is disabled (it never declares "shadow_map" in that case), which is the
-    // signal to fall back to the neutral white texture.
     const shadow_view_raw = core.*.resource_view.?(core, "shadow_map");
     const shadow_tex_view = if (shadow_view_raw != c.KE_GPU_INVALID_HANDLE) shadow_view_raw else white_view;
     const shadow_lvp_buf = core.*.resource_buffer.?(core, "shadow_lvp");
@@ -172,7 +131,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const core = dl.core;
     const dev = dl.device;
 
-    // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
 
@@ -197,8 +155,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const view_proj = zm.mul(view, proj);
     const inv_vp = zm.inverse(view_proj);
 
-    // Environment cubemap from the first skybox entity (default black otherwise);
-    // rebuild set 0 only when the bound environment changes. View 1 = [skybox].
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
@@ -210,11 +166,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         rebuildFrameBindGroup(dl);
     }
 
-    // Per-frame UBO: camera + directional light + ambient + matrices.
     var frame: DeferredFrame = .{
         .camera_pos = .{ cam_wt.matrix.m[12], cam_wt.matrix.m[13], cam_wt.matrix.m[14], 1.0 },
-        // Zero until a directional_light entity supplies the real values; the
-        // shader ignores these while shadow_params.z stays clear.
         .light_dir = .{ 0.0, 0.0, 0.0, 0.0 },
         .light_color = .{ 0.0, 0.0, 0.0, 0.0 },
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
@@ -226,8 +179,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     zm.storeMat(frame.view[0..], view);
     zm.storeMat(frame.inv_view_proj[0..], inv_vp);
 
-    // View 2 = [directional_light]; present → enable the directional term and
-    // seed the scene ambient from it.
     var li_segc: usize = 0;
     const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
@@ -237,7 +188,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         frame.ambient = .{ d.ambient.x, d.ambient.y, d.ambient.z, 0.0 };
         frame.shadow_params[2] = 1.0; // directional active
     }
-    // View 3 = [AmbientLight]; a standalone ambient overrides the directional's.
     var am_segc: usize = 0;
     const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
@@ -246,8 +196,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     core.*.upload.?(core, dl.frame_uniform, 0, &frame, @sizeOf(DeferredFrame));
 
-    // Set 1 — resolve this frame's G-buffer + depth views and rebuild (transient
-    // views can change on resize; same per-frame pattern tonemap uses for "hdr").
     const albedo_view = pc.*.read.?(pc, "gbuffer_albedo");
     const normal_view = pc.*.read.?(pc, "gbuffer_normal");
     const emissive_view = pc.*.read.?(pc, "gbuffer_emissive");
@@ -297,9 +245,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
 
     const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
-    // Set 0 layout — frame UBO (0) + shadow (4,5,6) + ibl (7,8). Bindings 1-3
-    // are unused by the deferred shader (it declares none), so they are omitted;
-    // gaps in binding numbers are allowed.
     const frame_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
         .{ .binding = 0, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 4, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
@@ -313,8 +258,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
         .entries = &frame_bgl_entries,
     });
 
-    // Set 1 layout — the 3 G-buffer targets (unfilterable-ish float, texel-fetched)
-    // + depth (unfilterable float). No sampler (Load only).
     const gbuf_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
         .{ .binding = 0, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
         .{ .binding = 1, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
@@ -326,7 +269,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
         .entries = &gbuf_bgl_entries,
     });
 
-    // Set 2 — empty (features use 0 and 3; the positional array needs 2 filled).
     dl.empty_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
         .entry_count = 0,
         .entries = null,
@@ -338,8 +280,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     }, out_error);
     if (dl.empty_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
     const vs = core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
     const fs = core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
@@ -379,9 +319,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     if (dl.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     rebuildFrameBindGroup(dl);
 
-    // Declare the HDR target (also declared by tonemap's reads; declare is
-    // idempotent-by-name via the ECS cid registration). The gbuffer targets +
-    // depth are declared by the gbuffer plugin (runs first).
     const hdr_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "hdr",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
@@ -390,16 +327,8 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
 
-    // Shadow's presence is read from the named-resource table, not a pointer
-    // to the shadow plugin: shadow only registers "shadow_map"'s cid when
-    // enabled (see ke_render_shadow_create), so an invalid cid here IS the
-    // "off" signal — no separate `enabled` flag needs to cross the plugin
-    // boundary.
     const shadow_map_cid = core.*.cid.?(core, "shadow_map");
     const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
-    // "light_clusters" (not "cluster_lights") is the scheduling ordering tag —
-    // cull WRITEs it, this pass READs it; the actual light data crosses
-    // through the "cluster_lights" bind group looked up separately below.
     const cluster_lights_cid = core.*.cid.?(core, "light_clusters");
 
     dl.writes = .{"hdr"};
@@ -407,7 +336,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.io = std.mem.zeroes(c.ke_render_pass_io);
     dl.io.writes = @ptrCast(&dl.writes);
     dl.io.writes_count = 1;
-    // reads: the gbuffer + depth always exist; shadow_map only when shadow is on.
     dl.io.reads = @ptrCast(&dl.reads);
     dl.io.reads_count = if (shadow_enabled) 6 else 5; // drop shadow_map read when absent (its resource isn't declared)
     dl.io.cmd_slot = 4; // after gbuffer (slot 3), before skybox (5) / tonemap (6)
@@ -443,8 +371,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     ac += 1;
     dl.access_count = ac;
 
-    // Data the body reads through resolved views. Index order is the
-    // query_index passed to ke_system_ctx_view.
     const rd = c.KE_ACCESS_READ;
     dl.queries = std.mem.zeroes([4]c.ke_query_decl);
     dl.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };

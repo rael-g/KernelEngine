@@ -1,11 +1,5 @@
 const std = @import("std");
 
-// Build the ke_physics_body2d shared library (Zig 0.16 API).
-// The system that reconciles ke_body2d_component against a physics world. Talks
-// to everything through borrowed ke_runtime/ke_ecs/ke_physics_2d handles passed
-// to its factory, so it links no backend and is built against no backend's
-// sources — swapping Box2D out never touches this plugin.
-
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});

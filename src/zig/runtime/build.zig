@@ -1,11 +1,5 @@
 const std = @import("std");
 
-// Build the ke_runtime shared library (Zig 0.16 API) — the in-house scheduler
-// (system catalog + phase loop + parallel wave dispatch + defer queue + fixed
-// timestep). Pure logic over borrowed ke_ecs / ke_scheduler vtables; no vcpkg
-// lib. Allocates through libc malloc/free (size-agnostic, mirrors the raw
-// buffers the C impl owned); ke_common is consumed across a C-ABI DLL boundary.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});

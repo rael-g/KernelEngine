@@ -1,12 +1,3 @@
-// The framework plugin's own heap.
-//
-// One allocator for the whole plugin rather than one per factory: several
-// entry points here (the primitive baker) are reached from C without a self
-// pointer to hang state on, and a buffer baked through one path is released
-// through another. A single heap makes that pairing correct by construction.
-//
-// Memory that comes from a C library is NOT this heap's: tomlc99 hands back
-// strings it allocated with malloc, and those keep going back to free().
 
 const std = @import("std");
 

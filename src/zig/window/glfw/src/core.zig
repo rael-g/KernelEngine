@@ -1,6 +1,3 @@
-// Backend-agnostic window controller: owns the ke_window vtable handed to the
-// engine, drives whatever device it was given, and forwards input events to
-// ke_input. Knows nothing about GLFW.
 
 const std = @import("std");
 
@@ -65,12 +62,7 @@ pub const Core = struct {
         heap.gpa.destroy(self);
     }
 
-    // -- ke_window vtable ----------------------------------------------------
-
     fn onInitialize(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-        // The window is already live by the time the handle exists — the
-        // factory initializes it so a failure surfaces as a null handle rather
-        // than a half-built window. This slot stays for contract symmetry.
         if (from(self_in) == null) {
             E.fail(out_error, .invalid_argument, "invalid argument", @src());
             return false;
@@ -127,8 +119,6 @@ pub const Core = struct {
         const dev = self.dev orelse return null;
         return dev.getNativeHandle();
     }
-
-    // -- device events -> ke_input -------------------------------------------
 
     fn handleEvent(ctx: *anyopaque, ev: device.Event) void {
         const self: *Core = @ptrCast(@alignCast(ctx));

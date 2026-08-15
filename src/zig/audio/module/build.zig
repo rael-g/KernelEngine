@@ -1,11 +1,5 @@
 const std = @import("std");
 
-// Build the ke_audio_module shared library (Zig 0.16 API).
-// Audio's domain-level scene vocabulary: it teaches a ke_world what an
-// audio_player component is. Talks to everything through borrowed
-// ke_ecs/ke_world handles, so it links no audio backend and is built against
-// none — swapping miniaudio out never touches this plugin.
-
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});

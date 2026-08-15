@@ -1,8 +1,3 @@
-// aiMesh / aiMaterial -> the engine's ke_mesh_data / ke_material_data.
-//
-// Assimp's C++ accessors (HasNormals(), Get(AI_MATKEY_...)) have no counterpart
-// in the C API, so presence is tested by null-checking the arrays directly and
-// material values are read through the aiGetMaterial* family.
 
 const std = @import("std");
 
@@ -70,10 +65,6 @@ pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_d
     log.copyString(&md.name, &am.mName.data);
     md.vertex_count = am.mNumVertices;
 
-    // Counted before allocating rather than reserving three per face and
-    // shrinking: triangulation is requested at import, but a degenerate face can
-    // still carry fewer than three indices, and the free path recovers the
-    // length from index_count alone — so the two must agree exactly.
     var index_count: usize = 0;
     for (0..am.mNumFaces) |fi| index_count += @min(3, am.mFaces[fi].mNumIndices);
 
@@ -114,15 +105,11 @@ pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_d
             v.tx = t.x;
             v.ty = t.y;
             v.tz = t.z;
-            // Handedness: sign of dot(cross(n, t), bitangent).
             const cx = n.y * t.z - n.z * t.y;
             const cy = n.z * t.x - n.x * t.z;
             const cz = n.x * t.y - n.y * t.x;
             v.tw = if (cx * bt.x + cy * bt.y + cz * bt.z >= 0) 1 else -1;
         } else {
-            // Uses the normal resolved above, which defaults to (0,0,1) for a
-            // mesh without normals — reading am.mNormals here would dereference
-            // null in exactly that case.
             const t = fallbackTangent(v.nx, v.ny, v.nz);
             v.tx = t[0];
             v.ty = t[1];
@@ -176,7 +163,6 @@ pub fn convertMaterial(am: *const c.aiMaterial, md: *c.ke_material_data) void {
         log.copyString(&md.name, &name.data);
     }
 
-    // glTF-style base colour first, falling back to the classic diffuse slot.
     var color = c.aiColor4D{ .r = 1, .g = 1, .b = 1, .a = 1 };
     if (!getColor(am, MatKey.base_color, &color)) {
         _ = getColor(am, MatKey.color_diffuse, &color);
@@ -186,7 +172,6 @@ pub fn convertMaterial(am: *const c.aiMaterial, md: *c.ke_material_data) void {
     md.base_color_b = color.b;
     md.base_color_a = color.a;
 
-    // Defaults stand when the material declares no PBR factors.
     var metallic: f32 = 0.0;
     var roughness: f32 = 0.5;
     _ = getFloat(am, MatKey.metallic_factor, &metallic);

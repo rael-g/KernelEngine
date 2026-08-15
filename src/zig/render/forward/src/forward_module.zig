@@ -1,44 +1,20 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
-
-// Transparent-forward pass — the other half of the deferred+forward hybrid.
-// Only BLEND materials reach it (the gbuffer plugin skips them; a G-buffer
-// holds one surface per pixel, so N-layer order-dependent blending cannot be
-// represented there). Depth-tests LEQUAL against the G-buffer's "depth"
-// without writing it, and blends into "hdr" after skybox.
-//
-// Shares set 0 (frame + shadow/ibl gap-filling) and set 3 (cluster light
-// lists) with the deferred-lighting plugin — same shading library, same
-// hooks. Adds one more: refraction_feature reads "hdr_opaque", a same-frame
-// snapshot of "hdr" taken (via a raw encoder copy, before this pass's own
-// render pass opens) so a refracting fragment can sample what's already been
-// shaded behind it without a read/write hazard against the target it also
-// writes.
-//
-// Owns its own material (set 1, per-mesh) + object (set 2, per-draw) binding,
-// mirroring the gbuffer plugin — this pass draws real geometry, not a
-// fullscreen triangle like deferred-lighting/skybox/tonemap.
 
 const gpa = std.heap.c_allocator;
 
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
 
-// Set 2 — per-object transform. Matches forward_common.slang's PerObject.
 const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
 };
 
-// Matches transparent_forward.slang's PerFrame.
 const PerFrame = extern struct {
     camera_pos: [4]f32,
     light_dir: [4]f32,
@@ -49,11 +25,6 @@ const PerFrame = extern struct {
     view: [16]f32,
 };
 
-
-// One transparent draw, collected while iterating the mesh query, then sorted
-// back-to-front before recording. ke_ecs has no ordered iteration (query_resolve
-// returns archetype segments in storage order), so the pass builds and sorts
-// its own list rather than relying on iteration order.
 const Draw = struct {
     mesh: *const c.ke_mesh_component,
     world: *const c.ke_world_transform_component,
@@ -70,8 +41,6 @@ const ForwardModule = struct {
     ndc: c.ke_ndc_convention = undefined,
     logger: ?*c.ke_logger = null,
 
-    // When false, bindings 7-8 are forced to the engine's default black cubemap
-    // regardless of any skybox — the shader still samples it, but IBL is 0.
     ibl_enabled: bool = true,
 
     mesh_cid: c.ke_component_id = undefined,
@@ -81,15 +50,6 @@ const ForwardModule = struct {
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    // Pipeline params shared by every material this pass draws: identical bind-
-    // group/vertex/target/blend layout, differing only in the two shader
-    // modules, filled per-draw from the material's shader name (see
-    // resolvePipeline). Not a resolved handle — re-queried via
-    // get_or_create_pipeline every record(): §6 Mechanism 1 upgrades a fresh
-    // miss's magenta fallback to the real compiled PSO asynchronously; a handle
-    // cached once at setup would freeze on the fallback and never see the
-    // upgrade. attrs/vbl held here (not setup-locals) so vertex_buffers stays a
-    // stable pointer for the PSO key's lifetime.
     pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
@@ -106,20 +66,10 @@ const ForwardModule = struct {
     writes: [2][*c]const u8 = undefined, // hdr (blend), depth (LEQUAL test, no write)
     reads: [1][*c]const u8 = undefined, // shadow_map (conditional)
     io: c.ke_render_pass_io = undefined,
-    // WRITE hdr, hdr_opaque (2) + READ depth, mesh, transform, camera, light,
-    // ambient, skybox, frame_cid, cluster_lights (9) + 1 conditional
-    // (shadow_map) = 12 max.
     access: [12]c.ke_component_access = undefined,
     access_count: u32 = 0,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all.
     queries: [5]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient], [mesh,transform]
 
-    // Fills pipeline_template's two shader modules from the material's authored
-    // shader name, resolving "<shader>.forward" for each stage. Returns false
-    // (draw skipped) if either stage fails to load. Called per draw; load_shader
-    // is a cache hit after the first resolve of a given material.
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
@@ -134,14 +84,9 @@ const ForwardModule = struct {
 };
 
 const PASS_NAME = "forward";
-// The engine default material shader — the name ke_render_service resolves an
-// unknown/none material to. Duplicated here (not imported) per the plugin
-// decoupling precedent, only to warm a PSO at setup before any scene material.
 const DEFAULT_MATERIAL_SHADER = "standard";
-// A "<shader>.<pass>" qualified name — the shader-name bound plus the suffix.
 const MAX_SHADER_QUALIFIED = 128;
 
-// orthographic_size is the half-height of the view volume; width follows from aspect.
 fn makeProjection(ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
     var p = if (cam.orthographic != 0) ortho: {
         const h = cam.orthographic_size * 2.0;
@@ -188,11 +133,6 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-// Set 0 — frame UBO + refraction source (1-2) + shadow (4-6) + ibl (7-8). The
-// refraction/shadow/ibl bindings are stable views set once here (and whenever
-// the bound environment changes), not per-frame transient ones — unlike the
-// deferred-lighting plugin's set-1 gbuffer bind group, nothing here changes
-// size or identity across frames.
 fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const dev = fwd.device;
     const core = fwd.core;
@@ -202,9 +142,6 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const hdr_opaque_view = core.*.resource_view.?(core, "hdr_opaque");
     const smp = core.*.sampler.?(core);
 
-    // Shadow's outputs are looked up by name, not through a pointer to the
-    // shadow plugin — an invalid view IS the "off" signal (see the
-    // deferred-lighting plugin for the same pattern).
     const shadow_view_raw = core.*.resource_view.?(core, "shadow_map");
     const shadow_tex_view = if (shadow_view_raw != c.KE_GPU_INVALID_HANDLE) shadow_view_raw else white_view;
     const shadow_lvp_buf = core.*.resource_buffer.?(core, "shadow_lvp");
@@ -235,11 +172,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const fwd = moduleOf(user);
     const core = fwd.core;
 
-    // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
-    // No camera: deferred-lighting already cleared/shaded hdr (or left it
-    // cleared); this pass composites on top, so there is nothing to do.
     if (cam_segc == 0 or cam_segs[0].count == 0) return;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
@@ -252,9 +186,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
 
-    // Snapshot "hdr" into "hdr_opaque" before this pass's own render pass opens
-    // (a copy cannot be issued once a render pass is active) — the refraction
-    // hook samples this, never the target this pass is itself writing into.
     const enc = pc.*.encoder.?(pc);
     const hdr_tex = core.*.resource_texture.?(core, "hdr");
     const hdr_opaque_tex = core.*.resource_texture.?(core, "hdr_opaque");
@@ -265,8 +196,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const proj = makeProjection(fwd.ndc, cam, aspect);
     const view_proj = zm.mul(view, proj);
 
-    // Environment cubemap from the first skybox entity (default black otherwise);
-    // rebuild set 0 only when the bound environment changes. View 1 = [skybox].
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
@@ -280,8 +209,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     var frame: PerFrame = .{
         .camera_pos = .{ cam_wt.matrix.m[12], cam_wt.matrix.m[13], cam_wt.matrix.m[14], 1.0 },
-        // Zero until a directional_light entity supplies the real values; the
-        // shader ignores these while shadow_params.z stays clear.
         .light_dir = .{ 0.0, 0.0, 0.0, 0.0 },
         .light_color = .{ 0.0, 0.0, 0.0, 0.0 },
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
@@ -291,8 +218,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     };
     zm.storeMat(frame.view[0..], view);
 
-    // View 2 = [directional_light]; present → enable the directional term and
-    // seed the scene ambient from it.
     var li_segc: usize = 0;
     const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
@@ -302,7 +227,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         frame.ambient = .{ d.ambient.x, d.ambient.y, d.ambient.z, 0.0 };
         frame.shadow_params[2] = 1.0;
     }
-    // View 3 = [AmbientLight]; a standalone ambient overrides the directional's.
     var am_segc: usize = 0;
     const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
@@ -311,10 +235,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
-    // View 4 = [mesh, transform]. Collect only BLEND materials — the gbuffer
-    // plugin already drew everything else. Compute each draw's view-space
-    // depth so they can be sorted back-to-front before recording (blending is
-    // not commutative; ke_ecs has no ordered iteration to rely on instead).
     var draw_count: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 4, &segc);
@@ -346,10 +266,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         var idx_count: u32 = 0;
         if (core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count) == 0) continue;
 
-        // Per-draw PSO by the material's authored shader ("<shader>.forward").
-        // load_shader + get_or_create_pipeline both dedup, so a repeated
-        // material is a cache hit. A material whose shader fails to resolve is
-        // skipped (already logged by load_shader).
         if (!fwd.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
         rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template));
 
@@ -407,8 +323,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entries = &frame_bgl_entries,
     });
 
-    // Set 2 — per-object transform ring (dynamic offset, vertex stage). Same
-    // shape as the gbuffer plugin's.
     const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0,
         .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
@@ -434,9 +348,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .attributes = &fwd.attrs,
     };
 
-    // Template shared by every material: layout, blend, depth, target —
-    // everything but the two shader modules, which resolvePipeline() fills per
-    // draw from the material's shader name.
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
@@ -445,9 +356,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &fwd.vbl;
-    // Standard alpha blend: the surface's own alpha weighs its shading against
-    // whatever is already in "hdr" (skybox + opaque, composited by deferred-
-    // lighting + skybox before this pass runs).
     pp.blend_state.blend_enabled = 1;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_SRC_ALPHA;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -456,10 +364,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.blend_state.dst_alpha = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     pp.blend_state.alpha_op = c.KE_GPU_BLEND_OP_ADD;
     pp.blend_state.write_mask = 0x0F;
-    // LEQUAL, no write: tests against the G-buffer's depth (already populated
-    // by the gbuffer plugin) without occluding surfaces this pass draws later
-    // — depth ordering among transparents is handled by the back-to-front
-    // sort, not by the depth buffer.
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
@@ -472,8 +376,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.color_target_count = 1;
     fwd.pipeline_template = pp;
 
-    // Warm the default material's PSO so a pipeline exists before the first draw
-    // resolves it. Any material a scene actually uses is resolved on demand.
     if (!fwd.resolvePipeline(DEFAULT_MATERIAL_SHADER)) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "transparent-forward: default material shader failed to load", @src().file, @intCast(@src().line), null);
         return false;
@@ -514,8 +416,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (fwd.obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // Snapshot target for refraction_feature.slang — same format/sizing as
-    // "hdr" (declared by the deferred-lighting plugin), copied afresh each frame.
     const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "hdr_opaque",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
@@ -526,18 +426,10 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     rebuildFrameBindGroup(fwd);
 
-    // Shadow's presence is read from the named-resource table, not a pointer
-    // to the shadow plugin (see the deferred-lighting plugin for the same
-    // pattern).
     const shadow_map_cid = core.*.cid.?(core, "shadow_map");
     const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
-    // "light_clusters" (not "cluster_lights") is the scheduling ordering tag —
-    // cull WRITEs it, this pass READs it; the actual light data crosses
-    // through the "cluster_lights" bind group looked up separately below.
     const cluster_lights_cid = core.*.cid.?(core, "light_clusters");
 
-    // "hdr" LOADs (composites over skybox's output); "depth" also LOADs, tested
-    // read-only (io.load governs both — see pass_recording.zig's ctxBeginRender).
     fwd.writes = .{ "hdr", "depth" };
     fwd.reads = .{"shadow_map"};
     fwd.io = std.mem.zeroes(c.ke_render_pass_io);
@@ -553,7 +445,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     ac += 1;
     fwd.access[ac] = .{ .cid = hdr_opaque_cid, .access = c.KE_ACCESS_WRITE };
     ac += 1;
-    // READ, not WRITE: this pass tests depth but never writes it (depth_write_enabled=0).
     fwd.access[ac] = .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ };
     ac += 1;
     fwd.access[ac] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ };

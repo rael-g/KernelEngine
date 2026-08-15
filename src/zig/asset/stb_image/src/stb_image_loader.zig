@@ -1,20 +1,11 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const gpa = std.heap.c_allocator;
 
-// Declarations only — the implementation is compiled as C from
-// stb_image_impl.c (see build.zig); translate-c cannot reliably lower
-// stb_image's JPEG decoder, so @cImport never sees STB_IMAGE_IMPLEMENTATION.
 const stb = @cImport({
     @cInclude("stb_image.h");
 });
@@ -24,7 +15,6 @@ const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
 const State = struct {
@@ -55,7 +45,6 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
     var w: c_int = 0;
     var h: c_int = 0;
     var channels: c_int = 0;
-    // Force RGBA8 — matches ke_texture_data's contract (4 bytes/pixel, row-major).
     const raw = stb.stbi_load(path, &w, &h, &channels, 4);
     if (raw == null) {
         logWarn(state.logger, stb.stbi_failure_reason());

@@ -1,14 +1,3 @@
-// ke_signal_bus impl.
-//
-// Two lifetimes, kept apart on purpose. Connections live until something
-// removes them and are pure data (source, signal, target, handler) — no
-// closure, no per-language state, so a scene file can serialize one and a node
-// in any language can be either end of it. Emissions live one frame: queued
-// into flat storage, joined against the connection table once, cleared.
-//
-// The join is the reason an emitter never names its listeners. It also means
-// delivery order is the order emissions were queued, then the order connections
-// were made — deterministic, and not dependent on which worker ran which system.
 
 const std = @import("std");
 
@@ -79,8 +68,6 @@ fn orDefault(v: u32, d: u32) u32 {
     return if (v == 0) d else v;
 }
 
-// -- vtable ------------------------------------------------------------------
-
 fn signalId(
     self_in: ?*c.ke_signal_bus,
     name_in: [*c]const u8,
@@ -105,11 +92,6 @@ fn signalId(
 
     for (s.signals[0..s.signal_count], 0..) |*sig, i| {
         if (!std.mem.eql(u8, sig.name[0..sig.name_len], name)) continue;
-        // Name plus payload size is the identity, but only once someone has
-        // declared the size: a caller that just wants the id passes UNKNOWN and
-        // neither learns nor asserts a layout. Two real declarations that
-        // disagree is how two languages end up reading one another's bytes at
-        // the wrong stride, with nothing to show for it.
         if (payload_size != unknown_size) {
             if (sig.payload_size == unknown_size) {
                 sig.payload_size = payload_size;
@@ -276,9 +258,6 @@ fn deliveries(self_in: ?*c.ke_signal_bus, out_count: [*c]u32) callconv(.c) [*c]c
         outer: for (s.events[0..s.event_count]) |ev| {
             for (s.connections[0..s.connection_count]) |conn| {
                 if (conn.source != ev.source or conn.signal_id != ev.signal_id) continue;
-                // Overflowing the delivery buffer drops the rest of this frame's
-                // routing. Silence here would look like a listener that simply
-                // stopped reacting, so the cap is a params field, not a constant.
                 if (s.delivery_count == s.deliveries.len) break :outer;
                 s.deliveries[s.delivery_count] = .{
                     .source = ev.source,
@@ -316,8 +295,6 @@ fn destroy(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     heap.gpa.free(s.deliveries);
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 pub export fn ke_signal_bus_create(
     params: [*c]const c.ke_signal_bus_params,
@@ -393,8 +370,6 @@ pub export fn ke_signal_bus_create(
 
     return .{ .ref = &s.api, .destroy = destroy };
 }
-
-// -- tests -------------------------------------------------------------------
 
 const testing = std.testing;
 
@@ -554,8 +529,6 @@ test "a signal wired by name before its layout is declared still resolves to one
     try testing.expect(bus.signal_id.?(bus, "GoalScored", unknown_size, &wired, null));
     try testing.expect(bus.connect.?(bus, 1, wired, 2, 0, null));
 
-    // Emitting before anyone declared the layout must fail rather than write a
-    // payload of a size nobody agreed on.
     var p = Payload{ .left_scored = 1 };
     try testing.expect(!bus.emit.?(bus, 1, wired, &p, @sizeOf(Payload), null));
 

@@ -1,6 +1,3 @@
-// CPU-side primitive mesh baking — pure math. Internal to the framework
-// plugin (see mesh_shape_internal.h). External callers reach these through
-// ke_asset_resolver->resolve_mesh.
 
 const std = @import("std");
 
@@ -9,10 +6,6 @@ const heap = @import("heap.zig");
 
 const pi: f32 = 3.14159265358979323846;
 
-// Buffers cross back to C as bare pointers with no length attached. The counts
-// travelling on ke_mesh_shape_data are what the free path reconstructs the
-// slices from, so a bake must never publish a count that differs from what it
-// allocated.
 fn allocArray(comptime T: type, count: u32) ?[*]T {
     if (count == 0) return null;
     const slice = heap.gpa.alloc(T, count) catch return null;
@@ -79,17 +72,11 @@ const CubeFace = struct {
 };
 
 const cube_faces = [6]CubeFace{
-    // +X
     .{ .n = .{ 1, 0, 0 }, .t = .{ 0, 0, -1 }, .p = .{ .{ 0.5, -0.5, 0.5 }, .{ 0.5, -0.5, -0.5 }, .{ 0.5, 0.5, -0.5 }, .{ 0.5, 0.5, 0.5 } } },
-    // -X
     .{ .n = .{ -1, 0, 0 }, .t = .{ 0, 0, 1 }, .p = .{ .{ -0.5, -0.5, -0.5 }, .{ -0.5, -0.5, 0.5 }, .{ -0.5, 0.5, 0.5 }, .{ -0.5, 0.5, -0.5 } } },
-    // +Y
     .{ .n = .{ 0, 1, 0 }, .t = .{ 1, 0, 0 }, .p = .{ .{ -0.5, 0.5, 0.5 }, .{ 0.5, 0.5, 0.5 }, .{ 0.5, 0.5, -0.5 }, .{ -0.5, 0.5, -0.5 } } },
-    // -Y
     .{ .n = .{ 0, -1, 0 }, .t = .{ 1, 0, 0 }, .p = .{ .{ -0.5, -0.5, -0.5 }, .{ 0.5, -0.5, -0.5 }, .{ 0.5, -0.5, 0.5 }, .{ -0.5, -0.5, 0.5 } } },
-    // +Z
     .{ .n = .{ 0, 0, 1 }, .t = .{ 1, 0, 0 }, .p = .{ .{ -0.5, -0.5, 0.5 }, .{ 0.5, -0.5, 0.5 }, .{ 0.5, 0.5, 0.5 }, .{ -0.5, 0.5, 0.5 } } },
-    // -Z
     .{ .n = .{ 0, 0, -1 }, .t = .{ -1, 0, 0 }, .p = .{ .{ 0.5, -0.5, -0.5 }, .{ -0.5, -0.5, -0.5 }, .{ -0.5, 0.5, -0.5 }, .{ 0.5, 0.5, -0.5 } } },
 };
 
@@ -250,8 +237,6 @@ pub export fn ke_mesh_shape_bake_internal(
         c.KE_MESH_PRIMITIVE_CUBE => bakeCube(vbuf, ibuf),
         c.KE_MESH_PRIMITIVE_SPHERE => bakeSphere(vbuf, ibuf, segments, rings),
         else => {
-            // Unreachable via the sizing switch above, but a bad enum value must
-            // surface as a failed bake rather than a trap.
             heap.gpa.free(vbuf[0..vcount]);
             heap.gpa.free(ibuf[0..icount]);
             return false;

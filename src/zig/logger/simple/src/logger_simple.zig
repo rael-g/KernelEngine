@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const gpa = std.heap.c_allocator;
@@ -14,7 +10,6 @@ const c = @cImport({
     @cInclude("stdio.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
 const MAX_SINKS = 8;
@@ -77,9 +72,6 @@ fn consoleSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) cal
     const label = ke_log_level_to_string(event.*.level);
     const tag: [*c]const u8 = if (event.*.tag != null) event.*.tag else "";
     const message: [*c]const u8 = if (event.*.message != null) event.*.message else "";
-    // libc, not std.Io: Zig 0.16 moved file IO behind an Io instance this
-    // plugin has no reason to plumb through; see configuration_toml.zig for
-    // the same call this project already made.
     _ = c.fprintf(c.stderr, "[%s] %s: %s\n", label, tag, message);
     _ = c.fflush(c.stderr); // flushed per-entry, not just on an explicit Flush() call
 }

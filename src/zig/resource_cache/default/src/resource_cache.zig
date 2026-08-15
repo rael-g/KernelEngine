@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const gpa = std.heap.c_allocator;
@@ -12,12 +8,7 @@ const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
-
-// Open-addressed table with tombstones for both the handle→entry and
-// path→handle directions. destroy_fn is per-cache (set at construction); all
-// resources in a cache share the same destructor.
 
 fn hashString(str: ?[*:0]const u8) u64 {
     const s = str orelse return 0;
@@ -59,9 +50,6 @@ const Table = struct {
         t.active = 0;
     }
 
-    // Finds the slot for `key`. Returns the matching active entry, or the first
-    // usable slot (preferring tombstones over empty so reinsertion keeps probe
-    // chains short). `found` discriminates.
     fn probe(t: *const Table, key: u64, found: *bool) usize {
         const mask = t.capacity - 1;
         var index = @as(usize, @intCast(key & mask));
@@ -136,8 +124,6 @@ fn stateOf(self: *c.ke_resource_cache) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-// ── vtable: lifetime ────────────────────────────────────────────────────────
-
 fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or handle == HANDLE_NONE) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -176,7 +162,6 @@ fn vtRetain(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error
     return true;
 }
 
-// Walks the path table and tombstones any entry pointing at `handle`.
 fn evictPathsForHandle(s: *State, handle: c.ke_resource_handle) void {
     for (s.paths.slots) |*p| {
         if (p.key != RC_EMPTY and p.key != RC_TOMBSTONE and p.handle == handle) {
@@ -217,8 +202,6 @@ fn vtRelease(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_erro
     return true;
 }
 
-// ── vtable: path cache ──────────────────────────────────────────────────────
-
 fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*c]c.ke_resource_handle) callconv(.c) bool {
     if (self == null or key == null or out_handle == null) return false;
     const s = stateOf(self.?);
@@ -227,8 +210,6 @@ fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*
     if (!found) return false;
 
     const h = s.paths.slots[idx].handle;
-    // Retain on behalf of caller. If the underlying resource vanished (stale
-    // path entry), drop the path entry and report cache miss.
     if (!vtRetain(self, h, null)) {
         s.paths.slots[idx].key = RC_TOMBSTONE;
         s.paths.active -= 1;
@@ -273,13 +254,10 @@ fn vtCacheEvict(self: ?*c.ke_resource_cache, key: [*c]const u8) callconv(.c) voi
     s.paths.active -= 1;
 }
 
-// ── vtable: teardown ────────────────────────────────────────────────────────
-
 fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
     const api = self orelse return;
     const s = stateOf(api);
 
-    // Fire destroy callback for every resource still alive.
     for (s.resources.slots) |*r| {
         if (r.key == RC_EMPTY or r.key == RC_TOMBSTONE) continue;
         const h = r.handle;
@@ -291,8 +269,6 @@ fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
     s.paths.deinit();
     gpa.destroy(s);
 }
-
-// ── Factory ─────────────────────────────────────────────────────────────────
 
 export fn ke_resource_cache_create(params: [*c]const c.ke_resource_cache_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_resource_cache_handle {
     const empty = c.ke_resource_cache_handle{ .ref = null, .destroy = null };

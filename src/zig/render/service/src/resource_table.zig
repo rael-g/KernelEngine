@@ -1,11 +1,6 @@
 const rc = @import("render_service.zig");
 const c = rc.c;
 
-// Named-resource table: declare()/import_texture() register a resource under
-// a tag-cid (the runtime access-list identity passes order by), cid()/
-// resource_view() resolve it back. This is the render-graph-via-ECS-tags
-// mechanism: no render-graph object, just resources registered by name.
-
 pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resource_desc, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
     const st = rc.coreOf(self);
@@ -21,13 +16,6 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
     }
 
     const depth = rc.isDepthFormat(desc.*.format);
-    // Depth targets are sampleable too (deferred-lighting reads the G-buffer
-    // depth to reconstruct position). WGPU allows RenderAttachment|TextureBinding
-    // on Depth32Float; the pass that writes it and the later pass that samples it
-    // don't overlap, so no in-pass read/write hazard. COPY_SRC|COPY_DST let any
-    // declared resource be a copy_texture_to_texture endpoint (e.g. "hdr" snapshotted
-    // into "hdr_opaque" for the transparent-forward pass's refraction read) without
-    // a per-resource opt-in — the same blanket-permissive approach as SAMPLED above.
     const usage: c.ke_gpu_texture_usage = if (depth)
         c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED |
             c.KE_GPU_TEXTURE_USAGE_COPY_SRC | c.KE_GPU_TEXTURE_USAGE_COPY_DST
@@ -91,12 +79,6 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
     return cid;
 }
 
-// Mints a tag cid under `name` with no GPU payload — for a producer/consumer
-// ordering dependency that isn't itself a texture/buffer/bind-group (e.g.
-// cluster's cull compute WRITEs "light_clusters" purely so the scheduler
-// orders deferred/forward's READ after it; the actual light data crosses via
-// import_bind_group's "cluster_lights", a separate name). Same table, same
-// cid() lookup as every other named resource — just no backing resource.
 pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
     const st = rc.coreOf(self);
@@ -116,9 +98,6 @@ pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [
     return cid;
 }
 
-// Publishes a producer-owned GPU buffer under `name` (e.g. shadow's LVP uniform).
-// Mirrors importTexture: the resource is non-transient (the producer, not the
-// table, owns and destroys it) and carries no texture/view.
 pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c.ke_gpu_buffer, size: u64, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
     const st = rc.coreOf(self);
@@ -140,10 +119,6 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
     return cid;
 }
 
-// Publishes a producer-owned GPU bind group (+ the layout it was built from)
-// under `name` (e.g. cluster's light-list set-3 bind group). A consumer
-// building its own pipeline needs the layout at setup time, not just the bind
-// group instance at draw time.
 pub fn importBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8, bg: c.ke_gpu_bind_group,
                        layout: c.ke_gpu_bind_group_layout, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
@@ -182,34 +157,27 @@ pub fn resourceTexture(self: [*c]c.ke_render_service, name: [*c]const u8) callco
     return r.texture;
 }
 
-// KE_GPU_INVALID_HANDLE if no buffer with that name was published (importBuffer).
 pub fn resourceBuffer(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_buffer {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.buffer;
 }
 
-// 0 if no buffer with that name was published.
 pub fn resourceBufferSize(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) u64 {
     const r = rc.coreOf(self).find(name) orelse return 0;
     return r.buffer_size;
 }
 
-// Callable from any system in any phase, unlike ke_render_pass_ctx.backbuffer_size
-// (only available inside a render pass) — see the doc comment in render_service.h.
 pub fn backbufferSize(self: [*c]c.ke_render_service, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
     const st = rc.coreOf(self);
     if (out_w != null) out_w.* = st.backbuffer_w;
     if (out_h != null) out_h.* = st.backbuffer_h;
 }
 
-// KE_GPU_INVALID_HANDLE if no bind group with that name was published (importBindGroup).
 pub fn resourceBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.bind_group;
 }
 
-// The layout the named bind group was built from (for a consumer's own pipeline
-// creation). KE_GPU_INVALID_HANDLE if no bind group with that name was published.
 pub fn resourceBindGroupLayout(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group_layout {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.bind_group_layout;

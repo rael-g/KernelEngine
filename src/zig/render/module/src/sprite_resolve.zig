@@ -1,17 +1,3 @@
-// "render.sprite2d.resolve" — turns an authored ke_sprite2d_component into the
-// geometry and material the render passes already consume.
-//
-// A sprite is not a mesh a scene happened to author beside a node: which image,
-// which rectangle of it, how big, around what point, and mirrored on which axis
-// are the sprite's own data, and only this system knows how to spell them as a
-// quad. Building the quad here rather than in a shader keeps the atlas region,
-// the pivot and the flips off the per-draw path entirely — two sprites sharing
-// all five dedup to one uploaded mesh through upload_mesh's key cache.
-//
-// The mesh component the passes read is attached by this system when it is
-// missing, through the context's own attach verb — adding a component is a
-// structural change no system body may make inline, so it lands at the wave
-// barrier.
 
 const cimport = @import("cimport.zig");
 const c = cimport.c;
@@ -108,10 +94,6 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const st: *State = @alignCast(@ptrCast(user.?));
 
-    // Query 0 sees the sprites already carrying a quad, and is where the work
-    // happens. Query 1 sees every sprite, and is only how one that has none asks
-    // for it — the request lands at the wave barrier, so the sprite resolves on
-    // the tick after it appears.
     var segc: usize = 0;
     var segs = c.ke_system_ctx_view(ctx, 0, &segc);
     var s: usize = 0;

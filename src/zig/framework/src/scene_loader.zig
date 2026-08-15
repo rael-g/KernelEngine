@@ -1,19 +1,3 @@
-// ke_scene_loader impl, tomlc99 backed.
-//
-// Walks a `.scene.toml` file:
-//   [[entity]] entries -> tree.create_node + component blocks + script factory
-//   dispatch.
-//
-// Every `[entity.<component>]` block goes through the world's registry: look the
-// cid up by name, add the component, build a variant-table entry list from the
-// TOML table, apply it through the component's generated field table and then
-// its callback, if either is registered. A block naming an unknown component, or
-// one with no mapping at all, is reported and skipped.
-//
-// Arena lifetime: every per-entity allocation (strings + entries) comes from the
-// loader's arena and is freed at loader destroy. The arena is conceptually owned
-// by the world (it outlives the entity); parking it in the loader gives the same
-// end behavior with a simpler ownership graph.
 
 const std = @import("std");
 
@@ -30,14 +14,6 @@ const path_max = 512;
 const resolved_path_max = 1024;
 
 const res_prefix = "res://";
-
-// -- arena -------------------------------------------------------------------
-//
-// Backs the variant entries a component block is applied from.
-// Nothing here is ever freed individually — the whole arena goes at once when
-// the loader is destroyed — so std.heap.ArenaAllocator over the plugin heap is
-// the exact shape this needs, with none of a chunk allocator's bookkeeping
-// hand-rolled again.
 
 const Arena = struct {
     inner: std.heap.ArenaAllocator,
@@ -89,8 +65,6 @@ fn treeOf(world: *c.ke_world) ?*c.ke_scene_tree {
     return if (t == null) null else t;
 }
 
-// -- variant construction ----------------------------------------------------
-
 fn variantNull() c.ke_variant {
     return .{ .type = c.KE_VARIANT_NULL, .unnamed_0 = .{ .i = 0 } };
 }
@@ -118,8 +92,6 @@ fn variantVec4(x: f32, y: f32, z: f32, w: f32) c.ke_variant {
 fn variantTable(t: *const c.ke_variant_table) c.ke_variant {
     return .{ .type = c.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
 }
-
-// -- TOML -> variant ---------------------------------------------------------
 
 /// Numeric arrays become vec2/vec3/vec4 by element count; anything else is null.
 fn variantFromArray(arr: *c.toml_array_t) c.ke_variant {
@@ -183,8 +155,6 @@ fn readVarIn(s: *State, tbl: *c.toml_table_t, key: [*c]const u8) c.ke_variant {
     return variantNull();
 }
 
-// -- path resolution ---------------------------------------------------------
-
 fn pathDirname(path: []const u8, out: []u8) []const u8 {
     const idx = std.mem.lastIndexOfAny(u8, path, "/\\") orelse {
         out[0] = '.';
@@ -230,11 +200,7 @@ fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8
     writeJoined(out, &.{ base_dir, "/", ref });
 }
 
-// -- script dispatch ---------------------------------------------------------
-
 fn dispatchScript(s: *State, entity: c.ke_entity, type_name: [*c]const u8) void {
-    // The factory reports its own success; a script that fails to bind must not
-    // abort the rest of the scene load.
     if (s.script_factory) |factory| _ = factory(s.script_ctx, entity, type_name, null);
 }
 
@@ -259,8 +225,6 @@ fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
     }
     return entries[0..count];
 }
-
-// -- components application via apply registry -------------------------------
 
 fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype) void {
     const lg = world_impl.loggerOf(world) orelse return;
@@ -310,12 +274,6 @@ fn applyComponentBlock(
         return false;
     }
 
-    // Neither a field table nor a callback means no field mapping is defined for
-    // this component. Looked up before the component is added, because adding it
-    // zero-initialized and then failing to populate it is worse than skipping the
-    // block: a node binding later sees the component already present and keeps
-    // its own defaults out, leaving the entity with a field of zeroes nobody
-    // authored.
     var field_count: u32 = 0;
     const fields = world.get_component_fields.?(world, meta.cid, &field_count);
     const apply_fn = world.get_component_apply.?(world, meta.cid);
@@ -324,12 +282,6 @@ fn applyComponentBlock(
         return false;
     }
 
-    // A component this entity did not already carry starts as whatever the
-    // storage last held: the backend recycles a freed row's memory, so a field
-    // the scene block does not mention reads back as another entity's leftovers
-    // rather than as zero. Clearing it makes the omitted field deterministic.
-    // Only when it is new — an entity whose node already seeded its defaults
-    // must keep them, since the block is an override, not a replacement.
     const existing = e.component_get.?(e, entity, meta.cid);
     const comp = e.component_add.?(e, entity, meta.cid) orelse {
         structural(world, out_error, "component '{s}' could not be added to the entity", .{comp_name});
@@ -338,29 +290,18 @@ fn applyComponentBlock(
     if (existing == null) {
         const bytes: [*]u8 = @ptrCast(comp);
         @memset(bytes[0..meta.size], 0);
-        // Zero is not what the header said the field holds. A component born of a
-        // scene block has no node behind it to run a constructor, so the table's
-        // declared defaults are the only ones it will ever get.
         if (fields) |f| fields_apply.seedDefaults(comp, f, field_count);
     }
 
-    // Entries come from the arena rather than a fixed stack buffer, so a
-    // component block with many fields is applied whole instead of truncated.
     const entries = buildEntries(s, comp_tbl) orelse {
         structural(world, out_error, "component '{s}' block could not be read", .{comp_name});
         return false;
     };
 
-    // Table first, callback second: the generated description covers every field
-    // it can express, leaving the callback only what a description cannot say.
     if (fields != null)
         fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
     if (apply_fn) |f| f(comp, entries.ptr, @intCast(entries.len));
 
-    // Whatever neither the table nor the callback claimed is a key no build of
-    // this engine has a use for — a typo, or a field that was removed. Ignoring
-    // it is how a value silently never arrives, which is the whole reason the
-    // entry carries the flag.
     for (entries) |*entry| {
         if (entry.consumed) continue;
         structural(world, out_error, "component '{s}' has no field '{s}'", .{ comp_name, entry.key });
@@ -425,8 +366,6 @@ fn applyComponentBlocks(
     return true;
 }
 
-// -- signal connections ------------------------------------------------------
-
 /// Wires the `[[entity.connect]]` blocks one entity declares.
 ///
 /// Resolved in a pass after every entity in the file exists, because a listener
@@ -488,8 +427,6 @@ fn applyConnections(
     return true;
 }
 
-// -- entity processing -------------------------------------------------------
-
 /// Name -> entity map for resolving `parent = "..."` back-references within one
 /// scene file. Grows on demand: a scene may declare any number of named
 /// entities, and silently dropping late ones would break their children.
@@ -514,8 +451,6 @@ const NameMap = struct {
             self.items = buf.ptr;
             self.capacity = cap;
         }
-        // The name lives in the arena: the TOML datum it came from is freed by
-        // the caller as soon as the entity is processed.
         const owned = self.arena.dupeZ(name) orelse return;
         self.items.?[self.count] = .{ .name = owned, .entity = entity };
         self.count += 1;
@@ -579,7 +514,6 @@ fn processEntity(
         };
     }
 
-    // A `scene = "..."` reference splices another scene file in under `parent`.
     const scene_ref = c.toml_string_in(args.entity_tbl, "scene");
     if (scene_ref.ok != 0) {
         var resolved: [resolved_path_max]u8 = undefined;
@@ -608,9 +542,6 @@ fn processEntity(
         return false;
     }
 
-    // Every component the file authors lands before the script is dispatched, so
-    // a node binds onto an entity whose data is already final: its generated seed
-    // keeps whatever the scene wrote and fills only what the scene left out.
     if (!applyComponentBlocks(s, entity, args.entity_tbl, out_error)) return false;
     if (args.override_outer) |outer| {
         if (!applyComponentBlocks(s, entity, outer, out_error)) return false;
@@ -649,9 +580,6 @@ fn loadSceneRecursive(
         return false;
     };
     var errbuf: [200]u8 = undefined;
-    // @alignCast: *std.c.FILE has alignment 1, but the toml.h cimport's
-    // [*c]FILE wants 8 on Windows; the pointer value is a valid FILE* either
-    // way, so assert the alignment across the seam.
     const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
     if (root == null) {
@@ -663,7 +591,6 @@ fn loadSceneRecursive(
     var base_buf: [path_max]u8 = undefined;
     const base_dir = pathDirname(std.mem.span(path), &base_buf);
 
-    // A scene with no [[entity]] array is valid and simply contributes nothing.
     const entities = c.toml_array_in(root, "entity") orelse {
         if (out_root) |r| r.* = c.KE_ENTITY_INVALID;
         return true;
@@ -675,9 +602,6 @@ fn loadSceneRecursive(
     var first_root: c.ke_entity = c.KE_ENTITY_INVALID;
     const n = c.toml_array_nelem(entities);
 
-    // Kept so connections can be wired once every entity exists; an entity's own
-    // index is the only handle back to it, since a connection's source is the
-    // block that declares it whether or not that block named the entity.
     const created = s.arena.allocArray(c.ke_entity, @intCast(n));
 
     var is_first = true;
@@ -686,8 +610,6 @@ fn loadSceneRecursive(
         const et = c.toml_table_at(entities, i) orelse continue;
         var ent: c.ke_entity = c.KE_ENTITY_INVALID;
 
-        // Only the first entity inherits the caller's attach point and name
-        // override — it is the subscene's root.
         const args: ProcessArgs = if (is_first) .{
             .base_dir = base_dir,
             .entity_tbl = et,
@@ -723,8 +645,6 @@ fn loadSceneRecursive(
     if (out_root) |r| r.* = first_root;
     return true;
 }
-
-// -- vtable ------------------------------------------------------------------
 
 fn vtLoad(
     self_in: ?*c.ke_scene_loader,
@@ -769,8 +689,6 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     s.arena.deinit();
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,

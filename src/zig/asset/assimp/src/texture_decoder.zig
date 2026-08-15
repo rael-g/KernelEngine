@@ -1,13 +1,3 @@
-// Texture decoding for the assimp loader.
-//
-// Heap ownership rule, carried over from the C++ implementation: out.pixels is
-// ALWAYS allocated by this plugin's own allocator, and any intermediate buffer
-// is released with its own producer's free (stb's buffers with
-// stbi_image_free). Mixing heaps across a shared-library boundary crashes on
-// Windows, where each CRT owns its own.
-//
-// Pixel buffers stay 4-byte aligned so a texel is never split across the
-// granularity a GPU upload copies in.
 
 const std = @import("std");
 
@@ -63,8 +53,6 @@ pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, logger: ?*c.k
 
 pub fn decodeEmbedded(gpa: std.mem.Allocator, et: *const c.aiTexture, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
     if (et.mHeight == 0) {
-        // Compressed in memory (a PNG/JPEG inside a GLB); stb owns the decode
-        // buffer, and mWidth is its byte length rather than a pixel count.
         var w: c_int = 0;
         var h: c_int = 0;
         var ch: c_int = 0;
@@ -81,8 +69,6 @@ pub fn decodeEmbedded(gpa: std.mem.Allocator, et: *const c.aiTexture, logger: ?*
         return ok;
     }
 
-    // Uncompressed texels in assimp's buffer: written straight into the
-    // destination, so no intermediate copy is needed.
     const w: usize = @intCast(et.mWidth);
     const h: usize = @intCast(et.mHeight);
     const count = w * h;

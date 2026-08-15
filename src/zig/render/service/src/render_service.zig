@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 pub const c = @cImport({
@@ -18,17 +14,6 @@ pub const c = @cImport({
 
 pub const gpa = @import("heap.zig").gpa;
 
-// This file holds only the shared state (CoreState + its small accessor
-// methods), the factory/destroy pair, and the vtable wiring. Each vtable
-// slot's actual logic lives in its own file, grouped by concern rather than
-// by "everything the core does":
-//   resource_table.zig   — named-resource declare/import/lookup (tag cids)
-//   pass_recording.zig    — ke_render_pass_ctx + the compute-pass proxy
-//   frame_lifecycle.zig   — begin/end_frame + the deferred-upload recorder
-//   asset_upload.zig      — mesh/texture/cubemap/material upload
-// The core provides mechanism only. A rendering feature — anything owning a
-// pipeline, shaders, or per-frame draw state — belongs to a pass module, not
-// to this vtable.
 const resource_table = @import("resource_table.zig");
 const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");
@@ -42,16 +27,10 @@ pub const MAX_CMD_BUFFERS = 64;
 pub const NUM_PRECREATED_ENCODERS = 9; // command encoders pre-created per frame (≥ pass count)
 pub const MAX_COLOR_ATTACH = 8;
 pub const MAX_UPLOADS = 4096; // deferred buffer uploads per frame
-// An authored-material shader name is a file stem (a build artifact), not a
-// game-tuning value — this bounds an identifier, not a workload.
 pub const MAX_SHADER_NAME = 64;
 pub const DEFAULT_MATERIAL_SHADER = "standard";
 const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024; // per-frame staging for upload data copies
 
-// A deferred buffer upload. wgpuQueueWriteBuffer is NOT safe to call concurrently
-// with render-pass recording on wgpu-native (it deadlocks), so `upload` records
-// here lock-free from any pass thread and end_frame replays the writes single-
-// threaded before the submit (queue-ordered, so the data lands before the draws).
 pub const UploadRecord = struct {
     buffer: c.ke_gpu_buffer,
     gpu_offset: u64,
@@ -75,18 +54,7 @@ pub const Material = struct {
     bind_group: c.ke_gpu_bind_group, // set 1: base_color + albedo + sampler
     alpha_mode: c.ke_alpha_mode, // CPU-side only — gates gbuffer vs transparent-forward, no GPU state
     alpha_cutoff: f32, // MASK discard threshold; unused for OPAQUE/BLEND
-    // CPU-side only — the authored-material shader name (file stem of a
-    // `struct X : IMaterial` .slang). A drawing pass concatenates
-    // "<shader>.<pass>" and resolves that PSO via load_shader; this field
-    // carries no GPU state itself, same as alpha_mode above. Stored inline
-    // (NUL-terminated) so the material owns the string; MAX_SHADER_NAME bounds
-    // a build-artifact identifier, not a game-tuning value.
     shader: [MAX_SHADER_NAME]u8,
-    // The textures this material's bind group samples, held with one reference
-    // each (retained at create, released when the material is destroyed). Keeps
-    // the bind group's views alive independently of the caller's own references
-    // to those textures — releasing a shared texture elsewhere can't dangle this
-    // material. Resolved values (fallbacks included), not the caller's raw args.
     albedo: c.ke_texture_handle,
     normal: c.ke_texture_handle,
 };
@@ -99,27 +67,13 @@ pub const Resource = struct {
     view: c.ke_gpu_texture_view,
     is_backbuffer: bool,
     is_transient: bool, // owns texture+view → destroyed on core destroy
-    // Per-resource clear color. [3]==0 (default) defers to core's global clear_color.
     clear_value: [4]f32,
-    // Non-texture producer outputs published under the same name→cid table, so a
-    // consumer pass never holds a pointer to the producing pass's private struct
-    // (e.g. shadow publishes its LVP uniform buffer, cluster its light-list bind
-    // group) — the same "look it up by name" contract textures already use.
     buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     buffer_size: u64 = 0,
     bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    // The layout the bind group was built from — a consumer building its own
-    // pipeline needs this at setup time (the bind group instance alone isn't
-    // enough to declare a matching bind_group_layouts[] slot).
     bind_group_layout: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 };
 
-// Accumulated compute-pass recording. On wgpu-native, recording a compute pass
-// concurrently with a render pass deadlocks; render-pass recording across distinct
-// encoders is safe. So begin_compute hands back a recording proxy that appends the
-// commands to one of these (pure CPU writes, safe on any pass thread); end_frame
-// replays them into a real compute pass single-threaded. The pass author calls the
-// same ke_gpu_compute_pass interface and never sees the difference.
 pub const MAX_COMPUTE_CMDS = 32;
 pub const ComputeCmd = union(enum) {
     set_pipeline: c.ke_gpu_pipeline,
@@ -146,18 +100,11 @@ pub const CoreState = struct {
     backbuffer_w: u32,
     backbuffer_h: u32,
 
-    // Per-pass slots: each pass records into its own encoder (parallel-safe) and
-    // parks it here by io.cmd_slot. end_frame FINISHES them single-threaded (the
-    // device's command-buffer registry is not thread-safe) and submits in order.
     cmd_encoders: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_encoder,
     cmd_valid: [MAX_CMD_BUFFERS]bool, // a render pass parked a recorded encoder here
 
-    // Per-slot accumulated compute recording (replayed single-threaded in end_frame).
     compute_records: [MAX_CMD_BUFFERS]ComputeRecord,
 
-    // Deferred uploads — parallel passes record here lock-free (atomic-bumped index
-    // + arena offset); end_frame flushes them single-threaded before submit, so the
-    // non-thread-safe GPU queue is never written concurrently with pass recording.
     upload_records: [MAX_UPLOADS]UploadRecord,
     upload_count: std.atomic.Value(u32),
     upload_arena: []u8,
@@ -165,15 +112,9 @@ pub const CoreState = struct {
 
     clear_color: [4]f32,
 
-    // Resource storage: generational slot maps (grow on demand, recycle freed
-    // slots, detect stale handles). Ownership + refcount + path-dedup live in the
-    // matching ke_resource_cache; the slot map is just the backing store the
-    // cache's destroy callback empties. Cubemaps share the texture store.
     mesh_store: slot_map.SlotMap(Mesh),
     texture_store: slot_map.SlotMap(Texture),
     material_store: slot_map.SlotMap(Material),
-    // One cache per owned resource kind (see resource_cache.h: a cache never
-    // inspects its handles, so each kind gets its own instance + destroy_fn).
     mesh_cache: *c.ke_resource_cache,
     texture_cache: *c.ke_resource_cache,
     material_cache: *c.ke_resource_cache,
@@ -181,15 +122,9 @@ pub const CoreState = struct {
     texture_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
     material_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
 
-    // Shader modules: a 4th owned resource kind, deduped by resolved file path
-    // (see shader_loader.zig). Never released by a pass — lives for the core's
-    // lifetime, freed at teardown like the built-in mesh/texture/material.
     shader_store: slot_map.SlotMap(c.ke_gpu_shader_module),
     shader_cache: *c.ke_resource_cache,
     shader_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
-    // Absolute path to the directory build-time-compiled shaders were
-    // installed into (owned, allocated at create). load_shader resolves
-    // "<shader_dir>/<name>.<stage-suffix>.<ext>" against this.
     shader_dir: []const u8,
 
     sampler: c.ke_gpu_sampler, // shared linear-repeat sampler
@@ -201,13 +136,8 @@ pub const CoreState = struct {
 
     ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
 
-    // PSO dedup + lifecycle (§6 Mechanism 1) — the core is the sole owner of
-    // every ke_gpu_pipeline; passes request, never create/destroy directly.
     pipeline_cache: pipeline_cache.PipelineCache,
 
-    // Resolve a handle to its payload, or null if the handle is stale/unknown.
-    // Callers decide the fallback (a neutral resource, or an error) — the store
-    // never silently substitutes one resource for another.
     pub fn meshAt(self: *CoreState, h: c.ke_mesh_handle) ?*Mesh {
         return self.mesh_store.get(h.bits);
     }
@@ -216,10 +146,6 @@ pub const CoreState = struct {
         return self.texture_store.get(h.bits);
     }
 
-    // Falls back to the built-in white material for a stale/unknown handle, so a
-    // draw with a released material renders visibly-neutral instead of reading
-    // freed memory. A pass that needs to distinguish the two checks material_store
-    // directly.
     pub fn materialAt(self: *CoreState, h: c.ke_material_handle) *Material {
         return self.material_store.get(h.bits) orelse
             self.material_store.get(self.white_material.bits).?;
@@ -254,14 +180,8 @@ pub fn isDepthFormat(fmt: c.ke_gpu_texture_format) bool {
     return fmt >= c.KE_GPU_TEXTURE_FORMAT_D16_UNORM and fmt <= c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT;
 }
 
-// ── Factory + destroy ───────────────────────────────────────────────────────
-
 fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
-    // Must run before pipeline_cache.destroyAll: an in-flight async compile's
-    // on_ready callback writes into a pipeline_cache Entry, so destroying the
-    // cache (or the CoreState it lives in) before every dispatched compile has
-    // fired would race a callback against freed memory.
     if (st.device.flush_pipeline_compiles) |flush| flush(st.device);
     var i: u32 = 0;
     while (i < st.resource_count) : (i += 1) {
@@ -271,10 +191,6 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
             if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
         }
     }
-    // Destroying a cache fires its destroy_fn for every still-live resource,
-    // which removes it from its slot map and destroys the GPU objects. Materials
-    // before textures: a material's destroy releases the textures its bind group
-    // samples, so those textures must still be resident when it runs.
     st.material_cache_destroy(st.material_cache);
     st.texture_cache_destroy(st.texture_cache);
     st.mesh_cache_destroy(st.mesh_cache);
@@ -354,10 +270,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
 
-    // The four owning caches. Each destroy_fn empties the matching slot map and
-    // destroys the GPU objects; destroy_ctx is the core so the callback can reach
-    // the device + stores. A failure here leaves earlier caches leaked on the
-    // error path, but a cache alloc failing at startup is fatal anyway.
     const mesh_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
         .destroy_fn = asset_upload.destroyMeshResource,
         .destroy_ctx = st,
@@ -389,7 +301,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
     st.material_cache_destroy = mat_ch.destroy.?;
     st.shader_cache_destroy = shader_ch.destroy.?;
 
-    // Built-in backbuffer resource (its view is refreshed each begin_frame).
     const bb_cid = e.component_register.?(e, "backbuffer", 0, null);
     st.resources[0] = .{
         .name = "backbuffer",
@@ -454,8 +365,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         .load_shader = shader_loader.loadShader,
     };
 
-    // Material system: shared sampler + set-1 layout + built-in white texture (0)
-    // and white material (0) so untextured/unmaterialed draws still resolve.
     st.sampler = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
         .min_filter = c.KE_GPU_FILTER_LINEAR,
         .mag_filter = c.KE_GPU_FILTER_LINEAR,
@@ -478,11 +387,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         .entry_count = 4,
         .entries = &mat_bgl_entries,
     });
-    // Built-in singletons: engine-reserved keys (never a real asset path, so no
-    // game content can collide with them) — every upload is cache-registered,
-    // no exceptions. The core keeps the one reference each starts with, so they
-    // live until teardown. A stale/none albedo, normal, or material handle
-    // resolves to these.
     const white_px = [_]u8{ 255, 255, 255, 255 };
     st.white_texture_h = asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, null);
     const flat_normal_px = [_]u8{ 128, 128, 255, 255 }; // (0,0,1) in tangent space

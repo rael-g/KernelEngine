@@ -1,8 +1,3 @@
-// ke_asset_resolver impl. Maps res:// / absolute / relative paths to CPU-side
-// asset data via injected loaders (image_loader today; mesh loader slot
-// reserved). Material parsing is an internal helper exposed only through the
-// resolve_material vtable method — the framework plugin's external surface is
-// vtables + factories, nothing else.
 
 const std = @import("std");
 
@@ -29,8 +24,6 @@ const State = struct {
 fn stateOf(self: *c.ke_asset_resolver) *State {
     return @ptrCast(@alignCast(self.handle));
 }
-
-// -- helpers -----------------------------------------------------------------
 
 fn dupCStr(s: [*c]const u8) ?[:0]u8 {
     if (s == null) return null;
@@ -92,8 +85,6 @@ fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
     copyStringClamped(out, p);
 }
 
-// -- internal material parser ------------------------------------------------
-
 /// Reads a numeric TOML key that may be written as either a float or an int.
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {
     const d = c.toml_double_in(tab, key);
@@ -114,7 +105,6 @@ fn tomlNumberAt(arr: ?*c.toml_array_t, idx: c_int) ?f32 {
 /// Parses a `.material` TOML file. Defaults applied for missing keys. Returns
 /// false on missing/unparseable file or absent [material] section.
 fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
-    // Defaults: white, non-metallic, mid-roughness, no textures.
     out.base_color[0] = 1.0;
     out.base_color[1] = 1.0;
     out.base_color[2] = 1.0;
@@ -146,13 +136,9 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     if (tomlNumberIn(mat, "metallic")) |f| out.metallic = f;
     if (tomlNumberIn(mat, "roughness")) |f| out.roughness = f;
     if (tomlNumberIn(mat, "alpha_cutoff")) |f| out.alpha_cutoff = f;
-    // ior is only meaningful for BLEND, but is parsed unconditionally like every
-    // other factor — the field is simply inert elsewhere.
     if (tomlNumberIn(mat, "ior")) |f| out.ior = f;
     if (tomlNumberIn(mat, "distortion_strength")) |f| out.distortion_strength = f;
 
-    // The strings below are tomlc99's, allocated with malloc inside the parser,
-    // so they go back to free() rather than to the plugin heap.
     const albedo = c.toml_string_in(mat, "albedo");
     if (albedo.ok != 0) {
         copyStringClamped(&out.albedo_path, std.mem.span(albedo.u.s));
@@ -164,8 +150,6 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
         std.c.free(normal.u.s);
     }
 
-    // glTF-aligned: "OPAQUE" | "MASK" | "BLEND". Unknown values keep the OPAQUE
-    // default rather than erroring — a typo should not fail a whole scene load.
     const am = c.toml_string_in(mat, "alpha_mode");
     if (am.ok != 0) {
         const mode = std.mem.span(am.u.s);
@@ -179,8 +163,6 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
 
     return true;
 }
-
-// -- vtable methods ----------------------------------------------------------
 
 fn vtResolveTexture(
     self_in: ?*c.ke_asset_resolver,
@@ -255,7 +237,6 @@ fn vtResolveMesh(
         };
         return mesh_shape.ke_mesh_shape_bake_internal(kind, 0, out);
     }
-    // Future: dispatch .gltf/.fbx/.obj via an injected ke_asset_loader.
     E.fail(out_error, .not_found, "mesh not found", @src());
     return false;
 }
@@ -342,8 +323,6 @@ fn vtFreeFont(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_font_data) callconv(.
         if (loader.free_font) |free_font| free_font(loader, data);
     }
 }
-
-// -- cached load-from-path ---------------------------------------------------
 
 fn vtResolveTextureInto(
     self_in: ?*c.ke_asset_resolver,
@@ -503,8 +482,6 @@ fn vtDestroy(self_in: ?*c.ke_asset_resolver) callconv(.c) void {
     if (s.project_root) |root| heap.gpa.free(root);
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_asset_resolver_create(
     image_loader: ?*c.ke_image_loader,

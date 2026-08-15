@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
@@ -11,16 +7,6 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-// UI overlay — screen-space quad batching + its own pipeline/shaders, drawn
-// after tonemap so it composites over the rendered scene. A standalone
-// plugin: talks to the rest of the pipeline only through the borrowed
-// ke_render_service/ke_runtime handles passed to create() — it never sees
-// another pass's private struct. Game code queues quads via the ui_quad
-// vtable method, which is why (unlike tonemap/skybox) this plugin exposes a
-// real vtable instead of an opaque fire-and-forget handle.
-
-// 6 vertices per quad (two triangles, no index buffer — the per-frame count is
-// small enough that indexing isn't worth the complexity).
 const MAX_UI_QUADS = 8192;
 const MAX_UI_BATCHES = 512;
 const MAX_UI_TEXTURES = 256; // bind-group cache size — must cover every texture handle a quad might reference
@@ -37,24 +23,8 @@ const UiBatch = struct {
     vertex_count: u32,
 };
 
-// One screen-space quad, ECS-visible so producers (LabelUiSystem, arbitrary
-// game scripts via SystemContext.Attach) and this pass share it the same way
-// every other render-phase system shares sim-written data: through a declared
-// query, resolved+extracted by the runtime before the wave, read here via
-// ke_system_ctx_view. No CPU-side accumulator, no reset, no race — the
-// runtime's existing per-tick extraction is what makes this safe across the
-// sim N+1 || render N pipelining, exactly like camera/mesh/transform above.
-// dst_w <= 0 means "not emitted this frame" (a shrunk text label's unused
-// pooled glyph slot) and is skipped rather than drawn.
-// Declared in kernel_engine/render/ui/components.h, not here: it used to be a
-// second definition of the same struct, kept in step with the C# one by a
-// comment asking both sides not to drift. They already had — the field names
-// disagreed while the bytes happened to line up.
 const UiQuadComponent = c.ke_ui_quad_component;
 
-// A loaded font's glyph table, owned copies so the caller's own ke_font_data
-// (freed via ke_asset_resolver's free_font right after load_font returns) can
-// go away without this outliving it.
 const UiFont = struct {
     key: []u8 = &.{},
     atlas: c.ke_texture_handle = undefined,
@@ -64,8 +34,6 @@ const UiFont = struct {
     in_use: bool = false,
 };
 
-// api is the first field so &state.api == &state (the same trick
-// ke_configuration uses) — the opaque ke_render_ui* handle IS this struct.
 const UiState = struct {
     api: c.ke_render_ui = undefined,
 
@@ -73,9 +41,6 @@ const UiState = struct {
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
 
-    // Re-queried via core.get_or_create_pipeline every record() call — see
-    // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade.
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     bgl_frame: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0: proj uniform
     bgl_tex: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 1: texture + sampler
@@ -84,10 +49,6 @@ const UiState = struct {
     vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
     vertices: [MAX_UI_QUADS * 6]UiVertex = undefined,
-    // Consecutive same-texture quads batch into one draw call (sprite-batching —
-    // texture switches are the only thing that splits a batch). Sized generously;
-    // a caller alternating textures every quad still degrades gracefully (no
-    // crash, just more draw calls up to MAX_UI_BATCHES).
     batches: [MAX_UI_BATCHES]UiBatch = undefined,
     bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = undefined, // lazily built, keyed by texture index; INVALID_HANDLE = unbuilt
 
@@ -96,12 +57,9 @@ const UiState = struct {
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [1]c.ke_component_access = undefined,
-    // "render.ui" (draw, KE_PHASE_RENDER): [0] = ui_quad (read), [1] = label (read).
     queries: [2]c.ke_query_decl = undefined,
     quad_cid: c.ke_component_id = 0,
     label_cid: c.ke_component_id = 0,
-    // "render.ui.labels" (shape, KE_PHASE_UPDATE): label (write) — its own
-    // system, its own query, registered separately below.
     label_shape_queries: [1]c.ke_query_decl = undefined,
 };
 
@@ -157,10 +115,6 @@ fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_met
     return null;
 }
 
-// Shapes one "label" entity's text into screen-space glyph quads, written back
-// into the same component's glyphs[]/glyph_count field, given the backbuffer
-// size. Called from labelShapeSystem (KE_PHASE_UPDATE), a system of its own —
-// not part of the "render.ui" draw pass.
 fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u32) void {
     const l: *c.ke_label_component = @ptrCast(l_ptr);
     l.glyph_count = 0;
@@ -206,9 +160,6 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     l.glyph_count = slot;
 }
 
-// The set-1 (texture+sampler) bind group for a texture index, built once and
-// cached — UI textures (font atlases, a handful of solid-color sources) are
-// stable across frames, so rebuilding every quad would be wasteful.
 fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
     const tex_idx = c.ke_handle_index(tex.bits);
     if (ui.bind_group_cache[tex_idx] != c.KE_GPU_INVALID_HANDLE)
@@ -219,10 +170,6 @@ fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
         .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
     };
-    // No out_error slot on this lazy-cache path (system(), its only caller, has
-    // no error return to surface it through) — pass null. The push/pop error
-    // scope inside create_bind_group still prevents the uncaptured-error abort
-    // either way; only the descriptive ke_error is lost here.
     const bg = ui.device.create_bind_group.?(ui.device, &c.ke_gpu_bind_group_params{
         .layout = ui.bgl_tex,
         .entry_count = 2,
@@ -236,10 +183,6 @@ inline fn moduleOf(user: ?*anyopaque) *UiState {
     return @alignCast(@ptrCast(user.?));
 }
 
-// Appends one screen-space quad (already in pixel space) to the shared
-// vertex/batch buffers, splitting into a new batch on a texture change.
-// Shared by ui_quad entries and label glyphs — both draw the same way once
-// reduced to (texture, dst rect, uv rect, premultiplied color).
 fn emitQuad(ui: *UiState, vertex_count: *u32, batch_count: *u32, tex_in: c.ke_texture_handle,
             x0: f32, y0: f32, x1: f32, y1: f32, tu0: f32, tv0: f32, tu1: f32, tv1: f32, color: [4]f32) void {
     if (vertex_count.* + 6 > ui.vertices.len) return;
@@ -266,13 +209,6 @@ fn emitQuad(ui: *UiState, vertex_count: *u32, batch_count: *u32, tex_in: c.ke_te
     ui.batches[batch_count.* - 1].vertex_count += 6;
 }
 
-// Shapes every "label" entity's text into glyphs, written back into the same
-// component for "render.ui" to draw. A genuinely separate system from the
-// draw pass below — sim-writes/render-reads, the same split every other
-// render component uses (transform, mesh, camera, ...) — made possible by
-// ke_render_service.backbuffer_size, which (unlike ke_render_pass_ctx's) is
-// callable outside a render pass. "render.ui.labels" runtime system,
-// KE_PHASE_UPDATE (registered ahead of "render.ui", KE_PHASE_RENDER).
 fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const ui = moduleOf(user);
 
@@ -294,12 +230,6 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
     }
 }
 
-// Builds this frame's vertices/batches from the ui_quad query view (resolved
-// and extracted by the runtime before this wave, exactly like camera/mesh/
-// transform in every other render-phase pass — see UiQuadComponent), draws
-// every "label" entity's already-shaped glyphs the same way (shaped by
-// labelShapeSystem, a separate KE_PHASE_UPDATE system — this pass only reads),
-// and draws each texture batch. "render.ui" runtime system.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const ui = moduleOf(user);
     const core = ui.core;
@@ -358,7 +288,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         return;
     }
 
-    // Pixel-space (top-left origin) → clip space, honoring the backend's NDC.
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
@@ -386,9 +315,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.end_pass.?(core, pc);
 }
 
-// Pipeline + buffers for the UI overlay pass. Premultiplied-alpha blend so
-// both solid quads and glyph coverage composite correctly over whatever the
-// tonemap pass already wrote.
 fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, bb_cid: c.ke_component_id,
          cmd_slot: u32, out_error: [*c][*c]c.ke_error) bool {
@@ -396,8 +322,6 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     ui.device = dev;
     ui.ndc = ndc;
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
     const vs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
     const fs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
@@ -446,8 +370,6 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.bind_group_layouts[0] = ui.bgl_frame;
     pp.bind_group_layouts[1] = ui.bgl_tex;
     pp.bind_group_layout_count = 2;
-    // Premultiplied-alpha over: dst = src + dst*(1-src.a). The color channel
-    // reads ONE (not SRC_ALPHA) because ui_quad's caller already premultiplies.
     pp.blend_state.blend_enabled = 1;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_ONE;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -499,8 +421,6 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     for (&ui.bind_group_cache) |*e| e.* = c.KE_GPU_INVALID_HANDLE;
     for (&ui.fonts) |*f| f.* = .{};
 
-    // UI overlay pass: loads (doesn't clear) the backbuffer tonemap just wrote,
-    // so text/quads composite on top.
     ui.writes = .{"backbuffer"};
     ui.io = std.mem.zeroes(c.ke_render_pass_io);
     ui.io.writes = @ptrCast(&ui.writes);
@@ -552,14 +472,10 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
         return empty;
     }
 
-    // Same name any producer (game scripts via SystemContext.Attach) registers
-    // via component_register — whoever calls first wins, everyone gets the same cid.
     ui.quad_cid = e.component_register.?(e, "ui_quad", @sizeOf(UiQuadComponent), null);
     ui.queries[0].terms[0] = .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ };
     ui.queries[0].term_count = 1;
 
-    // "label" — draw pass (below) only reads the shaped glyphs; labelShapeSystem
-    // (its own system, registered next) is the sole writer.
     ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
     ui.queries[1].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ };
     ui.queries[1].term_count = 1;
@@ -576,10 +492,6 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
 
-    // "render.ui.labels" — shapes text into glyphs. A separate system, in
-    // KE_PHASE_UPDATE (sim side), writing the same "label" component
-    // "render.ui" above only reads — the ordinary sim-writes/render-reads
-    // split every other render component in this engine already uses.
     ui.label_shape_queries[0].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE };
     ui.label_shape_queries[0].term_count = 1;
 

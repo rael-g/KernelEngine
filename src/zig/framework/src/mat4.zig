@@ -1,11 +1,3 @@
-// Zig ports of the matrix helpers that live as `static inline` in
-// kernel_engine/common/math.h.
-//
-// translate-c cannot lower those bodies (nested array indexing inside the
-// index expression), and being `static inline` they export no symbol to link
-// against — so Zig callers need their own copy. Any change to the C originals
-// must be mirrored here; the shared regression is scene-tree transform
-// propagation, which compares against hand-computed matrices.
 
 const c = @import("c.zig").c;
 

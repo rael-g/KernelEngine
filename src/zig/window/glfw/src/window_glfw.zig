@@ -1,17 +1,8 @@
-// ke_window_glfw — the GLFW window plugin's single exported factory. Assembles
-// the GLFW device with the backend-agnostic core and hands back the ke_window
-// vtable.
 
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
@@ -56,8 +47,6 @@ export fn ke_window_glfw_create(
     };
 
     if (!core.initialize(config)) {
-        // destroyApi tears down the device it owns, so the failure path does
-        // not need to unwind the two allocations by hand.
         core_mod.Core.destroyApi(core.toApi());
         E.fail(out_error, .general, "window creation failed", @src());
         return null_handle;
