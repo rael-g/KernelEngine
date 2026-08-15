@@ -9,8 +9,8 @@ const gpa = std.heap.c_allocator;
 
 const MAX_UI_QUADS = 8192;
 const MAX_UI_BATCHES = 512;
-const MAX_UI_TEXTURES = 256; // bind-group cache size — must cover every texture handle a quad might reference
-const MAX_UI_FONTS = 64; // loaded fonts are a handful per game; raise if a real caller hits this
+const MAX_UI_TEXTURES = 256;
+const MAX_UI_FONTS = 64;
 
 const UiVertex = extern struct {
     position: [2]f32,
@@ -18,7 +18,7 @@ const UiVertex = extern struct {
     color: [4]f32,
 };
 const UiBatch = struct {
-    texture: c.ke_texture_handle, // full generational handle; its slot index keys the bind-group cache
+    texture: c.ke_texture_handle,
     first_vertex: u32,
     vertex_count: u32,
 };
@@ -42,15 +42,15 @@ const UiState = struct {
     ndc: c.ke_ndc_convention = undefined,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    bgl_frame: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0: proj uniform
-    bgl_tex: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 1: texture + sampler
+    bgl_frame: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    bgl_tex: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
     vertices: [MAX_UI_QUADS * 6]UiVertex = undefined,
     batches: [MAX_UI_BATCHES]UiBatch = undefined,
-    bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = undefined, // lazily built, keyed by texture index; INVALID_HANDLE = unbuilt
+    bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = undefined,
 
     fonts: [MAX_UI_FONTS]UiFont = undefined,
 
@@ -252,7 +252,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         var i: usize = 0;
         while (i < quad_segs[s].count) : (i += 1) {
             const q = quads[i];
-            if (q.dst_w <= 0 or q.dst_h <= 0) continue; // unused pooled slot this frame
+            if (q.dst_w <= 0 or q.dst_h <= 0) continue;
             if (vertex_count + 6 > ui.vertices.len) break :quad_loop;
             emitQuad(ui, &vertex_count, &batch_count, .{ .bits = q.texture_bits },
                 q.dst_x, q.dst_y, q.dst_x + q.dst_w, q.dst_y + q.dst_h,
@@ -381,7 +381,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.depth_stencil.depth_test_enabled = 0;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    pp.color_target_formats[0] = 0; // swapchain surface format (backbuffer)
+    pp.color_target_formats[0] = 0;
     pp.color_target_count = 1;
 
     ui.pipeline_params = pp;
@@ -392,7 +392,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     ui.frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
-        .size = 64, // float4x4
+        .size = 64,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     }, out_error);
@@ -426,7 +426,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     ui.io.writes = @ptrCast(&ui.writes);
     ui.io.writes_count = 1;
     ui.io.cmd_slot = cmd_slot;
-    ui.io.load = 1; // loads (doesn't clear) — composites over the tonemapped scene
+    ui.io.load = 1;
     ui.access = .{
         .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
     };

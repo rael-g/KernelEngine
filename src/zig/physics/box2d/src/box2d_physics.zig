@@ -25,7 +25,7 @@ const Entry = struct {
 
 const State = struct {
     api: c.ke_physics_2d,
-    logger: ?*c.ke_logger, // borrowed; may be null
+    logger: ?*c.ke_logger,
     world: c.b2WorldId,
     bodies: ?[*]Entry,
     body_count: u32,

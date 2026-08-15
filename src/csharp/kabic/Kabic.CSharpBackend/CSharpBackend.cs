@@ -324,7 +324,7 @@ public static class CSharpBackend
         var o = new List<string>
         {
             Header,
-            "using System.Runtime.CompilerServices;", // CallConvCdecl, needed whenever a slot has a [callback] param
+            "using System.Runtime.CompilerServices;",
             "using System.Runtime.InteropServices;",
             "using KernelEngine.Common;",
             "using KernelEngine.Common.Native;",
@@ -638,7 +638,7 @@ public static class CSharpBackend
                 var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 var retType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
-                var needsCast = retType == "nint"; // CsPrimitive maps `void *` -> nint; the raw call still returns void*
+                var needsCast = retType == "nint";
                 o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
                 o.Add($"    public {retType} {name}({sig})");
                 o.Add("    {");

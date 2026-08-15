@@ -8,7 +8,7 @@ const mat4 = @import("mat4.zig");
 const E = @import("kerror").Errors(c);
 
 const State = struct {
-    ecs: *c.ke_ecs, // borrowed
+    ecs: *c.ke_ecs,
     transform_cid: c.ke_component_id,
     transform2d_cid: c.ke_component_id,
     world_transform_cid: c.ke_component_id,

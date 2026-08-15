@@ -39,7 +39,7 @@ pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) cal
         st.cmd_encoders[slot] = ps.encoder;
         st.cmd_valid[slot] = !ps.is_compute;
     } else {
-        ps.encoder.destroy.?(ps.encoder); // unreachable in practice; avoid a leak
+        ps.encoder.destroy.?(ps.encoder);
     }
     gpa.destroy(ps);
     gpa.destroy(@as(*c.ke_render_pass_ctx, @ptrCast(ctx)));
@@ -129,7 +129,7 @@ inline fn recOf(self: [*c]c.ke_gpu_compute_pass) *rc.ComputeRecord {
     return @alignCast(@ptrCast(self.*.handle));
 }
 fn cpAppend(rec: *rc.ComputeRecord, cmd: rc.ComputeCmd) void {
-    if (rec.count >= rc.MAX_COMPUTE_CMDS) return; // overflow — raise MAX_COMPUTE_CMDS
+    if (rec.count >= rc.MAX_COMPUTE_CMDS) return;
     rec.cmds[rec.count] = cmd;
     rec.count += 1;
 }
@@ -151,7 +151,7 @@ fn cpDispatchIndirect(self: [*c]c.ke_gpu_compute_pass, indirect_buf: c.ke_gpu_bu
     cpAppend(recOf(self), .{ .dispatch_indirect = .{ .buf = indirect_buf, .offset = offset } });
 }
 fn cpEnd(self: [*c]c.ke_gpu_compute_pass) callconv(.c) void {
-    _ = self; // end is implicit — the replay in end_frame ends the real pass
+    _ = self;
 }
 
 fn ctxEncoder(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_command_encoder {

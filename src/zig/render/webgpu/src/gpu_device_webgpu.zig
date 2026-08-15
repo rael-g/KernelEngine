@@ -36,16 +36,16 @@ const DeviceState = struct {
     queue:                   wgpu.WGPUQueue,
     surface:                 wgpu.WGPUSurface,
     surface_format:          wgpu.WGPUTextureFormat,
-    current_surface_texture: wgpu.WGPUTexture, // null between frames
-    surface_ext:             ?*SurfaceExt,      // lazily created, owned by state
-    surface_w:               u32,               // last configured swapchain size
+    current_surface_texture: wgpu.WGPUTexture,
+    surface_ext:             ?*SurfaceExt,
+    surface_w:               u32,
     surface_h:               u32,
-    scheduler:               ?*ke.ke_scheduler,  // borrowed, optional — see Params.scheduler
+    scheduler:               ?*ke.ke_scheduler,
     pending_compiles:        [MAX_PENDING_COMPILES]?*ke.ke_task,
     pending_compiles_count:  u32,
 };
 
-const MAX_PENDING_COMPILES = 64; // mirrors ke_render_service's PipelineCache.MAX_PIPELINES — one async compile per cache miss, ever
+const MAX_PENDING_COMPILES = 64;
 
 fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
     return @ptrCast(dev);
@@ -343,7 +343,7 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
                 break;
             }
         } else if (caps.formatCount > 0) {
-            s.surface_format = caps.formats[0]; // no plain UNORM offered — fall back
+            s.surface_format = caps.formats[0];
         }
         wgpu.wgpuSurfaceCapabilitiesFreeMembers(caps);
     }
@@ -505,10 +505,10 @@ fn reapCompletedCompiles(s: *DeviceState) void {
     while (i < s.pending_compiles_count) {
         const task = s.pending_compiles[i].?;
         if (sched.is_completed.?(sched, task)) {
-            sched.wait.?(sched, task); // already done — returns immediately, frees the task
+            sched.wait.?(sched, task);
             s.pending_compiles_count -= 1;
             s.pending_compiles[i] = s.pending_compiles[s.pending_compiles_count];
-            continue; // re-check the slot we just swapped in
+            continue;
         }
         i += 1;
     }
@@ -627,10 +627,10 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     };
     const tex: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
     if (pp.initial_data != null) {
-        const bytes_per_pixel: u32 = 4; // assume RGBA8
+        const bytes_per_pixel: u32 = 4;
         const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
         const bytes_per_row: u32 = (unaligned_bpr + 255) & ~@as(u32, 255);
-        const face_bytes: usize = @as(usize, unaligned_bpr) * pp.height; // tightly packed source per layer
+        const face_bytes: usize = @as(usize, unaligned_bpr) * pp.height;
         const layers: u32 = if (pp.depth_or_array_layers == 0) 1 else pp.depth_or_array_layers;
         const src_bytes: [*]const u8 = @ptrCast(pp.initial_data);
         const layout = wgpu.WGPUTexelCopyBufferLayout{
@@ -955,7 +955,7 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
 
 const AsyncCompileJob = struct {
     device: wgpu.WGPUDevice,
-    build: RenderPipelineDescBuild, // heap-owned; build.desc's pointers reference this struct's own fields
+    build: RenderPipelineDescBuild,
     on_ready: *const fn (ke.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void,
     user: ?*anyopaque,
 };
@@ -1025,7 +1025,7 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
     job.device = s.device;
     job.on_ready = cb;
     job.user = user;
-    buildRenderPipelineDescriptor(dev, p, &job.build); // synchronous — see doc comment above
+    buildRenderPipelineDescriptor(dev, p, &job.build);
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     const task = sched.dispatch.?(sched, runAsyncCompileJob, job);
@@ -1455,7 +1455,7 @@ fn surfaceExtAcquire(self: *const SurfaceExt) callconv(.c) ke.ke_gpu_texture_vie
     {
         return ke.KE_GPU_INVALID_HANDLE;
     }
-    s.current_surface_texture = st.texture; // held until queuePresent releases it
+    s.current_surface_texture = st.texture;
     return @intFromPtr(wgpu.wgpuTextureCreateView(st.texture, null));
 }
 

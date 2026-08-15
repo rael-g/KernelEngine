@@ -57,7 +57,7 @@ public static class GameActionsEnumEditor
         else
         {
             spliceAt = decl.Members[^1].FullSpan.End;
-            prefix   = ","; // injected at end of the previous member's line, before its trailing newline
+            prefix   = ",";
             while (spliceAt > 0 && (raw[spliceAt - 1] == '\n' || raw[spliceAt - 1] == '\r')) spliceAt--;
         }
 

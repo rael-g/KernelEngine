@@ -207,7 +207,7 @@ test "the C ABI slots tolerate a null self" {
     try testing.expectEqual(@as(?*anyopaque, null), api.get_native_handle.?(null));
     try testing.expect(!api.get_size.?(null, null, null, null));
     try testing.expect(!api.on_shutdown.?(null, null));
-    core_mod.Core.destroyApi(null); // must not crash
+    core_mod.Core.destroyApi(null);
 }
 
 test "key events reach ke_input with the right action" {

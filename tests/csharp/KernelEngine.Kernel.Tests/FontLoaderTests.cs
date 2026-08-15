@@ -20,7 +20,7 @@ public class FontLoaderTests
         var data = (ke_font_data*)NativeMemory.Alloc((nuint)sizeof(ke_font_data));
         data->atlas_width = 10;
         data->atlas_height = 10;
-        data->atlas_rgba = (byte*)NativeMemory.Alloc(400); // 10*10*4
+        data->atlas_rgba = (byte*)NativeMemory.Alloc(400);
         data->glyph_count = 1;
         data->glyphs = (ke_glyph_metrics*)NativeMemory.Alloc((nuint)sizeof(ke_glyph_metrics));
         data->glyphs[0].codepoint = 65;

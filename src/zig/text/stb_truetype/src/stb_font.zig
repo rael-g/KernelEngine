@@ -144,7 +144,7 @@ fn loadFont(
         glyphs[i].width = @floatFromInt(pcc.x1 - pcc.x0);
         glyphs[i].height = @floatFromInt(pcc.y1 - pcc.y0);
         glyphs[i].bearing_x = pcc.xoff;
-        glyphs[i].bearing_y = -pcc.yoff; // stb yoff is +down from top of glyph; we want +up from baseline
+        glyphs[i].bearing_y = -pcc.yoff;
         glyphs[i].advance_x = pcc.xadvance;
     }
 

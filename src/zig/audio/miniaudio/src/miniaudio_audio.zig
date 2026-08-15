@@ -90,7 +90,7 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
     }
     slot.initialized = true;
 
-    if (state.next_id == 0) state.next_id = 1; // skip the invalid sentinel
+    if (state.next_id == 0) state.next_id = 1;
     const id = state.next_id;
     state.next_id += 1;
     state.sounds.put(id, slot) catch {

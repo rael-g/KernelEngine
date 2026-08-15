@@ -11,7 +11,7 @@ const PASS_NAME = "gbuffer";
 const DEFAULT_MATERIAL_SHADER = "standard";
 
 const MAX_DRAWS = 512;
-const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
+const UNIFORM_STRIDE = 256;
 
 const PerObject = extern struct {
     mvp: [16]f32,
@@ -35,11 +35,11 @@ const GBufferModule = struct {
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
 
-    writes: [4][*c]const u8 = undefined, // gbuffer_albedo/normal/emissive + depth
+    writes: [4][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
-    access: [8]c.ke_component_access = undefined, // 3 gbuffer + depth writes; mesh/transform/camera/frame reads
+    access: [8]c.ke_component_access = undefined,
     access_count: u32 = 0,
-    queries: [2]c.ke_query_decl = undefined, // [camera, transform], [mesh, transform]
+    queries: [2]c.ke_query_decl = undefined,
 
     fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
         var name_buf: [rc_MAX_SHADER_QUALIFIED]u8 = undefined;
@@ -123,7 +123,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const view_proj = zm.mul(view, proj);
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0); // set 0: empty (encode uses only sets 1+2)
+    rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0);
 
     var draw_idx: u32 = 0;
     var segc: usize = 0;
@@ -153,8 +153,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_template));
 
             const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
-            rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
-            rp.*.set_bind_group.?(rp, 2, gb.obj_bind_group, &offset, 1); // set 2: per-object
+            rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
+            rp.*.set_bind_group.?(rp, 2, gb.obj_bind_group, &offset, 1);
             rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
             rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
             rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -219,17 +219,17 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &gb.vbl;
-    pp.blend_state.write_mask = 0x0F; // opaque encode, no blend
+    pp.blend_state.write_mask = 0x0F;
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 1;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    pp.bind_group_layouts[0] = gb.empty_bgl; // set 0: empty
-    pp.bind_group_layouts[1] = core.*.material_layout.?(core); // set 1: per-material
-    pp.bind_group_layouts[2] = obj_bgl; // set 2: per-object
+    pp.bind_group_layouts[0] = gb.empty_bgl;
+    pp.bind_group_layouts[1] = core.*.material_layout.?(core);
+    pp.bind_group_layouts[2] = obj_bgl;
     pp.bind_group_layout_count = 3;
-    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM; // albedo + metallic
-    pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM; // octNormal + roughness + ao
-    pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // emissive + alpha
+    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     pp.color_target_count = 3;
     gb.pipeline_template = pp;
 
@@ -298,7 +298,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.io = std.mem.zeroes(c.ke_render_pass_io);
     gb.io.writes = @ptrCast(&gb.writes);
     gb.io.writes_count = 4;
-    gb.io.cmd_slot = 3; // after cull (slot 2), before deferred-lighting
+    gb.io.cmd_slot = 3;
 
     gb.access = .{
         .{ .cid = albedo_cid, .access = c.KE_ACCESS_WRITE },

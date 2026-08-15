@@ -7,19 +7,19 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-const MAX_LIGHTS = 1_000_000; // point (or spot) lights the storage buffers can hold, each type independently
+const MAX_LIGHTS = 1_000_000;
 const UPLOAD_CHUNK = 1024;
 
 const PointLightGpu = extern struct {
-    pos_radius: [4]f32, // xyz = world position, w = radius
-    color_intensity: [4]f32, // rgb = color, w = intensity
+    pos_radius: [4]f32,
+    color_intensity: [4]f32,
 };
 
 const SpotLightGpu = extern struct {
-    pos_range: [4]f32, // xyz = world position, w = range
-    dir_cos_inner: [4]f32, // xyz = cone axis, w = cos(inner angle)
-    color_intensity: [4]f32, // rgb = color, w = intensity
-    cone: [4]f32, // x = cos(outer angle); yzw pad
+    pos_range: [4]f32,
+    dir_cos_inner: [4]f32,
+    color_intensity: [4]f32,
+    cone: [4]f32,
 };
 
 const SpotLightComp = extern struct {
@@ -32,15 +32,15 @@ const SpotLightComp = extern struct {
 };
 
 const ClusterGridUniform = extern struct {
-    cluster_grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
-    cluster_viewport: [4]f32, // screen W, screen H, near, far
+    cluster_grid: [4]f32,
+    cluster_viewport: [4]f32,
 };
 
 const ClusterParams = extern struct {
-    grid: [4]f32, // numX, numY, numZ, maxLightsPerCluster
-    counts: [4]f32, // pointCount, spotCount, 0, 0
-    proj: [4]f32, // tan(fovY/2), aspect, near, far
-    view: [16]f32, // world → view
+    grid: [4]f32,
+    counts: [4]f32,
+    proj: [4]f32,
+    view: [16]f32,
 };
 
 const ClusterModule = struct {
@@ -74,8 +74,8 @@ const ClusterModule = struct {
     cull_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     cull_io: c.ke_render_pass_io = undefined,
     cull_access: [6]c.ke_component_access = undefined,
-    cull_queries: [3]c.ke_query_decl = undefined, // [point_light,transform], [spot_light,transform], [camera,transform]
-    clusters_cid: c.ke_component_id = undefined, // tag: cull WRITES, forward READS (ordering)
+    cull_queries: [3]c.ke_query_decl = undefined,
+    clusters_cid: c.ke_component_id = undefined,
 
     point_overflow_warned: bool = false,
     spot_overflow_warned: bool = false,
@@ -363,7 +363,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     cm.clusters_cid = core.*.import_tag.?(core, "light_clusters", null);
     cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);
-    cm.cull_io.cmd_slot = 2; // cull → frame command slot 2 (before forward)
+    cm.cull_io.cmd_slot = 2;
     cm.cull_access = .{
         .{ .cid = cm.clusters_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = cm.point_light_cid, .access = c.KE_ACCESS_READ },

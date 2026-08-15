@@ -34,12 +34,12 @@ var services = new ServiceCollection()
         var faces = new byte[faceSize * faceSize * 4 * 6];
         (byte R, byte G, byte B)[] colors =
         [
-            (255, 0,   0),   // +X Red
-            (0,   255, 255), // -X Cyan
-            (0,   255, 0),   // +Y Green
-            (255, 0,   255), // -Y Magenta
-            (0,   0,   255), // +Z Blue
-            (255, 255, 0),   // -Z Yellow
+            (255, 0,   0),
+            (0,   255, 255),
+            (0,   255, 0),
+            (255, 0,   255),
+            (0,   0,   255),
+            (255, 255, 0),
         ];
         for (int f = 0; f < 6; f++)
         {
@@ -105,10 +105,10 @@ sealed class FreeLook : Camera
     {
         float dt = view.DeltaTime;
 
-        if (view.IsKeyDown(262)) _yaw   += RotateDeg * dt; // Right arrow
-        if (view.IsKeyDown(263)) _yaw   -= RotateDeg * dt; // Left arrow
-        if (view.IsKeyDown(265)) _pitch += RotateDeg * dt; // Up arrow
-        if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt; // Down arrow
+        if (view.IsKeyDown(262)) _yaw   += RotateDeg * dt;
+        if (view.IsKeyDown(263)) _yaw   -= RotateDeg * dt;
+        if (view.IsKeyDown(265)) _pitch += RotateDeg * dt;
+        if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt;
         _pitch = Math.Clamp(_pitch, -89f, 89f);
 
         var rot     = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
@@ -116,12 +116,12 @@ sealed class FreeLook : Camera
         var right   = Vector3.Transform(-Vector3.UnitX, rot);
 
         var move = Vector3.Zero;
-        if (view.IsKeyDown(87))  move += forward;        // W
-        if (view.IsKeyDown(83))  move -= forward;        // S
-        if (view.IsKeyDown(65))  move -= right;          // A
-        if (view.IsKeyDown(68))  move += right;          // D
-        if (view.IsKeyDown(340)) move += Vector3.UnitY;  // Left Shift
-        if (view.IsKeyDown(341)) move -= Vector3.UnitY;  // Left Ctrl
+        if (view.IsKeyDown(87))  move += forward;
+        if (view.IsKeyDown(83))  move -= forward;
+        if (view.IsKeyDown(65))  move -= right;
+        if (view.IsKeyDown(68))  move += right;
+        if (view.IsKeyDown(340)) move += Vector3.UnitY;
+        if (view.IsKeyDown(341)) move -= Vector3.UnitY;
         if (move != Vector3.Zero) move = Vector3.Normalize(move);
 
         LocalTransform = LocalTransform with

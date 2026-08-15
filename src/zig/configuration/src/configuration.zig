@@ -9,13 +9,13 @@ const ke = @cImport({
 
 const gpa = @import("heap.zig").gpa;
 
-const NONE: u32 = std.math.maxInt(u32); // == KE_CONFIGURATION_SUBSCRIPTION_NONE
+const NONE: u32 = std.math.maxInt(u32);
 
 const Value = union(enum) {
     int: i64,
     double: f64,
     boolean: bool,
-    string: [:0]u8, // heap-owned
+    string: [:0]u8,
 };
 
 const Entry = struct {
@@ -33,7 +33,7 @@ const Sub = struct {
 };
 
 const State = struct {
-    api: ke.ke_configuration, // first field: &api == &State
+    api: ke.ke_configuration,
     entries: std.ArrayListUnmanaged(Entry),
     subs: std.ArrayListUnmanaged(Sub),
     next_sub_id: u32,

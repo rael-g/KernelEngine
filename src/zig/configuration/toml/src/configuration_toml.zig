@@ -32,7 +32,7 @@ fn setScalar(cfg: [*c]ke.ke_configuration, section: [:0]const u8, key: [*c]const
         defer std.c.free(ds.u.s);
         return cfg.*.set_string.?(cfg, section.ptr, key, ds.u.s, out_error);
     }
-    return true; // array / timestamp / unknown — skip
+    return true;
 }
 
 fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:0]const u8, out_error: ?*?*ke.ke_error) bool {
@@ -56,7 +56,7 @@ fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:
             defer gpa.free(child);
             if (!walkTable(cfg, sub, child, out_error)) return false;
         } else if (toml.toml_array_in(tab, key) != null) {
-            continue; // arrays deferred
+            continue;
         } else {
             if (!setScalar(cfg, section, key, tab, out_error)) return false;
         }
@@ -70,7 +70,7 @@ export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]con
         return false;
     }
     const fp = toml.fopen(path, "r");
-    if (fp == null) return true; // absent/unreadable → defaults apply, not an error
+    if (fp == null) return true;
     defer _ = toml.fclose(fp);
 
     var errbuf: [256]u8 = undefined;

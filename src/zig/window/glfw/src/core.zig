@@ -10,7 +10,7 @@ const E = @import("kerror").Errors(c);
 pub const Core = struct {
     api: c.ke_window,
     dev: ?device.Device,
-    input: ?*c.ke_input, // borrowed
+    input: ?*c.ke_input,
     initialized: bool,
 
     pub fn create(dev: device.Device, input: ?*c.ke_input) ?*Core {

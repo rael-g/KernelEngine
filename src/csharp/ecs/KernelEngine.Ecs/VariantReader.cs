@@ -16,7 +16,7 @@ namespace KernelEngine.Ecs;
 /// </remarks>
 public ref struct VariantReader
 {
-    private readonly nint _entries; // ke_variant_table_entry* stored as nint
+    private readonly nint _entries;
     private readonly uint _count;
 
     public unsafe VariantReader(ke_variant_table_entry* entries, uint count)

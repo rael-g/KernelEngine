@@ -67,7 +67,7 @@ public static class RuntimeStartup
     {
         var byType = modules.ToDictionary(m => m.GetType());
         var sorted = new List<IRuntimeModule>(modules.Count);
-        var state  = new Dictionary<IRuntimeModule, byte>();  // 0=unseen, 1=visiting, 2=done
+        var state  = new Dictionary<IRuntimeModule, byte>();
 
         void Visit(IRuntimeModule m)
         {

@@ -226,7 +226,7 @@ fn inputDestroy(self: ?*c.ke_input) callconv(.c) void {
 }
 
 export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_handle {
-    _ = log; // reserved; the default input system does not log
+    _ = log;
     const empty = c.ke_input_handle{ .ref = null, .destroy = null };
 
     const api = gpa.create(c.ke_input) catch {

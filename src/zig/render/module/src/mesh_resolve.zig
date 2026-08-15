@@ -161,7 +161,7 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
         core,
         key.ptr,
         @ptrCast(&mc.base_color),
-        0, // metallic
+        0,
         mc.roughness,
         c.KE_TEXTURE_NONE,
         c.KE_TEXTURE_NONE,
@@ -169,7 +169,7 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
         mc.alpha_cutoff,
         mc.ior,
         mc.distortion_strength,
-        null, // shader: engine default ("standard")
+        null,
         null,
     );
 }

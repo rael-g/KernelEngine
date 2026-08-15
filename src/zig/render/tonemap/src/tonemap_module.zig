@@ -61,7 +61,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &tm.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, tm.bind_group, null, 0);
-    rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle — no vertex buffer needed
+    rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
 }
@@ -86,7 +86,7 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entries = &bgl_entries,
     });
 
-    tm.bgl = bgl; // kept alive for per-frame bind group creation in system()
+    tm.bgl = bgl;
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.vertex_module   = vs;
     pp.vertex_entry    = "vs_main";
@@ -94,7 +94,7 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.fragment_entry  = "fs_main";
     pp.bind_group_layouts[0] = bgl;
     pp.bind_group_layout_count = 1;
-    pp.color_target_formats[0] = 0; // swapchain surface format
+    pp.color_target_formats[0] = 0;
     pp.color_target_count = 1;
     pp.blend_state.write_mask = 0x0F;
     pp.depth_stencil.depth_test_enabled = 0;
@@ -115,7 +115,7 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     tm.io.writes_count = 1;
     tm.io.reads = @ptrCast(&tm.reads);
     tm.io.reads_count = 1;
-    tm.io.cmd_slot = 7; // after transparent-forward (slot 6)
+    tm.io.cmd_slot = 7;
 
     tm.access = .{
         .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_READ },
@@ -158,7 +158,7 @@ export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.phase = c.KE_PHASE_RENDER;
     params.access_list = &tm.access;
     params.access_count = tm.access.len;
-    params.pinned_thread = 0; // render systems run in parallel (sim ‖ render + parallel passes)
+    params.pinned_thread = 0;
     params.user_data = tm;
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);

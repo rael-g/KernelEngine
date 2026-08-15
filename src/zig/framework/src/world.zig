@@ -20,13 +20,13 @@ const ApplyEntry = struct {
 };
 
 const State = struct {
-    scheduler: ?*c.ke_scheduler, // borrowed
-    ecs: ?*c.ke_ecs, // borrowed
-    runtime: ?*c.ke_runtime, // borrowed
-    scene_tree: ?*c.ke_scene_tree, // borrowed
-    project_root: [*c]const u8, // borrowed string
-    logger: ?*c.ke_logger, // borrowed
-    signal_bus: ?*c.ke_signal_bus, // borrowed
+    scheduler: ?*c.ke_scheduler,
+    ecs: ?*c.ke_ecs,
+    runtime: ?*c.ke_runtime,
+    scene_tree: ?*c.ke_scene_tree,
+    project_root: [*c]const u8,
+    logger: ?*c.ke_logger,
+    signal_bus: ?*c.ke_signal_bus,
 
     apply_registry: ?[*]ApplyEntry,
     apply_count: u32,

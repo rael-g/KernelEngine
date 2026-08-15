@@ -142,7 +142,7 @@ static bool FilesEqual(string a, string b) =>
 
 static bool DirsEqual(string a, string b)
 {
-    if (!Directory.Exists(a)) return true; // a domain with no enums never gets an enums dir
+    if (!Directory.Exists(a)) return true;
     if (!Directory.Exists(b)) return !Directory.EnumerateFileSystemEntries(a).Any();
     var aFiles = Directory.EnumerateFiles(a, "*", SearchOption.AllDirectories)
         .Select(f => Path.GetRelativePath(a, f));

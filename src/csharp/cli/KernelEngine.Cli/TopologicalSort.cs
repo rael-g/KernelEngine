@@ -19,7 +19,7 @@ internal static class TopologicalSort
         {
             foreach (var dep in m.DependsOn)
             {
-                if (!remaining.Contains(dep)) continue; // dep not in manifest — treated as satisfied
+                if (!remaining.Contains(dep)) continue;
                 if (!dependents.TryGetValue(dep, out var list))
                     dependents[dep] = list = new List<string>();
                 list.Add(m.Id);

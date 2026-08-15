@@ -14,7 +14,7 @@ public class LoggerSinkTests
         logger.AddSink(mockSink, LogLevel.Info);
         
         logger.Info("TestTag", "Hello Info");
-        logger.Trace("TestTag", "Hello Trace"); // Below minLevel
+        logger.Trace("TestTag", "Hello Trace");
 
         mockSink.Received(1).Log(LogLevel.Info, "TestTag", "Hello Info");
         mockSink.DidNotReceive().Log(LogLevel.Trace, Arg.Any<string>(), Arg.Any<string>());

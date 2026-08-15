@@ -14,7 +14,7 @@ const name_max = @typeInfo(@FieldType(c.ke_name_component, "name")).array.len;
 
 const State = struct {
     api: c.ke_scene_tree,
-    ecs: *c.ke_ecs, // borrowed
+    ecs: *c.ke_ecs,
     root: c.ke_entity,
     transform_cid: c.ke_component_id,
     transform2d_cid: c.ke_component_id,

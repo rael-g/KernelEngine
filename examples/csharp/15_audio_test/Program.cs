@@ -75,12 +75,12 @@ static string WriteSineWav(int frequency, int durationMs)
     w.Write(36 + dataSize);
     w.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
     w.Write(16);
-    w.Write((short)1);          // PCM
-    w.Write((short)1);          // mono
+    w.Write((short)1);
+    w.Write((short)1);
     w.Write(sampleRate);
-    w.Write(sampleRate * 2);    // byte rate
-    w.Write((short)2);          // block align
-    w.Write((short)16);         // bits per sample
+    w.Write(sampleRate * 2);
+    w.Write((short)2);
+    w.Write((short)16);
     w.Write(System.Text.Encoding.ASCII.GetBytes("data"));
     w.Write(dataSize);
 

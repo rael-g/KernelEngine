@@ -2,7 +2,7 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
-const MAX_COLOR_TARGETS = 8; // mirrors ke_gpu_render_pipeline_params.color_target_formats[8]
+const MAX_COLOR_TARGETS = 8;
 
 const PsoKey = struct {
     vertex_module: c.ke_gpu_shader_module,
@@ -13,7 +13,7 @@ const PsoKey = struct {
     cull_mode: c.ke_gpu_cull_mode,
     front_face: c.ke_gpu_front_face,
     vertex_buffer_count: u32,
-    vertex_buffers_ptr: usize, // vertex_buffers is caller-owned + stable for the module's lifetime; compare by identity
+    vertex_buffers_ptr: usize,
     blend_state: c.ke_gpu_blend_state,
     depth_stencil: c.ke_gpu_depth_stencil_state,
     bind_group_layouts: [4]c.ke_gpu_bind_group_layout,
@@ -55,8 +55,8 @@ const PipelineState = enum(u8) { pending, ready };
 
 const Entry = struct {
     state: std.atomic.Value(PipelineState),
-    real_pso: c.ke_gpu_pipeline, // KE_GPU_INVALID_HANDLE until state == .ready
-    fallback_pso: c.ke_gpu_pipeline, // magenta stand-in, bound while .pending
+    real_pso: c.ke_gpu_pipeline,
+    fallback_pso: c.ke_gpu_pipeline,
 };
 
 const CompileCtx = struct {

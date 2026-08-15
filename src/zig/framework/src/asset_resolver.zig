@@ -16,9 +16,9 @@ const path_buf_max = 1024;
 
 const State = struct {
     api: c.ke_asset_resolver,
-    image_loader: ?*c.ke_image_loader, // borrowed; may be null
-    font_loader: ?*c.ke_font_loader, // borrowed; may be null
-    project_root: ?[:0]u8, // owned; may be null
+    image_loader: ?*c.ke_image_loader,
+    font_loader: ?*c.ke_font_loader,
+    project_root: ?[:0]u8,
 };
 
 fn stateOf(self: *c.ke_asset_resolver) *State {

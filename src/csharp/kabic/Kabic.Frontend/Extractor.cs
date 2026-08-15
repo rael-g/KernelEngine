@@ -145,7 +145,7 @@ public static class Extractor
             }
 
             var slotParams = new List<ApiParam>();
-            for (var i = 1; i < paramTypes.Count; i++) // skip self (index 0)
+            for (var i = 1; i < paramTypes.Count; i++)
             {
                 var pname = i < pnames.Count ? pnames[i] : null;
                 var (tags, doc) = pname is not null && pdocs.TryGetValue(pname, out var d)
@@ -162,7 +162,7 @@ public static class Extractor
 
     static ApiFunction ExtractFunction(JsonObject node, string name, List<string> errors)
     {
-        var (_, summary, pdocs, retDoc) = DocParser.Parse(node); // functions don't carry slot-shape tags today
+        var (_, summary, pdocs, retDoc) = DocParser.Parse(node);
         var paramDecls = ((node["inner"] as JsonArray) ?? [])
             .Where(c => c!["kind"]?.GetValue<string>() == "ParmVarDecl").Select(c => c!.AsObject()).ToList();
         var pnames = paramDecls.Select(p => p["name"]?.GetValue<string>()).ToList();

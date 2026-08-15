@@ -342,8 +342,8 @@ fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) void {
         }
         s_defer_applied_total += 1;
     }
-    q.count = 0; // drain — capacity retained
-    q.arena_used = 0; // arena rewinds — capacity retained
+    q.count = 0;
+    q.arena_used = 0;
 }
 
 export fn ke_system_ctx_defer_applied_count() callconv(.c) u32 {
@@ -530,8 +530,8 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 }
 
 const TaskPkg = struct {
-    state: CtxState, // runtime-private; ctx.handle points here
-    ctx: c.ke_system_ctx, // public vtable handed to the system body
+    state: CtxState,
+    ctx: c.ke_system_ctx,
     execute: ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) void,
     user_data: ?*anyopaque,
     dt: f32,

@@ -19,7 +19,7 @@ fn flecsLogHandler(level: i32, file: [*c]const u8, line: i32, msg: [*c]const u8)
     if (level >= 0 or msg == null) return;
     const f: []const u8 = if (file != null) std.mem.span(file) else "?";
     const m: []const u8 = std.mem.span(msg);
-    const dst = last_msg_buf[0 .. last_msg_buf.len - 1]; // headroom for the NUL fatal() needs
+    const dst = last_msg_buf[0 .. last_msg_buf.len - 1];
     const written = std.fmt.bufPrint(dst, "{s}:{d}: {s}", .{ f, line, m }) catch dst[0..0];
     last_msg_len = written.len;
 }
@@ -59,7 +59,7 @@ const QueryCacheEntry = struct {
 /// bodies then read those segments as plain memory (no flecs call).
 const RegisteredQuery = struct {
     query: ?*c.ecs_query_t,
-    elem_sizes: [c.KE_QUERY_MAX_TERMS]usize, // 0 for a tag term (no column)
+    elem_sizes: [c.KE_QUERY_MAX_TERMS]usize,
     term_count: usize,
 };
 
@@ -173,7 +173,7 @@ fn componentRegister(
     cdesc.type.alignment = @intCast(@alignOf(c.max_align_t));
     const cid: c.ke_component_id = @truncate(c.ecs_component_init(s.world, &cdesc));
 
-    _ = findOrCreateQuery(s, cid); // warm before any readonly wave (see above)
+    _ = findOrCreateQuery(s, cid);
     return cid;
 }
 
@@ -208,7 +208,7 @@ fn componentLookup(
     if (out_meta != null) {
         out_meta.*.cid = @truncate(e);
         out_meta.*.size = @intCast(ti.*.size);
-        out_meta.*.fields = null; // field reflection not used through this impl
+        out_meta.*.fields = null;
         out_meta.*.field_count = 0;
     }
     return true;

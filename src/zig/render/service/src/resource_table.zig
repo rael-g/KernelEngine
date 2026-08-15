@@ -70,7 +70,7 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
         .texture = tex,
-        .view = c.KE_GPU_INVALID_HANDLE, // view creation needs a format — refinement
+        .view = c.KE_GPU_INVALID_HANDLE,
         .is_backbuffer = false,
         .is_transient = false,
         .clear_value = .{ 0, 0, 0, 0 },

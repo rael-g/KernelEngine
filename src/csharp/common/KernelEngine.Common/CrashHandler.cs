@@ -40,7 +40,7 @@ public static class CrashHandler
         if (OperatingSystem.IsWindows())
         {
             try { SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX); }
-            catch { /* non-fatal */ }
+            catch {  }
 
             try { _set_abort_behavior_release(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT); } catch { }
             try { _set_abort_behavior_debug  (0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT); } catch { }
@@ -51,7 +51,7 @@ public static class CrashHandler
                 _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
                 _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
             }
-            catch { /* release build — ucrtbased not loaded, fine */ }
+            catch {  }
 
             unsafe
             {
@@ -77,7 +77,7 @@ public static class CrashHandler
             Console.Error.WriteLine(ex?.ToString() ?? e.ExceptionObject?.ToString() ?? "(unknown)");
             Console.Error.Flush();
         }
-        catch { /* never let the handler itself crash */ }
+        catch {  }
     }
 
     private const uint _CALL_REPORTFAULT = 2;
@@ -131,8 +131,8 @@ public static class CrashHandler
             Console.Error.WriteLine(Environment.StackTrace);
             Console.Error.Flush();
         }
-        catch { /* never let the handler itself crash */ }
-        Environment.Exit(134); // 128 + SIGABRT, conventional shell exit code
+        catch {  }
+        Environment.Exit(134);
     }
 
     [DllImport("kernel32.dll")]

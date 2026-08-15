@@ -4,12 +4,12 @@ const c = rc.c;
 pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = rc.coreOf(self);
-    @memset(st.cmd_valid[0..], false); // open the frame: no pass has recorded yet
+    @memset(st.cmd_valid[0..], false);
     for (&st.compute_records) |*r| {
         r.valid = false;
         r.count = 0;
     }
-    st.upload_count.store(0, .monotonic); // reset the deferred-upload collector
+    st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
     var pe: u32 = 0;
     while (pe < rc.NUM_PRECREATED_ENCODERS) : (pe += 1) {
@@ -91,9 +91,9 @@ pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offs
     if (size == 0 or data == null) return;
     const st = rc.coreOf(self);
     const idx = st.upload_count.fetchAdd(1, .monotonic);
-    if (idx >= rc.MAX_UPLOADS) return; // overflow — raise MAX_UPLOADS if ever hit
+    if (idx >= rc.MAX_UPLOADS) return;
     const aoff = st.upload_arena_offset.fetchAdd(size, .monotonic);
-    if (aoff + size > st.upload_arena.len) return; // arena overflow — raise the size
+    if (aoff + size > st.upload_arena.len) return;
     const src: [*]const u8 = @ptrCast(data);
     @memcpy(st.upload_arena[aoff .. aoff + size], src[0..size]);
     st.upload_records[idx] = .{ .buffer = buffer, .gpu_offset = offset, .arena_offset = aoff, .size = size };

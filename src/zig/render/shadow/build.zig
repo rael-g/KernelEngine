@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
-    mod.linkSystemLibrary("ke_runtime", .{}); // ke_system_ctx_view
+    mod.linkSystemLibrary("ke_runtime", .{});
     mod.addCMacro("KE_RENDER_SHADOW_EXPORT", "");
 
     const zmath = b.dependency("zmath", .{});

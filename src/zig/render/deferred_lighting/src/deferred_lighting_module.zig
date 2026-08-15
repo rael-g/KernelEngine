@@ -12,8 +12,8 @@ const DeferredFrame = extern struct {
     light_dir: [4]f32,
     light_color: [4]f32,
     ambient: [4]f32,
-    shadow_params: [4]f32, // z = directional active
-    viewport: [4]f32, // x=w, y=h
+    shadow_params: [4]f32,
+    viewport: [4]f32,
     view: [16]f32,
     inv_view_proj: [16]f32,
 };
@@ -32,20 +32,20 @@ const DeferredLightingModule = struct {
     skybox_cid: c.ke_component_id = undefined,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
-    gbuf_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 1
-    empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 2 (unused)
+    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    gbuf_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     empty_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, rebuilt on env change
-    gbuf_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 1, rebuilt per frame (transient views)
+    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    gbuf_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
 
     reads: [6][*c]const u8 = undefined,
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [13]c.ke_component_access = undefined,
-    queries: [4]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient]
+    queries: [4]c.ke_query_decl = undefined,
     access_count: u32 = 0,
 };
 
@@ -99,8 +99,8 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     const dev = dl.device;
     const core = dl.core;
     const env_view = core.*.texture_view.?(core, dl.env_cubemap);
-    const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core)); // 1x1 white
-    const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE }); // black cube
+    const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core));
+    const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE });
     const smp = core.*.sampler.?(core);
 
     const shadow_view_raw = core.*.resource_view.?(core, "shadow_map");
@@ -186,7 +186,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         frame.light_dir = .{ d.direction.x, d.direction.y, d.direction.z, 0.0 };
         frame.light_color = .{ d.color.x, d.color.y, d.color.z, d.intensity };
         frame.ambient = .{ d.ambient.x, d.ambient.y, d.ambient.z, 0.0 };
-        frame.shadow_params[2] = 1.0; // directional active
+        frame.shadow_params[2] = 1.0;
     }
     var am_segc: usize = 0;
     const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
@@ -222,7 +222,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     rp.*.set_bind_group.?(rp, 1, dl.gbuf_bind_group, null, 0);
     rp.*.set_bind_group.?(rp, 2, dl.empty_bg, null, 0);
     rp.*.set_bind_group.?(rp, 3, core.*.resource_bind_group.?(core, "cluster_lights"), null, 0);
-    rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle
+    rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
 }
@@ -294,15 +294,15 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     pp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.blend_state.write_mask = 0x0F;
-    pp.depth_stencil.depth_test_enabled = 0; // fullscreen resolve, no depth
+    pp.depth_stencil.depth_test_enabled = 0;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     pp.bind_group_layouts[0] = dl.frame_bgl;
     pp.bind_group_layouts[1] = dl.gbuf_bgl;
     pp.bind_group_layouts[2] = dl.empty_bgl;
-    pp.bind_group_layouts[3] = core.*.resource_bind_group_layout.?(core, "cluster_lights"); // set 3: cluster light lists
+    pp.bind_group_layouts[3] = core.*.resource_bind_group_layout.?(core, "cluster_lights");
     pp.bind_group_layout_count = 4;
-    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
+    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     pp.color_target_count = 1;
     dl.pipeline_params = pp;
     if (core.*.get_or_create_pipeline.?(core, &dl.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
@@ -337,8 +337,8 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.io.writes = @ptrCast(&dl.writes);
     dl.io.writes_count = 1;
     dl.io.reads = @ptrCast(&dl.reads);
-    dl.io.reads_count = if (shadow_enabled) 6 else 5; // drop shadow_map read when absent (its resource isn't declared)
-    dl.io.cmd_slot = 4; // after gbuffer (slot 3), before skybox (5) / tonemap (6)
+    dl.io.reads_count = if (shadow_enabled) 6 else 5;
+    dl.io.cmd_slot = 4;
 
     var ac: u32 = 0;
     dl.access[ac] = .{ .cid = hdr_cid, .access = c.KE_ACCESS_WRITE };

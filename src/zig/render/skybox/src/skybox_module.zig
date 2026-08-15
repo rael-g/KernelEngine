@@ -19,15 +19,15 @@ const SkyboxModule = struct {
     skybox_cid: c.ke_component_id = undefined,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
-    bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // rebuilt per frame (transient depth view)
+    bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
     writes: [1][*c]const u8 = undefined,
     reads: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
-    queries: [2]c.ke_query_decl = undefined, // [camera, transform], [skybox]
+    queries: [2]c.ke_query_decl = undefined,
 };
 
 /// View matrix from where the camera ended up in world space. A camera whose
@@ -64,7 +64,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return; // no camera → deferred already cleared hdr
+    if (cam_segc == 0 or cam_segs[0].count == 0) return;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
@@ -122,7 +122,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sm.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, sm.bind_group, null, 0);
-    rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle
+    rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
 }
@@ -163,12 +163,12 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     skp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     skp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     skp.blend_state.write_mask = 0x0F;
-    skp.depth_stencil.depth_test_enabled = 0; // no depth attachment; occlusion via texel-fetch discard
+    skp.depth_stencil.depth_test_enabled = 0;
     skp.depth_stencil.depth_write_enabled = 0;
     skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     skp.bind_group_layouts[0] = sm.bgl;
     skp.bind_group_layout_count = 1;
-    skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
+    skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     skp.color_target_count = 1;
     sm.pipeline_params = skp;
     if (core.*.get_or_create_pipeline.?(core, &sm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
@@ -191,8 +191,8 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sm.io.writes_count = 1;
     sm.io.reads = @ptrCast(&sm.reads);
     sm.io.reads_count = 1;
-    sm.io.load = 1; // composite over deferred-lighting's output, don't clear
-    sm.io.cmd_slot = 5; // after deferred-lighting (4), before tonemap (6)
+    sm.io.load = 1;
+    sm.io.cmd_slot = 5;
 
     sm.access = .{
         .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE },

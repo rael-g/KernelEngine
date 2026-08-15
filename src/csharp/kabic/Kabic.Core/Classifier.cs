@@ -91,12 +91,12 @@ public static class Classifier
         {
             if (convention.IsFactoryName(fn.Name) && fn.Params.Any(convention.IsErrorOutParam)
                 && vtables.Any(v => fn.Returns.Contains(convention.HandleTypeFor(v.Name))))
-                continue; // factory function; the provider constructor handles it
+                continue;
 
             var firstParamType = fn.Params.FirstOrDefault()?.Type.Replace("const ", "").Replace("struct ", "").TrimEnd('*', ' ');
             var owner = firstParamType is not null && model.Structs.Any(s => s.Name == firstParamType) ? firstParamType : null;
             owner ??= vtables.Select(v => v.Name).FirstOrDefault(n => fn.Returns.Trim() == n);
-            if (owner is null) continue; // no known owner yet (e.g. ke_log_level_to_string) — not wired until something needs it
+            if (owner is null) continue;
             var selfParam = firstParamType == owner ? fn.Params[0] : null;
             (result.FreeFunctionGroups.TryGetValue(owner, out var list)
                 ? list : result.FreeFunctionGroups[owner] = []).Add(new GroupedFunction(fn, selfParam));

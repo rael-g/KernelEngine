@@ -36,7 +36,7 @@ const TrackingHeap = std.heap.DebugAllocator(.{ .thread_safe = true });
 
 const State = struct {
     api: c.ke_asset_loader,
-    logger: ?*c.ke_logger, // borrowed
+    logger: ?*c.ke_logger,
     heap: if (debug_heap) TrackingHeap else void,
     gpa: std.mem.Allocator,
 };
@@ -306,7 +306,7 @@ const load_failed_error = c.ke_error{
 
 const AsyncCtx = struct {
     state: *State,
-    path: [:0]u8, // owned copy; the caller's buffer may not outlive the task
+    path: [:0]u8,
     on_complete: c.ke_load_model_complete_func,
     user_data: ?*anyopaque,
 };

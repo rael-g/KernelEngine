@@ -76,6 +76,6 @@ sealed class KeyEdgeListener : Node
             _prev[i] = down;
         }
 
-        if (view.IsKeyDown(256)) Environment.Exit(0); // Escape
+        if (view.IsKeyDown(256)) Environment.Exit(0);
     }
 }

@@ -7,10 +7,10 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-const SHADOW_RES = 1024; // shadow map resolution
+const SHADOW_RES = 1024;
 
 const MAX_DRAWS = 512;
-const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
+const UNIFORM_STRIDE = 256;
 
 const ShadowObj = extern struct { model: [16]f32 };
 
@@ -24,9 +24,9 @@ const ShadowModule = struct {
     light_cid: c.ke_component_id = undefined,
     frame_cid: c.ke_component_id = undefined,
 
-    view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE, // the shadow map's view — read by the forward's set-0 binding 3/5
+    view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE,
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE, // set 0 (this pass) AND read by the forward's binding 4
+    lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     lvp_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     obj_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
@@ -34,7 +34,7 @@ const ShadowModule = struct {
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
-    queries: [2]c.ke_query_decl = undefined, // [directional_light], [mesh, transform]
+    queries: [2]c.ke_query_decl = undefined,
 };
 
 fn lightViewProj(ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
@@ -137,13 +137,13 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const shadow_map_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "shadow_map",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, // filterable; depth in .r
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
         .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
         .width = SHADOW_RES,
         .height = SHADOW_RES,
         .scale_x = 1.0,
         .scale_y = 1.0,
-        .clear_value = .{ 1.0, 1.0, 1.0, 1.0 }, // R=1 = far depth; alpha≠0 → override
+        .clear_value = .{ 1.0, 1.0, 1.0, 1.0 },
     }, null);
     const shadow_depth_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "shadow_depth",
@@ -208,7 +208,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.io = std.mem.zeroes(c.ke_render_pass_io);
     sh.io.writes = @ptrCast(&sh.writes);
     sh.io.writes_count = 2;
-    sh.io.cmd_slot = 1; // shadow pass → frame command slot 1 (before the opaque pass)
+    sh.io.cmd_slot = 1;
     sh.access = .{
         .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },

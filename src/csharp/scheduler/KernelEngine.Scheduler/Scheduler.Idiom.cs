@@ -17,7 +17,7 @@ namespace KernelEngine.Scheduler;
 public unsafe partial class Scheduler : IScheduler
 {
     /// <inheritdoc/>
-    void IScheduler.Dispatch(Action action) => Dispatch(action);  // fire-and-forget
+    void IScheduler.Dispatch(Action action) => Dispatch(action);
 
     /// <inheritdoc/>
     void IScheduler.DispatchPinned(uint threadNum, Action action)
@@ -37,7 +37,7 @@ public unsafe partial class Scheduler : IScheduler
         var handle = GCHandle.FromIntPtr((IntPtr)data);
         var action = (Action)handle.Target!;
         try   { action(); }
-        catch { /* fire-and-forget; future versions can surface via on_complete */ }
+        catch {  }
         finally { handle.Free(); }
     }
 

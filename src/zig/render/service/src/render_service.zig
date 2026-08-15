@@ -24,12 +24,12 @@ const shader_loader = @import("shader_loader.zig");
 
 pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
-pub const NUM_PRECREATED_ENCODERS = 9; // command encoders pre-created per frame (≥ pass count)
+pub const NUM_PRECREATED_ENCODERS = 9;
 pub const MAX_COLOR_ATTACH = 8;
-pub const MAX_UPLOADS = 4096; // deferred buffer uploads per frame
+pub const MAX_UPLOADS = 4096;
 pub const MAX_SHADER_NAME = 64;
 pub const DEFAULT_MATERIAL_SHADER = "standard";
-const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024; // per-frame staging for upload data copies
+const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024;
 
 pub const UploadRecord = struct {
     buffer: c.ke_gpu_buffer,
@@ -50,10 +50,10 @@ pub const Texture = struct {
 };
 
 pub const Material = struct {
-    ubo: c.ke_gpu_buffer, // base_color uniform
-    bind_group: c.ke_gpu_bind_group, // set 1: base_color + albedo + sampler
-    alpha_mode: c.ke_alpha_mode, // CPU-side only — gates gbuffer vs transparent-forward, no GPU state
-    alpha_cutoff: f32, // MASK discard threshold; unused for OPAQUE/BLEND
+    ubo: c.ke_gpu_buffer,
+    bind_group: c.ke_gpu_bind_group,
+    alpha_mode: c.ke_alpha_mode,
+    alpha_cutoff: f32,
     shader: [MAX_SHADER_NAME]u8,
     albedo: c.ke_texture_handle,
     normal: c.ke_texture_handle,
@@ -66,7 +66,7 @@ pub const Resource = struct {
     texture: c.ke_gpu_texture,
     view: c.ke_gpu_texture_view,
     is_backbuffer: bool,
-    is_transient: bool, // owns texture+view → destroyed on core destroy
+    is_transient: bool,
     clear_value: [4]f32,
     buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     buffer_size: u64 = 0,
@@ -82,10 +82,10 @@ pub const ComputeCmd = union(enum) {
     dispatch_indirect: struct { buf: c.ke_gpu_buffer, offset: usize },
 };
 pub const ComputeRecord = struct {
-    pass: c.ke_gpu_compute_pass, // synthesized object handed to the pass body
+    pass: c.ke_gpu_compute_pass,
     cmds: [MAX_COMPUTE_CMDS]ComputeCmd,
     count: u32,
-    valid: bool, // a compute pass recorded into this slot this frame
+    valid: bool,
 };
 
 pub const CoreState = struct {
@@ -101,7 +101,7 @@ pub const CoreState = struct {
     backbuffer_h: u32,
 
     cmd_encoders: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_encoder,
-    cmd_valid: [MAX_CMD_BUFFERS]bool, // a render pass parked a recorded encoder here
+    cmd_valid: [MAX_CMD_BUFFERS]bool,
 
     compute_records: [MAX_CMD_BUFFERS]ComputeRecord,
 
@@ -127,14 +127,14 @@ pub const CoreState = struct {
     shader_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
     shader_dir: []const u8,
 
-    sampler: c.ke_gpu_sampler, // shared linear-repeat sampler
-    material_bgl: c.ke_gpu_bind_group_layout, // set 1 layout
-    default_normal: c.ke_texture_handle, // built-in flat (0,0,1) normal map
-    default_cubemap: c.ke_texture_handle, // built-in 1×1 black env cubemap
-    white_texture_h: c.ke_texture_handle, // built-in 1×1 white — solid-color UI quads sample this
-    white_material: c.ke_material_handle, // built-in white material — stale/unknown material handles resolve here
+    sampler: c.ke_gpu_sampler,
+    material_bgl: c.ke_gpu_bind_group_layout,
+    default_normal: c.ke_texture_handle,
+    default_cubemap: c.ke_texture_handle,
+    white_texture_h: c.ke_texture_handle,
+    white_material: c.ke_material_handle,
 
-    ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
+    ndc: c.ke_ndc_convention,
 
     pipeline_cache: pipeline_cache.PipelineCache,
 
@@ -166,7 +166,7 @@ pub const PassState = struct {
     core: *CoreState,
     io: c.ke_render_pass_io,
     encoder: *c.ke_gpu_command_encoder,
-    is_compute: bool, // set when begin_compute was called → recording was accumulated
+    is_compute: bool,
 };
 
 pub inline fn coreOf(self: [*c]c.ke_render_service) *CoreState {
@@ -310,7 +310,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         .view = c.KE_GPU_INVALID_HANDLE,
         .is_backbuffer = true,
         .is_transient = false,
-        .clear_value = .{ 0, 0, 0, 0 }, // defer to core's global clear_color
+        .clear_value = .{ 0, 0, 0, 0 },
     };
     st.resource_count = 1;
 
@@ -389,9 +389,9 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
     });
     const white_px = [_]u8{ 255, 255, 255, 255 };
     st.white_texture_h = asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, null);
-    const flat_normal_px = [_]u8{ 128, 128, 255, 255 }; // (0,0,1) in tangent space
+    const flat_normal_px = [_]u8{ 128, 128, 255, 255 };
     st.default_normal = asset_upload.uploadTexture(core, "__ke_default_normal", 1, 1, &flat_normal_px, null);
-    const black_cube_px = [_]u8{0} ** (4 * 6); // 1×1 black on all 6 faces
+    const black_cube_px = [_]u8{0} ** (4 * 6);
     st.default_cubemap = asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, null);
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
     st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, null);

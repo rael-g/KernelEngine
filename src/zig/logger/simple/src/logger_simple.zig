@@ -73,7 +73,7 @@ fn consoleSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) cal
     const tag: [*c]const u8 = if (event.*.tag != null) event.*.tag else "";
     const message: [*c]const u8 = if (event.*.message != null) event.*.message else "";
     _ = c.fprintf(c.stderr, "[%s] %s: %s\n", label, tag, message);
-    _ = c.fflush(c.stderr); // flushed per-entry, not just on an explicit Flush() call
+    _ = c.fflush(c.stderr);
 }
 
 fn consoleSinkFlush(self: ?*c.ke_logger_sink) callconv(.c) void {

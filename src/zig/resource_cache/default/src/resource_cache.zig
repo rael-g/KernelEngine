@@ -25,16 +25,16 @@ const RC_TOMBSTONE: u64 = std.math.maxInt(u64);
 const HANDLE_NONE: c.ke_resource_handle = std.math.maxInt(u32);
 
 const Slot = struct {
-    key: u64 = 0, // 0 = empty, maxU64 = tombstone
-    refcount: u32 = 0, // resource entries only
-    handle: u32 = 0, // resource: redundant; path: target handle
+    key: u64 = 0,
+    refcount: u32 = 0,
+    handle: u32 = 0,
 };
 
 const Table = struct {
     slots: []Slot,
-    capacity: usize, // power of two
-    occupied: usize, // active + tombstones
-    active: usize, // active only
+    capacity: usize,
+    occupied: usize,
+    active: usize,
 
     fn init(initial_capacity: usize) ?Table {
         const slots = gpa.alloc(Slot, initial_capacity) catch return null;
@@ -102,7 +102,7 @@ const Table = struct {
 };
 
 fn keyFromHandle(h: c.ke_resource_handle) u64 {
-    return @as(u64, h) + 1; // +1 keeps 0 reserved for EMPTY
+    return @as(u64, h) + 1;
 }
 
 fn keyFromPath(path: ?[*:0]const u8) u64 {

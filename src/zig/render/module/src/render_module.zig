@@ -19,19 +19,19 @@ const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
 const ModuleState = struct {
     core: c.ke_render_service_handle,
     device: *c.ke_gpu_device,
-    ndc: c.ke_ndc_convention, // backend clip-space convention (queried at setup)
-    logger: ?*c.ke_logger, // borrowed, optional — runtime diagnostics route through it when present
+    ndc: c.ke_ndc_convention,
+    logger: ?*c.ke_logger,
 
     bb_writes: [1][*c]const u8,
     io: c.ke_render_pass_io,
     frame_cid: c.ke_component_id,
-    begin_access: [2]c.ke_component_access, // WRITE backbuffer, WRITE frame
-    clear_access: [2]c.ke_component_access, // WRITE backbuffer, READ frame
-    end_access: [2]c.ke_component_access, // READ backbuffer, WRITE frame
-    mesh_resolve_queries: [1]c.ke_query_decl, // "render.mesh.resolve": WRITE mesh
-    sprite_resolve_queries: [2]c.ke_query_decl, // "render.sprite2d.resolve": [sprite+mesh], [sprite]
+    begin_access: [2]c.ke_component_access,
+    clear_access: [2]c.ke_component_access,
+    end_access: [2]c.ke_component_access,
+    mesh_resolve_queries: [1]c.ke_query_decl,
+    sprite_resolve_queries: [2]c.ke_query_decl,
     sprite_resolve_state: sprite_resolve.State,
-    label_resolve_queries: [1]c.ke_query_decl, // "render.label.resolve": WRITE label
+    label_resolve_queries: [1]c.ke_query_decl,
     label_resolve_state: label_resolve.State,
 
     shadow: c.ke_render_shadow_handle,
@@ -78,7 +78,7 @@ fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
     params.query_count = query_count;
     params.access_list = access;
     params.access_count = access_count;
-    params.pinned_thread = 0; // render systems run in parallel (sim ‖ render + parallel passes)
+    params.pinned_thread = 0;
     params.user_data = user;
     params.execute = exec;
     _ = rt.register_system.?(rt, &params, null);
@@ -199,7 +199,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.io = std.mem.zeroes(c.ke_render_pass_io);
     st.io.writes = @ptrCast(&st.bb_writes);
     st.io.writes_count = 1;
-    st.io.cmd_slot = 0; // clear pass → frame command slot 0
+    st.io.cmd_slot = 0;
 
     const bb_cid = core_h.ref.*.cid.?(core_h.ref, "backbuffer");
     st.frame_cid = e.component_register.?(e, "render.frame", 0, null);

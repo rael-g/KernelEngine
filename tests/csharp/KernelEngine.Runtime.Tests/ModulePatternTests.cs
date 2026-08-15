@@ -90,8 +90,8 @@ public class ModulePatternTests : IDisposable
     {
         var order = new List<string>();
         var services = new ServiceCollection()
-            .Add<IRuntimeModule>(new ModuleB(order))   // registered FIRST but depends on A
-            .Add<IRuntimeModule>(new ModuleA(order));  // registered SECOND
+            .Add<IRuntimeModule>(new ModuleB(order))
+            .Add<IRuntimeModule>(new ModuleA(order));
         using var sp = services.BuildServiceProvider();
 
         using var runtime = new Runtime(_ecs, _taskScheduler);

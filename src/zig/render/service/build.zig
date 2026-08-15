@@ -29,8 +29,8 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
-    mod.linkSystemLibrary("ke_resource_cache_default", .{}); // refcount + path-keyed dedup for mesh/texture/material
-    mod.linkSystemLibrary("ke_runtime", .{}); // ke_system_ctx_* used by the forward pass
+    mod.linkSystemLibrary("ke_resource_cache_default", .{});
+    mod.linkSystemLibrary("ke_runtime", .{});
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
 
     mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });

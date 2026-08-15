@@ -32,12 +32,12 @@ var services = new ServiceCollection()
         var faces = new byte[faceSize * faceSize * 4 * 6];
         (byte R, byte G, byte B)[] skyColors =
         [
-            (255, 0,   0),   // +X Red
-            (0,   255, 255), // -X Cyan
-            (0,   255, 0),   // +Y Green
-            (255, 0,   255), // -Y Magenta
-            (0,   0,   255), // +Z Blue
-            (255, 255, 0),   // -Z Yellow
+            (255, 0,   0),
+            (0,   255, 255),
+            (0,   255, 0),
+            (255, 0,   255),
+            (0,   0,   255),
+            (255, 255, 0),
         ];
         for (int f = 0; f < 6; f++)
         {

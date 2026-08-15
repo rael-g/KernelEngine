@@ -47,7 +47,7 @@ pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, logger: ?*c.k
     const raw = c.stbi_load(path, &w, &h, &ch, 4) orelse return fallbackWhite(gpa, logger, out);
     log.copyString(&out.path, path);
     const ok = copyToOwnStorage(gpa, raw, w, h, out);
-    c.stbi_image_free(raw); // matched with stbi_load
+    c.stbi_image_free(raw);
     return ok;
 }
 
@@ -65,7 +65,7 @@ pub fn decodeEmbedded(gpa: std.mem.Allocator, et: *const c.aiTexture, logger: ?*
             4,
         ) orelse return fallbackWhite(gpa, logger, out);
         const ok = copyToOwnStorage(gpa, raw, w, h, out);
-        c.stbi_image_free(raw); // matched with stbi_load_from_memory
+        c.stbi_image_free(raw);
         return ok;
     }
 

@@ -58,7 +58,7 @@ public record ApiFunction(string Name, string Returns, string? Doc, string? Retu
 public class ApiModel
 {
     public List<ApiEnum> Enums { get; } = [];
-    public List<ApiStruct> Structs { get; } = [];   // includes vtables; use IsVtable to distinguish
+    public List<ApiStruct> Structs { get; } = [];
     public List<ApiFunction> Functions { get; } = [];
 
     /// <summary>

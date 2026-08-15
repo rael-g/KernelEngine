@@ -2,8 +2,8 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
-const INDEX_BITS = 20; // KE_HANDLE_INDEX_BITS
-const GENERATION_BITS = 12; // KE_HANDLE_GENERATION_BITS
+const INDEX_BITS = 20;
+const GENERATION_BITS = 12;
 const INDEX_MASK: u32 = (1 << INDEX_BITS) - 1;
 const GENERATION_MASK: u32 = (1 << GENERATION_BITS) - 1;
 const GENERATION_FIRST: u32 = 1;
@@ -24,12 +24,12 @@ pub fn SlotMap(comptime T: type) type {
 
         const Slot = struct {
             payload: T,
-            generation: u32, // current generation of this slot
+            generation: u32,
             occupied: bool,
         };
 
         slots: std.ArrayListUnmanaged(Slot),
-        free: std.ArrayListUnmanaged(u32), // indices of vacant slots, ready to reuse
+        free: std.ArrayListUnmanaged(u32),
         alloc: std.mem.Allocator,
 
         pub fn init(alloc: std.mem.Allocator) Self {
@@ -49,7 +49,7 @@ pub fn SlotMap(comptime T: type) type {
                 return packHandle(idx, s.generation);
             }
             const idx: u32 = @intCast(self.slots.items.len);
-            if (idx > INDEX_MASK) return c.KE_HANDLE_NONE; // index space full
+            if (idx > INDEX_MASK) return c.KE_HANDLE_NONE;
             self.slots.append(self.alloc, .{ .payload = value, .generation = GENERATION_FIRST, .occupied = true }) catch return c.KE_HANDLE_NONE;
             return packHandle(idx, GENERATION_FIRST);
         }
@@ -72,7 +72,7 @@ pub fn SlotMap(comptime T: type) type {
             s.occupied = false;
             s.generation = (s.generation +% 1) & GENERATION_MASK;
             if (s.generation == 0) s.generation = GENERATION_FIRST;
-            self.free.append(self.alloc, idx) catch {}; // a lost free slot leaks a slot, not memory-unsafe
+            self.free.append(self.alloc, idx) catch {};
             return payload;
         }
 

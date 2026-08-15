@@ -8,7 +8,7 @@ const c = cimport.c;
 const gpa = std.heap.c_allocator;
 
 const MAX_DRAWS = 512;
-const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
+const UNIFORM_STRIDE = 256;
 
 const PerObject = extern struct {
     mvp: [16]f32,
@@ -20,8 +20,8 @@ const PerFrame = extern struct {
     light_dir: [4]f32,
     light_color: [4]f32,
     ambient: [4]f32,
-    shadow_params: [4]f32, // z = directional active
-    viewport: [4]f32, // x=w, y=h
+    shadow_params: [4]f32,
+    viewport: [4]f32,
     view: [16]f32,
 };
 
@@ -32,7 +32,7 @@ const Draw = struct {
 };
 
 fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
-    return a.view_depth > b.view_depth; // back-to-front: farthest drawn first
+    return a.view_depth > b.view_depth;
 }
 
 const ForwardModule = struct {
@@ -53,22 +53,22 @@ const ForwardModule = struct {
     pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
-    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
-    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, rebuilt on env change
+    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 2
+    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
 
     draws: [MAX_DRAWS]Draw = undefined,
 
-    writes: [2][*c]const u8 = undefined, // hdr (blend), depth (LEQUAL test, no write)
-    reads: [1][*c]const u8 = undefined, // shadow_map (conditional)
+    writes: [2][*c]const u8 = undefined,
+    reads: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [12]c.ke_component_access = undefined,
     access_count: u32 = 0,
-    queries: [5]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient], [mesh,transform]
+    queries: [5]c.ke_query_decl = undefined,
 
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
@@ -278,8 +278,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         core.*.upload.?(core, fwd.obj_uniform, offset, &u, @sizeOf(PerObject));
 
         const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
-        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
-        rp.*.set_bind_group.?(rp, 2, fwd.obj_bind_group, &offset, 1); // set 2: per-object
+        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
+        rp.*.set_bind_group.?(rp, 2, fwd.obj_bind_group, &offset, 1);
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -368,11 +368,11 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
     pp.bind_group_layouts[0] = fwd.frame_bgl;
-    pp.bind_group_layouts[1] = core.*.material_layout.?(core); // set 1: per-material
-    pp.bind_group_layouts[2] = fwd.obj_bgl; // set 2: per-object
-    pp.bind_group_layouts[3] = core.*.resource_bind_group_layout.?(core, "cluster_lights"); // set 3: cluster light lists
+    pp.bind_group_layouts[1] = core.*.material_layout.?(core);
+    pp.bind_group_layouts[2] = fwd.obj_bgl;
+    pp.bind_group_layouts[3] = core.*.resource_bind_group_layout.?(core, "cluster_lights");
     pp.bind_group_layout_count = 4;
-    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
+    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     pp.color_target_count = 1;
     fwd.pipeline_template = pp;
 
@@ -438,7 +438,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.io.reads = @ptrCast(&fwd.reads);
     fwd.io.reads_count = if (shadow_enabled) 1 else 0;
     fwd.io.load = 1;
-    fwd.io.cmd_slot = 6; // after skybox (5), before tonemap (7)
+    fwd.io.cmd_slot = 6;
 
     var ac: u32 = 0;
     fwd.access[ac] = .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE };
