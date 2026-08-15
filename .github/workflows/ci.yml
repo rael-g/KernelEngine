@@ -1,0 +1,75 @@
+name: build and test
+
+# The gates existed before this file did, and nothing ran them: the drift checks,
+# the coverage check and the three test suites all had to be remembered by hand.
+# A gate nobody runs is a gate that goes stale, so this runs them on every push
+# and pull request, in the order a person would.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # X11 and GL headers only: vcpkg builds glfw3 from source, and it looks for
+      # the windowing system's own development headers, which no port provides.
+      # Everything else compiles through the zig toolchain the triplet names.
+      - name: Install windowing system headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xorg-dev libgl1-mesa-dev libglu1-mesa-dev pkg-config
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # vcpkg fetches itself into .cache and installs into vcpkg_installed_zig
+      # (see build.zig). Both are derived from the manifest, so the manifest and
+      # the triplet definition are what the key has to follow.
+      - name: Restore vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache
+            vcpkg_installed_zig
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
+
+      - name: Build native
+        run: zig build --prefix build/native
+
+      - name: Kernel and framework tests
+        run: build/native/bin/test_ke_kernel
+
+      - name: Integration tests
+        run: build/native/bin/test_integration_cpp
+
+      - name: Managed tests
+        run: dotnet test KernelEngine.slnx
+
+      # Both gates regenerate into a temp directory and compare bytes, so they
+      # fail on a header edited without regenerating — the failure mode that
+      # leaves a scene silently dropping a field.
+      - name: Generated code is in step with the headers
+        run: dotnet run scripts/check_api_drift.cs
+
+      - name: Every public header is described by some language
+        run: dotnet run scripts/check_api_coverage.cs
+
+      # scripts/check_bindings_drift.cs is deliberately NOT run here. It compares
+      # timestamps, and a fresh checkout writes every file at once in no
+      # meaningful order, so it reports drift that regenerating does not change a
+      # byte of. It becomes a CI step once it compares content, the way the two
+      # gates above already do.
