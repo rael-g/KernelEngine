@@ -21,6 +21,7 @@ const State = struct {
     ecs: *c.ke_ecs, // borrowed
     root: c.ke_entity,
     transform_cid: c.ke_component_id,
+    world_transform_cid: c.ke_component_id,
     hierarchy_cid: c.ke_component_id,
     name_cid: c.ke_component_id,
     // Owned when a runtime was supplied: the systems keeping world matrices in
@@ -44,6 +45,10 @@ fn getName(s: *State, e: c.ke_entity) ?*const c.ke_name_component {
 
 fn getTransform(s: *State, e: c.ke_entity) ?*c.ke_transform_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.transform_cid)));
+}
+
+fn getWorldTransform(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component {
+    return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
 /// Resolves an existing component cid by name, registering it when absent.
@@ -92,6 +97,7 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
     // invalidate any pointer captured from an earlier add — only once every add
     // is done can the field data be safely fetched and written.
     if (s.ecs.component_add.?(s.ecs, entity, s.transform_cid) == null or
+        s.ecs.component_add.?(s.ecs, entity, s.world_transform_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.hierarchy_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.name_cid) == null)
     {
@@ -103,7 +109,10 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
         t.position = .{ .x = 0.0, .y = 0.0, .z = 0.0 };
         t.rotation = .{ .x = 0.0, .y = 0.0, .z = 0.0, .w = 1.0 };
         t.scale = .{ .x = 1.0, .y = 1.0, .z = 1.0 };
-        t.world_matrix = identityMatrix();
+    }
+
+    if (getWorldTransform(s, entity)) |w| {
+        w.matrix = identityMatrix();
     }
 
     if (getHierarchy(s, entity)) |h| {
@@ -367,10 +376,12 @@ fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
 fn propagateRecursive(s: *State, entity: c.ke_entity, parent_world: *const c.ke_mat4) void {
     var child_parent = parent_world;
     if (getTransform(s, entity)) |t| {
-        var local: c.ke_mat4 = undefined;
-        mat4.fromTransform(&local, &t.position, &t.rotation, &t.scale);
-        mat4.mul(&t.world_matrix, &local, parent_world);
-        child_parent = &t.world_matrix;
+        if (getWorldTransform(s, entity)) |w| {
+            var local: c.ke_mat4 = undefined;
+            mat4.fromTransform(&local, &t.position, &t.rotation, &t.scale);
+            mat4.mul(&w.matrix, &local, parent_world);
+            child_parent = &w.matrix;
+        }
     }
 
     const h = getHierarchy(s, entity) orelse return;
@@ -429,12 +440,14 @@ export fn ke_scene_tree_create(
         .ecs = ecs,
         .root = c.KE_ENTITY_INVALID,
         .transform_cid = 0,
+        .world_transform_cid = 0,
         .hierarchy_cid = 0,
         .name_cid = 0,
         .hierarchy = std.mem.zeroes(c.ke_scene_hierarchy_handle),
     };
 
     s.transform_cid = ensureComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component));
+    s.world_transform_cid = ensureComponent(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component));
     s.hierarchy_cid = ensureComponent(ecs, c.KE_COMPONENT_NAME_HIERARCHY, @sizeOf(c.ke_hierarchy_component));
     s.name_cid = ensureComponent(ecs, c.KE_COMPONENT_NAME_NAME, @sizeOf(c.ke_name_component));
 

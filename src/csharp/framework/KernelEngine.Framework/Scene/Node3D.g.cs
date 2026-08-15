@@ -7,7 +7,7 @@ using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Per-entity 3D transform component. Read/written as one atomic unit (position, rotation, and scale are meaningless set independently mid-write) — kabic's [whole:] tag maps the whole struct to a single bit-cast property instead of one property per field. world_matrix is derived output, recomputed from the hierarchy each frame; it rides along in the same atomic struct rather than being a separate field a caller could plausibly author.</summary>
+/// <summary>Per-entity authored 3D pose. Read/written as one atomic unit (position, rotation, and scale are meaningless set independently mid-write) — kabic's [whole:] tag maps the whole struct to a single bit-cast property instead of one property per field. Carries only what a caller writes: the resolved world matrix is ke_world_transform_component, so no consumer of a pose is handed a derived field it is free to overwrite.</summary>
 [GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 public partial class Node3D : Node
 {

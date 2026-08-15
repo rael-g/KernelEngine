@@ -56,7 +56,7 @@ const PerFrame = extern struct {
 // its own list rather than relying on iteration order.
 const Draw = struct {
     mesh: *const c.ke_mesh_component,
-    transform: *const c.ke_transform_component,
+    world: *const c.ke_world_transform_component,
     view_depth: f32,
 };
 
@@ -75,7 +75,7 @@ const ForwardModule = struct {
     ibl_enabled: bool = true,
 
     mesh_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
     light_cid: c.ke_component_id = undefined,
     ambient_cid: c.ke_component_id = undefined,
@@ -161,18 +161,18 @@ fn makeProjection(ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, a
     return p;
 }
 
-fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToRh(eye, fwd, up);
-    };
-    return view;
+/// View matrix from where the camera ended up in world space. A camera whose
+/// basis carries no rotation at all is aimed at the origin instead: an authored
+/// camera that only set a position would otherwise stare down -Z at nothing.
+fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    const m = cam_wt.matrix.m;
+    const eye = zm.f32x4(m[12], m[13], m[14], 1.0);
+    const unrotated = @abs(m[1]) < 1e-6 and @abs(m[2]) < 1e-6 and @abs(m[4]) < 1e-6 and
+        @abs(m[6]) < 1e-6 and @abs(m[8]) < 1e-6 and @abs(m[9]) < 1e-6;
+    if (unrotated) return zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
+    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+    const up = zm.f32x4(m[4], m[5], m[6], 0);
+    return zm.lookToRh(eye, fwd, up);
 }
 
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
@@ -243,7 +243,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     if (cam_segc == 0 or cam_segs[0].count == 0) return;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
+    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &fwd.io);
     if (pc == null) return;
@@ -261,7 +261,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     enc.*.copy_texture_to_texture.?(enc, hdr_tex, hdr_opaque_tex, bw, bh);
 
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
-    const view = cameraView(cam_tc);
+    const view = cameraView(cam_wt);
     const proj = makeProjection(fwd.ndc, cam, aspect);
     const view_proj = zm.mul(view, proj);
 
@@ -279,7 +279,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
 
     var frame: PerFrame = .{
-        .camera_pos = .{ cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0 },
+        .camera_pos = .{ cam_wt.matrix.m[12], cam_wt.matrix.m[13], cam_wt.matrix.m[14], 1.0 },
         // Zero until a directional_light entity supplies the real values; the
         // shader ignores these while shadow_params.z stays clear.
         .light_dir = .{ 0.0, 0.0, 0.0, 0.0 },
@@ -321,13 +321,14 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var s: usize = 0;
     while (s < segc and draw_count < MAX_DRAWS) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count and draw_count < MAX_DRAWS) : (i += 1) {
             if (core.*.material_alpha_mode.?(core, meshes[i].material) != c.KE_ALPHA_MODE_BLEND) continue;
-            const wp = zm.f32x4(tcs[i].position.x, tcs[i].position.y, tcs[i].position.z, 1.0);
+            const wm = wts[i].matrix.m;
+            const wp = zm.f32x4(wm[12], wm[13], wm[14], 1.0);
             const view_pos = zm.mul(wp, view);
-            fwd.draws[draw_count] = .{ .mesh = @ptrCast(&meshes[i]), .transform = @ptrCast(&tcs[i]), .view_depth = view_pos[2] };
+            fwd.draws[draw_count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_depth = view_pos[2] };
             draw_count += 1;
         }
     }
@@ -352,7 +353,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         if (!fwd.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
         rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template));
 
-        const model = zm.loadMat(draw.transform.world_matrix.m[0..]);
+        const model = zm.loadMat(draw.world.matrix.m[0..]);
         const mvp = zm.mul(model, view_proj);
         var u: PerObject = undefined;
         zm.storeMat(u.mvp[0..], mvp);
@@ -373,7 +374,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
 fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
-         mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
+         mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
          light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
          frame_cid: c.ke_component_id,
          out_error: [*c][*c]c.ke_error) bool {
@@ -383,7 +384,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.logger = logger;
     fwd.ibl_enabled = ibl_enabled;
     fwd.mesh_cid = mesh_cid;
-    fwd.transform_cid = transform_cid;
+    fwd.world_transform_cid = world_transform_cid;
     fwd.camera_cid = camera_cid;
     fwd.light_cid = light_cid;
     fwd.ambient_cid = ambient_cid;
@@ -557,7 +558,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     ac += 1;
     fwd.access[ac] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
-    fwd.access[ac] = .{ .cid = transform_cid, .access = c.KE_ACCESS_READ };
+    fwd.access[ac] = .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
     fwd.access[ac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
@@ -580,7 +581,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const rd = c.KE_ACCESS_READ;
     fwd.queries = std.mem.zeroes([5]c.ke_query_decl);
     fwd.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    fwd.queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    fwd.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     fwd.queries[0].term_count = 2;
     fwd.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
     fwd.queries[1].term_count = 1;
@@ -589,7 +590,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.queries[3].terms[0] = .{ .cid = ambient_cid, .access = rd };
     fwd.queries[3].term_count = 1;
     fwd.queries[4].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    fwd.queries[4].terms[1] = .{ .cid = transform_cid, .access = rd };
+    fwd.queries[4].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     fwd.queries[4].term_count = 2;
     return true;
 }
@@ -605,7 +606,7 @@ fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
 export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                     logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
-                                    mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                    mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, light_cid: c.ke_component_id,
                                     ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
                                     frame_cid: c.ke_component_id,
@@ -618,7 +619,7 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const fwd = gpa.create(ForwardModule) catch return empty;
     fwd.* = .{};
     if (!setup(fwd, dev, core_ref, ndc, logger, ibl_enabled != 0,
-               mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
+               mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
         gpa.destroy(fwd);
         return empty;

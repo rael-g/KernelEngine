@@ -38,7 +38,7 @@ extern "C"
     } ke_render_shadow_handle;
 
     // Creates the shadow-depth pass. `runtime`/`core`/`device` are borrowed.
-    // mesh_cid/transform_cid/light_cid/frame_cid are cids the aggregator
+    // mesh_cid/world_transform_cid/light_cid/frame_cid are cids the aggregator
     // already registered. When `enabled` is false, the tiny "shadow_lvp"
     // uniform is still published (shadow_feature.slang's neutral-default hook
     // resource) but no render target/pipeline/system is created — deferred/
@@ -47,7 +47,7 @@ extern "C"
     KE_RENDER_SHADOW_API ke_render_shadow_handle ke_render_shadow_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_bool enabled,
-        ke_component_id mesh_cid, ke_component_id transform_cid,
+        ke_component_id mesh_cid, ke_component_id world_transform_cid,
         ke_component_id light_cid, ke_component_id frame_cid,
         ke_error **out_error);
 

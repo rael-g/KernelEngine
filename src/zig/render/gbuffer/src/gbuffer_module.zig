@@ -56,7 +56,7 @@ const GBufferModule = struct {
     ndc: c.ke_ndc_convention = undefined,
 
     mesh_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
 
     // Pipeline params shared by every material this pass draws: identical bind-
@@ -109,18 +109,18 @@ const rc_MAX_SHADER_QUALIFIED = 128;
 // Right-handed view from a camera transform (identity rotation → look at origin;
 // otherwise the world-matrix basis). Duplicated from forward_module.zig per the
 // decoupling precedent so the encode pass agrees on view space independently.
-fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToRh(eye, fwd, up);
-    };
-    return view;
+/// View matrix from where the camera ended up in world space. A camera whose
+/// basis carries no rotation at all is aimed at the origin instead: an authored
+/// camera that only set a position would otherwise stare down -Z at nothing.
+fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    const m = cam_wt.matrix.m;
+    const eye = zm.f32x4(m[12], m[13], m[14], 1.0);
+    const unrotated = @abs(m[1]) < 1e-6 and @abs(m[2]) < 1e-6 and @abs(m[4]) < 1e-6 and
+        @abs(m[6]) < 1e-6 and @abs(m[8]) < 1e-6 and @abs(m[9]) < 1e-6;
+    if (unrotated) return zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
+    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+    const up = zm.f32x4(m[4], m[5], m[6], 0);
+    return zm.lookToRh(eye, fwd, up);
 }
 
 // orthographic_size is the half-height of the view volume; width follows from aspect.
@@ -167,14 +167,14 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
+    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const view = cameraView(cam_tc);
+    const view = cameraView(cam_wt);
     const proj = makeProjection(gb.ndc, cam, aspect);
     const view_proj = zm.mul(view, proj);
 
@@ -190,7 +190,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var s: usize = 0;
     while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
             // BLEND materials are the transparent-forward pass's exclusive draws;
@@ -203,7 +203,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             var idx_count: u32 = 0;
             if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
 
-            const model = zm.loadMat(tcs[i].world_matrix.m[0..]);
+            const model = zm.loadMat(wts[i].matrix.m[0..]);
             const mvp = zm.mul(model, view_proj);
             var u: PerObject = undefined;
             zm.storeMat(u.mvp[0..], mvp);
@@ -234,13 +234,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 }
 
 fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+         ndc: c.ke_ndc_convention, mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     gb.core = core;
     gb.device = dev;
     gb.ndc = ndc;
     gb.mesh_cid = mesh_cid;
-    gb.transform_cid = transform_cid;
+    gb.world_transform_cid = world_transform_cid;
     gb.camera_cid = camera_cid;
 
     // Set 0 — empty: the encode shader binds only material (set 1) + object
@@ -393,7 +393,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .cid = emissive_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = depth_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
@@ -404,10 +404,10 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const rd = c.KE_ACCESS_READ;
     gb.queries = std.mem.zeroes([2]c.ke_query_decl);
     gb.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    gb.queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    gb.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     gb.queries[0].term_count = 2;
     gb.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    gb.queries[1].terms[1] = .{ .cid = transform_cid, .access = rd };
+    gb.queries[1].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     gb.queries[1].term_count = 2;
     return true;
 }
@@ -419,7 +419,7 @@ fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
 
 export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
-                                    mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                    mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_gbuffer_handle {
     const empty = c.ke_render_gbuffer_handle{ .ref = null, .destroy = null };
@@ -429,7 +429,7 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
 
     const gb = gpa.create(GBufferModule) catch return empty;
     gb.* = .{};
-    if (!setup(gb, dev, core_ref, ndc, mesh_cid, transform_cid, camera_cid, frame_cid, out_error)) {
+    if (!setup(gb, dev, core_ref, ndc, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
         gpa.destroy(gb);
         return empty;
     }

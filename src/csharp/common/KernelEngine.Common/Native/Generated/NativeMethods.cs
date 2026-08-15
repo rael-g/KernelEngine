@@ -9,4 +9,7 @@ public static partial class NativeMethods
 
     [NativeTypeName("#define KE_COMPONENT_NAME_TRANSFORM \"transform\"")]
     public static ReadOnlySpan<byte> KE_COMPONENT_NAME_TRANSFORM => "transform"u8;
+
+    [NativeTypeName("#define KE_COMPONENT_NAME_WORLD_TRANSFORM \"world_transform\"")]
+    public static ReadOnlySpan<byte> KE_COMPONENT_NAME_WORLD_TRANSFORM => "world_transform"u8;
 }

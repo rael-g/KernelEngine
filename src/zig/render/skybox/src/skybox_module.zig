@@ -32,7 +32,7 @@ const SkyboxModule = struct {
     ndc: c.ke_ndc_convention = undefined,
 
     camera_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
     // Re-queried via core.get_or_create_pipeline every record() call — see
@@ -53,18 +53,18 @@ const SkyboxModule = struct {
     queries: [2]c.ke_query_decl = undefined, // [camera, transform], [skybox]
 };
 
-fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToRh(eye, fwd, up);
-    };
-    return view;
+/// View matrix from where the camera ended up in world space. A camera whose
+/// basis carries no rotation at all is aimed at the origin instead: an authored
+/// camera that only set a position would otherwise stare down -Z at nothing.
+fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    const m = cam_wt.matrix.m;
+    const eye = zm.f32x4(m[12], m[13], m[14], 1.0);
+    const unrotated = @abs(m[1]) < 1e-6 and @abs(m[2]) < 1e-6 and @abs(m[4]) < 1e-6 and
+        @abs(m[6]) < 1e-6 and @abs(m[8]) < 1e-6 and @abs(m[9]) < 1e-6;
+    if (unrotated) return zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
+    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+    const up = zm.f32x4(m[4], m[5], m[6], 0);
+    return zm.lookToRh(eye, fwd, up);
 }
 
 fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
@@ -91,7 +91,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     if (cam_segc == 0 or cam_segs[0].count == 0) return; // no camera → deferred already cleared hdr
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
+    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &sm.io);
     if (pc == null) return;
@@ -103,7 +103,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     // Rotation-only view (translation zeroed) × proj, inverted → clip-to-world
     // direction so the cubemap stays centred on the camera (infinite background).
-    const view = cameraView(cam_tc);
+    const view = cameraView(cam_wt);
     var vm: [16]f32 = undefined;
     zm.storeMat(vm[0..], view);
     vm[12] = 0;
@@ -156,13 +156,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 }
 
 fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+         ndc: c.ke_ndc_convention, camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     sm.core = core;
     sm.device = dev;
     sm.ndc = ndc;
     sm.camera_cid = camera_cid;
-    sm.transform_cid = transform_cid;
+    sm.world_transform_cid = world_transform_cid;
     sm.skybox_cid = skybox_cid;
 
     const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
@@ -228,7 +228,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE },
         .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = skybox_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
@@ -238,7 +238,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const rd = c.KE_ACCESS_READ;
     sm.queries = std.mem.zeroes([2]c.ke_query_decl);
     sm.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    sm.queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    sm.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     sm.queries[0].term_count = 2;
     sm.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
     sm.queries[1].term_count = 1;
@@ -259,7 +259,7 @@ fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
 
 export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
-                                   camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                   camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                    skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_skybox_handle {
     const empty = c.ke_render_skybox_handle{ .ref = null, .destroy = null };
@@ -269,7 +269,7 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
 
     const sm = gpa.create(SkyboxModule) catch return empty;
     sm.* = .{};
-    if (!setup(sm, dev, core_ref, ndc, camera_cid, transform_cid, skybox_cid, frame_cid, out_error)) {
+    if (!setup(sm, dev, core_ref, ndc, camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error)) {
         gpa.destroy(sm);
         return empty;
     }

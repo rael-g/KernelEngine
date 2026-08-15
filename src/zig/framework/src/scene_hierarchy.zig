@@ -14,6 +14,7 @@ const E = @import("kerror").Errors(c);
 const State = struct {
     ecs: *c.ke_ecs, // borrowed
     transform_cid: c.ke_component_id,
+    world_transform_cid: c.ke_component_id,
     hierarchy_cid: c.ke_component_id,
 
     // Entities in an order where a parent always precedes its children, rebuilt
@@ -25,15 +26,19 @@ const State = struct {
     stack: std.ArrayList(c.ke_entity) = .empty,
 
     queries: [1]c.ke_query_decl = undefined,
-    access: [2]c.ke_component_access = undefined,
+    access: [3]c.ke_component_access = undefined,
 };
 
 fn hierarchyOf(s: *State, e: c.ke_entity) ?*const c.ke_hierarchy_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.hierarchy_cid)));
 }
 
-fn transformOf(s: *State, e: c.ke_entity) ?*c.ke_transform_component {
+fn transformOf(s: *State, e: c.ke_entity) ?*const c.ke_transform_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.transform_cid)));
+}
+
+fn worldTransformOf(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component {
+    return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
 fn identityMatrix() c.ke_mat4 {
@@ -96,18 +101,19 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.
     // the time its children are read, so one forward pass is enough.
     for (s.order.items) |entity| {
         const t = transformOf(s, entity) orelse continue;
+        const w = worldTransformOf(s, entity) orelse continue;
         const h = hierarchyOf(s, entity);
 
         const parent_world = blk: {
             const hier = h orelse break :blk &identity;
             if (hier.parent == c.KE_ENTITY_INVALID) break :blk &identity;
-            const pt = transformOf(s, hier.parent) orelse break :blk &identity;
-            break :blk &pt.world_matrix;
+            const pw = worldTransformOf(s, hier.parent) orelse break :blk &identity;
+            break :blk &pw.matrix;
         };
 
         var local: c.ke_mat4 = undefined;
         mat4.fromTransform(&local, &t.position, &t.rotation, &t.scale);
-        mat4.mul(&t.world_matrix, &local, parent_world);
+        mat4.mul(&w.matrix, &local, parent_world);
     }
 }
 
@@ -142,8 +148,10 @@ export fn ke_scene_hierarchy_create(
     // owns, or these systems would maintain a second, unrelated set of components
     // while the real scene graph silently stopped being propagated.
     var transform_meta: c.ke_component_meta = undefined;
+    var world_transform_meta: c.ke_component_meta = undefined;
     var hierarchy_meta: c.ke_component_meta = undefined;
     if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM, &transform_meta, null) or
+        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &world_transform_meta, null) or
         !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta, null))
     {
         E.fail(out_error, .not_found, "scene_tree components are not registered on this ecs", @src());
@@ -157,6 +165,7 @@ export fn ke_scene_hierarchy_create(
     s.* = .{
         .ecs = ecs,
         .transform_cid = transform_meta.cid,
+        .world_transform_cid = world_transform_meta.cid,
         .hierarchy_cid = hierarchy_meta.cid,
     };
 
@@ -166,12 +175,13 @@ export fn ke_scene_hierarchy_create(
 
     s.access = .{
         .{ .cid = s.hierarchy_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = s.transform_cid, .access = c.KE_ACCESS_WRITE },
+        .{ .cid = s.transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = s.world_transform_cid, .access = c.KE_ACCESS_WRITE },
     };
 
     // POST_UPDATE: after gameplay has moved things, before the render phase reads
-    // world matrices. Declaring the transform write is what makes the scheduler
-    // order this against anything else touching transforms, rather than the
+    // world matrices. Declaring the world-transform write is what makes the
+    // scheduler order this against anything else touching them, rather than the
     // ordering resting on nobody else happening to be in this phase.
     var propagate = std.mem.zeroes(c.ke_runtime_system_params);
     propagate.name = "scene.propagate_transforms";

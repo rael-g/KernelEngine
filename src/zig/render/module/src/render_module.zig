@@ -296,7 +296,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // and handed to each feature module's setup — the modules share cids by
         // name, none owns the registry.
         const mesh_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_MESH, @sizeOf(c.ke_mesh_component), null);
-        const transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), null);
+        const world_transform_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), null);
         const camera_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_CAMERA, @sizeOf(c.ke_camera_component), null);
         const light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(c.ke_directional_light_component), null);
         const point_light_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(c.ke_point_light_component), null);
@@ -350,7 +350,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // resolve them by name) and registers its runtime system only when
         // enabled, in the position its old registerSys call used to occupy.
         st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, @intFromBool(shadow_enabled),
-                                              mesh_cid, transform_cid, light_cid, st.frame_cid, out_error);
+                                              mesh_cid, world_transform_cid, light_cid, st.frame_cid, out_error);
         if (st.shadow.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
@@ -363,7 +363,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // its runtime system, in the position its old registerSys call used
         // to occupy.
         st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-                                                point_light_cid, spot_light_cid, transform_cid, camera_cid, st.frame_cid, out_error);
+                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.cluster.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
@@ -374,7 +374,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // resources (gbuffer_albedo/normal/emissive/depth — needed by
         // deferred-lighting's setup below) and registers its runtime system,
         // in the position its old registerSys call used to occupy.
-        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, ndc, mesh_cid, transform_cid, camera_cid, st.frame_cid, out_error);
+        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, ndc, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.gbuffer.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
@@ -386,7 +386,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // ke_render_service) and registers its runtime system, in the position
         // its old registerSys call used to occupy.
         st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
-                                                            camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
+                                                            camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
@@ -395,7 +395,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // Skybox is its own physical plugin: its factory registers its own
         // runtime system directly, matching the position its old registerSys
         // call used to occupy (registration order matters — see tonemap above).
-        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, camera_cid, transform_cid, skybox_cid, st.frame_cid, out_error);
+        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.skybox.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
@@ -407,7 +407,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         // and registers its runtime system, in the position its old
         // registerSys call used to occupy.
         st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
-                                                mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
+                                                mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);

@@ -4,12 +4,12 @@ using System.Runtime.InteropServices;
 namespace KernelEngine.Ecs;
 
 /// <summary>
-/// ECS component that stores the local spatial transform and the computed world matrix.
-/// Memory layout matches <c>ke_transform_component</c> exactly.
+/// ECS component holding the authored local pose. Memory layout matches
+/// <c>ke_transform_component</c> exactly.
 /// </summary>
 /// <remarks>
-/// Write <see cref="Position"/>, <see cref="Rotation"/>, and <see cref="Scale"/> each frame.
-/// The <see cref="WorldMatrix"/> field is read-only output computed by the TransformSystem.
+/// Carries only what a caller writes. Where the entity ended up in world space is
+/// <see cref="WorldTransformComponent"/>, written by the hierarchy alone.
 /// </remarks>
 [StructLayout(LayoutKind.Sequential)]
 public struct TransformComponent
@@ -17,8 +17,6 @@ public struct TransformComponent
     public Vector3 Position;
     public Quaternion Rotation;
     public Vector3 Scale;
-    /// <summary>Computed by the TransformSystem — do not write directly.</summary>
-    public Matrix4x4 WorldMatrix;
 
     public static TransformComponent Identity => new()
     {
@@ -31,4 +29,19 @@ public struct TransformComponent
         Matrix4x4.CreateScale(Scale)
       * Matrix4x4.CreateFromQuaternion(Rotation)
       * Matrix4x4.CreateTranslation(Position);
+}
+
+/// <summary>
+/// ECS component holding where an entity ended up in world space, composed down
+/// the hierarchy. Memory layout matches <c>ke_world_transform_component</c> exactly.
+/// </summary>
+/// <remarks>
+/// Output of the hierarchy, which is its only writer: writing it from game code is
+/// overwritten on the next propagation.
+/// </remarks>
+[StructLayout(LayoutKind.Sequential)]
+public struct WorldTransformComponent
+{
+    /// <summary>The resolved world matrix.</summary>
+    public Matrix4x4 Matrix;
 }

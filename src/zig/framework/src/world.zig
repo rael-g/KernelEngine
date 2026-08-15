@@ -252,9 +252,9 @@ export fn ke_world_create(
     world.register_component_apply = worldRegisterComponentApply;
     world.get_component_apply = worldGetComponentApply;
 
-    // Register the framework's own component vocabulary — just "transform"
-    // (spatial's, framework's to own since scene_tree owns transform
-    // propagation). Every other domain (render's camera/mesh/lights, physics's
+    // Register the framework's own component vocabulary — spatial's transform
+    // and the world transform derived from it (framework's to own, since
+    // scene_tree owns the propagation between them). Every other domain (render's camera/mesh/lights, physics's
     // bodies, ...) registers its own cid + apply callback against this world
     // from its own plugin, via register_component_apply below — the framework
     // plugin has no compile-time knowledge of any other domain's components.
@@ -262,6 +262,11 @@ export fn ke_world_create(
     registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component),
         apply.ke_framework_apply_transform,
         &c.ke_transform_component_fields, c.ke_transform_component_fields.len);
+    // No fields and no apply: the hierarchy is its only writer, so a scene block
+    // naming it has nothing to set. Registering it here is what fixes its size
+    // once, before any consumer can register the name against a different one.
+    registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component),
+        null, null, 0);
 
     return .{ .ref = world, .destroy = worldDestroy };
 }

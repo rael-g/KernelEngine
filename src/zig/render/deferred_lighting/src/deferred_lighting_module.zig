@@ -50,7 +50,7 @@ const DeferredLightingModule = struct {
     ibl_enabled: bool = true,
 
     camera_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     light_cid: c.ke_component_id = undefined,
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
@@ -82,18 +82,18 @@ const DeferredLightingModule = struct {
     access_count: u32 = 0,
 };
 
-fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToRh(eye, fwd, up);
-    };
-    return view;
+/// View matrix from where the camera ended up in world space. A camera whose
+/// basis carries no rotation at all is aimed at the origin instead: an authored
+/// camera that only set a position would otherwise stare down -Z at nothing.
+fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    const m = cam_wt.matrix.m;
+    const eye = zm.f32x4(m[12], m[13], m[14], 1.0);
+    const unrotated = @abs(m[1]) < 1e-6 and @abs(m[2]) < 1e-6 and @abs(m[4]) < 1e-6 and
+        @abs(m[6]) < 1e-6 and @abs(m[8]) < 1e-6 and @abs(m[9]) < 1e-6;
+    if (unrotated) return zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
+    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+    const up = zm.f32x4(m[4], m[5], m[6], 0);
+    return zm.lookToRh(eye, fwd, up);
 }
 
 // orthographic_size is the half-height of the view volume; width follows from aspect.
@@ -185,14 +185,14 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         return;
     }
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
+    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const view = cameraView(cam_tc);
+    const view = cameraView(cam_wt);
     const proj = makeProjection(dl.ndc, cam, aspect);
     const view_proj = zm.mul(view, proj);
     const inv_vp = zm.inverse(view_proj);
@@ -212,7 +212,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     // Per-frame UBO: camera + directional light + ambient + matrices.
     var frame: DeferredFrame = .{
-        .camera_pos = .{ cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0 },
+        .camera_pos = .{ cam_wt.matrix.m[12], cam_wt.matrix.m[13], cam_wt.matrix.m[14], 1.0 },
         // Zero until a directional_light entity supplies the real values; the
         // shader ignores these while shadow_params.z stays clear.
         .light_dir = .{ 0.0, 0.0, 0.0, 0.0 },
@@ -281,7 +281,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
 fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
-         camera_cid: c.ke_component_id, transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
+         camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
          ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
          out_error: [*c][*c]c.ke_error) bool {
     dl.core = core;
@@ -290,7 +290,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.logger = logger;
     dl.ibl_enabled = ibl_enabled;
     dl.camera_cid = camera_cid;
-    dl.transform_cid = transform_cid;
+    dl.world_transform_cid = world_transform_cid;
     dl.light_cid = light_cid;
     dl.ambient_cid = ambient_cid;
     dl.skybox_cid = skybox_cid;
@@ -431,7 +431,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     ac += 1;
     dl.access[ac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
-    dl.access[ac] = .{ .cid = transform_cid, .access = c.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
     dl.access[ac] = .{ .cid = light_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
@@ -448,7 +448,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     const rd = c.KE_ACCESS_READ;
     dl.queries = std.mem.zeroes([4]c.ke_query_decl);
     dl.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    dl.queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    dl.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     dl.queries[0].term_count = 2;
     dl.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
     dl.queries[1].term_count = 1;
@@ -470,7 +470,7 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
 export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                               device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                               logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
-                                              camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                              camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                               light_cid: c.ke_component_id, ambient_cid: c.ke_component_id,
                                               skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                               out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_deferred_lighting_handle {
@@ -482,7 +482,7 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     const dl = gpa.create(DeferredLightingModule) catch return empty;
     dl.* = .{};
     if (!setup(dl, dev, core_ref, ndc, logger, ibl_enabled != 0,
-               camera_cid, transform_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
+               camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
         gpa.destroy(dl);
         return empty;

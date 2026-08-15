@@ -250,6 +250,13 @@ ke_transform_component *TransformOf(ke_ecs *ecs, ke_entity e)
     return (ke_transform_component *)ecs->component_get(ecs, e, meta.cid);
 }
 
+ke_world_transform_component *WorldOf(ke_ecs *ecs, ke_entity e)
+{
+    ke_component_meta meta;
+    if (!ecs->component_lookup(ecs, KE_COMPONENT_NAME_WORLD_TRANSFORM, &meta, nullptr)) return nullptr;
+    return (ke_world_transform_component *)ecs->component_get(ecs, e, meta.cid);
+}
+
 } // namespace
 
 TEST_F(SceneTreeTest, PropagateTransforms_FreshNodeIsIdentity)
@@ -258,10 +265,10 @@ TEST_F(SceneTreeTest, PropagateTransforms_FreshNodeIsIdentity)
     ASSERT_NE(n, KE_ENTITY_INVALID);
     tree->propagate_transforms(tree);
 
-    auto *t = TransformOf(ecs, n);
+    auto *t = WorldOf(ecs, n);
     ASSERT_NE(t, nullptr);
     for (int i = 0; i < 16; ++i) {
-        EXPECT_FLOAT_EQ(t->world_matrix.m[i], (i % 5 == 0) ? 1.0f : 0.0f) << "cell " << i;
+        EXPECT_FLOAT_EQ(t->matrix.m[i], (i % 5 == 0) ? 1.0f : 0.0f) << "cell " << i;
     }
 }
 
@@ -277,13 +284,13 @@ TEST_F(SceneTreeTest, PropagateTransforms_ChildTranslationComposesWithParent)
     tree->propagate_transforms(tree);
 
     // Row-major with translation in the last row.
-    auto *pt = TransformOf(ecs, parent);
-    EXPECT_FLOAT_EQ(pt->world_matrix.m[12], 10.0f);
+    auto *pt = WorldOf(ecs, parent);
+    EXPECT_FLOAT_EQ(pt->matrix.m[12], 10.0f);
 
-    auto *ct = TransformOf(ecs, child);
-    EXPECT_FLOAT_EQ(ct->world_matrix.m[12], 11.0f);
-    EXPECT_FLOAT_EQ(ct->world_matrix.m[13], 2.0f);
-    EXPECT_FLOAT_EQ(ct->world_matrix.m[14], 3.0f);
+    auto *ct = WorldOf(ecs, child);
+    EXPECT_FLOAT_EQ(ct->matrix.m[12], 11.0f);
+    EXPECT_FLOAT_EQ(ct->matrix.m[13], 2.0f);
+    EXPECT_FLOAT_EQ(ct->matrix.m[14], 3.0f);
 }
 
 TEST_F(SceneTreeTest, PropagateTransforms_ParentScaleScalesChildOffset)
@@ -296,10 +303,10 @@ TEST_F(SceneTreeTest, PropagateTransforms_ParentScaleScalesChildOffset)
     tree->propagate_transforms(tree);
 
     // The child sits one unit out in a parent scaled 2x, so it lands at 2.
-    auto *ct = TransformOf(ecs, child);
-    EXPECT_FLOAT_EQ(ct->world_matrix.m[12], 2.0f);
+    auto *ct = WorldOf(ecs, child);
+    EXPECT_FLOAT_EQ(ct->matrix.m[12], 2.0f);
     // And inherits the scale on its own basis row.
-    EXPECT_FLOAT_EQ(ct->world_matrix.m[0], 2.0f);
+    EXPECT_FLOAT_EQ(ct->matrix.m[0], 2.0f);
 }
 
 TEST_F(SceneTreeTest, PropagateTransforms_QuarterTurnAboutYMapsXToMinusZ)
@@ -311,10 +318,10 @@ TEST_F(SceneTreeTest, PropagateTransforms_QuarterTurnAboutYMapsXToMinusZ)
     tree->propagate_transforms(tree);
 
     // The basis X row must rotate onto -Z.
-    auto *t = TransformOf(ecs, n);
-    EXPECT_NEAR(t->world_matrix.m[0], 0.0f, 1e-5f);
-    EXPECT_NEAR(t->world_matrix.m[1], 0.0f, 1e-5f);
-    EXPECT_NEAR(t->world_matrix.m[2], -1.0f, 1e-5f);
+    auto *t = WorldOf(ecs, n);
+    EXPECT_NEAR(t->matrix.m[0], 0.0f, 1e-5f);
+    EXPECT_NEAR(t->matrix.m[1], 0.0f, 1e-5f);
+    EXPECT_NEAR(t->matrix.m[2], -1.0f, 1e-5f);
 }
 
 TEST_F(SceneTreeTest, PropagateTransforms_GrandchildAccumulatesWholeChain)
@@ -328,10 +335,10 @@ TEST_F(SceneTreeTest, PropagateTransforms_GrandchildAccumulatesWholeChain)
     TransformOf(ecs, d)->position = ke_vec3{ 0.0f, 0.0f, 4.0f };
     tree->propagate_transforms(tree);
 
-    auto *dt = TransformOf(ecs, d);
-    EXPECT_FLOAT_EQ(dt->world_matrix.m[12], 1.0f);
-    EXPECT_FLOAT_EQ(dt->world_matrix.m[13], 2.0f);
-    EXPECT_FLOAT_EQ(dt->world_matrix.m[14], 4.0f);
+    auto *dt = WorldOf(ecs, d);
+    EXPECT_FLOAT_EQ(dt->matrix.m[12], 1.0f);
+    EXPECT_FLOAT_EQ(dt->matrix.m[13], 2.0f);
+    EXPECT_FLOAT_EQ(dt->matrix.m[14], 4.0f);
 }
 
 TEST_F(SceneTreeTest, Create_NullArgs_ReturnsInvalidArgument)

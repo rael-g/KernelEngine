@@ -41,13 +41,13 @@ extern "C"
 
     // Creates the deferred-lighting pass (the opaque path's second half —
     // decodes the G-buffer and shades it). `runtime`/`core`/`device` are
-    // borrowed. camera_cid/transform_cid/light_cid/ambient_cid/skybox_cid/
+    // borrowed. camera_cid/world_transform_cid/light_cid/ambient_cid/skybox_cid/
     // frame_cid are cids the aggregator already registered. Handle's ref is
     // NULL on failure.
     KE_RENDER_DEFERRED_LIGHTING_API ke_render_deferred_lighting_handle ke_render_deferred_lighting_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
         ke_ndc_convention ndc, ke_logger *logger, ke_bool ibl_enabled,
-        ke_component_id camera_cid, ke_component_id transform_cid,
+        ke_component_id camera_cid, ke_component_id world_transform_cid,
         ke_component_id light_cid, ke_component_id ambient_cid,
         ke_component_id skybox_cid, ke_component_id frame_cid,
         ke_error **out_error);

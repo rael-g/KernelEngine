@@ -96,6 +96,7 @@ int main(void)
     if (!ke_material_is_valid(mat)) die("create_material", err);
 
     ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component), NULL);
+    ke_component_id world_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_WORLD_TRANSFORM, sizeof(ke_world_transform_component), NULL);
     ke_component_id camera_cid    = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_CAMERA,    sizeof(ke_camera_component), NULL);
     ke_component_id mesh_cid      = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_MESH,      sizeof(ke_mesh_component), NULL);
     ke_component_id light_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, sizeof(ke_directional_light_component), NULL);
@@ -104,13 +105,20 @@ int main(void)
 
     ke_entity cam = ecs.ref->entity_create(ecs.ref);
     ke_transform_component *cam_t = ecs.ref->component_add(ecs.ref, cam, transform_cid);
-    *cam_t = (ke_transform_component){ .position = { 1.5f, 1.5f, -3.0f }, .world_matrix = identity };
+    *cam_t = (ke_transform_component){ .position = { 1.5f, 1.5f, -3.0f }, .scale = { 1.0f, 1.0f, 1.0f } };
+    ke_world_transform_component *cam_w = ecs.ref->component_add(ecs.ref, cam, world_cid);
+    *cam_w = (ke_world_transform_component){ .matrix = identity };
+    cam_w->matrix.m[12] = 1.5f;
+    cam_w->matrix.m[13] = 1.5f;
+    cam_w->matrix.m[14] = -3.0f;
     ke_camera_component *cam_c = ecs.ref->component_add(ecs.ref, cam, camera_cid);
     *cam_c = (ke_camera_component){ .fov = 60.0f, .near_plane = 0.1f, .far_plane = 100.0f };
 
     ke_entity ent = ecs.ref->entity_create(ecs.ref);
     ke_transform_component *ent_t = ecs.ref->component_add(ecs.ref, ent, transform_cid);
-    *ent_t = (ke_transform_component){ .world_matrix = identity };
+    *ent_t = (ke_transform_component){ .scale = { 1.0f, 1.0f, 1.0f } };
+    ke_world_transform_component *ent_w = ecs.ref->component_add(ecs.ref, ent, world_cid);
+    *ent_w = (ke_world_transform_component){ .matrix = identity };
     ke_mesh_component *ent_m = ecs.ref->component_add(ecs.ref, ent, mesh_cid);
     *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat };
 

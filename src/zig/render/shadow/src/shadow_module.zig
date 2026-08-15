@@ -42,7 +42,7 @@ const ShadowModule = struct {
     core: *c.ke_render_service = undefined,
     ndc: c.ke_ndc_convention = undefined,
     mesh_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     light_cid: c.ke_component_id = undefined,
     frame_cid: c.ke_component_id = undefined,
 
@@ -131,7 +131,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     var s: usize = 0;
     while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
             var vbo: c.ke_gpu_buffer = 0;
@@ -140,7 +140,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
 
             var u: ShadowObj = undefined;
-            @memcpy(u.model[0..], tcs[i].world_matrix.m[0..16]);
+            @memcpy(u.model[0..], wts[i].matrix.m[0..16]);
             const offset: u32 = draw_idx * UNIFORM_STRIDE;
             core.*.upload.?(core, sh.obj_uniform, offset, &u, @sizeOf(ShadowObj));
 
@@ -161,13 +161,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 // and the per-draw uniform ring.
 fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, enabled: bool, mesh_cid: c.ke_component_id,
-         transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
+         world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
          frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     sh.enabled = enabled;
     sh.core = core;
     sh.ndc = ndc;
     sh.mesh_cid = mesh_cid;
-    sh.transform_cid = transform_cid;
+    sh.world_transform_cid = world_transform_cid;
     sh.light_cid = light_cid;
     sh.frame_cid = frame_cid;
 
@@ -261,7 +261,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
@@ -273,7 +273,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.queries[0].terms[0] = .{ .cid = light_cid, .access = rd };
     sh.queries[0].term_count = 1;
     sh.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    sh.queries[1].terms[1] = .{ .cid = transform_cid, .access = rd };
+    sh.queries[1].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     sh.queries[1].term_count = 2;
     return true;
 }
@@ -286,7 +286,7 @@ fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
 export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                    enabled: c.ke_bool, mesh_cid: c.ke_component_id,
-                                   transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
+                                   world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
                                    frame_cid: c.ke_component_id,
                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_shadow_handle {
     const empty = c.ke_render_shadow_handle{ .ref = null, .destroy = null };
@@ -296,7 +296,7 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
 
     const sh = gpa.create(ShadowModule) catch return empty;
     sh.* = .{};
-    if (!setup(sh, dev, core_ref, ndc, enabled != 0, mesh_cid, transform_cid, light_cid, frame_cid, out_error)) {
+    if (!setup(sh, dev, core_ref, ndc, enabled != 0, mesh_cid, world_transform_cid, light_cid, frame_cid, out_error)) {
         gpa.destroy(sh);
         return empty;
     }

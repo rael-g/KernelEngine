@@ -83,7 +83,7 @@ const ClusterModule = struct {
     logger: ?*c.ke_logger = null,
     point_light_cid: c.ke_component_id = undefined,
     spot_light_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
     frame_cid: c.ke_component_id = undefined,
 
@@ -129,18 +129,18 @@ const ClusterModule = struct {
 // otherwise the world-matrix basis, looking down local −Z). Duplicated from
 // render_module.zig (same decoupling precedent as the constants above) so the
 // cull pass agrees with the forward on view space without importing it.
-fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToRh(eye, fwd, up);
-    };
-    return view;
+/// View matrix from where the camera ended up in world space. A camera whose
+/// basis carries no rotation at all is aimed at the origin instead: an authored
+/// camera that only set a position would otherwise stare down -Z at nothing.
+fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    const m = cam_wt.matrix.m;
+    const eye = zm.f32x4(m[12], m[13], m[14], 1.0);
+    const unrotated = @abs(m[1]) < 1e-6 and @abs(m[2]) < 1e-6 and @abs(m[4]) < 1e-6 and
+        @abs(m[6]) < 1e-6 and @abs(m[8]) < 1e-6 and @abs(m[9]) < 1e-6;
+    if (unrotated) return zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
+    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
+    const up = zm.f32x4(m[4], m[5], m[6], 0);
+    return zm.lookToRh(eye, fwd, up);
 }
 
 fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: usize) void {
@@ -176,11 +176,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const pls: [*c]const c.ke_point_light_component = @ptrCast(@alignCast(segs[s].columns[0]));
-            const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+            const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
             point_total += segs[s].count;
             var i: usize = 0;
             while (i < segs[s].count and pn < MAX_LIGHTS) : (i += 1) {
-                const m = tcs[i].world_matrix.m;
+                const m = wts[i].matrix.m;
                 chunk[fill] = PointLightGpu{
                     .pos_radius = .{ m[12], m[13], m[14], pls[i].radius },
                     .color_intensity = .{ pls[i].color.x, pls[i].color.y, pls[i].color.z, pls[i].intensity },
@@ -214,11 +214,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
-            const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+            const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
             spot_total += segs[s].count;
             var i: usize = 0;
             while (i < segs[s].count and sn < MAX_LIGHTS) : (i += 1) {
-                const m = tcs[i].world_matrix.m;
+                const m = wts[i].matrix.m;
                 chunk[fill] = SpotLightGpu{
                     .pos_range = .{ m[12], m[13], m[14], sls[i].range },
                     .dir_cos_inner = .{ sls[i].dir[0], sls[i].dir[1], sls[i].dir[2], std.math.cos(sls[i].inner_deg * deg2rad) },
@@ -246,7 +246,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const cam_segs = c.ke_system_ctx_view(ctx, 2, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return;
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
+    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &cm.cull_io);
     if (pc == null) return;
@@ -262,7 +262,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         .proj = .{ std.math.tan(cam.fov * deg2rad * 0.5), aspect, cam.near_plane, cam.far_plane },
         .view = undefined,
     };
-    zm.storeMat(params.view[0..], cameraView(cam_tc));
+    zm.storeMat(params.view[0..], cameraView(cam_wt));
     core.*.upload.?(core, cm.cull_uniform, 0, &params, @sizeOf(ClusterParams));
 
     // The clustered-lights feature's own grid UBO (cluster_feature.slang, set 3
@@ -306,13 +306,13 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize, out_error: [*c][*c]c.ke
 fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
-             transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
+             world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
              frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     cm.core = core;
     cm.logger = logger;
     cm.point_light_cid = point_light_cid;
     cm.spot_light_cid = spot_light_cid;
-    cm.transform_cid = transform_cid;
+    cm.world_transform_cid = world_transform_cid;
     cm.camera_cid = camera_cid;
     cm.frame_cid = frame_cid;
     cm.grid_x = grid_x;
@@ -460,7 +460,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .cid = cm.clusters_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = cm.point_light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = cm.spot_light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = cm.transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = cm.world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = cm.camera_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = cm.frame_cid, .access = c.KE_ACCESS_READ },
     };
@@ -471,13 +471,13 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const rd = c.KE_ACCESS_READ;
     cm.cull_queries = std.mem.zeroes([3]c.ke_query_decl);
     cm.cull_queries[0].terms[0] = .{ .cid = cm.point_light_cid, .access = rd };
-    cm.cull_queries[0].terms[1] = .{ .cid = cm.transform_cid, .access = rd };
+    cm.cull_queries[0].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
     cm.cull_queries[0].term_count = 2;
     cm.cull_queries[1].terms[0] = .{ .cid = cm.spot_light_cid, .access = rd };
-    cm.cull_queries[1].terms[1] = .{ .cid = cm.transform_cid, .access = rd };
+    cm.cull_queries[1].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
     cm.cull_queries[1].term_count = 2;
     cm.cull_queries[2].terms[0] = .{ .cid = cm.camera_cid, .access = rd };
-    cm.cull_queries[2].terms[1] = .{ .cid = cm.transform_cid, .access = rd };
+    cm.cull_queries[2].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
     cm.cull_queries[2].term_count = 2;
     return true;
 }
@@ -491,7 +491,7 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
                                     device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
                                     grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
                                     point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
-                                    transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
+                                    world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
                                     frame_cid: c.ke_component_id,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_cluster_handle {
     const empty = c.ke_render_cluster_handle{ .ref = null, .destroy = null };
@@ -502,7 +502,7 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const cm = gpa.create(ClusterModule) catch return empty;
     cm.* = .{};
     if (!setup(cm, dev, core_ref, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-               point_light_cid, spot_light_cid, transform_cid, camera_cid, frame_cid, out_error)) {
+               point_light_cid, spot_light_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
         gpa.destroy(cm);
         return empty;
     }

@@ -42,6 +42,7 @@ EcsRegistry reg;
 unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
 var transformCid = reg.RegisterComponent<TransformComponent>("transform");
+var worldCid     = reg.RegisterComponent<WorldTransformComponent>("world_transform");
 var cameraCid    = reg.RegisterComponent<Camera>("camera");
 var meshCid      = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
 var lightCid     = reg.RegisterComponent<DirectionalLight>("directional_light");
@@ -50,13 +51,16 @@ var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
 camT = TransformComponent.Identity;
 camT.Position = new Vector3(1.5f, 1.5f, -3.0f);
+ref var camW = ref reg.AddComponent<WorldTransformComponent>(cam, worldCid)[0];
+camW.Matrix = Matrix4x4.CreateTranslation(camT.Position);
 ref var camC = ref reg.AddComponent<Camera>(cam, cameraCid)[0];
 camC = new Camera { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f };
 
 var ent = reg.CreateEntity();
 ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
 entT = TransformComponent.Identity;
-entT.WorldMatrix = Matrix4x4.Identity;
+ref var entW = ref reg.AddComponent<WorldTransformComponent>(ent, worldCid)[0];
+entW.Matrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
 entM = MeshComponent.Default with { Mesh = cube, Material = orange };
 
