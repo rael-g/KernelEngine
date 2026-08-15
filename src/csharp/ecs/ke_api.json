@@ -71,7 +71,7 @@
     },
     {
       "name": "ke_ecs_segment",
-      "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term (term order = the order passed to query_register; columns[i] is the storage for cids[i], aligned 1:1 with entities). A tag term (zero-size component) has columns[i] == NULL. Pointers stay valid until the next structural change \u2014 deferred to the wave barrier \u2014 so they are stable for the whole parallel wave.",
+      "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term in the order query_register received them, each aligned 1:1 with \u0060entities\u0060. A tag term\u0027s column is NULL. Pointers stay valid until the next structural change.",
       "tags": [],
       "fields": [
         {

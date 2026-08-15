@@ -12,24 +12,13 @@ extern "C"
 {
 #endif
 
-// Opaque — the runtime's per-system component funnel (kernel_engine/runtime/system_ctx.h).
+/// Opaque — the runtime's per-system component funnel
+/// (kernel_engine/runtime/system_ctx.h).
 typedef struct ke_system_ctx ke_system_ctx;
 
-// Opaque — the per-pass recording context (kernel_engine/render/service/pass_context.h).
-// Forward-declared here so this header stays light; pass impls include the full
-// definition. Mirrors how gpu_device.h forward-declares its encoder/render-pass.
+/// Opaque — the per-pass recording context
+/// (kernel_engine/render/service/pass_context.h).
 typedef struct ke_render_pass_ctx ke_render_pass_ctx;
-
-// ══════════════════════════════════════════════════════════════════════════
-// L5 — Render core service
-//
-// Owns the transient render-target pool, the resource registry, and barrier
-// tracking. It does NOT order passes: a render pass is a plain runtime system,
-// and the runtime's wave-builder orders them. Each declared resource is minted
-// as a zero-size tag component (its cid is placed in a pass-system's
-// access_list) so a texture dependency becomes an ordinary write-before-read
-// edge for the same wave-builder that orders sim systems.
-// ══════════════════════════════════════════════════════════════════════════
 
 typedef struct ke_render_service ke_render_service;
 
@@ -55,29 +44,21 @@ typedef struct ke_render_resource_desc
     uint32_t                height;
     float                   scale_x; // used when size_mode = RELATIVE_TO_BACKBUFFER
     float                   scale_y;
-    // Per-resource clear color. Alpha == 0 (default/zeroed) defers to the core's
-    // global clear color set via set_clear_color(). Alpha != 0 uses these values.
+    /// Per-resource clear color.
     float                   clear_value[4];
 } ke_render_resource_desc;
 
-// A pass's declared resource I/O by name. The module turns these names into
-// the access_list cids (via cid()) at register_system time; begin_pass uses the
-// same names to resolve views and bind the writes as attachments.
+/// A pass's declared resource I/O by name.
 typedef struct ke_render_pass_io
 {
     const char *const *reads;
     uint32_t           reads_count;
     const char *const *writes;
     uint32_t           writes_count;
-    // The frame command-buffer slot this pass records into. Each pass owns a
-    // distinct slot, so passes that run in parallel append without a shared
-    // counter (no atomic, no race). end_frame submits the populated slots in
-    // ascending order, so the module must assign slots in dependency order
-    // (a pass whose output a later pass samples gets the lower slot).
+    /// The frame command-buffer slot this pass records into.
     uint32_t           cmd_slot;
-    // When non-zero, color attachments load their existing contents instead of
-    // clearing. An overlay pass (e.g. UI on top of the tonemapped scene) sets
-    // this so it composites rather than wipes the target. Default 0 = clear.
+    /// When non-zero, color attachments load their existing contents instead of
+    /// clearing.
     uint32_t           load;
 } ke_render_pass_io;
 
@@ -85,108 +66,64 @@ struct ke_render_service
 {
     void *handle;
 
-    // ── Setup (single thread, module on_load) ─────────────────────────────
-    // Declares a transient resource the core allocates and recycles; returns
-    // the tag-component cid to place in pass access_lists.
+    /// Declares a transient resource the core allocates and recycles.
+    /// @return The tag-component cid to place in a pass's access_list.
     ke_component_id (*declare)(struct ke_render_service *self,
                                const ke_render_resource_desc *desc, ke_error **out_error);
-    // Imports an externally-owned texture under `name`; returns its tag cid.
+    /// Imports an externally-owned texture under `name`.
+    /// @return Its tag-component cid.
     ke_component_id (*import_texture)(struct ke_render_service *self, const char *name,
                                       ke_gpu_texture tex, ke_error **out_error);
-    // Mints a tag cid under `name` with no GPU payload — for a pure scheduling
-    // ordering dependency between two passes that isn't itself a texture/
-    // buffer/bind-group (e.g. a compute pass's cull-list output another pass
-    // must run after, when the actual data crosses through a different named
-    // resource). Same table/cid() lookup as every other named resource.
+    /// Mints a tag cid under `name` with no GPU payload, for an ordering
+    /// dependency between two passes that carries no data of its own.
     ke_component_id (*import_tag)(struct ke_render_service *self, const char *name,
                                   ke_error **out_error);
-    // Publishes an externally-owned GPU buffer under `name` (e.g. a shadow pass's
-    // light-view-proj uniform) so another pass can bind it without holding a
-    // pointer to the producing pass's private state — same contract as
-    // import_texture, for producer outputs that aren't a texture.
+    /// Publishes an externally-owned GPU buffer under `name` for another pass to
+    /// bind by name.
     ke_component_id (*import_buffer)(struct ke_render_service *self, const char *name,
                                      ke_gpu_buffer buffer, uint64_t size, ke_error **out_error);
-    // Publishes an externally-owned GPU bind group (+ the layout it was built
-    // from) under `name` (e.g. a clustered-lighting pass's light-list set). A
-    // consumer building its own pipeline needs the layout at setup time; the
-    // bind group instance is looked up again at draw time via resource_bind_group.
+    /// Publishes an externally-owned GPU bind group and its layout under `name`.
+    /// The layout is available at setup; the instance is fetched at draw time
+    /// via resource_bind_group.
     ke_component_id (*import_bind_group)(struct ke_render_service *self, const char *name,
                                          ke_gpu_bind_group bg, ke_gpu_bind_group_layout layout,
                                          ke_error **out_error);
-    // The tag cid previously minted for `name` (KE_COMPONENT_INVALID if unknown).
+    /// @return The tag cid minted for `name`, or KE_COMPONENT_INVALID.
     ke_component_id (*cid)(struct ke_render_service *self, const char *name);
 
-    // ── Execute (inside a render system's body) ───────────────────────────
+    /// Opens a pass's recording context, from inside a render system's body.
     struct ke_render_pass_ctx *(*begin_pass)(struct ke_render_service *self,
                                              ke_system_ctx *sys,
                                              const ke_render_pass_io *io);
+    /// Closes a recording context opened by begin_pass.
     void (*end_pass)(struct ke_render_service *self, struct ke_render_pass_ctx *ctx);
 
-    // ── Frame boundary (module wires these as the first/last render systems) ─
-    // begin_frame acquires the backbuffer — a built-in resource named
-    // "backbuffer", auto-declared at create — and clears the per-pass command
-    // slot table. end_frame submits the populated command slots in ascending
-    // slot order (the module assigns slots in dependency order), then presents.
+    /// Acquires the backbuffer (a built-in resource named "backbuffer") and
+    /// clears the per-pass command slot table.
     ke_bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
+    /// Submits the populated command slots in ascending slot order, then presents.
     ke_bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
 
-    // ── Mesh resources (handle-keyed GPU buffers owned by the core) ────────
-    // Uploads interleaved vertices (position float3 + normal float3) and 16-bit
-    // indices to device buffers; returns a handle a ke_mesh_component references.
-    // The forward pass resolves the handle to draw. KE_MESH_NONE on failure.
-    // `key` is required (KE_MESH_NONE + KE_ERROR_INVALID_ARGUMENT if NULL/empty) —
-    // every mesh is dedup-cached, no uncached upload exists. A resident key returns
-    // the existing handle with its refcount bumped, uploading nothing; a new key
-    // uploads and registers it. Either way the result starts with one reference;
-    // the caller balances it with release_mesh. Callers with no natural path
-    // (procedural geometry) key by their own generation parameters, e.g.
-    // "primitive:cube" or "primitive:sphere:0.5:24:32" — identical calls then
-    // dedup automatically, same as file-backed content.
+    /// Uploads interleaved vertices and 16-bit indices to device buffers.
+    /// @return A handle a ke_mesh_component references.
     /** @param key [utf8] Dedup cache key; required. */
     ke_mesh_handle (*upload_mesh)(struct ke_render_service *self, const char *key,
                                   const void *vertices, size_t vertices_size,
                                   const uint16_t *indices, uint32_t index_count,
                                   ke_error **out_error);
-    // Resolves a mesh handle to its GPU buffers (for a pass to bind + draw).
-    // Returns false if the handle is unknown.
+    /// Resolves a mesh handle to its GPU buffers (for a pass to bind + draw).
     ke_bool (*mesh_buffers)(struct ke_render_service *self, ke_mesh_handle h,
                             ke_gpu_buffer *out_vbo, ke_gpu_buffer *out_ibo,
                             uint32_t *out_index_count);
 
-    // The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).
-    // Defaults to a dark blue; the render module sets it from its config.
+    /// The color a pass clears its color attachments to (begin_render
+    /// LOAD_OP_CLEAR).
     void (*set_clear_color)(struct ke_render_service *self, float r, float g, float b, float a);
 
-    // ── Material resources (glTF base color factor × albedo texture) ──────
-    // Uploads an RGBA8 texture (width*height*4 bytes, row-major). The built-in
-    // white texture is available via white_texture(). KE_TEXTURE_NONE on failure.
-    // `key` is required, same rule as upload_mesh. Cubemaps share this texture
-    // cache and keyspace.
     /** @param key [utf8] Dedup cache key; required. */
     ke_texture_handle (*upload_texture)(struct ke_render_service *self, const char *key,
                                         uint32_t width, uint32_t height,
                                         const void *rgba, ke_error **out_error);
-    // Creates a material: base_color factor multiplied by the albedo texture
-    // (KE_TEXTURE_NONE / handle 0 = white). Handle 0 is a built-in white material.
-    // KE_MATERIAL_NONE on failure. alpha_mode/alpha_cutoff are CPU-side only (see
-    // material_alpha_mode below) — they never reach the GPU material uniform.
-    // ior/distortion_strength only affect the transparent-forward refraction hook
-    // (meaningless outside BLEND); ior: 1.0 = no bend, 1.33 = water, 1.5 = glass.
-    // distortion_strength: lateral shift of the sampled background, in
-    // normalized screen space (glass vs. thick water).
-    // `shader` names the authored material this surface is shaded by — the file
-    // stem of a `struct X : IMaterial` .slang in the project's materials
-    // directory ("standard", "stripes", ...). NULL/empty selects the engine
-    // default ("standard"). It is NOT a file path and NOT a format: whichever
-    // pass draws this material resolves "<shader>.<pass>" through load_shader,
-    // picking up the (material x pass) wrapper the build already compiled. Two
-    // materials naming different shaders therefore resolve to genuinely
-    // distinct PSOs, not merely distinct bind-group contents. CPU-side only,
-    // like alpha_mode. Copied, not borrowed.
-    // `key` is required, same rule as upload_mesh. A caller with no natural file
-    // path (a scene-authored inline material, say) keys by its own parameters —
-    // e.g. a hash/concatenation of base_color+metallic+roughness+alpha_mode — so
-    // two nodes authored with identical values share one material.
     /**
      * @param key [utf8] Dedup cache key; required.
      * @param shader [utf8,nullable] Authored material name; NULL/empty selects the engine default.
@@ -202,102 +139,74 @@ struct ke_render_service
                                           float distortion_strength,
                                           const char *shader,
                                           ke_error **out_error);
-    // The per-material bind-group layout (descriptor set 1) a forward pipeline
-    // must declare so its set-1 bind groups (from material_bind_group) are valid.
+    /// The per-material bind-group layout (descriptor set 1) a forward pipeline
+    /// must declare so its set-1 bind groups (from material_bind_group) are
+    /// valid.
     ke_gpu_bind_group_layout (*material_layout)(struct ke_render_service *self);
-    // The set-1 bind group for a material handle; an unknown handle resolves to
-    // the built-in white material (handle 0).
+    /// The set-1 bind group for a material handle; an unknown handle resolves
+    /// to the built-in white material (handle 0).
     ke_gpu_bind_group (*material_bind_group)(struct ke_render_service *self, ke_material_handle h);
-    // The pass bucket for a material handle, resolved from CPU-side storage —
-    // no GPU state touched. gbuffer skips BLEND; transparent forward skips
-    // everything else. An unknown handle resolves to OPAQUE (the white material).
+    /// The pass bucket for a material handle, resolved from CPU-side storage —
+    /// no GPU state touched.
     ke_alpha_mode (*material_alpha_mode)(struct ke_render_service *self, ke_material_handle h);
-    // The MASK discard threshold for a material handle. Meaningless outside MASK.
+    /// The MASK discard threshold for a material handle.
     float (*material_alpha_cutoff)(struct ke_render_service *self, ke_material_handle h);
 
-    // ── Environment cubemap (skybox + image-based lighting) ──────────────
-    // Uploads an RGBA8 cubemap: 6 faces of face_size×face_size, +X,-X,+Y,-Y,+Z,-Z
-    // concatenated. Returns a texture handle whose view is cube-dimensioned.
-    // KE_TEXTURE_NONE on failure.
-    // `key` is required, same rule as upload_mesh. Cubemaps live in the same
-    // texture cache as upload_texture and share its keyspace.
     /** @param key [utf8] Dedup cache key; required. */
     ke_texture_handle (*upload_cubemap)(struct ke_render_service *self, const char *key,
                                         uint32_t face_size, const void *faces,
                                         ke_error **out_error);
-    // The GPU view for a texture/cubemap handle (for a pass to bind it). A stale or
-    // unknown handle resolves to the built-in white texture.
+    /// The GPU view for a texture/cubemap handle (for a pass to bind it).
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);
-    // The shared filtering sampler the core creates (linear, repeat).
+    /// The shared filtering sampler the core creates (linear, repeat).
     ke_gpu_sampler (*sampler)(struct ke_render_service *self);
 
-    // The GPU view of a declared transient resource by name (so one pass can bind
-    // another pass's output, e.g. the forward sampling the shadow map).
-    // KE_GPU_INVALID_HANDLE if no resource with that name was declared.
+    /// The GPU view of a declared transient resource, by name.
     ke_gpu_texture_view (*resource_view)(struct ke_render_service *self, const char *name);
-    // The raw GPU texture behind a declared resource — for copy_texture_to_texture,
-    // which operates on textures, not views (e.g. snapshotting "hdr" into a
-    // second texture a same-pass refraction read can sample without a hazard).
-    // KE_GPU_INVALID_HANDLE if no resource with that name was declared.
+    /// The raw GPU texture behind a declared resource, for the copy operations
+    /// that take a texture rather than a view.
     ke_gpu_texture (*resource_texture)(struct ke_render_service *self, const char *name);
-    // The GPU buffer published under `name` via import_buffer. KE_GPU_INVALID_HANDLE
-    // if no buffer with that name was published.
+    /// The GPU buffer published under `name` via import_buffer.
     ke_gpu_buffer (*resource_buffer)(struct ke_render_service *self, const char *name);
-    // The size (bytes) of the buffer published under `name`. 0 if unknown.
+    /// The size (bytes) of the buffer published under `name`.
     uint64_t (*resource_buffer_size)(struct ke_render_service *self, const char *name);
-    // The GPU bind group published under `name` via import_bind_group.
-    // KE_GPU_INVALID_HANDLE if no bind group with that name was published.
+    /// The GPU bind group published under `name` via import_bind_group.
     ke_gpu_bind_group (*resource_bind_group)(struct ke_render_service *self, const char *name);
-    // The layout the named bind group was built from (for a consumer's own
-    // pipeline creation). KE_GPU_INVALID_HANDLE if unknown.
+    /// The layout the named bind group was built from (for a consumer's own
+    /// pipeline creation).
     ke_gpu_bind_group_layout (*resource_bind_group_layout)(struct ke_render_service *self, const char *name);
 
-    // The backbuffer's current pixel size — the same value a KE_PHASE_RENDER
-    // pass reads via ke_render_pass_ctx.backbuffer_size, but callable from any
-    // system in any phase (refreshed once per frame at ke_render_module's
-    // begin_frame, so a system earlier in the same tick sees the previous
-    // frame's size — a one-frame lag on resize, not a correctness issue for
-    // anything anchored to screen space).
+    /// The backbuffer's pixel size, callable from any phase. Refreshed once per
+    /// frame at begin_frame, so a caller earlier in the tick reads the previous
+    /// frame's size.
     void (*backbuffer_size)(struct ke_render_service *self, uint32_t *out_w, uint32_t *out_h);
 
-    // Records a buffer upload to be flushed single-threaded at end_frame (before
-    // submit). Render passes call this instead of the device's write_buffer so
-    // parallel passes never touch the non-thread-safe GPU queue concurrently. The
-    // data is copied, so the caller's buffer need not outlive the call. Queue
-    // writes are ordered before the frame's submit, so deferring is correct.
+    /// Records a buffer upload to be flushed single-threaded at end_frame
+    /// (before submit).
     void (*upload)(struct ke_render_service *self, ke_gpu_buffer buffer,
                    uint64_t offset, const void *data, size_t size);
 
-    // ── PSO authority (§6 Mechanism 1) ─────────────────────────────────────
-    // Returns the pipeline for this exact params state, compiling it on first
-    // request. The core owns every pipeline it hands back — callers (every
-    // render pass, none privileged over another) never call
-    // create_render_pipeline / destroy_pipeline themselves. Two requests with
-    // identical params always resolve to the same cached pipeline.
+    /// ── PSO authority (§6 Mechanism 1) ─────────────────────────────────────
+    /// Returns the pipeline for this exact params state, compiling it on first
+    /// request.
     ke_gpu_pipeline (*get_or_create_pipeline)(struct ke_render_service *self,
                                               const ke_gpu_render_pipeline_params *params);
 
-    // The authored-material shader name a material handle was created with (see
-    // create_material's `shader`). An unknown handle resolves to "standard"
-    // (the built-in default). CPU-side only, like alpha_mode/alpha_cutoff — a
-    // drawing pass concatenates "<shader>.<pass>" and resolves the resulting
-    // PSO via load_shader + get_or_create_pipeline. The returned pointer is
-    // owned by the core and valid for the material's lifetime.
+    /// The authored-material shader name a material handle was created with
+    /// (see create_material's `shader`).
     const char *(*material_shader)(struct ke_render_service *self, ke_material_handle h);
 
-    // ── Resource lifetime (refcount + path-keyed dedup) ─────────────────────
-    // The core owns one cache per resource kind (mesh / texture+cubemap /
-    // material). upload_*/create_material register the result there with one
-    // reference; retain adds a reference, release drops one. At zero references
-    // the GPU objects are destroyed and the slot recycled (a later handle into
-    // the reused slot carries a new generation, so a handle kept past its
-    // release no longer resolves — see handles.h). Releasing an unknown or
-    // already-stale handle is a no-op.
+    /// Adds a reference to a mesh, keeping it resident.
     void (*retain_mesh)(struct ke_render_service *self, ke_mesh_handle h);
+    /// Drops a reference to a mesh, freeing it at zero.
     void (*release_mesh)(struct ke_render_service *self, ke_mesh_handle h);
+    /// Adds a reference to a texture, keeping it resident.
     void (*retain_texture)(struct ke_render_service *self, ke_texture_handle h);
+    /// Drops a reference to a texture, freeing it at zero.
     void (*release_texture)(struct ke_render_service *self, ke_texture_handle h);
+    /// Adds a reference to a material, keeping it resident.
     void (*retain_material)(struct ke_render_service *self, ke_material_handle h);
+    /// Drops a reference to a material, freeing it at zero.
     void (*release_material)(struct ke_render_service *self, ke_material_handle h);
 
     /**
@@ -322,26 +231,12 @@ struct ke_render_service
      */
     ke_bool (*try_get_material)(struct ke_render_service *self, const char *key, ke_material_handle *out);
 
-    // The built-in 1×1 white texture, resolvable everywhere a neutral albedo is
-    // wanted. Was implicitly "handle 0" before handles became generational; now
-    // exposed explicitly since no literal handle value is meaningful.
+    /// The built-in 1×1 white texture, resolvable everywhere a neutral albedo
+    /// is wanted.
     ke_texture_handle (*white_texture)(struct ke_render_service *self);
 
-    // ── Shader loading (build-time compiled, runtime resolved) ─────────────
-    // Resolves a shader by logical NAME + STAGE to a device-ready module. Names
-    // neither a file path nor a format — the core resolves
-    // "<shader_dir>/<name>.<stage-suffix>.<ext>" itself, where <shader_dir> was
-    // given to the factory that created this core and <ext> comes from
-    // device.shader_language() (WGSL/SPIR-V/MSL/DXIL). `stage` must be exactly
-    // one of KE_GPU_SHADER_STAGE_VERTEX/FRAGMENT/COMPUTE — never a combination.
-    // The file itself must already exist: this loads a build-time artifact
-    // (see cmake's ke_compile_slang_shader), it does not compile anything, so
-    // the PSO-affecting shader set stays statically derivable from the build
-    // (§6 doctrine) even though the load happens at runtime. The core owns
-    // every shader module it hands back — deduped by resolved path, like every
-    // other resource kind — so passes never call destroy_shader_module
-    // themselves. KE_GPU_INVALID_HANDLE on failure (file missing, `stage` not
-    // exactly one bit, or the device rejected the bytes).
+    /// ── Shader loading (build-time compiled, runtime resolved) ─────────────
+    /// Resolves a shader by logical NAME + STAGE to a device-ready module.
     ke_gpu_shader_module (*load_shader)(struct ke_render_service *self, const char *name,
                                         ke_gpu_shader_stage stage, ke_error **out_error);
 };

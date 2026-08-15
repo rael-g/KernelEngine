@@ -45,7 +45,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         _borrowed = borrowed;
     }
 
-    /// <summary>── Setup (single thread, module on_load) ───────────────────────────── Declares a transient resource the core allocates and recycles; returns the tag-component cid to place in pass access_lists.</summary>
+    /// <summary>Declares a transient resource the core allocates and recycles.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint Declare(ke_render_resource_desc* desc)
     {
@@ -55,7 +55,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return result;
     }
 
-    /// <summary>Imports an externally-owned texture under `name`; returns its tag cid.</summary>
+    /// <summary>Imports an externally-owned texture under `name`.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint ImportTexture(sbyte* name, ulong tex)
     {
@@ -65,7 +65,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return result;
     }
 
-    /// <summary>Mints a tag cid under `name` with no GPU payload — for a pure scheduling ordering dependency between two passes that isn't itself a texture/ buffer/bind-group (e.g. a compute pass's cull-list output another pass must run after, when the actual data crosses through a different named resource). Same table/cid() lookup as every other named resource.</summary>
+    /// <summary>Mints a tag cid under `name` with no GPU payload, for an ordering dependency between two passes that carries no data of its own.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint ImportTag(sbyte* name)
     {
@@ -75,7 +75,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return result;
     }
 
-    /// <summary>Publishes an externally-owned GPU buffer under `name` (e.g. a shadow pass's light-view-proj uniform) so another pass can bind it without holding a pointer to the producing pass's private state — same contract as import_texture, for producer outputs that aren't a texture.</summary>
+    /// <summary>Publishes an externally-owned GPU buffer under `name` for another pass to bind by name.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint ImportBuffer(sbyte* name, ulong buffer, ulong size)
     {
@@ -85,7 +85,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return result;
     }
 
-    /// <summary>Publishes an externally-owned GPU bind group (+ the layout it was built from) under `name` (e.g. a clustered-lighting pass's light-list set). A consumer building its own pipeline needs the layout at setup time; the bind group instance is looked up again at draw time via resource_bind_group.</summary>
+    /// <summary>Publishes an externally-owned GPU bind group and its layout under `name`. The layout is available at setup; the instance is fetched at draw time via resource_bind_group.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint ImportBindGroup(sbyte* name, ulong bg, ulong layout)
     {
@@ -95,25 +95,25 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return result;
     }
 
-    /// <summary>The tag cid previously minted for `name` (KE_COMPONENT_INVALID if unknown).</summary>
+    /// <returns>The tag cid minted for `name`, or KE_COMPONENT_INVALID.</returns>
     public uint Cid(sbyte* name)
     {
         return Handle->cid(Handle, name);
     }
 
-    /// <summary>── Execute (inside a render system's body) ───────────────────────────</summary>
+    /// <summary>Opens a pass's recording context, from inside a render system's body.</summary>
     public ke_render_pass_ctx* BeginPass(ke_system_ctx* sys, ke_render_pass_io* io)
     {
         return Handle->begin_pass(Handle, sys, io);
     }
 
-
+    /// <summary>Closes a recording context opened by begin_pass.</summary>
     public void EndPass(ke_render_pass_ctx* ctx)
     {
         Handle->end_pass(Handle, ctx);
     }
 
-    /// <summary>── Frame boundary (module wires these as the first/last render systems) ─ begin_frame acquires the backbuffer — a built-in resource named "backbuffer", auto-declared at create — and clears the per-pass command slot table. end_frame submits the populated command slots in ascending slot order (the module assigns slots in dependency order), then presents.</summary>
+    /// <summary>Acquires the backbuffer (a built-in resource named "backbuffer") and clears the per-pass command slot table.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void BeginFrame()
     {
@@ -121,6 +121,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         KernelError.ThrowIfFailed(Handle->begin_frame(Handle, &err) != 0, err, "begin_frame");
     }
 
+    /// <summary>Submits the populated command slots in ascending slot order, then presents.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void EndFrame()
     {
@@ -128,7 +129,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         KernelError.ThrowIfFailed(Handle->end_frame(Handle, &err) != 0, err, "end_frame");
     }
 
-    /// <summary>── Mesh resources (handle-keyed GPU buffers owned by the core) ──────── Uploads interleaved vertices (position float3 + normal float3) and 16-bit indices to device buffers; returns a handle a ke_mesh_component references. The forward pass resolves the handle to draw. KE_MESH_NONE on failure. `key` is required (KE_MESH_NONE + KE_ERROR_INVALID_ARGUMENT if NULL/empty) — every mesh is dedup-cached, no uncached upload exists. A resident key returns the existing handle with its refcount bumped, uploading nothing; a new key uploads and registers it. Either way the result starts with one reference; the caller balances it with release_mesh. Callers with no natural path (procedural geometry) key by their own generation parameters, e.g. "primitive:cube" or "primitive:sphere:0.5:24:32" — identical calls then dedup automatically, same as file-backed content.</summary>
+    /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_mesh_handle UploadMesh(string key, void* vertices, nuint verticesSize, ushort* indices, uint indexCount)
@@ -143,19 +144,18 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>Resolves a mesh handle to its GPU buffers (for a pass to bind + draw). Returns false if the handle is unknown.</summary>
+    /// <summary>Resolves a mesh handle to its GPU buffers (for a pass to bind + draw).</summary>
     public bool MeshBuffers(ke_mesh_handle h, ulong* outVbo, ulong* outIbo, uint* outIndexCount)
     {
         return Handle->mesh_buffers(Handle, h, outVbo, outIbo, outIndexCount) != 0;
     }
 
-    /// <summary>The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR). Defaults to a dark blue; the render module sets it from its config.</summary>
+    /// <summary>The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).</summary>
     public void SetClearColor(float r, float g, float b, float a)
     {
         Handle->set_clear_color(Handle, r, g, b, a);
     }
 
-    /// <summary>── Material resources (glTF base color factor × albedo texture) ────── Uploads an RGBA8 texture (width*height*4 bytes, row-major). The built-in white texture is available via white_texture(). KE_TEXTURE_NONE on failure. `key` is required, same rule as upload_mesh. Cubemaps share this texture cache and keyspace.</summary>
     /// <param name="key">Dedup cache key; required.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_texture_handle UploadTexture(string key, uint width, uint height, void* rgba)
@@ -170,7 +170,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>Creates a material: base_color factor multiplied by the albedo texture (KE_TEXTURE_NONE / handle 0 = white). Handle 0 is a built-in white material. KE_MATERIAL_NONE on failure. alpha_mode/alpha_cutoff are CPU-side only (see material_alpha_mode below) — they never reach the GPU material uniform. ior/distortion_strength only affect the transparent-forward refraction hook (meaningless outside BLEND); ior: 1.0 = no bend, 1.33 = water, 1.5 = glass. distortion_strength: lateral shift of the sampled background, in normalized screen space (glass vs. thick water). `shader` names the authored material this surface is shaded by — the file stem of a `struct X : IMaterial` .slang in the project's materials directory ("standard", "stripes", ...). NULL/empty selects the engine default ("standard"). It is NOT a file path and NOT a format: whichever pass draws this material resolves "&lt;shader&gt;.&lt;pass&gt;" through load_shader, picking up the (material x pass) wrapper the build already compiled. Two materials naming different shaders therefore resolve to genuinely distinct PSOs, not merely distinct bind-group contents. CPU-side only, like alpha_mode. Copied, not borrowed. `key` is required, same rule as upload_mesh. A caller with no natural file path (a scene-authored inline material, say) keys by its own parameters — e.g. a hash/concatenation of base_color+metallic+roughness+alpha_mode — so two nodes authored with identical values share one material.</summary>
     /// <param name="key">Dedup cache key; required.</param>
     /// <param name="shader">Authored material name; NULL/empty selects the engine default.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
@@ -202,19 +201,18 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->material_bind_group(Handle, h);
     }
 
-    /// <summary>The pass bucket for a material handle, resolved from CPU-side storage — no GPU state touched. gbuffer skips BLEND; transparent forward skips everything else. An unknown handle resolves to OPAQUE (the white material).</summary>
+    /// <summary>The pass bucket for a material handle, resolved from CPU-side storage — no GPU state touched.</summary>
     public ke_alpha_mode MaterialAlphaMode(ke_material_handle h)
     {
         return Handle->material_alpha_mode(Handle, h);
     }
 
-    /// <summary>The MASK discard threshold for a material handle. Meaningless outside MASK.</summary>
+    /// <summary>The MASK discard threshold for a material handle.</summary>
     public float MaterialAlphaCutoff(ke_material_handle h)
     {
         return Handle->material_alpha_cutoff(Handle, h);
     }
 
-    /// <summary>── Environment cubemap (skybox + image-based lighting) ────────────── Uploads an RGBA8 cubemap: 6 faces of face_size×face_size, +X,-X,+Y,-Y,+Z,-Z concatenated. Returns a texture handle whose view is cube-dimensioned. KE_TEXTURE_NONE on failure. `key` is required, same rule as upload_mesh. Cubemaps live in the same texture cache as upload_texture and share its keyspace.</summary>
     /// <param name="key">Dedup cache key; required.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_texture_handle UploadCubemap(string key, uint faceSize, void* faces)
@@ -229,7 +227,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>The GPU view for a texture/cubemap handle (for a pass to bind it). A stale or unknown handle resolves to the built-in white texture.</summary>
+    /// <summary>The GPU view for a texture/cubemap handle (for a pass to bind it).</summary>
     public ulong TextureView(ke_texture_handle h)
     {
         return Handle->texture_view(Handle, h);
@@ -241,97 +239,97 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->sampler(Handle);
     }
 
-    /// <summary>The GPU view of a declared transient resource by name (so one pass can bind another pass's output, e.g. the forward sampling the shadow map). KE_GPU_INVALID_HANDLE if no resource with that name was declared.</summary>
+    /// <summary>The GPU view of a declared transient resource, by name.</summary>
     public ulong ResourceView(sbyte* name)
     {
         return Handle->resource_view(Handle, name);
     }
 
-    /// <summary>The raw GPU texture behind a declared resource — for copy_texture_to_texture, which operates on textures, not views (e.g. snapshotting "hdr" into a second texture a same-pass refraction read can sample without a hazard). KE_GPU_INVALID_HANDLE if no resource with that name was declared.</summary>
+    /// <summary>The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.</summary>
     public ulong ResourceTexture(sbyte* name)
     {
         return Handle->resource_texture(Handle, name);
     }
 
-    /// <summary>The GPU buffer published under `name` via import_buffer. KE_GPU_INVALID_HANDLE if no buffer with that name was published.</summary>
+    /// <summary>The GPU buffer published under `name` via import_buffer.</summary>
     public ulong ResourceBuffer(sbyte* name)
     {
         return Handle->resource_buffer(Handle, name);
     }
 
-    /// <summary>The size (bytes) of the buffer published under `name`. 0 if unknown.</summary>
+    /// <summary>The size (bytes) of the buffer published under `name`.</summary>
     public ulong ResourceBufferSize(sbyte* name)
     {
         return Handle->resource_buffer_size(Handle, name);
     }
 
-    /// <summary>The GPU bind group published under `name` via import_bind_group. KE_GPU_INVALID_HANDLE if no bind group with that name was published.</summary>
+    /// <summary>The GPU bind group published under `name` via import_bind_group.</summary>
     public ulong ResourceBindGroup(sbyte* name)
     {
         return Handle->resource_bind_group(Handle, name);
     }
 
-    /// <summary>The layout the named bind group was built from (for a consumer's own pipeline creation). KE_GPU_INVALID_HANDLE if unknown.</summary>
+    /// <summary>The layout the named bind group was built from (for a consumer's own pipeline creation).</summary>
     public ulong ResourceBindGroupLayout(sbyte* name)
     {
         return Handle->resource_bind_group_layout(Handle, name);
     }
 
-    /// <summary>The backbuffer's current pixel size — the same value a KE_PHASE_RENDER pass reads via ke_render_pass_ctx.backbuffer_size, but callable from any system in any phase (refreshed once per frame at ke_render_module's begin_frame, so a system earlier in the same tick sees the previous frame's size — a one-frame lag on resize, not a correctness issue for anything anchored to screen space).</summary>
+    /// <summary>The backbuffer's pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame's size.</summary>
     public void BackbufferSize(uint* outW, uint* outH)
     {
         Handle->backbuffer_size(Handle, outW, outH);
     }
 
-    /// <summary>Records a buffer upload to be flushed single-threaded at end_frame (before submit). Render passes call this instead of the device's write_buffer so parallel passes never touch the non-thread-safe GPU queue concurrently. The data is copied, so the caller's buffer need not outlive the call. Queue writes are ordered before the frame's submit, so deferring is correct.</summary>
+    /// <summary>Records a buffer upload to be flushed single-threaded at end_frame (before submit).</summary>
     public void Upload(ulong buffer, ulong offset, void* data, nuint size)
     {
         Handle->upload(Handle, buffer, offset, data, size);
     }
 
-    /// <summary>── PSO authority (§6 Mechanism 1) ───────────────────────────────────── Returns the pipeline for this exact params state, compiling it on first request. The core owns every pipeline it hands back — callers (every render pass, none privileged over another) never call create_render_pipeline / destroy_pipeline themselves. Two requests with identical params always resolve to the same cached pipeline.</summary>
+    /// <summary>── PSO authority (§6 Mechanism 1) ───────────────────────────────────── Returns the pipeline for this exact params state, compiling it on first request.</summary>
     public ulong GetOrCreatePipeline(ke_gpu_render_pipeline_params* @params)
     {
         return Handle->get_or_create_pipeline(Handle, @params);
     }
 
-    /// <summary>The authored-material shader name a material handle was created with (see create_material's `shader`). An unknown handle resolves to "standard" (the built-in default). CPU-side only, like alpha_mode/alpha_cutoff — a drawing pass concatenates "&lt;shader&gt;.&lt;pass&gt;" and resolves the resulting PSO via load_shader + get_or_create_pipeline. The returned pointer is owned by the core and valid for the material's lifetime.</summary>
+    /// <summary>The authored-material shader name a material handle was created with (see create_material's `shader`).</summary>
     public sbyte* MaterialShader(ke_material_handle h)
     {
         return Handle->material_shader(Handle, h);
     }
 
-    /// <summary>── Resource lifetime (refcount + path-keyed dedup) ───────────────────── The core owns one cache per resource kind (mesh / texture+cubemap / material). upload_*/create_material register the result there with one reference; retain adds a reference, release drops one. At zero references the GPU objects are destroyed and the slot recycled (a later handle into the reused slot carries a new generation, so a handle kept past its release no longer resolves — see handles.h). Releasing an unknown or already-stale handle is a no-op.</summary>
+    /// <summary>Adds a reference to a mesh, keeping it resident.</summary>
     public void RetainMesh(ke_mesh_handle h)
     {
         Handle->retain_mesh(Handle, h);
     }
 
-
+    /// <summary>Drops a reference to a mesh, freeing it at zero.</summary>
     public void ReleaseMesh(ke_mesh_handle h)
     {
         Handle->release_mesh(Handle, h);
     }
 
-
+    /// <summary>Adds a reference to a texture, keeping it resident.</summary>
     public void RetainTexture(ke_texture_handle h)
     {
         Handle->retain_texture(Handle, h);
     }
 
-
+    /// <summary>Drops a reference to a texture, freeing it at zero.</summary>
     public void ReleaseTexture(ke_texture_handle h)
     {
         Handle->release_texture(Handle, h);
     }
 
-
+    /// <summary>Adds a reference to a material, keeping it resident.</summary>
     public void RetainMaterial(ke_material_handle h)
     {
         Handle->retain_material(Handle, h);
     }
 
-
+    /// <summary>Drops a reference to a material, freeing it at zero.</summary>
     public void ReleaseMaterial(ke_material_handle h)
     {
         Handle->release_material(Handle, h);
@@ -382,13 +380,13 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>The built-in 1×1 white texture, resolvable everywhere a neutral albedo is wanted. Was implicitly "handle 0" before handles became generational; now exposed explicitly since no literal handle value is meaningful.</summary>
+    /// <summary>The built-in 1×1 white texture, resolvable everywhere a neutral albedo is wanted.</summary>
     public ke_texture_handle WhiteTexture()
     {
         return Handle->white_texture(Handle);
     }
 
-    /// <summary>── Shader loading (build-time compiled, runtime resolved) ───────────── Resolves a shader by logical NAME + STAGE to a device-ready module. Names neither a file path nor a format — the core resolves "&lt;shader_dir&gt;/&lt;name&gt;.&lt;stage-suffix&gt;.&lt;ext&gt;" itself, where &lt;shader _dir&gt; was given to the factory that created this core and &lt;ext &gt; comes from device.shader_language() (WGSL/SPIR-V/MSL/DXIL). `stage` must be exactly one of KE_GPU_SHADER_STAGE_VERTEX/FRAGMENT/COMPUTE — never a combination. The file itself must already exist: this loads a build-time artifact (see cmake's ke_compile_slang_shader), it does not compile anything, so the PSO-affecting shader set stays statically derivable from the build (§6 doctrine) even though the load happens at runtime. The core owns every shader module it hands back — deduped by resolved path, like every other resource kind — so passes never call destroy_shader_module themselves. KE_GPU_INVALID_HANDLE on failure (file missing, `stage` not exactly one bit, or the device rejected the bytes).</summary>
+    /// <summary>── Shader loading (build-time compiled, runtime resolved) ───────────── Resolves a shader by logical NAME + STAGE to a device-ready module.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ulong LoadShader(sbyte* name, uint stage)
     {

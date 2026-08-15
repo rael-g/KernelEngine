@@ -19,14 +19,14 @@ public unsafe partial class SystemCtx
             return Native.ke_system_ctx_view(p, queryIndex, outCount);
     }
 
-    /// <summary>Reserve a real, usable entity id immediately (routes to ke_ecs-&gt;entity_reserve). Safe to call inside a system body during a parallel wave. Unlike spawn (whose id is only assigned at the wave barrier), the returned id is valid at once and can be referenced — used as a parent, stored, or given components via attach (applied at the barrier). This is the entry point for structural creation that needs the id synchronously (e.g. scene-tree node creation from a system).</summary>
+    /// <summary>Reserves an entity id usable immediately, callable during a parallel wave. The id may be referenced at once; components given via attach land at the wave barrier.</summary>
     public static ulong Reserve(in ke_system_ctx ctx)
     {
         fixed (ke_system_ctx* p = &ctx)
             return Native.ke_system_ctx_reserve(p);
     }
 
-    /// <summary>Enqueue an arbitrary structural mutation to run at the wave barrier. The engine copies `user_size` bytes of `user` into an internal arena, so the caller's buffer need not outlive this call. This is the generic escape valve a builder (e.g. the scene tree) uses to perform read-modify-write structural work — such as creating a node and linking it into its parent's child list — that the fixed spawn/attach/despawn verbs cannot express, while still honoring the "no structural change inside a wave" rule. Returns false on OOM.</summary>
+    /// <summary>Enqueues a structural mutation to run at the wave barrier, for work the fixed spawn/attach/despawn verbs cannot express. `user_size` bytes of `user` are copied, so the caller's buffer need not outlive the call. False on OOM.</summary>
     public static bool Defer(in ke_system_ctx ctx, delegate* unmanaged[Cdecl]<ke_ecs*, nint, void> fn, void* user, nuint userSize)
     {
         fixed (ke_system_ctx* p = &ctx)

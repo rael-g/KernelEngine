@@ -91,13 +91,13 @@
           "name": "clear_value",
           "type": "float[4]",
           "tags": [],
-          "doc": "Per-resource clear color. Alpha == 0 (default/zeroed) defers to the core\u0027s global clear color set via set_clear_color(). Alpha != 0 uses these values."
+          "doc": "Per-resource clear color."
         }
       ]
     },
     {
       "name": "ke_render_pass_io",
-      "doc": "A pass\u0027s declared resource I/O by name. The module turns these names into the access_list cids (via cid()) at register_system time; begin_pass uses the same names to resolve views and bind the writes as attachments.",
+      "doc": "A pass\u0027s declared resource I/O by name.",
       "tags": [],
       "fields": [
         {
@@ -128,13 +128,13 @@
           "name": "cmd_slot",
           "type": "uint32_t",
           "tags": [],
-          "doc": "The frame command-buffer slot this pass records into. Each pass owns a distinct slot, so passes that run in parallel append without a shared counter (no atomic, no race). end_frame submits the populated slots in ascending order, so the module must assign slots in dependency order (a pass whose output a later pass samples gets the lower slot)."
+          "doc": "The frame command-buffer slot this pass records into."
         },
         {
           "name": "load",
           "type": "uint32_t",
           "tags": [],
-          "doc": "When non-zero, color attachments load their existing contents instead of clearing. An overlay pass (e.g. UI on top of the tonemapped scene) sets this so it composites rather than wipes the target. Default 0 = clear."
+          "doc": "When non-zero, color attachments load their existing contents instead of clearing."
         }
       ]
     }
@@ -157,8 +157,8 @@
           "name": "declare",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "\u2500\u2500 Setup (single thread, module on_load) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Declares a transient resource the core allocates and recycles; returns the tag-component cid to place in pass access_lists.",
-          "return_doc": null,
+          "doc": "Declares a transient resource the core allocates and recycles.",
+          "return_doc": "The tag-component cid to place in a pass\u0027s access_list.",
           "params": [
             {
               "name": "desc",
@@ -178,8 +178,8 @@
           "name": "import_texture",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Imports an externally-owned texture under \u0060name\u0060; returns its tag cid.",
-          "return_doc": null,
+          "doc": "Imports an externally-owned texture under \u0060name\u0060.",
+          "return_doc": "Its tag-component cid.",
           "params": [
             {
               "name": "name",
@@ -205,7 +205,7 @@
           "name": "import_tag",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Mints a tag cid under \u0060name\u0060 with no GPU payload \u2014 for a pure scheduling ordering dependency between two passes that isn\u0027t itself a texture/ buffer/bind-group (e.g. a compute pass\u0027s cull-list output another pass must run after, when the actual data crosses through a different named resource). Same table/cid() lookup as every other named resource.",
+          "doc": "Mints a tag cid under \u0060name\u0060 with no GPU payload, for an ordering dependency between two passes that carries no data of its own.",
           "return_doc": null,
           "params": [
             {
@@ -226,7 +226,7 @@
           "name": "import_buffer",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Publishes an externally-owned GPU buffer under \u0060name\u0060 (e.g. a shadow pass\u0027s light-view-proj uniform) so another pass can bind it without holding a pointer to the producing pass\u0027s private state \u2014 same contract as import_texture, for producer outputs that aren\u0027t a texture.",
+          "doc": "Publishes an externally-owned GPU buffer under \u0060name\u0060 for another pass to bind by name.",
           "return_doc": null,
           "params": [
             {
@@ -259,7 +259,7 @@
           "name": "import_bind_group",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Publishes an externally-owned GPU bind group (\u002B the layout it was built from) under \u0060name\u0060 (e.g. a clustered-lighting pass\u0027s light-list set). A consumer building its own pipeline needs the layout at setup time; the bind group instance is looked up again at draw time via resource_bind_group.",
+          "doc": "Publishes an externally-owned GPU bind group and its layout under \u0060name\u0060. The layout is available at setup; the instance is fetched at draw time via resource_bind_group.",
           "return_doc": null,
           "params": [
             {
@@ -292,8 +292,8 @@
           "name": "cid",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "The tag cid previously minted for \u0060name\u0060 (KE_COMPONENT_INVALID if unknown).",
-          "return_doc": null,
+          "doc": null,
+          "return_doc": "The tag cid minted for \u0060name\u0060, or KE_COMPONENT_INVALID.",
           "params": [
             {
               "name": "name",
@@ -307,7 +307,7 @@
           "name": "begin_pass",
           "returns": "struct ke_render_pass_ctx *",
           "tags": [],
-          "doc": "\u2500\u2500 Execute (inside a render system\u0027s body) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+          "doc": "Opens a pass\u0027s recording context, from inside a render system\u0027s body.",
           "return_doc": null,
           "params": [
             {
@@ -328,7 +328,7 @@
           "name": "end_pass",
           "returns": "void",
           "tags": [],
-          "doc": null,
+          "doc": "Closes a recording context opened by begin_pass.",
           "return_doc": null,
           "params": [
             {
@@ -343,7 +343,7 @@
           "name": "begin_frame",
           "returns": "ke_bool",
           "tags": [],
-          "doc": "\u2500\u2500 Frame boundary (module wires these as the first/last render systems) \u2500 begin_frame acquires the backbuffer \u2014 a built-in resource named \u0022backbuffer\u0022, auto-declared at create \u2014 and clears the per-pass command slot table. end_frame submits the populated command slots in ascending slot order (the module assigns slots in dependency order), then presents.",
+          "doc": "Acquires the backbuffer (a built-in resource named \u0022backbuffer\u0022) and clears the per-pass command slot table.",
           "return_doc": null,
           "params": [
             {
@@ -358,7 +358,7 @@
           "name": "end_frame",
           "returns": "ke_bool",
           "tags": [],
-          "doc": null,
+          "doc": "Submits the populated command slots in ascending slot order, then presents.",
           "return_doc": null,
           "params": [
             {
@@ -373,8 +373,8 @@
           "name": "upload_mesh",
           "returns": "ke_mesh_handle",
           "tags": [],
-          "doc": "\u2500\u2500 Mesh resources (handle-keyed GPU buffers owned by the core) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Uploads interleaved vertices (position float3 \u002B normal float3) and 16-bit indices to device buffers; returns a handle a ke_mesh_component references. The forward pass resolves the handle to draw. KE_MESH_NONE on failure. \u0060key\u0060 is required (KE_MESH_NONE \u002B KE_ERROR_INVALID_ARGUMENT if NULL/empty) \u2014 every mesh is dedup-cached, no uncached upload exists. A resident key returns the existing handle with its refcount bumped, uploading nothing; a new key uploads and registers it. Either way the result starts with one reference; the caller balances it with release_mesh. Callers with no natural path (procedural geometry) key by their own generation parameters, e.g. \u0022primitive:cube\u0022 or \u0022primitive:sphere:0.5:24:32\u0022 \u2014 identical calls then dedup automatically, same as file-backed content.",
-          "return_doc": null,
+          "doc": "Uploads interleaved vertices and 16-bit indices to device buffers.",
+          "return_doc": "A handle a ke_mesh_component references.",
           "params": [
             {
               "name": "key",
@@ -420,7 +420,7 @@
           "name": "mesh_buffers",
           "returns": "ke_bool",
           "tags": [],
-          "doc": "Resolves a mesh handle to its GPU buffers (for a pass to bind \u002B draw). Returns false if the handle is unknown.",
+          "doc": "Resolves a mesh handle to its GPU buffers (for a pass to bind \u002B draw).",
           "return_doc": null,
           "params": [
             {
@@ -453,7 +453,7 @@
           "name": "set_clear_color",
           "returns": "void",
           "tags": [],
-          "doc": "The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR). Defaults to a dark blue; the render module sets it from its config.",
+          "doc": "The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).",
           "return_doc": null,
           "params": [
             {
@@ -486,7 +486,7 @@
           "name": "upload_texture",
           "returns": "ke_texture_handle",
           "tags": [],
-          "doc": "\u2500\u2500 Material resources (glTF base color factor \u00D7 albedo texture) \u2500\u2500\u2500\u2500\u2500\u2500 Uploads an RGBA8 texture (width*height*4 bytes, row-major). The built-in white texture is available via white_texture(). KE_TEXTURE_NONE on failure. \u0060key\u0060 is required, same rule as upload_mesh. Cubemaps share this texture cache and keyspace.",
+          "doc": null,
           "return_doc": null,
           "params": [
             {
@@ -527,7 +527,7 @@
           "name": "create_material",
           "returns": "ke_material_handle",
           "tags": [],
-          "doc": "Creates a material: base_color factor multiplied by the albedo texture (KE_TEXTURE_NONE / handle 0 = white). Handle 0 is a built-in white material. KE_MATERIAL_NONE on failure. alpha_mode/alpha_cutoff are CPU-side only (see material_alpha_mode below) \u2014 they never reach the GPU material uniform. ior/distortion_strength only affect the transparent-forward refraction hook (meaningless outside BLEND); ior: 1.0 = no bend, 1.33 = water, 1.5 = glass. distortion_strength: lateral shift of the sampled background, in normalized screen space (glass vs. thick water). \u0060shader\u0060 names the authored material this surface is shaded by \u2014 the file stem of a \u0060struct X : IMaterial\u0060 .slang in the project\u0027s materials directory (\u0022standard\u0022, \u0022stripes\u0022, ...). NULL/empty selects the engine default (\u0022standard\u0022). It is NOT a file path and NOT a format: whichever pass draws this material resolves \u0022\u003Cshader\u003E.\u003Cpass\u003E\u0022 through load_shader, picking up the (material x pass) wrapper the build already compiled. Two materials naming different shaders therefore resolve to genuinely distinct PSOs, not merely distinct bind-group contents. CPU-side only, like alpha_mode. Copied, not borrowed. \u0060key\u0060 is required, same rule as upload_mesh. A caller with no natural file path (a scene-authored inline material, say) keys by its own parameters \u2014 e.g. a hash/concatenation of base_color\u002Bmetallic\u002Broughness\u002Balpha_mode \u2014 so two nodes authored with identical values share one material.",
+          "doc": null,
           "return_doc": null,
           "params": [
             {
@@ -636,7 +636,7 @@
           "name": "material_alpha_mode",
           "returns": "ke_alpha_mode",
           "tags": [],
-          "doc": "The pass bucket for a material handle, resolved from CPU-side storage \u2014 no GPU state touched. gbuffer skips BLEND; transparent forward skips everything else. An unknown handle resolves to OPAQUE (the white material).",
+          "doc": "The pass bucket for a material handle, resolved from CPU-side storage \u2014 no GPU state touched.",
           "return_doc": null,
           "params": [
             {
@@ -651,7 +651,7 @@
           "name": "material_alpha_cutoff",
           "returns": "float",
           "tags": [],
-          "doc": "The MASK discard threshold for a material handle. Meaningless outside MASK.",
+          "doc": "The MASK discard threshold for a material handle.",
           "return_doc": null,
           "params": [
             {
@@ -666,7 +666,7 @@
           "name": "upload_cubemap",
           "returns": "ke_texture_handle",
           "tags": [],
-          "doc": "\u2500\u2500 Environment cubemap (skybox \u002B image-based lighting) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Uploads an RGBA8 cubemap: 6 faces of face_size\u00D7face_size, \u002BX,-X,\u002BY,-Y,\u002BZ,-Z concatenated. Returns a texture handle whose view is cube-dimensioned. KE_TEXTURE_NONE on failure. \u0060key\u0060 is required, same rule as upload_mesh. Cubemaps live in the same texture cache as upload_texture and share its keyspace.",
+          "doc": null,
           "return_doc": null,
           "params": [
             {
@@ -701,7 +701,7 @@
           "name": "texture_view",
           "returns": "ke_gpu_texture_view",
           "tags": [],
-          "doc": "The GPU view for a texture/cubemap handle (for a pass to bind it). A stale or unknown handle resolves to the built-in white texture.",
+          "doc": "The GPU view for a texture/cubemap handle (for a pass to bind it).",
           "return_doc": null,
           "params": [
             {
@@ -724,7 +724,7 @@
           "name": "resource_view",
           "returns": "ke_gpu_texture_view",
           "tags": [],
-          "doc": "The GPU view of a declared transient resource by name (so one pass can bind another pass\u0027s output, e.g. the forward sampling the shadow map). KE_GPU_INVALID_HANDLE if no resource with that name was declared.",
+          "doc": "The GPU view of a declared transient resource, by name.",
           "return_doc": null,
           "params": [
             {
@@ -739,7 +739,7 @@
           "name": "resource_texture",
           "returns": "ke_gpu_texture",
           "tags": [],
-          "doc": "The raw GPU texture behind a declared resource \u2014 for copy_texture_to_texture, which operates on textures, not views (e.g. snapshotting \u0022hdr\u0022 into a second texture a same-pass refraction read can sample without a hazard). KE_GPU_INVALID_HANDLE if no resource with that name was declared.",
+          "doc": "The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.",
           "return_doc": null,
           "params": [
             {
@@ -754,7 +754,7 @@
           "name": "resource_buffer",
           "returns": "ke_gpu_buffer",
           "tags": [],
-          "doc": "The GPU buffer published under \u0060name\u0060 via import_buffer. KE_GPU_INVALID_HANDLE if no buffer with that name was published.",
+          "doc": "The GPU buffer published under \u0060name\u0060 via import_buffer.",
           "return_doc": null,
           "params": [
             {
@@ -769,7 +769,7 @@
           "name": "resource_buffer_size",
           "returns": "uint64_t",
           "tags": [],
-          "doc": "The size (bytes) of the buffer published under \u0060name\u0060. 0 if unknown.",
+          "doc": "The size (bytes) of the buffer published under \u0060name\u0060.",
           "return_doc": null,
           "params": [
             {
@@ -784,7 +784,7 @@
           "name": "resource_bind_group",
           "returns": "ke_gpu_bind_group",
           "tags": [],
-          "doc": "The GPU bind group published under \u0060name\u0060 via import_bind_group. KE_GPU_INVALID_HANDLE if no bind group with that name was published.",
+          "doc": "The GPU bind group published under \u0060name\u0060 via import_bind_group.",
           "return_doc": null,
           "params": [
             {
@@ -799,7 +799,7 @@
           "name": "resource_bind_group_layout",
           "returns": "ke_gpu_bind_group_layout",
           "tags": [],
-          "doc": "The layout the named bind group was built from (for a consumer\u0027s own pipeline creation). KE_GPU_INVALID_HANDLE if unknown.",
+          "doc": "The layout the named bind group was built from (for a consumer\u0027s own pipeline creation).",
           "return_doc": null,
           "params": [
             {
@@ -814,7 +814,7 @@
           "name": "backbuffer_size",
           "returns": "void",
           "tags": [],
-          "doc": "The backbuffer\u0027s current pixel size \u2014 the same value a KE_PHASE_RENDER pass reads via ke_render_pass_ctx.backbuffer_size, but callable from any system in any phase (refreshed once per frame at ke_render_module\u0027s begin_frame, so a system earlier in the same tick sees the previous frame\u0027s size \u2014 a one-frame lag on resize, not a correctness issue for anything anchored to screen space).",
+          "doc": "The backbuffer\u0027s pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame\u0027s size.",
           "return_doc": null,
           "params": [
             {
@@ -835,7 +835,7 @@
           "name": "upload",
           "returns": "void",
           "tags": [],
-          "doc": "Records a buffer upload to be flushed single-threaded at end_frame (before submit). Render passes call this instead of the device\u0027s write_buffer so parallel passes never touch the non-thread-safe GPU queue concurrently. The data is copied, so the caller\u0027s buffer need not outlive the call. Queue writes are ordered before the frame\u0027s submit, so deferring is correct.",
+          "doc": "Records a buffer upload to be flushed single-threaded at end_frame (before submit).",
           "return_doc": null,
           "params": [
             {
@@ -868,7 +868,7 @@
           "name": "get_or_create_pipeline",
           "returns": "ke_gpu_pipeline",
           "tags": [],
-          "doc": "\u2500\u2500 PSO authority (\u00A76 Mechanism 1) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Returns the pipeline for this exact params state, compiling it on first request. The core owns every pipeline it hands back \u2014 callers (every render pass, none privileged over another) never call create_render_pipeline / destroy_pipeline themselves. Two requests with identical params always resolve to the same cached pipeline.",
+          "doc": "\u2500\u2500 PSO authority (\u00A76 Mechanism 1) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Returns the pipeline for this exact params state, compiling it on first request.",
           "return_doc": null,
           "params": [
             {
@@ -883,7 +883,7 @@
           "name": "material_shader",
           "returns": "const char *",
           "tags": [],
-          "doc": "The authored-material shader name a material handle was created with (see create_material\u0027s \u0060shader\u0060). An unknown handle resolves to \u0022standard\u0022 (the built-in default). CPU-side only, like alpha_mode/alpha_cutoff \u2014 a drawing pass concatenates \u0022\u003Cshader\u003E.\u003Cpass\u003E\u0022 and resolves the resulting PSO via load_shader \u002B get_or_create_pipeline. The returned pointer is owned by the core and valid for the material\u0027s lifetime.",
+          "doc": "The authored-material shader name a material handle was created with (see create_material\u0027s \u0060shader\u0060).",
           "return_doc": null,
           "params": [
             {
@@ -898,7 +898,7 @@
           "name": "retain_mesh",
           "returns": "void",
           "tags": [],
-          "doc": "\u2500\u2500 Resource lifetime (refcount \u002B path-keyed dedup) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 The core owns one cache per resource kind (mesh / texture\u002Bcubemap / material). upload_*/create_material register the result there with one reference; retain adds a reference, release drops one. At zero references the GPU objects are destroyed and the slot recycled (a later handle into the reused slot carries a new generation, so a handle kept past its release no longer resolves \u2014 see handles.h). Releasing an unknown or already-stale handle is a no-op.",
+          "doc": "Adds a reference to a mesh, keeping it resident.",
           "return_doc": null,
           "params": [
             {
@@ -913,7 +913,7 @@
           "name": "release_mesh",
           "returns": "void",
           "tags": [],
-          "doc": null,
+          "doc": "Drops a reference to a mesh, freeing it at zero.",
           "return_doc": null,
           "params": [
             {
@@ -928,7 +928,7 @@
           "name": "retain_texture",
           "returns": "void",
           "tags": [],
-          "doc": null,
+          "doc": "Adds a reference to a texture, keeping it resident.",
           "return_doc": null,
           "params": [
             {
@@ -943,7 +943,7 @@
           "name": "release_texture",
           "returns": "void",
           "tags": [],
-          "doc": null,
+          "doc": "Drops a reference to a texture, freeing it at zero.",
           "return_doc": null,
           "params": [
             {
@@ -958,7 +958,7 @@
           "name": "retain_material",
           "returns": "void",
           "tags": [],
-          "doc": null,
+          "doc": "Adds a reference to a material, keeping it resident.",
           "return_doc": null,
           "params": [
             {
@@ -973,7 +973,7 @@
           "name": "release_material",
           "returns": "void",
           "tags": [],
-          "doc": null,
+          "doc": "Drops a reference to a material, freeing it at zero.",
           "return_doc": null,
           "params": [
             {
@@ -1069,7 +1069,7 @@
           "name": "white_texture",
           "returns": "ke_texture_handle",
           "tags": [],
-          "doc": "The built-in 1\u00D71 white texture, resolvable everywhere a neutral albedo is wanted. Was implicitly \u0022handle 0\u0022 before handles became generational; now exposed explicitly since no literal handle value is meaningful.",
+          "doc": "The built-in 1\u00D71 white texture, resolvable everywhere a neutral albedo is wanted.",
           "return_doc": null,
           "params": []
         },
@@ -1077,7 +1077,7 @@
           "name": "load_shader",
           "returns": "ke_gpu_shader_module",
           "tags": [],
-          "doc": "\u2500\u2500 Shader loading (build-time compiled, runtime resolved) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Resolves a shader by logical NAME \u002B STAGE to a device-ready module. Names neither a file path nor a format \u2014 the core resolves \u0022\u003Cshader_dir\u003E/\u003Cname\u003E.\u003Cstage-suffix\u003E.\u003Cext\u003E\u0022 itself, where \u003Cshader _dir\u003E was given to the factory that created this core and \u003Cext \u003E comes from device.shader_language() (WGSL/SPIR-V/MSL/DXIL). \u0060stage\u0060 must be exactly one of KE_GPU_SHADER_STAGE_VERTEX/FRAGMENT/COMPUTE \u2014 never a combination. The file itself must already exist: this loads a build-time artifact (see cmake\u0027s ke_compile_slang_shader), it does not compile anything, so the PSO-affecting shader set stays statically derivable from the build (\u00A76 doctrine) even though the load happens at runtime. The core owns every shader module it hands back \u2014 deduped by resolved path, like every other resource kind \u2014 so passes never call destroy_shader_module themselves. KE_GPU_INVALID_HANDLE on failure (file missing, \u0060stage\u0060 not exactly one bit, or the device rejected the bytes).",
+          "doc": "\u2500\u2500 Shader loading (build-time compiled, runtime resolved) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Resolves a shader by logical NAME \u002B STAGE to a device-ready module.",
           "return_doc": null,
           "params": [
             {

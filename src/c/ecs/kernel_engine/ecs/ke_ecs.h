@@ -10,26 +10,17 @@ extern "C"
 {
 #endif
 
-    // ── Resolved queries ─────────────────────────────────────────────────────
-    // A query is a component tuple registered once. It is resolved (single-thread)
-    // into archetype segments before a parallel wave; the wave bodies then read
-    // those segments as plain memory and make no ke_ecs call — no method on this
-    // contract is ever invoked concurrently from more than one thread, so ke_ecs
-    // itself needs no lock, no readonly mode, no thread-safety wrapper of its
-    // own. Concurrency is a property of how the runtime calls this contract
-    // (resolve serially, then let wave bodies read plain memory), not something
-    // ke_ecs provides. See docs/RuntimeArchitectureV2.md §15.
-
+    /** A component tuple registered once and resolved into archetype segments. */
     typedef uint64_t ke_query_id;
 #define KE_QUERY_INVALID ((ke_query_id)0)
 #define KE_QUERY_MAX_TERMS 8
 
-    // One archetype's slice of a query match: the matched entities, plus one column
-    // base pointer per query term (term order = the order passed to query_register;
-    // columns[i] is the storage for cids[i], aligned 1:1 with entities). A tag term
-    // (zero-size component) has columns[i] == NULL. Pointers stay valid until the
-    // next structural change — deferred to the wave barrier — so they are stable
-    // for the whole parallel wave.
+    /**
+     * One archetype's slice of a query match: the matched entities, plus one
+     * column base pointer per query term in the order query_register received
+     * them, each aligned 1:1 with `entities`. A tag term's column is NULL.
+     * Pointers stay valid until the next structural change.
+     */
     typedef struct ke_ecs_segment
     {
         const ke_entity *entities;

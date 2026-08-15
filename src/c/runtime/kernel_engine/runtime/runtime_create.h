@@ -1,10 +1,6 @@
 ﻿#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
 #define KERNEL_ENGINE_RUNTIME_RUNTIME_CREATE_H_
 
-// ke_runtime_create — the in-house scheduler.
-// Owns the system catalog + phase loop + (eventually) parallel wave dispatch.
-// Storage is borrowed via ke_ecs*; the scheduler never owns it.
-
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/scheduler/scheduler.h>
@@ -15,21 +11,14 @@ extern "C" {
 #endif
 
 typedef struct ke_runtime_params {
-    // Fixed timestep for KE_PHASE_FIXED_UPDATE. The runtime accumulates real
-    // elapsed dt across tick() calls and runs FIXED_UPDATE 0..N times per tick
-    // to catch up at this constant rate. Default (when 0) = 1/60s.
+    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60.
     float fixed_dt;
 
-    // Maximum accumulator value to prevent "spiral of death" when frame time
-    // exceeds catch-up budget. Default (when 0) = 0.25s — 15 fixed steps at 1/60.
-    // Excess dt above this cap is discarded silently.
+    /// Largest catch-up budget a tick may accumulate, in seconds; excess is
+    /// discarded. 0 selects 0.25.
     float fixed_dt_max_accum;
 
-    // Most systems a single phase may hold. Sizes the per-phase scratch the wave
-    // planner walks, so it is a workload-shape value rather than an algorithmic one:
-    // a host registering a system per node type scales this with the size of its
-    // game. Registering past it fails the registration instead of dropping the
-    // system silently. Default (when 0) = 256.
+    /// Most systems one phase may hold; registering past it fails. 0 selects 256.
     uint32_t max_systems_per_phase;
 } ke_runtime_params;
 

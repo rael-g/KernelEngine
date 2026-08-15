@@ -23,9 +23,8 @@ typedef enum ke_phase {
     KE_PHASE_FIXED_UPDATE = 2,
     KE_PHASE_UPDATE       = 3,
     KE_PHASE_POST_UPDATE  = 4,
-    // Dispatched asynchronously by tick(), so it overlaps the next tick's sim
-    // phases. Its systems read query results the runtime extracted before
-    // dispatch, never live storage, and structural mutation is refused here.
+    /// Runs asynchronously against the next tick's sim phases. Its systems read
+    /// extracted query results, never live storage, and may not mutate structure.
     KE_PHASE_RENDER       = 5,
     KE_PHASE_SHUTDOWN     = 6,
 } ke_phase;

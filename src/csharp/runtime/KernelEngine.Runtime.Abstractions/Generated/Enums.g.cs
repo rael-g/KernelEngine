@@ -11,9 +11,9 @@ public enum RuntimePhase
     FixedUpdate = 2,
     Update = 3,
     PostUpdate = 4,
-    /// <summary>Dispatched asynchronously by tick(), so it overlaps the next tick's sim phases. Its systems read query results the runtime extracted before dispatch, never live storage, and structural mutation is refused here.</summary>
+    /// <summary>Runs asynchronously against the next tick's sim phases. Its systems read extracted query results, never live storage, and may not mutate structure.</summary>
     Render = 5,
-    /// <summary>Dispatched asynchronously by tick(), so it overlaps the next tick's sim phases. Its systems read query results the runtime extracted before dispatch, never live storage, and structural mutation is refused here.</summary>
+    /// <summary>Runs asynchronously against the next tick's sim phases. Its systems read extracted query results, never live storage, and may not mutate structure.</summary>
     Shutdown = 6,
 }
 
