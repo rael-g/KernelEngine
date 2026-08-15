@@ -461,21 +461,17 @@ volume = 0.5
 
 TEST_F(SceneLoaderTest, LegacyComponentsNesting_IsNotRead)
 {
-    // The old [entity.components.X] level is gone; a file still using it must not
-    // half-work, or the author would be left guessing which fields landed.
+    // The old [entity.components.X] level is gone. Loading anyway would leave the
+    // author guessing which fields landed, so the file is refused outright.
     auto p = WriteTempScene(R"(
 [[entity]]
 name = "Old"
 [entity.components.point_light]
 radius = 42.0
 )");
-    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
-    ke_entity e = tree->find_node(tree, "Old", NULL);
-    ASSERT_NE(e, KE_ENTITY_INVALID);
-
-    ke_component_meta meta;
-    ASSERT_TRUE(ecs->component_lookup(ecs, "point_light", &meta, nullptr));
-    EXPECT_EQ(ecs->component_get(ecs, e, meta.cid), nullptr);
+    ke_error *err = nullptr;
+    EXPECT_FALSE(loader->load(loader, p.string().c_str(), &err));
+    EXPECT_NE(err, nullptr);
 }
 
 TEST_F(SceneLoaderTest, InternalComponent_CannotBeAuthored)
@@ -492,16 +488,24 @@ parent = "Parent"
 [entity.hierarchy]
 parent = 999
 )");
-    ASSERT_TRUE(loader->load(loader, p.string().c_str(), NULL));
-    ke_entity parent = tree->find_node(tree, "Parent", NULL);
-    ke_entity child  = tree->find_node(tree, "Child", NULL);
-    ASSERT_NE(child, KE_ENTITY_INVALID);
+    ke_error *err = nullptr;
+    EXPECT_FALSE(loader->load(loader, p.string().c_str(), &err));
+    EXPECT_NE(err, nullptr);
+}
 
-    ke_component_meta meta;
-    ASSERT_TRUE(ecs->component_lookup(ecs, "hierarchy", &meta, nullptr));
-    auto *h = (ke_hierarchy_component *)ecs->component_get(ecs, child, meta.cid);
-    ASSERT_NE(h, nullptr);
-    EXPECT_EQ(h->parent, parent);
+TEST_F(SceneLoaderTest, UnknownComponent_FailsTheLoad)
+{
+    // A typo in a component name is the failure this whole format is exposed to,
+    // and the only moment it can be caught is now, synchronously, at load.
+    auto p = WriteTempScene(R"(
+[[entity]]
+name = "Typo"
+[entity.point_ligth]
+radius = 42.0
+)");
+    ke_error *err = nullptr;
+    EXPECT_FALSE(loader->load(loader, p.string().c_str(), &err));
+    EXPECT_NE(err, nullptr);
 }
 
 TEST_F(SceneLoaderTest, Collider2D_FieldsApplied)

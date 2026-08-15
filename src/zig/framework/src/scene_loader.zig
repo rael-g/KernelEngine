@@ -274,19 +274,40 @@ fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
     log(world, c.KE_LOG_LEVEL_WARNING, fmt, args);
 }
 
+/// Loading a scene is synchronous, so a scene that cannot be honoured is a
+/// failure, not a log line. A block naming a component nobody registered, a
+/// block shape that was retired, or a connection that resolves to nothing all
+/// mean the file says something the engine will not do — and a game that starts
+/// anyway looks right until the exact moment it matters.
+fn structural(
+    world: *c.ke_world,
+    out_error: [*c][*c]c.ke_error,
+    comptime fmt: []const u8,
+    args: anytype,
+) void {
+    var buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch "scene is not loadable";
+    log(world, c.KE_LOG_LEVEL_ERROR, "{s}", .{msg});
+    E.fail(out_error, .invalid_argument, msg, @src());
+}
+
 fn applyComponentBlock(
     s: *State,
     entity: c.ke_entity,
     comp_name: [*c]const u8,
     comp_tbl: *c.toml_table_t,
-) void {
+    out_error: [*c][*c]c.ke_error,
+) bool {
     const world = s.world;
-    const e = ecsOf(world) orelse return;
+    const e = ecsOf(world) orelse {
+        structural(world, out_error, "world has no ecs", .{});
+        return false;
+    };
 
     var meta: c.ke_component_meta = undefined;
     if (!e.component_lookup.?(e, comp_name, &meta, null)) {
-        warn(world, "scene names component '{s}', which no module registered", .{comp_name});
-        return;
+        structural(world, out_error, "scene names component '{s}', which no module registered", .{comp_name});
+        return false;
     }
 
     // Neither a field table nor a callback means no field mapping is defined for
@@ -299,8 +320,8 @@ fn applyComponentBlock(
     const fields = world.get_component_fields.?(world, meta.cid, &field_count);
     const apply_fn = world.get_component_apply.?(world, meta.cid);
     if (fields == null and apply_fn == null) {
-        warn(world, "component '{s}' has no field mapping registered; its scene block is ignored", .{comp_name});
-        return;
+        structural(world, out_error, "component '{s}' has no field mapping registered", .{comp_name});
+        return false;
     }
 
     // A component this entity did not already carry starts as whatever the
@@ -310,7 +331,10 @@ fn applyComponentBlock(
     // Only when it is new — an entity whose node already seeded its defaults
     // must keep them, since the block is an override, not a replacement.
     const existing = e.component_get.?(e, entity, meta.cid);
-    const comp = e.component_add.?(e, entity, meta.cid) orelse return;
+    const comp = e.component_add.?(e, entity, meta.cid) orelse {
+        structural(world, out_error, "component '{s}' could not be added to the entity", .{comp_name});
+        return false;
+    };
     if (existing == null) {
         const bytes: [*]u8 = @ptrCast(comp);
         @memset(bytes[0..meta.size], 0);
@@ -318,13 +342,17 @@ fn applyComponentBlock(
 
     // Entries come from the arena rather than a fixed stack buffer, so a
     // component block with many fields is applied whole instead of truncated.
-    const entries = buildEntries(s, comp_tbl) orelse return;
+    const entries = buildEntries(s, comp_tbl) orelse {
+        structural(world, out_error, "component '{s}' block could not be read", .{comp_name});
+        return false;
+    };
 
     // Table first, callback second: the generated description covers every field
     // it can express, leaving the callback only what a description cannot say.
     if (fields != null)
         fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
     if (apply_fn) |f| f(comp, entries.ptr, @intCast(entries.len));
+    return true;
 }
 
 /// Whether a table under `[[entity]]` describes something other than a component.
@@ -359,22 +387,28 @@ fn internalComponent(key: [*c]const u8) bool {
 /// addresses a component by the name it is registered under, and nothing else.
 /// The entity's identity keys (`name`, `parent`, `type`, `scene`) are scalars, so
 /// they are not tables and never reach here.
-fn applyComponentBlocks(s: *State, entity: c.ke_entity, tbl: *c.toml_table_t) void {
+fn applyComponentBlocks(
+    s: *State,
+    entity: c.ke_entity,
+    tbl: *c.toml_table_t,
+    out_error: [*c][*c]c.ke_error,
+) bool {
     var i: c_int = 0;
     while (true) : (i += 1) {
         const key = c.toml_key_in(tbl, i) orelse break;
         const block = c.toml_table_in(tbl, key) orelse continue;
         if (retiredBlock(key)) |advice| {
-            warn(s.world, "[entity.{s}] is no longer read; {s}", .{ key, advice });
-            continue;
+            structural(s.world, out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
+            return false;
         }
         if (reservedBlock(key)) continue;
         if (internalComponent(key)) {
-            warn(s.world, "component '{s}' is the scene tree's own and cannot be authored", .{key});
-            continue;
+            structural(s.world, out_error, "component '{s}' is the scene tree's own and cannot be authored", .{key});
+            return false;
         }
-        applyComponentBlock(s, entity, key, block);
+        if (!applyComponentBlock(s, entity, key, block, out_error)) return false;
     }
+    return true;
 }
 
 // -- signal connections ------------------------------------------------------
@@ -384,21 +418,22 @@ fn applyComponentBlocks(s: *State, entity: c.ke_entity, tbl: *c.toml_table_t) vo
 /// Resolved in a pass after every entity in the file exists, because a listener
 /// is as often declared below the emitter as above it, and requiring one order
 /// would make the wiring depend on file layout rather than on what it says.
-/// A target naming a node this file does not declare is reported, not skipped
-/// quietly: a connection nobody made looks exactly like a listener that never
-/// reacts.
+/// A connection that resolves to nothing fails the load: a wire nobody made
+/// looks exactly like a listener that never reacts, and only one of the two is
+/// something the author can see.
 fn applyConnections(
     s: *State,
     source: c.ke_entity,
     entity_tbl: *c.toml_table_t,
     names: *const NameMap,
-) void {
-    const arr = c.toml_array_in(entity_tbl, "connect") orelse return;
+    out_error: [*c][*c]c.ke_error,
+) bool {
+    const arr = c.toml_array_in(entity_tbl, "connect") orelse return true;
     const world = s.world;
 
     const bus = world_impl.signalBusOf(world) orelse {
-        warn(world, "scene declares signal connections but no signal bus was given to the world", .{});
-        return;
+        structural(world, out_error, "scene declares signal connections but the world has no signal bus", .{});
+        return false;
     };
 
     const n = c.toml_array_nelem(arr);
@@ -412,13 +447,13 @@ fn applyConnections(
         defer if (target_d.ok != 0) std.c.free(target_d.u.s);
 
         if (signal_d.ok == 0 or target_d.ok == 0) {
-            warn(world, "a connect block needs both a signal and a target", .{});
-            continue;
+            structural(world, out_error, "a connect block needs both a signal and a target", .{});
+            return false;
         }
 
         const target = names.get(std.mem.span(target_d.u.s)) orelse {
-            warn(world, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
-            continue;
+            structural(world, out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
+            return false;
         };
 
         var handler: u32 = 0;
@@ -427,15 +462,16 @@ fn applyConnections(
 
         var signal_id: u32 = 0;
         if (!bus.signal_id.?(bus, signal_d.u.s, c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN, &signal_id, null)) {
-            warn(world, "could not resolve signal '{s}'", .{signal_d.u.s});
-            continue;
+            structural(world, out_error, "could not resolve signal '{s}'", .{signal_d.u.s});
+            return false;
         }
         if (!bus.connect.?(bus, source, signal_id, target, handler, null)) {
-            warn(world, "could not connect signal '{s}'", .{signal_d.u.s});
-            continue;
+            structural(world, out_error, "could not connect signal '{s}'", .{signal_d.u.s});
+            return false;
         }
         log(world, c.KE_LOG_LEVEL_INFO, "connected '{s}' from entity {d} to entity {d}", .{ signal_d.u.s, source, target });
     }
+    return true;
 }
 
 // -- entity processing -------------------------------------------------------
@@ -561,8 +597,10 @@ fn processEntity(
     // Every component the file authors lands before the script is dispatched, so
     // a node binds onto an entity whose data is already final: its generated seed
     // keeps whatever the scene wrote and fills only what the scene left out.
-    applyComponentBlocks(s, entity, args.entity_tbl);
-    if (args.override_outer) |outer| applyComponentBlocks(s, entity, outer);
+    if (!applyComponentBlocks(s, entity, args.entity_tbl, out_error)) return false;
+    if (args.override_outer) |outer| {
+        if (!applyComponentBlocks(s, entity, outer, out_error)) return false;
+    }
 
     const type_d = c.toml_string_in(args.entity_tbl, "type");
     if (type_d.ok != 0) {
@@ -664,7 +702,7 @@ fn loadSceneRecursive(
         var j: c_int = 0;
         while (j < n) : (j += 1) {
             const et = c.toml_table_at(entities, j) orelse continue;
-            applyConnections(s, slots[@intCast(j)], et, &names);
+            if (!applyConnections(s, slots[@intCast(j)], et, &names, out_error)) return false;
         }
     }
 
