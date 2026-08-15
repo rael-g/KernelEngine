@@ -1,4 +1,3 @@
-
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
@@ -47,7 +46,7 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
 
     var key_buf: [192]u8 = undefined;
     const key = std.fmt.bufPrintZ(&key_buf, "sprite:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}", .{
-        w,          h,          sp.pivot.x,  sp.pivot.y, sp.region.x,
+        w,           h,           sp.pivot.x,  sp.pivot.y, sp.region.x,
         sp.region.y, sp.region.z, sp.region.w, sp.flip_h,  sp.flip_v,
     }) catch return c.KE_MESH_NONE;
 
@@ -91,7 +90,7 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
 }
 
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
-    const st: *State = @alignCast(@ptrCast(user.?));
+    const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
     var segs = c.ke_system_ctx_view(ctx, 0, &segc);
@@ -119,4 +118,186 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
             _ = c.ke_system_ctx_attach(ctx, segs[s].entities[i], st.mesh_cid, null, 0);
         }
     }
+}
+
+const testing = std.testing;
+
+const Capture = struct {
+    var key: [192]u8 = undefined;
+    var key_len: usize = 0;
+    var verts: [4]Vertex = undefined;
+    var indices: [6]u16 = undefined;
+    var calls: u32 = 0;
+
+    fn reset() void {
+        key_len = 0;
+        calls = 0;
+        verts = std.mem.zeroes([4]Vertex);
+        indices = std.mem.zeroes([6]u16);
+    }
+
+    fn keySlice() []const u8 {
+        return key[0..key_len];
+    }
+};
+
+fn captureUploadMesh(
+    _: [*c]c.ke_render_service,
+    key: [*c]const u8,
+    vertices: ?*const anyopaque,
+    _: usize,
+    indices: [*c]const u16,
+    index_count: u32,
+    _: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_mesh_handle {
+    const k = std.mem.span(key);
+    @memcpy(Capture.key[0..k.len], k);
+    Capture.key_len = k.len;
+    const v: [*]const Vertex = @ptrCast(@alignCast(vertices.?));
+    Capture.verts = v[0..4].*;
+    @memcpy(Capture.indices[0..index_count], indices[0..index_count]);
+    Capture.calls += 1;
+    return .{ .bits = 77 };
+}
+
+fn fakeService() c.ke_render_service {
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.upload_mesh = captureUploadMesh;
+    return svc;
+}
+
+fn defaultSprite() c.ke_sprite2d_component {
+    var sp = std.mem.zeroes(c.ke_sprite2d_component);
+    sp.size = .{ .x = 2, .y = 4 };
+    sp.pivot = .{ .x = 0.5, .y = 0.5 };
+    sp.region = .{ .x = 0, .y = 0, .z = 1, .w = 1 };
+    return sp;
+}
+
+test "a centred pivot puts the quad's corners half a size either side of the origin" {
+    Capture.reset();
+    var svc = fakeService();
+    const sp = defaultSprite();
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqual(@as(f32, -1), Capture.verts[0].position[0]);
+    try testing.expectEqual(@as(f32, -2), Capture.verts[0].position[1]);
+    try testing.expectEqual(@as(f32, 1), Capture.verts[2].position[0]);
+    try testing.expectEqual(@as(f32, 2), Capture.verts[2].position[1]);
+}
+
+test "a bottom-left pivot puts the whole quad in the positive quadrant" {
+    Capture.reset();
+    var svc = fakeService();
+    var sp = defaultSprite();
+    sp.pivot = .{ .x = 0, .y = 0 };
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqual(@as(f32, 0), Capture.verts[0].position[0]);
+    try testing.expectEqual(@as(f32, 0), Capture.verts[0].position[1]);
+    try testing.expectEqual(@as(f32, 2), Capture.verts[2].position[0]);
+    try testing.expectEqual(@as(f32, 4), Capture.verts[2].position[1]);
+}
+
+test "the quad's texture coordinates start flipped vertically because images are authored top-down" {
+    Capture.reset();
+    var svc = fakeService();
+    const sp = defaultSprite();
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqual(@as(f32, 0), Capture.verts[0].uv[0]);
+    try testing.expectEqual(@as(f32, 1), Capture.verts[0].uv[1]);
+    try testing.expectEqual(@as(f32, 1), Capture.verts[2].uv[0]);
+    try testing.expectEqual(@as(f32, 0), Capture.verts[2].uv[1]);
+}
+
+test "a horizontal flip swaps the horizontal texture coordinates and nothing else" {
+    Capture.reset();
+    var svc = fakeService();
+    var sp = defaultSprite();
+    sp.flip_h = 1;
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqual(@as(f32, 1), Capture.verts[0].uv[0]);
+    try testing.expectEqual(@as(f32, 1), Capture.verts[0].uv[1]);
+    try testing.expectEqual(@as(f32, -1), Capture.verts[0].position[0]);
+}
+
+test "a vertical flip swaps the vertical texture coordinates" {
+    Capture.reset();
+    var svc = fakeService();
+    var sp = defaultSprite();
+    sp.flip_v = 1;
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqual(@as(f32, 0), Capture.verts[0].uv[1]);
+    try testing.expectEqual(@as(f32, 1), Capture.verts[2].uv[1]);
+}
+
+test "a region draws only that rectangle of the image" {
+    Capture.reset();
+    var svc = fakeService();
+    var sp = defaultSprite();
+    sp.region = .{ .x = 0.25, .y = 0.5, .z = 0.25, .w = 0.5 };
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqual(@as(f32, 0.25), Capture.verts[0].uv[0]);
+    try testing.expectEqual(@as(f32, 1.0), Capture.verts[0].uv[1]);
+    try testing.expectEqual(@as(f32, 0.5), Capture.verts[2].uv[0]);
+    try testing.expectEqual(@as(f32, 0.5), Capture.verts[2].uv[1]);
+}
+
+test "every quad faces the viewer with the same normal and tangent" {
+    Capture.reset();
+    var svc = fakeService();
+    const sp = defaultSprite();
+    _ = quadFor(&svc, &sp);
+    for (Capture.verts) |v| {
+        try testing.expectEqual([3]f32{ 0, 0, 1 }, v.normal);
+        try testing.expectEqual([3]f32{ 1, 0, 0 }, v.tangent);
+    }
+}
+
+test "the quad is two triangles sharing the diagonal" {
+    Capture.reset();
+    var svc = fakeService();
+    const sp = defaultSprite();
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqual([6]u16{ 0, 1, 2, 0, 2, 3 }, Capture.indices);
+}
+
+test "two sprites of the same shape share one cache key, and a different shape does not" {
+    Capture.reset();
+    var svc = fakeService();
+    const sp = defaultSprite();
+    _ = quadFor(&svc, &sp);
+    var first: [192]u8 = undefined;
+    const first_len = Capture.key_len;
+    @memcpy(first[0..first_len], Capture.keySlice());
+
+    _ = quadFor(&svc, &sp);
+    try testing.expectEqualStrings(first[0..first_len], Capture.keySlice());
+
+    var other = sp;
+    other.flip_h = 1;
+    _ = quadFor(&svc, &other);
+    try testing.expect(!std.mem.eql(u8, first[0..first_len], Capture.keySlice()));
+}
+
+test "a sprite naming no image resolves to no texture without consulting a resolver" {
+    var svc = fakeService();
+    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+    var sp = defaultSprite();
+    try testing.expectEqual(c.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
+}
+
+test "a sprite naming an image draws untextured where no resolver was wired" {
+    var svc = fakeService();
+    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+    var sp = defaultSprite();
+    @memcpy(sp.texture[0.."res://sprite.png".len], "res://sprite.png");
+    try testing.expectEqual(c.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
+}
+
+test "an image already uploaded is not resolved a second time" {
+    var svc = fakeService();
+    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+    var sp = defaultSprite();
+    @memcpy(sp.texture[0.."res://sprite.png".len], "res://sprite.png");
+    sp.texture_handle = .{ .bits = 9 };
+    try testing.expectEqual(@as(u32, 9), resolveTexture(&st, &sp).bits);
 }

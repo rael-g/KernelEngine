@@ -70,7 +70,8 @@ public sealed class NodeTypeRegistry
             if (ch == '+') { sb.Append('.'); continue; }
             if (char.IsUpper(ch))
             {
-                var prev = i > 0 ? name[i - 1] : '.';
+                var rawPrev = i > 0 ? name[i - 1] : '.';
+                var prev = rawPrev == '+' ? '.' : rawPrev;
                 var startsWord = prev != '.' && prev != '_' && !char.IsDigit(prev)
                     && (!char.IsUpper(prev) || (i + 1 < name.Length && char.IsLower(name[i + 1])));
                 if (startsWord) sb.Append('_');

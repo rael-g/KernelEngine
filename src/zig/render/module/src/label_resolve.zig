@@ -1,4 +1,3 @@
-
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
@@ -37,7 +36,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
 }
 
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
-    const st: *State = @alignCast(@ptrCast(user.?));
+    const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
@@ -51,4 +50,16 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
             l.font_handle = bake(st, l);
         }
     }
+}
+
+const testing = std.testing;
+
+test "a label draws unfonted where no resolver was wired, rather than failing the frame" {
+    var core = std.mem.zeroes(c.ke_render_service);
+    var ui = std.mem.zeroes(c.ke_render_ui);
+    var st = State{ .core = &core, .ui = &ui, .resolver = null };
+    var l = std.mem.zeroes(c.ke_label_component);
+    @memcpy(l.font[0.."res://font.ttf".len], "res://font.ttf");
+    l.font_size = 16;
+    try testing.expectEqual(@as(u32, c.KE_HANDLE_NONE), bake(&st, &l).bits);
 }

@@ -895,3 +895,856 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 
     return .{ .ref = &h.api, .destroy = &runtimeDestroy };
 }
+
+const testing = std.testing;
+
+extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ecs_handle;
+extern fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle;
+
+const Fixture = struct {
+    scheduler_h: c.ke_scheduler_handle,
+    ecs_h: c.ke_ecs_handle,
+    runtime_h: c.ke_runtime_handle,
+
+    fn init() !Fixture {
+        const sh = ke_scheduler_enki_create(null);
+        try testing.expect(sh.ref != null);
+
+        const eh = ke_ecs_flecs_create(null, null);
+        try testing.expect(eh.ref != null);
+
+        var rp = std.mem.zeroes(c.ke_runtime_params);
+        const rh = ke_runtime_create(eh.ref, sh.ref, &rp, null);
+        try testing.expect(rh.ref != null);
+
+        return .{ .scheduler_h = sh, .ecs_h = eh, .runtime_h = rh };
+    }
+
+    fn deinit(self: *Fixture) void {
+        if (self.runtime_h.ref) |r| self.runtime_h.destroy.?(r);
+        if (self.ecs_h.ref) |r| self.ecs_h.destroy.?(r);
+        if (self.scheduler_h.ref) |r| self.scheduler_h.destroy.?(r);
+    }
+
+    fn rt(self: *Fixture) *c.ke_runtime {
+        return @ptrCast(self.runtime_h.ref);
+    }
+
+    fn ecs(self: *Fixture) *c.ke_ecs {
+        return @ptrCast(self.ecs_h.ref);
+    }
+
+    fn tick(self: *Fixture, dt: f32) bool {
+        return self.rt().tick.?(self.rt(), dt, null);
+    }
+
+    fn flushRender(self: *Fixture) void {
+        self.rt().flush_render.?(self.rt());
+    }
+};
+
+fn access(cid: u32, mode: c_int) c.ke_component_access {
+    return .{ .cid = cid, .access = @intCast(mode) };
+}
+
+fn systemParams(name: [*c]const u8, phase: c_int) c.ke_runtime_system_params {
+    var s = std.mem.zeroes(c.ke_runtime_system_params);
+    s.name = name;
+    s.phase = @intCast(phase);
+    return s;
+}
+
+fn noopSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {}
+
+const Counter = std.atomic.Value(u32);
+
+fn countingSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+    const counter: *Counter = @ptrCast(@alignCast(ud.?));
+    _ = counter.fetchAdd(1, .acq_rel);
+}
+
+const ModuleCtx = struct {
+    load_calls: Counter = Counter.init(0),
+    system_ticks: Counter = Counter.init(0),
+};
+
+fn moduleTickSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+    const ctx: *ModuleCtx = @ptrCast(@alignCast(ud.?));
+    _ = ctx.system_ticks.fetchAdd(1, .acq_rel);
+}
+
+fn testModuleOnLoad(runtime: ?*c.ke_runtime, ud: ?*anyopaque, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const ctx: *ModuleCtx = @ptrCast(@alignCast(ud.?));
+    _ = ctx.load_calls.fetchAdd(1, .acq_rel);
+
+    var sys = systemParams("TickCounter", c.KE_PHASE_UPDATE);
+    sys.user_data = ud;
+    sys.execute = &moduleTickSystem;
+
+    const rtp = runtime orelse return false;
+    return rtp.register_system.?(rtp, &sys, null) != 0;
+}
+
+test "a runtime with no systems ticks and tears down" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    try testing.expect(f.tick(1.0 / 60.0));
+}
+
+test "registering a module calls its load hook exactly once" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var ctx = ModuleCtx{};
+    var mod = std.mem.zeroes(c.ke_runtime_module_params);
+    mod.name = "TestModule";
+    mod.user_data = &ctx;
+    mod.on_load = &testModuleOnLoad;
+
+    const mid = f.rt().register_module.?(f.rt(), &mod, null);
+    try testing.expect(mid != 0);
+    try testing.expectEqual(@as(u32, 1), ctx.load_calls.load(.acquire));
+}
+
+test "a registered system fires once per tick" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var ctx = ModuleCtx{};
+    var mod = std.mem.zeroes(c.ke_runtime_module_params);
+    mod.name = "TickModule";
+    mod.user_data = &ctx;
+    mod.on_load = &testModuleOnLoad;
+
+    try testing.expect(f.rt().register_module.?(f.rt(), &mod, null) != 0);
+
+    for (0..10) |_| try testing.expect(f.tick(1.0 / 60.0));
+
+    try testing.expectEqual(@as(u32, 10), ctx.system_ticks.load(.acquire));
+}
+
+test "registering a module with no params is refused" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    try testing.expectEqual(@as(c.ke_module_id, 0), f.rt().register_module.?(f.rt(), null, null));
+}
+
+test "registering a system with no execute body is refused" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    const sys = systemParams("Bad", c.KE_PHASE_UPDATE);
+    try testing.expectEqual(@as(c.ke_system_id, 0), f.rt().register_system.?(f.rt(), &sys, null));
+}
+
+test "creating a runtime without an ecs is refused" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var rp = std.mem.zeroes(c.ke_runtime_params);
+    const rh = ke_runtime_create(null, f.scheduler_h.ref, &rp, null);
+    try testing.expect(rh.ref == null);
+}
+
+test "creating a runtime without a scheduler is refused" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var rp = std.mem.zeroes(c.ke_runtime_params);
+    const rh = ke_runtime_create(f.ecs_h.ref, null, &rp, null);
+    try testing.expect(rh.ref == null);
+}
+
+const ParallelProbe = struct {
+    arrived: Counter = Counter.init(0),
+    tids: [2]std.atomic.Value(u64) = .{ std.atomic.Value(u64).init(0), std.atomic.Value(u64).init(0) },
+    distinct: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    total: Counter = Counter.init(0),
+};
+
+const ParallelSlot = struct {
+    probe: *ParallelProbe,
+    index: usize,
+};
+
+const parallel_rendezvous_spin_cap: u32 = 4_000_000;
+
+fn parallelWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+    const slot: *ParallelSlot = @ptrCast(@alignCast(ud.?));
+    const p = slot.probe;
+
+    p.tids[slot.index].store(@intCast(std.Thread.getCurrentId()), .release);
+    _ = p.arrived.fetchAdd(1, .acq_rel);
+
+    var spins: u32 = 0;
+    while (p.arrived.load(.acquire) % 2 != 0 and spins < parallel_rendezvous_spin_cap) : (spins += 1) {
+        std.atomic.spinLoopHint();
+    }
+
+    const a = p.tids[0].load(.acquire);
+    const b = p.tids[1].load(.acquire);
+    if (a != 0 and b != 0 and a != b) p.distinct.store(true, .release);
+
+    _ = p.total.fetchAdd(1, .acq_rel);
+}
+
+test "disjoint systems in one wave run on more than one thread" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = ParallelProbe{};
+    var slot_a = ParallelSlot{ .probe = &probe, .index = 0 };
+    var slot_b = ParallelSlot{ .probe = &probe, .index = 1 };
+
+    const acc_a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const acc_b = [_]c.ke_component_access{access(2, c.KE_ACCESS_WRITE)};
+
+    var sa = systemParams("SysA", c.KE_PHASE_UPDATE);
+    sa.access_list = &acc_a;
+    sa.access_count = 1;
+    sa.user_data = &slot_a;
+    sa.execute = &parallelWorker;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sa, null) != 0);
+
+    var sb = systemParams("SysB", c.KE_PHASE_UPDATE);
+    sb.access_list = &acc_b;
+    sb.access_count = 1;
+    sb.user_data = &slot_b;
+    sb.execute = &parallelWorker;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sb, null) != 0);
+
+    for (0..20) |_| try testing.expect(f.tick(1.0 / 60.0));
+
+    try testing.expectEqual(@as(u32, 40), probe.total.load(.acquire));
+    try testing.expect(probe.distinct.load(.acquire));
+}
+
+const OrderProbe = struct {
+    slots: [8]Counter = @splat(Counter.init(0)),
+    next: Counter = Counter.init(0),
+};
+
+const OrderSlot = struct {
+    probe: *OrderProbe,
+    tag: u32,
+};
+
+fn orderWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+    const slot: *OrderSlot = @ptrCast(@alignCast(ud.?));
+    const i = slot.probe.next.fetchAdd(1, .acq_rel);
+    if (i < slot.probe.slots.len) slot.probe.slots[i].store(slot.tag, .release);
+}
+
+test "systems conflicting on a component run one after the other" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = OrderProbe{};
+    var slot_1 = OrderSlot{ .probe = &probe, .tag = 1 };
+    var slot_2 = OrderSlot{ .probe = &probe, .tag = 2 };
+
+    const acc = [_]c.ke_component_access{access(42, c.KE_ACCESS_WRITE)};
+
+    var s1 = systemParams("Writer1", c.KE_PHASE_UPDATE);
+    s1.access_list = &acc;
+    s1.access_count = 1;
+    s1.user_data = &slot_1;
+    s1.execute = &orderWorker;
+    try testing.expect(f.rt().register_system.?(f.rt(), &s1, null) != 0);
+
+    var s2 = systemParams("Writer2", c.KE_PHASE_UPDATE);
+    s2.access_list = &acc;
+    s2.access_count = 1;
+    s2.user_data = &slot_2;
+    s2.execute = &orderWorker;
+    try testing.expect(f.rt().register_system.?(f.rt(), &s2, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+
+    try testing.expectEqual(@as(u32, 2), probe.next.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), probe.slots[0].load(.acquire));
+    try testing.expectEqual(@as(u32, 2), probe.slots[1].load(.acquire));
+}
+
+test "the fixed phase accumulates at its own rate" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var fixed_ticks = Counter.init(0);
+    var update_ticks = Counter.init(0);
+
+    var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
+    fx.user_data = &fixed_ticks;
+    fx.execute = &countingSystem;
+    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+
+    var up = systemParams("UpdateCounter", c.KE_PHASE_UPDATE);
+    up.user_data = &update_ticks;
+    up.execute = &countingSystem;
+    try testing.expect(f.rt().register_system.?(f.rt(), &up, null) != 0);
+
+    for (0..10) |_| try testing.expect(f.tick(1.0 / 60.0));
+
+    try testing.expectEqual(@as(u32, 10), update_ticks.load(.acquire));
+    try testing.expectEqual(@as(u32, 10), fixed_ticks.load(.acquire));
+}
+
+test "a large frame catches the fixed phase up" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var fixed_ticks = Counter.init(0);
+    var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
+    fx.user_data = &fixed_ticks;
+    fx.execute = &countingSystem;
+    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+
+    try testing.expect(f.tick(5.0 / 60.0));
+    try testing.expectEqual(@as(u32, 5), fixed_ticks.load(.acquire));
+}
+
+test "a frame shorter than the fixed step takes no step" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var fixed_ticks = Counter.init(0);
+    var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
+    fx.user_data = &fixed_ticks;
+    fx.execute = &countingSystem;
+    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 120.0));
+    try testing.expectEqual(@as(u32, 0), fixed_ticks.load(.acquire));
+
+    try testing.expect(f.tick(1.0 / 120.0));
+    try testing.expectEqual(@as(u32, 1), fixed_ticks.load(.acquire));
+}
+
+test "a huge frame is capped so the fixed phase cannot spiral" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var fixed_ticks = Counter.init(0);
+    var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
+    fx.user_data = &fixed_ticks;
+    fx.execute = &countingSystem;
+    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+
+    try testing.expect(f.tick(1.0));
+
+    const steps = fixed_ticks.load(.acquire);
+    try testing.expect(steps <= 15);
+    try testing.expect(steps >= 14);
+}
+
+test "a negative delta time is refused" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    try testing.expect(!f.tick(-1.0));
+}
+
+var g_gated_render_runs = Counter.init(0);
+var g_gated_render_may_finish = std.atomic.Value(bool).init(false);
+
+fn gatedRenderBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+    while (!g_gated_render_may_finish.load(.acquire)) std.atomic.spinLoopHint();
+    _ = g_gated_render_runs.fetchAdd(1, .acq_rel);
+}
+
+test "tick dispatches the render phase without waiting for it" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    g_gated_render_runs.store(0, .release);
+    g_gated_render_may_finish.store(false, .release);
+
+    var rnd = systemParams("GatedRender", c.KE_PHASE_RENDER);
+    rnd.execute = &gatedRenderBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expectEqual(@as(u32, 0), g_gated_render_runs.load(.acquire));
+
+    g_gated_render_may_finish.store(true, .release);
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expect(g_gated_render_runs.load(.acquire) >= 1);
+
+    f.flushRender();
+}
+
+const ExtractProbe = struct {
+    seen: std.atomic.Value(i32) = std.atomic.Value(i32).init(-1),
+    seen_ptr: std.atomic.Value(usize) = std.atomic.Value(usize).init(0),
+    runs: Counter = Counter.init(0),
+};
+
+var g_extract_probe = ExtractProbe{};
+
+fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+    var seg_count: usize = 0;
+    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    if (segs == null) return;
+    for (0..seg_count) |s| {
+        const col: [*]i32 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
+        for (0..segs[s].count) |i| col[i] = 42;
+    }
+}
+
+fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+    var seg_count: usize = 0;
+    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    if (segs != null and seg_count > 0 and segs[0].count > 0) {
+        if (segs[0].columns[0]) |col| {
+            const typed: [*]const i32 = @ptrCast(@alignCast(col));
+            g_extract_probe.seen.store(typed[0], .release);
+            g_extract_probe.seen_ptr.store(@intFromPtr(col), .release);
+        }
+    }
+    _ = g_extract_probe.runs.fetchAdd(1, .acq_rel);
+}
+
+test "the render extract carries this tick's sim write" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    const cid = f.ecs().component_register.?(f.ecs(), "Extract.Value", @sizeOf(i32), null);
+    const e = f.ecs().entity_create.?(f.ecs());
+    const v = f.ecs().component_add.?(f.ecs(), e, cid);
+    try testing.expect(v != null);
+    @as(*i32, @ptrCast(@alignCast(v.?))).* = 0;
+
+    g_extract_probe.seen.store(-1, .release);
+    g_extract_probe.seen_ptr.store(0, .release);
+    g_extract_probe.runs.store(0, .release);
+
+    var wq = std.mem.zeroes(c.ke_query_decl);
+    wq.terms[0] = access(cid, c.KE_ACCESS_WRITE);
+    wq.term_count = 1;
+
+    var sim = systemParams("SimWriter", c.KE_PHASE_UPDATE);
+    sim.queries = &wq;
+    sim.query_count = 1;
+    sim.execute = &extractSimWriter;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sim, null) != 0);
+
+    var rq = std.mem.zeroes(c.ke_query_decl);
+    rq.terms[0] = access(cid, c.KE_ACCESS_READ);
+    rq.term_count = 1;
+
+    var rnd = systemParams("RenderReader", c.KE_PHASE_RENDER);
+    rnd.queries = &rq;
+    rnd.query_count = 1;
+    rnd.execute = &extractRenderReader;
+    try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    f.flushRender();
+
+    try testing.expect(g_extract_probe.runs.load(.acquire) >= 1);
+    try testing.expectEqual(@as(i32, 42), g_extract_probe.seen.load(.acquire));
+
+    const live_ptr = @intFromPtr(f.ecs().component_get.?(f.ecs(), e, cid));
+    try testing.expect(g_extract_probe.seen_ptr.load(.acquire) != live_ptr);
+}
+
+const Vec3 = extern struct {
+    x: f32,
+    y: f32,
+    z: f32,
+};
+
+var g_extract_pv_sum: f64 = 0.0;
+var g_extract_pv_runs = Counter.init(0);
+
+fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+    var seg_count: usize = 0;
+    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    if (segs != null) {
+        for (0..seg_count) |s| {
+            const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
+            const vc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[1] orelse continue));
+            for (0..segs[s].count) |i| {
+                g_extract_pv_sum += @as(f64, pc[i].x) + @as(f64, vc[i].x);
+            }
+        }
+    }
+    _ = g_extract_pv_runs.fetchAdd(1, .acq_rel);
+}
+
+test "the render extract keeps multi term columns aligned" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    const pos = f.ecs().component_register.?(f.ecs(), "ExtractPos", @sizeOf(Vec3), null);
+    const vel = f.ecs().component_register.?(f.ecs(), "ExtractVel", @sizeOf(Vec3), null);
+
+    var expect: f64 = 0.0;
+    for (0..64) |i| {
+        const e = f.ecs().entity_create.?(f.ecs());
+        _ = f.ecs().component_add.?(f.ecs(), e, pos);
+        _ = f.ecs().component_add.?(f.ecs(), e, vel);
+        const p: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, pos).?));
+        const v: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, vel).?));
+        p.x = @floatFromInt(i);
+        v.x = @floatFromInt(i * 2);
+        expect += @as(f64, @floatFromInt(i)) + @as(f64, @floatFromInt(i * 2));
+    }
+
+    var rq = std.mem.zeroes(c.ke_query_decl);
+    rq.terms[0] = access(pos, c.KE_ACCESS_READ);
+    rq.terms[1] = access(vel, c.KE_ACCESS_READ);
+    rq.term_count = 2;
+
+    var rnd = systemParams("RenderPosVel", c.KE_PHASE_RENDER);
+    rnd.queries = &rq;
+    rnd.query_count = 1;
+    rnd.execute = &extractPosVelReader;
+    try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
+
+    g_extract_pv_sum = 0.0;
+    g_extract_pv_runs.store(0, .release);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    f.flushRender();
+
+    try testing.expect(g_extract_pv_runs.load(.acquire) >= 1);
+    try testing.expectEqual(expect, g_extract_pv_sum);
+}
+
+fn waveSystem(list: [*c]const c.ke_component_access, count: u32) c.ke_runtime_system_params {
+    var s = systemParams("Synthetic", c.KE_PHASE_UPDATE);
+    s.access_list = list;
+    s.access_count = count;
+    s.execute = &noopSystem;
+    return s;
+}
+
+test "no systems produce no waves" {
+    var assignments = [_]u32{ 99, 99, 99, 99 };
+    var wave_count: u32 = 99;
+    ke_runtime_debug_compute_waves(null, 0, &assignments, &wave_count);
+    try testing.expectEqual(@as(u32, 0), wave_count);
+}
+
+test "a single system occupies one wave" {
+    const acc = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const sys = [_]c.ke_runtime_system_params{waveSystem(&acc, 1)};
+
+    var assignments = [_]u32{99};
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sys, 1, &assignments, &wave_count);
+
+    try testing.expectEqual(@as(u32, 1), wave_count);
+    try testing.expectEqual(@as(u32, 0), assignments[0]);
+}
+
+test "systems writing different components share a wave" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const b = [_]c.ke_component_access{access(2, c.KE_ACCESS_WRITE)};
+    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
+
+    var assignments = [_]u32{ 99, 99 };
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+
+    try testing.expectEqual(@as(u32, 1), wave_count);
+    try testing.expectEqual(@as(u32, 0), assignments[0]);
+    try testing.expectEqual(@as(u32, 0), assignments[1]);
+}
+
+test "two systems writing the same component land in different waves" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const b = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
+
+    var assignments = [_]u32{ 99, 99 };
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+
+    try testing.expectEqual(@as(u32, 2), wave_count);
+    try testing.expectEqual(@as(u32, 0), assignments[0]);
+    try testing.expectEqual(@as(u32, 1), assignments[1]);
+}
+
+test "a writer and a reader of the same component land in different waves" {
+    const a = [_]c.ke_component_access{access(5, c.KE_ACCESS_WRITE)};
+    const b = [_]c.ke_component_access{access(5, c.KE_ACCESS_READ)};
+    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
+
+    var assignments = [_]u32{ 99, 99 };
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+
+    try testing.expectEqual(@as(u32, 2), wave_count);
+}
+
+test "two readers of the same component share a wave" {
+    const a = [_]c.ke_component_access{access(7, c.KE_ACCESS_READ)};
+    const b = [_]c.ke_component_access{access(7, c.KE_ACCESS_READ)};
+    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
+
+    var assignments = [_]u32{ 99, 99 };
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+
+    try testing.expectEqual(@as(u32, 1), wave_count);
+    try testing.expectEqual(@as(u32, 0), assignments[0]);
+    try testing.expectEqual(@as(u32, 0), assignments[1]);
+}
+
+test "a chain of conflicts groups greedily" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const b = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
+    const d = [_]c.ke_component_access{access(2, c.KE_ACCESS_WRITE)};
+    const e = [_]c.ke_component_access{access(2, c.KE_ACCESS_READ)};
+    const sys = [_]c.ke_runtime_system_params{
+        waveSystem(&a, 1),
+        waveSystem(&b, 1),
+        waveSystem(&d, 1),
+        waveSystem(&e, 1),
+    };
+
+    var assignments = [_]u32{ 99, 99, 99, 99 };
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sys, 4, &assignments, &wave_count);
+
+    try testing.expectEqual(@as(u32, 3), wave_count);
+    try testing.expectEqual(@as(u32, 0), assignments[0]);
+    try testing.expectEqual(@as(u32, 1), assignments[1]);
+    try testing.expectEqual(@as(u32, 1), assignments[2]);
+    try testing.expectEqual(@as(u32, 2), assignments[3]);
+}
+
+test "the clear shadow and cull access shape lands in one wave" {
+    const clear = [_]c.ke_component_access{
+        access(1, c.KE_ACCESS_READ),
+        access(2, c.KE_ACCESS_WRITE),
+    };
+    const shadow = [_]c.ke_component_access{
+        access(1, c.KE_ACCESS_READ),
+        access(3, c.KE_ACCESS_READ),
+        access(4, c.KE_ACCESS_WRITE),
+    };
+    const cull = [_]c.ke_component_access{
+        access(1, c.KE_ACCESS_READ),
+        access(3, c.KE_ACCESS_READ),
+        access(5, c.KE_ACCESS_WRITE),
+    };
+    const sys = [_]c.ke_runtime_system_params{
+        waveSystem(&clear, 2),
+        waveSystem(&shadow, 3),
+        waveSystem(&cull, 3),
+    };
+
+    var assignments = [_]u32{ 99, 99, 99 };
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sys, 3, &assignments, &wave_count);
+
+    try testing.expectEqual(@as(u32, 1), wave_count);
+    try testing.expectEqual(assignments[0], assignments[1]);
+    try testing.expectEqual(assignments[1], assignments[2]);
+}
+
+fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+    _ = ke_system_ctx_spawn(ctx);
+    _ = ke_system_ctx_spawn(ctx);
+    _ = ke_system_ctx_spawn(ctx);
+    const count: *Counter = @ptrCast(@alignCast(ud.?));
+    _ = count.fetchAdd(1, .acq_rel);
+}
+
+test "a deferred spawn is applied at the wave barrier" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    ke_system_ctx_reset_defer_applied();
+
+    var spawn_calls = Counter.init(0);
+    var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
+    sys.user_data = &spawn_calls;
+    sys.execute = &spawnerBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expectEqual(@as(u32, 1), spawn_calls.load(.acquire));
+    try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
+}
+
+const MutatorProbe = struct {
+    payload: u8 = 'X',
+    ok: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+};
+
+fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+    const probe: *MutatorProbe = @ptrCast(@alignCast(ud.?));
+    const attached = ke_system_ctx_attach(ctx, 42, 5, &probe.payload, 1);
+    const detached = ke_system_ctx_detach(ctx, 42, 5);
+    const despawned = ke_system_ctx_despawn(ctx, 42);
+    probe.ok.store(attached and detached and despawned, .release);
+}
+
+test "deferred attach detach and despawn are applied at the barrier" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    ke_system_ctx_reset_defer_applied();
+
+    var probe = MutatorProbe{};
+    var sys = systemParams("Mutator", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &mutatorBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expect(probe.ok.load(.acquire));
+    try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
+}
+
+fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+    _ = ke_system_ctx_spawn(ctx);
+}
+
+test "the defer queue drains between ticks" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    ke_system_ctx_reset_defer_applied();
+
+    var sys = systemParams("RepeatSpawner", c.KE_PHASE_UPDATE);
+    sys.execute = &repeatSpawnerBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    for (0..5) |_| try testing.expect(f.tick(1.0 / 60.0));
+
+    try testing.expectEqual(@as(u32, 5), ke_system_ctx_defer_applied_count());
+}
+
+test "a zero size component registers as a usable tag" {
+    const h = ke_ecs_flecs_create(null, null);
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const ecs: *c.ke_ecs = @ptrCast(h.ref);
+
+    var tag = ecs.component_register.?(ecs, "ZeroSizeTag", 0, null);
+    try testing.expect(tag != 0);
+
+    const e = ecs.entity_create.?(ecs);
+    _ = ecs.component_add.?(ecs, e, tag);
+
+    const q = ecs.query_register.?(ecs, &tag, 1);
+    try testing.expect(q != c.KE_QUERY_INVALID);
+
+    var segs = std.mem.zeroes([8]c.ke_ecs_segment);
+    var seg_count: usize = 0;
+    ecs.query_resolve.?(ecs, q, &segs, 8, &seg_count);
+
+    var total: usize = 0;
+    for (0..seg_count) |i| total += segs[i].count;
+    try testing.expectEqual(@as(usize, 1), total);
+}
+
+fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+    var seg_count: usize = 0;
+    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    if (segs == null) return;
+
+    var sink: f32 = 0.0;
+    for (0..seg_count) |s| {
+        const col: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
+        for (0..segs[s].count) |i| sink += col[i].x;
+    }
+    std.mem.doNotOptimizeAway(sink);
+}
+
+test "two readers sharing a wave read the same storage without conflicting" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    const pos = f.ecs().component_register.?(f.ecs(), "pos", @sizeOf(Vec3), null);
+    try testing.expect(pos != 0);
+
+    for (0..512) |i| {
+        const e = f.ecs().entity_create.?(f.ecs());
+        const p: *Vec3 = @ptrCast(@alignCast(f.ecs().component_add.?(f.ecs(), e, pos).?));
+        p.x = @floatFromInt(i);
+        p.y = 0.0;
+        p.z = 0.0;
+    }
+
+    var read_pos = std.mem.zeroes(c.ke_query_decl);
+    read_pos.terms[0] = access(pos, c.KE_ACCESS_READ);
+    read_pos.term_count = 1;
+
+    var a = systemParams("ReaderA", c.KE_PHASE_UPDATE);
+    a.queries = &read_pos;
+    a.query_count = 1;
+    a.execute = &parallelReaderBody;
+
+    var b = a;
+    b.name = "ReaderB";
+
+    try testing.expect(f.rt().register_system.?(f.rt(), &a, null) != 0);
+    try testing.expect(f.rt().register_system.?(f.rt(), &b, null) != 0);
+
+    const sysz = [_]c.ke_runtime_system_params{ a, b };
+    var waves = [_]u32{ 0, 0 };
+    var wave_count: u32 = 0;
+    ke_runtime_debug_compute_waves(&sysz, 2, &waves, &wave_count);
+    try testing.expectEqual(waves[0], waves[1]);
+
+    for (0..300) |_| try testing.expect(f.tick(1.0 / 60.0));
+}
+
+var g_pv_sum: f64 = 0.0;
+
+fn posVelBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+    var seg_count: usize = 0;
+    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    if (segs == null) return;
+    for (0..seg_count) |s| {
+        const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
+        const vc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[1] orelse continue));
+        for (0..segs[s].count) |i| g_pv_sum += @as(f64, pc[i].x) + @as(f64, vc[i].x);
+    }
+}
+
+test "a multi term query hands back aligned columns" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    const pos = f.ecs().component_register.?(f.ecs(), "pos2", @sizeOf(Vec3), null);
+    const vel = f.ecs().component_register.?(f.ecs(), "vel2", @sizeOf(Vec3), null);
+    try testing.expect(pos != 0);
+    try testing.expect(vel != 0);
+
+    var expect: f64 = 0.0;
+    for (0..100) |i| {
+        const e = f.ecs().entity_create.?(f.ecs());
+        _ = f.ecs().component_add.?(f.ecs(), e, pos);
+        _ = f.ecs().component_add.?(f.ecs(), e, vel);
+        const p: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, pos).?));
+        const v: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, vel).?));
+        p.x = @floatFromInt(i);
+        v.x = @floatFromInt(i * 2);
+        expect += @as(f64, @floatFromInt(i)) + @as(f64, @floatFromInt(i * 2));
+    }
+
+    var q = std.mem.zeroes(c.ke_query_decl);
+    q.terms[0] = access(pos, c.KE_ACCESS_READ);
+    q.terms[1] = access(vel, c.KE_ACCESS_READ);
+    q.term_count = 2;
+
+    var s = systemParams("PosVel", c.KE_PHASE_UPDATE);
+    s.queries = &q;
+    s.query_count = 1;
+    s.execute = &posVelBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &s, null) != 0);
+
+    g_pv_sum = 0.0;
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expectEqual(expect, g_pv_sum);
+}

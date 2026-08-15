@@ -1,4 +1,3 @@
-
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
@@ -175,7 +174,7 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
 }
 
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
-    const core: *c.ke_render_service = @alignCast(@ptrCast(user.?));
+    const core: *c.ke_render_service = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
@@ -188,4 +187,201 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
             resolveMaterial(core, meshes + i);
         }
     }
+}
+
+const testing = std.testing;
+
+const Recorder = struct {
+    var mesh_key: [192]u8 = undefined;
+    var mesh_key_len: usize = 0;
+    var mesh_calls: u32 = 0;
+    var vertex_count: usize = 0;
+    var index_count: u32 = 0;
+
+    var material_key: [192]u8 = undefined;
+    var material_key_len: usize = 0;
+    var material_calls: u32 = 0;
+    var material_roughness: f32 = 0;
+    var material_alpha_mode: c.ke_alpha_mode = 0;
+
+    fn reset() void {
+        mesh_key_len = 0;
+        mesh_calls = 0;
+        vertex_count = 0;
+        index_count = 0;
+        material_key_len = 0;
+        material_calls = 0;
+        material_roughness = 0;
+        material_alpha_mode = 0;
+    }
+
+    fn meshKey() []const u8 {
+        return mesh_key[0..mesh_key_len];
+    }
+
+    fn materialKey() []const u8 {
+        return material_key[0..material_key_len];
+    }
+};
+
+fn recordUploadMesh(
+    _: [*c]c.ke_render_service,
+    key: [*c]const u8,
+    _: ?*const anyopaque,
+    vertices_size: usize,
+    _: [*c]const u16,
+    idx_count: u32,
+    _: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_mesh_handle {
+    const k = std.mem.span(key);
+    @memcpy(Recorder.mesh_key[0..k.len], k);
+    Recorder.mesh_key_len = k.len;
+    Recorder.vertex_count = vertices_size / @sizeOf(Vertex);
+    Recorder.index_count = idx_count;
+    Recorder.mesh_calls += 1;
+    return .{ .bits = 42 };
+}
+
+fn recordCreateMaterial(
+    _: [*c]c.ke_render_service,
+    key: [*c]const u8,
+    _: [*c]const f32,
+    _: f32,
+    roughness: f32,
+    _: c.ke_texture_handle,
+    _: c.ke_texture_handle,
+    alpha_mode: c.ke_alpha_mode,
+    _: f32,
+    _: f32,
+    _: f32,
+    _: [*c]const u8,
+    _: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_material_handle {
+    const k = std.mem.span(key);
+    @memcpy(Recorder.material_key[0..k.len], k);
+    Recorder.material_key_len = k.len;
+    Recorder.material_roughness = roughness;
+    Recorder.material_alpha_mode = alpha_mode;
+    Recorder.material_calls += 1;
+    return .{ .bits = 43 };
+}
+
+fn recordingService() c.ke_render_service {
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.upload_mesh = recordUploadMesh;
+    svc.create_material = recordCreateMaterial;
+    return svc;
+}
+
+fn meshNamed(primitive: []const u8) c.ke_mesh_component {
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    @memcpy(m.primitive[0..primitive.len], primitive);
+    return m;
+}
+
+test "the quad primitive uploads four vertices and six indices under its own key" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = meshNamed("quad");
+    resolveMesh(&svc, &m);
+    try testing.expectEqualStrings("primitive:quad", Recorder.meshKey());
+    try testing.expectEqual(@as(usize, 4), Recorder.vertex_count);
+    try testing.expectEqual(@as(u32, 6), Recorder.index_count);
+    try testing.expectEqual(@as(u32, 42), m.mesh.bits);
+}
+
+test "the plane primitive is a quad lying flat, keyed apart from the upright one" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = meshNamed("plane");
+    resolveMesh(&svc, &m);
+    try testing.expectEqualStrings("primitive:plane", Recorder.meshKey());
+    try testing.expectEqual(@as(usize, 4), Recorder.vertex_count);
+}
+
+test "the cube primitive has four vertices per face so each face keeps its own normal" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = meshNamed("cube");
+    resolveMesh(&svc, &m);
+    try testing.expectEqualStrings("primitive:cube", Recorder.meshKey());
+    try testing.expectEqual(@as(usize, 24), Recorder.vertex_count);
+    try testing.expectEqual(@as(u32, 36), Recorder.index_count);
+}
+
+test "the sphere primitive names its own tessellation in its key" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = meshNamed("sphere");
+    resolveMesh(&svc, &m);
+    try testing.expectEqualStrings("primitive:sphere:0.5:24:32", Recorder.meshKey());
+    try testing.expectEqual(@as(usize, (sphere_rings + 1) * (sphere_segments + 1)), Recorder.vertex_count);
+    try testing.expectEqual(@as(u32, sphere_rings * sphere_segments * 6), Recorder.index_count);
+}
+
+test "a primitive nobody implements resolves to no mesh rather than a wrong one" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = meshNamed("torus");
+    resolveMesh(&svc, &m);
+    try testing.expectEqual(@as(u32, 0), Recorder.mesh_calls);
+    try testing.expectEqual(@as(u32, c.KE_HANDLE_NONE), m.mesh.bits);
+}
+
+test "a mesh naming no primitive is left alone" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    resolveMesh(&svc, &m);
+    try testing.expectEqual(@as(u32, 0), Recorder.mesh_calls);
+}
+
+test "a mesh that already carries a handle is not uploaded again" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = meshNamed("quad");
+    m.mesh = .{ .bits = 5 };
+    resolveMesh(&svc, &m);
+    try testing.expectEqual(@as(u32, 0), Recorder.mesh_calls);
+    try testing.expectEqual(@as(u32, 5), m.mesh.bits);
+}
+
+test "a mesh without a material gets one built from the values authored on it" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    m.base_color = .{ .x = 1, .y = 0, .z = 0, .w = 1 };
+    m.roughness = 0.25;
+    m.alpha_mode = c.KE_ALPHA_MODE_BLEND;
+    resolveMaterial(&svc, &m);
+    try testing.expectEqual(@as(u32, 1), Recorder.material_calls);
+    try testing.expectEqual(@as(f32, 0.25), Recorder.material_roughness);
+    try testing.expectEqual(@as(c.ke_alpha_mode, c.KE_ALPHA_MODE_BLEND), Recorder.material_alpha_mode);
+    try testing.expectEqual(@as(u32, 43), m.material.bits);
+}
+
+test "the material cache key is spelled out of every value that changes the shading" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    m.roughness = 0.25;
+    resolveMaterial(&svc, &m);
+    var first: [192]u8 = undefined;
+    const first_len = Recorder.material_key_len;
+    @memcpy(first[0..first_len], Recorder.materialKey());
+
+    var other = std.mem.zeroes(c.ke_mesh_component);
+    other.roughness = 0.75;
+    resolveMaterial(&svc, &other);
+    try testing.expect(!std.mem.eql(u8, first[0..first_len], Recorder.materialKey()));
+}
+
+test "a mesh that already carries a material keeps it" {
+    Recorder.reset();
+    var svc = recordingService();
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    m.material = .{ .bits = 8 };
+    resolveMaterial(&svc, &m);
+    try testing.expectEqual(@as(u32, 0), Recorder.material_calls);
+    try testing.expectEqual(@as(u32, 8), m.material.bits);
 }

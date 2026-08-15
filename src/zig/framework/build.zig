@@ -19,6 +19,8 @@ pub fn build(b: *std.Build) void {
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_runtime library") orelse @panic("-Dke-lib-dir required");
+    const ke_audio = b.option([]const u8, "ke-audio-include", "kernel_engine/audio include dir, read by the tests for its generated field table");
+    const ke_physics = b.option([]const u8, "ke-physics-include", "kernel_engine/physics include dir, read by the tests for its generated field table");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/framework_root.zig"),
@@ -60,6 +62,8 @@ pub fn build(b: *std.Build) void {
         inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
             test_mod.addIncludePath(.{ .cwd_relative = inc });
         }
+        if (ke_audio) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
+        if (ke_physics) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
         test_mod.addIncludePath(b.path("include"));
         test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
         test_mod.linkSystemLibrary("ke_runtime", .{});

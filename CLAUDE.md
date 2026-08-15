@@ -16,14 +16,15 @@ vcpkg itself is fetched automatically (`.cache/vcpkg-<version>/`) — no manual 
 
 ```bash
 zig build --prefix build/native                     # configure + build + install, one step
+zig build test --prefix build/native                 # every plugin's own Zig tests
 build/native/bin/c_demo_01                           # run a C example (Linux name; c_demo_01.exe on Windows)
-build/native/bin/test_ke_kernel                      # native kernel/framework tests (GTest)
-build/native/bin/test_integration_cpp                # native integration tests (GTest)
 ```
 
 Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. C# expects native libraries at `build/native/bin/`.
 
-**`test_ke_kernel` and `test_integration_cpp` (C++/GTest) are frozen — new tests are written in Zig, not C++.** They exist only because they predate the engine's move to Zig; keep them passing, but grow them only as a byproduct of touching that file for another reason, never to house new coverage. A new test for Zig-implemented engine logic belongs in that plugin's own `zig build test` (see any `src/zig/<plugin>/build.zig` for the pattern — `b.addTest` against the plugin's own source, run via `b.addRunArtifact`).
+**Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
+
+The root `test` step runs all of them. It cannot go stale: `Ctx.plugin` takes a required `.has_tests` / `.no_tests` argument, so a new plugin does not compile until that question is answered, and the test invocation reuses the same `-D` flag slice as the library build, so the two can never drift. Give a plugin a single test root that transitively imports its other files — a hand-written list of test roots lets a new test file go silently unrun, and lets two roots that import each other run the same test twice.
 
 ### Managed (.NET 10)
 
@@ -43,7 +44,7 @@ dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean 
 
 Shaders compile to `src/zig/render/service/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_service` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
-**Known debt — no native/Zig coverage story.** `scripts/coverage.cs` only measures C#. Zig's own compiler has no source-coverage instrumentation. DWARF-based tools don't fill the gap either: `kcov` (which works via `libdw`, compiler-agnostic in principle) was tried directly against a Zig-compiled binary and produces silent 0% coverage — Zig 0.16 emits a line-table extended opcode `libdw` doesn't decode, confirmed by comparing against an identical `gcc`/`zig cc`-compiled C binary (which `kcov` measures correctly) and by inspecting the raw DWARF with `readelf --debug-dump=decodedline`. This blocks coverage for both `zig build test` targets and the two legacy GTest suites equally, so there's no coverage-driven reason to keep writing new tests in C++.
+**Known debt — no native/Zig coverage story.** `scripts/coverage.cs` only measures C#. Zig's own compiler has no source-coverage instrumentation. DWARF-based tools don't fill the gap either: `kcov` (which works via `libdw`, compiler-agnostic in principle) was tried directly against a Zig-compiled binary and produces silent 0% coverage — Zig 0.16 emits a line-table extended opcode `libdw` doesn't decode, confirmed by comparing against an identical `gcc`/`zig cc`-compiled C binary (which `kcov` measures correctly) and by inspecting the raw DWARF with `readelf --debug-dump=decodedline`. So the only native coverage signal is reading the tests, not measuring them.
 
 ### Running examples after a native rebuild
 
