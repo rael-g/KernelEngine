@@ -4,12 +4,12 @@ version = 2
 
 [[entity]]
 name = "Root"
-type = "Pong.Wall"
+type = "pong.wall"
 
 [[entity]]
 name   = "Shape"
 parent = "Root"
-type   = "Collider2D"
+type   = "collider2d"
 [entity.collider2d]
 half_extents = [8.0, 0.25]
 restitution  = 1.0
@@ -17,7 +17,7 @@ restitution  = 1.0
 [[entity]]
 name   = "Visual"
 parent = "Root"
-type   = "Sprite2D"
+type   = "sprite2d"
 [entity.sprite2d]
 size  = [16.0, 0.5]
 color = [0.15, 0.15, 0.20, 1.0]

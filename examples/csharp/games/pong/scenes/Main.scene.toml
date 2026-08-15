@@ -4,13 +4,13 @@ version = 2
 
 [[entity]]
 name = "Ambient"
-type = "AmbientLight"
+type = "ambient_light"
 [entity.ambient_light]
 color = [1.0, 1.0, 1.0]
 
 [[entity]]
 name = "Camera"
-type = "Camera"
+type = "camera"
 [entity.transform]
 position = [0.0, 0.0, 10.0]
 [entity.camera]
@@ -63,7 +63,7 @@ target = "Scoreboard"
 
 [[entity]]
 name = "Scoreboard"
-type = "Pong.Scoreboard"
+type = "pong.scoreboard"
 [entity.scoreboard]
 font_path = ""
 font_size = 56.0

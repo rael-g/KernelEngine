@@ -17,11 +17,11 @@ public sealed class PongModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
-        services.AddNodeType<Wall>("Pong.Wall");
-        services.AddNodeType<Paddle>("Pong.Paddle");
-        services.AddNodeType<Ball>("Pong.Ball");
-        services.AddNodeType<Scoreboard>("Pong.Scoreboard");
-        services.AddNodeType<MenuController>("Pong.MenuController");
+        services.AddNodeType<Wall>();
+        services.AddNodeType<Paddle>();
+        services.AddNodeType<Ball>();
+        services.AddNodeType<Scoreboard>();
+        services.AddNodeType<MenuController>();
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)

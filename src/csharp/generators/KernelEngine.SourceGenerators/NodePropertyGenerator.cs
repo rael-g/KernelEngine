@@ -460,9 +460,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             var ch = name[i];
             if (char.IsUpper(ch))
             {
-                // A run of capitals is one word, so UIRoot reads ui_root, not u_i_root.
-                var startsWord = i > 0 && (!char.IsUpper(name[i - 1])
-                    || (i + 1 < name.Length && !char.IsUpper(name[i + 1])));
+                // A run of capitals is one word, so UIRoot reads ui_root, not u_i_root;
+                // a capital after a digit continues one, so Sprite2D reads sprite2d.
+                var startsWord = i > 0 && !char.IsDigit(name[i - 1])
+                    && (!char.IsUpper(name[i - 1])
+                        || (i + 1 < name.Length && !char.IsUpper(name[i + 1])));
                 if (startsWord) sb.Append('_');
                 sb.Append(char.ToLowerInvariant(ch));
             }

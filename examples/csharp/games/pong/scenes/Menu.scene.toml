@@ -4,13 +4,13 @@ version = 2
 
 [[entity]]
 name = "Ambient"
-type = "AmbientLight"
+type = "ambient_light"
 [entity.ambient_light]
 color = [1.0, 1.0, 1.0]
 
 [[entity]]
 name = "Camera"
-type = "Camera"
+type = "camera"
 [entity.transform]
 position = [0.0, 0.0, 10.0]
 [entity.camera]
@@ -23,4 +23,4 @@ far_plane         = 1000.0
 # transition to Main when Space is pressed.
 [[entity]]
 name = "Controller"
-type = "Pong.MenuController"
+type = "pong.menu_controller"
