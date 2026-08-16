@@ -107,7 +107,7 @@ int main(void)
     cam_w->matrix.m[13] = 1.5f;
     cam_w->matrix.m[14] = -3.0f;
     ke_camera_component *cam_c = ecs.ref->component_add(ecs.ref, cam, camera_cid);
-    *cam_c = (ke_camera_component){ .fov = 60.0f, .near_plane = 0.1f, .far_plane = 100.0f };
+    *cam_c = (ke_camera_component){ .fov = 60.0f, .near_plane = 0.1f, .far_plane = 100.0f, .cull_mask = UINT32_MAX };
 
     ke_entity ent = ecs.ref->entity_create(ecs.ref);
     ke_transform_component *ent_t = ecs.ref->component_add(ecs.ref, ent, transform_cid);
@@ -115,7 +115,7 @@ int main(void)
     ke_world_transform_component *ent_w = ecs.ref->component_add(ecs.ref, ent, world_cid);
     *ent_w = (ke_world_transform_component){ .matrix = identity };
     ke_mesh_component *ent_m = ecs.ref->component_add(ecs.ref, ent, mesh_cid);
-    *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat };
+    *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat, .layers = 1 };
 
     ke_entity sun = ecs.ref->entity_create(ecs.ref);
     ke_directional_light_component *sun_l = ecs.ref->component_add(ecs.ref, sun, light_cid);

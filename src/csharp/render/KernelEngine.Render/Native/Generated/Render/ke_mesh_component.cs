@@ -26,6 +26,9 @@ public partial struct ke_mesh_component
 
     public float distortion_strength;
 
+    [NativeTypeName("uint32_t")]
+    public uint layers;
+
     [InlineArray(32)]
     public partial struct _primitive_e__FixedBuffer
     {

@@ -18,6 +18,7 @@ public partial class MeshRenderer : Node3D
         _generatedState0.alpha_cutoff = 0.5f;
         _generatedState0.ior = 1.5f;
         _generatedState0.distortion_strength = 0.05f;
+        _generatedState0.layers = 1;
     }
 
     [NativeField("mesh", Component = typeof(ke_mesh_component))]
@@ -44,4 +45,7 @@ public partial class MeshRenderer : Node3D
 
     [NativeField("distortion_strength", Component = typeof(ke_mesh_component))]
     public partial float DistortionStrength { get; set; }
+
+    [NativeField("layers", Component = typeof(ke_mesh_component))]
+    public partial uint Layers { get; set; }
 }

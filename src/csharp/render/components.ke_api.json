@@ -130,6 +130,14 @@
             "bool"
           ],
           "doc": null
+        },
+        {
+          "name": "cull_mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": null
         }
       ]
     },
@@ -380,6 +388,14 @@
           "type": "float",
           "tags": [
             "default:0.05"
+          ],
+          "doc": null
+        },
+        {
+          "name": "layers",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
           ],
           "doc": null
         }

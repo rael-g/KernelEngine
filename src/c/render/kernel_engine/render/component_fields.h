@@ -12,6 +12,7 @@ static const ke_component_field ke_camera_component_fields[] = {
     { "far_plane", KE_VARIANT_FLOAT, offsetof(ke_camera_component, far_plane), sizeof(((ke_camera_component *)0)->far_plane), { KE_VARIANT_FLOAT, { .f = 1000.0 } } },
     { "orthographic_size", KE_VARIANT_FLOAT, offsetof(ke_camera_component, orthographic_size), sizeof(((ke_camera_component *)0)->orthographic_size), { KE_VARIANT_FLOAT, { .f = 5.0 } } },
     { "orthographic", KE_VARIANT_BOOL, offsetof(ke_camera_component, orthographic), sizeof(((ke_camera_component *)0)->orthographic), { KE_VARIANT_NULL, { 0 } } },
+    { "cull_mask", KE_VARIANT_INT, offsetof(ke_camera_component, cull_mask), sizeof(((ke_camera_component *)0)->cull_mask), { KE_VARIANT_INT, { .i = 4294967295 } } },
 };
 
 static const ke_component_field ke_directional_light_component_fields[] = {
@@ -48,6 +49,7 @@ static const ke_component_field ke_mesh_component_fields[] = {
     { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, alpha_cutoff), sizeof(((ke_mesh_component *)0)->alpha_cutoff), { KE_VARIANT_FLOAT, { .f = 0.5 } } },
     { "ior", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, ior), sizeof(((ke_mesh_component *)0)->ior), { KE_VARIANT_FLOAT, { .f = 1.5 } } },
     { "distortion_strength", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, distortion_strength), sizeof(((ke_mesh_component *)0)->distortion_strength), { KE_VARIANT_FLOAT, { .f = 0.05 } } },
+    { "layers", KE_VARIANT_INT, offsetof(ke_mesh_component, layers), sizeof(((ke_mesh_component *)0)->layers), { KE_VARIANT_INT, { .i = 1 } } },
 };
 
 static const ke_component_field ke_sprite2d_component_fields[] = {

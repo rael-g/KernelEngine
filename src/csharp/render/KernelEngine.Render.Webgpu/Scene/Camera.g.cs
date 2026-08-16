@@ -17,6 +17,7 @@ public partial class Camera : Node3D
         _generatedState0.near_plane = 0.1f;
         _generatedState0.far_plane = 1000f;
         _generatedState0.orthographic_size = 5f;
+        _generatedState0.cull_mask = 4294967295;
     }
 
     [NativeField("fov", Component = typeof(ke_camera_component))]
@@ -33,4 +34,7 @@ public partial class Camera : Node3D
 
     [NativeField("orthographic", Component = typeof(ke_camera_component))]
     public partial bool Orthographic { get; set; }
+
+    [NativeField("cull_mask", Component = typeof(ke_camera_component))]
+    public partial uint CullMask { get; set; }
 }

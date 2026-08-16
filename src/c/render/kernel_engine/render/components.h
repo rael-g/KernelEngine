@@ -19,6 +19,9 @@ extern "C"
         float   far_plane; ///< [default:1000]
         float   orthographic_size; ///< [default:5]
         uint8_t orthographic; ///< [bool]
+        /// Which of the 32 view layers this camera draws. A renderable is skipped
+        /// unless one of its own layer bits is set here.
+        uint32_t cull_mask; ///< [default:4294967295]
     } ke_camera_component;
 
     /** [node:DirectionalLight,base:Node3D] Directional light node. Init properties feed the per-frame light state the renderer consumes. */
@@ -88,6 +91,9 @@ extern "C"
         float    alpha_cutoff; ///< [default:0.5]
         float    ior; ///< [default:1.5]
         float    distortion_strength; ///< [default:0.05]
+        /// Which of the 32 view layers this renderable occupies. A camera draws it
+        /// only when its cull_mask names one of these bits.
+        uint32_t layers; ///< [default:1]
     } ke_mesh_component;
 
     /// [node:Sprite2D,base:Node2D]

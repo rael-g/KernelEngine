@@ -14,4 +14,7 @@ public partial struct ke_camera_component
 
     [NativeTypeName("uint8_t")]
     public byte orthographic;
+
+    [NativeTypeName("uint32_t")]
+    public uint cull_mask;
 }
