@@ -8,7 +8,7 @@ namespace KernelEngine.Framework;
 /// to spawn entities and attach components; every entity is created through the
 /// native <see cref="SceneTree"/> so hierarchy and name are wired at the C level.
 /// </summary>
-public sealed class NodeWorld
+public sealed class NodeWorld : ISignalDeclarer
 {
     private readonly World              _world;
     private readonly IEcsRegistry       _ecs;
@@ -128,6 +128,12 @@ public sealed class NodeWorld
     }
 
     private readonly Dictionary<uint, Type> _signalTypes = new();
+
+    /// <summary>
+    /// Declares a payload type's signal up front, so a scene naming it resolves and a
+    /// scene naming something else fails instead of inventing a signal nobody raises.
+    /// </summary>
+    void ISignalDeclarer.Declare<T>() => _ = SignalIdOf<T>();
 
     /// <summary>
     /// Hands one delivery to the node it names. A delivery whose target is no longer

@@ -191,6 +191,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
 
+        EmitSignalTypeCollection(sb, classSymbol, borrows, overrideModifier);
+
         var needsUtf8Helpers = false;
 
         foreach (var p in properties)
@@ -625,18 +627,51 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         isEnabledByDefault: true);
 
     /// <summary>
+    /// Emits the list of payload types this node type takes part in, both the ones it
+    /// handles and the ones it emits. Registering these at startup is what lets a scene
+    /// file's signal name be checked rather than taken on faith.
+    /// </summary>
+    static void EmitSignalTypeCollection(
+        StringBuilder sb,
+        INamedTypeSymbol classSymbol,
+        ImmutableArray<IParameterSymbol> borrows,
+        string overrideModifier)
+    {
+        var types = SignalHandlersOf(classSymbol)
+            .Select(m => m.Parameters[0].Type.ToDisplayString())
+            .Concat(borrows
+                .Where(b => BorrowKindOf(b.Type) == "Emit")
+                .Select(b => ((INamedTypeSymbol)b.Type).TypeArguments[0].ToDisplayString()))
+            .Distinct()
+            .ToArray();
+        if (types.Length == 0) return;
+
+        sb.AppendLine($"    {overrideModifier} override void CollectSignalTypes(global::KernelEngine.Framework.ISignalDeclarer into)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        base.CollectSignalTypes(into);");
+        foreach (var t in types)
+            sb.AppendLine($"        into.Declare<{t}>();");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    /// <summary>Every <c>On(in T)</c> this type declares itself.</summary>
+    static IMethodSymbol[] SignalHandlersOf(INamedTypeSymbol classSymbol) =>
+        classSymbol.GetMembers("On").OfType<IMethodSymbol>()
+            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
+                && m.Parameters.Length == 1
+                && m.Parameters[0].Type.IsUnmanagedType
+                && m.Parameters[0].Type.TypeKind == TypeKind.Struct)
+            .ToArray();
+
+    /// <summary>
     /// Emits the dispatch that turns a delivered signal into a call on this node's
     /// matching <c>On</c> handler. A node with no handler emits nothing, so listening
     /// costs a virtual call only for types that actually listen.
     /// </summary>
     static void EmitSignalDispatch(StringBuilder sb, INamedTypeSymbol classSymbol, string overrideModifier)
     {
-        var handlers = classSymbol.GetMembers("On").OfType<IMethodSymbol>()
-            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
-                && m.Parameters.Length == 1
-                && m.Parameters[0].Type.IsUnmanagedType
-                && m.Parameters[0].Type.TypeKind == TypeKind.Struct)
-            .ToArray();
+        var handlers = SignalHandlersOf(classSymbol);
         if (handlers.Length == 0) return;
 
         sb.AppendLine();

@@ -454,8 +454,8 @@ fn applyConnections(
         if (handler_d.ok != 0) handler = @intCast(handler_d.u.i);
 
         var signal_id: u32 = 0;
-        if (!bus.signal_id.?(bus, signal_d.u.s, c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN, &signal_id, null)) {
-            structural(world, out_error, "could not resolve signal '{s}'", .{signal_d.u.s});
+        if (!bus.signal_lookup.?(bus, signal_d.u.s, &signal_id)) {
+            structural(world, out_error, "connects the signal '{s}', which no node type declares", .{signal_d.u.s});
             return false;
         }
         if (!bus.connect.?(bus, source, signal_id, target, handler, null)) {
@@ -1968,6 +1968,7 @@ test "a connection between two entities in the same scene reaches the bus" {
         \\
     );
 
+    _ = try f.declaredSignal("GoalScored");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const emitter = f.find("Emitter");
@@ -2004,6 +2005,7 @@ test "a connect block that names no handler wires handler zero" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const sig = try f.declaredSignal("Poke");
@@ -2030,6 +2032,7 @@ test "a connection naming an entity the scene never declared fails the load" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
 
@@ -2066,10 +2069,11 @@ test "a connect block missing its target fails the load" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
 
-test "a connection naming a signal nobody declared loads and registers that signal" {
+test "a connection naming a signal nobody declared fails the load" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
@@ -2085,11 +2089,42 @@ test "a connection naming a signal nobody declared loads and registers that sign
         \\
     );
 
-    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
 
-    const sig = try f.declaredSignal("NeverDeclaredAnywhere");
-    try f.emitFrom(f.find("Emitter"), sig);
-    try testing.expectEqual(@as(usize, 1), f.delivered().len);
+test "a misspelled signal name fails the load rather than wiring a signal nobody raises" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    _ = try f.declaredSignal("GoalScored");
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "GoalScorred"
+        \\target = "Emitter"
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "looking a signal up does not bring it into being" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const b = f.bus();
+    var id: u32 = 0;
+    try testing.expect(!b.signal_lookup.?(b, "Absent", &id));
+    try testing.expect(!b.signal_lookup.?(b, "Absent", &id));
+
+    _ = try f.declaredSignal("Absent");
+    try testing.expect(b.signal_lookup.?(b, "Absent", &id));
 }
 
 test "the same connection declared twice delivers once" {
@@ -2116,6 +2151,7 @@ test "the same connection declared twice delivers once" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const sig = try f.declaredSignal("Poke");
@@ -2147,6 +2183,7 @@ test "two connections of one signal that differ only by handler both deliver" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const sig = try f.declaredSignal("Poke");
@@ -2180,6 +2217,7 @@ test "a connection resolves a target declared later in the same file" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const sig = try f.declaredSignal("Poke");
@@ -2206,6 +2244,7 @@ test "an entity may connect a signal to itself" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const loop = f.find("Loop");
@@ -2250,6 +2289,7 @@ test "a connection declared inside a subscene wires that instance's own entities
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const left_child = f.find("Left/Child");
@@ -2292,6 +2332,7 @@ test "a connection in the outer scene cannot name an entity inside a spliced sub
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
 
@@ -2320,6 +2361,7 @@ test "an entity that splices a subscene connects from the subscene's root" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const left = f.find("Left");
@@ -2384,5 +2426,6 @@ test "a connect written as a single table instead of an array fails the load" {
         \\
     );
 
+    _ = try f.declaredSignal("Poke");
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }

@@ -57,6 +57,17 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         }
     }
 
+    /// <summary>Resolves a signal by name without registering it, so a caller that did not author the name can tell an existing signal from a typo. A scene file is exactly that caller: signal_id would happily invent the signal its author misspelled, and the connection would then never fire.</summary>
+    public bool TrySignalLookup(string name, uint* outId)
+    {
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        fixed (byte* namePtr = nameBytes)
+        {
+            var found = Handle->signal_lookup(Handle, (sbyte*)namePtr, outId);
+            return found;
+        }
+    }
+
     /// <summary>Wires one source entity's signal to one target entity, tagged with a handler selector the receiving language interprets. Connecting the same quadruple twice is a no-op rather than a duplicate delivery.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void Connect(ulong source, uint signalId, ulong target, uint handlerId)

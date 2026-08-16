@@ -116,6 +116,23 @@ fn signalId(
     return true;
 }
 
+fn signalLookup(
+    self_in: ?*c.ke_signal_bus,
+    name_in: [*c]const u8,
+    out_id: [*c]u32,
+) callconv(.c) bool {
+    const self = self_in orelse return false;
+    if (name_in == null or out_id == null) return false;
+    const s = stateOf(self);
+    const name = std.mem.span(name_in);
+    for (s.signals[0..s.signal_count], 0..) |*sig, i| {
+        if (!std.mem.eql(u8, sig.name[0..sig.name_len], name)) continue;
+        out_id.* = @intCast(i);
+        return true;
+    }
+    return false;
+}
+
 fn connect(
     self_in: ?*c.ke_signal_bus,
     source: c.ke_entity,
@@ -360,6 +377,7 @@ pub export fn ke_signal_bus_create(
     s.api = .{
         .handle = s,
         .signal_id = signalId,
+        .signal_lookup = signalLookup,
         .connect = connect,
         .disconnect = disconnect,
         .forget_entity = forgetEntity,

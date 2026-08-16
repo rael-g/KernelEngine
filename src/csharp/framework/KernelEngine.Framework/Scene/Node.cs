@@ -107,6 +107,16 @@ public abstract class Node
     protected internal virtual void CollectBehaviorComponents(List<string> into) { }
 
     /// <summary>
+    /// Declares every payload type this node type emits or handles, so a signal a
+    /// scene may legitimately name exists before any scene is read. Without it a
+    /// signal comes into being only when something first emits it, which makes a
+    /// scene naming a real signal indistinguishable from one naming a typo.
+    /// Accumulates down the chain the same way <see cref="CollectBehaviorComponents"/>
+    /// does.
+    /// </summary>
+    protected internal virtual void CollectSignalTypes(ISignalDeclarer into) { }
+
+    /// <summary>
     /// Creates <paramref name="child"/> as this node's child, under
     /// <paramref name="name"/>. The name is what a <see cref="Child{T}"/> borrow
     /// resolves against, so two children of the same type are told apart by it.

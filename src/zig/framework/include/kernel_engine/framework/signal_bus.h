@@ -63,6 +63,15 @@ extern "C"
                           uint32_t             *out_id,
                           ke_error            **out_error);
 
+        /// [try] Resolves a signal by name without registering it, so a caller that
+        /// did not author the name can tell an existing signal from a typo. A scene
+        /// file is exactly that caller: signal_id would happily invent the signal
+        /// its author misspelled, and the connection would then never fire.
+        /// @param name [utf8]
+        bool (*signal_lookup)(struct ke_signal_bus *self,
+                              const char           *name,
+                              uint32_t             *out_id);
+
         /// Wires one source entity's signal to one target entity, tagged with a
         /// handler selector the receiving language interprets. Connecting the same
         /// quadruple twice is a no-op rather than a duplicate delivery.

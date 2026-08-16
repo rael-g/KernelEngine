@@ -69,6 +69,8 @@ public sealed class SceneNodesModule : IRuntimeModule
             evaluator?.Evaluate(_inputSnapshot);
         }, accessList: Array.Empty<ComponentAccess>(), pinnedThread: 1);
 
+        DeclareSignals(nodeWorld, services);
+
         var signals = services.GetService<SignalBus>();
         if (signals is not null)
         {
@@ -130,5 +132,22 @@ public sealed class SceneNodesModule : IRuntimeModule
         });
         done.Wait();
         if (err != null) throw new InvalidOperationException("Scene setup failed", err);
+    }
+
+    /// <summary>
+    /// Registers every signal any known node type emits or handles, before the first
+    /// scene is read. That ordering is the whole point: the loader can only reject a
+    /// misspelled signal name if the real names are already there to compare against.
+    /// </summary>
+    private static void DeclareSignals(NodeWorld nodeWorld, IServiceProvider services)
+    {
+        var registry = services.GetService<NodeTypeRegistry>();
+        if (registry is null) return;
+
+        foreach (var type in registry.RegisteredTypes)
+        {
+            var probe = (Node)ActivatorUtilities.CreateInstance(services, type);
+            probe.CollectSignalTypes(nodeWorld);
+        }
     }
 }

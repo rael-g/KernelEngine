@@ -9,6 +9,9 @@ public unsafe partial struct ke_signal_bus
     [NativeTypeName("bool (*)(struct ke_signal_bus *, const char *, uint32_t, uint32_t *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_signal_bus*, sbyte*, uint, uint*, ke_error**, bool> signal_id;
 
+    [NativeTypeName("bool (*)(struct ke_signal_bus *, const char *, uint32_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_signal_bus*, sbyte*, uint*, bool> signal_lookup;
+
     [NativeTypeName("bool (*)(struct ke_signal_bus *, ke_entity, uint32_t, ke_entity, uint32_t, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_signal_bus*, ulong, uint, ulong, uint, ke_error**, bool> connect;
 

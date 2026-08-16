@@ -35,6 +35,9 @@ public sealed class NodeTypeRegistry
         return this;
     }
 
+    /// <summary>Every node type registered, in no particular order.</summary>
+    public IEnumerable<Type> RegisteredTypes => _qualified.Values;
+
     /// <summary>Resolves a name a scene file wrote to the type it names.</summary>
     /// <exception cref="InvalidOperationException">
     /// The name is unknown, or it is a short name more than one registered type answers to.
