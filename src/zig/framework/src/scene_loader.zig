@@ -342,7 +342,12 @@ fn applyComponentBlock(
 
     if (fields != null)
         fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
-    if (apply_fn) |f| f(comp, entries.ptr, @intCast(entries.len));
+    if (apply_fn) |f| {
+        if (!f(comp, entries.ptr, @intCast(entries.len))) {
+            structural(world, out_error, "component '{s}' was given a value it cannot hold", .{comp_name});
+            return false;
+        }
+    }
 
     for (entries) |*entry| {
         if (entry.consumed) continue;
@@ -352,8 +357,10 @@ fn applyComponentBlock(
     return true;
 }
 
-/// Whether a table under `[[entity]]` describes something other than a component.
-fn reservedBlock(key: [*c]const u8) bool {
+/// A connection is authored as an array of tables, so a plain table by that name
+/// only ever reaches here written in the singular. Wiring is not something a file
+/// may ask for and not get, so the spelling is corrected rather than skipped.
+fn reservedBlockMiswritten(key: [*c]const u8) bool {
     return std.mem.eql(u8, std.mem.span(key), "connect");
 }
 
@@ -387,7 +394,10 @@ fn applyComponentBlocks(
             structural(s.world, out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
             return false;
         }
-        if (reservedBlock(key)) continue;
+        if (reservedBlockMiswritten(key)) {
+            structural(s.world, out_error, "[entity.connect] declares nothing; a connection is written [[entity.connect]]", .{});
+            return false;
+        }
         if (internalComponent(key)) {
             structural(s.world, out_error, "component '{s}' is the scene tree's own and cannot be authored", .{key});
             return false;
@@ -807,10 +817,6 @@ fn fakeEntityCreate(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     return f.next_entity;
 }
 
-fn fakeEntityReserve(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
-    return fakeEntityCreate(self);
-}
-
 fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
     const f = fakeEcsOf(self);
     if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return;
@@ -911,9 +917,9 @@ const DemoComponent = extern struct {
     mode: i32,
 };
 
-fn demoApply(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) void {
+fn demoApply(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) bool {
     const d: *DemoComponent = @ptrCast(@alignCast(ptr));
-    if (n == 0) return;
+    if (n == 0) return true;
     for (e[0..n]) |*entry| {
         if (entry.key == null) continue;
         const key = std.mem.span(entry.key);
@@ -929,6 +935,7 @@ fn demoApply(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv
             entry.consumed = true;
         }
     }
+    return true;
 }
 
 const ScriptSpy = struct {
@@ -998,7 +1005,6 @@ const Fixture = struct {
         self.ecs.vtable = std.mem.zeroes(c.ke_ecs);
         self.ecs.vtable.handle = &self.ecs;
         self.ecs.vtable.entity_create = fakeEntityCreate;
-        self.ecs.vtable.entity_reserve = fakeEntityReserve;
         self.ecs.vtable.entity_destroy = fakeEntityDestroy;
         self.ecs.vtable.component_register = fakeComponentRegister;
         self.ecs.vtable.component_lookup = fakeComponentLookup;
@@ -1267,6 +1273,24 @@ test "a key only the domain callback knows is not reported as unknown" {
     );
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a value only the domain callback can judge fails the load when it rejects it" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Turned"
+        \\[entity.transform]
+        \\rotation_euler = "ninety"
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
 
 test "every sprite2d field the table describes reaches the component" {
@@ -2344,7 +2368,7 @@ test "a scene without connections loads on a world that has no signal bus" {
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 }
 
-test "a connect written as a single table instead of an array is ignored" {
+test "a connect written as a single table instead of an array fails the load" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
@@ -2360,9 +2384,5 @@ test "a connect written as a single table instead of an array is ignored" {
         \\
     );
 
-    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
-
-    const sig = try f.declaredSignal("Poke");
-    try f.emitFrom(f.find("Emitter"), sig);
-    try testing.expectEqual(@as(usize, 0), f.delivered().len);
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }

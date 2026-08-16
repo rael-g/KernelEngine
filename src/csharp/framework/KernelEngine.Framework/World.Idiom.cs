@@ -55,14 +55,18 @@ public unsafe partial class World : IDisposable
     /// </summary>
     /// <typeparam name="T">The unmanaged component struct the callback populates.</typeparam>
     /// <param name="cid">Component id returned by <c>IEcsRegistry.RegisterComponent</c>.</param>
-    /// <param name="callback">Managed callback; must not be stored across frames.</param>
+    /// <param name="callback">
+    /// Managed callback; must not be stored across frames. Throwing from it rejects
+    /// the value and fails the load, which is how a callback reports a key it owns
+    /// carrying something it cannot map.
+    /// </param>
     public void RegisterComponentApply<T>(uint cid, ComponentApplyCallback<T> callback) where T : unmanaged
     {
         var bridge = new ApplyBridge<T>(callback);
         var del    = new ApplyNativeFn(bridge.Invoke);
         _applyHandles.Add(GCHandle.Alloc(del));
 
-        var fnPtr = (delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, void>)
+        var fnPtr = (delegate* unmanaged[Cdecl]<void*, ke_variant_table_entry*, uint, bool>)
             Marshal.GetFunctionPointerForDelegate(del).ToPointer();
 
         var native = ((INativeWorld)this).Native;
@@ -85,7 +89,7 @@ public unsafe partial class World : IDisposable
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private unsafe delegate void ApplyNativeFn(void* comp, ke_variant_table_entry* entries, uint count);
+    private unsafe delegate bool ApplyNativeFn(void* comp, ke_variant_table_entry* entries, uint count);
 
     /// <summary>
     /// Per-type bridge that holds the managed callback and exposes an instance
@@ -99,17 +103,19 @@ public unsafe partial class World : IDisposable
 
         internal ApplyBridge(ComponentApplyCallback<T> callback) => _callback = callback;
 
-        internal unsafe void Invoke(void* comp, ke_variant_table_entry* entries, uint count)
+        internal unsafe bool Invoke(void* comp, ke_variant_table_entry* entries, uint count)
         {
             try
             {
                 var reader    = new VariantReader(entries, count);
                 ref var typed = ref *(T*)comp;
                 _callback(ref typed, in reader);
+                return true;
             }
             catch (Exception ex)
             {
                 SceneLoader.ParkException(ex);
+                return false;
             }
         }
     }

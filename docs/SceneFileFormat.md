@@ -77,6 +77,31 @@ type = "sports.soccer.ball"
 [entity.ball]                   # shortcut, while only one ball is registered
 ```
 
+## A connection reaches only inside its own file
+
+`[[entity.connect]]` resolves `target` against the names declared in **the same file**,
+and nothing else. A file's name table is built when that file is read and discarded when
+it is done, so a subscene cannot name an entity in its parent and a parent cannot name one
+inside a subscene.
+
+That falls out of what `scene =` means: splicing a file in gives you its root, not its
+insides. A subscene stays a unit you can move, rename or replace without auditing who
+reached into it — which is the same reason a scene may not author the components the scene
+tree owns.
+
+So a connection between two subscenes is not written in either of them. Either the wiring
+belongs one level up, where both roots have names, or it is not scene wiring at all and
+belongs to the node that owns the relationship.
+
+```toml
+[[entity]]
+name  = "Ball"
+type  = "pong.ball"
+[[entity.connect]]
+signal = "BallScored"
+target = "LeftPaddle"     # a name this file declares — a name from a subscene never resolves
+```
+
 ## Rotation is authored in degrees
 
 Stored in radians — as a quaternion in `transform`, as an angle in `transform2d` — and
@@ -88,12 +113,29 @@ written in degrees, because a file is read by people. `[entity.transform]` takes
 Loading a scene is synchronous, so a scene the engine cannot honour raises rather than
 logging and continuing. A component nobody registered, a field the component does not
 have, a retired block shape, a component the scene tree owns, an unresolvable parent,
-and a signal connection that resolves to nothing all stop the load.
+a signal connection that resolves to nothing, and `[entity.connect]` written in the
+singular where an array of tables belongs all stop the load.
 
-The field check is why every apply path marks what it took (`consumed` on
+So does **a value the field's own domain cannot map**. An enumerator is authored by name,
+and only the domain that declares the enum knows the names, so `alpha_mode = "transparent"`
+is refused instead of quietly becoming opaque; the same goes for a field of view outside
+the range a projection exists for, or a rotation authored as anything but a number. This
+is a distinct failure from an unknown key, and says so: the key was right, the value was
+not.
+
+The key check is why every apply path marks what it took (`consumed` on
 `ke_variant_table_entry`): a key claimed by neither the generated field table nor the
 domain's own callback is a typo, and reporting it is the difference between a wrong
-value and a value that quietly never arrives.
+value and a value that quietly never arrives. The value check is why an apply callback
+returns a bool — `consumed` can say "this key is mine", but only the callback can say
+"and what it holds is not something I can store".
+
+## Defaults come from the header, not from zero
+
+A component the scene creates is seeded with the `[default:]` each field declares in the
+C header before any authored key is applied, so a partial block leaves the rest at the
+value the engine means rather than at zero. `[entity.mesh]` naming only a colour still
+gets `roughness = 1.0`, `alpha_cutoff = 0.5` and `ior = 1.5`.
 
 ## Where the vocabulary comes from
 

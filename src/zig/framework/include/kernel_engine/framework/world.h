@@ -22,9 +22,13 @@ extern "C"
     /// Entries are mutable so the callback can mark what it took: a key it
     /// accepted must have `consumed` set, or the loader will report it as one
     /// nothing in the engine wanted.
-    typedef void (*ke_component_apply_fn)(void                   *component,
-                                           ke_variant_table_entry *entries,
-                                           uint32_t                count);
+    ///
+    /// @return false when a key the callback owns carries a value it cannot map,
+    /// which fails the load. Only the callback holds that mapping, so only it can
+    /// tell a value apart from a typo.
+    typedef bool (*ke_component_apply_fn)(void                   *component,
+                                          ke_variant_table_entry *entries,
+                                          uint32_t                count);
 
     typedef struct ke_world ke_world;
 
