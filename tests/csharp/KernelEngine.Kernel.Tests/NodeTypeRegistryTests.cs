@@ -12,6 +12,14 @@ namespace Sports.Volley
     public sealed class Ball : Node;
 }
 
+namespace Sports.Indoor
+{
+    public sealed class Court : Node
+    {
+        public sealed class CornerFlag : Node;
+    }
+}
+
 namespace EngineTests
 {
 
@@ -23,6 +31,23 @@ public class NodeTypeRegistryTests
         Assert.Equal("pong.menu_controller", NodeTypeRegistry.Normalize("Pong.MenuController"));
         Assert.Equal("sprite2d", NodeTypeRegistry.Normalize("Sprite2D"));
         Assert.Equal("ui_root", NodeTypeRegistry.Normalize("UIRoot"));
+    }
+
+    [Fact]
+    public void ANestedTypeSeparatorReadsAsANamespaceDot()
+    {
+        Assert.Equal("pong.ball", NodeTypeRegistry.Normalize("Pong+Ball"));
+        Assert.Equal("pong.game.ball", NodeTypeRegistry.Normalize("Pong.Game+Ball"));
+        Assert.Equal("outer.inner_thing", NodeTypeRegistry.Normalize("Outer+InnerThing"));
+    }
+
+    [Fact]
+    public void ANestedNodeTypeRegistersUnderTheNameASceneWouldWrite()
+    {
+        var registry = new NodeTypeRegistry().Register<Sports.Indoor.Court.CornerFlag>();
+        Assert.Equal(
+            typeof(Sports.Indoor.Court.CornerFlag),
+            registry.Resolve("sports.indoor.court.corner_flag"));
     }
 
     [Fact]
