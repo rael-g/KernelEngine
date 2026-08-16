@@ -38,4 +38,7 @@ public unsafe partial struct ke_ecs
 
     [NativeTypeName("ke_entity (*)(struct ke_ecs *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong> entity_reserve;
+
+    [NativeTypeName("void (*)(struct ke_ecs *, ke_entity)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, void> entity_materialize;
 }

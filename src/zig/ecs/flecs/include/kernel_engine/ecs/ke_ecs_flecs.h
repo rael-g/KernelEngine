@@ -3,6 +3,7 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <stdint.h>
 
 #ifndef KE_ECS_FLECS_API
 #  if defined(_WIN32) || defined(__CYGWIN__)
@@ -24,7 +25,11 @@ extern "C" {
 
 typedef struct ke_ecs_flecs_params
 {
-    int reserved;
+    /// First id the world's own allocator may issue. Ids below it form the pool
+    /// entity_reserve draws from, so this doubles as that pool's capacity — the
+    /// world's own side is unbounded. 0 takes the default. Raise it for a world
+    /// whose systems spawn heavily; entity_reserve returns 0 once it is spent.
+    uint32_t world_id_base;
 } ke_ecs_flecs_params;
 
 /// Creates a ke_ecs vtable backed by an internally-owned flecs world.

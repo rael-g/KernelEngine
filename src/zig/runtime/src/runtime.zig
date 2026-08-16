@@ -54,7 +54,6 @@ const DeferKind = enum(c_int) {
 const DeferCommand = struct {
     kind: DeferKind,
     entity: c.ke_entity,
-    spawn_out: ?*c.ke_entity,
     cid: c.ke_component_id,
     attach_offset: usize,
     attach_size: usize,
@@ -267,15 +266,23 @@ export fn ke_system_ctx_defer(ctx: ?*c.ke_system_ctx, func: c.ke_defer_fn, user:
     return true;
 }
 
+/// Returns the id the entity will have, usable immediately — a system that spawns
+/// something almost always needs to give it components in the same body, and it
+/// can only name it if the id exists now. The entity itself enters the world at
+/// the wave barrier.
 export fn ke_system_ctx_spawn(ctx: ?*c.ke_system_ctx) callconv(.c) c.ke_entity {
     const s = ctxOf(ctx) orelse return c.KE_ENTITY_INVALID;
     const q = s.defer_q orelse return c.KE_ENTITY_INVALID;
+    const ecs = s.ecs orelse return c.KE_ENTITY_INVALID;
+    const reserve = ecs.entity_reserve orelse return c.KE_ENTITY_INVALID;
+    const entity = reserve(ecs);
+    if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
     if (!deferReserve(q, q.count + 1)) return c.KE_ENTITY_INVALID;
     const cmd = &q.cmds.?[q.count];
     q.count += 1;
     cmd.kind = .spawn;
-    cmd.spawn_out = null;
-    return c.KE_ENTITY_INVALID;
+    cmd.entity = entity;
+    return entity;
 }
 
 export fn ke_system_ctx_attach(ctx: ?*c.ke_system_ctx, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize) callconv(.c) bool {
@@ -324,8 +331,7 @@ fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) void {
         const cmd = &q.cmds.?[i];
         switch (cmd.kind) {
             .spawn => {
-                const e = ecs.entity_create.?(ecs);
-                if (cmd.spawn_out) |so| so.* = e;
+                if (ecs.entity_materialize) |materialize| materialize(ecs, cmd.entity);
             },
             .attach => {
                 const slot = ecs.component_add.?(ecs, cmd.entity, cmd.cid);
@@ -1548,12 +1554,16 @@ test "the clear shadow and cull access shape lands in one wave" {
     try testing.expectEqual(assignments[1], assignments[2]);
 }
 
+const SpawnProbe = struct {
+    ids: [3]c.ke_entity = .{ c.KE_ENTITY_INVALID, c.KE_ENTITY_INVALID, c.KE_ENTITY_INVALID },
+    calls: Counter = Counter.init(0),
+    cid: c.ke_component_id = 0,
+};
+
 fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
-    _ = ke_system_ctx_spawn(ctx);
-    _ = ke_system_ctx_spawn(ctx);
-    _ = ke_system_ctx_spawn(ctx);
-    const count: *Counter = @ptrCast(@alignCast(ud.?));
-    _ = count.fetchAdd(1, .acq_rel);
+    const probe: *SpawnProbe = @ptrCast(@alignCast(ud.?));
+    for (&probe.ids) |*slot| slot.* = ke_system_ctx_spawn(ctx);
+    _ = probe.calls.fetchAdd(1, .acq_rel);
 }
 
 test "a deferred spawn is applied at the wave barrier" {
@@ -1562,15 +1572,52 @@ test "a deferred spawn is applied at the wave barrier" {
 
     ke_system_ctx_reset_defer_applied();
 
-    var spawn_calls = Counter.init(0);
+    var probe = SpawnProbe{};
     var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
-    sys.user_data = &spawn_calls;
+    sys.user_data = &probe;
     sys.execute = &spawnerBody;
     try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
-    try testing.expectEqual(@as(u32, 1), spawn_calls.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
     try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
+}
+
+test "spawn hands the system body an id it can actually use" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = SpawnProbe{};
+    var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &spawnerBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(f.tick(1.0 / 60.0));
+
+    const e = f.ecs();
+    const cid = e.component_register.?(e, "spawned_probe", 4, null);
+    for (probe.ids, 0..) |id, i| {
+        try testing.expect(id != c.KE_ENTITY_INVALID);
+        for (probe.ids[i + 1 ..]) |other| try testing.expect(id != other);
+        try testing.expect(e.component_add.?(e, id, cid) != null);
+    }
+}
+
+test "an entity spawned with no components still exists after the barrier" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = SpawnProbe{};
+    var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &spawnerBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(f.tick(1.0 / 60.0));
+
+    const e = f.ecs();
+    const cid = e.component_register.?(e, "exists_probe", 4, null);
+    e.entity_destroy.?(e, probe.ids[0]);
+    try testing.expect(e.component_add.?(e, probe.ids[0], cid) == null);
 }
 
 const MutatorProbe = struct {

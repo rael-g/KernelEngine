@@ -63,9 +63,24 @@ const RegisteredQuery = struct {
     term_count: usize,
 };
 
+/// First id flecs' own allocator may issue. Everything between the ids the world
+/// is born with and this mark is the pool entity_reserve draws from. The world's
+/// side is unbounded; only the reserve pool is sized, which is why the split
+/// doubles as its capacity and is overridable through the params.
+const default_world_id_base: u32 = 1 << 20;
+
 const State = struct {
     api: c.ke_ecs,
     world: ?*c.ecs_world_t,
+
+    reserve_low: u32,
+    reserve_end: u32,
+    reserve_next: std.atomic.Value(u32),
+    /// One bit per pool slot, recording that the id has already been given its
+    /// one life. flecs cannot answer this: deleting an id outside its active
+    /// range removes every trace of it, so asking the world whether an id ever
+    /// existed reports the same "no" for one never used and one destroyed.
+    materialized: ?[]u8,
 
     queries: ?[*]QueryCacheEntry,
     query_count: usize,
@@ -115,11 +130,48 @@ fn entityCreate(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     return @intCast(c.ecs_new(s.world));
 }
 
+/// Hands out an id without touching the world, which is the whole point: this is
+/// the one entity operation a system body may call from a parallel wave, and
+/// flecs' own id allocator walks a shared entity index that corrupts under
+/// concurrent use. The id comes from a band flecs is configured never to issue
+/// from, so the two allocators cannot meet, and the world learns about it later —
+/// see `materializeReserved`. Returns 0 once the pool is spent.
 fn entityReserve(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     const self = self_in orelse return 0;
     if (self.handle == null) return 0;
     const s = stateOf(self);
-    return @intCast(c.ecs_new(s.world));
+    const offset = s.reserve_next.fetchAdd(1, .monotonic);
+    if (offset >= s.reserve_end - s.reserve_low) return 0;
+    return @as(c.ke_entity, s.reserve_low) + offset;
+}
+
+/// Brings a reserved id into the world the first time anything is attached to it.
+///
+/// Only reachable single-threaded: the runtime flushes its defer queue after the
+/// wave barrier, so this runs where a world mutation is safe. An id outside the
+/// pool was issued by flecs and is already as alive as it will ever be.
+fn entityMaterialize(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
+    const self = self_in orelse return;
+    if (self.handle == null or entity == 0) return;
+    materializeReserved(stateOf(self), entity);
+}
+
+fn materializeReserved(s: *State, entity: c.ke_entity) void {
+    if (entity < s.reserve_low or entity >= s.reserve_end) return;
+
+    const bits = s.materialized orelse blk: {
+        const bytes = ((s.reserve_end - s.reserve_low) + 7) / 8;
+        const buf = heap.gpa.alloc(u8, bytes) catch return;
+        @memset(buf, 0);
+        s.materialized = buf;
+        break :blk buf;
+    };
+
+    const slot: u32 = @intCast(entity - s.reserve_low);
+    const mask = @as(u8, 1) << @intCast(slot % 8);
+    if (bits[slot / 8] & mask != 0) return;
+    bits[slot / 8] |= mask;
+    c.ecs_make_alive(s.world, @intCast(entity));
 }
 
 fn entityDestroy(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
@@ -218,6 +270,7 @@ fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
     const self = self_in orelse return null;
     if (self.handle == null or entity == 0 or component == 0) return null;
     const s = stateOf(self);
+    materializeReserved(s, entity);
     if (!c.ecs_is_alive(s.world, @intCast(entity))) return null;
 
     c.ecs_add_id(s.world, @intCast(entity), @intCast(component));
@@ -341,6 +394,7 @@ fn destroy(self_in: ?*c.ke_ecs) callconv(.c) void {
         }
         heap.gpa.free(rqs[0..s.rquery_capacity]);
     }
+    if (s.materialized) |m| heap.gpa.free(m);
     if (s.world) |w| _ = c.ecs_fini(w);
 
     heap.gpa.destroy(s);
@@ -350,8 +404,12 @@ export fn ke_ecs_flecs_create(
     params_in: ?*const c.ke_ecs_flecs_params,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_ecs_handle {
-    _ = params_in;
     const null_handle = std.mem.zeroes(c.ke_ecs_handle);
+
+    const world_id_base: u32 = blk: {
+        const p = params_in orelse break :blk default_world_id_base;
+        break :blk if (p.*.world_id_base == 0) default_world_id_base else p.*.world_id_base;
+    };
 
     installFlecsOsApi();
 
@@ -362,6 +420,10 @@ export fn ke_ecs_flecs_create(
     s.* = .{
         .api = std.mem.zeroes(c.ke_ecs),
         .world = null,
+        .reserve_low = 0,
+        .reserve_end = world_id_base,
+        .reserve_next = std.atomic.Value(u32).init(0),
+        .materialized = null,
         .queries = null,
         .query_count = 0,
         .query_capacity = 0,
@@ -377,9 +439,26 @@ export fn ke_ecs_flecs_create(
         return null_handle;
     }
 
+    s.reserve_low = @intCast(c.ecs_get_max_id(s.world) + 1);
+    if (world_id_base <= s.reserve_low) {
+        _ = c.ecs_fini(s.world);
+        heap.gpa.destroy(s);
+        E.fail(out_error, .invalid_argument, "world_id_base must leave room below it for the reserve pool", @src());
+        return null_handle;
+    }
+    if (c.ecs_entity_range_new(s.world, world_id_base, 0)) |range| {
+        c.ecs_entity_range_set(s.world, range);
+    } else {
+        _ = c.ecs_fini(s.world);
+        heap.gpa.destroy(s);
+        E.fail(out_error, .not_initialized, "flecs would not keep its ids clear of the reserve pool", @src());
+        return null_handle;
+    }
+
     s.api.handle = s;
     s.api.entity_create = entityCreate;
     s.api.entity_reserve = entityReserve;
+    s.api.entity_materialize = entityMaterialize;
     s.api.entity_destroy = entityDestroy;
     s.api.component_register = componentRegister;
     s.api.component_lookup = componentLookup;
@@ -460,4 +539,168 @@ pub fn debugTriggerRealFlecsAssertion() void {
     c.ecs_add_id(world, e, tag);
 
     _ = c.ecs_get_mut_id(world, e, tag);
+}
+
+test "a reserved id can never be one the world's own allocator will issue" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const reserved = e.entity_reserve.?(handle.ref);
+    try testing.expect(reserved != 0);
+    try testing.expect(reserved < default_world_id_base);
+
+    var i: usize = 0;
+    while (i < 64) : (i += 1) {
+        const created = e.entity_create.?(handle.ref);
+        try testing.expect(created >= default_world_id_base);
+    }
+}
+
+test "reserving past the pool's capacity reports exhaustion instead of colliding" {
+    var params = c.ke_ecs_flecs_params{ .world_id_base = 0 };
+    const probe = ke_ecs_flecs_create(&params, null);
+    const low = stateOf(probe.ref.?).reserve_low;
+    probe.destroy.?(probe.ref);
+
+    params.world_id_base = low + 4;
+    const handle = ke_ecs_flecs_create(&params, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    var i: usize = 0;
+    while (i < 4) : (i += 1) try testing.expect(e.entity_reserve.?(handle.ref) != 0);
+    try testing.expectEqual(@as(c.ke_entity, 0), e.entity_reserve.?(handle.ref));
+}
+
+test "every reserved id is distinct" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    var seen: [256]c.ke_entity = undefined;
+    for (&seen) |*slot| slot.* = e.entity_reserve.?(handle.ref);
+    for (seen, 0..) |a, i| {
+        try testing.expect(a != 0);
+        for (seen[i + 1 ..]) |b| try testing.expect(a != b);
+    }
+}
+
+test "reserving concurrently never hands the same id to two threads" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    const thread_count = 8;
+    const per_thread = 2000;
+    var ids: [thread_count][per_thread]c.ke_entity = undefined;
+
+    const Worker = struct {
+        fn run(ecs: *c.ke_ecs, out: *[per_thread]c.ke_entity) void {
+            for (out) |*slot| slot.* = ecs.entity_reserve.?(ecs);
+        }
+    };
+
+    var threads: [thread_count]std.Thread = undefined;
+    for (&threads, 0..) |*t, i| {
+        t.* = try std.Thread.spawn(.{}, Worker.run, .{ handle.ref.?, &ids[i] });
+    }
+    for (threads) |t| t.join();
+
+    var flat: [thread_count * per_thread]c.ke_entity = undefined;
+    for (ids, 0..) |row, i| @memcpy(flat[i * per_thread ..][0..per_thread], &row);
+    std.mem.sort(c.ke_entity, &flat, {}, std.sort.asc(c.ke_entity));
+    for (flat[1..], 0..) |v, i| {
+        try testing.expect(v != 0);
+        try testing.expect(v != flat[i]);
+    }
+}
+
+test "a reserved id is not in the world until something materializes it" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "reserve_probe", 4, null);
+    const reserved = e.entity_reserve.?(handle.ref);
+    try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
+
+    e.entity_materialize.?(handle.ref, reserved);
+    try testing.expect(e.component_add.?(handle.ref, reserved, cid) != null);
+}
+
+test "attaching to a reserved id materializes it without a separate call" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "attach_probe", 4, null);
+    const reserved = e.entity_reserve.?(handle.ref);
+
+    const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
+    @as(*u32, @ptrCast(@alignCast(slot))).* = 0xabcd;
+    const read = e.component_get.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
+    try testing.expectEqual(@as(u32, 0xabcd), @as(*u32, @ptrCast(@alignCast(read))).*);
+}
+
+test "materializing an id twice is a no-op rather than a second entity" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "twice_probe", 4, null);
+    const reserved = e.entity_reserve.?(handle.ref);
+    e.entity_materialize.?(handle.ref, reserved);
+    const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
+    @as(*u32, @ptrCast(@alignCast(slot))).* = 7;
+
+    e.entity_materialize.?(handle.ref, reserved);
+    const read = e.component_get.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
+    try testing.expectEqual(@as(u32, 7), @as(*u32, @ptrCast(@alignCast(read))).*);
+}
+
+test "materializing an id the world already owns leaves it alone" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "owned_probe", 4, null);
+    const created = e.entity_create.?(handle.ref);
+    const slot = e.component_add.?(handle.ref, created, cid) orelse return error.TestUnexpectedResult;
+    @as(*u32, @ptrCast(@alignCast(slot))).* = 99;
+
+    e.entity_materialize.?(handle.ref, created);
+    const read = e.component_get.?(handle.ref, created, cid) orelse return error.TestUnexpectedResult;
+    try testing.expectEqual(@as(u32, 99), @as(*u32, @ptrCast(@alignCast(read))).*);
+}
+
+test "a split that leaves no room for the reserve pool is refused" {
+    var params = c.ke_ecs_flecs_params{ .world_id_base = 1 };
+    var out_error: ?*c.ke_error = null;
+    const handle = ke_ecs_flecs_create(&params, &out_error);
+    try testing.expect(handle.ref == null);
+    try testing.expect(out_error != null);
+}
+
+test "a caller may move the split between the two id allocators" {
+    var params = c.ke_ecs_flecs_params{ .world_id_base = 1_000_000 };
+    const handle = ke_ecs_flecs_create(&params, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    try testing.expect(e.entity_reserve.?(handle.ref) < 1_000_000);
+    try testing.expect(e.entity_create.?(handle.ref) >= 1_000_000);
+}
+
+test "a reserved entity that was destroyed does not come back on the next attach" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "revive_probe", 4, null);
+    const reserved = e.entity_reserve.?(handle.ref);
+    try testing.expect(e.component_add.?(handle.ref, reserved, cid) != null);
+
+    e.entity_destroy.?(handle.ref, reserved);
+    try testing.expect(e.component_add.?(handle.ref, reserved, cid) == null);
+    try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
 }

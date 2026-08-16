@@ -110,10 +110,23 @@ extern "C"
                               size_t           *out_count);
 
         /**
-         * Reserves an entity id without creating storage. Unlike entity_create this
-         * is safe from any wave thread; components attach via the runtime defer queue.
+         * Reserves an entity id, callable concurrently from any wave thread —
+         * the one entity operation that is. The id is usable immediately as a
+         * reference; the entity itself appears in the world when component_add
+         * first runs for it, which the runtime does at the wave barrier.
+         *
+         * An implementation may not satisfy this by forwarding to entity_create:
+         * the contract is concurrent callability, and a backend whose id
+         * allocator walks shared state must keep a separate one for this.
          */
         ke_entity (*entity_reserve)(struct ke_ecs *self);
+
+        /**
+         * Brings a reserved id into the world, so an entity that never receives a
+         * component still exists. Structural; single-threaded. A no-op for an id
+         * that is already alive.
+         */
+        void (*entity_materialize)(struct ke_ecs *self, ke_entity entity);
 
     } ke_ecs;
 
