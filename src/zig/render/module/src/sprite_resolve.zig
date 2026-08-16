@@ -3,6 +3,9 @@ const c = cimport.c;
 
 const std = @import("std");
 
+const cache_key = @import("cache_key.zig");
+const bitsOf = cache_key.bits;
+
 const Vertex = extern struct {
     position: [3]f32,
     normal: [3]f32,
@@ -44,13 +47,13 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
     };
     const idx = [6]u16{ 0, 1, 2, 0, 2, 3 };
 
-    var key_buf: [192]u8 = undefined;
-    const key = std.fmt.bufPrintZ(&key_buf, "sprite:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}", .{
-        w,           h,           sp.pivot.x,  sp.pivot.y, sp.region.x,
-        sp.region.y, sp.region.z, sp.region.w, sp.flip_h,  sp.flip_v,
-    }) catch return c.KE_MESH_NONE;
+    var key: cache_key.Key("sprite", 10) = .{};
+    const k = key.init(.{
+        bitsOf(w),            bitsOf(h),            bitsOf(sp.pivot.x),   bitsOf(sp.pivot.y), bitsOf(sp.region.x),
+        bitsOf(sp.region.y),  bitsOf(sp.region.z),  bitsOf(sp.region.w),  sp.flip_h,     sp.flip_v,
+    });
 
-    return core.upload_mesh.?(core, key.ptr, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
+    return core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
 }
 
 /// Uploads the image the sprite names, once.
@@ -67,14 +70,14 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     const core = st.core;
     const col = sp.color;
     const tex = resolveTexture(st, sp);
-    var key_buf: [192]u8 = undefined;
-    const key = std.fmt.bufPrintZ(&key_buf, "sprite:{d}:{d}:{d}:{d}:{d}:{d}:{d}", .{
-        col.x, col.y, col.z, col.w, tex.bits, sp.alpha_mode, sp.alpha_cutoff,
-    }) catch return c.KE_MATERIAL_NONE;
+    var key: cache_key.Key("sprite", 7) = .{};
+    const k = key.init(.{
+        bitsOf(col.x), bitsOf(col.y), bitsOf(col.z), bitsOf(col.w), tex.bits, sp.alpha_mode, bitsOf(sp.alpha_cutoff),
+    });
 
     return core.create_material.?(
         core,
-        key.ptr,
+        k,
         @ptrCast(&sp.color),
         0,
         1,

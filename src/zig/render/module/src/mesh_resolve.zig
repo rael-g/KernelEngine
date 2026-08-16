@@ -3,6 +3,9 @@ const c = cimport.c;
 
 const std = @import("std");
 
+const cache_key = @import("cache_key.zig");
+const bitsOf = cache_key.bits;
+
 const Vertex = extern struct {
     position: [3]f32,
     normal: [3]f32,
@@ -149,16 +152,16 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
     if (c.ke_material_is_valid(mc.material)) return;
     const bc = mc.base_color;
 
-    var key_buf: [160]u8 = undefined;
-    const key = std.fmt.bufPrintZ(
-        &key_buf,
-        "inline:{d}:{d}:{d}:{d}:{d}:{d}:{d}:{d}",
-        .{ bc.x, bc.y, bc.z, bc.w, mc.roughness, mc.alpha_mode, mc.alpha_cutoff, mc.ior },
-    ) catch return;
+    var key: cache_key.Key("inline", 8) = .{};
+    const k = key.init(.{
+        bitsOf(bc.x),         bitsOf(bc.y),        bitsOf(bc.z),
+        bitsOf(bc.w),         bitsOf(mc.roughness), mc.alpha_mode,
+        bitsOf(mc.alpha_cutoff), bitsOf(mc.ior),
+    });
 
     mc.material = core.create_material.?(
         core,
-        key.ptr,
+        k,
         @ptrCast(&mc.base_color),
         0,
         mc.roughness,
