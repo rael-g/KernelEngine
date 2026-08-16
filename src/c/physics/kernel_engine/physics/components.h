@@ -66,6 +66,11 @@ extern "C"
         float            friction; ///< [default:0.3]
         /// Bounciness. 0 absorbs the impact, 1 returns all of it.
         float            restitution;
+        /// Which of the 32 collision layers this shape occupies.
+        uint32_t         layer; ///< [default:1]
+        /// Which layers this shape tests against. Two shapes touch only when each
+        /// one's layer bit is set in the other's mask.
+        uint32_t         mask; ///< [default:4294967295]
 
         /// [idiom] Whether the fixture has been attached to its body. Set by the
         /// plugin once the ancestor body exists; authoring it would claim a fixture

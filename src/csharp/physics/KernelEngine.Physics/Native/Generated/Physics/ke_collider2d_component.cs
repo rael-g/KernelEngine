@@ -16,5 +16,11 @@ public partial struct ke_collider2d_component
 
     public float restitution;
 
+    [NativeTypeName("uint32_t")]
+    public uint layer;
+
+    [NativeTypeName("uint32_t")]
+    public uint mask;
+
     public bool attached;
 }

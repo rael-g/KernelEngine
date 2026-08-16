@@ -75,19 +75,21 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
 
     /// <summary>Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin. The offset is what lets one body carry several shapes in different places — a character's feet and torso, a paddle's rounded ends.</summary>
     /// <param name="offsetAngle">Radians, CCW positive, about the offset center.</param>
+    /// <param name="filter">Layers the fixture occupies and tests against. NULL leaves it colliding with everything.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void AddBoxFixture(uint body, float halfW, float halfH, float offsetX, float offsetY, float offsetAngle, float density, float friction, float restitution)
+    public void AddBoxFixture(uint body, float halfW, float halfH, float offsetX, float offsetY, float offsetAngle, float density, float friction, float restitution, ke_collision_filter_2d* filter)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfW, halfH, offsetX, offsetY, offsetAngle, density, friction, restitution, &err), err, "add_box_fixture");
+        KernelError.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfW, halfH, offsetX, offsetY, offsetAngle, density, friction, restitution, filter, &err), err, "add_box_fixture");
     }
 
     /// <summary>Attaches a circle fixture at the given offset from the body origin.</summary>
+    /// <param name="filter">Layers the fixture occupies and tests against. NULL leaves it colliding with everything.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void AddCircleFixture(uint body, float radius, float offsetX, float offsetY, float density, float friction, float restitution)
+    public void AddCircleFixture(uint body, float radius, float offsetX, float offsetY, float density, float friction, float restitution, ke_collision_filter_2d* filter)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offsetX, offsetY, density, friction, restitution, &err), err, "add_circle_fixture");
+        KernelError.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offsetX, offsetY, density, friction, restitution, filter, &err), err, "add_circle_fixture");
     }
 
     /// <summary>Reads the body's current pose and motion.</summary>

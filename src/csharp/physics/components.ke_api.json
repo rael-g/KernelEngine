@@ -41,6 +41,26 @@
   ],
   "structs": [
     {
+      "name": "ke_collision_filter_2d",
+      "doc": "Which of the 32 collision layers a fixture occupies, and which it tests against. Two fixtures touch only when each one\u0027s layer bit is set in the other\u0027s mask, so a mask written on one side alone never produces a contact.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "layer",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mask",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_body_state_2d",
       "doc": "Snapshot of a body\u0027s pose \u002B motion at a point in time. Position is the body\u0027s local origin in world space; angle is in radians.",
       "tags": [],
@@ -281,6 +301,22 @@
           "doc": "Bounciness. 0 absorbs the impact, 1 returns all of it."
         },
         {
+          "name": "layer",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": null
+        },
+        {
           "name": "attached",
           "type": "_Bool",
           "tags": [
@@ -451,6 +487,14 @@
               "doc": null
             },
             {
+              "name": "filter",
+              "type": "const ke_collision_filter_2d *",
+              "tags": [
+                "opt"
+              ],
+              "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
+            },
+            {
               "name": "out_error",
               "type": "ke_error **",
               "tags": [],
@@ -506,6 +550,14 @@
               "type": "float",
               "tags": [],
               "doc": null
+            },
+            {
+              "name": "filter",
+              "type": "const ke_collision_filter_2d *",
+              "tags": [
+                "opt"
+              ],
+              "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
             },
             {
               "name": "out_error",

@@ -23,6 +23,8 @@ static const ke_component_field ke_collider2d_component_fields[] = {
     { "density", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, density), sizeof(((ke_collider2d_component *)0)->density), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
     { "friction", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, friction), sizeof(((ke_collider2d_component *)0)->friction), { KE_VARIANT_FLOAT, { .f = 0.3 } } },
     { "restitution", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, restitution), sizeof(((ke_collider2d_component *)0)->restitution), { KE_VARIANT_NULL, { 0 } } },
+    { "layer", KE_VARIANT_INT, offsetof(ke_collider2d_component, layer), sizeof(((ke_collider2d_component *)0)->layer), { KE_VARIANT_INT, { .i = 1 } } },
+    { "mask", KE_VARIANT_INT, offsetof(ke_collider2d_component, mask), sizeof(((ke_collider2d_component *)0)->mask), { KE_VARIANT_INT, { .i = 4294967295 } } },
     { "attached", KE_VARIANT_BOOL, offsetof(ke_collider2d_component, attached), sizeof(((ke_collider2d_component *)0)->attached), { KE_VARIANT_NULL, { 0 } } },
 };
 

@@ -9,6 +9,17 @@ public readonly record struct BodyHandle2D(uint Value)
     public bool IsValid => Value != 0;
 }
 
+/// <summary>
+/// Which of the 32 collision layers a fixture occupies, and which it tests against.
+/// Two fixtures touch only when each one's layer bit is set in the other's mask, so a
+/// mask written on one side alone never produces a contact.
+/// </summary>
+public readonly record struct CollisionFilter2D(uint Layer, uint Mask)
+{
+    /// <summary>Occupies the first layer and tests against every one of them.</summary>
+    public static readonly CollisionFilter2D Everything = new(1u, uint.MaxValue);
+}
+
 /// <summary>Snapshot of a body's pose and motion at a point in time.</summary>
 public readonly record struct BodyState2D(
     Vector2 Position,
@@ -40,10 +51,10 @@ public interface IPhysics2D : IDisposable
     /// from the body origin. The offset is what lets one body carry several shapes in
     /// different places.
     /// </summary>
-    void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents, Vector2 offset = default, float offsetAngle = 0f, float density = 1f, float friction = 0.3f, float restitution = 0f);
+    void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents, Vector2 offset = default, float offsetAngle = 0f, float density = 1f, float friction = 0.3f, float restitution = 0f, CollisionFilter2D? filter = null);
 
     /// <summary>Attaches a circle fixture at the given offset from the body origin.</summary>
-    void AddCircleFixture(BodyHandle2D body, float radius, Vector2 offset = default, float density = 1f, float friction = 0.3f, float restitution = 0f);
+    void AddCircleFixture(BodyHandle2D body, float radius, Vector2 offset = default, float density = 1f, float friction = 0.3f, float restitution = 0f, CollisionFilter2D? filter = null);
 
     /// <summary>Reads the body's current pose and motion.</summary>
     BodyState2D GetBodyState(BodyHandle2D body);

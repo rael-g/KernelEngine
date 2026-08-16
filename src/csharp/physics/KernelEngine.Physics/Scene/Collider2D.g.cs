@@ -18,6 +18,8 @@ public partial class Collider2D : Node2D
         _generatedState0.radius = 0.5f;
         _generatedState0.density = 1f;
         _generatedState0.friction = 0.3f;
+        _generatedState0.layer = 1;
+        _generatedState0.mask = 4294967295;
     }
 
     [NativeField("kind", Component = typeof(ke_collider2d_component))]
@@ -38,4 +40,10 @@ public partial class Collider2D : Node2D
     /// <summary>Bounciness. 0 absorbs the impact, 1 returns all of it.</summary>
     [NativeField("restitution", Component = typeof(ke_collider2d_component))]
     public partial float Restitution { get; set; }
+
+    [NativeField("layer", Component = typeof(ke_collider2d_component))]
+    public partial uint Layer { get; set; }
+
+    [NativeField("mask", Component = typeof(ke_collider2d_component))]
+    public partial uint Mask { get; set; }
 }

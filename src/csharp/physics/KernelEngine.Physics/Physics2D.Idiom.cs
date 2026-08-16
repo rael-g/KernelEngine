@@ -30,18 +30,27 @@ public unsafe partial class Physics2D : IPhysics2D
     }
 
     /// <inheritdoc/>
-    public void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents, Vector2 offset = default, float offsetAngle = 0f,
-        float density = 1f, float friction = 0.3f, float restitution = 0f)
+    public unsafe void AddBoxFixture(BodyHandle2D body, Vector2 halfExtents, Vector2 offset = default, float offsetAngle = 0f,
+        float density = 1f, float friction = 0.3f, float restitution = 0f, CollisionFilter2D? filter = null)
     {
-        if (body.IsValid) AddBoxFixture(body.Value, halfExtents.X, halfExtents.Y, offset.X, offset.Y, offsetAngle, density, friction, restitution);
+        if (!body.IsValid) return;
+        var native = ToNative(filter);
+        AddBoxFixture(body.Value, halfExtents.X, halfExtents.Y, offset.X, offset.Y, offsetAngle, density, friction, restitution,
+            filter.HasValue ? &native : null);
     }
 
     /// <inheritdoc/>
-    public void AddCircleFixture(BodyHandle2D body, float radius, Vector2 offset = default,
-        float density = 1f, float friction = 0.3f, float restitution = 0f)
+    public unsafe void AddCircleFixture(BodyHandle2D body, float radius, Vector2 offset = default,
+        float density = 1f, float friction = 0.3f, float restitution = 0f, CollisionFilter2D? filter = null)
     {
-        if (body.IsValid) AddCircleFixture(body.Value, radius, offset.X, offset.Y, density, friction, restitution);
+        if (!body.IsValid) return;
+        var native = ToNative(filter);
+        AddCircleFixture(body.Value, radius, offset.X, offset.Y, density, friction, restitution,
+            filter.HasValue ? &native : null);
     }
+
+    private static ke_collision_filter_2d ToNative(CollisionFilter2D? filter) =>
+        new() { layer = filter?.Layer ?? 0, mask = filter?.Mask ?? 0 };
 
     /// <inheritdoc/>
     public void SetBodyPosition(BodyHandle2D body, Vector2 position, float angle)
