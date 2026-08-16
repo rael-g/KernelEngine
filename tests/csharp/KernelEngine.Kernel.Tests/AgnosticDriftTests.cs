@@ -86,7 +86,8 @@ public class AgnosticDriftTests(ITestOutputHelper output)
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var git = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(git) || File.Exists(git))
                 return dir.FullName;
             dir = dir.Parent;
         }
