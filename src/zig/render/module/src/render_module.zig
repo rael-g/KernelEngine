@@ -266,21 +266,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         sprite_resolve_params.execute = sprite_resolve.system;
         _ = rt.register_system.?(rt, &sprite_resolve_params, null);
 
-        const label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
-        st.label_resolve_state = .{ .core = st.core.ref, .ui = st.ui.ref, .resolver = asset_resolver };
-        st.label_resolve_queries = std.mem.zeroes([1]c.ke_query_decl);
-        st.label_resolve_queries[0].terms[0] = .{ .cid = label_cid, .access = c.KE_ACCESS_WRITE };
-        st.label_resolve_queries[0].term_count = 1;
-        var label_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
-        label_resolve_params.name = "render.label.resolve";
-        label_resolve_params.phase = c.KE_PHASE_UPDATE;
-        label_resolve_params.queries = &st.label_resolve_queries;
-        label_resolve_params.query_count = st.label_resolve_queries.len;
-        label_resolve_params.pinned_thread = 0;
-        label_resolve_params.user_data = &st.label_resolve_state;
-        label_resolve_params.execute = label_resolve.system;
-        _ = rt.register_system.?(rt, &label_resolve_params, null);
-
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
 
@@ -339,6 +324,22 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
+
+        const label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null);
+        st.label_resolve_state = .{ .core = st.core.ref, .ui = st.ui.ref, .resolver = asset_resolver };
+        st.label_resolve_queries = std.mem.zeroes([1]c.ke_query_decl);
+        st.label_resolve_queries[0].terms[0] = .{ .cid = label_cid, .access = c.KE_ACCESS_WRITE };
+        st.label_resolve_queries[0].term_count = 1;
+        var label_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
+        label_resolve_params.name = "render.label.resolve";
+        label_resolve_params.phase = c.KE_PHASE_UPDATE;
+        label_resolve_params.queries = &st.label_resolve_queries;
+        label_resolve_params.query_count = st.label_resolve_queries.len;
+        label_resolve_params.pinned_thread = 0;
+        label_resolve_params.user_data = &st.label_resolve_state;
+        label_resolve_params.execute = label_resolve.system;
+        _ = rt.register_system.?(rt, &label_resolve_params, null);
+
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
 
