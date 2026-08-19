@@ -52,11 +52,17 @@ public struct MeshComponent
     public float   AlphaCutoff;
     public float   Ior;
     public float   DistortionStrength;
+    /// <summary>
+    /// Which of the 32 view layers this renderable occupies. A camera draws it
+    /// only when its cull mask names one of these bits.
+    /// </summary>
+    public uint    Layers;
 
     /// <summary>
     /// The defaults <c>ke_mesh_component</c> documents per field. A
     /// zero-initialized instance is not neutral — it is a black, fully rough,
-    /// fully cut-out surface, which is valid memory that renders as nothing.
+    /// fully cut-out surface on no layer at all, which is valid memory that
+    /// renders as nothing.
     /// </summary>
     public static MeshComponent Default => new()
     {
@@ -66,6 +72,7 @@ public struct MeshComponent
         AlphaCutoff        = 0.5f,
         Ior                = 1.5f,
         DistortionStrength = 0.05f,
+        Layers             = 1,
     };
 }
 

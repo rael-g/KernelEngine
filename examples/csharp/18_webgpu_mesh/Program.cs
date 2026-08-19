@@ -48,7 +48,7 @@ camT.Position = new Vector3(1.5f, 1.5f, -3.0f);
 ref var camW = ref reg.AddComponent<WorldTransformComponent>(cam, worldCid)[0];
 camW.Matrix = Matrix4x4.CreateTranslation(camT.Position);
 ref var camC = ref reg.AddComponent<Camera>(cam, cameraCid)[0];
-camC = new Camera { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f };
+camC = new Camera { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f, CullMask = uint.MaxValue };
 
 var ent = reg.CreateEntity();
 ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
@@ -106,4 +106,5 @@ struct Camera
     public float FarPlane;
     public float OrthographicSize;
     public byte  Orthographic;
+    public uint  CullMask;
 }
