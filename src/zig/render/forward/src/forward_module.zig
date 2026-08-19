@@ -31,8 +31,41 @@ const Draw = struct {
     view_depth: f32,
 };
 
+/// Orders by ascending view depth, which is farthest first under a right-handed
+/// view space.
 fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
-    return a.view_depth > b.view_depth;
+    return a.view_depth < b.view_depth;
+}
+
+/// The draws this camera owes the transparent pass, farthest first: meshes whose
+/// layers the cull_mask names and whose material blends. Returns how many of
+/// `out` were filled.
+fn collectDraws(
+    core: *c.ke_render_service,
+    cam: *const c.ke_camera_component,
+    view: zm.Mat,
+    segs: [*]const c.ke_ecs_segment,
+    seg_count: usize,
+    out: []Draw,
+) u32 {
+    var count: u32 = 0;
+    var s: usize = 0;
+    while (s < seg_count and count < out.len) : (s += 1) {
+        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        var i: usize = 0;
+        while (i < segs[s].count and count < out.len) : (i += 1) {
+            if (meshes[i].layers & cam.cull_mask == 0) continue;
+            if (core.material_alpha_mode.?(core, meshes[i].material) != c.KE_ALPHA_MODE_BLEND) continue;
+            const wm = wts[i].matrix.m;
+            const wp = zm.f32x4(wm[12], wm[13], wm[14], 1.0);
+            const view_pos = zm.mul(wp, view);
+            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_depth = view_pos[2] };
+            count += 1;
+        }
+    }
+    std.sort.pdq(Draw, out[0..count], {}, drawFartherFirst);
+    return count;
 }
 
 const ForwardModule = struct {
@@ -235,25 +268,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
-    var draw_count: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 4, &segc);
-    var s: usize = 0;
-    while (s < segc and draw_count < MAX_DRAWS) : (s += 1) {
-        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
-        var i: usize = 0;
-        while (i < segs[s].count and draw_count < MAX_DRAWS) : (i += 1) {
-            if (meshes[i].layers & cam.cull_mask == 0) continue;
-            if (core.*.material_alpha_mode.?(core, meshes[i].material) != c.KE_ALPHA_MODE_BLEND) continue;
-            const wm = wts[i].matrix.m;
-            const wp = zm.f32x4(wm[12], wm[13], wm[14], 1.0);
-            const view_pos = zm.mul(wp, view);
-            fwd.draws[draw_count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_depth = view_pos[2] };
-            draw_count += 1;
-        }
-    }
-    std.sort.pdq(Draw, fwd.draws[0..draw_count], {}, drawFartherFirst);
+    const draw_count = collectDraws(core, cam, view, segs, segc, fwd.draws[0..MAX_DRAWS]);
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_bind_group.?(rp, 0, fwd.frame_bind_group, null, 0);
@@ -530,4 +547,159 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+/// Reports every material as blending except handle 0.
+fn blendUnlessZero(_: [*c]c.ke_render_service, m: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
+    return if (m.bits == 0) c.KE_ALPHA_MODE_OPAQUE else c.KE_ALPHA_MODE_BLEND;
+}
+
+fn blendingService() c.ke_render_service {
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.material_alpha_mode = blendUnlessZero;
+    return svc;
+}
+
+fn cameraSeeing(mask: u32) c.ke_camera_component {
+    var cam = std.mem.zeroes(c.ke_camera_component);
+    cam.cull_mask = mask;
+    return cam;
+}
+
+fn meshOn(layers: u32) c.ke_mesh_component {
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    m.layers = layers;
+    m.material = .{ .bits = 7 };
+    return m;
+}
+
+fn transformAt(z: f32) c.ke_world_transform_component {
+    var wt = std.mem.zeroes(c.ke_world_transform_component);
+    wt.matrix.m[14] = z;
+    return wt;
+}
+
+fn oneSegment(meshes: []const c.ke_mesh_component, wts: []const c.ke_world_transform_component) c.ke_ecs_segment {
+    var seg = std.mem.zeroes(c.ke_ecs_segment);
+    seg.columns[0] = @constCast(@ptrCast(meshes.ptr));
+    seg.columns[1] = @constCast(@ptrCast(wts.ptr));
+    seg.count = meshes.len;
+    return seg;
+}
+
+test "a mesh on a layer the camera's cull_mask omits is not drawn" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+    try testing.expectEqual(@as(u32, 0b001), out[0].mesh.layers);
+}
+
+test "a camera whose mask names several layers draws a mesh on any one of them" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b101);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 2), n);
+}
+
+test "a mesh sharing one bit of a multi layer mask is drawn once, not once per bit" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b111);
+    const meshes = [_]c.ke_mesh_component{meshOn(0b111)};
+    const wts = [_]c.ke_world_transform_component{transformAt(-1)};
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+}
+
+test "a camera that names no layer draws nothing, even with meshes in front of it" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 0), n);
+}
+
+test "an opaque mesh the camera can see still stays out of the transparent pass" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    var opaque_mesh = meshOn(0b001);
+    opaque_mesh.material = .{ .bits = 0 };
+    const meshes = [_]c.ke_mesh_component{ opaque_mesh, meshOn(0b001) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+    try testing.expectEqual(@as(u32, 7), out[0].mesh.material.bits);
+}
+
+test "the culled draws come back farthest first, so blending composites back to front" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b111);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-2), transformAt(-9), transformAt(-5) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    const eye_at_origin = zm.lookAtRh(zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 0, -1, 1), zm.f32x4(0, 1, 0, 0));
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, eye_at_origin, &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 3), n);
+    try testing.expectEqual(@as(u32, 0b010), out[0].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b100), out[1].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b001), out[2].mesh.layers);
+}
+
+test "collection stops at the caller's capacity instead of writing past it" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b001), meshOn(0b001) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [2]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 2), n);
+}
+
+test "meshes are gathered across every segment the query returned" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    const a_meshes = [_]c.ke_mesh_component{meshOn(0b001)};
+    const a_wts = [_]c.ke_world_transform_component{transformAt(-1)};
+    const b_meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010) };
+    const b_wts = [_]c.ke_world_transform_component{ transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{ oneSegment(&a_meshes, &a_wts), oneSegment(&b_meshes, &b_wts) };
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 2), n);
 }

@@ -40,4 +40,23 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/forward_module.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inline for (.{ ke_common, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_logger, ke_self }) |inc| {
+        test_mod.addIncludePath(.{ .cwd_relative = inc });
+    }
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    test_mod.linkSystemLibrary("ke_common", .{});
+    test_mod.linkSystemLibrary("ke_runtime", .{});
+    test_mod.addCMacro("KE_RENDER_FORWARD_EXPORT", "");
+    test_mod.addImport("zmath", zmath.module("root"));
+
+    const unit_tests = b.addTest(.{ .root_module = test_mod });
+    const run_tests = b.addRunArtifact(unit_tests);
+    b.step("test", "Run the forward pass unit tests").dependOn(&run_tests.step);
 }
